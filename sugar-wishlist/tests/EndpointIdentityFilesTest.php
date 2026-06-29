@@ -25,7 +25,7 @@ final class EndpointIdentityFilesTest extends TestCase
             identityFiles: ['/path/to/key1', '/path/to/key2'],
         );
         $argv = $e->toSshArgv();
-        $this->assertSame(['ssh', '-i', '/path/to/key1', 'deploy@prod.example.com'], $argv);
+        $this->assertSame(['ssh', '-i', '/path/to/key1', '--', 'deploy@prod.example.com'], $argv);
     }
 
     public function testIdentityFilesSingleItem(): void
@@ -37,7 +37,7 @@ final class EndpointIdentityFilesTest extends TestCase
             identityFiles: ['/path/to/key'],
         );
         $argv = $e->toSshArgv();
-        $this->assertSame(['ssh', '-i', '/path/to/key', 'deploy@prod.example.com'], $argv);
+        $this->assertSame(['ssh', '-i', '/path/to/key', '--', 'deploy@prod.example.com'], $argv);
     }
 
     public function testWithIdentityFilesReturnsNewInstance(): void

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wishlist;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * One row in a wishlist directory — a host the user can pick to
  * `ssh` into. Held as an immutable value object; build via
@@ -14,6 +16,7 @@ namespace SugarCraft\Wishlist;
  */
 final class Endpoint
 {
+    use Mutable;
     /**
      * @param array<string> $identityFiles
      */
@@ -48,17 +51,40 @@ final class Endpoint
             $argv[] = $this->identityFiles[0];
         }
         if ($this->proxyJump !== null && $this->proxyJump !== '') {
+            $this->assertNotOption('proxyJump', $this->proxyJump);
             $argv[] = '-J';
             $argv[] = $this->proxyJump;
         }
         foreach ($this->options as $opt) {
+            $this->assertNotOption('option', $opt);
             $argv[] = '-o';
             $argv[] = $opt;
         }
-        $argv[] = $this->user !== null && $this->user !== ''
+        // `--` stops SSH from interpreting the destination as an option.
+        // Belt-and-suspenders with the leading-dash guard below.
+        $argv[] = '--';
+        $dest = $this->user !== null && $this->user !== ''
             ? "{$this->user}@{$this->host}"
             : $this->host;
+        $this->assertNotOption('host', $dest);
+        $argv[] = $dest;
         return $argv;
+    }
+
+    /**
+     * Guard against option-injection: a leading dash makes a string
+     * look like an ssh flag. Throws if $value would be misinterpreted
+     * as a flag by ssh(1).
+     *
+     * @throws \InvalidArgumentException
+     */
+    private function assertNotOption(string $field, string $value): void
+    {
+        if ($value !== '' && str_starts_with($value, '-')) {
+            throw new \InvalidArgumentException(
+                Lang::t('endpoint.option_injection', ['field' => $field, 'value' => $value])
+            );
+        }
     }
 
     public function displayLine(): string
@@ -70,34 +96,55 @@ final class Endpoint
         return "{$this->name}  ─  {$dest}";
     }
 
-    /**
-     * @param array<string> $files
-     */
-    public function withIdentityFiles(array $files): self
+    // -------------------------------------------------------------------------
+    // Immutable builders (with* methods) — all delegate to mutate()
+    // -------------------------------------------------------------------------
+
+    public function withName(string $name): self
     {
-        return new self(
-            name:          $this->name,
-            host:          $this->host,
-            port:          $this->port,
-            user:          $this->user,
-            identityFiles: $files,
-            description:   $this->description,
-            proxyJump:     $this->proxyJump,
-            options:       $this->options,
-        );
+        return $this->mutate(['name' => $name]);
     }
 
-    public function withProxyJump(?string $jump): self
+    public function withHost(string $host): self
     {
-        return new self(
-            name:          $this->name,
-            host:          $this->host,
-            port:          $this->port,
-            user:          $this->user,
-            identityFiles: $this->identityFiles,
-            description:   $this->description,
-            proxyJump:     $jump,
-            options:       $this->options,
-        );
+        return $this->mutate(['host' => $host]);
+    }
+
+    public function withPort(int $port): self
+    {
+        return $this->mutate(['port' => $port]);
+    }
+
+    public function withUser(?string $user): self
+    {
+        // Null is valid here (means no user, ssh uses env default).
+        return $this->mutate(['user' => $user]);
+    }
+
+    /**
+     * @param array<string> $identityFiles
+     */
+    public function withIdentityFiles(array $identityFiles): self
+    {
+        return $this->mutate(['identityFiles' => $identityFiles]);
+    }
+
+    public function withDescription(?string $description): self
+    {
+        // Null is valid here (no description shown).
+        return $this->mutate(['description' => $description]);
+    }
+
+    public function withProxyJump(?string $proxyJump): self
+    {
+        return $this->mutate(['proxyJump' => $proxyJump]);
+    }
+
+    /**
+     * @param list<string> $options
+     */
+    public function withOptions(array $options): self
+    {
+        return $this->mutate(['options' => $options]);
     }
 }

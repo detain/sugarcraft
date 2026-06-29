@@ -35,7 +35,8 @@ final class SshConfigParser
         $this->globalOptions = [];
         $this->hostBlocks = [];
 
-        $currentHost = null;
+        /** @var list<string>|null $currentHostPatterns */
+        $currentHostPatterns = null;
         /** @var array<string,string|list<string>> $currentOptions */
         $currentOptions = [];
         $inGlobalBlock = false;
@@ -49,12 +50,20 @@ final class SshConfigParser
 
             // Host keyword opens a new block
             if (preg_match('/^host\s+(.+)$/i', $line, $m)) {
-                if ($currentHost !== null) {
-                    $this->storeHostBlock($currentHost, $currentOptions);
+                if ($currentHostPatterns !== null) {
+                    $this->storeHostBlock($currentHostPatterns, $currentOptions);
                 }
-                $currentHost = $m[1];
+                // Split multi-pattern Host lines (e.g. "Host a b c") into
+                // individual patterns. First-match-wins ordering: preserve
+                // left-to-right order.
+                $rawPatterns = preg_split('/\s+/', trim($m[1]));
+                $currentHostPatterns = array_values(array_filter(
+                    $rawPatterns,
+                    static fn(string $p) => $p !== ''
+                ));
                 $currentOptions = [];
-                $inGlobalBlock = strtolower($currentHost) === '*';
+                // Check if ANY pattern is '*' to determine global block
+                $inGlobalBlock = in_array('*', $currentHostPatterns, true);
                 if ($inGlobalBlock) {
                     $currentOptions = $this->globalOptions;
                 }
@@ -62,38 +71,42 @@ final class SshConfigParser
             }
 
             // Keyword VALUE lines (inside a Host block)
-            if ($currentHost !== null && preg_match('/^(\w+)\s+(.+)$/i', $line, $m)) {
+            if ($currentHostPatterns !== null && preg_match('/^(\w+)\s+(.+)$/i', $line, $m)) {
                 $key = strtolower($m[1]);
                 $value = trim($m[2]);
-                $this->applyKeyword($currentOptions, $key, $value, $inGlobalBlock);
+                $this->applyKeyword($currentOptions, $key, $value);
                 continue;
             }
         }
 
         // Flush final block
-        if ($currentHost !== null) {
-            $this->storeHostBlock($currentHost, $currentOptions);
+        if ($currentHostPatterns !== null) {
+            $this->storeHostBlock($currentHostPatterns, $currentOptions);
         }
 
         return $this->buildEndpoints();
     }
 
     /**
+     * @param list<string> $hostPatterns
      * @param array<string,string|list<string>> $options
      */
-    private function storeHostBlock(string $hostPattern, array $options): void
+    private function storeHostBlock(array $hostPatterns, array $options): void
     {
-        if (strtolower($hostPattern) === '*') {
-            $this->globalOptions = $options;
-            return;
+        foreach ($hostPatterns as $pattern) {
+            if (strtolower($pattern) === '*') {
+                // Host * sets global options only; no endpoint is created.
+                $this->globalOptions = $options;
+                continue;
+            }
+            $this->hostBlocks[] = ['host' => $pattern, 'options' => $options, 'line' => 0];
         }
-        $this->hostBlocks[] = ['host' => $hostPattern, 'options' => $options, 'line' => 0];
     }
 
     /**
      * @param array<string,string|list<string>> $options
      */
-    private function applyKeyword(array &$options, string $key, string $value, bool $inGlobalBlock): void
+    private function applyKeyword(array &$options, string $key, string $value): void
     {
         match ($key) {
             'hostname' => $options['hostname'] = $value,
@@ -149,10 +162,45 @@ final class SshConfigParser
 
     private function expandPath(string $path): string
     {
-        if (str_starts_with($path, '~')) {
-            $home = getenv('HOME') ?: (function_exists('posix_getpwuid') && posix_getpwuid(posix_geteuid()) !== false ? posix_getpwuid(posix_geteuid())['dir'] : '/root');
+        if (strncmp($path, '~', 1) !== 0) {
+            return $path;
+        }
+
+        // Parse ~user/path or ~/path using a simple string scan instead of regex
+        $len = strlen($path);
+        if ($len >= 2 && $path[1] === '/') {
+            // ~/path — current user's home
+            $home = getenv('HOME') ?? '/root';
             return $home . substr($path, 1);
         }
+
+        // ~user/path — find the first slash
+        $slashPos = strpos($path, '/');
+        if ($slashPos === false) {
+            // ~user with no slash — entire path is the user name
+            $user = substr($path, 1);
+            $rest = '';
+        } else {
+            $user = substr($path, 1, $slashPos - 1);
+            $rest = substr($path, $slashPos);
+        }
+
+        if ($user === '') {
+            // Edge case: just ~ or ~/... (already handled above)
+            $home = getenv('HOME') ?? '/root';
+            return $home . $rest;
+        }
+
+        // ~user/path — try to resolve via posix_getpwnam
+        if (function_exists('posix_getpwnam')) {
+            $pw = @posix_getpwnam($user);
+            if ($pw !== false && isset($pw['dir'])) {
+                return $pw['dir'] . $rest;
+            }
+        }
+
+        // Cannot resolve ~user — return path unchanged rather than
+        // producing garbage like <home>user/...
         return $path;
     }
 
