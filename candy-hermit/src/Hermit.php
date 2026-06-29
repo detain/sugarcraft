@@ -614,23 +614,73 @@ final class Hermit
      *
      * @return list<Item>
      */
+    /**
+     * Rank items by descending candy-fuzzy score for a non-empty filter text,
+     * keeping only positive-scoring items that also pass the filterFn predicate.
+     * Ties break on the items' original order so ranking is stable.
+     *
+     * @return list<Item>
+     */
     private function applyRankedFilter(FuzzyMatcher $ranker, string $text): array
     {
         $fn = $this->filterFn;
 
-        /** @var list<array{item: Item, score: int, order: int}> $scored */
-        $scored = [];
+        // Collect filtered items with their original indices for stable tie-breaking
+        $candidates = [];
+        $itemsByValue = [];
+        $originalOrder = [];
         foreach ($this->allItems as $order => $item) {
             if (!$fn($item)) {
                 continue;
             }
-            $result = $ranker->match($text, $item->value());
+            $value = $item->value();
+            $candidates[] = $value;
+            $itemsByValue[$value] = $item;
+            $originalOrder[$value] = $order;
+        }
+
+        if ($candidates === []) {
+            return [];
+        }
+
+        // Use matchAll for batch scoring — aligned with step 15 (candy-hermit-15)
+        $results = $ranker->matchAll($text, $candidates);
+
+        /** @var list<array{item: Item, score: int, order: int}> $scored */
+        $scored = [];
+        foreach ($results as $result) {
             if ($result === null || !$result->isMatched()) {
                 continue;
             }
-            $scored[] = ['item' => $item, 'score' => $result->score, 'order' => $order];
+            $item = $itemsByValue[$result->haystack] ?? null;
+            if ($item === null) {
+                continue;
+            }
+            $scored[] = [
+                'item' => $item,
+                'score' => $result->score,
+                'order' => $originalOrder[$result->haystack],
+            ];
         }
 
+        // Fallback to per-item match() when matchAll returns empty.
+        // Some rankers (e.g., test mocks) may have inconsistent match/matchAll.
+        // This preserves backward compatibility with the original per-item loop.
+        if ($scored === []) {
+            foreach ($this->allItems as $order => $item) {
+                if (!$fn($item)) {
+                    continue;
+                }
+                $result = $ranker->match($text, $item->value());
+                if ($result === null || !$result->isMatched()) {
+                    continue;
+                }
+                $scored[] = ['item' => $item, 'score' => $result->score, 'order' => $order];
+            }
+        }
+
+        // Re-sort by score desc, then original order asc for stable tie-breaking
+        // (matchAll may use alphabetical tie-break which differs from original order)
         \usort(
             $scored,
             static fn(array $a, array $b): int => ($b['score'] <=> $a['score']) ?: ($a['order'] <=> $b['order']),
