@@ -636,7 +636,7 @@ final class App implements Model
         }
 
         $dsn = $context->connection()->dsn();
-        $username = $context->connection()->username() ?? '';
+        $username = $context->connection()->username();
         $password = $context->password();
         $isPostgres = $context instanceof PostgresServerContext;
         $flavor = $isPostgres ? Flavor::Postgres : $this->flavor;
@@ -923,7 +923,7 @@ final class App implements Model
         }
 
         $dsn = $context->connection()->dsn();
-        $username = $context->connection()->username() ?? '';
+        $username = $context->connection()->username();
         $password = $context->password();
 
         $isPostgres = $context instanceof PostgresServerContext;

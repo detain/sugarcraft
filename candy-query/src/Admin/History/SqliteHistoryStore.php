@@ -28,7 +28,9 @@ final class SqliteHistoryStore implements HistoryStoreInterface
     {
         $dir = \dirname($dbPath);
         if (!\is_dir($dir)) {
-            \mkdir($dir, 0755, true);
+            if (!\mkdir($dir, 0755, true) && !\is_dir($dir)) {
+                throw new \RuntimeException("Cannot create history directory: {$dir}");
+            }
         }
 
         $this->db = new \SQLite3($dbPath);
