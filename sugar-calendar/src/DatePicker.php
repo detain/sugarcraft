@@ -682,10 +682,34 @@ final class DatePicker
                 $style = $this->sgrToBufferStyle($this->todayStyle);
             }
 
+            // Apply cursor as final override — compose reverse attr onto existing style
+            // so the cursor is visible even on today/selected/range cells.
+            if ($i === $this->cursorIndex) {
+                $style = $this->applyCursorStyle($style);
+            }
+
             $cells[] = [$text, $style];
         }
 
         return $cells;
+    }
+
+    /**
+     * Compose the cursor's reverse attribute onto a base style, preserving
+     * fg/bg colours so the cursor is visible on today/selected/range cells.
+     */
+    private function applyCursorStyle(?Style $base): Style
+    {
+        $cursorStyle = $this->sgrToBufferStyle($this->cursorStyle);
+        if ($base === null) {
+            return $cursorStyle ?? Style::reverse();
+        }
+        // OR the cursor attrs into the base style, keeping base fg/bg
+        return new Style(
+            $base->fg(),
+            $base->bg(),
+            $base->attrs() | ($cursorStyle?->attrs() ?? Style::ATTR_REVERSE),
+        );
     }
 
     private function buildRange(): ?DateRange
