@@ -65,6 +65,15 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    public function testQueryLongerThanCandidateReturnsNull(): void
+    {
+        // A full-query alignment requires every query char to appear in order
+        // in the candidate; if query is longer, no such alignment exists.
+        $result = $this->matcher->match('hello', 'hi');
+
+        $this->assertNull($result);
+    }
+
     public function testMatchAllReturnsSortedResults(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
@@ -235,5 +244,35 @@ final class SmithWatermanMatcherTest extends TestCase
 
         $this->assertNotEmpty($resultMap['alpha']->indices());
         $this->assertNotEmpty($resultMap['label']->indices());
+    }
+
+    public function testMatchAllRespectsLimit(): void
+    {
+        $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
+        $results = $this->matcher->matchAll('app', $candidates, limit: 2);
+
+        $this->assertCount(2, $results);
+    }
+
+    public function testMatchAllRespectsMinScore(): void
+    {
+        // Build a list with varied scores
+        $candidates = ['hello', 'hey', 'h', 'xyz'];
+        $results = $this->matcher->matchAll('he', $candidates, minScore: 10);
+
+        // All results should have score >= 10
+        foreach ($results as $result) {
+            $this->assertGreaterThanOrEqual(10, $result->score);
+        }
+    }
+
+    public function testMatchAllWithNoLimitOrMinScoreIsUnchanged(): void
+    {
+        // Verify the default behavior (no limit, minScore=1) returns same results
+        $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
+        $withDefaults = $this->matcher->matchAll('app', $candidates);
+        $explicit = $this->matcher->matchAll('app', $candidates, null, 1);
+
+        $this->assertEquals($withDefaults, $explicit);
     }
 }

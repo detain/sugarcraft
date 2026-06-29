@@ -32,6 +32,12 @@ final class Highlighter
             return $candidate;
         }
 
+        // Normalize: MatchResult is publicly constructible, so external callers
+        // may pass unsorted or duplicate indices.  groupIntoRuns() assumes
+        // ascending order — enforce that invariant here.
+        $indices = array_values(array_unique($indices));
+        sort($indices);
+
         // Group consecutive indices into runs
         $runs = $this->groupIntoRuns($indices);
 
@@ -42,7 +48,7 @@ final class Highlighter
     /**
      * Group consecutive indices into runs.
      *
-     * @param list<int> $indices Sorted list of matched character indices
+     * @param list<int> $indices Sorted list of matched character indices (precondition: ascending, unique — enforced by caller)
      * @return list<array{start: int, end: int}> List of [start, end] inclusive ranges
      */
     private function groupIntoRuns(array $indices): array
@@ -93,7 +99,7 @@ final class Highlighter
             $styled = $styler($matched);
             $result = mb_substr($result, 0, $run['start'], 'UTF-8')
                 . $styled
-                . mb_substr($result, $run['end'] + 1, mb_strlen($result, 'UTF-8') - $run['end'] - 1, 'UTF-8');
+                . mb_substr($result, $run['end'] + 1, null, 'UTF-8');
         }
 
         return $result;
