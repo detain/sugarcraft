@@ -9,7 +9,7 @@ use SugarCraft\Tick\Heartbeat;
 /**
  * Exports heartbeats as CSV with comma-separated values.
  */
-final class CsvExporter implements ExporterInterface
+final class CsvExporter implements TabularExporterInterface
 {
     /** @return list<string> */
     public function headers(): array
@@ -70,6 +70,11 @@ final class CsvExporter implements ExporterInterface
         $csv = stream_get_contents($fh);
         fclose($fh);
         return $csv;
+    }
+
+    public function export(string $name, array $heartbeats): string
+    {
+        return $this->encode($heartbeats);
     }
 
     public function format(): string
