@@ -378,7 +378,9 @@ final class InspectorTest extends TestCase
     public function testDeleteChars(): void
     {
         $seg = Inspector::parse("\x1b[3P")[0];
-        $this->assertStringContainsString('F1', $seg->describe());
+        // CSI P is Delete Character (DCH), not F1.
+        $this->assertStringContainsString('delete chars 3', $seg->describe());
+        $this->assertStringNotContainsString('F1', $seg->describe());
     }
 
     public function testCursorColumn(): void
@@ -670,5 +672,69 @@ final class InspectorTest extends TestCase
         // Trigger unknown ANSI color name (index out of range)
         $seg = Inspector::parse("\x1b[90m")[0];  // foreground bright + 0 = black
         $this->assertStringContainsString('foreground bright black', $seg->describe());
+    }
+
+    // --- Step 3: CSI P is DCH (delete chars), not F1 ---
+
+    public function testCsiPIsDeleteChar(): void
+    {
+        $desc = Inspector::describeCsi('2', 'P');
+        $this->assertStringContainsString('delete chars 2', $desc);
+        $this->assertStringNotContainsString('F1', $desc);
+    }
+
+    public function testCsiQIsGenericCsiQ(): void
+    {
+        // CSI Q has no standard bare meaning; should fall through to generic CSI label.
+        $desc = Inspector::describeCsi('', 'Q');
+        $this->assertStringContainsString('CSI', $desc);
+        $this->assertStringNotContainsString('F2', $desc);
+    }
+
+    // --- Step 4: sixel detection relies on DCS final byte, not 'sixel' substring ---
+
+    public function testDcsSixelNoFalsePositive(): void
+    {
+        // Payload containing 'sixel' word but no final q byte must NOT claim sixel.
+        $desc = Inspector::describeDcs('xsixelx');
+        $this->assertStringNotContainsString('sixel image', $desc);
+    }
+
+    public function testDcsSixelByFinalQ(): void
+    {
+        // DCS with final 'q' byte must claim sixel.
+        $desc = Inspector::describeDcs('', ord('q'));
+        $this->assertStringContainsString('sixel image', $desc);
+    }
+
+    // --- Step 5: OSC/APC control-byte sanitization in describe labels ---
+
+    public function testBinaryOscNoRawEscInLabel(): void
+    {
+        // An embedded ESC in an OSC title must not re-arm a sequence when
+        // the report is printed to a terminal.
+        $seg = Inspector::parse("\x1b]0;ab\x1bcd\x07")[0];
+        $desc = $seg->describe();
+        // The ESC byte must be replaced with a visible token.
+        $this->assertStringNotContainsString("\x1b", $desc);
+        $this->assertStringContainsString('set window title', $desc);
+    }
+
+    // --- Step 8: truncated extended-color detection ---
+
+    public function testTruncatedTruecolorIsFlagged(): void
+    {
+        // 38;2;10 is incomplete (missing G and B channels).
+        $desc = Inspector::describeCsi('38;2;10', 'm');
+        $this->assertStringContainsString('truncated', $desc);
+        $this->assertStringNotContainsString('rgb(10,0,0)', $desc);
+    }
+
+    public function testTruncated256IsFlagged(): void
+    {
+        // 38;5 is incomplete (missing the color index).
+        $desc = Inspector::describeCsi('38;5', 'm');
+        $this->assertStringContainsString('truncated', $desc);
+        $this->assertStringNotContainsString('256-color 0', $desc);
     }
 }

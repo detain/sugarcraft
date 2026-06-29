@@ -99,4 +99,21 @@ final class InspectorReportAsJsonTest extends TestCase
         $this->assertIsString($entry['content']);
         $this->assertIsString($entry['description']);
     }
+
+    /**
+     * Regression: binary / invalid-UTF-8 in OSC title must not crash reportAsJson().
+     * Before the fix json_encode returned false (TypeError against : string).
+     */
+    public function testBinaryOscTitleDoesNotCrash(): void
+    {
+        // 0xff 0xfe are invalid UTF-8 continuation bytes.
+        $json = Inspector::reportAsJson("\x1b]0;\xff\xfe\x07");
+        $this->assertIsString($json);
+        $decoded = json_decode($json, true);
+        $this->assertIsArray($decoded);
+        $this->assertCount(1, $decoded);
+        $this->assertSame('sequence', $decoded[0]['type']);
+        // The invalid bytes should be substituted; the label still describes the OSC.
+        $this->assertStringContainsString('set window title', $decoded[0]['description']);
+    }
 }
