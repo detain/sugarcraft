@@ -134,7 +134,11 @@ final class AsciinemaFormat
             return null;
         }
 
-        [$timeOffset, $type, $data] = $decoded;
+        // Use null coalescing to handle 2-element events (e.g. ["o"] with no data)
+        // and 3-element events (e.g. ["o", "data"]) gracefully.
+        $timeOffset = $decoded[0] ?? 0.0;
+        $type = $decoded[1] ?? '';
+        $data = $decoded[2] ?? '';
 
         // Convert relative time offset to absolute time from cassette start
         $t = $previousTime + (float) $timeOffset;

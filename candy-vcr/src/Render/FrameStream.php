@@ -95,28 +95,28 @@ final class FrameStream implements \IteratorAggregate
             EventKind::Output => $this->processOutput($event, $terminal),
             EventKind::Resize => $this->processResize($event, $terminal),
             EventKind::Quit => $terminal,
-            EventKind::Snapshot => $this->processSnapshot($event),
-            EventKind::Hide => $this->processHide(),
-            EventKind::Show => $this->processShow(),
+            EventKind::Snapshot => $this->processSnapshot($event, $terminal),
+            EventKind::Hide => $this->processHide($terminal),
+            EventKind::Show => $this->processShow($terminal),
         };
     }
 
-    private function processSnapshot(Event $event): Terminal
+    private function processSnapshot(Event $event, Terminal $terminal): Terminal
     {
         $this->pendingScreenshotPath = $event->payload['path'] ?? null;
-        return $this->terminal;
+        return $terminal;
     }
 
-    private function processHide(): Terminal
+    private function processHide(Terminal $terminal): Terminal
     {
         $this->captureCursor = false;
-        return $this->terminal;
+        return $terminal;
     }
 
-    private function processShow(): Terminal
+    private function processShow(Terminal $terminal): Terminal
     {
         $this->captureCursor = true;
-        return $this->terminal;
+        return $terminal;
     }
 
     private function processInput(Event $event, Terminal $terminal): Terminal

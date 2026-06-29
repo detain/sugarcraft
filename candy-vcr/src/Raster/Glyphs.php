@@ -23,6 +23,8 @@ final class Glyphs
     /** @var array<string, \GdImage> */
     private array $cache = [];
 
+    private const MAX_CACHE_TILES = 4096;
+
     private int $fontSize;
 
     private Theme $theme;
@@ -33,6 +35,8 @@ final class Glyphs
     private int $hits = 0;
 
     private int $misses = 0;
+
+    private int $evictions = 0;
 
     public function __construct(
         private int $cellW,
@@ -47,11 +51,11 @@ final class Glyphs
     }
 
     /**
-     * @return array{hits:int, misses:int}
+     * @return array{hits:int, misses:int, evictions:int}
      */
     public function cacheStats(): array
     {
-        return ['hits' => $this->hits, 'misses' => $this->misses];
+        return ['hits' => $this->hits, 'misses' => $this->misses, 'evictions' => $this->evictions];
     }
 
     public function cellWidth(): int
@@ -100,6 +104,7 @@ final class Glyphs
         }
 
         $this->misses++;
+        $this->evictIfNeeded();
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $this->cellW);
         $this->cache[$key] = $tile;
 
@@ -127,11 +132,29 @@ final class Glyphs
         }
 
         $this->misses++;
+        $this->evictIfNeeded();
         $wideW = $this->cellW * 2;
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $wideW);
         $this->cache[$key] = $tile;
 
         return $tile;
+    }
+
+    /**
+     * Evict the oldest cache entry if the cache has reached the size limit.
+     * Uses simple FIFO eviction via array_key_first.
+     */
+    private function evictIfNeeded(): void
+    {
+        if (count($this->cache) >= self::MAX_CACHE_TILES) {
+            $oldestKey = array_key_first($this->cache);
+            if ($oldestKey !== null) {
+                $oldImage = $this->cache[$oldestKey];
+                unset($this->cache[$oldestKey]);
+                imagedestroy($oldImage);
+                $this->evictions++;
+            }
+        }
     }
 
     /**
@@ -187,7 +210,10 @@ final class Glyphs
         }
 
         if ($fontPath !== null) {
-            $boldInt = $bold ? 1 : 0;
+            // Bold is handled by resolving a -Bold font face via FontLoader::resolve()
+            // rather than synthetic emboldening via imagettftext's bold parameter.
+            // The $bold parameter is passed through to the font resolution path
+            // (style='bold') and the resulting -Bold face is used directly.
             imagettftext($tile, (float) $this->fontSize, $angle, $xOffset, $yOffset, $fgColor, $fontPath, $char);
         }
 
