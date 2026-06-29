@@ -138,6 +138,14 @@ final class SugarBoxer
     {
         if ($w <= 0 || $h <= 0) return;
 
+        // Apply margin as outer inset (shifts the region inward)
+        [$mt, $mr, $mb, $ml] = $node->margin;
+        $x += $ml;
+        $y += $mt;
+        $w -= $ml + $mr;
+        $h -= $mt + $mb;
+        if ($w <= 0 || $h <= 0) return;
+
         switch ($node->kind) {
             case Node::LEAF:
                 $this->renderLeaf($node, $x, $y, $w, $h, $cells);
@@ -179,11 +187,30 @@ final class SugarBoxer
 
         if ($pcw <= 0 || $pch <= 0) return;
 
-        if ($node->border) {
-            $this->drawBorder($node->borderStyle, $x, $y, $w, $h, $cells);
+        // Apply maxWidth constraint: soft-clamp the content width to maxWidth
+        // and recompute horizontal padding to stay centered.
+        if ($node->maxWidth > 0 && $node->maxWidth < $pcw) {
+            $clampedW = $node->maxWidth;
+            $clampedPadH = ($p * 2 >= $clampedW) ? \max(0, \intdiv($clampedW - 1, 2)) : $p;
+            $pcx = $cx + $clampedPadH;
+            $pcw = $clampedW - $clampedPadH * 2;
+        }
+        // Apply maxHeight constraint: soft-clamp the content height to maxHeight
+        // and recompute vertical padding to stay centered.
+        if ($node->maxHeight > 0 && $node->maxHeight < $pch) {
+            $clampedH = $node->maxHeight;
+            $clampedPadV = ($p * 2 >= $clampedH) ? \max(0, \intdiv($clampedH - 1, 2)) : $p;
+            $pcy = $cy + $clampedPadV;
+            $pch = $clampedH - $clampedPadV * 2;
         }
 
-        $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells);
+        if ($pcw <= 0 || $pch <= 0) return;
+
+        if ($node->border) {
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
+        }
+
+        $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells, $node->style, $node->alignH, $node->alignV);
     }
 
     private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
@@ -218,7 +245,7 @@ final class SugarBoxer
 
         // Draw outer border first
         if ($node->border) {
-            $this->drawBorder($node->borderStyle, $x, $y, $w, $h, $cells);
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
 
         // Render each child. distribute() already bakes the border pad into
@@ -231,6 +258,9 @@ final class SugarBoxer
             $ow = $i === $n - 1
                 ? $w - $b - $offsets[$i]
                 : $offsets[$i + 1] - $offsets[$i] - $sp;
+            if ($child->maxWidth > 0) {
+                $ow = \min($ow, $child->maxWidth);
+            }
 
             $this->renderNode($child, $ox, $y + $b, $ow, $availableH, $cells);
 
@@ -273,7 +303,7 @@ final class SugarBoxer
         }
 
         if ($node->border) {
-            $this->drawBorder($node->borderStyle, $x, $y, $w, $h, $cells);
+            $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
 
         for ($i = 0; $i < $n; $i++) {
@@ -282,6 +312,9 @@ final class SugarBoxer
             $oh = $i === $n - 1
                 ? $h - $b - $offsets[$i]
                 : $offsets[$i + 1] - $offsets[$i] - $sp;
+            if ($child->maxHeight > 0) {
+                $oh = \min($oh, $child->maxHeight);
+            }
 
             $this->renderNode($child, $x + $b, $oy, $availableW, $oh, $cells);
 
@@ -303,18 +336,55 @@ final class SugarBoxer
 
     /**
      * Render text content within a content region with word-wrap.
+     *
+     * @param Style|null  $style   Optional SGR style prefix (fg/bg/attrs from candy-sprinkles)
+     * @param Align|null $alignH  Horizontal text alignment
+     * @param VAlign|null $alignV Vertical text alignment
      */
-    private function renderContent(string $text, int $x, int $y, int $w, int $h, array &$cells): void
+    private function renderContent(string $text, int $x, int $y, int $w, int $h, array &$cells, ?Style $style = null, ?Align $alignH = null, ?VAlign $alignV = null): void
     {
         if ($w <= 0 || $h <= 0) return;
 
         $wrapped = $this->wordWrap($text, $w);
         $linesToRender = \array_slice($wrapped, 0, $h);
+        $numLines = \count($linesToRender);
+
+        // Compute vertical alignment top pad
+        $topPad = 0;
+        if ($alignV === VAlign::Middle) {
+            $topPad = \intdiv($h - $numLines, 2);
+        } elseif ($alignV === VAlign::Bottom) {
+            $topPad = $h - $numLines;
+        }
+        $topPad = \max(0, $topPad);
+
+        // Pre-compute the SGR prefix from the style (render a single-char probe and strip trailing reset)
+        $sgrPrefix = '';
+        if ($style !== null) {
+            $probe = $style->render(' ');
+            // The render output is: SGR-open + ' ' + SGR-close
+            // Split on the sentinel byte (NUL) to isolate the opening SGR.
+            $parts = \explode("\x00", $probe, 2);
+            $sgrPrefix = $parts[0] ?? '';
+        }
 
         foreach ($linesToRender as $lineIdx => $line) {
-            $lineY = $y + $lineIdx;
+            $lineY = $y + $topPad + $lineIdx;
             if ($lineY >= \count($cells)) break;
-            $this->placeLine($line, $x, $lineY, $w, $cells);
+
+            // Apply horizontal alignment: compute left pad and reduce effective width
+            $leftPad = 0;
+            $lw = $this->strWidth($line);
+            if ($alignH === Align::Center) {
+                $leftPad = \intdiv($w - $lw, 2);
+            } elseif ($alignH === Align::Right) {
+                $leftPad = $w - $lw;
+            }
+            $leftPad = \max(0, $leftPad);
+
+            // Prepend SGR prefix to styled lines
+            $lineToPlace = $sgrPrefix !== '' ? $sgrPrefix . $line : $line;
+            $this->placeLine($lineToPlace, $x + $leftPad, $lineY, $w, $cells);
         }
     }
 
@@ -624,28 +694,48 @@ final class SugarBoxer
      * Draw a border using the characters from the given Border object.
      * Uses Border::rounded() as default when $border is null.
      */
-    private function drawBorder(?Border $border, int $x, int $y, int $w, int $h, array &$cells): void
+    private function drawBorder(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
     {
         if ($w < 2 || $h < 2) return;
 
-        $b = $border ?? Border::rounded();
+        $border = $node->borderStyle ?? Border::rounded();
+        $title  = $node->title;
 
         // Corners
-        $this->setChar($x,           $y,           $b->topLeft,     $cells);
-        $this->setChar($x + $w - 1,  $y,           $b->topRight,    $cells);
-        $this->setChar($x,           $y + $h - 1,  $b->bottomLeft,  $cells);
-        $this->setChar($x + $w - 1,  $y + $h - 1,  $b->bottomRight, $cells);
+        $this->setChar($x,           $y,           $border->topLeft,     $cells);
+        $this->setChar($x + $w - 1,  $y,           $border->topRight,    $cells);
+        $this->setChar($x,           $y + $h - 1,  $border->bottomLeft,  $cells);
+        $this->setChar($x + $w - 1,  $y + $h - 1,  $border->bottomRight, $cells);
 
         // Top/bottom edges
         for ($i = 1; $i < $w - 1; $i++) {
-            $this->setChar($x + $i, $y,           $b->top,    $cells);
-            $this->setChar($x + $i, $y + $h - 1,  $b->bottom, $cells);
+            $this->setChar($x + $i, $y,           $border->top,    $cells);
+            $this->setChar($x + $i, $y + $h - 1,  $border->bottom, $cells);
         }
 
         // Left/right edges
         for ($j = 1; $j < $h - 1; $j++) {
-            $this->setChar($x,           $y + $j, $b->left,  $cells);
-            $this->setChar($x + $w - 1,  $y + $j, $b->right, $cells);
+            $this->setChar($x,           $y + $j, $border->left,  $cells);
+            $this->setChar($x + $w - 1,  $y + $j, $border->right, $cells);
+        }
+
+        // Title: overlay on top border row, clipped to available interior width.
+        // Only render when there is room for corners + at least 1 title cell ($w >= 4).
+        // Uses setChar per grapheme (visualCells/strWidth) to handle wide glyphs.
+        if ($title !== '' && $w >= 4) {
+            $maxTitleLen = $w - 2; // interior width (cols between corners)
+            ['cells' => $segments] = $this->visualCells($title);
+            $col = 0;
+            foreach ($segments as $seg) {
+                $gw = $this->strWidth($seg);
+                if ($col + $gw > $maxTitleLen) break;
+                $this->setChar($x + 1 + $col, $y, $seg, $cells);
+                // Blank continuation cells for wide graphemes
+                for ($k = 1; $k < $gw; $k++) {
+                    $this->setChar($x + 1 + $col + $k, $y, '', $cells);
+                }
+                $col += $gw;
+            }
         }
     }
 
@@ -694,12 +784,19 @@ final class SugarBoxer
     private function distribute(int $available, array $weights, int $totalWeight, int $spacing, int $borderPad): array
     {
         $n = \count($weights);
+        $contentSpan = $available - $spacing * \max(0, $n - 1);
         $offsets = [0 => $borderPad];
+        $used = $borderPad;
 
         for ($i = 0; $i < $n - 1; $i++) {
-            $share = (int) \round($weights[$i] / $totalWeight * ($available - $spacing * ($n - 1)));
-            $share = \max($share, 1);
-            $offsets[] = $offsets[$i] + $share + $spacing;
+            $share = (int) \round($weights[$i] / $totalWeight * $contentSpan);
+            // Reserve at least 1 col per remaining child when room exists;
+            // when space runs out, a child legitimately gets 0 (the
+            // $w <= 0 guard in renderNode skips it gracefully).
+            $remainingChildren = $n - 1 - $i;
+            $share = \max(0, \min($share, $contentSpan - $used - $remainingChildren));
+            $used += $share + $spacing;
+            $offsets[] = $used;
         }
 
         return $offsets;
