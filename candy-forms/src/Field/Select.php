@@ -374,6 +374,7 @@ final class Select implements \SugarCraft\Forms\Field
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
     public function getDescription(): string  { return $this->resolveDescription($this->description); }
     public function getError(): ?string       { return null; }
+    public function revalidate(): Field       { return $this; }
     public function skippable(): bool         { return false; }
 
     /**

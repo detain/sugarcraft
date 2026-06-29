@@ -84,4 +84,15 @@ interface Field
      *                                     keyed by field key
      */
     public function isHidden(array $values): bool;
+
+    /**
+     * Re-run validators/constraints against the current value and return
+     * a new field instance with the recomputed error. Idempotent: if no
+     * error exists and the value is unchanged, returns $this. Does not
+     * alter focus.
+     *
+     * This is called by Form::validateAll() and by the submit gate so
+     * that untouched-but-required fields surface errors at commit time.
+     */
+    public function revalidate(): Field;
 }
