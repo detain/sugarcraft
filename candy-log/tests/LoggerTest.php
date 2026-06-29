@@ -242,4 +242,48 @@ final class LoggerTest extends TestCase
         // Verify the timestamp is a real date in Y/m/d H:i:s format
         $this->assertMatchesRegularExpression('/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/', $content);
     }
+
+    public function testSetReportTimestampKeepsCustomFormatter(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $jsonFormatter = new JsonFormatter(true);
+        $log = Logger::new(
+            formatter: $jsonFormatter,
+            level: Level::Debug,
+            reportTimestamp: true,
+            reportCaller: false,
+            stream: $stream,
+        );
+        // Calling setReportTimestamp(false) should NOT destroy the JsonFormatter
+        $log->setReportTimestamp(false);
+        $log->info('json still');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        // Must still be valid JSON with level field
+        $this->assertStringContainsString('"level"', $content);
+        $this->assertStringContainsString('json still', $content);
+    }
+
+    public function testSetReportCallerPreservesCustomFormatter(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $jsonFormatter = new JsonFormatter(true);
+        $log = Logger::new(
+            formatter: $jsonFormatter,
+            level: Level::Debug,
+            reportTimestamp: true,
+            reportCaller: false,
+            stream: $stream,
+        );
+        // Calling setReportCaller(true) should NOT destroy the JsonFormatter
+        $log->setReportCaller(true);
+        $log->info('json still');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        // Must still be valid JSON with level field
+        $this->assertStringContainsString('"level"', $content);
+        $this->assertStringContainsString('json still', $content);
+    }
 }
