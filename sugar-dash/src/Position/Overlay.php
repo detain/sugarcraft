@@ -76,8 +76,8 @@ final class Overlay
      */
     private static function calculateX(int $overlayWidth, int $anchorX, int $containerWidth): int
     {
-        // Align left edge with anchor
-        $x = $anchorX;
+        // Align left edge with anchor, but never go left of 0.
+        $x = max(0, $anchorX);
 
         // Clamp to container bounds
         if ($x + $overlayWidth > $containerWidth) {
