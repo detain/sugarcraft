@@ -139,11 +139,15 @@ final class AsyncOps
                 \React\EventLoop\Loop::get()->addTimer(
                     $backoff,
                     static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred): void {
-                        $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1);
-                        $next->then(
-                            static fn ($v) => $deferred->resolve($v),
-                            static fn ($e) => $deferred->reject($e),
-                        );
+                        try {
+                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1);
+                            $next->then(
+                                static fn ($v) => $deferred->resolve($v),
+                                static fn ($e) => $deferred->reject($e),
+                            );
+                        } catch (\Throwable $e) {
+                            $deferred->reject($e);
+                        }
                     },
                 );
                 return $deferred->promise();
