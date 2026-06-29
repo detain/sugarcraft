@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Position;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -83,11 +84,15 @@ final class Center
             return $content;
         }
 
-        $measured = self::measureRenderedView($content);
-        $offsetX = self::calculateOffsetX($content, $width);
+        // Strip ANSI from content so padding is calculated on clean text
+        // and the final output contains no escape sequences.
+        $cleanContent = Ansi::strip($content);
+
+        $measured = self::measureRenderedView($cleanContent);
+        $offsetX = self::calculateOffsetX($cleanContent, $width);
         $offsetY = self::calculateOffsetY($measured['height'], $height);
 
-        $lines = explode("\n", $content);
+        $lines = explode("\n", $cleanContent);
         $result = [];
 
         // Add top padding

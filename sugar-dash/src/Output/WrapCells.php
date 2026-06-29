@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Output;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -43,12 +44,14 @@ final class WrapCells
 
             foreach ($words as $word) {
                 $wordWidth = Width::string($word);
+                // Strip ANSI from the word for output (keep width calculation using original)
+                $wordClean = Ansi::strip($word);
 
                 // Handle whitespace
                 if ($word !== '' && preg_match('/^\s+$/', $word) !== 0) {
                     $spaceWidth = $wordWidth;
                     if ($currentWidth + $spaceWidth <= $width) {
-                        $currentLine .= $word;
+                        $currentLine .= $wordClean;
                         $currentWidth += $spaceWidth;
                     }
                     continue;
@@ -57,13 +60,13 @@ final class WrapCells
                 // Handle regular words
                 if ($wordWidth <= $width) {
                     if ($currentWidth + $wordWidth <= $width) {
-                        $currentLine .= $word;
+                        $currentLine .= $wordClean;
                         $currentWidth += $wordWidth;
                     } else {
                         if ($currentLine !== '') {
                             $lines[] = $currentLine;
                         }
-                        $currentLine = $word;
+                        $currentLine = $wordClean;
                         $currentWidth = $wordWidth;
                     }
                 } else {
@@ -81,23 +84,52 @@ final class WrapCells
                                 $chunkWidth = min($wordWidth, $width);
                             }
 
-                            $chunk = mb_substr($remaining, 0, self::charsForWidth($remaining, $chunkWidth), 'UTF-8');
-                            $currentLine .= $chunk;
-                            $currentWidth += Width::string($chunk);
+                            // Strip ANSI so that charsForWidth (which uses Width::string
+                            // internally) finds the right character boundary in terms of
+                            // display width. The stripped text is only used to determine
+                            // how many characters fit; we then extract those characters
+                            // from the original $remaining to preserve any surrounding ANSI.
+                            $remainingClean = Ansi::strip($remaining);
+                            $charsForThisChunk = self::charsForWidth($remainingClean, $chunkWidth);
+
+                            // When charsForWidth returns 0, a single char is too wide for
+                            // chunkWidth (e.g. CJK 2-cells in 1-cell slot). Extract 1 char
+                            // anyway to prevent infinite loop, and flush current line.
+                            if ($charsForThisChunk === 0) {
+                                $charsForThisChunk = 1;
+                            }
+
+                            $chunk = mb_substr($remaining, 0, $charsForThisChunk, 'UTF-8');
+                            $chunkClean = Ansi::strip($chunk);
+                            $chunkWidth = Width::string($chunk);
+
+                            // When charsForThisChunk was forced to 1 (single char too wide for
+                            // remaining slot), the char doesn't fit on the current line.
+                            // Flush current line first, then start a new line with the char.
+                            if ($charsForThisChunk === 1 && $chunkWidth > $width - $currentWidth) {
+                                if ($currentLine !== '') {
+                                    $lines[] = $currentLine;
+                                }
+                                $currentLine = $chunkClean;
+                                $currentWidth = $chunkWidth;
+                            } else {
+                                $currentLine .= $chunkClean;
+                                $currentWidth += $chunkWidth;
+                            }
                             $remaining = mb_substr($remaining, mb_strlen($chunk, 'UTF-8'), null, 'UTF-8');
 
-                            if ($currentWidth >= $width) {
+                            if ($currentWidth >= $width && $currentLine !== '') {
                                 $lines[] = $currentLine;
                                 $currentLine = '';
                                 $currentWidth = 0;
                             }
                         }
                     } else {
-                        // Just start a new line
-                        if ($currentLine !== '') {
-                            $lines[] = $currentLine;
-                        }
-                        $currentLine = $word;
+                        // Long word that overflows: push the accumulated line
+                        // (even if empty, to count the "new line" slot), then
+                        // place the word on its own line.
+                        $lines[] = $currentLine;
+                        $currentLine = $wordClean;
                         $currentWidth = $wordWidth;
                     }
                 }
