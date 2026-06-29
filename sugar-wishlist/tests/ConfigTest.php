@@ -151,4 +151,48 @@ final class ConfigTest extends TestCase
         $this->expectException(\RuntimeException::class);
         Config::load('/nonexistent/path/wishlist.json');
     }
+
+    public function testYamlDocMarkerParsesSuccessfully(): void
+    {
+        // YAML document markers (---) at the start should be skipped gracefully.
+        $raw = <<<YAML
+---
+- name: prod
+  host: prod.example.com
+YAML;
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('prod', $endpoints[0]->name);
+    }
+
+    public function testYamlTabIndentedContinuationValue(): void
+    {
+        // A tab before a continuation value should be normalized to spaces
+        // so the nested option under `options:` parses correctly.
+        $raw = <<<YAML
+- name: prod
+  host: prod.example.com
+  options:
+  	- ServerAliveInterval=60
+YAML;
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertCount(1, $endpoints);
+        $this->assertSame(
+            ['ServerAliveInterval=60'],
+            $endpoints[0]->options,
+        );
+    }
+
+    public function testYamlGarbageLineStillThrows(): void
+    {
+        // A genuinely malformed line (not a comment, not a doc marker, not
+        // a valid key:value) should still throw yaml_unparseable.
+        $raw = <<<YAML
+- name: prod
+  host: prod.example.com
+!!!not a valid line!!!
+YAML;
+        $this->expectException(\RuntimeException::class);
+        Config::parse($raw, 'wishlist.yml');
+    }
 }
