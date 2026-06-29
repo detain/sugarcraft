@@ -69,6 +69,22 @@ final class HermitTest extends TestCase
         $this->assertSame(5, $h->itemCount());
     }
 
+    public function testBackspaceCursorNeverNegative(): void
+    {
+        // Set a filter that excludes everything, then type and backspace
+        // to an empty filtered set — cursor must floor at 0, not -1.
+        $h = $this->makeHermit()
+            ->setFilterFn(static fn(Item $i): bool => false)
+            ->show()
+            ->type('a'); // all filtered out
+
+        $this->assertSame(0, $h->itemCount());
+
+        $h = $h->backspace(); // empty filter → empty list, cursor floor at 0
+
+        $this->assertSame(0, $h->cursor(), 'cursor must be 0, not -1, on empty filtered list');
+    }
+
     public function testClearFilter(): void
     {
         $h = $this->makeHermit()->show()->type('b');
@@ -148,9 +164,13 @@ final class HermitTest extends TestCase
             ->setMatchStyle("\x1b[33m")
             ->setWindowHeight(5)
             ->setWindowWidth(40)
-            ->setOffset(5, 3);
+            ->show();
 
-        $this->assertTrue($h->isShown()); // setPrompt doesn't auto-show
+        $this->assertTrue($h->isShown()); // show() does set isShown
+
+        // setOffset is a pure position setter — does NOT auto-show
+        $h2 = $this->makeHermit()->setOffset(5, 3);
+        $this->assertFalse($h2->isShown(), 'setOffset alone must not show the overlay');
     }
 
     public function testWithItemsReturnsNewInstance(): void
@@ -287,6 +307,30 @@ final class HermitTest extends TestCase
         $this->assertStringContainsString("\x1b[31m", $view);
     }
 
+    public function testHighlightMatchesExactSGRBytes(): void
+    {
+        // 'banana' filtered by 'an' yields the highlighted fragment:
+        // "\x1b[33man\x1b[0m" embedded in the item line (yellow highlight).
+        // Use explicit windowWidth to avoid computeWidth() path and ensure
+        // no truncateAnsi truncation of the highlighted string.
+        $h = Hermit::new([new FilteredItem(1, 'banana')])
+            ->setWindowWidth(40)
+            ->setMatchStyle("\x1b[33m")
+            ->show()
+            ->type('an');
+
+        $bg = str_repeat(str_repeat(' ', 40) . "\n", 5);
+        $view = $h->View($bg);
+
+        // Assert the exact SGR placement: opening code, matched run, reset.
+        // strpos is used directly because PHPUnit's assertStringContainsString
+        // may represent non-printable bytes differently in failure output.
+        $this->assertNotFalse(
+            \strpos($view, "\x1b[33man\x1b[0m"),
+            'highlighted substring with SGR wrap should appear in View output',
+        );
+    }
+
     public function testSigwinchOnResizeCallback(): void
     {
         $receivedCols = -1;
@@ -311,5 +355,114 @@ final class HermitTest extends TestCase
         // attachSigwinch returns false when no callback is set
         $hNoCb = $this->makeHermit();
         $this->assertFalse($hNoCb->attachSigwinch());
+    }
+
+    public function testAttachSigwinchInstallsHandler(): void
+    {
+        // attachSigwinch returns true only when SIGWINCH + pcntl are available.
+        if (!\function_exists('pcntl_signal') || !\defined('SIGWINCH')) {
+            $this->markTestSkipped('SIGWINCH or pcntl not available');
+        }
+
+        $h = $this->makeHermit()->withOnResize(
+            static function (int $cols, int $rows): void {
+                // no-op callback for testing attachSigwinch install
+            },
+        );
+
+        $result = $h->attachSigwinch();
+
+        $this->assertTrue($result, 'attachSigwinch should return true when callback set and signals available');
+    }
+
+    public function testScrollingViewportKeepsCursorVisible(): void
+    {
+        // Build 20 items in a windowHeight=5 (so 3 visible rows for items).
+        $items = [];
+        for ($i = 0; $i < 20; $i++) {
+            $items[] = new FilteredItem($i + 1, "item{$i}");
+        }
+        $h = Hermit::new($items)
+            ->setWindowHeight(5)
+            ->setWindowWidth(40)
+            ->show();
+
+        // cursorBottom() moves to the last item (index 19).
+        $h = $h->cursorBottom();
+
+        // The viewport should have scrolled so item[19] is visible.
+        $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+
+        // The last item's text appears in output; first item does not (viewport scrolled).
+        $this->assertStringContainsString('item19', $result, 'last item should be visible in scrolled viewport');
+        $this->assertStringNotContainsString('item0', $result, 'first item should not be visible when scrolled to bottom');
+    }
+
+    public function testScrollingViewportFitsInWindowCase(): void
+    {
+        // When all items fit in the window, item[0] should still render at top.
+        $items = [
+            new FilteredItem(1, 'apple'),
+            new FilteredItem(2, 'banana'),
+            new FilteredItem(3, 'cherry'),
+        ];
+        $h = Hermit::new($items)
+            ->setWindowHeight(5)
+            ->setWindowWidth(40)
+            ->show();
+
+        $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+
+        // First item should be visible at the top when items fit in window.
+        $this->assertStringContainsString('apple', $result, 'first item should be visible at top when fits in window');
+    }
+
+    public function testHelpBarAndStatusBarRenderInView(): void
+    {
+        // Use 2 items so there's room for bars
+        // Background needs to be tall enough for bars (windowHeight=5 + 2 bars = 7 lines)
+        $items = [
+            new FilteredItem(1, 'apple'),
+            new FilteredItem(2, 'banana'),
+        ];
+        $helpBar = new HelpBar(['Esc' => 'close']);
+        $statusBar = new StatusBar('3 of 12');
+
+        $h = Hermit::new($items)
+            ->setWindowHeight(5)
+            ->setWindowWidth(40)
+            ->withHelpBar($helpBar)
+            ->withStatusBar($statusBar)
+            ->show();
+
+        // Background must be tall enough for the bars (5 window + 2 bars = 7 min)
+        $bg = implode("\n", array_fill(0, 10, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+
+        // Both HelpBar and StatusBar content should appear in the output.
+        $this->assertStringContainsString('Esc: close', $result, 'HelpBar content should appear');
+        $this->assertStringContainsString('3 of 12', $result, 'StatusBar content should appear');
+    }
+
+    public function testItemWithEmbeddedNewlineDoesNotInjectRows(): void
+    {
+        // An item value containing an embedded newline should be sanitized
+        // to a space, so it doesn't inject extra rows in the output.
+        $h = Hermit::new([new FilteredItem(1, "foo\nbar")])
+            ->setWindowHeight(3)
+            ->setWindowWidth(40)
+            ->show();
+
+        $bg = implode("\n", array_fill(0, 3, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+        $resultLines = explode("\n", rtrim($result, "\n"));
+
+        // The overlay should not inject extra rows - still 3 lines like the background.
+        $this->assertSame(3, count($resultLines), 'overlay should not inject rows from embedded newline');
+        // The sanitized item should show 'foo' (newline replaced with space, becoming 'foo bar')
+        $this->assertStringContainsString('foo', $result, 'item value should be present');
+        $this->assertStringNotContainsString("foo\nbar", $result, 'raw newline should not appear in output');
     }
 }

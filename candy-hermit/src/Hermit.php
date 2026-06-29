@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Hermit;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\FuzzyMatcher;
@@ -42,7 +43,7 @@ final class Hermit
 
     private string $prompt = '> ';
 
-    /** @var \Closure(string $item, bool $isSelected): string */
+    /** @var \Closure(string $item, bool $isSelected, int $number = 0): string */
     private \Closure $itemFormatter;
 
     /** @var \Closure(Item $item): bool Filter function applied to items. */
@@ -96,11 +97,11 @@ final class Hermit
         ?\Closure $itemFormatter = null,
         ?\Closure $filterFn = null,
     ) {
-        $this->allItems     = \array_values($items);
+        $this->allItems      = $this->coerceItems($items);
         $this->filteredItems = $this->allItems;
         $this->itemFormatter = $itemFormatter
-            ?? fn(string $item, bool $selected): string =>
-                ($selected ? '● ' : '  ') . $item;
+            ?? fn(string $item, bool $selected, int $number = 0): string =>
+                ($selected ? '● ' : '  ') . ($number > 0 ? "$number. " : '') . $item;
         $this->filterFn = $filterFn
             ?? fn(Item $item): bool => true;
     }
@@ -121,7 +122,7 @@ final class Hermit
     public function withItems(array $items): self
     {
         $clone = clone $this;
-        $clone->allItems = \array_values($items);
+        $clone->allItems = $clone->coerceItems($items);
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
         return $clone;
@@ -160,10 +161,16 @@ final class Hermit
         $clone = clone $this;
         $clone->xOffset = $x;
         $clone->yOffset = $y;
-        $clone->isShown = true;
         return $clone;
     }
 
+    /**
+     * Set the formatter for item display lines.
+     *
+     * The closure receives the item's value (string), a bool indicating
+     * whether it is currently selected, and optionally the item's number
+     * (int, default 0) — it always returns the formatted display string.
+     */
     public function setItemFormatter(\Closure $fn): self
     {
         $clone = clone $this;
@@ -248,15 +255,14 @@ final class Hermit
     }
 
     /**
-     * Attach a SIGWINCH handler via SignalForwarder that forwards
-     * terminal resize events to the stored $onResize callback.
+     * Attach a SIGWINCH handler via SignalForwarder that queries the live
+     * TTY dimensions and forwards (cols, rows) to the stored $onResize callback.
      *
-     * Requires ext-pcntl. Installs a SIGWINCH handler that calls
-     * SizeIoctl against /dev/tty and then invokes the $onResize
-     * closure with (cols, rows) if one was registered via withOnResize().
-     *
-     * Returns true if the handler was installed; false if pcntl
-     * is unavailable or SIGWINCH is not defined.
+     * Requires ext-pcntl. Queries SugarCraft\Core\Util\Tty::size() on \STDIN
+     * to get the current terminal geometry, then invokes the $onResize closure
+     * with the fresh dimensions. Falls back to 80x24 if the query fails (e.g.
+     * non-interactive context). Returns true if the handler was installed;
+     * false if pcntl/SIGWINCH is unavailable.
      *
      * Mirrors SignalForwarder::attachSigwinchToFd pattern.
      */
@@ -268,11 +274,8 @@ final class Hermit
 
         $hermit = $this;
         return SignalForwarder::attachSigwinchToFd(
-            \STDIN,
-            static fn(): array => [
-                'cols' => (int) (\getenv('COLUMNS') ?: 80),
-                'rows' => (int) (\getenv('LINES') ?: 24),
-            ],
+            (int) \STDIN, // int fd, not resource (PHP 8+ casts resource to its fd number)
+            static fn(): array => $hermit->ttySize(),
             static function (int $cols, int $rows) use ($hermit): void {
                 $cb = $hermit->onResize;
                 if ($cb !== null) {
@@ -280,6 +283,25 @@ final class Hermit
                 }
             },
         );
+    }
+
+    /**
+     * Query the TTY geometry via SugarCraft\Core\Util\Tty.
+     * Falls back to 80×24 if the query fails (non-interactive context).
+     *
+     * @return array{cols: int, rows: int}
+     */
+    private function ttySize(): array
+    {
+        try {
+            $size = (new Tty(\STDIN))->size();
+            return [
+                'cols' => $size['cols'] ?: 80,
+                'rows' => $size['rows'] ?: 24,
+            ];
+        } catch (\Throwable) {
+            return ['cols' => 80, 'rows' => 24];
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -320,7 +342,7 @@ final class Hermit
         }
         $clone->filterText = \substr($clone->filterText, 0, -1);
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
-        $clone->cursor = \min($clone->cursor, \count($clone->filteredItems) - 1);
+        $clone->cursor = \max(0, \min($clone->cursor, \count($clone->filteredItems) - 1));
         return $clone;
     }
 
@@ -466,13 +488,20 @@ final class Hermit
         $sep = \str_repeat('─', $winWidth);
         $lines[] = $sep;
 
-        // Item lines
+        // Item lines — scrolling viewport keeps $this->cursor in view
         $items = $this->filteredItems;
-        $maxShow = \min(\count($items), $this->windowHeight - 2);
+        $visibleRows = \max(0, $this->windowHeight - 2);
+        $maxShow = \min(\count($items), $visibleRows);
+        // Center the cursor in the visible window when possible
+        $top = $this->cursor < $visibleRows
+            ? 0
+            : \min($this->cursor - $visibleRows + 1, \count($items) - $visibleRows);
+        $top = \max(0, $top);
 
         for ($i = 0; $i < $maxShow; $i++) {
-            $isSelected = ($i === $this->cursor);
-            $itemStr    = ($this->itemFormatter)($items[$i]->value(), $isSelected);
+            $actualIndex = $top + $i;
+            $isSelected = ($actualIndex === $this->cursor);
+            $itemStr    = ($this->itemFormatter)($items[$actualIndex]->value(), $isSelected, $items[$actualIndex]->number());
 
             if ($filter !== '' && $this->matchStyle !== '') {
                 $itemStr = $this->ranker !== null
@@ -483,13 +512,35 @@ final class Hermit
             // ANSI-aware truncate + pad: a matchStyle-highlighted item keeps its
             // escape sequences and the box edge stays straight (the old
             // mb_substr/str_pad counted escape bytes as visible columns).
+            // Sanitize: strip control bytes (newline/cr) that break one-line-per-row invariant
+            $itemStr = \str_replace(["\r\n", "\r", "\n"], ' ', $itemStr);
             $itemStr = Width::padRight(Width::truncateAnsi($itemStr, $winWidth), $winWidth);
             $lines[] = $itemStr;
         }
 
-        // Fill remaining lines if fewer items than window height
+        // Fill remaining lines if fewer items than window height,
+        // then append visible HelpBar/StatusBar if set and non-empty.
+        // Bars are rendered inside the windowHeight constraint.
         while (\count($lines) < $this->windowHeight) {
             $lines[] = \str_repeat(' ', $winWidth);
+        }
+
+        // HelpBar renders below items (bars extend the overlay past windowHeight)
+        if ($this->helpBar !== null && $this->helpBar->isVisible()) {
+            $helpLine = $this->helpBar->render();
+            if ($helpLine !== '') {
+                $helpLine = Width::padRight(Width::truncateAnsi($helpLine, $winWidth), $winWidth);
+                $lines[] = $helpLine;
+            }
+        }
+
+        // StatusBar renders below HelpBar (bars extend the overlay past windowHeight)
+        if ($this->statusBar !== null && $this->statusBar->isVisible()) {
+            $statusLine = $this->statusBar->render();
+            if ($statusLine !== '') {
+                $statusLine = Width::padRight(Width::truncateAnsi($statusLine, $winWidth), $winWidth);
+                $lines[] = $statusLine;
+            }
         }
 
         // Composite onto background
@@ -499,6 +550,26 @@ final class Hermit
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Coerce a mixed input array into a list of Item objects.
+     *
+     * Strings are wrapped as FilteredItem with a 1-based ordinal.
+     * Items already implementing Item are passed through unchanged.
+     *
+     * @param array<Item|string> $items
+     * @return list<Item>
+     */
+    private function coerceItems(array $items): array
+    {
+        $result = [];
+        foreach (\array_values($items) as $i => $item) {
+            $result[] = $item instanceof Item
+                ? $item
+                : new FilteredItem($i + 1, (string) $item);
+        }
+        return $result;
+    }
 
     /**
      * Filter allItems using the configured filter function.
@@ -576,7 +647,7 @@ final class Hermit
         $filterLen = Width::of($this->filterText);
         $itemMax   = 0;
         foreach ($this->filteredItems as $item) {
-            $itemLen = Width::of(($this->itemFormatter)($item->value(), false));
+            $itemLen = Width::of(($this->itemFormatter)($item->value(), false, $item->number()));
             if ($itemLen > $itemMax) $itemMax = $itemLen;
         }
         return \max($promptLen + $filterLen + 5, $itemMax + 2);
@@ -589,62 +660,45 @@ final class Hermit
      */
     private function printableText(string $text): string
     {
-        $charPositions = [];
         $charString = '';
 
-        $handler = new class($charPositions, $charString) implements \SugarCraft\Ansi\Parser\Handler
+        $handler = new class($charString) implements \SugarCraft\Ansi\Parser\Handler
         {
-            /** @var list<int> */
-            private array $positions;
+            /** @var string */
             private string $string;
-            private int $byteOffset = 0;
 
-            public function __construct(array &$positions, string &$string)
+            public function __construct(string &$string)
             {
-                $this->positions = &$positions;
                 $this->string = &$string;
             }
 
             public function printChar(string $rune): void
             {
-                $this->positions[] = $this->byteOffset;
                 $this->string .= $rune;
-                $this->byteOffset += \strlen($rune);
             }
 
             public function execute(int $byte): void
             {
-                $this->byteOffset += 1;
             }
 
             public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
             {
-                $this->byteOffset += 1;
-                foreach ($params as $p) {
-                    if ($p > 0) {
-                        $this->byteOffset += \strlen((string) $p) + 1;
-                    }
-                }
             }
 
             public function escDispatch(int $final, int $intermediate): void
             {
-                $this->byteOffset += $intermediate > 0 ? 2 : 1;
             }
 
             public function oscDispatch(string $data): void
             {
-                $this->byteOffset += \strlen($data) + 2;
             }
 
             public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
             {
-                $this->byteOffset += 1 + \strlen($data) + 2;
             }
 
             public function sosPmApcDispatch(string $kind, string $data): void
             {
-                $this->byteOffset += \strlen($data) + 2;
             }
         };
 

@@ -178,6 +178,7 @@ final class HermitRankerTest extends TestCase
             ->setWindowWidth(40)
             ->setWindowHeight(5)
             ->setOffset(0, 0)
+            ->show()
             ->type('te');
 
         $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
@@ -196,6 +197,7 @@ final class HermitRankerTest extends TestCase
             ->setWindowWidth($width)
             ->setWindowHeight(5)
             ->setOffset(0, 0)
+            ->show()
             ->type('te');
 
         // Mirror the real consumer: render over a blank canvas exactly $width cells wide.
@@ -222,6 +224,7 @@ final class HermitRankerTest extends TestCase
             ->setItemFormatter(static fn (string $v, bool $sel): string => $v)
             ->setWindowHeight(4)
             ->setOffset(0, 0)
+            ->show()
             ->type('本');
 
         // computeWidth = max(prompt+filter+5, itemMax+2), all in visible cells.
@@ -260,6 +263,7 @@ final class HermitRankerTest extends TestCase
             ->setWindowWidth(40)
             ->setWindowHeight(5)
             ->setOffset(0, 0)
+            ->show()
             ->type('a');
 
         $out = $h->View($bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40))));

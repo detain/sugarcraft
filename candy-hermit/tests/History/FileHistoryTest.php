@@ -74,6 +74,42 @@ final class FileHistoryTest extends TestCase
         $this->assertSame($this->tmpPath, $history->path());
     }
 
+    public function testAllSkipsCorruptLine(): void
+    {
+        // Write a good line, a bad JSON line, then another good line.
+        \file_put_contents(
+            $this->tmpPath,
+            \json_encode(['n' => 1, 'v' => 'first']) . "\n"
+                . "{bad json\n"
+                . \json_encode(['n' => 2, 'v' => 'third']) . "\n",
+        );
+
+        $history = new FileHistory($this->tmpPath);
+        $items = $history->all();
+
+        $this->assertCount(2, $items);
+        $this->assertSame('first', $items[0]->value());
+        $this->assertSame(1, $items[0]->number());
+        $this->assertSame('third', $items[1]->value());
+        $this->assertSame(2, $items[1]->number());
+    }
+
+    public function testAllClosesHandleEvenOnCorruptLines(): void
+    {
+        // Write corrupt lines that would throw JsonException during read.
+        \file_put_contents($this->tmpPath, "{bad}\n{also bad}\n");
+
+        $history = new FileHistory($this->tmpPath);
+
+        // Calling all() repeatedly must not exhaust file descriptors.
+        // If the handle leaked, a second call would fail or behave differently.
+        $first = $history->all();
+        $second = $history->all();
+
+        $this->assertSame([], $first);
+        $this->assertSame([], $second);
+    }
+
     public function testMultipleAppendsPersist(): void
     {
         $history = new FileHistory($this->tmpPath);
