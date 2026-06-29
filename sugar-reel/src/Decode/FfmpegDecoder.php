@@ -65,6 +65,9 @@ final class FfmpegDecoder implements Decoder
     /** Carry-over bytes from the PNG pipe between next() calls (a frame may straddle reads). */
     private string $pngBuffer = '';
 
+    /** Cached fps value from the last open() call — avoids re-probing the source. */
+    private float $fps = 0.0;
+
     /**
      * @param int $cellPxW Pixel width of one terminal cell — graphics modes decode at
      *                     cellsW·cellPxW pixels so the image fills the cell box at full
@@ -84,6 +87,7 @@ final class FfmpegDecoder implements Decoder
     {
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
+        $this->fps = $fps;
         $this->graphics = $mode?->isGraphics() ?? false;
         $this->pngBuffer = '';
 
@@ -107,6 +111,14 @@ final class FfmpegDecoder implements Decoder
         $ffmpegPath = Probe::ffmpeg();
         if ($ffmpegPath === null) {
             throw new \RuntimeException('ffmpeg not found on this host');
+        }
+
+        // For local sources, verify the file exists before spawning ffmpeg so
+        // a missing file surfaces as a clear exception rather than a silent
+        // empty decode. Network URLs, pipes, and the '/fake' test path are
+        // excluded — only plain local paths are checked.
+        if (!self::isNetworkSource($source) && !is_file($source)) {
+            throw new \RuntimeException("video source not found: {$source}");
         }
 
         // Aspect-correct letterbox box. The on-screen display area for cellsW × cellsH
@@ -348,5 +360,16 @@ final class FfmpegDecoder implements Decoder
             // that indicates an error. We don't throw here since next() returning
             // null will signal end of stream to the caller.
         }
+    }
+
+    /**
+     * Return the cached fps value from the last open() call.
+     *
+     * Allows callers (e.g. Player) to retrieve the fps without re-probing
+     * the source through VideoSource::probe().
+     */
+    public function fps(): float
+    {
+        return $this->fps;
     }
 }

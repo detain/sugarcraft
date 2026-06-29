@@ -143,4 +143,81 @@ final class WebVttTest extends TestCase
         self::assertTrue($cue->contains(9.99));
         self::assertFalse($cue->contains(10.0));
     }
+
+    /**
+     * Binary-search tie-breaking: when $seconds falls inside multiple overlapping
+     * cues, cueAt() returns the cue with the LATEST start time (first matching
+     * from the end during the walk-back phase).
+     *
+     * Set up three overlapping cues:
+     *   A: 0.0 – 10.0  "Background"
+     *   B: 2.0 –  8.0  "Middle"
+     *   C: 4.0 –  6.0  "Foreground"  (latest start = wins when overlapping)
+     *
+     * At t=5.0 all three contain the time; the binary search lands on C (index 2)
+     * first, then walk-back confirms it contains t=5.0 and returns "Foreground".
+     */
+    public function testCueAtOverlappingCuesReturnsLatestStart(): void
+    {
+        $vtt = WebVtt::parse(
+            "WEBVTT\n\n"
+            . "00:00:00.000 --> 00:00:10.000\n"
+            . "Background\n\n"
+            . "00:00:02.000 --> 00:00:08.000\n"
+            . "Middle\n\n"
+            . "00:00:04.000 --> 00:00:06.000\n"
+            . "Foreground"
+        );
+
+        // Before first cue: null
+        self::assertNull($vtt->cueAt(-0.1));
+
+        // Inside A: t=0.5 (A: [0.0, 10.0))
+        self::assertSame('Background', $vtt->cueAt(0.5));
+
+        // Inside A (A: [0.0, 10.0) contains 1.0 since 0.0 <= 1.0 < 10.0)
+        self::assertSame('Background', $vtt->cueAt(1.0));
+
+        // Inside A and B (before C starts) — B wins (later start)
+        self::assertSame('Middle', $vtt->cueAt(3.0));
+
+        // Inside all three — C wins (latest start)
+        self::assertSame('Foreground', $vtt->cueAt(5.0));
+
+        // Inside B and C (after C ends) — B wins (latest remaining start)
+        self::assertSame('Middle', $vtt->cueAt(7.0));
+
+        // Inside A only (after B and C end) — A wins
+        self::assertSame('Background', $vtt->cueAt(9.0));
+
+        // After last cue: null
+        self::assertNull($vtt->cueAt(99.0));
+    }
+
+    /**
+     * Binary search must handle a gap between cues correctly: cueAt() lands
+     * on the cue just after the gap during the binary search, then walks back
+     * past cues that don't contain $seconds until it finds one that does or
+     * exhausts the list (returning null).
+     */
+    public function testCueAtBinarySearchWalkBackAcrossGap(): void
+    {
+        $vtt = WebVtt::parse(
+            "WEBVTT\n\n"
+            . "00:00:00.000 --> 00:00:01.000\n"
+            . "First\n\n"
+            // gap: 1.0 – 4.999
+            . "00:00:05.000 --> 00:00:06.000\n"
+            . "Second\n\n"
+            // gap: 6.0 – 8.999
+            . "00:00:09.000 --> 00:00:10.000\n"
+            . "Third"
+        );
+
+        self::assertSame('First', $vtt->cueAt(0.5),  'inside first cue');
+        self::assertNull($vtt->cueAt(1.5),  'in first gap');
+        self::assertSame('Second', $vtt->cueAt(5.5), 'inside second cue');
+        self::assertNull($vtt->cueAt(7.5),  'in second gap');
+        self::assertSame('Third', $vtt->cueAt(9.5), 'inside third cue');
+    }
 }
