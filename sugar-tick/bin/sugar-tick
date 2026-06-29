@@ -17,9 +17,14 @@ declare(strict_types=1);
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Tick\Backup\AutoBackup;
 use SugarCraft\Tick\Dashboard;
+use SugarCraft\Tick\Export\CsvExporter;
+use SugarCraft\Tick\Export\IcalExporter;
+use SugarCraft\Tick\Export\JsonExporter;
 use SugarCraft\Tick\Heartbeat;
 use SugarCraft\Tick\Lang;
+use SugarCraft\Tick\Report\GapsReport;
 use SugarCraft\Tick\Store;
 
 $argv = $argv ?? [];
@@ -27,11 +32,22 @@ $cmd = $argv[1] ?? 'dashboard';
 
 $store = new Store(getenv('SUGARTICK_DIR') ?: Store::defaultDir());
 
+// Show usage for help flags or unknown commands
+if ($cmd === 'help' || $cmd === '--help' || $cmd === '-h') {
+    fwrite(STDOUT, Lang::t('cli.usage') . "\n");
+    exit(0);
+}
+
 if ($cmd === 'push') {
     // sugar-tick push <project> <language> <file> [duration]
-    $project  = $argv[2] ?? 'unknown';
-    $language = $argv[3] ?? 'unknown';
-    $file     = $argv[4] ?? '';
+    $project  = $argv[2] ?? null;
+    $language = $argv[3] ?? null;
+    $file     = $argv[4] ?? null;
+    if ($project === null || $language === null || $file === null) {
+        fwrite(STDERR, Lang::t('cli.push_missing_args') . "\n");
+        fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
+        exit(1);
+    }
     $duration = (int)($argv[5] ?? 60);
     $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
     $store->append(new Heartbeat(time(), $project, $language, $file, $duration));
@@ -41,6 +57,77 @@ if ($cmd === 'push') {
         'duration' => $duration,
     ]) . "\n");
     exit(0);
+}
+
+if ($cmd === 'export') {
+    $format = $argv[2] ?? null;
+    $days = isset($argv[3]) ? max(1, (int)$argv[3]) : 7;
+
+    if ($format === null || !in_array($format, ['csv', 'json', 'ics'], true)) {
+        fwrite(STDERR, Lang::t('cli.export_invalid_format') . "\n");
+        fwrite(STDERR, Lang::t('cli.export_usage') . "\n");
+        exit(1);
+    }
+
+    $endDay = new \DateTimeImmutable('today');
+    $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
+    $beats = $store->loadRange($fromDay, $endDay);
+
+    $exporter = match ($format) {
+        'csv' => new CsvExporter(),
+        'json' => new JsonExporter(),
+        'ics' => new IcalExporter(),
+    };
+    fwrite(STDOUT, $exporter->export('sugar-tick', $beats));
+    exit(0);
+}
+
+if ($cmd === 'gaps') {
+    $days = isset($argv[2]) ? max(1, (int)$argv[2]) : 7;
+
+    $endDay = new \DateTimeImmutable('today');
+    $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
+    $beats = $store->loadRange($fromDay, $endDay);
+
+    $report = new GapsReport($beats);
+    $gaps = $report->gaps();
+
+    if ($gaps === []) {
+        fwrite(STDOUT, Lang::t('cli.gaps_no_data') . "\n");
+        exit(0);
+    }
+
+    fwrite(STDOUT, Lang::t('cli.gaps_header') . "\n");
+    foreach ($gaps as $gap) {
+        $start = date('M j H:i', $gap['start']);
+        $end = date('H:i', $gap['end']);
+        fwrite(STDOUT, Lang::t('cli.gaps_entry', [
+            'start' => $start,
+            'end' => $end,
+            'seconds' => $gap['gapSeconds'],
+        ]) . "\n");
+    }
+    exit(0);
+}
+
+if ($cmd === 'backup') {
+    $dataDir = $store->dir;
+    $backupDir = $dataDir . '-backups';
+    $autoBackup = new AutoBackup($backupDir, [$dataDir]);
+    $count = $autoBackup->rotate(30);
+    if ($count > 0) {
+        fwrite(STDOUT, Lang::t('cli.backup_done', ['count' => $count]) . "\n");
+    } else {
+        fwrite(STDOUT, Lang::t('cli.backup_none') . "\n");
+    }
+    exit(0);
+}
+
+// Unknown command - show usage
+if ($cmd !== 'dashboard') {
+    fwrite(STDERR, "Unknown command: {$cmd}\n");
+    fwrite(STDERR, Lang::t('cli.usage') . "\n");
+    exit(1);
 }
 
 (new Program(Dashboard::start($store), new ProgramOptions(useAltScreen: true)))->run();
