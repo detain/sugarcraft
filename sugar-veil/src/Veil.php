@@ -6,7 +6,6 @@ namespace SugarCraft\Veil;
 
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
@@ -63,17 +62,8 @@ final class Veil
     /** @var Manager|null Stored manager for back-compat only (deprecated) */
     private readonly ?Manager $manager;
 
-    /** @var Buffer|null Lazily-built previous frame buffer for diff-based emission */
-    private ?Buffer $previousFrame = null;
-
-    /** @var string|null Previous full composite output (string), kept so the diff buffer can be built lazily on frame 2 */
-    private ?string $previousOutput = null;
-
-    /** @var int|null Previous output width for resize detection */
-    private ?int $prevWidth = null;
-
-    /** @var int|null Previous output height for resize detection */
-    private ?int $prevHeight = null;
+    /** @var RenderSession Mutable diff/session state shared across with*() clones */
+    private readonly RenderSession $session;
 
     /**
      * @param int             $backdropOpacity 0–100 backdrop dimming
@@ -96,6 +86,7 @@ final class Veil
         ?Scanner $scanner = null,
         ?string $lastRendered = null,
         ?Manager $manager = null,
+        ?RenderSession $session = null,
     ) {
         $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
         $this->animationKind = $animationKind;
@@ -107,10 +98,7 @@ final class Veil
         $this->lastRendered = $lastRendered;
         $this->marker = new Mark();
         $this->manager = $manager;
-        $this->previousFrame = null;
-        $this->previousOutput = null;
-        $this->prevWidth = null;
-        $this->prevHeight = null;
+        $this->session = $session ?? new RenderSession();
     }
 
     /**
@@ -354,28 +342,19 @@ final class Veil
         Position $vertical,
         Position $horizontal,
     ): array {
-        if ($this->animationKind === AnimationKind::SLIDE) {
-            $slide = new Slide();
-            return $slide->apply($foreground, $progress, $vertical, $horizontal);
-        }
-
-        if ($this->animationKind === AnimationKind::FADE) {
-            $fade = new Fade();
-            return [
-                'foreground' => $fade->apply($foreground, $progress),
+        return match ($this->animationKind) {
+            AnimationKind::SLIDE => (new Slide())->apply($foreground, $progress, $vertical, $horizontal),
+            AnimationKind::FADE => [
+                'foreground' => (new Fade())->apply($foreground, $progress),
                 'verticalOffset' => 0,
                 'horizontalOffset' => 0,
-            ];
-        }
-
-        if ($this->animationKind === AnimationKind::SCALE) {
-            $scale = new Scale();
-            return [
-                'foreground' => $scale->apply($foreground, $progress),
+            ],
+            AnimationKind::SCALE => [
+                'foreground' => (new Scale())->apply($foreground, $progress),
                 'verticalOffset' => 0,
                 'horizontalOffset' => 0,
-            ];
-        }
+            ],
+        };
     }
 
     /**
@@ -426,15 +405,15 @@ final class Veil
         $x = $baseX + $xOffset;
         $y = $baseY + $yOffset;
 
-        // Clamp so the overlay stays within the background bounds
-        $x = \max(0, \min($x, $bgWidth  - 1));
-        $y = \max(0, \min($y, $bgHeight - 1));
-
         // Build the output a row at a time. Each foreground line is overlaid as a
         // single styled SEGMENT at [x, x + visibleWidth) — cell-aware (via Width)
         // so its ANSI escape sequences are never split — and the backdrop is dimmed
         // only OUTSIDE the foreground footprint, so the overlay stays bright over a
         // dimmed background instead of inheriting the dim.
+        //
+        // Unlike the old clamp, we allow $x/$y to fall entirely outside the
+        // background bounds so that animations (e.g. SLIDE at progress 0) can
+        // position the overlay fully off-screen without showing a sliver.
         $output = [];
         for ($row = 0; $row < $bgHeight; $row++) {
             $bgLine = $bgLines[$row];
@@ -446,15 +425,20 @@ final class Veil
                 continue;
             }
 
+            // If the overlay starts to the right of the background, skip this row.
+            if ($x >= $bgWidth) {
+                $output[$row] = $this->dimLine($bgLine);
+                continue;
+            }
+
             // Clip the foreground line to the room left on this row (keeping its
             // escapes) and measure its visible footprint.
             $fgLine = Width::truncateAnsi($fgLines[$fy], $bgWidth - $x);
             $fgVis  = Width::string($fgLine);
 
-            // Background before/after the overlay: pad the gap to x cells, slice
-            // the tail at a clean cell boundary, and dim both — the foreground
-            // segment between them is left bright.
-            $prefix = Width::padRight(Width::truncateAnsi($bgLine, $x), $x);
+            // Compute prefix/suffix from the background, handling off-screen left.
+            $prefixWidth = \max(0, $x);
+            $prefix = Width::padRight(Width::truncateAnsi($bgLine, $prefixWidth), $prefixWidth);
             $suffix = Width::dropAnsi($bgLine, $x + $fgVis);
 
             $output[$row] = $this->dimLine($prefix) . $fgLine . $this->dimLine($suffix);
@@ -462,30 +446,17 @@ final class Veil
 
         $fullOutput = \implode("\n", $output);
 
-        // First frame (or after a resize): emit the full output and remember it as a
-        // STRING only. Building the diff buffer here is pure waste for callers that use
-        // a fresh Veil per render and never reach the diff path, so it is deferred to
-        // the first subsequent same-dimension composite below.
-        if ($this->previousOutput === null || $this->prevWidth !== $bgWidth || $this->prevHeight !== $bgHeight) {
-            $this->previousOutput = $fullOutput;
-            $this->prevWidth = $bgWidth;
-            $this->prevHeight = $bgHeight;
-            $this->previousFrame = null;
+        if ($this->session->shouldEmitFull($bgWidth, $bgHeight)) {
+            $this->session->rememberFull($fullOutput, $bgWidth, $bgHeight);
             return $fullOutput;
         }
 
-        // Subsequent frames with same dimensions: materialise the previous buffer lazily
-        // (exactly ONCE — cached in $previousFrame), build the current buffer, diff and
-        // emit the delta. Reused callers thus build exactly one buffer per frame, same as
-        // before; fresh-instance callers build zero.
-        $prev = $this->previousFrame ??= $this->bufferFromOutput($this->previousOutput, $bgWidth, $bgHeight);
-        $current = $this->bufferFromOutput($fullOutput, $bgWidth, $bgHeight);
-        $ops = $current->diff($prev);
-        $this->previousFrame = $current;
-        $this->previousOutput = $fullOutput;
-
-        $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        return $this->session->diff(
+            $fullOutput,
+            $bgWidth,
+            $bgHeight,
+            fn(string $out, int $w, int $h): Buffer => $this->bufferFromOutput($out, $w, $h),
+        );
     }
 
     /**
@@ -583,6 +554,7 @@ final class Veil
             scanner: $scanner,
             lastRendered: $lastRendered ?? $this->lastRendered,
             manager: $manager ?? $this->manager,
+            session: $this->session,
         );
     }
 
@@ -623,9 +595,6 @@ final class Veil
      */
     public function resetPreviousFrame(): void
     {
-        $this->previousFrame = null;
-        $this->previousOutput = null;
-        $this->prevWidth = null;
-        $this->prevHeight = null;
+        $this->session->reset();
     }
 }

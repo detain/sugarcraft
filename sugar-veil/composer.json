@@ -9,7 +9,8 @@
         "modal",
         "composite",
         "terminal",
-        "sugarcraft"
+        "sugarcraft",
+        "bubbletea-overlay"
     ],
     "homepage": "https://github.com/sugarcraft/sugar-veil",
     "authors": [
