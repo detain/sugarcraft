@@ -68,6 +68,8 @@ final class Paginator implements Model
                 || ($msg->type === KeyType::Char && $msg->rune === 'h')
                 || $msg->type === KeyType::PageUp
                 => [$this->prevPage(), null],
+            $msg->type === KeyType::Home => [$this->firstPage(), null],
+            $msg->type === KeyType::End  => [$this->lastPage(), null],
             default => [$this, null],
         };
     }
@@ -98,6 +100,18 @@ final class Paginator implements Model
     public function prevPage(): self
     {
         return $this->mutate(page: max(0, $this->page - 1));
+    }
+
+    /** Move to the first page (page index 0). */
+    public function firstPage(): self
+    {
+        return $this->mutate(page: 0);
+    }
+
+    /** Move to the last page. */
+    public function lastPage(): self
+    {
+        return $this->mutate(page: max(0, $this->totalPages() - 1));
     }
 
     public function onFirstPage(): bool
