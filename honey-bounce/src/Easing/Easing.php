@@ -39,7 +39,7 @@ enum Easing
      * Apply the easing function to a normalized time value.
      *
      * @param float $t Time value in range [0.0, 1.0]
-     * @return float Eased value (typically also in [0.0, 1.0])
+     * @return float Eased value (may exceed [0,1] for Elastic/Back curves due to intentional overshoot)
      */
     public function ease(float $t): float
     {
@@ -58,7 +58,7 @@ enum Easing
                 ? 4.0 * $t * $t * $t
                 : 1.0 - pow(-2.0 * $t + 2.0, 3.0) / 2.0,
 
-            self::ElasticIn => sin($t * M_PI) * pow(2.0, 10.0 * ($t - 1.0)),
+            self::ElasticIn => -pow(2.0, 10.0 * $t - 10.0) * sin(($t * 10.0 - 10.75) * ((2.0 * M_PI) / 3.0)),
             self::ElasticOut => sin(13.0 * M_PI / 2.0 * $t) * pow(2.0, -10.0 * $t) + $t,
             self::ElasticInOut => $t < 0.5
                 ? -(pow(2.0, 20.0 * $t - 10.0) * sin((20.0 * $t - 11.125) * M_PI * 2.5)) / 2.0
@@ -77,8 +77,7 @@ enum Easing
                 : (1.0 - pow(-2.0 * $t + 2.0, 3.0) + (1.0 - $t) * sin((-2.0 * $t + 2.0) * M_PI)) / 2.0 + 0.5,
         };
 
-        // Clamp to [0, 1] to handle floating point precision issues
-        return $result < 0.0 ? 0.0 : ($result > 1.0 ? 1.0 : $result);
+        return $result;
     }
 
     /**

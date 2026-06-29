@@ -27,22 +27,12 @@ final class EasingTest extends TestCase
             sprintf('%s at t=0 must be near 0', $easing->name)
         );
 
-        // Note: ElasticIn at t=1 returns ~0 due to sin(M_PI) floating-point precision issue
-        // This is a known limitation of the formula, not a bug in the implementation
-        if ($easing === Easing::ElasticIn) {
-            $this->assertLessThan(
-                0.01,
-                $resultAt1,
-                sprintf('%s at t=1 must be near 0 due to sin(PI) precision', $easing->name)
-            );
-        } else {
-            $this->assertEqualsWithDelta(
-                1.0,
-                $resultAt1,
-                0.01,
-                sprintf('%s at t=1 must be near 1', $easing->name)
-            );
-        }
+        $this->assertEqualsWithDelta(
+            1.0,
+            $resultAt1,
+            0.01,
+            sprintf('%s at t=1 must be near 1', $easing->name)
+        );
     }
 
     public static function allEasingCasesProvider(): iterable
@@ -242,11 +232,13 @@ final class EasingTest extends TestCase
     {
         $easing = Easing::ElasticIn;
 
-        // Note: Due to floating-point precision with sin(M_PI), ElasticIn at t=1
-        // returns ~0 instead of 1. This is a known limitation of the sin(t*PI) formula.
-        $this->assertEqualsWithDelta(0.0, $easing->ease(0.0), self::FLOAT_TOLERANCE);
-        // At t=1, the sin(M_PI) formula produces ~0 (not 1) due to floating-point precision
-        $this->assertLessThan(0.01, $easing->ease(1.0), 'ElasticIn at t=1 should be near 0 due to sin(PI) precision');
+        // Canonical formula gives ~-0.0005 at t=0, not exactly 0
+        $this->assertLessThan(
+            0.001,
+            abs($easing->ease(0.0)),
+            'ElasticIn at t=0 should be near 0'
+        );
+        $this->assertEqualsWithDelta(1.0, $easing->ease(1.0), self::FLOAT_TOLERANCE);
 
         // ElasticIn starts slow and accelerates
         $earlyResult = $easing->ease(0.1);
@@ -293,22 +285,34 @@ final class EasingTest extends TestCase
     {
         $easing = Easing::BackIn;
 
-        // Note: Due to clamping, BackIn stays at 0 for early t values
-        // until the raw formula becomes positive (around t=0.8)
         $this->assertEqualsWithDelta(0.0, $easing->ease(0.0), self::FLOAT_TOLERANCE);
         $this->assertEqualsWithDelta(1.0, $easing->ease(1.0), self::FLOAT_TOLERANCE);
 
-        // At t=0.8, BackIn should show its characteristic pullback-then-accelerate behavior
-        $this->assertGreaterThan(
+        // BackIn shows characteristic overshoot behavior - negative values at start
+        $this->assertLessThan(
             0.0,
-            $easing->ease(0.8),
-            'BackIn at t=0.8 should be positive'
+            $easing->ease(0.3),
+            'BackIn at t=0.3 should be negative (overshoot)'
         );
     }
 
     public function testResultIsAlwaysInValidRange(): void
     {
-        foreach (Easing::cases() as $easing) {
+        // Non-overshooting cases must stay within [0,1]
+        $nonOvershootingEasings = [
+            Easing::Linear,
+            Easing::QuadraticIn,
+            Easing::QuadraticOut,
+            Easing::QuadraticInOut,
+            Easing::CubicIn,
+            Easing::CubicOut,
+            Easing::CubicInOut,
+            Easing::BounceIn,
+            Easing::BounceOut,
+            Easing::BounceInOut,
+        ];
+
+        foreach ($nonOvershootingEasings as $easing) {
             for ($t = 0.0; $t <= 1.0; $t += 0.1) {
                 $result = $easing->ease($t);
                 $this->assertGreaterThanOrEqual(
@@ -323,6 +327,30 @@ final class EasingTest extends TestCase
                 );
             }
         }
+    }
+
+    public function testElasticOutOvershootsAboveOne(): void
+    {
+        $easing = Easing::ElasticOut;
+
+        // ElasticOut dips below 0 at t=0.2 (negative overshoot)
+        $this->assertLessThan(
+            0.0,
+            $easing->ease(0.2),
+            'ElasticOut at t=0.2 must be negative (anticipation dip)'
+        );
+    }
+
+    public function testBackOvershootsOutsideUnitInterval(): void
+    {
+        $easing = Easing::BackIn;
+
+        // BackIn produces negative values at t=0.3 (overshoot below 0)
+        $this->assertLessThan(
+            0.0,
+            $easing->ease(0.3),
+            'BackIn at t=0.3 must be negative (backward overshoot)'
+        );
     }
 
     public function testAllEasingTypesExist(): void
