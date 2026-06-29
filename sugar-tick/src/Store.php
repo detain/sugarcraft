@@ -89,10 +89,9 @@ final class Store
      * @param CancellationToken|null $token  Optional cancellation token to abort the write
      * @throws \RuntimeException  If the write is cancelled or fails
      *
-     * @note CancellationToken provides best-effort detection only. PHP cannot
-     *       interrupt a blocking `file_put_contents()` mid-write — the token is
-     *       checked before the call and the callback fires after the I/O completes.
-     *       True pre-emptive cancellation requires a non-blocking/async rewrite.
+     * @note CancellationToken is checked immediately before the write.
+     *       If cancelled at that point the write is skipped and an exception is thrown.
+     *       PHP cannot interrupt a blocking `file_put_contents()` mid-write.
      */
     public function append(Heartbeat $hb, ?CancellationToken $token = null): void
     {
@@ -106,18 +105,11 @@ final class Store
         $file = $this->dir . '/' . date('Y-m-d', $hb->time) . '.jsonl';
         $line = json_encode($hb->toArray(), JSON_UNESCAPED_SLASHES) . "\n";
 
-        // Register cancellation callback before blocking I/O
-        $cancelled = false;
-        if ($token !== null) {
-            $token->onCancel(static function () use (&$cancelled): void {
-                $cancelled = true;
-            });
+        // Re-check cancellation immediately before the write
+        if ($token !== null && $token->isCancelled()) {
+            throw new \RuntimeException('Heartbeat append cancelled');
         }
 
         file_put_contents($file, $line, FILE_APPEND);
-
-        if ($cancelled) {
-            throw new \RuntimeException('Heartbeat append cancelled during I/O');
-        }
     }
 }
