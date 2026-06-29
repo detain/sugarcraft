@@ -44,9 +44,32 @@ class WeatherModule extends BaseModule
     public function update(Msg $msg): array
     {
         if ($msg instanceof TickMsg) {
-            $snapshot = $this->fetchWeather();
-            $next = $this->withSnapshot($snapshot, new \DateTimeImmutable());
-            return [$next, Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new TickMsg())];
+            // Fast path: fresh in-memory cache — apply immediately, no I/O.
+            $cached = $this->loadCache();
+            if ($cached !== null) {
+                $age = time() - $cached->fetchedAt->getTimestamp();
+                if ($age < self::TTL_SECONDS) {
+                    $next = $this->withSnapshot($cached, $cached->fetchedAt);
+                    return [$next, $this->makeTickCmd()];
+                }
+            }
+
+            // Cache miss or stale — schedule async HTTP fetch off the loop.
+            // Fallback to stale cache on rejection (network failure).
+            return [
+                $this,
+                Cmd::batch(
+                    Cmd::promise(function (): \React\Promise\PromiseInterface {
+                        return $this->fetchWeatherHttp();
+                    }),
+                    $this->makeTickCmd(),
+                ),
+            ];
+        }
+
+        if ($msg instanceof WeatherResultMsg) {
+            $next = $this->withSnapshot($msg->snapshot, new \DateTimeImmutable());
+            return [$next, null];
         }
 
         return [$this, null];
@@ -83,26 +106,40 @@ class WeatherModule extends BaseModule
         return $clone;
     }
 
-    private function fetchWeather(): WeatherSnapshot
+    /**
+     * Fetch weather from HTTP, cache on success.
+     *
+     * Returns a promise that resolves to WeatherResultMsg or rejects on
+     * failure when no stale cache exists.  Never throws synchronously —
+     * all errors surface as promise rejections handled by Cmd::promise.
+     *
+     * @return \React\Promise\PromiseInterface<WeatherResultMsg>
+     */
+    private function fetchWeatherHttp(): \React\Promise\PromiseInterface
     {
-        $cached = $this->loadCache();
-        if ($cached !== null) {
-            $age = time() - $cached->fetchedAt->getTimestamp();
-            if ($age < self::TTL_SECONDS) {
-                return $cached;
-            }
-        }
+        $deferred = new \React\Promise\Deferred();
 
         try {
             $snapshot = $this->httpClient->fetch($this->location);
             $this->saveCache($snapshot);
-            return $snapshot;
-        } catch (\RuntimeException $e) {
+            $deferred->resolve(new WeatherResultMsg($snapshot));
+        } catch (\Throwable $e) {
+            // Network failure with stale cache available — resolve with stale
+            // snapshot so the view still shows data. No stale cache: reject.
+            $cached = $this->loadCache();
             if ($cached !== null) {
-                return $cached;
+                $deferred->resolve(new WeatherResultMsg($cached));
+            } else {
+                $deferred->reject($e);
             }
-            throw $e;
         }
+
+        return $deferred->promise();
+    }
+
+    private function makeTickCmd(): \Closure
+    {
+        return Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new TickMsg());
     }
 
     private function loadCache(): ?WeatherSnapshot
