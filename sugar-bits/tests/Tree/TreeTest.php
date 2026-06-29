@@ -173,4 +173,20 @@ final class TreeTest extends TestCase
         $this->assertSame(0, $t->visibleCount());
         $this->assertNull($t->selectedNode());
     }
+
+    public function testLabelWithNewlineStaysOneLine(): void
+    {
+        // A node whose label contains a newline must not produce multiple
+        // output lines — the newline must be replaced with a space.
+        $t = Tree::new(
+            Node::leaf("a\nb"),
+        );
+        $this->assertSame(1, $t->visibleCount(), 'Single leaf node must be one visible row');
+        $view = $t->view();
+        // The output must be a single line (no embedded newlines).
+        $this->assertSame(0, substr_count($view, "\n"), 'Newline in label should not produce extra rows');
+        // The label text itself should appear with newline replaced by space.
+        $this->assertStringContainsString('a b', $view);
+        $this->assertStringNotContainsString("a\nb", $view);
+    }
 }
