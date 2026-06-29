@@ -56,7 +56,10 @@ final class KeyboardInteractiveTest extends TestCase
         [$err] = $this->stderr();
         $ki = new KeyboardInteractive(
             [['prompt' => 'First?', 'echo' => true], ['prompt' => 'Second?']],
-            null, $out, $stdin, $err
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
         );
         $reached = false;
         $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
@@ -73,7 +76,9 @@ final class KeyboardInteractiveTest extends TestCase
         $ki = new KeyboardInteractive(
             [['prompt' => 'Password?']],
             fn($responses) => $responses[0] === 'correct',
-            $out, $stdin, $err
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
         );
         $reached = false;
         $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
@@ -91,7 +96,9 @@ final class KeyboardInteractiveTest extends TestCase
         $ki = new KeyboardInteractive(
             [['prompt' => 'Password?']],
             fn($responses) => $responses[0] === 'correct',
-            $out, $stdin, $err
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
         );
         $reached = false;
         $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
@@ -107,7 +114,10 @@ final class KeyboardInteractiveTest extends TestCase
         [$err] = $this->stderr();
         $ki = new KeyboardInteractive(
             [['prompt' => 'Q1'], ['prompt' => 'Q2'], ['prompt' => 'Q3']],
-            null, $out, $stdin, $err
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
         );
         $receivedCtx = null;
         $ki->handle(Context::background(), $this->session(), function (Context $c, Session $s) use (&$receivedCtx): void {
@@ -125,7 +135,10 @@ final class KeyboardInteractiveTest extends TestCase
         [$err] = $this->stderr();
         $ki = new KeyboardInteractive(
             [['prompt' => 'Enter PIN:', 'echo' => false]],
-            null, $out, $stdin, $err
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
         );
         $ki->handle(Context::background(), $this->session(), function (): void {});
         $output = $readOut();
@@ -137,7 +150,13 @@ final class KeyboardInteractiveTest extends TestCase
         $stdin = $this->makeStdin("x\n");
         [$out] = $this->stdout();
         [$err] = $this->stderr();
-        $ki = new KeyboardInteractive([['prompt' => 'Q?']], null, $out, $stdin, $err);
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Q?']],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
         $original = Context::background()->withValue('existing', 'key');
         $derived = null;
         $ki->handle($original, $this->session(), function (Context $c, Session $s) use (&$derived): void {
