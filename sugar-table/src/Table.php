@@ -107,7 +107,6 @@ final class Table
     private string $borderRight = '│';
     private string $borderCenterH = '─';
     private string $borderCenterV = '│';
-    private string $borderCross   = '┼';
 
     private string $headerStyle   = '1;37';  // bold white
     private string $footerStyle   = '90';    // bright black
@@ -127,6 +126,12 @@ final class Table
 
     /** Cached computed column widths from the last render pass. @var array<int, int>|null */
     private ?array $computedColumnWidths = null;
+
+    /** Cached result of filteredSortedRows(). Cleared on any filter/sort/row change. @var list<Row>|null */
+    private ?array $filteredSortedCache = null;
+
+    /** Cache for computeColumnWidths() results, keyed by tableWidth. @var array<int, array<int, int>> */
+    private array $widthSolveCache = [];
 
     /** Inner cell padding (characters on each side). Default 0 (flush). */
     private int $cellPadding = 0;
@@ -174,6 +179,9 @@ final class Table
         $clone = clone $this;
         $clone->rows    = $rows;
         $clone->selectedIndex = 0;
+        // Invalidate cached computations that depend on rows
+        $clone->filteredSortedCache = null;
+        $clone->widthSolveCache = [];
         return $clone;
     }
 
@@ -377,6 +385,8 @@ final class Table
     {
         $clone = clone $this;
         $clone->cellPadding = \max(0, $padding);
+        $clone->filteredSortedCache = null;
+        $clone->widthSolveCache = [];
         return $clone;
     }
 
@@ -403,6 +413,8 @@ final class Table
     {
         $clone = clone $this;
         $clone->targetWidth = \max(0, $cols);
+        $clone->filteredSortedCache = null;
+        $clone->widthSolveCache = [];
         return $clone;
     }
 
@@ -695,6 +707,7 @@ final class Table
         }
 
         $clone->selectedIndex = 0;
+        $clone->filteredSortedCache = null;
         return $clone;
     }
 
@@ -702,6 +715,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->sortColumns = [];
+        $clone->filteredSortedCache = null;
         return $clone;
     }
 
@@ -712,12 +726,22 @@ final class Table
     public function Filter(string $colKey, string $text): self
     {
         $clone = clone $this;
+
+        // If this column is not filterable (and at least one column IS declared
+        // filterable), treat the call as a no-op — return clone with no changes.
+        $filterableKeys = $this->filterableKeys();
+        $hasExplicitFilterable = $this->hasExplicitFilterable();
+        if ($hasExplicitFilterable && !\in_array($colKey, $filterableKeys, true)) {
+            return $clone;
+        }
+
         if ($text === '') {
             unset($clone->filterText[$colKey]);
         } else {
             $clone->filterText[$colKey] = $text;
         }
         $clone->selectedIndex = 0;
+        $clone->filteredSortedCache = null;
         return $clone;
     }
 
@@ -731,6 +755,7 @@ final class Table
         $clone = clone $this;
         $clone->filterText = [];
         $clone->selectedIndex = 0;
+        $clone->filteredSortedCache = null;
         return $clone;
     }
 
@@ -755,6 +780,7 @@ final class Table
         $clone = clone $this;
         $clone->searchText = $text;
         $clone->selectedIndex = 0;
+        $clone->filteredSortedCache = null;
         return $clone;
     }
 
@@ -774,6 +800,45 @@ final class Table
         return $this->search('');
     }
 
+    /**
+     * Returns true if at least one column has $filterable === true.
+     * Used to gate the opt-in filterability model.
+     */
+    private function hasExplicitFilterable(): bool
+    {
+        foreach ($this->columns as $col) {
+            if ($col->filterable === true) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns the list of column keys that participate in filtering.
+     *
+     * When at least one column has $filterable === true (hasExplicitFilterable):
+     * returns only the keys of columns where filterable === true.
+     *
+     * When NO column has $filterable === true (back-compat default):
+     * returns ALL column keys so existing search/filter behaviour is unchanged.
+     *
+     * @return list<string>
+     */
+    private function filterableKeys(): array
+    {
+        $keys = [];
+        $anyFilterable = false;
+        foreach ($this->columns as $col) {
+            if ($col->filterable === true) {
+                $anyFilterable = true;
+                $keys[] = $col->key;
+            }
+        }
+        // Back-compat: if nothing is explicitly marked filterable, allow all
+        return $anyFilterable ? $keys : \array_column($this->columns, 'key');
+    }
+
     // -------------------------------------------------------------------------
     // Queries
     // -------------------------------------------------------------------------
@@ -787,13 +852,25 @@ final class Table
     /** @return list<Row> */
     public function filteredSortedRows(): array
     {
+        return $this->filteredSortedCache ??= $this->buildFilteredSortedRows();
+    }
+
+    /** Build (and cache) the filtered+sorted row list. */
+    private function buildFilteredSortedRows(): array
+    {
         $rows = $this->rows;
 
         // Per-column filters (AND logic — row must match ALL column filters)
+        // Only filterable columns participate; skip filterText entries for
+        // non-filterable columns when opt-in gating is active.
         if ($this->filterText !== []) {
+            $filterable = $this->filterableKeys();
             $rows = \array_values(
-                \array_filter($rows, function (Row $row): bool {
+                \array_filter($rows, function (Row $row) use ($filterable): bool {
                     foreach ($this->filterText as $key => $text) {
+                        if (!\in_array($key, $filterable, true)) {
+                            continue; // column not filterable — skip (no-op filter)
+                        }
                         $val = $row->data->get($key);
                         $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) ($val ?? '');
                         if (\stripos($str, $text) === false) return false;
@@ -803,13 +880,16 @@ final class Table
             );
         }
 
-        // Global search across all columns (OR logic — row matches if ANY column contains search text)
+        // Global search — only scan filterable columns (OR logic)
         if ($this->searchText !== '') {
             $searchLower = \strtolower($this->searchText);
+            $filterable = $this->filterableKeys();
             $rows = \array_values(
-                \array_filter($rows, function (Row $row) use ($searchLower): bool {
-                    foreach ($row->data->all() as $key => $val) {
-                        $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) ($val ?? '');
+                \array_filter($rows, function (Row $row) use ($searchLower, $filterable): bool {
+                    foreach ($filterable as $key) {
+                        $val = $row->data->get($key);
+                        if ($val === null) continue;
+                        $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) $val;
                         if (\stripos(\strtolower($str), $searchLower) !== false) return true;
                     }
                     return false;
@@ -908,8 +988,14 @@ final class Table
             return Lang::t('showing_rows', ['from' => 0, 'to' => 0, 'total' => 0]);
         }
 
-        $from = ($this->page * $this->pageSize) + 1;
-        $to = \min(($this->page + 1) * $this->pageSize, $total);
+        // When pagination is off (pageSize <= 0), show the full filtered set
+        if ($this->pageSize <= 0) {
+            $from = 1;
+            $to = $total;
+        } else {
+            $from = ($this->page * $this->pageSize) + 1;
+            $to = \min(($this->page + 1) * $this->pageSize, $total);
+        }
 
         return Lang::t('showing_rows', ['from' => $from, 'to' => $to, 'total' => $total]);
     }
@@ -1006,7 +1092,9 @@ final class Table
      */
     private function contentWidthForColumn(Column $col): int
     {
-        $maxLen = \strlen($col->title);
+        // Sanitize title and measure display width (not byte length)
+        $title = Sanitize::value($col->title, false);
+        $maxLen = Width::of($title);
 
         foreach ($this->rows as $row) {
             $val = $row->data->get($col->key);
@@ -1016,7 +1104,9 @@ final class Table
             $str = \is_object($val) && method_exists($val, '__toString')
                 ? (string) $val
                 : (\is_scalar($val) ? (string) $val : '');
-            $len = \strlen($str);
+            // Sanitize before width measurement
+            $str = Sanitize::value($str, false);
+            $len = Width::of($str);
             if ($len > $maxLen) {
                 $maxLen = $len;
             }
@@ -1364,6 +1454,9 @@ final class Table
                     : (\is_scalar($val) ? (string) $val : '');
             }
 
+            // Sanitize before width padding / renderCell / styleFunc
+            $cellStr = Sanitize::value($cellStr, false);
+
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
                 $cellStyle = $this->normalizeStyleResult($rawResult, $cellStyle);
@@ -1371,9 +1464,15 @@ final class Table
 
             $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
 
-            // For expanded rows, show full content without truncation
+            // For expanded rows, show full content without column-width truncation.
+            // Use the content's display width as cellWidth so fillCellContent
+            // receives enough budget for the full text (the buffer is pre-sized
+            // to at least totalWidth so there is room to write it).
             if ($this->isExpandedByRow($rowData)) {
-                $displayText = $cellStr;
+                $effectiveWidth = Width::of($cellStr);
+                $displayText = $column->alignLeft
+                    ? Width::padRight($cellStr, $effectiveWidth)
+                    : Width::padLeft($cellStr, $effectiveWidth);
             } else {
                 // Account for cell padding: effective content width = colWidth - 2*padding
                 $effectiveWidth = $colWidth - (2 * $this->cellPadding);
@@ -1431,6 +1530,8 @@ final class Table
                     ? (string) $val
                     : (\is_scalar($val) ? (string) $val : '');
             }
+            // Sanitize before renderCell width measurement
+            $cellStr = Sanitize::value($cellStr, true);
 
             $lines = $column->renderCell($cellStr, $effectiveWidth);
             $lineCount = \count($lines);
@@ -1497,6 +1598,9 @@ final class Table
                     ? (string) $val
                     : (\is_scalar($val) ? (string) $val : '');
             }
+
+            // Sanitize before styleFunc (multiline context: preserve \n for explode)
+            $cellStr = Sanitize::value($cellStr, true);
 
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
@@ -2008,17 +2112,14 @@ final class Table
 
     private function borderCenterH(): string
     {
-        return $this->border?->middle ?? $this->borderCenterH;
+        // Horizontal header-separator rule: use top border char (─) not middle (┼)
+        return $this->border?->top ?? $this->borderCenterH;
     }
 
     private function borderCenterV(): string
     {
-        return $this->border?->middleLeft ?? $this->borderCenterV;
-    }
-
-    private function borderCross(): string
-    {
-        return $this->border?->middle ?? $this->borderCross;
+        // Vertical column separator: use left border char (│) not middleLeft (├)
+        return $this->border?->left ?? $this->borderCenterV;
     }
 
     private function computeTotalWidth(): int
