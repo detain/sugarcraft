@@ -327,7 +327,7 @@ final class Hermit
         }
         $clone->filterText = \substr($clone->filterText, 0, -1);
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
-        $clone->cursor = \min($clone->cursor, \count($clone->filteredItems) - 1);
+        $clone->cursor = \max(0, \min($clone->cursor, \count($clone->filteredItems) - 1));
         return $clone;
     }
 
