@@ -94,13 +94,16 @@ final class Log
     ): void {
         $formatter ??= PanicFormatter::pretty($showLocals, $redactPaths);
 
-        // Register exception handler, capturing the previous one for optional chaining.
-        $previousHandler = set_exception_handler(static function (\Throwable $e) use ($formatter, $previousHandler): void {
+        // First, register a no-op handler just to capture what was previously registered.
+        $previousHandler = \set_exception_handler(static function (): void {});
+
+        // Now register the real handler with the captured previous handler.
+        \set_exception_handler(static function (\Throwable $e) use ($formatter, $previousHandler): void {
             self::restoreTerminal();
             $report = $formatter->format($e);
             \fwrite(\STDERR, "\n{$report}\n");
 
-            // Chain to previous handler if one was registered
+            // Chain to previous handler if one was registered.
             if ($previousHandler !== null) {
                 $previousHandler($e);
             }
