@@ -194,7 +194,10 @@ final class Table implements Model
     /** Read-only accessor for the headers. */
     public function headersList(): array { return $this->headers; }
 
-    /** Cursor position (0-indexed). Mirrors Bubbles' `Cursor()`. */
+    /**
+     * Cursor position (0-indexed) within the visible (sorted → filtered)
+     * row projection. Mirrors Bubbles' `Cursor()`.
+     */
     public function cursor(): int { return $this->cursor; }
 
     /** Move the cursor to a specific row, clamped. */
@@ -239,9 +242,14 @@ final class Table implements Model
     /** @return list<string> */
     public function selectedRow(): array
     {
-        return $this->rows[$this->cursor] ?? [];
+        return $this->visibleRows()[$this->cursor] ?? [];
     }
 
+    /**
+     * Cursor position (0-indexed) within the visible (sorted → filtered)
+     * row projection. Matches what `view()` highlights and what
+     * `selectedRow()` returns.
+     */
     public function index(): int
     {
         return $this->cursor;
@@ -552,6 +560,18 @@ final class Table implements Model
         }));
     }
 
+    /**
+     * The rows that are currently visible: sorted then filtered.
+     * This is the single source of truth for cursor/indexing operations —
+     * both `view()` and `selectedRow()` operate on this projection.
+     *
+     * @return list<list<string>>
+     */
+    private function visibleRows(): array
+    {
+        return $this->filteredRows($this->sortedRows());
+    }
+
     /** @return list<int> */
     private function columnWidths(): array
     {
@@ -629,7 +649,7 @@ final class Table implements Model
 
     private function moveCursor(int $idx): self
     {
-        $count = count($this->rows);
+        $count = count($this->visibleRows());
         if ($count === 0) {
             return $this->mutate(cursor: 0, offset: 0);
         }
