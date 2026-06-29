@@ -217,6 +217,16 @@ final class Git implements GitDriver
         $this->run(['worktree', 'remove', $path]);
     }
 
+    public function rebaseInProgress(): bool
+    {
+        $out = $this->run(['rev-parse', '--absolute-git-dir']);
+        $gitDir = $out[0] ?? '';
+        if ($gitDir === '' || !is_dir($gitDir)) {
+            return false;
+        }
+        return is_dir($gitDir . '/rebase-merge') || is_dir($gitDir . '/rebase-apply');
+    }
+
     /**
      * Reject a ref/branch/path that begins with `-` to prevent option injection.
      *

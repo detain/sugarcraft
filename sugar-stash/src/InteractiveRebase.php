@@ -18,10 +18,8 @@ enum RebaseAction: string
 
 /**
  * A commit entry in the interactive rebase todo list.
- *
- * @readonly
  */
-final class RebaseCommit
+final readonly class RebaseCommit
 {
     /**
      * @param string       $sha     Short SHA

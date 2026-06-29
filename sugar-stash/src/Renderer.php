@@ -123,7 +123,7 @@ final class Renderer
         foreach ($a->status as $i => $row) {
             $idx  = $row['index_status'] ?? ' ';
             $work = $row['work_status']  ?? ' ';
-            $path = self::sanitize($row['path'] ?? '');
+            $path = self::truncate(self::sanitize($row['path'] ?? ''), 31);
             $marker = sprintf('%s%s ', $idx, $work);
             $line = $marker . $path;
             $st = Style::new();
@@ -147,7 +147,7 @@ final class Renderer
         $rows = [];
         foreach ($a->branches as $i => $b) {
             $marker = $b['current'] ? '* ' : '  ';
-            $line   = $marker . self::sanitize($b['name']);
+            $line   = $marker . self::truncate(self::sanitize($b['name']), 32);
             $st = Style::new();
             $st = $b['current']
                 ? $st->bold()->foreground(Color::hex('#fde68a'))
@@ -182,6 +182,14 @@ final class Renderer
             $rows[] = Lang::t('log.empty');
         }
         return self::frame($a, Pane::Log, ' log ', implode("\n", $rows), 36);
+    }
+
+    private static function truncate(string $s, int $max): string
+    {
+        if (mb_strlen($s) <= $max) {
+            return $s;
+        }
+        return mb_substr($s, 0, $max - 1) . '…';
     }
 
     private static function frame(App $a, Pane $p, string $title, string $body, int $width): string
@@ -445,6 +453,7 @@ final class Renderer
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('rebase_i.confirm_count');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . Lang::t('help.close_help');
         } else {
+            $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('rebase_i.preview_only'));
             if ($ir->commits === []) {
                 $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('rebase_i.no_commits'));
             } else {

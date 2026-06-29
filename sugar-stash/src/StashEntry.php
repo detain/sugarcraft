@@ -6,10 +6,8 @@ namespace SugarCraft\Stash;
 
 /**
  * Represents a single stash entry.
- *
- * @readonly
  */
-final class StashEntry
+final readonly class StashEntry
 {
     public function __construct(
         public readonly int $index,

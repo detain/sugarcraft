@@ -88,7 +88,7 @@ final class DiffViewerTest extends TestCase
         $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
         $patch = $dv->currentHunkPatch();
 
-        $this->assertSame("@@ -1,3 +1,4 @@\n-line 1\n+line 1 modified\n context\n", $patch);
+        $this->assertSame("diff --git a/src/A.php b/src/A.php\n@@ -1,3 +1,4 @@\n-line 1\n+line 1 modified\n context\n", $patch);
     }
 
     public function testWithHunkCursorClampsToValidRange(): void

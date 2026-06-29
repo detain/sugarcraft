@@ -98,6 +98,7 @@ final class RendererTest extends TestCase
             public function worktreeList(): array { return []; }
             public function worktreeAdd(string $path, string $branch): void {}
             public function worktreeRemove(string $path): void {}
+            public function rebaseInProgress(): bool { return false; }
         };
         $a = App::start($g);
         $out = Renderer::render($a);

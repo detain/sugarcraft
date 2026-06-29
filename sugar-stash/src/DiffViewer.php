@@ -17,12 +17,14 @@ final readonly class DiffViewer
     /**
      * @param list<string> $lines Raw diff lines (including hunk headers)
      * @param list<int>    $hunkStarts Byte-offsets in $lines where each hunk begins
+     * @param list<string> $header Lines before the first hunk header (diff --git / --- / +++)
      */
     public function __construct(
         public array $lines,
         public int $hunkCursor,
         public string $path,
         public array $hunkStarts,
+        public array $header,
     ) {}
 
     /**
@@ -34,15 +36,20 @@ final readonly class DiffViewer
     public static function fromRawDiff(string $path, array $lines): self
     {
         $hunkStarts = [];
+        $header = [];
+        $inHeader = true;
         foreach ($lines as $i => $line) {
             if (str_starts_with($line, '@@')) {
+                $inHeader = false;
                 $hunkStarts[] = $i;
+            } elseif ($inHeader) {
+                $header[] = $line;
             }
         }
         // Default cursor to first hunk, or 0 if no hunks
         $cursor = $hunkStarts[0] ?? 0;
 
-        return new self(lines: $lines, hunkCursor: $cursor, path: $path, hunkStarts: $hunkStarts);
+        return new self(lines: $lines, hunkCursor: $cursor, path: $path, hunkStarts: $hunkStarts, header: $header);
     }
 
     /** Returns the hunk lines around hunkCursor, for rendering and staging. */
@@ -67,7 +74,9 @@ final readonly class DiffViewer
     /** Returns the raw patch for just the current hunk (for git apply --cached). */
     public function currentHunkPatch(): string
     {
-        return implode("\n", $this->currentHunkLines()) . "\n";
+        $header = implode("\n", $this->header);
+        $hunk = implode("\n", $this->currentHunkLines());
+        return $header === '' ? $hunk . "\n" : $header . "\n" . $hunk . "\n";
     }
 
     public function withHunkCursor(int $cursor): self
@@ -82,6 +91,7 @@ final readonly class DiffViewer
             hunkCursor: $lineIdx,
             path: $this->path,
             hunkStarts: $this->hunkStarts,
+            header: $this->header,
         );
     }
 
