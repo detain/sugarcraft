@@ -85,8 +85,8 @@ final class TextFormatterTest extends TestCase
         // SGR for bold is 1, so we expect \x1b[1;... pattern
         $this->assertStringContainsString("\x1b[", $line);
         $this->assertStringContainsString('ERR', $line);
-        // Bold escape sequence should be present
-        $this->assertMatchesRegularExpression('/\x1b\[1;/', $line);
+        // Bold escape sequence should be present (SGR 1 = bold, rendered as \x1b[1m)
+        $this->assertMatchesRegularExpression('/\x1b\[1m/', $line);
     }
 
     public function testColorSnapshotForFatalLevel(): void
@@ -97,8 +97,8 @@ final class TextFormatterTest extends TestCase
         // Fatal uses white on red + bold: \x1b[38;5;7m\x1b[48;5;1m + bold
         $this->assertStringContainsString("\x1b[", $line);
         $this->assertStringContainsString('FTL', $line);
-        // Bold and background color sequences
-        $this->assertMatchesRegularExpression('/\x1b\[1;/', $line);
+        // Bold (SGR 1) and background color (SGR 48) sequences
+        $this->assertMatchesRegularExpression('/\x1b\[1m/', $line);
         $this->assertMatchesRegularExpression('/\x1b\[48;/', $line);
     }
 

@@ -62,7 +62,7 @@ final class TextFormatter implements Formatter
 
                 PartsOrder::PART_LEVEL => $this->useColors
                     ? $this->styledLevel($level)
-                    : $level->label(),
+                    : $level->shortLabel(),
 
                 PartsOrder::PART_PREFIX => ($prefix !== null && $prefix !== '')
                     ? ($this->useColors ? $this->styledPrefix($prefix) : $prefix)
@@ -109,9 +109,10 @@ final class TextFormatter implements Formatter
         $pairs = [];
         foreach ($context as $k => $v) {
             $val = $this->formatValue($v);
+            $pair = "{$k}={$val}";
             $pairs[] = $this->useColors
-                ? $this->styles->keyStyle('key')->render("{$k}=") . $this->styles->keyStyle('value')->render($val)
-                : "{$k}={$val}";
+                ? $this->styles->keyStyle('key')->render($pair)
+                : $pair;
         }
         return \implode(' ', $pairs);
     }

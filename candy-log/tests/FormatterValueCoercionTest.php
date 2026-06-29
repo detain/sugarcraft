@@ -51,7 +51,8 @@ final class FormatterValueCoercionTest extends TestCase
         \fclose($this->tempFile);
 
         $content = \file_get_contents($this->tempPath);
-        $this->assertStringContainsString('a=[1 2 [[x]]]', $content);
+        // Array rendered with space delimiter, nested [x] stays as [x]
+        $this->assertStringContainsString('a=[1 2 [x]]', $content);
     }
 
     public function testNestedArrayThroughLogfmtFormatter(): void
@@ -67,8 +68,8 @@ final class FormatterValueCoercionTest extends TestCase
         \fclose($this->tempFile);
 
         $content = \file_get_contents($this->tempPath);
-        // Logfmt uses comma delimiter
-        $this->assertStringContainsString('a=[1,2,[[x]]]', $content);
+        // Logfmt uses comma delimiter, nested [x] stays as [x]
+        $this->assertStringContainsString('a=[1,2,[x]]', $content);
     }
 
     public function testNestedArrayThroughJsonFormatter(): void
@@ -86,7 +87,8 @@ final class FormatterValueCoercionTest extends TestCase
         $content = \file_get_contents($this->tempPath);
         $decoded = \json_decode(\trim($content), true);
         $this->assertIsArray($decoded);
-        $this->assertSame([1, 2, [['x']]], $decoded['a'] ?? null);
+        // Input [1, 2, ['x']] remains [1, 2, ['x']] in JSON
+        $this->assertSame([1, 2, ['x']], $decoded['a'] ?? null);
     }
 
     public function testObjectWithoutToStringThroughTextFormatter(): void
