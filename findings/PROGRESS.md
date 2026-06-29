@@ -49,11 +49,11 @@
 | sugar-charts | 4 | 12 | 2 | 5 | 5 | MERGED | | bf724b42 | full — legendItems crash fix, off-by-one axis, with*(null) clear semantics |
 | sugar-crush | 4 | 18 | 5 | 8 | 5 | MERGED | | 5d0d7ce7 | full — hook matching security, Chat render O(wxh) fix |
 | sugar-readline | 4 | 15 | 3 | 6 | 6 | MERGED | | 9408dec1 | full — run loop insert, busy-spin, vi dd/yy mode, emacs handleKeyDirect |
-| candy-files | 5 | 14 | 5 | 7 | 2 | PENDING | | | |
-| honey-flap | 5 | 11 | 2 | 6 | 3 | PENDING | | | |
-| sugar-bits | 5 | 9 | 4 | 2 | 3 | PENDING | | | |
-| sugar-reel | 5 | 9 | 0 | 3 | 6 | PENDING | | | |
-| sugar-tick | 5 | 14 | 0 | 8 | 6 | PENDING | | | |
+| candy-files | 5 | 14 | 5 | 7 | 2 | MERGED | | 601617bc | full — sanitizeName fix, async copy routing, 143 tests |
+| honey-flap | 5 | 11 | 2 | 6 | 3 | MERGED | | 99f2f759 | already complete at wave 4 merge, 41 tests |
+| sugar-bits | 5 | 9 | 4 | 2 | 3 | MERGED | | 99f2f759 | already complete at wave 4 merge, 694 tests |
+| sugar-reel | 5 | 9 | 0 | 3 | 6 | MERGED | | 0a3035e1 | full — regression tests, 282 tests |
+| sugar-tick | 5 | 14 | 0 | 8 | 6 | MERGED | | 852cd217 | full — regression tests for all findings, 125 tests |
 | sugar-veil | 5 | 13 | 2 | 6 | 5 | MERGED | | ca02edd6 | full — position system, truecolor dimming, buffer fix |
 | candy-query | 6 | 11 | 3 | 5 | 3 | MERGED | | 1a9e212a | full — unused MysqlDatabase::password() removed |
 | sugar-glow | 6 | 11 | 2 | 6 | 3 | MERGED | | f8679819 | full — theme_config_unreadable added to all 15 locale files |
