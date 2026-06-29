@@ -33,7 +33,7 @@ final class AnsiHandler implements Handler
 
     private string $csiIntermediate = '';
 
-    private bool $ss3Buffered = false;
+    protected bool $ss3Buffered = false;
 
     private int $ss3Intermediate = 0;
 
@@ -42,6 +42,9 @@ final class AnsiHandler implements Handler
     private bool $oscInProgress = false;
 
     private bool $sosPmInProgress = false;
+
+    /** Tracks whether a sequence dispatch (CSI/OSC/DCS/APC/ESC) auto-flushed text since last drain. */
+    private bool $sequenceProcessedSinceLastDrain = false;
 
     public function parse(string $input): array
     {
@@ -78,12 +81,69 @@ final class AnsiHandler implements Handler
         return $this->segments;
     }
 
-    private function flushText(): void
+    /**
+     * Reset all accumulated state (segments, text buffer, flags).
+     * Used by StreamingInspector between sessions.
+     */
+    public function reset(): void
     {
-        if ($this->textBuf !== '') {
-            $this->segments[] = new TextSegment($this->textBuf);
-            $this->textBuf = '';
+        $this->segments = [];
+        $this->textBuf = '';
+        $this->inCsi = false;
+        $this->csiFinal = '';
+        $this->csiPrefix = '';
+        $this->csiIntermediate = '';
+        $this->ss3Buffered = false;
+        $this->ss3Intermediate = 0;
+        $this->dcsInProgress = false;
+        $this->oscInProgress = false;
+        $this->sosPmInProgress = false;
+        $this->sequenceProcessedSinceLastDrain = false;
+    }
+
+    /**
+     * Return all segments produced since the last drain (or since reset).
+     * Does NOT call flushText() — pending text is only flushed when a
+     * sequence dispatch auto-flushes (csiDispatch / oscDispatch / etc.) or
+     * when finish() is called.  This preserves the streaming invariant that
+     * text is returned only when a sequence is completed or the stream ends.
+     *
+     * Does NOT emit pending bare ESC — that is handled by finish() so that
+     * the next feed() can correctly continue a sequence (e.g. ESC O P SS3)
+     * across chunk boundaries.
+     *
+     * @return list<Segment>
+     */
+    public function drainSegments(): array
+    {
+        $out = $this->segments;
+        $this->segments = [];
+        return $out;
+    }
+
+    public function flushText(): void
+    {
+        if ($this->textBuf === '') {
+            return;
         }
+        $this->segments[] = new TextSegment($this->textBuf);
+        $this->textBuf = '';
+    }
+
+    /**
+     * Returns whether an SS3 intermediate byte is buffered awaiting a final byte.
+     */
+    public function isSs3Buffered(): bool
+    {
+        return $this->ss3Buffered;
+    }
+
+    /**
+     * Returns the buffered SS3 intermediate byte value.
+     */
+    protected function getSs3Intermediate(): int
+    {
+        return $this->ss3Intermediate;
     }
 
     public function printChar(string $rune): void
@@ -103,9 +163,23 @@ final class AnsiHandler implements Handler
     {
         if ($byte >= 0x00 && $byte <= 0x1F && $byte !== 0x1B) {
             $this->flushText();
+            $this->sequenceProcessedSinceLastDrain = true;
             $this->segments[] = new SequenceSegment(
                 chr($byte),
                 'C0 ' . C0C1::c0Name($byte),
+            );
+        }
+        // C1 bytes 0x80–0x9F: the VT500 "anywhere" transition table routes
+        // 0x80–0x8F, 0x91–0x97, and 0x9C through Action::Execute (→ Ground).
+        // The remaining C1 bytes (0x90, 0x98, 0x9A, 0x9B, 0x9D, 0x9E,
+        // 0x9F) go to Entry states and are handled via their respective
+        // dispatch callbacks (DCS/CSI/OSC/SOS/PM/APC), never reaching execute().
+        if ($byte >= 0x80 && $byte <= 0x9F) {
+            $this->flushText();
+            $this->sequenceProcessedSinceLastDrain = true;
+            $this->segments[] = new SequenceSegment(
+                chr($byte),
+                'C1 ' . C0C1::c1Name($byte),
             );
         }
     }
@@ -113,6 +187,7 @@ final class AnsiHandler implements Handler
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
     {
         $this->flushText();
+        $this->sequenceProcessedSinceLastDrain = true;
 
         $prefixStr = $prefix !== 0 ? chr($prefix) : '';
         $intermediateStr = $intermediate !== 0 ? chr($intermediate) : '';
@@ -152,6 +227,7 @@ final class AnsiHandler implements Handler
     public function escDispatch(int $final, int $intermediate): void
     {
         $this->flushText();
+        $this->sequenceProcessedSinceLastDrain = true;
 
         if ($final === ord('O')) {
             $this->ss3Buffered = true;
@@ -174,6 +250,7 @@ final class AnsiHandler implements Handler
     public function oscDispatch(string $data): void
     {
         $this->flushText();
+        $this->sequenceProcessedSinceLastDrain = true;
         $this->oscInProgress = true;
         // OSC terminator normalized to BEL; original ST (\x1b\\) is not
         // preserved because candy-ansi's Parser strips it before dispatch.
@@ -186,6 +263,7 @@ final class AnsiHandler implements Handler
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
     {
         $this->flushText();
+        $this->sequenceProcessedSinceLastDrain = true;
 
         $this->dcsInProgress = true;
 
@@ -217,6 +295,7 @@ final class AnsiHandler implements Handler
         }
 
         $this->flushText();
+        $this->sequenceProcessedSinceLastDrain = true;
 
         $label = match ($kind) {
             'sos' => self::describeSosPm($data),
