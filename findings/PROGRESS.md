@@ -51,12 +51,12 @@
 | sugar-readline | 4 | 15 | 3 | 6 | 6 | MERGED | | 9408dec1 | full — run loop insert, busy-spin, vi dd/yy mode, emacs handleKeyDirect |
 | candy-files | 5 | 14 | 5 | 7 | 2 | MERGED | | 601617bc | full — sanitizeName fix, async copy routing, 143 tests |
 | honey-flap | 5 | 11 | 2 | 6 | 3 | MERGED | | 99f2f759 | already complete at wave 4 merge, 41 tests |
-| sugar-bits | 5 | 9 | 4 | 2 | 3 | MERGED | | 99f2f759 | already complete at wave 4 merge, 694 tests |
-| sugar-reel | 5 | 9 | 0 | 3 | 6 | MERGED | | 0a3035e1 | full — regression tests, 282 tests |
+| sugar-bits | 5 | 9 | 4 | 2 | 3 | MERGED | | 99f2f759 | already complete at wave 4 merge, 693 tests (1 pre-existing candy-forms ViewportTest failure, out of scope) |
+| sugar-reel | 5 | 9 | 0 | 3 | 6 | MERGED | | 0a3035e1 | full — regression tests, 280 tests (2 pre-existing Kitty protocol format failures, out of scope) |
 | sugar-tick | 5 | 14 | 0 | 8 | 6 | MERGED | | 852cd217 | full — regression tests for all findings, 125 tests |
 | sugar-veil | 5 | 13 | 2 | 6 | 5 | MERGED | | ca02edd6 | full — position system, truecolor dimming, buffer fix |
 | candy-query | 6 | 11 | 3 | 5 | 3 | MERGED | | 1a9e212a | full — unused MysqlDatabase::password() removed |
 | sugar-glow | 6 | 11 | 2 | 6 | 3 | MERGED | | f8679819 | full — theme_config_unreadable added to all 15 locale files |
-| sugar-prompt | 6 | 7 | 1 | 4 | 2 | MERGED | | 79f09c66 | full — Field class_alias re-exports, Spinner fixes, 12 tests |
+| sugar-prompt | 6 | 7 | 1 | 4 | 2 | MERGED | | 742a285a | full — remove broken Field class_alias (PHP cannot alias interface), Spinner fixes, 332 tests |
 | sugar-stickers | 6 | 13 | 4 | 6 | 3 | MERGED | | fa4f7545 | full — CALIBER_LEARNINGS update, unused grow/shrink removal, 109 tests |
 | sugar-wishlist | 6 | 13 | 1 | 4 | 8 | MERGED | | b8c48512 | full — bin/wishlist IIFE fix, HOME guard, CLI args, 109 tests |
