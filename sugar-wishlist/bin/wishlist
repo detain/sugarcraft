@@ -13,22 +13,73 @@ declare(strict_types=1);
  * the current process with `ssh` connecting to the chosen entry.
  */
 
+use SugarCraft\Wishlist\Config;
+use SugarCraft\Wishlist\Lang;
+use SugarCraft\Wishlist\Launcher;
+use SugarCraft\Wishlist\Picker;
+
+// ---------------------------------------------------------------------------
+// Autoloader
+// ---------------------------------------------------------------------------
 (static function (array $argv): void {
-    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
-        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
-        if (is_file($path)) {
-            require $path;
+    foreach ([
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/../../vendor/autoload.php',
+        __DIR__ . '/../../../vendor/autoload.php',
+    ] as $candidate) {
+        if (is_file($candidate)) {
+            require $candidate;
             return;
+        }
     }
+    fwrite(STDERR, "wishlist: could not find composer autoloader\n");
+    exit(1);
+})($argv);
+
+// ---------------------------------------------------------------------------
+// CLI argument parsing
+// ---------------------------------------------------------------------------
+$opts = getopt('', ['config:', 'ssh:']);
+$cfgPath = $opts['config'] ?? '';
+$sshBin = $opts['ssh'] ?? '/usr/bin/ssh';
+
+// ---------------------------------------------------------------------------
+// Config file search (with HOME guard)
+// ---------------------------------------------------------------------------
+if ($cfgPath === '') {
+    $home = getenv('HOME');
+    $candidates = [];
+    // Always check CWD first
+    foreach (['wishlist.yml', 'wishlist.yaml', 'wishlist.json'] as $name) {
+        if (is_file($name)) {
+            $candidates[] = $name;
+        }
+    }
+    // Only add ~/.config/... candidates when HOME is set and non-empty
+    // to prevent probing '/.config/wishlist.yml' when HOME is unset.
+    if ($home !== false && $home !== '') {
+        foreach (['.config/wishlist.yml', '.config/wishlist.yaml', '.config/wishlist.json'] as $name) {
+            $candidates[] = $home . '/' . $name;
+        }
+    }
+    if ($candidates === []) {
+        fwrite(STDERR, Lang::t('cli.no_config') . "\n");
+        exit(1);
+    }
+    $cfgPath = $candidates[0];
 }
 
-// Validate the --ssh binary before we try to dispatch.
-// An invalid path would fail into the generic exec_failed message.
+// ---------------------------------------------------------------------------
+// SSH binary validation
+// ---------------------------------------------------------------------------
 if (!is_file($sshBin) || !is_executable($sshBin)) {
     fwrite(STDERR, Lang::t('cli.ssh_not_executable', ['bin' => $sshBin]) . "\n");
     exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 try {
     $endpoints = Config::load($cfgPath);
 } catch (\Throwable $e) {
