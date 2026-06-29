@@ -244,6 +244,24 @@ final class DatePickerStyleTest extends TestCase
         $this->assertIsString($view);
     }
 
+    public function testWithStyleRejectsNonSgrInput(): void
+    {
+        // Full escape sequences are not valid SGR codes for With*Style() setters
+        $this->expectException(\InvalidArgumentException::class);
+        $this->dp->WithHeaderStyle("\e[1m");
+    }
+
+    public function testWithStyleAcceptsValidSgr(): void
+    {
+        // Valid SGR codes should not throw
+        $dp = $this->dp
+            ->WithHeaderStyle('1;31')
+            ->WithTodayStyle('7')
+            ->WithCursorStyle('');
+
+        $this->assertNotSame($this->dp, $dp);
+    }
+
     private function invokeSgrToBufferStyle(string $sgr): ?Style
     {
         $ref = new \ReflectionClass($this->dp);

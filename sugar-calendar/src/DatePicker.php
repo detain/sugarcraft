@@ -470,6 +470,7 @@ final class DatePicker
 
     public function WithHeaderStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->headerStyle = $s;
         return $clone;
@@ -477,6 +478,7 @@ final class DatePicker
 
     public function WithTodayStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->todayStyle = $s;
         return $clone;
@@ -484,6 +486,7 @@ final class DatePicker
 
     public function WithSelectedStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->selectedStyle = $s;
         return $clone;
@@ -491,6 +494,7 @@ final class DatePicker
 
     public function WithCursorStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->cursorStyle = $s;
         return $clone;
@@ -498,6 +502,7 @@ final class DatePicker
 
     public function WithRangeStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->rangeStyle = $s;
         return $clone;
@@ -506,6 +511,22 @@ final class DatePicker
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Validate an SGR code string — must be empty or digits-only with optional
+     * semicolons (e.g. "1;31", "7", ""). Throws if a full escape sequence is
+     * passed, which would mangle explode(';') inside sgrToBufferStyle().
+     *
+     * @throws \InvalidArgumentException
+     */
+    private static function assertSgr(string $s): void
+    {
+        if ($s !== '' && !\preg_match('/^[0-9;]*$/', $s)) {
+            throw new \InvalidArgumentException(
+                'SGR code must be empty or digits/semicolons only, got: ' . $s
+            );
+        }
+    }
 
     /**
      * Place a string into the buffer at (col, row), handling wide chars.
