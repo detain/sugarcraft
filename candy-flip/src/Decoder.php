@@ -25,6 +25,12 @@ use SugarCraft\Flip\Lang;
  */
 final class Decoder
 {
+    /**
+     * Maximum allowed cell-grid product (cellsW * cellsH) to prevent
+     * excessive memory allocation from untrusted input.
+     */
+    private const MAX_CELLS = 100_000;
+
     /** @return list<Frame> */
     public static function decode(string $path, int $cellsW, int $cellsH): array
     {
@@ -38,6 +44,12 @@ final class Decoder
         if ($bytes === false || strlen($bytes) < 6
             || (substr($bytes, 0, 6) !== 'GIF87a' && substr($bytes, 0, 6) !== 'GIF89a')) {
             throw new \RuntimeException(Lang::t('decoder.not_gif'));
+        }
+        if ($cellsW <= 0 || $cellsH <= 0) {
+            throw new \RuntimeException(Lang::t('decoder.grid_too_large', ['max' => (string) self::MAX_CELLS]));
+        }
+        if ($cellsW * $cellsH > self::MAX_CELLS) {
+            throw new \RuntimeException(Lang::t('decoder.grid_too_large', ['max' => (string) self::MAX_CELLS]));
         }
         $header = self::parseHeader($bytes);
         $frames = [];

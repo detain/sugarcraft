@@ -136,6 +136,42 @@ final class DecoderTest extends TestCase
     }
 
     /**
+     * Regression: zero or negative cell dimensions must throw rather than
+     * allocating a zero-size buffer or looping infinitely.
+     */
+    public function testRejectsZeroCellGrid(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        Decoder::decode($this->gifPath, 0, 10);
+    }
+
+    public function testRejectsNegativeCellGrid(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        Decoder::decode($this->gifPath, -1, 10);
+    }
+
+    /**
+     * Regression: an oversized cell grid product (cellsW * cellsH > MAX_CELLS)
+     * must throw to prevent excessive memory allocation.
+     */
+    public function testRejectsOversizedCellGrid(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        // 500 * 500 = 250,000 which exceeds MAX_CELLS (100,000)
+        Decoder::decode($this->gifPath, 500, 500);
+    }
+
+    /**
      * Regression: a real GD-encoded GIF whose LZW image data spans
      * multiple full-size (≥128-byte) sub-blocks used to decode to zero
      * frames, because findImageDataEnd() bailed on any sub-block length
