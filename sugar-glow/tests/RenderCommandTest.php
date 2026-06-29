@@ -471,4 +471,31 @@ final class RenderCommandTest extends TestCase
         fclose($stream);
         $this->assertSame("# Hello from stdin", $result);
     }
+
+    public function testExecuteUnreadableThemeConfigThrows(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'glow-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', '/no/such/theme.json'],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+
+            $command = new RenderCommand();
+            $this->expectException(\InvalidArgumentException::class);
+            $this->invokeExecute($command, $input, $output);
+        } finally {
+            unlink($tmp);
+        }
+    }
 }
