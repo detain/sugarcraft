@@ -183,13 +183,11 @@ final class Repo
     {
         $out = [];
         $rc  = 0;
-        \exec("git -C {$this->path} branch 2>&1", $out, $rc);
+        $path = \escapeshellarg($this->path);
+        \exec("git -C {$path} branch --format='%(refname:short)' 2>&1", $out, $rc);
         if ($rc !== 0) return [];
 
-        return \array_map(
-            fn($line) => \ltrim($line, '* '),
-            \array_filter($out, fn($l) => !\str_starts_with($l, ' '))
-        );
+        return \array_values(\array_filter(\array_map('trim', $out), fn($l) => $l !== ''));
     }
 
     /**
@@ -199,7 +197,8 @@ final class Repo
     {
         $out = [];
         $rc  = 0;
-        \exec("git -C {$this->path} tag 2>&1", $out, $rc);
+        $path = \escapeshellarg($this->path);
+        \exec("git -C {$path} tag 2>&1", $out, $rc);
         return $rc === 0 ? $out : [];
     }
 
@@ -212,7 +211,9 @@ final class Repo
     {
         $out = [];
         $rc  = 0;
-        \exec("git -C {$this->path} for-each-ref --format='%(objectname) %(refname)' {$prefix} 2>&1", $out, $rc);
+        $path = \escapeshellarg($this->path);
+        $escapedPrefix = \escapeshellarg($prefix);
+        \exec("git -C {$path} for-each-ref --format='%(objectname) %(refname)' {$escapedPrefix} 2>&1", $out, $rc);
         if ($rc !== 0) return [];
 
         $result = [];
@@ -236,9 +237,10 @@ final class Repo
     {
         $escapedPath = \escapeshellarg($path);
         $escapedHash = \escapeshellarg($commitHash);
+        $repoPath = \escapeshellarg($this->path);
         $out = [];
         $rc  = 0;
-        \exec("git -C {$this->path} show {$escapedHash}:{$escapedPath} 2>&1", $out, $rc);
+        \exec("git -C {$repoPath} show {$escapedHash}:{$escapedPath} 2>&1", $out, $rc);
         if ($rc !== 0) return null;
         return \implode("\n", $out);
     }
@@ -250,10 +252,11 @@ final class Repo
      */
     public function readme(): ?array
     {
-        foreach (['README.md', 'README', 'readme.md', 'README.txt'] as $name) {
-            $ref = $this->refs()['refs/heads/master'] ?? $this->refs()['refs/heads/main'] ?? null;
-            if ($ref === null) break;
+        $refs = $this->refs();
+        $ref = $refs['refs/heads/master'] ?? $refs['refs/heads/main'] ?? null;
+        if ($ref === null) return null;
 
+        foreach (['README.md', 'README', 'readme.md', 'README.txt'] as $name) {
             $content = $this->readFile($ref, $name);
             if ($content !== null) {
                 return ['content' => $content, 'name' => $name];
@@ -269,6 +272,15 @@ final class Repo
     public function isPrivate(): bool
     {
         return $this->private;
+    }
+
+    /**
+     * Whether this repo is publicly visible (explicitly public and not private).
+     * A repo that is not explicitly public is collaborator-only.
+     */
+    public function isVisiblePublic(): bool
+    {
+        return $this->isPublic && !$this->private;
     }
 
     public function isCollaborator(string $username): bool

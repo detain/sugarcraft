@@ -36,10 +36,9 @@ final class AccessControl
      */
     public function canRead(?User $user, Repo $repo): bool
     {
-        if ($repo->isPublic && !$repo->isPrivate()) return true;
+        if ($repo->isVisiblePublic()) return true;
         if ($user === null) return false;
         if ($user->isAdmin) return true;
-        if (!$repo->isPrivate()) return true;
         return $repo->isCollaborator($user->username);
     }
 
@@ -50,7 +49,7 @@ final class AccessControl
     {
         if ($user === null) return false;
         if ($user->isAdmin) return true;
-        if ($repo->allowPush && !$repo->isPrivate()) return true;
+        if ($repo->allowPush && $repo->isVisiblePublic()) return true;
         return $repo->isCollaborator($user->username);
     }
 

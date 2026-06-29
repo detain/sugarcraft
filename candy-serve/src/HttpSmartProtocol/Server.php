@@ -116,6 +116,7 @@ final class Server
         try {
             return $this->route($headers, $body);
         } catch (\Throwable $e) {
+            \fwrite(\STDERR, (string) $e);
             return $this->errorResponse(500, 'Internal server error');
         }
     }
@@ -237,14 +238,41 @@ final class Server
         $this->responseHeaders['Content-Type'] = 'application/x-git-upload-pack-result';
         $this->responseHeaders['Transfer-Encoding'] = 'chunked';
 
-        // In a real implementation, we would:
-        // 1. Parse the request body to extract wants
-        // 2. Generate a packfile using git pack-objects
-        // 3. Stream it back chunked
+        // Delegate to git upload-pack --stateless-rpc for correct protocol handling
+        $repoPath = \escapeshellarg($repo->path());
+        $cmd = "git -C {$repoPath} upload-pack --stateless-rpc .";
 
-        // For now, build a minimal response using the upload pack handler
-        $handler = new UploadPack($repo, $this->getUserFromHeaders($headers));
-        $packData = $this->generatePackData($repo, $body);
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open($cmd, $desc, $pipes);
+        if ($proc === false) {
+            return $this->errorResponse(500, 'Failed to start upload-pack');
+        }
+
+        // Write request body to stdin
+        \fwrite($pipes[0], $body);
+        \fclose($pipes[0]);
+
+        // Read response into buffer (with size cap)
+        $maxBytes = 268435456; // 256 MiB
+        $packData = '';
+        while (!\feof($pipes[1])) {
+            $chunk = \fread($pipes[1], 65536);
+            if ($chunk === false) break;
+            $packData .= $chunk;
+            if (\strlen($packData) > $maxBytes) {
+                \fclose($pipes[1]);
+                \fclose($pipes[2]);
+                \proc_close($proc);
+                return $this->errorResponse(413, 'Packfile too large');
+            }
+        }
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
 
         $this->body = $packData;
         return $this->finalizeResponse();
@@ -276,11 +304,36 @@ final class Server
         $this->responseHeaders['Content-Type'] = 'application/x-git-receive-pack-result';
         $this->responseHeaders['Transfer-Encoding'] = 'chunked';
 
-        // Use the receive pack handler
-        $handler = new ReceivePack($repo, $this->getUserFromHeaders($headers));
-        $response = $this->processReceivePack($repo, $body);
+        // Delegate to git receive-pack --stateless-rpc for correct protocol handling
+        $repoPath = \escapeshellarg($repo->path());
+        $cmd = "git -C {$repoPath} receive-pack --stateless-rpc .";
 
-        $this->body = $response;
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open($cmd, $desc, $pipes);
+        if ($proc === false) {
+            return $this->errorResponse(500, 'Failed to start receive-pack');
+        }
+
+        // Write request body (commands + packfile) to stdin
+        \fwrite($pipes[0], $body);
+        \fclose($pipes[0]);
+
+        // Read response
+        $packData = '';
+        while (!\feof($pipes[1])) {
+            $chunk = \fread($pipes[1], 65536);
+            if ($chunk === false) break;
+            $packData .= $chunk;
+        }
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
+
+        $this->body = $packData;
         return $this->finalizeResponse();
     }
 
@@ -353,26 +406,42 @@ final class Server
         }
 
         $repoPath = \escapeshellarg($repo->path());
-        $wantArgs = \implode(' ', \array_map(
-            fn($h) => '^' . \escapeshellarg($h),
-            $wants
-        ));
+        $cmd = "git -C {$repoPath} pack-objects --stdout --revs 2>/dev/null";
 
-        // Generate packfile
-        $cmd = "git -C {$repoPath} pack-objects --stdout {$wantArgs} 2>/dev/null";
-        $handle = \popen($cmd, 'r');
-        if ($handle === false) {
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open($cmd, $desc, $pipes);
+        if ($proc === false) {
             return '';
         }
 
+        // Write want revs to stdin (one per line, no ^ prefix)
+        foreach ($wants as $hash) {
+            \fwrite($pipes[0], $hash . "\n");
+        }
+        \fclose($pipes[0]);
+
+        // TODO: stream via chunked callback for true streaming; cap buffered size for now
+        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
         $packData = '';
-        while (!\feof($handle)) {
-            $chunk = \fread($handle, 65536);
+        while (!\feof($pipes[1])) {
+            $chunk = \fread($pipes[1], 65536);
             if ($chunk === false) break;
             $packData .= $chunk;
+            if (\strlen($packData) > $maxBytes) {
+                \fclose($pipes[1]);
+                \fclose($pipes[2]);
+                \proc_close($proc);
+                throw new \RuntimeException('Packfile exceeds maximum size limit');
+            }
         }
 
-        \pclose($handle);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
         return $packData;
     }
 
@@ -483,7 +552,14 @@ final class Server
                     $colon = \strpos($credentials, ':');
                     if ($colon !== false) {
                         $username = \substr($credentials, 0, $colon);
-                        return $this->users[$username] ?? null;
+                        $password = \substr($credentials, $colon + 1);
+                        $user = $this->users[$username] ?? null;
+                        if ($user === null) return null;
+                        // Verify password
+                        if ($user->password !== null && !\hash_equals($user->password, $password)) {
+                            return null;
+                        }
+                        return $user;
                     }
                 }
             }

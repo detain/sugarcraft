@@ -24,6 +24,11 @@ final class ReceivePack
         $this->user = $user;
     }
 
+    public function repo(): Repo
+    {
+        return $this->repo;
+    }
+
     /**
      * Serve a git-receive-pack session over stdio.
      */
@@ -99,9 +104,8 @@ final class ReceivePack
 
             [$oldHash, $newHash, $ref] = $parts;
 
-            // Skip deletes (old != 0, new == 0)
-            // Skip fetches (old == 0)
-            if ($oldHash !== str_repeat('0', 40) && $newHash !== str_repeat('0', 40)) {
+            // Keep all commands: create (old=0), update, and delete (new=0)
+            if (\strlen($oldHash) === 40 && \strlen($newHash) === 40) {
                 $commands[] = ['old' => $oldHash, 'new' => $newHash, 'ref' => $ref];
             }
         }
@@ -119,21 +123,37 @@ final class ReceivePack
         $repoPath = \escapeshellarg($this->repo->path());
 
         foreach ($commands as $cmd) {
-            $oldHash = \escapeshellarg($cmd['old']);
-            $newHash = \escapeshellarg($cmd['new']);
-            $ref     = \escapeshellarg($cmd['ref']);
+            $oldHash = $cmd['old'];
+            $newHash = $cmd['new'];
+            $ref     = $cmd['ref'];
+            $escapedRef = \escapeshellarg($ref);
 
-            // Validate new hash format
-            if (!\ctype_xdigit(\ltrim($cmd['new'], '0')) && $cmd['new'] !== str_repeat('0', 40)) {
-                $this->reportError("invalid new object name: {$cmd['new']}");
+            // Validate hash format
+            if (!\ctype_xdigit(\ltrim($newHash, '0')) && $newHash !== \str_repeat('0', 40)) {
+                $this->reportError("invalid new object name: {$newHash}");
                 return 1;
             }
 
-            // Use git update-ref for atomic push
-            $updateRefCmd = "git -C {$repoPath} update-ref {$ref} {$newHash} {$oldHash} 2>&1";
             $out = [];
             $rc  = 0;
-            \exec($updateRefCmd, $out, $rc);
+
+            if ($newHash === \str_repeat('0', 40)) {
+                // Delete: git update-ref -d <ref> <old>
+                $escapedOld = \escapeshellarg($oldHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref -d {$escapedRef} {$escapedOld} 2>&1";
+                \exec($updateRefCmd, $out, $rc);
+            } elseif ($oldHash === \str_repeat('0', 40)) {
+                // Create: git update-ref <ref> <new> (no old arg)
+                $escapedNew = \escapeshellarg($newHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} 2>&1";
+                \exec($updateRefCmd, $out, $rc);
+            } else {
+                // Update: git update-ref <ref> <new> <old>
+                $escapedNew = \escapeshellarg($newHash);
+                $escapedOld = \escapeshellarg($oldHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} {$escapedOld} 2>&1";
+                \exec($updateRefCmd, $out, $rc);
+            }
 
             if ($rc !== 0) {
                 $this->reportError(\implode("\n", $out));
