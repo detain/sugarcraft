@@ -330,10 +330,10 @@ final class Board
             return $this;
         }
 
-        // Reveal all unflagged, unrevealed neighbors.
-        $rows = $this->rows;
-        $exploded = $this->exploded;
-        $revealedCount = $this->revealedCount;
+        // Reveal all unflagged, unrevealed neighbors, cascading through
+        // floodReveal so any zero-adjacent pocket adjacent to a chorded
+        // neighbour is fully cleared (standard minesweeper chord behaviour).
+        $b = $this;
         for ($dy = -1; $dy <= 1; $dy++) {
             for ($dx = -1; $dx <= 1; $dx++) {
                 if ($dx === 0 && $dy === 0) {
@@ -341,21 +341,18 @@ final class Board
                 }
                 $nx = $x + $dx;
                 $ny = $y + $dy;
-                $n = $this->cell($nx, $ny);
+                $n = $b->cell($nx, $ny);
                 if ($n === null || $n->revealed || $n->flagged) {
                     continue;
                 }
-                $rows[$ny][$nx] = $n->reveal();
-                $revealedCount++;
-                if ($n->mine) {
-                    $exploded = true;
-                }
+                // floodReveal skips already-revealed/flagged cells, handles
+                // adj==0 cascade, increments revealedCount, and sets exploded
+                // on a mine — so it fully subsumes the previous hand-rolled
+                // single-cell reveal logic.
+                $b = $b->floodReveal($nx, $ny);
             }
         }
 
-        return new self(
-            $this->width, $this->height, $this->mineCount,
-            $rows, $this->minesPlaced, $exploded, $revealedCount,
-        );
+        return $b;
     }
 }
