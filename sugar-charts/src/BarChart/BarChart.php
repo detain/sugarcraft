@@ -123,8 +123,8 @@ final class BarChart
         return $this->copy(width: $w, height: $h);
     }
 
-    public function withMin(?float $m): self       { return $this->copy(min: $m); }
-    public function withMax(?float $m): self       { return $this->copy(max: $m); }
+    public function withMin(?float $m): self       { return $this->copy(min: $m, minSet: true); }
+    public function withMax(?float $m): self       { return $this->copy(max: $m, maxSet: true); }
     public function withShowLabels(bool $on): self { return $this->copy(showLabels: $on); }
 
     /**
@@ -455,7 +455,7 @@ final class BarChart
             $rows[] = rtrim($line);
         }
         if ($this->showAxis) {
-            $axisLine = '└' . str_repeat('─', max(0, $this->width));
+            $axisLine = '└' . str_repeat('─', max(0, $this->width - 1));
             $rows[] = $axisLine;
         }
 
@@ -572,7 +572,9 @@ final class BarChart
         ?int $width = null,
         ?int $height = null,
         ?float $min = null,
+        bool $minSet = false,
         ?float $max = null,
+        bool $maxSet = false,
         ?bool $showLabels = null,
         ?bool $horizontal = null,
         ?bool $showAxis = null,
@@ -592,8 +594,8 @@ final class BarChart
             bars:               $bars               ?? $this->bars,
             width:              $width              ?? $this->width,
             height:             $height             ?? $this->height,
-            min:                $min                ?? $this->min,
-            max:                $max                ?? $this->max,
+            min:                $minSet ? $min : $this->min,
+            max:                $maxSet ? $max : $this->max,
             showLabels:         $showLabels         ?? $this->showLabels,
             horizontal:         $horizontal         ?? $this->horizontal,
             showAxis:           $showAxis           ?? $this->showAxis,

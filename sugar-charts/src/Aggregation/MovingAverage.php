@@ -48,6 +48,11 @@ final class MovingAverage
         return new self($windowSize, $centered);
     }
 
+    public static function new(int $windowSize, bool $centered = false): self
+    {
+        return self::create($windowSize, $centered);
+    }
+
     /**
      * Append a single value.
      */

@@ -91,6 +91,11 @@ final class BucketByTime
         return new self($intervalSeconds, $aggregator, $offsetSeconds);
     }
 
+    public static function new(int $intervalSeconds, ?\Closure $aggregator = null, int $offsetSeconds = 0): self
+    {
+        return self::create($intervalSeconds, $aggregator, $offsetSeconds);
+    }
+
     /**
      * Add a single timestamped point.
      */

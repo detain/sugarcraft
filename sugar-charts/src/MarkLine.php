@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Charts;
 
 /**
- * A horizontal reference-line annotation for charts. Mirrors ntcharts'
- * `MarkLine` concept — renders a dashed or solid line at a fixed Y value
+ * A horizontal reference-line annotation value object. Mirrors ntcharts'
+ * `MarkLine` concept — computes a dashed or solid line at a fixed Y value
  * (Min / Max / Average of the dataset) across the full plot width.
  *
- * MarkLine is immutable and composes into any chart that accepts
- * annotation collections.
+ * MarkLine is an immutable standalone value object. Rendering integration
+ * with chart classes (horizontal annotation overlay) is not yet wired;
+ * the value can be retrieved and used programmatically via `MarkLine::at()`,
+ * `MarkLine::min()`, `MarkLine::max()`, or `MarkLine::average()`.
  */
 final class MarkLine
 {

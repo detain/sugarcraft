@@ -78,6 +78,11 @@ final class Resample
         return new self($targetIntervalSeconds, $startTimestamp);
     }
 
+    public static function new(int $targetIntervalSeconds, int $startTimestamp = 0): self
+    {
+        return self::create($targetIntervalSeconds, $startTimestamp);
+    }
+
     /**
      * Add a single timestamped point.
      */
@@ -266,16 +271,16 @@ final class Resample
         $currTs = $this->startTimestamp > 0 ? $this->startTimestamp : $timestampedValues[0]['ts'];
         $endTs = $timestampedValues[count($timestampedValues) - 1]['ts'];
 
+        $i = 0;
+        $count = count($timestampedValues);
         while ($currTs <= $endTs) {
-            // Find nearest input point
-            $nearest = $timestampedValues[0];
-            foreach ($timestampedValues as $pt) {
-                if (abs($pt['ts'] - $currTs) < abs($nearest['ts'] - $currTs)) {
-                    $nearest = $pt;
-                }
+            while (
+                $i + 1 < $count
+                && abs($timestampedValues[$i + 1]['ts'] - $currTs) < abs($timestampedValues[$i]['ts'] - $currTs)
+            ) {
+                $i++;
             }
-
-            $result[] = ['ts' => $currTs, 'value' => $nearest['value']];
+            $result[] = ['ts' => $currTs, 'value' => $timestampedValues[$i]['value']];
             $currTs += $this->targetIntervalSeconds;
         }
 

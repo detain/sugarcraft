@@ -108,8 +108,8 @@ final class OHLCChart
         return $this->copy(width: $w, height: $h);
     }
 
-    public function withMin(?float $m): self  { return $this->copy(min: $m); }
-    public function withMax(?float $m): self  { return $this->copy(max: $m); }
+    public function withMin(?float $m): self  { return $this->copy(min: $m, minSet: true); }
+    public function withMax(?float $m): self  { return $this->copy(max: $m, maxSet: true); }
     public function withBodyRunes(string $bull, string $bear): self
     {
         return $this->copy(bodyBullish: $bull, bodyBearish: $bear);
@@ -120,7 +120,7 @@ final class OHLCChart
     }
     public function withColors(?Color $bullish, ?Color $bearish): self
     {
-        return $this->copy(bullishColor: $bullish, bearishColor: $bearish);
+        return $this->copy(bullishColor: $bullish, bullishColorSet: true, bearishColor: $bearish, bearishColorSet: true);
     }
 
     // ─── Legend & Label Configuration ──────────────────────────────────
@@ -382,12 +382,16 @@ final class OHLCChart
         ?int $width = null,
         ?int $height = null,
         ?float $min = null,
+        bool $minSet = false,
         ?float $max = null,
+        bool $maxSet = false,
         ?string $bodyBullish = null,
         ?string $bodyBearish = null,
         ?string $wick = null,
         ?Color $bullishColor = null,
+        bool $bullishColorSet = false,
         ?Color $bearishColor = null,
+        bool $bearishColorSet = false,
         ?bool $showLegend = null,
         ?Position $legendPosition = null,
         ?string $legendIndicatorChar = null,
@@ -401,13 +405,13 @@ final class OHLCChart
             bars:               $bars               ?? $this->bars,
             width:              $width              ?? $this->width,
             height:             $height             ?? $this->height,
-            min:                $min                ?? $this->min,
-            max:                $max                ?? $this->max,
+            min:                $minSet ? $min : $this->min,
+            max:                $maxSet ? $max : $this->max,
             bodyBullish:        $bodyBullish        ?? $this->bodyBullish,
             bodyBearish:        $bodyBearish        ?? $this->bodyBearish,
             wick:               $wick               ?? $this->wick,
-            bullishColor:       $bullishColor       ?? $this->bullishColor,
-            bearishColor:       $bearishColor       ?? $this->bearishColor,
+            bullishColor:       $bullishColorSet ? $bullishColor : $this->bullishColor,
+            bearishColor:       $bearishColorSet ? $bearishColor : $this->bearishColor,
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,
             legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,

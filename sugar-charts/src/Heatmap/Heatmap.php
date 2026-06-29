@@ -294,6 +294,17 @@ final class Heatmap
         $maxLabel = self::formatLabel($max);
         $minLen = mb_strlen($minLabel, 'UTF-8');
         $maxLen = mb_strlen($maxLabel, 'UTF-8');
+
+        $totalLabelLen = $minLen + $maxLen;
+        if ($totalLabelLen + 2 > $this->width) {
+            $budget = max(0, $this->width - 2);
+            $halfBudget = intdiv($budget, 2);
+            $minLabel = mb_substr($minLabel, 0, $halfBudget, 'UTF-8');
+            $maxLabel = mb_substr($maxLabel, 0, $budget - $halfBudget, 'UTF-8');
+            $minLen = mb_strlen($minLabel, 'UTF-8');
+            $maxLen = mb_strlen($maxLabel, 'UTF-8');
+        }
+
         $stripWidth = max(0, $this->width - $minLen - $maxLen - 2);
         $strip = '';
         for ($i = 0; $i < $stripWidth; $i++) {
