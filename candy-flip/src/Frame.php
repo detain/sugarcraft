@@ -15,11 +15,16 @@ final class Frame
 {
     /**
      * Disposal method constants from GIF89a spec.
+     * Per GCE transparency/disposal (gce-transparency-disposal):
+     *   0 = none (no disposal, leave composite as-is)
+     *   1 = keep  (do not dispose, leave the frame in place)
+     *   2 = restore-bg (restore to background/transparent fill)
+     *   3 = restore-prev (restore to previous — unsupported; treated as NONE)
      */
-    public const DISPOSAL_NONE       = 0; // No disposal action — leave composite as-is
-    public const DISPOSAL_RESTORE   = 1; // Restore to background (transparent fill)
-    public const DISPOSAL_PREVIOUS  = 2; // Restore to previous (unsupported; treated as NONE)
-    public const DISPOSAL_UNSPEC    = 3; // Unspecified — treat as DISPOSAL_NONE
+    public const DISPOSAL_NONE        = 0;
+    public const DISPOSAL_KEEP        = 1;
+    public const DISPOSAL_BACKGROUND  = 2;
+    public const DISPOSAL_PREVIOUS    = 3;
 
     /**
      * @param list<list<array{0:int,1:int,2:int}|null>> $cells  null = transparent
