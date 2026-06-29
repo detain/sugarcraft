@@ -291,17 +291,9 @@ final class Tabs implements Model
             $newActive = max(0, count($newLabels) - 1);
         }
         $newOffset = min($this->scrollOffset, max(0, count($newLabels) - 1));
-        return new self(
-            active: $newActive,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
+        return $this->copy(
             labels: $newLabels,
+            active: $newActive,
             scrollOffset: $newOffset,
         );
     }
@@ -313,88 +305,27 @@ final class Tabs implements Model
             return $this;
         }
         $index = max(0, min($index, $count - 1));
-        $new = new self(
-            active: $index,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
-        return $new->adjustScroll($index);
+        return $this->copy(active: $index)->adjustScroll($index);
     }
 
     public function withActiveStyle(Style $style): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $style,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(activeStyle: $style);
     }
 
     public function withInactiveStyle(Style $style): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $style,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(inactiveStyle: $style);
     }
 
     public function withDivider(string $divider): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(divider: $divider);
     }
 
     public function withKeyMap(TabsKeyMap $keyMap): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(keyMap: $keyMap);
     }
 
     public function withWidth(int $width): self
@@ -402,19 +333,7 @@ final class Tabs implements Model
         if ($width < 0) {
             throw new \InvalidArgumentException(Lang::t('tabs.neg_width'));
         }
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(width: $width);
     }
 
     /**
@@ -428,19 +347,7 @@ final class Tabs implements Model
      */
     public function withZoneManager(?Manager $manager): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $manager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(zoneManager: $manager);
     }
 
     /**
@@ -449,19 +356,7 @@ final class Tabs implements Model
      */
     public function withScrollOffset(int $offset): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: max(0, min($offset, count($this->labels) - 1)),
-        );
+        return $this->copy(scrollOffset: max(0, min($offset, count($this->labels) - 1)));
     }
 
     /**
@@ -471,19 +366,7 @@ final class Tabs implements Model
      */
     public function noWrap(): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: $this->focused,
-            wrap: false,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(wrap: false);
     }
 
     /**
@@ -491,39 +374,12 @@ final class Tabs implements Model
      */
     public function focus(): array
     {
-        return [
-            new self(
-                active: $this->active,
-                activeStyle: $this->activeStyle,
-                inactiveStyle: $this->inactiveStyle,
-                divider: $this->divider,
-                keyMap: $this->keyMap,
-                focused: true,
-                wrap: $this->wrap,
-                width: $this->width,
-                zoneManager: $this->zoneManager,
-                labels: $this->labels,
-                scrollOffset: $this->scrollOffset,
-            ),
-            null,
-        ];
+        return [$this->copy(focused: true), null];
     }
 
     public function blur(): self
     {
-        return new self(
-            active: $this->active,
-            activeStyle: $this->activeStyle,
-            inactiveStyle: $this->inactiveStyle,
-            divider: $this->divider,
-            keyMap: $this->keyMap,
-            focused: false,
-            wrap: $this->wrap,
-            width: $this->width,
-            zoneManager: $this->zoneManager,
-            labels: $this->labels,
-            scrollOffset: $this->scrollOffset,
-        );
+        return $this->copy(focused: false);
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
@@ -605,6 +461,38 @@ final class Tabs implements Model
     {
         $s = str_replace(["\n", "\r", "\t"], ' ', $s);
         return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', '', $s) ?? $s;
+    }
+
+    /**
+     * Internal copy-with-overrides helper — rebuilds the Tabs via the
+     * constructor with the same pattern as Tree::copy() / Table::mutate().
+     */
+    private function copy(
+        ?int $active = null,
+        ?Style $activeStyle = null,
+        ?Style $inactiveStyle = null,
+        ?string $divider = null,
+        ?TabsKeyMap $keyMap = null,
+        ?bool $focused = null,
+        ?bool $wrap = null,
+        ?int $width = null,
+        ?Manager $zoneManager = null,
+        ?array $labels = null,
+        ?int $scrollOffset = null,
+    ): self {
+        return new self(
+            active: $active ?? $this->active,
+            activeStyle: $activeStyle ?? $this->activeStyle,
+            inactiveStyle: $inactiveStyle ?? $this->inactiveStyle,
+            divider: $divider ?? $this->divider,
+            keyMap: $keyMap ?? $this->keyMap,
+            focused: $focused ?? $this->focused,
+            wrap: $wrap ?? $this->wrap,
+            width: $width ?? $this->width,
+            zoneManager: $zoneManager ?? $this->zoneManager,
+            labels: $labels ?? $this->labels,
+            scrollOffset: $scrollOffset ?? $this->scrollOffset,
+        );
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
