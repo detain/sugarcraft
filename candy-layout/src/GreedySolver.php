@@ -43,7 +43,10 @@ final class GreedySolver implements LayoutSolver
         return new self();
     }
 
-    public static function cassowary(): self
+    /**
+     * @return CassowarySolver
+     */
+    public static function cassowary(): CassowarySolver
     {
         return new CassowarySolver();
     }
@@ -129,15 +132,7 @@ final class GreedySolver implements LayoutSolver
         } else {
             // Step 3: distribute slack
             $slack = $totalWidth - $reservedFixed - $reservedMinSum;
-            if ($slack < 0) {
-                // Not enough room for all mins — distribute shortage proportionally
-                $scale = $totalWidth / $reservedMinSum;
-                foreach ($rawSizes as $i => $size) {
-                    if ($constraints[$i] instanceof Min) {
-                        $rawSizes[$i] = (int) floor($size * $scale);
-                    }
-                }
-            } elseif ($slack > 0) {
+            if ($slack > 0) {
                 $totalDistWeight = $fillWeightSum + $maxWeightSum;
 
                 if ($totalDistWeight > 0) {
@@ -154,6 +149,24 @@ final class GreedySolver implements LayoutSolver
                     foreach ($constraints as $i => $c) {
                         if ($c instanceof Min) {
                             $rawSizes[$i] = (int) floor(($c->n / $reservedMinSum) * $slack) + $c->n;
+                        }
+                    }
+
+                    // Rounding reclamation: pure Percentage/Ratio layouts lose pixels
+                    // to floor(). Distribute leftover round-robin to Percentage/Ratio
+                    // entries only (ratatui "give remainder to earlier segments first").
+                    // Min/Length are exact values and must not be inflated.
+                    // Guard: only correct genuine floor rounding (small diff <= 2),
+                    // not large shortfalls that represent intentional slack.
+                    $used = array_sum($rawSizes);
+                    $diff = $totalWidth - $used;
+                    if ($diff > 0 && $diff <= 2) {
+                        for ($i = 0; $i < $totalCount && $diff > 0; $i++) {
+                            $c = $constraints[$i];
+                            if ($c instanceof Percentage || $c instanceof Ratio) {
+                                $rawSizes[$i] += 1;
+                                $diff--;
+                            }
                         }
                     }
                 }
@@ -316,8 +329,9 @@ final class GreedySolver implements LayoutSolver
         $totalHeight = $area->height;
         $width = $area->width;
 
-        // Flip area to use horizontal solver on the "other" dimension
-        $fakeArea = new Region($area->x, $area->y, $totalHeight, $width);
+        // Flip area to use horizontal solver on the "other" dimension.
+        // Origin must be 0,0 — the flip-back at line 326 re-adds $area->x/$area->y.
+        $fakeArea = new Region(0, 0, $totalHeight, $width);
         $hRects = self::solveHorizontal($fakeArea, $constraints);
 
         // Flip x/y and width/height back to original orientation

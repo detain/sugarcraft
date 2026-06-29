@@ -28,10 +28,10 @@ interface LayoutSolver
     /**
      * Create a new GreedySolver instance.
      */
-    public static function greedy(): self;
+    public static function greedy(): GreedySolver;
 
     /**
      * Create a new CassowarySolver instance.
      */
-    public static function cassowary(): self;
+    public static function cassowary(): CassowarySolver;
 }
