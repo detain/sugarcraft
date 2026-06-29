@@ -31,6 +31,9 @@ final class Logger
     /** Styles for text-formatter level coloring. */
     private Styles $styles;
 
+    /** Whether colors are enabled based on terminal capabilities. */
+    private bool $useColors;
+
     /**
      * @param Formatter|null $formatter Output formatter (defaults to TextFormatter).
      * @param Level|null     $minLevel  Minimum level to emit (defaults to Info).
@@ -51,6 +54,9 @@ final class Logger
         // Probe-driven color decision: disable colors when terminal cannot render them
         $useColors = Probe::colorProfile()->allowsColor();
 
+        $this->styles = Styles::default();
+        $this->useColors = $useColors;
+
         $this->formatter = $formatter ?? new TextFormatter(
             $reportTimestamp,
             $timeFormat,
@@ -64,7 +70,6 @@ final class Logger
         $this->reportCaller = $reportCaller;
         $this->fields = [];
         $this->stream = $stream ?? \STDOUT;
-        $this->styles = Styles::default();
     }
 
     // -------------------------------------------------------------------------
@@ -234,21 +239,29 @@ final class Logger
     public function setReportCaller(bool $on): void
     {
         $this->reportCaller = $on;
-        $this->formatter = new TextFormatter(
-            $this->reportTimestamp,
-            $this->timeFormat,
-            $on,
-        );
+        // Only rebuild TextFormatter; leave non-text formatters (Json, Logfmt) untouched
+        if ($this->formatter instanceof TextFormatter) {
+            $this->formatter = new TextFormatter(
+                $this->reportTimestamp,
+                $this->timeFormat,
+                $on,
+                $this->useColors,
+            );
+        }
     }
 
     public function setReportTimestamp(bool $on): void
     {
         $this->reportTimestamp = $on;
-        $this->formatter = new TextFormatter(
-            $on,
-            $this->timeFormat,
-            $this->reportCaller,
-        );
+        // Only rebuild TextFormatter; leave non-text formatters (Json, Logfmt) untouched
+        if ($this->formatter instanceof TextFormatter) {
+            $this->formatter = new TextFormatter(
+                $on,
+                $this->timeFormat,
+                $this->reportCaller,
+                $this->useColors,
+            );
+        }
     }
 
     public function setPrefix(?string $prefix): void
