@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\CancellationSource;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -289,7 +290,8 @@ final class Select implements \SugarCraft\Forms\Field
             $next = $next->withPendingAsyncCancellation(CancellationSource::new());
             $asyncCmd = $this->scheduleAsyncSuggestions($next, $l->filterText);
             if ($cmd !== null) {
-                return [$next, fn() => $cmd()];
+                // Both the inner Cmd and the debounced fetch Cmd must run.
+                return [$next, Cmd::batch($cmd, $asyncCmd)];
             }
             return [$next, $asyncCmd];
         }
@@ -309,8 +311,10 @@ final class Select implements \SugarCraft\Forms\Field
      */
     private function scheduleAsyncSuggestions(self $field, string $filterText): ?\Closure
     {
-        // Create a new cancellation source for this operation
-        $cancellationSource = CancellationSource::new();
+        // Use the cancellation source already stored on $field (passed from update()).
+        // This is the CancellationSource that gets cancelled on subsequent keystrokes,
+        // ensuring rapid keystrokes cancel previous pending async operations.
+        $cancellationSource = $field->pendingAsyncCancellation;
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $currentSeq = ++$this->pendingAsyncSeq;

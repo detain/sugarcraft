@@ -405,8 +405,8 @@ final class Input implements \SugarCraft\Forms\Field
             $asyncCmd = $this->scheduleAsyncSuggestions($next);
             // Combine with any existing cmd from the synchronous update
             if ($cmd !== null) {
-                // Return combined cmd (both must run)
-                return [$next, fn() => $cmd()];
+                // Both the inner blink/tick Cmd and the debounced fetch Cmd must run.
+                return [$next, Cmd::batch($cmd, $asyncCmd)];
             }
             return [$next, $asyncCmd];
         }
