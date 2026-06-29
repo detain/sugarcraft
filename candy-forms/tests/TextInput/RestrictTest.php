@@ -185,4 +185,24 @@ final class RestrictTest extends TestCase
         [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'B')); // uppercase rejected
         $this->assertSame('a', $t->value);
     }
+
+    /**
+     * Step 10: withRestrict() validates the regex eagerly at construction time.
+     * A slash in the pattern (unintended delimiter) must throw, not silently
+     * accept or reject all input.
+     */
+    public function testWithRestrictThrowsOnSlashInPattern(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        TextInput::new()->withRestrict('a/b');
+    }
+
+    /**
+     * Step 10: An unclosed character class bracket is an invalid PCRE pattern.
+     */
+    public function testWithRestrictThrowsOnUnclosedBracket(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        TextInput::new()->withRestrict('[');
+    }
 }

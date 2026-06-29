@@ -42,4 +42,23 @@ final class PatternTest extends TestCase
         $this->assertSame(true, $v->validate('12345'));
         $this->assertSame('Must contain only digits', $v->validate('abc'));
     }
+
+    /**
+     * Step 10: Pattern validates the regex eagerly at construction time.
+     * An unclosed group or character class throws at construction, not at match time.
+     */
+    public function testPatternThrowsOnUnclosedGroup(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Pattern('(abc');
+    }
+
+    /**
+     * Step 10: An empty pattern string is invalid in PCRE.
+     */
+    public function testPatternThrowsOnEmptyPattern(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Pattern('');
+    }
 }

@@ -718,6 +718,9 @@ final class TextInput implements Model
      */
     public function withRestrict(string $pattern): self
     {
+        if ($pattern !== '' && @preg_match('/' . $pattern . '/', '') === false) {
+            throw new \InvalidArgumentException('Invalid restrict pattern: ' . $pattern);
+        }
         return $this->mutate(restrict: $pattern);
     }
 

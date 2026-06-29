@@ -547,14 +547,14 @@ final class Input implements \SugarCraft\Forms\Field
         return $this;
     }
 
-    private function mutate(?TextInput $input = null, ?string $title = null, ?string $description = null, ?string $error = null): self
+    private function mutate(?TextInput $input = null, ?string $title = null, ?string $description = null, ?string $error = null, bool $errorSet = false): self
     {
         return new self(
             key:                       $this->key,
             input:                     $input       ?? $this->input,
             title:                     $title       ?? $this->title,
             description:               $description ?? $this->description,
-            error:                     $error       ?? $this->error,
+            error:                     $errorSet ? $error : $this->error,
             validators:                $this->validators,
             suggestionsFunc:           $this->suggestionsFunc,
             fuzzyCandidates:           $this->fuzzyCandidates,
