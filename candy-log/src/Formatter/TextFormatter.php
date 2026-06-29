@@ -7,6 +7,7 @@ namespace SugarCraft\Log\Formatter;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Log\Formatter;
 use SugarCraft\Log\Level;
+use SugarCraft\Log\PartsOrder;
 use SugarCraft\Log\Styles;
 use SugarCraft\Sprinkles\Style;
 
@@ -23,6 +24,7 @@ final class TextFormatter implements Formatter
     private bool $reportCaller;
     private bool $useColors;
     private Styles $styles;
+    private PartsOrder $partsOrder;
 
     public function __construct(
         bool $reportTimestamp = true,
@@ -30,12 +32,14 @@ final class TextFormatter implements Formatter
         bool $reportCaller = false,
         bool $useColors = true,
         ?Styles $styles = null,
+        ?PartsOrder $partsOrder = null,
     ) {
         $this->reportTimestamp = $reportTimestamp;
         $this->timeFormat = $timeFormat;
         $this->reportCaller = $reportCaller;
         $this->useColors = $useColors;
         $this->styles = $styles ?? Styles::default();
+        $this->partsOrder = $partsOrder ?? PartsOrder::default();
     }
 
     public function format(
@@ -46,36 +50,43 @@ final class TextFormatter implements Formatter
         ?string $caller,
         ?string $prefix,
     ): string {
-        $parts = [];
+        $out = [];
 
-        if ($this->reportTimestamp) {
-            $ts = $this->timeFormat !== null
-                ? $time->format($this->timeFormat)
-                : $time->format(self::DEFAULT_TIME_FORMAT);
-            $parts[] = $ts;
+        foreach ($this->partsOrder->parts as $part) {
+            $item = match ($part) {
+                PartsOrder::PART_TIMESTAMP => $this->reportTimestamp
+                    ? ($this->timeFormat !== null
+                        ? $time->format($this->timeFormat)
+                        : $time->format(self::DEFAULT_TIME_FORMAT))
+                    : null,
+
+                PartsOrder::PART_LEVEL => $this->useColors
+                    ? $this->styledLevel($level)
+                    : $level->label(),
+
+                PartsOrder::PART_PREFIX => ($prefix !== null && $prefix !== '')
+                    ? ($this->useColors ? $this->styledPrefix($prefix) : $prefix)
+                    : null,
+
+                PartsOrder::PART_CALLER => ($this->reportCaller && $caller !== null)
+                    ? ($this->useColors ? $this->styledCaller($caller) : "<{$caller}>")
+                    : null,
+
+                PartsOrder::PART_MESSAGE => $message,
+
+                PartsOrder::PART_FIELDS => \count($context) > 0
+                    ? $this->formatContext($context)
+                    : null,
+
+                default => null,
+            };
+
+            if ($item !== null && $item !== '') {
+                $out[] = $item;
+            }
         }
 
-        $label = $this->useColors
-            ? $this->styledLevel($level)
-            : $level->label();
-
-        if ($prefix !== null && $prefix !== '') {
-            $label = ($this->useColors ? $this->styledPrefix($prefix) : $prefix) . ' ' . $label;
-        }
-
-        $parts[] = $label;
-
-        if ($this->reportCaller && $caller !== null) {
-            $parts[] = $this->useColors ? $this->styledCaller($caller) : "<{$caller}>";
-        }
-
-        $parts[] = $message;
-
-        if (\count($context) > 0) {
-            $parts[] = $this->formatContext($context);
-        }
-
-        return \implode(' ', $parts) . "\n";
+        return \implode(' ', $out) . "\n";
     }
 
     private function styledLevel(Level $level): string
@@ -117,6 +128,16 @@ final class TextFormatter implements Formatter
     {
         $child = clone $this;
         $child->styles = $styles;
+        return $child;
+    }
+
+    /**
+     * Create a new TextFormatter with different parts order, preserving all other settings.
+     */
+    public function withPartsOrder(PartsOrder $partsOrder): self
+    {
+        $child = clone $this;
+        $child->partsOrder = $partsOrder;
         return $child;
     }
 }
