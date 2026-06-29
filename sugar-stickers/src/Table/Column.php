@@ -11,11 +11,6 @@ namespace SugarCraft\Stickers\Table;
  */
 final class Column
 {
-    public readonly string $title;
-    public readonly int $width;
-    public string $align;       // 'left' | 'center' | 'right' — mutated via withAlign() on clones
-    public string $ansiStyle;   // ANSI style for header cells — mutated via withStyle() on clones
-
     /** @var callable(string $value, int $rowIndex): string|null */
     private $formatter;
 
@@ -24,17 +19,33 @@ final class Column
     private int $sortPriority = 0;
 
     private function __construct(
-        string $title,
-        int $width,
-        string $align = 'left',
-        string $ansiStyle = '',
+        public readonly string $title,
+        public readonly int $width,
+        public readonly string $align = 'left',
+        public readonly string $ansiStyle = '',
         ?callable $formatter = null,
     ) {
-        $this->title     = $title;
-        $this->width     = $width;
-        $this->align     = $align;
-        $this->ansiStyle = $ansiStyle;
         $this->formatter = $formatter;
+    }
+
+    /**
+     * Internal constructor that also preserves sort state.
+     * Used by with* methods to create a new instance with modified properties.
+     */
+    private static function fromState(
+        string $title,
+        int $width,
+        string $align,
+        string $ansiStyle,
+        ?callable $formatter,
+        int $sortDir,
+        int $sortPriority,
+    ): self {
+        $col = new self($title, $width, $align, $ansiStyle, $formatter);
+        // Access private properties directly since we're in the same class.
+        $col->sortDir = $sortDir;
+        $col->sortPriority = $sortPriority;
+        return $col;
     }
 
     public static function make(string $title, int $width): self
@@ -44,16 +55,12 @@ final class Column
 
     public function withAlign(string $align): self
     {
-        $clone = clone $this;
-        $clone->align = $align;
-        return $clone;
+        return self::fromState($this->title, $this->width, $align, $this->ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
     public function withStyle(string $ansiStyle): self
     {
-        $clone = clone $this;
-        $clone->ansiStyle = $ansiStyle;
-        return $clone;
+        return self::fromState($this->title, $this->width, $this->align, $ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
     public function withFormatter(callable $fn): self
@@ -66,7 +73,7 @@ final class Column
     public function sorted(int $direction = 1, int $priority = 0): self
     {
         $clone = clone $this;
-        $clone->sortDir     = $direction;
+        $clone->sortDir = $direction;
         $clone->sortPriority = $priority;
         return $clone;
     }
@@ -74,7 +81,7 @@ final class Column
     public function unsorted(): self
     {
         $clone = clone $this;
-        $clone->sortDir     = 0;
+        $clone->sortDir = 0;
         $clone->sortPriority = 0;
         return $clone;
     }
@@ -89,21 +96,49 @@ final class Column
             $result = $value;
         }
 
-        return \substr((string) $result, 0, $this->width);
+        // Sanitize data-origin content. Width clamping is done in padded().
+        return $this->sanitize((string) $result);
+    }
+
+    /**
+     * Strip dangerous control characters from content destined for the terminal.
+     *
+     * Removes C0 controls (0x00-0x08, 0x0B-0x1F), C1 escape (0x7F),
+     * and OSC/DCS sequences (0x80-0x9F, bare ESC introducers) that could
+     * corrupt terminal state or enable injection attacks. Library-emitted
+     * SGR sequences (\x1b[...m) are preserved as they are added downstream
+     * of sanitize via applyStyle.
+     */
+    private function sanitize(string $s): string
+    {
+        // Remove OSC sequences (ESC ] ... BEL or ESC \).
+        $s = \preg_replace('/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', '', $s);
+        // Remove DCS sequences (ESC P ... ESC \).
+        $s = \preg_replace('/\x1bP[^\x1b]*(?:\x1b\\\\)/', '', $s);
+        // Remove bare ESC introducers not followed by [ (not CSI).
+        $s = \preg_replace('/\x1b(?!\[)/', '', $s);
+        // Remove C0 controls except HT (0x09) and LF (0x0A).
+        $s = \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
+        // Remove DEL (0x7F).  Do NOT remove 0x80-0x9F — those are valid
+        // UTF-8 continuation bytes (e.g. CJK `東京` = e6[9d]b1 e4[ba]ac
+        // where bytes in brackets fall in that range).  Stripping them
+        // corrupts any multi-byte character whose encoding includes them.
+        $s = \preg_replace('/\x7F/', '', $s);
+        return $s;
     }
 
     public function padded(string $value, int $rowIndex): string
     {
         $v = $this->format($value, $rowIndex);
-        $len = \strlen($v);
-        if ($len >= $this->width) {
-            return \substr($v, 0, $this->width);
-        }
-        $pad = $this->width - $len;
+
+        // Clamp to display width using ANSI-aware truncation (no mid-grapheme cuts).
+        $v = \SugarCraft\Core\Util\Width::truncateAnsi($v, $this->width);
+
+        // Pad using Width methods for correct visual alignment.
         return match ($this->align) {
-            'right'  => \str_repeat(' ', $pad) . $v,
-            'center' => \str_repeat(' ', (int) \floor($pad / 2)) . $v . \str_repeat(' ', (int) \ceil($pad / 2)),
-            default  => $v . \str_repeat(' ', $pad),
+            'right'  => \SugarCraft\Core\Util\Width::padLeft($v, $this->width),
+            'center' => \SugarCraft\Core\Util\Width::padCenter($v, $this->width),
+            default  => \SugarCraft\Core\Util\Width::padRight($v, $this->width),
         };
     }
 

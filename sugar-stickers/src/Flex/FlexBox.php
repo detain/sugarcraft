@@ -12,15 +12,6 @@ enum Direction {
     case Column;  // vertical
 }
 
-/** {@see FlexBox} main-axis distribution of free space — equivalent to CSS `justify-content`. */
-enum Justify {
-    case Start;
-    case Center;
-    case End;
-    case SpaceBetween;
-    case SpaceAround;
-}
-
 /** {@see FlexBox} cross-axis item alignment — equivalent to CSS `align-items`. */
 enum Align {
     case Start;
@@ -32,7 +23,8 @@ enum Align {
 /**
  * CSS flexbox-like layout for terminal UIs.
  *
- * Supports row/column direction, justify/align, gap, wrapping, and ratio-based sizing.
+ * Supports row/column direction, align, gap, wrapping, and ratio-based sizing.
+ * Note: `wrap` and `border` are stored but not yet implemented in rendering.
  *
  * Port of 76creates/stickers FlexBox.
  *
@@ -40,21 +32,17 @@ enum Align {
  */
 final class FlexBox
 {
-    /** @var list<FlexItem> */
-    private array $items = [];
-
-    public Direction $direction = Direction::Row;
-    public Justify   $justify   = Justify::Start;
-    public Align     $align     = Align::Stretch;
-    public int       $gap       = 0;
-    public bool      $wrap      = false;
-    public bool      $border    = false;
-
-    private function __construct(Direction $direction, FlexItem ...$items)
-    {
-        $this->direction = $direction;
-        $this->items     = $items;
-    }
+    /**
+     * @param list<FlexItem> $items
+     */
+    private function __construct(
+        public readonly Direction $direction = Direction::Row,
+        public readonly Align $align = Align::Stretch,
+        public readonly int $gap = 0,
+        public readonly bool $wrap = false,
+        public readonly bool $border = false,
+        private array $items = [],
+    ) {}
 
     // -------------------------------------------------------------------------
     // Factory
@@ -62,12 +50,12 @@ final class FlexBox
 
     public static function row(FlexItem ...$items): self
     {
-        return (new self(Direction::Row, ...$items));
+        return new self(Direction::Row, Align::Stretch, 0, false, false, $items);
     }
 
     public static function column(FlexItem ...$items): self
     {
-        return (new self(Direction::Column, ...$items));
+        return new self(Direction::Column, Align::Stretch, 0, false, false, $items);
     }
 
     // -------------------------------------------------------------------------
@@ -76,51 +64,34 @@ final class FlexBox
 
     public function withDirection(Direction $d): self
     {
-        $clone = clone $this;
-        $clone->direction = $d;
-        return $clone;
-    }
-
-    public function withJustify(Justify $j): self
-    {
-        $clone = clone $this;
-        $clone->justify = $j;
-        return $clone;
+        return new self($d, $this->align, $this->gap, $this->wrap, $this->border, $this->items);
     }
 
     public function withAlign(Align $a): self
     {
-        $clone = clone $this;
-        $clone->align = $a;
-        return $clone;
+        return new self($this->direction, $a, $this->gap, $this->wrap, $this->border, $this->items);
     }
 
     public function withGap(int $cells): self
     {
-        $clone = clone $this;
-        $clone->gap = $cells;
-        return $clone;
+        return new self($this->direction, $this->align, $cells, $this->wrap, $this->border, $this->items);
     }
 
     public function withWrap(bool $w = true): self
     {
-        $clone = clone $this;
-        $clone->wrap = $w;
-        return $clone;
+        return new self($this->direction, $this->align, $this->gap, $w, $this->border, $this->items);
     }
 
     public function withBorder(bool $b = true): self
     {
-        $clone = clone $this;
-        $clone->border = $b;
-        return $clone;
+        return new self($this->direction, $this->align, $this->gap, $this->wrap, $b, $this->items);
     }
 
     public function addItem(FlexItem $item): self
     {
-        $clone = clone $this;
-        $clone->items[] = $item;
-        return $clone;
+        $newItems = $this->items;
+        $newItems[] = $item;
+        return new self($this->direction, $this->align, $this->gap, $this->wrap, $this->border, $newItems);
     }
 
     // -------------------------------------------------------------------------
@@ -190,12 +161,6 @@ final class FlexBox
             }
         }
 
-        // Compute start X for each item
-        $offsets = [0];
-        for ($i = 0; $i < \count($measured) - 1; $i++) {
-            $offsets[] = $offsets[$i] + $measured[$i]['allocated'] + $gap;
-        }
-
         $resultLines = [];
         $heights = \array_column($measured, 'height');
         $maxHeight = $this->align === Align::Stretch
@@ -214,6 +179,9 @@ final class FlexBox
                 }
                 $raw = $itemLines[$line] ?? '';
 
+                // Sanitize data-origin content before rendering.
+                $raw = $this->sanitize($raw);
+
                 // Align within allocated width
                 $cellStr = $this->alignCell($raw, $aw, $this->align);
 
@@ -226,7 +194,7 @@ final class FlexBox
                     $lineStr .= \str_repeat(' ', $gap);
                 }
             }
-            $resultLines[] = \substr($lineStr, 0, $totalWidth);
+            $resultLines[] = \SugarCraft\Core\Util\Width::truncateAnsi($lineStr, $totalWidth);
         }
 
         return \implode("\n", $resultLines);
@@ -246,18 +214,14 @@ final class FlexBox
         ], $items);
 
         $totalRatio   = \array_sum(\array_column($measured, 'ratio'));
-        $totalBasis   = \array_sum(\array_filter(\array_column($measured, 'item'), fn($it) => $it->basis > 0));
+        $itemsWithBasis = \array_filter($measured, fn($m) => $m['item']->basis > 0);
+        $totalBasis   = \array_sum(\array_column($itemsWithBasis, 'basis'));
         $freeHeight   = $totalHeight - $totalBasis - ($gap * (\count($items) - 1));
 
         foreach ($measured as $i => $m) {
             $measured[$i]['allocated'] = $m['item']->basis > 0
                 ? $m['item']->basis
                 : ($totalRatio > 0 ? (int) \round($freeHeight * $m['item']->ratio / $totalRatio) : 1);
-        }
-
-        $offsets = [0];
-        for ($i = 0; $i < \count($measured) - 1; $i++) {
-            $offsets[] = $offsets[$i] + $measured[$i]['allocated'] + $gap;
         }
 
         $resultLines = [];
@@ -267,6 +231,7 @@ final class FlexBox
             $maxW = $this->align === Align::Stretch ? $totalWidth : $m['width'];
 
             foreach ($itemLines as $line) {
+                $line = $this->sanitize($line);
                 $lineStr = $this->alignCell($line, $maxW, $this->align);
                 if ($m['item']->style !== '') {
                     $lineStr = $this->applyStyle($lineStr, $m['item']->style);
@@ -298,7 +263,7 @@ final class FlexBox
     private function measureWidth(FlexItem $item): int
     {
         $lines = \explode("\n", $item->content);
-        $widths = \array_map('strlen', $lines);
+        $widths = \array_map(\SugarCraft\Core\Util\Width::string(...), $lines);
         return $widths === [] ? 0 : \max($widths);
     }
 
@@ -309,16 +274,17 @@ final class FlexBox
 
     private function alignCell(string $text, int $width, Align $align): string
     {
-        $len = \strlen($text);
-        if ($len >= $width) {
-            return \substr($text, 0, $width);
+        // Truncate to display width if needed (ANSI-aware).
+        $truncated = \SugarCraft\Core\Util\Width::truncateAnsi($text, $width);
+        $visualWidth = \SugarCraft\Core\Util\Width::string($truncated);
+        if ($visualWidth >= $width) {
+            return $truncated;
         }
-        $pad = $width - $len;
         return match ($align) {
-            Align::Start    => $text . \str_repeat(' ', $pad),
-            Align::End      => \str_repeat(' ', $pad) . $text,
-            Align::Center   => \str_repeat(' ', (int) \floor($pad / 2)) . $text . \str_repeat(' ', (int) \ceil($pad / 2)),
-            Align::Stretch  => $text . \str_repeat(' ', $pad),
+            Align::Start    => \SugarCraft\Core\Util\Width::padRight($truncated, $width),
+            Align::End      => \SugarCraft\Core\Util\Width::padLeft($truncated, $width),
+            Align::Center   => \SugarCraft\Core\Util\Width::padCenter($truncated, $width),
+            Align::Stretch  => \SugarCraft\Core\Util\Width::padRight($truncated, $width),
         };
     }
 
@@ -326,5 +292,27 @@ final class FlexBox
     {
         if ($style === '') return $s;
         return Ansi::CSI . $style . 'm' . $s . Ansi::reset();
+    }
+
+    /**
+     * Strip dangerous control characters from content destined for the terminal.
+     *
+     * Removes C0 controls (0x00-0x08, 0x0B-0x1F), C1 escape (0x7F),
+     * and OSC/DCS sequences that could corrupt terminal state. Library-emitted
+     * SGR sequences are preserved as they are added downstream via applyStyle.
+     */
+    private function sanitize(string $s): string
+    {
+        // Remove OSC sequences (ESC ] ... BEL or ESC \).
+        $s = \preg_replace('/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', '', $s);
+        // Remove DCS sequences (ESC P ... ESC \).
+        $s = \preg_replace('/\x1bP[^\x1b]*(?:\x1b\\\\)/', '', $s);
+        // Remove bare ESC introducers not followed by [ (not CSI).
+        $s = \preg_replace('/\x1b(?!\[)/', '', $s);
+        // Remove C0 controls except HT (0x09) and LF (0x0A).
+        $s = \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
+        // Remove C1 controls (0x7F, 0x80-0x9F).
+        $s = \preg_replace('/[\x7F\x80-\x9F]/', '', $s);
+        return $s;
     }
 }

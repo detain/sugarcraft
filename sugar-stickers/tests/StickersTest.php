@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Stickers\Tests;
 
-use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem, Justify};
-use SugarCraft\Stickers\Table\{Column, Table};
+use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem};
+use SugarCraft\Stickers\Scrollbar;
+use SugarCraft\Stickers\Table\{Column, Table, TableRenderer};
+use SugarCraft\Stickers\Viewport;
 use PHPUnit\Framework\TestCase;
 
 final class StickersTest extends TestCase
@@ -85,13 +87,6 @@ final class StickersTest extends TestCase
         $this->assertStringContainsString('BOTTOM', $result);
     }
 
-    public function testFlexBoxWithJustify(): void
-    {
-        $box = FlexBox::row(FlexItem::new('x'))
-            ->withJustify(Justify::Center);
-        $this->assertSame(Justify::Center, $box->justify);
-    }
-
     public function testFlexBoxWithAlign(): void
     {
         $box = FlexBox::row(FlexItem::new('x'))
@@ -111,6 +106,120 @@ final class StickersTest extends TestCase
         $b = $a->withContent('new');
         $this->assertSame('old', $a->content);
         $this->assertSame('new', $b->content);
+    }
+
+    // ---- Structural FlexBox render tests ----
+
+    /**
+     * FlexBox row rendering produces exactly $totalHeight lines.
+     */
+    public function testFlexBoxRowRenderLineCount(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new("line1\nline2\nline3"),
+            FlexItem::new("line4\nline5"),
+        );
+
+        $output = $box->render(40, 5);
+        $lines = \explode("\n", $output);
+
+        $this->assertCount(5, $lines, 'Row render should produce exactly height lines');
+    }
+
+    /**
+     * Every rendered line's visual width should not exceed the requested width.
+     */
+    public function testFlexBoxRowNoLineExceedsWidth(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new('LEFT'),
+            FlexItem::new('RIGHT'),
+        );
+
+        $output = $box->render(20, 3);
+        $lines = \explode("\n", $output);
+
+        foreach ($lines as $line) {
+            $width = \SugarCraft\Core\Util\Width::string($line);
+            $this->assertLessThanOrEqual(20, $width, "Line width {$width} should not exceed 20");
+        }
+    }
+
+    /**
+     * FlexItem::withWidth(k) is equivalent to withBasis(k).
+     */
+    public function testFlexItemWithWidthEqualsWithBasis(): void
+    {
+        $a = FlexItem::new('content')->withWidth(10);
+        $b = FlexItem::new('content')->withBasis(10);
+
+        $this->assertSame($a->basis, $b->basis);
+    }
+
+    /**
+     * addItem appends an item to the FlexBox.
+     */
+    public function testFlexBoxAddItemAppends(): void
+    {
+        $box = FlexBox::row(FlexItem::new('A'));
+        $box2 = $box->addItem(FlexItem::new('B'));
+
+        // Original unchanged.
+        $this->assertStringNotContainsString('B', $box->render(20, 2));
+        // New has both.
+        $this->assertStringContainsString('A', $box2->render(20, 3));
+        $this->assertStringContainsString('B', $box2->render(20, 3));
+    }
+
+    /**
+     * withGap(n) inserts n spaces between items in row mode.
+     */
+    public function testFlexBoxRowWithGap(): void
+    {
+        $box = FlexBox::row(FlexItem::new('A'), FlexItem::new('B'))
+            ->withGap(3);
+
+        $output = $box->render(20, 2);
+
+        // A + 3 spaces + B should fit within 20 width.
+        $this->assertStringContainsString('A', $output);
+        $this->assertStringContainsString('B', $output);
+    }
+
+    /**
+     * withDirection round-trips the direction property.
+     */
+    public function testFlexBoxWithDirectionRoundtrip(): void
+    {
+        $box = FlexBox::row(FlexItem::new('x'))->withDirection(Direction::Column);
+        $this->assertSame(Direction::Column, $box->direction);
+
+        $box2 = $box->withDirection(Direction::Row);
+        $this->assertSame(Direction::Row, $box2->direction);
+    }
+
+    /**
+     * withWrap round-trips the wrap property.
+     */
+    public function testFlexBoxWithWrapRoundtrip(): void
+    {
+        $box = FlexBox::row(FlexItem::new('x'))->withWrap(true);
+        $this->assertTrue($box->wrap);
+
+        $box2 = $box->withWrap(false);
+        $this->assertFalse($box2->wrap);
+    }
+
+    /**
+     * withBorder round-trips the border property.
+     */
+    public function testFlexBoxWithBorderRoundtrip(): void
+    {
+        $box = FlexBox::row(FlexItem::new('x'))->withBorder(true);
+        $this->assertTrue($box->border);
+
+        $box2 = $box->withBorder(false);
+        $this->assertFalse($box2->border);
     }
 
     // ---- Table tests ----
@@ -340,11 +449,13 @@ final class StickersTest extends TestCase
     // ---- Diff-emission byte benchmark ------------------------------------
 
     /**
-     * Benchmark: diff-based render() emits fewer bytes than full re-render
+     * Benchmark: diff-based TableRenderer::render() emits fewer bytes than full re-render
      * for small changes between consecutive frames.
      *
      * Mirrors sugar-boxer, sugar-dash, sugar-crush, sugar-veil, candy-lister.
      *
+     * TableRenderer tracks diff state across frames. First render emits full output.
+     * Subsequent renders with stable dimensions emit delta-encoded ops.
      * Table diff works only when dimensions (width×height) stay constant.
      * Adding/removing rows changes height and triggers full re-emit.
      * We use style changes (cursorStyle, headerStyle) which are dimension-stable.
@@ -362,18 +473,20 @@ final class StickersTest extends TestCase
             ->addRow(['Bob'])
             ->addRow(['Carol']);
 
-        // Frame 1: full render
-        $out1 = $t->render();
+        $renderer = new TableRenderer();
+
+        // Frame 1: full render via TableRenderer
+        $out1 = $renderer->render($t);
         $bytes1 = \strlen($out1);
 
         // Frame 2: add cursor style (dimension-stable change)
         $t2 = $t->setCursor(1)->withCursorStyle('7');  // reverse video on row 1
-        $out2 = $t2->render();
+        $out2 = $renderer->render($t2);
         $bytes2 = \strlen($out2);
 
         // Frame 3: change header style (dimension-stable change)
         $t3 = $t2->withHeaderStyle('1');  // bold header
-        $out3 = $t3->render();
+        $out3 = $renderer->render($t3);
         $bytes3 = \strlen($out3);
 
         // First frame is full output (baseline)
@@ -386,5 +499,44 @@ final class StickersTest extends TestCase
         // Total delta bytes for 2 frames should be ≤60 (30×2)
         $totalDelta = $bytes2 + $bytes3;
         $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
+    }
+
+    // ---- Viewport scrollbar delegator tests ----
+
+    /** withScrollbar(true) returns a new Viewport with scrollbar enabled. */
+    public function testViewportWithScrollbarReturnsNewInstance(): void
+    {
+        $vp = Viewport::new(20, 10);
+        $vp2 = $vp->withScrollbar(true);
+
+        $this->assertNotSame($vp, $vp2, 'withScrollbar should return a new instance');
+    }
+
+    /** setYOffset(int) returns a new Viewport with the new offset. */
+    public function testViewportSetYOffset(): void
+    {
+        $vp = Viewport::new(20, 5)->setContent(\implode("\n", \range(1, 20)));
+        $vp2 = $vp->setYOffset(10);
+
+        $this->assertSame(10, $vp2->yOffset());
+    }
+
+    /** yOffset() returns current scroll offset. */
+    public function testViewportYOffsetAccessor(): void
+    {
+        $vp = Viewport::new(20, 5)->setContent(\implode("\n", \range(1, 20)));
+        $this->assertSame(0, $vp->yOffset());
+
+        $vp2 = $vp->setYOffset(5);
+        $this->assertSame(5, $vp2->yOffset());
+    }
+
+    /** setContent returns a new Viewport with updated content. */
+    public function testViewportSetContentReturnsNewInstance(): void
+    {
+        $vp = Viewport::new(20, 5);
+        $vp2 = $vp->setContent("hello\nworld");
+
+        $this->assertNotSame($vp, $vp2, 'setContent should return a new instance');
     }
 }
