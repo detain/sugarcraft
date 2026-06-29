@@ -38,7 +38,7 @@
 | sugar-boxer | 3 | 12 | 5 | 5 | 2 | MERGED | | c25b55d1 | full — withContent structural, margin collapse, layout wiring |
 | sugar-crumbs | 3 | 9 | 3 | 4 | 2 | MERGED | | 83b9ead2 | full — truncate returns array, ::new() factories, Builder fix |
 | sugar-dash | 3 | 12 | 4 | 6 | 2 | MERGED | | 3a1a9552 | full — Sanitize, shell-escaping, async weather, protocol hardening, test coverage |
-| sugar-gallery | 3 | 9 | 0 | 2 | 7 | PENDING | | | |
+| sugar-gallery | 3 | 9 | 0 | 2 | 7 | MERGED | | e04ebf89 | full — poster row normalization, Rail scroll clamp, test coverage, C0 strip, ::new factories, withTitle |
 | sugar-stash | 3 | 16 | 5 | 8 | 3 | PENDING | | | |
 | sugar-table | 3 | 9 | 2 | 4 | 3 | PENDING | | | |
 | candy-log | 4 | 13 | 5 | 5 | 3 | PENDING | | | |
