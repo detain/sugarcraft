@@ -36,14 +36,14 @@ final class DecoderTransparencyTest extends TestCase
         if (!extension_loaded('gd')) {
             $this->markTestSkipped('ext-gd not available');
         }
-        // Build GIF with disposal = 2 (restore to previous).
+        // Build GIF with disposal = 2 (restore to background).
         $path = sys_get_temp_dir() . '/dispose-test-' . uniqid() . '.gif';
-        file_put_contents($path, $this->buildDisposableGif(Frame::DISPOSAL_RESTORE));
+        file_put_contents($path, $this->buildDisposableGif(Frame::DISPOSAL_BACKGROUND));
         try {
             $frames = Decoder::decode($path, 2, 2);
             $this->assertNotEmpty($frames);
             $f = $frames[0];
-            $this->assertSame(Frame::DISPOSAL_RESTORE, $f->disposal);
+            $this->assertSame(Frame::DISPOSAL_BACKGROUND, $f->disposal);
         } finally {
             unlink($path);
         }
