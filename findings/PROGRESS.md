@@ -29,7 +29,7 @@
 | candy-palette | 3 | 13 | 3 | 6 | 4 | MERGED | | bcd970ec | full — detection consolidation, ProfileWriter fix, tests fixed |
 | candy-shine | 3 | 13 | 2 | 4 | 7 | MERGED | | c4981bac | full — SyntaxHighlighter regex, test backfill |
 | candy-kit | 3 | 9 | 0 | 4 | 5 | MERGED | | 724f49ec | full — Frame multi-cell, Stage clamping, intdiv fix |
-| candy-mold | 3 | 7 | 0 | 1 | 6 | PENDING | | | |
+| candy-mold | 3 | 7 | 0 | 1 | 6 | MERGED | | 9669aac1 | full — quit binding, tests, README, GIF, phpunit.xml |
 | candy-mines | 3 | 9 | 3 | 3 | 3 | DONE | ai/candy-mines-fix | | 109 tests; 3 pre-existing GameTest failures (test infrastructure added, failures require Game::init() call — architectural, outside audit scope); 1 skip |
 | candy-flip | 3 | 14 | 3 | 7 | 4 | MERGED | | dd5d0bef | full — player adaptive, orphaned classes removed |
 | candy-hermit | 3 | 15 | 3 | 7 | 5 | MERGED | | 47ec6847 | full — missing tests, applyRankedFilter fix |
