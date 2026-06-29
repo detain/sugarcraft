@@ -71,18 +71,7 @@ final class Renderer
      */
     public static function withConstraints(int $rows, int $cols): self
     {
-        $rc = new \ReflectionClass(Renderer::class);
-        $instance = $rc->newInstanceWithoutConstructor();
-
-        $propRows = $rc->getProperty('adaptiveRows');
-        $propRows->setAccessible(true);
-        $propRows->setValue($instance, $rows);
-
-        $propCols = $rc->getProperty('adaptiveCols');
-        $propCols->setAccessible(true);
-        $propCols->setValue($instance, $cols);
-
-        return $instance;
+        return new self($rows, $cols);
     }
 
     /**
