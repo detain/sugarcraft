@@ -12,7 +12,7 @@ namespace SugarCraft\Ansi\Parser;
  * representation. Implementations translate completed CSI sequences
  * into state mutations appropriate for their context.
  *
- * @see Mirrors charmbracelet/x/ansi CsiHandler
+ * Mirrors charmbracelet/x/ansi.CsiHandler
  */
 interface CsiHandler
 {

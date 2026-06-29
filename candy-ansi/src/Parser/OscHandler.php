@@ -10,7 +10,7 @@ namespace SugarCraft\Ansi\Parser;
  * Empty shell for now — Phase 1c fills in the implementations.
  * OSC sequences are terminated by BEL (0x07) or ST (ESC \).
  *
- * @see Mirrors charmbracelet/x/ansi OscHandler
+ * Mirrors charmbracelet/x/ansi.OscHandler
  */
 interface OscHandler
 {
