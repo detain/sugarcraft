@@ -99,65 +99,6 @@ Consecutive line clears (regardless of type) build a **combo counter** — each 
 
 When all lines are cleared at once and the board becomes completely empty, an additional **+5000 × (level + 1)** bonus is awarded.
 
-## Architecture
-
-Nine pure-state classes, each individually testable without booting the runtime:
-
-```
-Tetromino    enum   ─►  shape data + colour for each of the 7 pieces
-Piece        VO     ─►  Tetromino + rotation + (x, y), with immutable transforms
-Board        VO     ─►  10×24 grid (4 hidden rows above), fits/place/clearLines/dropPiece
-Bag          ──►    7-bag RNG with peek(); injectable RNG closure for deterministic tests
-Score        VO     ─►  points / lines / level + level-driven gravity interval
-Game         Model  ─►  SugarCraft Model orchestrating the above + key handling
-Computer     ──►    AI opponent with board-evaluation heuristics
-VsGame       Model  ─►  VS mode combining two Games with garbage row passing
-Renderer     ──►    pure view function from Game to frame string
-VsRenderer   ──►    split-screen view for VS mode
-```
-
-Why so split? Because each piece is testable in isolation — line-clear correctness has nothing to do with rotation correctness has nothing to do with score arithmetic. The full test suite is **82 tests, 1669 assertions** and runs in ~300 ms; the deterministic RNG injection means even the `Game` integration tests are reproducible across runs.
-
-## Super Rotation System
-
-candy-tetris implements the official Tetris Association **Super Rotation System (SRS)** — the same system used in modern Tetris games. When a piece rotation would collide with a wall or occupied cell, SRS tries a series of offset candidates before giving up:
-
-| Piece type | Offsets tried per rotation |
-|------------|---------------------------|
-| J / L / S / T / Z | 5 candidates per transition |
-| I | 5 candidates (larger offsets) |
-| O | No kicks (always valid) |
-
-The tables are from the [official SRS specification](https://tetris.fandom.com/wiki/SRS). `Piece::rotationsWithKicks()` returns all candidates in order; the `Game` loop tests each for board validity and uses the first fit.
-
-```php
-// All valid rotated positions (naive + wall-kick offsets)
-$candidates = $piece->rotationsWithKicks(+1); // clockwise
-foreach ($candidates as $candidate) {
-    if ($board->fits($candidate)) {
-        $piece = $candidate;
-        break;
-    }
-}
-```
-
-## Architecture
-
-Nine pure-state classes, each individually testable without booting the runtime:
-
-```
-Tetromino    enum   ─►  shape data + colour for each of the 7 pieces
-Piece        VO     ─►  Tetromino + rotation + (x, y), with immutable transforms
-Board        VO     ─►  10×24 grid (4 hidden rows above), fits/place/clearLines/dropPiece
-Bag          ──►    7-bag RNG with peek(); injectable RNG closure for deterministic tests
-Score        VO     ─►  points / lines / level + level-driven gravity interval
-Game         Model  ─►  SugarCraft Model orchestrating the above + key handling
-Computer     ──►    AI opponent with board-evaluation heuristics
-VsGame       Model  ─►  VS mode combining two Games with garbage row passing
-Renderer     ──►    pure view function from Game to frame string
-VsRenderer   ──►    split-screen view for VS mode
-```
-
 ## Shared foundations
 
 All game renderers build their playfield and score panel via [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer). The 10×20 playfield is a canonical `Buffer` cell grid; per-tetromino background style and ghost-piece foreground style are applied per-cell. `Buffer::withRegion` composites the score panel over the playfield interior. Snapshot tests via [candy-testing](https://github.com/detain/sugarcraft/tree/master/candy-testing) pin canonical game states (starting board, T-spin completion, pause overlay).

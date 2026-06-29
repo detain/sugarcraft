@@ -221,8 +221,14 @@ final class Game implements Model
     {
         $next = $this->piece->moved($dx, $dy);
         if ($this->board->fits($next)) {
-            // SRS-style: successful move resets lock delay
-            return $this->mutate(['piece' => $next]);
+            // SRS-style: successful move re-arms lock delay when grounded.
+            // Only re-arm when lock delay is active (max > 0) and the
+            // piece is already touching the ground (can't move further down).
+            $changes = ['piece' => $next];
+            if ($this->lockDelayMax > 0 && !$this->board->fits($this->piece->moved(0, 1))) {
+                $changes['lockDelayTicks'] = $this->lockDelayMax;
+            }
+            return $this->mutate($changes);
         }
         return $this;
     }
@@ -234,10 +240,15 @@ final class Game implements Model
         // "no kick needed" case is preserved automatically.
         foreach ($this->piece->rotationsWithKicks($delta) as $candidate) {
             if ($this->board->fits($candidate)) {
-                return $this->mutate([
+                // Successful rotation re-arms lock delay when grounded.
+                $changes = [
                     'piece' => $candidate,
                     'preLockRotation' => $candidate->rotation,
-                ]);
+                ];
+                if ($this->lockDelayMax > 0 && !$this->board->fits($this->piece->moved(0, 1))) {
+                    $changes['lockDelayTicks'] = $this->lockDelayMax;
+                }
+                return $this->mutate($changes);
             }
         }
         return $this;
@@ -247,9 +258,16 @@ final class Game implements Model
     {
         $next = $this->piece->moved(0, 1);
         if ($this->board->fits($next)) {
-            // Soft drop awards 1 point per cell and resets lock delay
-            $score = $this->score->withDropPoints(1);
-            return $this->mutate(['piece' => $next, 'score' => $score]);
+            // Soft drop awards 1 point per cell. Re-arm lock delay when
+            // grounded (same as horizontal movement per SRS).
+            $changes = [
+                'piece' => $next,
+                'score' => $this->score->withDropPoints(1),
+            ];
+            if ($this->lockDelayMax > 0 && !$this->board->fits($this->piece->moved(0, 1))) {
+                $changes['lockDelayTicks'] = $this->lockDelayMax;
+            }
+            return $this->mutate($changes);
         }
         return $this;
     }
