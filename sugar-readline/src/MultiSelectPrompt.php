@@ -196,7 +196,7 @@ final class MultiSelectPrompt
 
     public function view(): string
     {
-        $lines = [Ansi::wrap($this->label, $this->labelStyle)];
+        $lines = [Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)];
 
         $hint = sprintf('[multi-select] selected: %d', count($this->marked));
         if ($this->minSelect > 0) {
@@ -207,7 +207,7 @@ final class MultiSelectPrompt
         }
         $lines[] = $hint;
 
-        $bar = '[filter] ' . $this->filter;
+        $bar = '[filter] ' . Ansi::sanitize($this->filter);
         if ($this->filter !== '') {
             $bar .= sprintf(' (%d match%s)', count($this->filtered), count($this->filtered) === 1 ? '' : 'es');
         }
@@ -223,7 +223,7 @@ final class MultiSelectPrompt
         for ($i = $offset; $i < $end; $i++) {
             $choiceIdx = $this->filtered[$i];
             $glyph     = isset($this->marked[$choiceIdx]) ? $this->markedGlyph : $this->unmarkedGlyph;
-            $line      = $glyph . $this->choices[$choiceIdx];
+            $line      = $glyph . Ansi::sanitize($this->choices[$choiceIdx]);
             if ($i === $this->cursor) {
                 $line = Ansi::wrap($line, $this->cursorStyle);
             }
@@ -304,6 +304,17 @@ final class MultiSelectPrompt
 
     private function reclampPage(): void
     {
-        $this->page = min($this->page, $this->totalPages() - 1);
+        // Clamp cursor into valid range first
+        $count = count($this->filtered);
+        if ($count === 0) {
+            $this->cursor = 0;
+            $this->page = 0;
+            return;
+        }
+        $this->cursor = max(0, min($count - 1, $this->cursor));
+        // Re-derive page from cursor (consistent with moveCursorTo)
+        $this->page = intdiv($this->cursor, $this->pageSize);
+        // Finally clamp page to valid range
+        $this->page = min($this->page, max(0, $this->totalPages() - 1));
     }
 }

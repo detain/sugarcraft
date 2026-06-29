@@ -131,20 +131,29 @@ final class Readline
      *
      * Reads events from InputDriver and routes them to registered handlers.
      * For KeyEvents, dispatches to the symbolic key handler (by key name)
-     * and also invokes the prompt's handleKey(string) method.
+     * and also invokes the prompt's handleChar() for printable keys or
+     * handleKey() for control keys.
      *
-     * @param object $prompt  Object with handleKey(string): object method
+     * After each state change, if an output stream is provided and the prompt
+     * exposes a view() method, writes a redraw sequence to the output.
+     *
+     * @param object       $prompt  Object with handleKey(string): object method
+     * @param resource|null $output Output stream for repainting (default: STDOUT)
      * @return object  The final prompt state after user submits or aborts
      */
-    public function run(object $prompt): object
+    public function run(object $prompt, $output = null): object
     {
         $driver = $this->input ?? new StreamInputDriver(fopen('php://stdin', 'r'));
+
+        // Initial frame: repaint before entering the loop
+        $this->repaint($prompt, $output);
 
         while (true) {
             $event = $driver->read();
 
             if ($event === null) {
-                // Non-blocking empty read — continue polling
+                // Non-blocking empty read — sleep briefly before re-polling to avoid spinning
+                usleep(20000);
                 continue;
             }
 
@@ -155,6 +164,7 @@ final class Readline
                     return $result['prompt'];
                 }
                 $prompt = $result['prompt'];
+                $this->repaint($prompt, $output);
                 continue;
             }
 
@@ -176,6 +186,21 @@ final class Readline
                 if ($this->pasteHandler !== null) {
                     ($this->pasteHandler)($event);
                 }
+                // Also feed pasted text into the prompt when it accepts characters
+                if (is_callable([$prompt, 'handleChar']) && ($event->text !== '' || $event->content !== '')) {
+                    $text = $event->text ?? $event->content ?? '';
+                    foreach (mb_str_split($text, 1, 'UTF-8') as $char) {
+                        $next = $prompt->handleChar($char);
+                        if (is_callable([$next, 'isSubmitted']) && $next->isSubmitted()) {
+                            return $next;
+                        }
+                        if (is_callable([$next, 'isAborted']) && $next->isAborted()) {
+                            return $next;
+                        }
+                        $prompt = $next;
+                    }
+                    $this->repaint($prompt, $output);
+                }
                 continue;
             }
 
@@ -184,7 +209,34 @@ final class Readline
     }
 
     /**
+     * Write a redraw sequence to the output stream if provided and the prompt
+     * exposes a view() method.
+     *
+     * Emits "\r\x1b[K" (carriage-return + clear-line) followed by the view
+     * output to ensure the prompt line is refreshed cleanly.
+     */
+    private function repaint(object $prompt, mixed $output): void
+    {
+        if ($output === null) {
+            return;
+        }
+        if (!is_callable([$prompt, 'view'])) {
+            return;
+        }
+        $view = $prompt->view();
+        if ($view === '') {
+            return;
+        }
+        fwrite($output, "\r\x1b[K" . $view . "\n");
+    }
+
+    /**
      * Dispatch a KeyEvent to registered key handlers and the prompt.
+     *
+     * For printable single-character keys (no Ctrl/Alt modifier), prefers
+     * calling handleChar() when the prompt exposes it (TextPrompt, TextareaPrompt).
+     * Falls back to handleKey() for non-printable keys and prompts that only
+     * implement handleKey (SelectionPrompt, MultiSelect, Confirmation).
      *
      * @return array{stop: bool, prompt: object}
      */
@@ -195,7 +247,25 @@ final class Readline
             ($this->keyHandlers[$keyName])($event);
         }
 
-        // Also delegate to the prompt's handleKey method if it has one
+        // Prefer handleChar() for printable keys when the prompt exposes it
+        if ($this->isPrintable($event, $keyName) && is_callable([$prompt, 'handleChar'])) {
+            $next = $prompt->handleChar($event->key);
+            // Check if the prompt considers itself done
+            if (is_callable([$next, 'isSubmitted'])) {
+                if ($next->isSubmitted()) {
+                    return ['stop' => true, 'prompt' => $next];
+                }
+            }
+            if (is_callable([$next, 'isAborted'])) {
+                if ($next->isAborted()) {
+                    return ['stop' => true, 'prompt' => $next];
+                }
+            }
+            $prompt = $next;
+            return ['stop' => false, 'prompt' => $prompt];
+        }
+
+        // Delegate to the prompt's handleKey method if it has one
         if (is_callable([$prompt, 'handleKey'])) {
             $next = $prompt->handleKey($keyName);
             // Check if the prompt considers itself done
@@ -213,6 +283,41 @@ final class Readline
         }
 
         return ['stop' => false, 'prompt' => $prompt];
+    }
+
+    /**
+     * Determine if a KeyEvent represents a printable character that should
+     * be routed through handleChar() instead of handleKey().
+     *
+     * A printable key has:
+     * - No Ctrl or Alt modifier
+     * - A key that is a single multibyte character
+     * - A symbolic name that is NOT a reserved word (space, tab, enter, etc.)
+     */
+    private function isPrintable(KeyEvent $event, string $keyName): bool
+    {
+        // Must be a single character
+        if (mb_strlen($event->key, 'UTF-8') !== 1) {
+            return false;
+        }
+
+        // No Ctrl or Alt modifier
+        $mod = $event->modifiers;
+        if ($mod->includes(\SugarCraft\Input\KeyModifier::CTRL) || $mod->includes(\SugarCraft\Input\KeyModifier::ALT)) {
+            return false;
+        }
+
+        // Symbolic name must not be a reserved non-printable key
+        static $reserved = ['space', 'tab', 'enter', 'backspace', 'delete',
+                            'up', 'down', 'left', 'right', 'home', 'end',
+                            'pageup', 'pagedown', 'escape', 'esc', 'f1', 'f2', 'f3',
+                            'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12',
+                            'ctrl_c', 'ctrl_u', 'ctrl_k', 'ctrl_w', 'undo', 'redo'];
+        if (in_array($keyName, $reserved, true)) {
+            return false;
+        }
+
+        return true;
     }
 
     // -------------------------------------------------------------------------
