@@ -288,6 +288,36 @@ final class Logger
         $this->prefix = $prefix;
     }
 
+    /**
+     * Set the output stream in-place.
+     *
+     * @param resource $stream A valid output stream resource.
+     * @throws \InvalidArgumentException If $stream is not a resource.
+     */
+    public function setOutput($stream): void
+    {
+        if (!\is_resource($stream)) {
+            throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
+        }
+        $this->stream = $stream;
+    }
+
+    /**
+     * Create a child logger with a different output stream.
+     *
+     * @param resource $stream A valid output stream resource.
+     * @throws \InvalidArgumentException If $stream is not a resource.
+     */
+    public function withOutput($stream): self
+    {
+        if (!\is_resource($stream)) {
+            throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
+        }
+        $child = clone $this;
+        $child->stream = $stream;
+        return $child;
+    }
+
     /** Styles object for text-formatter level styling. */
     public function styles(): Styles
     {

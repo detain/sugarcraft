@@ -286,4 +286,87 @@ final class LoggerTest extends TestCase
         $this->assertStringContainsString('"level"', $content);
         $this->assertStringContainsString('json still', $content);
     }
+
+    public function testSetOutputRedirectsWrites(): void
+    {
+        // Create initial logger with first temp file
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $stream,
+        );
+        $log->info('before redirect');
+        \fclose($stream);
+
+        // Create a new temp file and redirect output there
+        $newPath = \sys_get_temp_dir() . '/candy-log-redirect-' . \uniqid() . '.log';
+        $newStream = \fopen($newPath, 'w');
+        $log->setOutput($newStream);
+        $log->info('after redirect');
+        \fclose($newStream);
+
+        // Verify first file has 'before' only
+        $beforeContent = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('before redirect', $beforeContent);
+        $this->assertStringNotContainsString('after redirect', $beforeContent);
+
+        // Verify second file has 'after' only
+        $afterContent = \file_get_contents($newPath);
+        $this->assertStringContainsString('after redirect', $afterContent);
+        $this->assertStringNotContainsString('before redirect', $afterContent);
+
+        \unlink($newPath);
+    }
+
+    public function testWithOutputReturnsCloneWithNewStream(): void
+    {
+        // Create logger with first temp file
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $stream,
+        );
+        $log->info('original');
+        \fclose($stream);
+
+        // Create a clone with a different stream
+        $newPath = \sys_get_temp_dir() . '/candy-log-clone-' . \uniqid() . '.log';
+        $newStream = \fopen($newPath, 'w');
+        $cloned = $log->withOutput($newStream);
+        $cloned->info('clone');
+        \fclose($stream);
+        \fclose($newStream);
+
+        // Verify original logger wrote to its stream
+        $originalContent = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('original', $originalContent);
+        $this->assertStringNotContainsString('clone', $originalContent);
+
+        // Verify cloned logger wrote to its stream
+        $clonedContent = \file_get_contents($newPath);
+        $this->assertStringContainsString('clone', $clonedContent);
+        $this->assertStringNotContainsString('original', $clonedContent);
+
+        \unlink($newPath);
+    }
+
+    public function testSetOutputThrowsOnInvalidInput(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $stream,
+        );
+        \fclose($stream);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('stream must be a valid resource');
+        $log->setOutput('not a resource');
+    }
 }
