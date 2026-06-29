@@ -32,6 +32,20 @@ final class FileWatcherTest extends TestCase
         unlink($path);
     }
 
+    public function testHasChangedSinceDetectsOlderMtime(): void
+    {
+        $path = sys_get_temp_dir() . '/test_watcher_older_' . uniqid() . '.txt';
+        file_put_contents($path, 'initial content');
+        $baselineMtime = filemtime($path);
+        // Touch the file to an OLDER (smaller) mtime than the baseline.
+        touch($path, $baselineMtime - 100);
+        $watcher = new FileWatcher($path);
+        // hasChangedSince returns true because current mtime !== baseline mtime
+        // (even though the file is older, not newer).
+        self::assertTrue($watcher->hasChangedSince($baselineMtime));
+        unlink($path);
+    }
+
     public function testHasChangedSinceReturnsTrueWhenModified(): void
     {
         $path = sys_get_temp_dir() . '/test_watcher_' . uniqid() . '.txt';
