@@ -155,6 +155,9 @@ final class MultiSelectPrompt
 
     public function selectionCount(): int { return count($this->marked); }
 
+    /** @return array<int, true> Map of marked choice indices to true. */
+    public function marked(): array { return $this->marked; }
+
     /** True when the current marked set satisfies min / max constraints. */
     public function canSubmit(): bool
     {

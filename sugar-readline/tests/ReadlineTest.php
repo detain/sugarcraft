@@ -561,7 +561,7 @@ final class ReadlineTest extends TestCase
 
     public function testConfirmationDefaultYes(): void
     {
-        $p = ConfirmationPrompt::new('Sure?')->submit();
+        $p = ConfirmationPrompt::new('Sure?', true)->submit();
         $this->assertTrue($p->result());
     }
 
@@ -597,7 +597,7 @@ final class ReadlineTest extends TestCase
 
     public function testConfirmationTabToggles(): void
     {
-        $p = ConfirmationPrompt::new('Sure?');
+        $p = ConfirmationPrompt::new('Sure?', true);
         $this->assertTrue($p->currentValue());
         $p = $p->handleKey(Key::Tab);
         $this->assertFalse($p->currentValue());
@@ -1075,7 +1075,6 @@ final class ReadlineTest extends TestCase
 
         $this->assertSame('hi', $finalPrompt->value());
 
-        fclose($writeEnd);
         fclose($readEnd);
 
        rewind($output);
@@ -1182,7 +1181,9 @@ final class ReadlineTest extends TestCase
             ->handleChar('b')->handleChar('o')->handleChar('b');
 
         // Move cursor to end of first line (after 'alice')
-        $prompt = $prompt->handleKey(Key::Home);
+        // After Enter, we're on line 1 (bob). Press Up to go to line 0 (alice),
+        // then Right 5 times to move to col 5 (after 'alice' at col 4)
+        $prompt = $prompt->handleKey(Key::Up);
         for ($i = 0; $i < 5; $i++) {
             $prompt = $prompt->handleKey(Key::Right);
         }

@@ -136,6 +136,7 @@ final class TextareaPrompt
     public function cursorLine(): int { return $this->line; }
     public function cursorCol(): int  { return $this->col; }
     public function lineCount(): int  { return count($this->lines); }
+    public function lines(): array  { return $this->lines; }
 
     // -------------------------------------------------------------------------
     // Rendering
