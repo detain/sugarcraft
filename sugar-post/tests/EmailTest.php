@@ -153,4 +153,38 @@ final class EmailTest extends TestCase
         $all = $email->allRecipients();
         $this->assertCount(1, $all);
     }
+
+    public function testRejectsCrlfInSubject(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('CRLF injection detected');
+
+        new Email(
+            from:    ['me@example.com'],
+            to:      ['you@example.com'],
+            subject: "Hello\r\nMalicious-Header: value",
+        );
+    }
+
+    public function testRejectsCrlfInRecipient(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('CRLF injection detected');
+
+        new Email(
+            from: ['me@example.com'],
+            to:   ["you@example.com\r\nMalicious: value"],
+        );
+    }
+
+    public function testRejectsInvalidEmail(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid email address');
+
+        new Email(
+            from: ['not-an-email'],
+            to:   ['you@example.com'],
+        );
+    }
 }
