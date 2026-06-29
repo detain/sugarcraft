@@ -6,6 +6,7 @@ namespace SugarCraft\Wish\Tests;
 
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
+use SugarCraft\Wish\Middleware\Keepalive;
 use SugarCraft\Wish\Server;
 use SugarCraft\Wish\Session;
 use PHPUnit\Framework\TestCase;
@@ -137,5 +138,47 @@ final class ServerTest extends TestCase
         $this->assertSame(['transport-run'], $log, 'transport must run; mw runs only if transport invokes it');
         $this->assertInstanceOf(Context::class, $captured);
         $this->assertSame($session, $captured2);
+    }
+
+    public function testWithKeepaliveReturnsFluentSelf(): void
+    {
+        $server = Server::new();
+        $result = $server->withKeepalive();
+
+        $this->assertSame($server, $result);
+    }
+
+    public function testWithKeepaliveAppendsKeepaliveMiddleware(): void
+    {
+        $server = Server::new()->withKeepalive();
+
+        $stack = (function (): array {
+            return $this->stack;
+        })->call($server);
+
+        $this->assertCount(1, $stack);
+        $this->assertInstanceOf(Keepalive::class, $stack[0]);
+    }
+
+    public function testWithKeepaliveDefaultIntervalIs60(): void
+    {
+        $server = Server::new()->withKeepalive();
+
+        $stack = (function (): array {
+            return $this->stack;
+        })->call($server);
+
+        $this->assertSame(60, $stack[0]->interval());
+    }
+
+    public function testWithKeepaliveCustomInterval(): void
+    {
+        $server = Server::new()->withKeepalive(30);
+
+        $stack = (function (): array {
+            return $this->stack;
+        })->call($server);
+
+        $this->assertSame(30, $stack[0]->interval());
     }
 }

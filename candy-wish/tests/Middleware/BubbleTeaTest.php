@@ -64,6 +64,8 @@ final class BubbleTeaTest extends TestCase
             {
                 return 0;
             }
+
+            public function signalChild(int $signal): void {}
         };
         $mw->setTransport($spawner);
 

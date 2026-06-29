@@ -79,6 +79,8 @@ final class KeepaliveTest extends TestCase
             {
                 return 0;
             }
+
+            public function signalChild(int $signal): void {}
         };
 
         // Should not throw — HostSshdTransport or fake transports

@@ -17,6 +17,14 @@ use SugarCraft\Wish\Session;
  * string $password)` and returns `true` to accept or `false` to
  * reject.
  *
+ * **Password environment exposure.** The password is read from the
+ * `SSH_PASSWORD` environment variable (via `$_SERVER` or `getenv`).
+ * This makes it visible via `/proc/<pid>/environ`, inherited by child
+ * processes, and potentially appearing in crash dumps. This middleware
+ * mitigates this by unsetting `SSH_PASSWORD` from both `$_SERVER` and
+ * the process environment immediately after reading it, before the
+ * validation result is returned.
+ *
  * On rejection writes a one-line message to stderr and returns
  * without invoking `$next`.
  */
@@ -54,6 +62,12 @@ final class PasswordAuth implements Middleware
         $password = isset($_SERVER['SSH_PASSWORD']) && $_SERVER['SSH_PASSWORD'] !== ''
             ? $_SERVER['SSH_PASSWORD']
             : (getenv('SSH_PASSWORD') ?: '');
+
+        // Clear the plaintext password from the environment immediately
+        // after reading so it stops appearing in /proc/<pid>/environ
+        // and is not inherited by child processes.
+        unset($_SERVER['SSH_PASSWORD']);
+        putenv('SSH_PASSWORD');
 
         if (!($this->validate)($session->user, $password)) {
             fwrite($this->stderr, "Permission denied.\n");
