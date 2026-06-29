@@ -29,7 +29,7 @@ final class CoverageBoostTest extends TestCase
 
     public function testMailerThrowsWhenNoFrom(): void
     {
-        $email = Email::make('a@x', 'b@x')->withFrom(''); // empty from
+        $email = Email::new('a@x', 'b@x')->withFrom(''); // empty from
         $email = new Email(from: [], to: ['b@x']);
         $mailer = new Mailer(new StubTransport());
         $this->expectException(\InvalidArgumentException::class);
@@ -39,7 +39,7 @@ final class CoverageBoostTest extends TestCase
 
     public function testMailerForwardsToTransport(): void
     {
-        $email = Email::make('from@x', 'to@x', 'subj', 'body');
+        $email = Email::new('from@x', 'to@x', 'subj', 'body');
         $stub = new StubTransport();
         (new Mailer($stub))->send($email);
         $this->assertCount(1, $stub->sent);
@@ -65,19 +65,19 @@ final class CoverageBoostTest extends TestCase
 
     public function testEmailWithCcReplaces(): void
     {
-        $e = Email::make('a@x', 'b@x')->withCc('c@x', 'd@x');
+        $e = Email::new('a@x', 'b@x')->withCc('c@x', 'd@x');
         $this->assertSame(['c@x', 'd@x'], $e->cc);
     }
 
     public function testEmailWithBccReplaces(): void
     {
-        $e = Email::make('a@x', 'b@x')->withBcc('e@x');
+        $e = Email::new('a@x', 'b@x')->withBcc('e@x');
         $this->assertSame(['e@x'], $e->bcc);
     }
 
     public function testEmailWithSignatureAppendsAtRender(): void
     {
-        $e = Email::make('a@x', 'b@x', 'subj', 'hi')->withSignature('-- ada');
+        $e = Email::new('a@x', 'b@x', 'subj', 'hi')->withSignature('-- ada');
         $this->assertSame('-- ada', $e->signature);
     }
 
@@ -86,7 +86,7 @@ final class CoverageBoostTest extends TestCase
         $tmp = \tempnam(\sys_get_temp_dir(), 'sp-');
         \file_put_contents($tmp, 'data');
         try {
-            $e = Email::make('a@x', 'b@x')->withInlineAttachment($tmp, 'cid-1');
+            $e = Email::new('a@x', 'b@x')->withInlineAttachment($tmp, 'cid-1');
             $this->assertCount(1, $e->attachments);
             $this->assertSame('cid-1', $e->attachments[0]->cid);
         } finally {
@@ -148,6 +148,6 @@ final class StubTransport implements Transport
 
     public function __construct(private readonly string $label = 'stub') {}
 
-    public function send(Email $email): void { $this->sent[] = $email; }
+    public function send(Email $email, ?\SugarCraft\Async\CancellationToken $token = null): void { $this->sent[] = $email; }
     public function name(): string { return $this->label; }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Post;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Immutable email message value object.
  *
@@ -20,6 +22,8 @@ namespace SugarCraft\Post;
  */
 final class Email
 {
+    use Mutable;
+
     public readonly array $from;
     public readonly array $to;
     public readonly array $cc;
@@ -50,22 +54,88 @@ final class Email
         array $attachments = [],
         ?string $signature = null,
     ) {
-        $this->from         = \array_values(\array_map('trim', $from));
-        $this->to           = \array_values(\array_map('trim', $to));
-        $this->subject      = $subject;
+        $this->from         = $this->sanitizeAddressList($from);
+        $this->to           = $this->sanitizeAddressList($to);
+        $this->subject      = $this->sanitizeHeader($subject, 'subject');
         $this->body         = $body;
-        $this->cc           = \array_values(\array_map('trim', $cc));
-        $this->bcc          = \array_values(\array_map('trim', $bcc));
+        $this->cc           = $this->sanitizeAddressList($cc);
+        $this->bcc          = $this->sanitizeAddressList($bcc);
         $this->htmlBody     = $htmlBody;
-        $this->replyTo      = $replyTo;
+        $this->replyTo      = $replyTo !== null ? $this->sanitizeAddr($replyTo) : null;
         $this->attachments  = $attachments;
         $this->signature    = $signature;
     }
 
     /**
-     * Create from named positional args (variadic convenience).
+     * Sanitize a list of addresses (strip CRLF, validate format).
+     *
+     * @param list<string> $addrs
+     * @return list<string>
      */
-    public static function make(
+    private function sanitizeAddressList(array $addrs): array
+    {
+        // Empty arrays are allowed; filter out empty strings first
+        $filtered = [];
+        foreach ($addrs as $addr) {
+            if ($addr !== '') {
+                $filtered[] = $this->sanitizeAddr($addr);
+            }
+        }
+        return \array_values($filtered);
+    }
+
+    /**
+     * Strip CRLF from an address and validate it as a bare email.
+     * Accepts display-name format "Name <addr@host>" and validates just the address part.
+     *
+     * Mirrors charmbracelet/pop address sanitization.
+     * Uses structural validation (has exactly one @, non-empty local part)
+     * rather than FILTER_VALIDATE_EMAIL which rejects short/informal TLDs.
+     */
+    private function sanitizeAddr(string $addr): string
+    {
+        if ($addr === '') {
+            return $addr;
+        }
+        // Reject any CRLF in the raw token
+        if (\preg_match('/[\r\n]/', $addr)) {
+            throw new \InvalidArgumentException(Lang::t('email.crlf_in_address'));
+        }
+        $trimmed = \trim($addr);
+
+        // Extract bare address if in "Name <addr@host>" format
+        $bareAddr = $trimmed;
+        if (\preg_match('/<([^>]+)>$/', $trimmed, $matches)) {
+            $bareAddr = $matches[1];
+        }
+
+        // Structural validation: must have exactly one @ and non-empty local part
+        if (\substr_count($bareAddr, '@') !== 1 || \str_starts_with($bareAddr, '@') || \str_ends_with($bareAddr, '@')) {
+            throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => $bareAddr]));
+        }
+        return $trimmed;
+    }
+
+    /**
+     * Reject CRLF in a header field value.
+     */
+    private function sanitizeHeader(?string $value, string $field): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (\preg_match('/[\r\n]/', $value)) {
+            throw new \InvalidArgumentException(Lang::t('email.crlf_in_header', ['field' => $field]));
+        }
+        return $value;
+    }
+
+    /**
+     * Create from a single from/to pair with optional subject/body.
+     *
+     * Mirrors charmbracelet/pop Email::new() factory.
+     */
+    public static function new(
         string $from,
         string $to,
         ?string $subject = null,
@@ -85,132 +155,69 @@ final class Email
 
     public function withFrom(string $from): self
     {
-        return new self(
-            from:         [$from],
-            to:           $this->to,
-            subject:      $this->subject,
-            body:         $this->body,
-            cc:           $this->cc,
-            bcc:          $this->bcc,
-            htmlBody:     $this->htmlBody,
-            replyTo:      $this->replyTo,
-            attachments:  $this->attachments,
-            signature:    $this->signature,
-        );
+        return $this->mutate(['from' => [$from]]);
     }
 
     public function withTo(string ...$to): self
     {
-        return new self(
-            from:         $this->from,
-            to:           \array_merge($this->to, $to),
-            subject:      $this->subject,
-            body:         $this->body,
-            cc:           $this->cc,
-            bcc:          $this->bcc,
-            htmlBody:     $this->htmlBody,
-            replyTo:      $this->replyTo,
-            attachments:  $this->attachments,
-            signature:    $this->signature,
-        );
+        return $this->mutate(['to' => \array_merge($this->to, $to)]);
     }
 
     public function withSubject(string $subject): self
     {
-        return $this->with('subject', $subject);
+        return $this->mutate(['subject' => $subject]);
     }
 
     public function withBody(string $body): self
     {
-        return $this->with('body', $body);
+        return $this->mutate(['body' => $body]);
     }
 
     public function withHtmlBody(string $htmlBody): self
     {
-        return $this->with('htmlBody', $htmlBody);
+        return $this->mutate(['htmlBody' => $htmlBody]);
     }
 
     public function withCc(string ...$cc): self
     {
-        return new self(
-            from:         $this->from,
-            to:           $this->to,
-            subject:      $this->subject,
-            body:         $this->body,
-            cc:           \array_merge($this->cc, $cc),
-            bcc:          $this->bcc,
-            htmlBody:     $this->htmlBody,
-            replyTo:      $this->replyTo,
-            attachments:  $this->attachments,
-            signature:    $this->signature,
-        );
+        return $this->mutate(['cc' => \array_merge($this->cc, $cc)]);
     }
 
     public function withBcc(string ...$bcc): self
     {
-        return new self(
-            from:         $this->from,
-            to:           $this->to,
-            subject:      $this->subject,
-            body:         $this->body,
-            cc:           $this->cc,
-            bcc:          \array_merge($this->bcc, $bcc),
-            htmlBody:     $this->htmlBody,
-            replyTo:      $this->replyTo,
-            attachments:  $this->attachments,
-            signature:    $this->signature,
-        );
+        return $this->mutate(['bcc' => \array_merge($this->bcc, $bcc)]);
     }
 
     public function withReplyTo(string $replyTo): self
     {
-        return $this->with('replyTo', $replyTo);
+        return $this->mutate(['replyTo' => $replyTo]);
     }
 
     /**
      * Add an attachment from a file path.
+     *
+     * @throws \InvalidArgumentException if path is null (use Attachment::fromContent for empty content)
      */
-    public function withAttachment(string $filename, string $path = null): self
+    public function withAttachment(string $filename, ?string $path = null): self
     {
-        $att = $path !== null
-            ? Attachment::fromPath($path, $filename)
-            : Attachment::fromContent('', $filename);
+        if ($path === null) {
+            throw new \InvalidArgumentException(Lang::t('attachment.no_path'));
+        }
+        $att = Attachment::fromPath($path, $filename);
 
-        return new self(
-            from:         $this->from,
-            to:           $this->to,
-            subject:      $this->subject,
-            body:         $this->body,
-            cc:           $this->cc,
-            bcc:          $this->bcc,
-            htmlBody:     $this->htmlBody,
-            replyTo:      $this->replyTo,
-            attachments:  \array_merge($this->attachments, [$att]),
-            signature:    $this->signature,
-        );
+        return $this->mutate(['attachments' => \array_merge($this->attachments, [$att])]);
     }
 
     public function withInlineAttachment(string $path, string $cid, string $filename = null): self
     {
         $att = Attachment::inline($path, $cid, $filename);
 
-        return new self(
-            from:         $this->from,
-            to:           $this->to,
-            subject:      $this->subject,
-            body:         $this->body,
-            cc:           $this->cc,
-            bcc:          $this->bcc,
-            htmlBody:     $this->htmlBody,
-            replyTo:      $this->replyTo,
-            attachments:  \array_merge($this->attachments, [$att]),
-            signature:    $this->signature,
-        );
+        return $this->mutate(['attachments' => \array_merge($this->attachments, [$att])]);
     }
 
     public function withSignature(string $signature): self
     {
-        return $this->with('signature', $signature);
+        return $this->mutate(['signature' => $signature]);
     }
 
     // -------------------------------------------------------------------------
@@ -248,24 +255,4 @@ final class Email
     // -------------------------------------------------------------------------
     // Private
     // -------------------------------------------------------------------------
-
-    /** Helper for simple field replacements. */
-    private function with(string $prop, mixed $value): self
-    {
-        $args = [
-            'from'        => $this->from,
-            'to'          => $this->to,
-            'subject'     => $this->subject,
-            'body'        => $this->body,
-            'cc'          => $this->cc,
-            'bcc'         => $this->bcc,
-            'htmlBody'    => $this->htmlBody,
-            'replyTo'     => $this->replyTo,
-            'attachments' => $this->attachments,
-            'signature'   => $this->signature,
-        ];
-        $args[$prop] = $value;
-
-        return new self(...$args);
-    }
 }
