@@ -21,7 +21,8 @@ final class EndpointProxyJumpTest extends TestCase
         $this->assertSame('ssh', $argv[0]);
         $this->assertSame('-J', $argv[1]);
         $this->assertSame('bastion.example.com', $argv[2]);
-        $this->assertSame('deploy@prod.example.com', $argv[3]);
+        $this->assertSame('--', $argv[3]);
+        $this->assertSame('deploy@prod.example.com', $argv[4]);
     }
 
     public function testProxyJumpWithPortInToSshArgv(): void
@@ -34,7 +35,7 @@ final class EndpointProxyJumpTest extends TestCase
             proxyJump: 'bastion.example.com',
         );
         $argv = $e->toSshArgv();
-        $this->assertSame(['ssh', '-p', '2222', '-J', 'bastion.example.com', 'deploy@prod.example.com'], $argv);
+        $this->assertSame(['ssh', '-p', '2222', '-J', 'bastion.example.com', '--', 'deploy@prod.example.com'], $argv);
     }
 
     public function testProxyJumpWithIdentityFilesInToSshArgv(): void
@@ -47,7 +48,7 @@ final class EndpointProxyJumpTest extends TestCase
             proxyJump: 'bastion.example.com',
         );
         $argv = $e->toSshArgv();
-        $this->assertSame(['ssh', '-i', '/path/to/key', '-J', 'bastion.example.com', 'deploy@prod.example.com'], $argv);
+        $this->assertSame(['ssh', '-i', '/path/to/key', '-J', 'bastion.example.com', '--', 'deploy@prod.example.com'], $argv);
     }
 
     public function testProxyJumpNullDoesNotAddFlag(): void

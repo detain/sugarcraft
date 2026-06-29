@@ -24,4 +24,7 @@ return [
     'cli.no_config'     => 'wishlist: no config found. Pass --config <path>.',
     'cli.error'         => 'wishlist: {message}',
     'cli.cancelled'     => 'wishlist: cancelled.',
+
+    // endpoint security
+    'endpoint.option_injection' => 'wishlist endpoint: field [{field}] has unsafe leading-dash value [{value}]',
 ];
