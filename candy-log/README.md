@@ -98,7 +98,7 @@ Override level styles via `Logger::styles()`:
 use SugarCraft\Sprinkles\Style;
 $log = Logger::new();
 $styles = $log->styles();
-$styles->levels[Level::Error] = Style::new()->foreground('red')->bold();
+$styles->levels[Level::Error->value] = Style::new()->foreground('red')->bold();
 $log->setStyles($styles);
 ```
 
@@ -162,6 +162,8 @@ The bridge also fires registered hooks before forwarding each message to the und
 ## Hook System
 
 The hook system lets you register callbacks that fire whenever a log entry is emitted at or above a given level. Hooks receive the `Level`, PSR-3 level string, message, and context — useful for dispatching to external services, enriching context, or filtering.
+
+> **Note:** Hooks fire **only via `PsrBridge`** — they do not fire when calling `Logger->info()` etc. directly. For the plain `Logger` API, hooks are not invoked. To use hooks, wrap your `Logger` in a `PsrBridge` and call methods on the bridge.
 
 ```php
 use SugarCraft\Log\Logger;
