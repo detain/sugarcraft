@@ -214,6 +214,9 @@ final class FlexBox
                 }
                 $raw = $itemLines[$line] ?? '';
 
+                // Sanitize data-origin content before rendering.
+                $raw = $this->sanitize($raw);
+
                 // Align within allocated width
                 $cellStr = $this->alignCell($raw, $aw, $this->align);
 
@@ -267,6 +270,7 @@ final class FlexBox
             $maxW = $this->align === Align::Stretch ? $totalWidth : $m['width'];
 
             foreach ($itemLines as $line) {
+                $line = $this->sanitize($line);
                 $lineStr = $this->alignCell($line, $maxW, $this->align);
                 if ($m['item']->style !== '') {
                     $lineStr = $this->applyStyle($lineStr, $m['item']->style);
@@ -326,5 +330,27 @@ final class FlexBox
     {
         if ($style === '') return $s;
         return Ansi::CSI . $style . 'm' . $s . Ansi::reset();
+    }
+
+    /**
+     * Strip dangerous control characters from content destined for the terminal.
+     *
+     * Removes C0 controls (0x00-0x08, 0x0B-0x1F), C1 escape (0x7F),
+     * and OSC/DCS sequences that could corrupt terminal state. Library-emitted
+     * SGR sequences are preserved as they are added downstream via applyStyle.
+     */
+    private function sanitize(string $s): string
+    {
+        // Remove OSC sequences (ESC ] ... BEL or ESC \).
+        $s = \preg_replace('/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', '', $s);
+        // Remove DCS sequences (ESC P ... ESC \).
+        $s = \preg_replace('/\x1bP[^\x1b]*(?:\x1b\\\\)/', '', $s);
+        // Remove bare ESC introducers not followed by [ (not CSI).
+        $s = \preg_replace('/\x1b(?!\[)/', '', $s);
+        // Remove C0 controls except HT (0x09) and LF (0x0A).
+        $s = \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
+        // Remove C1 controls (0x7F, 0x80-0x9F).
+        $s = \preg_replace('/[\x7F\x80-\x9F]/', '', $s);
+        return $s;
     }
 }

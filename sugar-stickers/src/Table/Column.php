@@ -89,7 +89,33 @@ final class Column
             $result = $value;
         }
 
-        return \substr((string) $result, 0, $this->width);
+        // Sanitize data-origin content before width-truncation.
+        $sanitized = $this->sanitize((string) $result);
+        return \substr($sanitized, 0, $this->width);
+    }
+
+    /**
+     * Strip dangerous control characters from content destined for the terminal.
+     *
+     * Removes C0 controls (0x00-0x08, 0x0B-0x1F), C1 escape (0x7F),
+     * and OSC/DCS sequences (0x80-0x9F, bare ESC introducers) that could
+     * corrupt terminal state or enable injection attacks. Library-emitted
+     * SGR sequences (\x1b[...m) are preserved as they are added downstream
+     * of sanitize via applyStyle.
+     */
+    private function sanitize(string $s): string
+    {
+        // Remove OSC sequences (ESC ] ... BEL or ESC \).
+        $s = \preg_replace('/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', '', $s);
+        // Remove DCS sequences (ESC P ... ESC \).
+        $s = \preg_replace('/\x1bP[^\x1b]*(?:\x1b\\\\)/', '', $s);
+        // Remove bare ESC introducers not followed by [ (not CSI).
+        $s = \preg_replace('/\x1b(?!\[)/', '', $s);
+        // Remove C0 controls except HT (0x09) and LF (0x0A).
+        $s = \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
+        // Remove C1 controls (0x7F, 0x80-0x9F).
+        $s = \preg_replace('/[\x7F\x80-\x9F]/', '', $s);
+        return $s;
     }
 
     public function padded(string $value, int $rowIndex): string
