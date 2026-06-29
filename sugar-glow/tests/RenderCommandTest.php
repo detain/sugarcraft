@@ -448,4 +448,27 @@ final class RenderCommandTest extends TestCase
             unlink($tmp);
         }
     }
+
+    public function testLoadInputEmptyStdinReturnsNull(): void
+    {
+        // Use a pipe that we control — php://temp is seekable and not a TTY.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        // Stream is seekable but empty → should return null.
+        $result = RenderCommand::loadInput('', $stream);
+        fclose($stream);
+        $this->assertNull($result);
+    }
+
+    public function testLoadInputReadsStdin(): void
+    {
+        // Use a pipe that we control — php://temp is seekable and not a TTY.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, "# Hello from stdin");
+        fseek($stream, 0); // Rewind to beginning so loadInput can read it.
+        $result = RenderCommand::loadInput('', $stream);
+        fclose($stream);
+        $this->assertSame("# Hello from stdin", $result);
+    }
 }
