@@ -226,4 +226,49 @@ final class PosterCardTest extends TestCase
         self::assertStringContainsString('R2', $lines[2]);
         self::assertStringNotContainsString('R3', $lines[2], 'overflow rows are dropped');
     }
+
+    public function testEveryPosterRowIsExactlyWidthCells(): void
+    {
+        // A poster with one over-wide row (16 cells) and one under-wide row (2
+        // cells) must be normalised to exactly width=8 cells each.
+        $card = (new PosterCard('1', 'Hi'))->withPoster("WWWWWWWWWWWWWWWW\nWW");
+        $lines = explode("\n", $card->render(false, 8, 3));
+
+        // 3 poster rows + 1 title = 4 total.
+        self::assertCount(4, $lines);
+        foreach (array_slice($lines, 0, 3) as $line) {
+            self::assertSame(8, Layout::width($line), 'every poster row is exactly 8 cells');
+        }
+    }
+
+    public function testOverWidePosterRowIsTruncatedNotWidened(): void
+    {
+        // An over-wide row must be CLAMPED to width, not extended.
+        $card = (new PosterCard('1', 'X'))->withPoster("TTTTTTTTTTTTTTTT"); // 16 T's at width 8
+        $line = explode("\n", $card->render(false, 8, 1))[0];
+
+        self::assertLessThanOrEqual(8, Layout::width($line), 'over-wide row is clamped to width');
+    }
+
+    public function testPlainTitleStripsControlBytes(): void
+    {
+        // Plain DB-sourced titles must not leak C0 controls into the terminal.
+        // ESC, Bell, and clear-screen sequences must all be stripped.
+        $titleLine = explode("\n", (new PosterCard('1', "Movie\e[2J\x07"))->render(false, 10, 1))[1];
+
+        self::assertStringContainsString('Movie', $titleLine);
+        self::assertStringNotContainsString("\e", $titleLine, 'ANSI escapes stripped from plain title');
+        self::assertStringNotContainsString("\x07", $titleLine, 'bell byte stripped from plain title');
+    }
+
+    public function testNewFactoryMatchesConstructor(): void
+    {
+        $byNew = PosterCard::new('id1', 'Title');
+        $byNew2 = new PosterCard('id1', 'Title');
+
+        self::assertSame($byNew->id, $byNew2->id);
+        self::assertSame($byNew->title, $byNew2->title);
+        self::assertSame($byNew->poster, $byNew2->poster);
+        self::assertSame($byNew->progress, $byNew2->progress);
+    }
 }

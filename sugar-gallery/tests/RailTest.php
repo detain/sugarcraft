@@ -108,4 +108,86 @@ final class RailTest extends TestCase
         self::assertFalse($same->cards[0]->hasPoster());
         self::assertFalse($same->cards[1]->hasPoster());
     }
+
+    public function testRailWithLoadedPosterKeepsUniformRowWidth(): void
+    {
+        // A rail with an over-wide poster (16 W's at cardWidth 8) must render
+        // rows that are uniformly 8 cells wide — the bug was that Rail::render()
+        // fed un-normalised rows straight into joinHorizontalWithSpacing.
+        $rail = new Rail('R', [
+            (new PosterCard('0', 'A'))->withPoster("WWWWWWWWWWWWWWWW\nW"),
+            new PosterCard('1', 'B'),
+        ]);
+
+        $out = $rail->render(50, false, 8, 3);
+        $lines = explode("\n", $out);
+
+        // Extract card body rows (skip the head "● R (1/2)" line at index 0).
+        $cardLines = array_slice($lines, 1);
+        $widths = array_map(static fn (string $l): int => \SugarCraft\Sprinkles\Layout::width($l), $cardLines);
+        self::assertCount(1, array_unique($widths), 'all card body rows have the same width');
+    }
+
+    public function testRenderKeepsFocusedCardVisibleAfterStaleScroll(): void
+    {
+        // Build a rail, move cursor far right (scroll advances), then call
+        // withCards() to create a stale scroll where cursor < scroll.
+        $rail = new Rail('R', $this->cards(5));
+        $rail = $rail->moveCursor(4, 3); // cursor=4, scroll=3
+        $rail = $rail->withCards($this->cards(5)); // scroll is now potentially stale
+
+        $out = $rail->render(50, true, 10, 3);
+        self::assertStringContainsString('Card 4', $out, 'focused card (Card 4) is visible after stale scroll');
+    }
+
+    public function testWithCardsEmptyResetsCursor(): void
+    {
+        $rail = (new Rail('R', $this->cards(5)))->moveCursor(4, 3);
+        $empty = $rail->withCards([]);
+
+        self::assertSame(0, $empty->cursor);
+        self::assertSame(0, $empty->scroll);
+        self::assertTrue($empty->isEmpty());
+    }
+
+    public function testRenderUsesDefaultSpacing(): void
+    {
+        $rail = new Rail('R', $this->cards(2));
+
+        $explicit = $rail->render(50, false, 10, 2, 2);
+        $default = $rail->render(50, false, 10, 2); // spacing defaults to 2
+
+        self::assertSame($explicit, $default, '5-arg render with default spacing matches explicit spacing=2');
+    }
+
+    public function testWithTitleReturnsRelabeledCopy(): void
+    {
+        $rail = new Rail('Old', $this->cards(3));
+        $relabeled = $rail->withTitle('New');
+
+        self::assertSame('New', $relabeled->title);
+        self::assertSame('Old', $rail->title, 'original is unchanged');
+        self::assertSame($rail->cursor, $relabeled->cursor);
+        self::assertSame($rail->scroll, $relabeled->scroll);
+        self::assertSame($rail->cards, $relabeled->cards);
+    }
+
+    public function testWithCursorClampsToLastCard(): void
+    {
+        $rail = new Rail('R', $this->cards(3));
+        $moved = $rail->withCursor(99);
+
+        self::assertSame(2, $moved->cursor, 'cursor clamped to last index');
+    }
+
+    public function testNewFactoryMatchesConstructor(): void
+    {
+        $byNew = Rail::new('R', $this->cards(2));
+        $byNew2 = new Rail('R', $this->cards(2));
+
+        self::assertSame($byNew->title, $byNew2->title);
+        self::assertSame($byNew->cursor, $byNew2->cursor);
+        self::assertSame($byNew->scroll, $byNew2->scroll);
+        self::assertCount(2, $byNew->cards);
+    }
 }
