@@ -77,4 +77,15 @@ final class NavigationTest extends TestCase
         $date = Navigation::gridIndexToDate(12, 5, 2026);
         $this->assertSame('2026-05-08', $date->format('Y-m-d'));
     }
+
+    public function testGridIndexToDateRollsIntoPreviousMonth(): void
+    {
+        // January 2026: firstDow=4 (Thu), index 0 → dayNum = -3
+        // modify string ' +(-3-1) days' = '+-4 days' which PHP parses as +4 days
+        // (second sign wins, treated as positive) — a silent rollover bug.
+        // This documents the current behaviour; step 11 will fix gridIndexToDate.
+        $date = Navigation::gridIndexToDate(0, 1, 2026);
+        $this->assertSame('2026-01-05', $date->format('Y-m-d'),
+            'gridIndexToDate(0) rolls forward 4 days (PHP modify +-n bug), not backward');
+    }
 }
