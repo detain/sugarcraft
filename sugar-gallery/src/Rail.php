@@ -25,6 +25,12 @@ final readonly class Rail
     ) {
     }
 
+    /** Canonical factory — mirrors the public constructor. */
+    public static function new(string $title, array $cards = [], int $cursor = 0, int $scroll = 0): self
+    {
+        return new self($title, $cards, $cursor, $scroll);
+    }
+
     /**
      * Replace the card list, clamping the cursor/scroll into range.
      *
@@ -49,6 +55,29 @@ final readonly class Rail
         }
 
         return new self($this->title, $cards, $this->cursor, $this->scroll);
+    }
+
+    /** Return a copy with a different title (immutable+fluent). */
+    public function withTitle(string $title): self
+    {
+        return new self($title, $this->cards, $this->cursor, $this->scroll);
+    }
+
+    /**
+     * Return a copy with a different cursor, clamped to [0, count-1].
+     * Scroll is clamped to cursor to keep the card visible; if a specific
+     * scroll/cursor relationship is needed use moveCursor() instead.
+     */
+    public function withCursor(int $cursor): self
+    {
+        if ($this->cards === []) {
+            return new self($this->title, [], 0, 0);
+        }
+
+        $cursor = max(0, min(count($this->cards) - 1, $cursor));
+        $scroll = max(0, min($this->scroll, $cursor));
+
+        return new self($this->title, $this->cards, $cursor, $scroll);
     }
 
     public function focusedCard(): ?PosterCard
@@ -100,11 +129,24 @@ final readonly class Rail
         }
 
         $perRow = self::perRow($railWidth, $cardWidth, $spacing);
-        $visible = array_slice($this->cards, $this->scroll, $perRow);
+
+        // Render-time scroll clamp: ensure the focused card is always inside
+        // the visible window even after a stale scroll (e.g. after withCards()
+        // or a railWidth/cardWidth change between moves). Mirrors moveCursor()
+        // math without mutating state — Rail is readonly.
+        $scroll = $this->scroll;
+        if ($this->cursor < $scroll) {
+            $scroll = $this->cursor;
+        } elseif ($this->cursor >= $scroll + $perRow) {
+            $scroll = $this->cursor - $perRow + 1;
+        }
+        $scroll = max(0, $scroll);
+
+        $visible = array_slice($this->cards, $scroll, $perRow);
 
         $blocks = [];
         foreach ($visible as $offset => $card) {
-            $absolute = $this->scroll + $offset;
+            $absolute = $scroll + $offset;
             $blocks[] = $card->render($focused && $absolute === $this->cursor, $cardWidth, $posterHeight);
         }
 
