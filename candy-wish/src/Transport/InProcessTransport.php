@@ -357,15 +357,9 @@ final class InProcessTransport implements Transport, ChildSpawner
         $next = function (Context $c, Session $s) use ($stack, $idx): void {
             $this->dispatch($c, $s, $stack, $idx + 1);
         };
-        $wrappedNext = function (Context $c, Session $s) use ($next): void {
-            $r = $next($c, $s);
-            if ($r instanceof \React\Promise\PromiseInterface) {
-                $r->wait();
-            }
-        };
-        $result = $stack[$idx]->handle($ctx, $session, $wrappedNext);
+        $result = $stack[$idx]->handle($ctx, $session, $next);
         if ($result instanceof \React\Promise\PromiseInterface) {
-            $result->wait();
+            PromiseAwait::settle($result);
         }
     }
 }
