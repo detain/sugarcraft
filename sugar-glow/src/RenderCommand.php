@@ -144,25 +144,21 @@ final class RenderCommand extends Command
         }
     }
 
-    /** @return string|null */
-    public static function loadInput(string $file): ?string
+    /**
+     * @param resource|null $stream Defaults to STDIN; allows unit-testing stdin paths.
+     */
+    public static function loadInput(string $file, $stream = null): ?string
     {
         if ($file !== '') {
             $contents = @file_get_contents($file);
             return is_string($contents) ? $contents : null;
         }
-        if (!defined('STDIN') || !is_resource(STDIN) || TtyDetect::isAtty(STDIN)) {
+        $stream = $stream ?? STDIN;
+        if (!defined('STDIN') || !is_resource($stream) || TtyDetect::isAtty($stream)) {
             return null;
         }
-        // Guard: if the terminal doesn't support color (NO_COLOR set or
-        // no-color capability detected), still read stdin but the caller
-        // will render with a non-color theme.  On probe failure, assume
-        // color is available (graceful degradation per step-29 brief).
-        if (!self::terminalSupportsColor()) {
-            $raw = stream_get_contents(STDIN);
-            return is_string($raw) && $raw !== '' ? $raw : null;
-        }
-        $raw = stream_get_contents(STDIN);
+        // Color decision now lives entirely in execute(); loadInput just reads stdin.
+        $raw = stream_get_contents($stream);
         return is_string($raw) && $raw !== '' ? $raw : null;
     }
 }
