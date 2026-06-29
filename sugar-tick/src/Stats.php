@@ -63,6 +63,9 @@ final class Stats
     /** @return list<int>  one bucket per day in `$days`, in seconds */
     public function timeline(): array
     {
+        if ($this->days === []) {
+            return [];
+        }
         $out = array_fill(0, count($this->days), 0);
         $dayKeys = array_map(static fn(\DateTimeImmutable $d) => $d->format('Y-m-d'), $this->days);
         $tz = $this->days[0]->getTimezone() ?? new \DateTimeZone(date_default_timezone_get());
