@@ -93,20 +93,16 @@ final class ProgramSimulator
         // We use a simplified approach: just call init/update/view directly.
         $model = $this->getModelFromProgram();
 
-        // Call init() once at startup.
+        // Call init() once at startup and thread any produced message.
         $initCmd = $model->init();
-        $this->runCmd($initCmd);
+        $initMsg = $this->runCmd($initCmd);
+        if ($initMsg !== null) {
+            [$model, ] = $this->applyMsg($model, $initMsg);
+        }
 
         // Process queued messages in order.
         foreach ($this->queue as $msg) {
-            [$model, $cmd] = $model->update($msg);
-            $this->runCmd($cmd);
-
-            // Capture view output by calling view() on the active model.
-            $viewOutput = $model->view();
-            if (is_string($viewOutput)) {
-                $this->outputBytes[] = $viewOutput;
-            }
+            [$model, ] = $this->applyMsg($model, $msg);
         }
 
         // Final view call.
@@ -122,6 +118,50 @@ final class ProgramSimulator
             cmds: $this->capturedCmds,
             output: implode('', $this->outputBytes),
         );
+    }
+
+    /**
+     * Apply a single message to the model, running any resulting command
+     * and iteratively draining cmd-produced messages (bounded to prevent
+     * infinite loops).
+     *
+     * @param Model $model
+     * @param Msg $msg
+     * @return array{0: Model, 1: ?\Closure} Updated model and any cmd
+     */
+    private function applyMsg(Model $model, Msg $msg): array
+    {
+        $cycleCount = 0;
+        $maxCycles = 10_000;
+
+        while (true) {
+            if ($cycleCount++ > $maxCycles) {
+                throw new \RuntimeException(
+                    'simulator.cmd_loop_overflow'
+                );
+            }
+
+            [$model, $cmd] = $model->update($msg);
+
+            // Capture view output after each update.
+            $viewOutput = $model->view();
+            if (is_string($viewOutput)) {
+                $this->outputBytes[] = $viewOutput;
+            }
+
+            // Run the cmd and get any produced message.
+            $producedMsg = $this->runCmd($cmd);
+
+            // If no message was produced, we're done with this update cycle.
+            if ($producedMsg === null) {
+                break;
+            }
+
+            // A cmd produced a message — feed it back into update().
+            $msg = $producedMsg;
+        }
+
+        return [$model, $cmd ?? null];
     }
 
     /**
@@ -142,34 +182,26 @@ final class ProgramSimulator
     }
 
     /**
-     * Run a Cmd (closure) and capture the result.
+     * Run a Cmd (closure) and return any produced message.
      *
      * @param \Closure|null $cmd
+     * @return ?Msg The message produced by the cmd, or null
      */
-    private function runCmd(?\Closure $cmd): void
+    private function runCmd(?\Closure $cmd): ?Msg
     {
         if ($cmd === null) {
-            return;
+            return null;
         }
 
         if ($this->fakeCmdRunner !== null) {
             $this->capturedCmds[] = $cmd;
-            $injectedMsg = ($this->fakeCmdRunner)($cmd);
-            if ($injectedMsg !== null && $this->getModelFromProgram() instanceof Model) {
-                // Dispatch injected msg to the model.
-                // Note: in the run() flow we pass the model around directly.
-            }
-            return;
+            return ($this->fakeCmdRunner)($cmd);
         }
 
         // By default, capture but don't execute side-effecting cmds.
         $this->capturedCmds[] = $cmd;
 
-        // Execute sync-only commands that don't have side effects.
-        $msg = $cmd();
-        if ($msg instanceof Msg) {
-            // For sync dispatching, we'd need the model.
-            // Just record it for inspection.
-        }
+        // Execute the cmd and return any produced message.
+        return $cmd();
     }
 }
