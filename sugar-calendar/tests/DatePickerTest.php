@@ -103,8 +103,9 @@ final class DatePickerTest extends TestCase
 
     public function testCursorRightBoundary(): void
     {
-        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->MoveCursorRight(41);  // 42 steps = clamped to 41
+        // MoveCursorRight takes no parameter; index is clamped at 41.
+        // The 45-step loop exercises the clamp boundary.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 
         for ($i = 0; $i < 45; $i++) {
             $dp = $dp->MoveCursorRight();
