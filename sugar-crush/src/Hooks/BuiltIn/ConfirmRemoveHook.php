@@ -23,15 +23,14 @@ final readonly class ConfirmRemoveHook implements HookInterface
 
     public function matcher(): string
     {
-        return '^rm$';
+        return '^Bash$';
     }
 
     public function execute(HookContext $context): HookResult
     {
-        $input = $context->toolInput;
+        $command = $context->toolArgs['command'] ?? '';
 
-        // Check for recursive or force remove
-        if (preg_match('/rm\s+-[rf]+\s+/', $input)) {
+        if (preg_match('/\brm\b[^\n]*\s-[a-z]*[rf]/i', $command)) {
             return HookResult::deny(
                 'This hook prevents recursive/force rm. Use interactive rm instead.'
             );

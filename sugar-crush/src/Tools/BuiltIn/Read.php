@@ -6,9 +6,17 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Read implements Tool
 {
+    private const DEFAULT_MAX_BYTES = 1024 * 1024;
+
+    public function __construct(
+        private ?string $root = null,
+        private int $maxBytes = self::DEFAULT_MAX_BYTES,
+    ) {}
+
     public function name(): string
     {
         return 'Read';
@@ -31,11 +39,39 @@ final readonly class Read implements Tool
     public function execute(array $args): ToolResult
     {
         $path = $args['file_path'] ?? '';
+
+        if ($this->root !== null) {
+            $resolved = PathJail::resolve($this->root, $path);
+            if ($resolved === null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: 'Error: path outside workspace root',
+                    isError: true,
+                );
+            }
+            $path = $resolved;
+        }
+
         set_error_handler(static function (int $errno, string $errstr) use ($path): bool {
             throw new \RuntimeException("Error reading file {$path}: {$errstr}");
         });
         try {
-            $content = file_get_contents($path);
+            clearstatcache(true, $path);
+            $size = @filesize($path);
+            if ($size !== false && $size > $this->maxBytes) {
+                $handle = fopen($path, 'rb');
+                if ($handle === false) {
+                    throw new \RuntimeException("Error reading file {$path}");
+                }
+                $content = fread($handle, $this->maxBytes);
+                fclose($handle);
+                if ($content === false) {
+                    throw new \RuntimeException("Error reading file {$path}");
+                }
+                $content .= "\n... [truncated]";
+            } else {
+                $content = file_get_contents($path);
+            }
             restore_error_handler();
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
