@@ -37,6 +37,14 @@ final class ProgramSimulator
 
     private ?\Closure $fakeCmdRunner = null;
 
+    /**
+     * When true, executes cmds and threads their returned messages through
+     * update(). When false, captures cmds but does NOT execute them (safe
+     * deterministic mode). Defaults to true (execute mode) for backward
+     * compatibility with existing tests.
+     */
+    private bool $executeCmds = true;
+
     private function __construct(
         private readonly Program $program,
     ) {}
@@ -74,6 +82,24 @@ final class ProgramSimulator
     {
         $sim = clone $this;
         $sim->fakeCmdRunner = $runner;
+        return $sim;
+    }
+
+    /**
+     * Opt-out of cmd execution for deterministic capture-only mode.
+     *
+     * By default (or when called with true), cmds are executed and their
+     * returned messages are threaded through update(). When called with
+     * false, cmds are captured but NOT executed — this is the safe,
+     * deterministic mode that avoids side effects from sync cmds.
+     *
+     * @param bool $execute Pass false to capture without executing
+     * @return $this
+     */
+    public function withRealCmdRunner(bool $execute): self
+    {
+        $sim = clone $this;
+        $sim->executeCmds = $execute;
         return $sim;
     }
 
@@ -195,12 +221,20 @@ final class ProgramSimulator
 
         if ($this->fakeCmdRunner !== null) {
             $this->capturedCmds[] = $cmd;
-            $cmdResult = $cmd(); // Execute cmd for side effects; ignore return
-            return ($this->fakeCmdRunner)($cmd); // Runner returns injected msg (or null)
+            // Execute the cmd for side effects, then let fakeRunner inject a msg.
+            if ($this->executeCmds) {
+                $cmd();
+            }
+            return ($this->fakeCmdRunner)($cmd);
         }
 
-        // By default, capture but don't execute side-effecting cmds.
+        // Capture the cmd (for inspection) and optionally execute.
         $this->capturedCmds[] = $cmd;
+
+        if (!$this->executeCmds) {
+            // Capture-only mode: don't execute side-effecting cmds.
+            return null;
+        }
 
         // Execute the cmd and return any produced message.
         return $cmd();
