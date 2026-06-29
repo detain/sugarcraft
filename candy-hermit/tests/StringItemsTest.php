@@ -131,4 +131,18 @@ final class StringItemsTest extends TestCase
         // Only banana is visible in filtered items.
         $this->assertStringContainsString('[SELECTED] banana', $result);
     }
+
+    public function testDefaultFormatterShowsItemOrdinal(): void
+    {
+        // FilteredItem(3, 'cherry') should render as "3. cherry" with the default formatter.
+        $h = Hermit::new([new FilteredItem(3, 'cherry')])->show();
+
+        $bg = str_repeat(str_repeat(' ', 80) . "
+", 20);
+        $result = $h->View($bg);
+
+        // The default formatter shows "  3. cherry" (2-space indent + ordinal + dot + space + value).
+        $this->assertStringContainsString('3. cherry', $result);
+    }
+
 }

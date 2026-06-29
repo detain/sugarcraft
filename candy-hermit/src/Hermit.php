@@ -43,7 +43,7 @@ final class Hermit
 
     private string $prompt = '> ';
 
-    /** @var \Closure(string $item, bool $isSelected): string */
+    /** @var \Closure(string $item, bool $isSelected, int $number = 0): string */
     private \Closure $itemFormatter;
 
     /** @var \Closure(Item $item): bool Filter function applied to items. */
@@ -100,8 +100,8 @@ final class Hermit
         $this->allItems      = $this->coerceItems($items);
         $this->filteredItems = $this->allItems;
         $this->itemFormatter = $itemFormatter
-            ?? fn(string $item, bool $selected): string =>
-                ($selected ? '● ' : '  ') . $item;
+            ?? fn(string $item, bool $selected, int $number = 0): string =>
+                ($selected ? '● ' : '  ') . ($number > 0 ? "$number. " : '') . $item;
         $this->filterFn = $filterFn
             ?? fn(Item $item): bool => true;
     }
@@ -488,13 +488,20 @@ final class Hermit
         $sep = \str_repeat('─', $winWidth);
         $lines[] = $sep;
 
-        // Item lines
+        // Item lines — scrolling viewport keeps $this->cursor in view
         $items = $this->filteredItems;
-        $maxShow = \min(\count($items), $this->windowHeight - 2);
+        $visibleRows = \max(0, $this->windowHeight - 2);
+        $maxShow = \min(\count($items), $visibleRows);
+        // Center the cursor in the visible window when possible
+        $top = $this->cursor < $visibleRows
+            ? 0
+            : \min($this->cursor - $visibleRows + 1, \count($items) - $visibleRows);
+        $top = \max(0, $top);
 
         for ($i = 0; $i < $maxShow; $i++) {
-            $isSelected = ($i === $this->cursor);
-            $itemStr    = ($this->itemFormatter)($items[$i]->value(), $isSelected);
+            $actualIndex = $top + $i;
+            $isSelected = ($actualIndex === $this->cursor);
+            $itemStr    = ($this->itemFormatter)($items[$actualIndex]->value(), $isSelected, $items[$actualIndex]->number());
 
             if ($filter !== '' && $this->matchStyle !== '') {
                 $itemStr = $this->ranker !== null
@@ -509,9 +516,29 @@ final class Hermit
             $lines[] = $itemStr;
         }
 
-        // Fill remaining lines if fewer items than window height
+        // Fill remaining lines if fewer items than window height,
+        // then append visible HelpBar/StatusBar if set and non-empty.
+        // Bars are rendered inside the windowHeight constraint.
         while (\count($lines) < $this->windowHeight) {
             $lines[] = \str_repeat(' ', $winWidth);
+        }
+
+        // HelpBar renders below items (bars extend the overlay past windowHeight)
+        if ($this->helpBar !== null && $this->helpBar->isVisible()) {
+            $helpLine = $this->helpBar->render();
+            if ($helpLine !== '') {
+                $helpLine = Width::padRight(Width::truncateAnsi($helpLine, $winWidth), $winWidth);
+                $lines[] = $helpLine;
+            }
+        }
+
+        // StatusBar renders below HelpBar (bars extend the overlay past windowHeight)
+        if ($this->statusBar !== null && $this->statusBar->isVisible()) {
+            $statusLine = $this->statusBar->render();
+            if ($statusLine !== '') {
+                $statusLine = Width::padRight(Width::truncateAnsi($statusLine, $winWidth), $winWidth);
+                $lines[] = $statusLine;
+            }
         }
 
         // Composite onto background
@@ -618,7 +645,7 @@ final class Hermit
         $filterLen = Width::of($this->filterText);
         $itemMax   = 0;
         foreach ($this->filteredItems as $item) {
-            $itemLen = Width::of(($this->itemFormatter)($item->value(), false));
+            $itemLen = Width::of(($this->itemFormatter)($item->value(), false, $item->number()));
             if ($itemLen > $itemMax) $itemMax = $itemLen;
         }
         return \max($promptLen + $filterLen + 5, $itemMax + 2);

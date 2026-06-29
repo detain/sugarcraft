@@ -374,4 +374,75 @@ final class HermitTest extends TestCase
 
         $this->assertTrue($result, 'attachSigwinch should return true when callback set and signals available');
     }
+
+    public function testScrollingViewportKeepsCursorVisible(): void
+    {
+        // Build 20 items in a windowHeight=5 (so 3 visible rows for items).
+        $items = [];
+        for ($i = 0; $i < 20; $i++) {
+            $items[] = new FilteredItem($i + 1, "item{$i}");
+        }
+        $h = Hermit::new($items)
+            ->setWindowHeight(5)
+            ->setWindowWidth(40)
+            ->show();
+
+        // cursorBottom() moves to the last item (index 19).
+        $h = $h->cursorBottom();
+
+        // The viewport should have scrolled so item[19] is visible.
+        $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+
+        // The last item's text appears in output; first item does not (viewport scrolled).
+        $this->assertStringContainsString('item19', $result, 'last item should be visible in scrolled viewport');
+        $this->assertStringNotContainsString('item0', $result, 'first item should not be visible when scrolled to bottom');
+    }
+
+    public function testScrollingViewportFitsInWindowCase(): void
+    {
+        // When all items fit in the window, item[0] should still render at top.
+        $items = [
+            new FilteredItem(1, 'apple'),
+            new FilteredItem(2, 'banana'),
+            new FilteredItem(3, 'cherry'),
+        ];
+        $h = Hermit::new($items)
+            ->setWindowHeight(5)
+            ->setWindowWidth(40)
+            ->show();
+
+        $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+
+        // First item should be visible at the top when items fit in window.
+        $this->assertStringContainsString('apple', $result, 'first item should be visible at top when fits in window');
+    }
+
+    public function testHelpBarAndStatusBarRenderInView(): void
+    {
+        // Use 2 items so there's room for bars
+        // Background needs to be tall enough for bars (windowHeight=5 + 2 bars = 7 lines)
+        $items = [
+            new FilteredItem(1, 'apple'),
+            new FilteredItem(2, 'banana'),
+        ];
+        $helpBar = new HelpBar(['Esc' => 'close']);
+        $statusBar = new StatusBar('3 of 12');
+
+        $h = Hermit::new($items)
+            ->setWindowHeight(5)
+            ->setWindowWidth(40)
+            ->withHelpBar($helpBar)
+            ->withStatusBar($statusBar)
+            ->show();
+
+        // Background must be tall enough for the bars (5 window + 2 bars = 7 min)
+        $bg = implode("\n", array_fill(0, 10, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+
+        // Both HelpBar and StatusBar content should appear in the output.
+        $this->assertStringContainsString('Esc: close', $result, 'HelpBar content should appear');
+        $this->assertStringContainsString('3 of 12', $result, 'StatusBar content should appear');
+    }
 }
