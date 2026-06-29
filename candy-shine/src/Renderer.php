@@ -877,7 +877,7 @@ final class Renderer
                 }
             }
         }
-        $st = SprinklesTable::new()->border(Border::rounded());
+        $st = SprinklesTable::new()->border($this->buildTableBorder());
         if ($headers !== []) {
             $st = $st->headers(...$headers);
         }
@@ -885,6 +885,31 @@ final class Renderer
             $st = $st->row(...$r);
         }
         return $st->render() . "\n\n";
+    }
+
+    /**
+     * Build a Border using theme table-separator glyphs but preserving
+     * the rounded corner style from Border::rounded().
+     */
+    private function buildTableBorder(): Border
+    {
+        $r = Border::rounded();
+        return new Border(
+            $r->top,
+            $r->bottom,
+            $r->left,
+            $r->right,
+            $r->topLeft,
+            $r->topRight,
+            $r->bottomLeft,
+            $r->bottomRight,
+            // Override interior separators from theme glyphs.
+            middleLeft: $this->theme->tableColumnSeparator,
+            middleRight: $this->theme->tableColumnSeparator,
+            middle: $this->theme->tableCenterSeparator,
+            middleTop: $this->theme->tableRowSeparator,
+            middleBottom: $this->theme->tableRowSeparator,
+        );
     }
 
     /**
