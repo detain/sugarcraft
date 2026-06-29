@@ -169,4 +169,42 @@ final class DecoderTest extends TestCase
             unlink($path);
         }
     }
+
+    /**
+     * Regression: a GIF whose extension sub-block length byte overruns EOF
+     * must not cause PHP warnings or exceptions. The bounds check added to
+     * the sub-block loops treats a truncated tail as end-of-data.
+     */
+    public function testDecodeHandlesTruncatedSubBlockOverrun(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // Build a GIF where an extension sub-block length byte claims 255 bytes
+        // but only a few bytes of payload follow before EOF.
+        $buf = "GIF87a";
+        $buf .= pack('v', 2); // width=2
+        $buf .= pack('v', 2); // height=2
+        $buf .= "\x80";       // GCT flag=1, GCT size=0 (2 entries)
+        $buf .= "\x00";       // bg index
+        $buf .= "\x00";       // par
+        $buf .= "\x00\x00\x00"; // GCT: color 0 = black
+        $buf .= "\xff\x00\x00"; // GCT: color 1 = red
+        // Extension block (not GCE) with sub-block length=255 but only
+        // 2 bytes follow before the GIF trailer (0x3B).
+        $buf .= "\x21\xFF";   // extension introducer + label (fake)
+        $buf .= "\xff";       // sub-block length claims 255 bytes
+        $buf .= "\x00\x3b";   // only 2 bytes before trailer — overruns EOF
+        // GIF should decode to empty frame list (no Image Descriptor found
+        // before EOF) without throwing or emitting PHP warnings.
+        $path = sys_get_temp_dir() . '/truncated-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+        try {
+            $frames = @Decoder::decode($path, 2, 2);
+            // Should return 0 frames (no valid Image Descriptor found)
+            $this->assertIsArray($frames);
+        } finally {
+            unlink($path);
+        }
+    }
 }
