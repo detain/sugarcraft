@@ -46,7 +46,11 @@ final class Counter implements Model
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'q') {
+        // Mirrors charmbracelet/bubbletea-app-template/Program.update
+        // quit with q (plain), Esc, or ctrl+c
+        if (($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl)
+            || $msg->type === KeyType::Escape
+            || ($msg->ctrl && $msg->rune === 'c')) {
             return [$this, Cmd::quit()];
         }
         return [match ($msg->type) {
@@ -56,6 +60,8 @@ final class Counter implements Model
         }, null];
     }
 
+    // Returns a plain string here; the Model contract also allows a View
+    // (cursor pos, window title, alt-screen) — see SugarCraft\Core\View.
     public function view(): string
     {
         $body = sprintf("  count: %d  \n  ↑ ↓ to change · q to quit  ", $this->n);
