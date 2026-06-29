@@ -49,7 +49,17 @@ final class JsonFormatter implements Formatter
             $record[$k] = $this->coerceValue($v);
         }
 
-        return (string) \json_encode($record, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . "\n";
+        $result = \json_encode($record, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        if ($result === false) {
+            // Fallback: encode a minimal safe record so we never emit an empty line
+            $result = \json_encode([
+                'level' => $record['level'] ?? 'UNKNOWN',
+                'msg'   => $record['msg']   ?? '',
+                '_encode_error' => \json_last_error_msg(),
+            ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        }
+
+        return $result . "\n";
     }
 
     private function coerceValue(mixed $v): mixed
@@ -58,11 +68,17 @@ final class JsonFormatter implements Formatter
             return $v;
         }
         if (\is_array($v)) {
-            return $v;
+            // Recurse so nested objects/resources become strings for json_encode
+            return \array_map(fn($i) => $this->coerceValue($i), $v);
         }
         if ($v === null) {
             return null;
         }
-        return (string) $v;
+        // Objects with __toString
+        if ($v instanceof \Stringable || \method_exists($v, '__toString')) {
+            return (string) $v;
+        }
+        // Object without __toString — return class name (top-level only; arrays already recursed)
+        return \get_class($v);
     }
 }
