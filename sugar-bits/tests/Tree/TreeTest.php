@@ -181,11 +181,11 @@ final class TreeTest extends TestCase
         $t = Tree::new(
             Node::leaf("a\nb"),
         );
+        $this->assertSame(1, $t->visibleCount(), 'Single leaf node must be one visible row');
         $view = $t->view();
-        // Each rendered row is one line separated by "\n".
-        // The label "a\nb" must not appear as two separate rows.
-        $this->assertSame(1, substr_count($view, "\n"), 'Newline in label should not produce extra rows');
-        // The label text itself should appear (newlines replaced with space).
+        // The output must be a single line (no embedded newlines).
+        $this->assertSame(0, substr_count($view, "\n"), 'Newline in label should not produce extra rows');
+        // The label text itself should appear with newline replaced by space.
         $this->assertStringContainsString('a b', $view);
         $this->assertStringNotContainsString("a\nb", $view);
     }
