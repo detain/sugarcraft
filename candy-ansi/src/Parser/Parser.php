@@ -37,8 +37,10 @@ final class Parser
     /** Total length of the rune we're currently collecting. */
     private int $utf8Need = 0;
 
-    public function __construct(private readonly Handler $handler)
-    {
+    public function __construct(
+        private readonly Handler $handler,
+        private readonly bool $replaceMalformed = false,
+    ) {
     }
 
     /**
@@ -67,6 +69,9 @@ final class Parser
         ) {
             $this->dispatch(0, $from);
         }
+        if ($this->replaceMalformed && $this->utf8Buffer !== '') {
+            $this->handler->printChar("\xEF\xBF\xBD");
+        }
         $this->state = State::Ground;
         $this->utf8Buffer = '';
         $this->utf8Need = 0;
@@ -81,6 +86,45 @@ final class Parser
         $this->clear();
     }
 
+    /**
+     * Returns true if the given byte sequence is a well-formed UTF-8 rune.
+     * Checks for: valid encoding, no overlong sequences, no surrogates,
+     * and code point <= U+10FFFF.
+     */
+    private function isValidUtf8Rune(string $rune): bool
+    {
+        $len = strlen($rune);
+        if ($len < 1 || $len > 4) {
+            return false;
+        }
+        $cp = match (true) {
+            $len === 1 => ord($rune[0]),
+            $len === 2 => ((ord($rune[0]) & 0x1F) << 6) | (ord($rune[1]) & 0x3F),
+            $len === 3 => ((ord($rune[0]) & 0x0F) << 12) | ((ord($rune[1]) & 0x3F) << 6) | (ord($rune[2]) & 0x3F),
+            default => ((ord($rune[0]) & 0x07) << 18) | ((ord($rune[1]) & 0x3F) << 12) | ((ord($rune[2]) & 0x3F) << 6) | (ord($rune[3]) & 0x3F),
+        };
+        // Overlong checks
+        if ($len === 2 && $cp < 0x80) {
+            return false; // overlong
+        }
+        if ($len === 3 && $cp < 0x800) {
+            return false; // overlong
+        }
+        if ($len === 4 && $cp < 0x10000) {
+            return false; // overlong
+        }
+        // Surrogate check (U+D800-U+DFFF)
+        if ($cp >= 0xD800 && $cp <= 0xDFFF) {
+            return false;
+        }
+        // Max code point
+        if ($cp > 0x10FFFF) {
+            return false;
+        }
+        // Also verify with mb_check_encoding as additional safety
+        return mb_check_encoding($rune, 'UTF-8');
+    }
+
     /** @internal Exposed for tests asserting partial-input progress. */
     public function currentState(): State
     {
@@ -93,7 +137,11 @@ final class Parser
             if ($byte >= 0x80 && $byte <= 0xBF) {
                 $this->utf8Buffer .= chr($byte);
                 if (strlen($this->utf8Buffer) >= $this->utf8Need) {
-                    $this->handler->printChar($this->utf8Buffer);
+                    if ($this->replaceMalformed && !$this->isValidUtf8Rune($this->utf8Buffer)) {
+                        $this->handler->printChar("\xEF\xBF\xBD");
+                    } else {
+                        $this->handler->printChar($this->utf8Buffer);
+                    }
                     $this->utf8Buffer = '';
                     $this->utf8Need = 0;
                     $this->state = State::Ground;
@@ -102,6 +150,9 @@ final class Parser
             }
             // Non-continuation byte in Utf8 — drop the incomplete rune
             // and fall through with the byte processed from Ground.
+            if ($this->replaceMalformed) {
+                $this->handler->printChar("\xEF\xBF\xBD");
+            }
             $this->utf8Buffer = '';
             $this->utf8Need = 0;
             $this->state = State::Ground;
