@@ -135,7 +135,7 @@ final class AnsiHandler implements Handler
     {
         if ($final === 'm') {
             $parts = [];
-            for ($i = 0; $i < count($params); $i++) {
+            for ($i = 0, $n = count($params); $i < $n; $i++) {
                 $p = $params[$i];
                 if ($p === 4 && isset($params[$i + 1]) && $params[$i + 1] >= 1 && $params[$i + 1] <= 9) {
                     $parts[] = '4:' . $params[$i + 1];
@@ -175,6 +175,8 @@ final class AnsiHandler implements Handler
     {
         $this->flushText();
         $this->oscInProgress = true;
+        // OSC terminator normalized to BEL; original ST (\x1b\\) is not
+        // preserved because candy-ansi's Parser strips it before dispatch.
         $this->segments[] = new SequenceSegment(
             "\x1b]{$data}\x07",
             Inspector::describeOsc($data),
