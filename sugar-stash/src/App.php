@@ -168,10 +168,24 @@ final class App implements Model
 
         // Worktrees overlay
         if ($this->worktrees !== null) {
+            // When adding, only Escape (cancel), Enter (confirm), and Char (append to path) are processed
+            if ($this->worktrees->adding) {
+                if ($msg->type === KeyType::Escape) {
+                    return [$this->withWorktrees($this->worktrees->cancelAdding()), null];
+                }
+                if ($msg->type === KeyType::Enter) {
+                    return [$this->executeWorktreeAdd(), null];
+                }
+                if ($msg->type === KeyType::Char && $msg->rune !== '') {
+                    return [$this->withWorktrees($this->worktrees->withNewPath($this->worktrees->newPath . $msg->rune)), null];
+                }
+                return [$this, null];
+            }
+            // When not adding
             if ($msg->type === KeyType::Escape) {
                 return [$this->withWorktrees(null), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 'a' && !$this->worktrees->adding) {
+            if ($msg->type === KeyType::Char && $msg->rune === 'a') {
                 return [$this->withWorktrees($this->worktrees->startAdding()), null];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'd' && !$this->worktrees->removing) {
@@ -182,10 +196,6 @@ final class App implements Model
             }
             if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
                 return [$this->navigateWorktree(+1), null];
-            }
-            // Confirm add worktree
-            if ($msg->type === KeyType::Enter && $this->worktrees->adding) {
-                return [$this->executeWorktreeAdd(), null];
             }
             // Confirm remove worktree
             if ($msg->type === KeyType::Enter && $this->worktrees->removing) {
@@ -520,8 +530,7 @@ final class App implements Model
         }
         try {
             $this->git->discard($row['path']);
-            $this->history->push(HistoryEntry::discard($row['path']));
-            return $this->refresh();
+            return $this->withAll(history: $this->history->push(HistoryEntry::discard($row['path'])))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -538,14 +547,15 @@ final class App implements Model
         }
         try {
             $isStaged = ($row['index_status'] ?? ' ') !== ' ';
+            $newHistory = null;
             if ($isStaged) {
                 $this->git->unstage($row['path']);
-                $this->history->push(HistoryEntry::unstage($row['path']));
+                $newHistory = $this->history->push(HistoryEntry::unstage($row['path']));
             } else {
                 $this->git->stage($row['path']);
-                $this->history->push(HistoryEntry::stage($row['path']));
+                $newHistory = $this->history->push(HistoryEntry::stage($row['path']));
             }
-            return $this->refresh();
+            return $this->withAll(history: $newHistory)->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -556,8 +566,7 @@ final class App implements Model
     {
         try {
             $this->git->stageAll();
-            $this->history->push(HistoryEntry::stageAll());
-            return $this->refresh();
+            return $this->withAll(history: $this->history->push(HistoryEntry::stageAll()))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -572,8 +581,7 @@ final class App implements Model
         }
         try {
             $this->git->checkout($branch['name']);
-            $this->history->push(HistoryEntry::checkout($branch['name']));
-            return $this->refresh();
+            return $this->withAll(history: $this->history->push(HistoryEntry::checkout($branch['name'])))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -593,8 +601,10 @@ final class App implements Model
         }
         try {
             $this->git->commit($this->commitMessage);
-            $this->history->push(HistoryEntry::commit($this->commitMessage));
-            return $this->withCommitCollection(false, '')->refresh();
+            return $this
+                ->withAll(history: $this->history->push(HistoryEntry::commit($this->commitMessage)))
+                ->withCommitCollection(false, '')
+                ->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -682,10 +692,12 @@ final class App implements Model
         try {
             $patch = $dv->currentHunkPatch();
             $this->git->stagePatch($dv->path, $patch);
-            $this->history->push(HistoryEntry::stagePatch($dv->path, $patch));
-            return $this->withDiffViewer(null)
+            $newHistory = $this->history->push(HistoryEntry::stagePatch($dv->path, $patch));
+            return $this
+                ->withAll(history: $newHistory)
+                ->withDiffViewer(null)
                 ->refresh()
-                ->withAll(successMessage: Lang::t('diff.hunk_staged'));
+                ->withAll(history: $newHistory, successMessage: Lang::t('diff.hunk_staged'));
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -696,8 +708,7 @@ final class App implements Model
     {
         try {
             $this->git->amend();
-            $this->history->push(HistoryEntry::amend());
-            return $this->refresh();
+            return $this->withAll(history: $this->history->push(HistoryEntry::amend()))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -727,8 +738,10 @@ final class App implements Model
         }
         try {
             $this->git->createBranch($this->branchName);
-            $this->history->push(HistoryEntry::createBranch($this->branchName));
-            return $this->withBranchCollection(false, '')->refresh();
+            return $this
+                ->withAll(history: $this->history->push(HistoryEntry::createBranch($this->branchName)))
+                ->withBranchCollection(false, '')
+                ->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -740,11 +753,13 @@ final class App implements Model
         if (!$this->history->canUndo()) {
             return $this->withError(Lang::t('history.nothing_to_undo'));
         }
-        $entry = $this->history->undo();
+        $result = $this->history->undo();
+        $entry = $result['entry'];
+        $newHistory = $result['manager'];
         if ($entry === null) {
             return $this->withError(Lang::t('history.nothing_to_undo'));
         }
-        return $this->applyHistoryEntry($entry, false);
+        return $this->applyHistoryEntry($entry, false, $newHistory);
     }
 
     /** Redo the last undone operation. */
@@ -753,11 +768,13 @@ final class App implements Model
         if (!$this->history->canRedo()) {
             return $this->withError(Lang::t('history.nothing_to_redo'));
         }
-        $entry = $this->history->redo();
+        $result = $this->history->redo();
+        $entry = $result['entry'];
+        $newHistory = $result['manager'];
         if ($entry === null) {
             return $this->withError(Lang::t('history.nothing_to_redo'));
         }
-        return $this->applyHistoryEntry($entry, true);
+        return $this->applyHistoryEntry($entry, true, $newHistory);
     }
 
     /**
@@ -765,7 +782,7 @@ final class App implements Model
      *
      * @param bool $forward If true, apply the original op; if false, apply the inverse
      */
-    private function applyHistoryEntry(HistoryEntry $entry, bool $forward): self
+    private function applyHistoryEntry(HistoryEntry $entry, bool $forward, ?HistoryManager $newHistory = null): self
     {
         $op = $forward ? $entry->op : $entry->inverseOp;
         $args = $forward ? $entry->args : $entry->inverseArgs;
@@ -782,13 +799,19 @@ final class App implements Model
                 'createBranch' => $this->git->createBranch($args['name']),
                 'deleteBranch' => $this->git->deleteBranch($args['name']),
                 'stageAll' => $this->git->stageAll(),
+                'unstageAll' => $this->git->unstageAll(),
                 'stagePatch' => $this->git->stagePatch($args['path'], $args['hunk']),
+                'unstagePatch' => $this->git->unstagePatch($args['path'], $args['hunk']),
                 'merge' => $this->git->merge($args['branch']),
                 'abort' => $this->git->rebaseAbort(),
                 default => null,
             };
             $msg = Lang::t('history.undone', ['op' => $entry->op]);
-            return $this->refresh()->withAll(successMessage: $msg);
+            $refreshed = $this->refresh();
+            if ($newHistory !== null) {
+                $refreshed = $refreshed->withAll(history: $newHistory);
+            }
+            return $refreshed->withAll(successMessage: $msg);
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -806,10 +829,10 @@ final class App implements Model
         }
         try {
             $this->git->deleteBranch($branch['name']);
-            $this->history->push(HistoryEntry::deleteBranch($branch['name']));
-            return $this->refresh()->withAll(
-                successMessage: Lang::t('branch.deleted', ['name' => $branch['name']])
-            );
+            return $this
+                ->withAll(history: $this->history->push(HistoryEntry::deleteBranch($branch['name'])))
+                ->refresh()
+                ->withAll(successMessage: Lang::t('branch.deleted', ['name' => $branch['name']]));
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
@@ -839,10 +862,11 @@ final class App implements Model
         }
         try {
             $this->git->merge($this->mergeTarget);
-            $this->history->push(HistoryEntry::merge($this->mergeTarget));
-            return $this->withMergeCollection(false, '')->refresh()->withAll(
-                successMessage: Lang::t('merge.success', ['branch' => $this->mergeTarget])
-            );
+            return $this
+                ->withAll(history: $this->history->push(HistoryEntry::merge($this->mergeTarget)))
+                ->withMergeCollection(false, '')
+                ->refresh()
+                ->withAll(successMessage: Lang::t('merge.success', ['branch' => $this->mergeTarget]));
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
