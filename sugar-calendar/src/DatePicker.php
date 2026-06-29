@@ -717,9 +717,15 @@ final class DatePicker
         if ($this->rangeStart === null || $this->rangeEnd === null) {
             return null;
         }
-        // Only highlight range when start and end are in the view month/year
-        if ($this->rangeStart->format('Y-n') !== $this->viewYear . '-' . $this->viewMonth
-            && $this->rangeEnd->format('Y-n') !== $this->viewYear . '-' . $this->viewMonth) {
+        // Highlight any portion of the range that overlaps the view month.
+        // Return null only when the range cannot possibly intersect this month:
+        // i.e. the range ends entirely before the first of this month, OR
+        // the range starts entirely after the last of this month.
+        $firstOfMonth = $this->firstOfViewMonth();
+        if ($firstOfMonth === null) return null;
+        $lastOfMonth = $firstOfMonth->modify('last day of this month')->setTime(23, 59, 59);
+
+        if ($this->rangeEnd < $firstOfMonth || $this->rangeStart > $lastOfMonth) {
             return null;
         }
         return new DateRange($this->rangeStart, $this->rangeEnd);
