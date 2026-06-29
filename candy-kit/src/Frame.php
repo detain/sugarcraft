@@ -136,8 +136,10 @@ final class Frame
         $len = Width::string($s);
 
         if ($len > $width) {
-            // Width::truncate strips ANSI, so reset SGR afterwards to be safe.
-            $s = Width::truncate($s, max(0, $width - 1)) . '…' . Ansi::reset();
+            // Width::truncateAnsi preserves CSI/OSC sequences so foreground/
+            // background/bold survive the cut; reset SGR afterwards to guarantee
+            // no bleed past the frame boundary.
+            $s = Width::truncateAnsi($s, max(0, $width - 1)) . '…' . Ansi::reset();
             // Re-measure: truncate can stop short of $width (it won't split a
             // wide glyph), so `truncated + …` is NOT guaranteed to be exactly
             // $width cells — fall through to pad it out.
@@ -162,7 +164,7 @@ final class Frame
         $len = Width::string($s);
 
         if ($len > $width) {
-            $s = Width::truncate($s, max(0, $width - 1)) . '…' . Ansi::reset();
+            $s = Width::truncateAnsi($s, max(0, $width - 1)) . '…' . Ansi::reset();
             $len = Width::string($s);
         }
 

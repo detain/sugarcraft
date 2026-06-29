@@ -51,4 +51,24 @@ final class ThemeTest extends TestCase
     {
         $this->assertStringContainsString("\x1b[", Theme::catppuccin()->accent->render('x'));
     }
+
+    public function testByNameResolvesPresets(): void
+    {
+        // Dracula's success color is #50fa7b → truecolor SGR 38;2;80;250;123
+        $this->assertStringContainsString(
+            '38;2;80;250;123',
+            Theme::byName('dracula')->success->render('x'),
+        );
+        // byName is case-insensitive (strtolower normalises the lookup key)
+        $this->assertEquals(
+            Theme::byName('ANSI')->success->render('x'),
+            Theme::byName('ansi')->success->render('x'),
+        );
+    }
+
+    public function testByNameRejectsUnknown(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Theme::byName('nonexistent');
+    }
 }

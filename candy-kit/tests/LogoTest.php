@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Kit\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Kit\Logo;
 
 final class LogoTest extends TestCase
@@ -62,6 +63,16 @@ final class LogoTest extends TestCase
         $this->assertNotSame($original, $colored);
         $this->assertStringNotContainsString("\x1b[", $original->render());
         $this->assertStringContainsString("\x1b[", $colored->render());
+    }
+
+    /** The $color instanceof Color branch in withColor() must be exercised too. */
+    public function testWithColorAcceptsColorInstance(): void
+    {
+        $logo = Logo::fromAscii("test")->withColor(Color::hex('#ff5fd2'));
+        $rendered = $logo->render();
+        // Must produce SGR and contain the ASCII text.
+        $this->assertStringContainsString("\x1b[", $rendered);
+        $this->assertStringContainsString('test', $rendered);
     }
 
     public function testRenderReturnsString(): void

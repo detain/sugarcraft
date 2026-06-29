@@ -103,4 +103,23 @@ final class Theme
             muted:   Style::new()->foreground(Color::hex('#a6adc8')),
         );
     }
+
+    /**
+     * Resolve a theme by name. Presets: `'ansi'`, `'plain'`, `'charm'`,
+     * `'dracula'`, `'nord'`, `'catppuccin'`. Case-insensitive.
+     *
+     * @throws \InvalidArgumentException if the name is not recognised
+     */
+    public static function byName(string $name): self
+    {
+        return match (strtolower($name)) {
+            'ansi'        => self::ansi(),
+            'plain'       => self::plain(),
+            'charm'       => self::charm(),
+            'dracula'     => self::dracula(),
+            'nord'        => self::nord(),
+            'catppuccin'  => self::catppuccin(),
+            default       => throw new \InvalidArgumentException("unknown theme: {$name}"),
+        };
+    }
 }
