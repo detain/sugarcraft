@@ -34,6 +34,8 @@ return [
     'resend.api_error'           => 'Resend API error ({status}): {body}',
 
     // bin/pop
+    'attachment.unreadable'      => 'Attachment file is not readable: {path}',
+    'attachment.no_path'        => 'Attachment path must be provided when attaching by filename',
     'cli.error'                  => 'Error: {message}',
     'cli.transport_error'        => 'Transport error: {message}',
     'cli.send_failed'            => 'Send failed: {message}',

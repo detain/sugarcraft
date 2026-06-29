@@ -24,6 +24,7 @@ final class SmtpTransport implements Transport
     private string $password;
     private int $timeout;
     private bool $tls;
+    private string $heloHost;
 
     /** @var resource|\Socket|null */
     private $socket = null;
@@ -35,6 +36,7 @@ final class SmtpTransport implements Transport
         string $username = '',
         string $password = '',
         int $timeout = 30,
+        string $heloHost = '',
     ) {
         $this->host     = $host;
         $this->port     = $port;
@@ -42,6 +44,7 @@ final class SmtpTransport implements Transport
         $this->password = $password;
         $this->timeout  = $timeout;
         $this->tls      = ($port === 465);
+        $this->heloHost = $heloHost;
     }
 
     /**
@@ -185,13 +188,13 @@ final class SmtpTransport implements Transport
 
     private function sendMailFrom(string $address): void
     {
-        $this->sendRaw("MAIL FROM:<{$address}>\r\n");
+        $this->sendRaw("MAIL FROM:<{$this->bareAddr($address)}>\r\n");
         $this->readResponse(250);
     }
 
     private function sendRcptTo(string $address): void
     {
-        $this->sendRaw("RCPT TO:<{$address}>\r\n");
+        $this->sendRaw("RCPT TO:<{$this->bareAddr($address)}>\r\n");
         $this->readResponse(250);
     }
 
@@ -211,7 +214,7 @@ final class SmtpTransport implements Transport
      *
      * Mirrors charmbracelet/pop dot-stuffing.
      */
-    private function dotStuff(string $mime): string
+    protected function dotStuff(string $mime): string
     {
         return \preg_replace('/^\./m', '..', $mime);
     }
@@ -220,7 +223,7 @@ final class SmtpTransport implements Transport
     // MIME building
     // -------------------------------------------------------------------------
 
-    private function buildMimeMessage(Email $email): string
+    protected function buildMimeMessage(Email $email): string
     {
         $boundary = \bin2hex(\random_bytes(16));
         $lines = [];
@@ -345,12 +348,49 @@ final class SmtpTransport implements Transport
 
     private function getHeloHost(): string
     {
-        return \gethostname() ?: 'localhost';
+        return $this->heloHost !== '' ? $this->heloHost : (\gethostname() ?: 'localhost');
     }
 
     private function addrListHeader(array $addrs): string
     {
-        return \implode(', ', $addrs);
+        $formatted = [];
+        foreach ($addrs as $addr) {
+            $formatted[] = $this->formatAddressForHeader($addr);
+        }
+        return \implode(', ', $formatted);
+    }
+
+    /**
+     * Extract the bare address from a "Name <addr@host>" string.
+     *
+     * Mirrors charmbracelet/pop bare address extraction.
+     */
+    private function bareAddr(string $addr): string
+    {
+        // Check for "Name <addr@host>" format
+        if (\preg_match('/<([^>]+)>/', $addr, $matches)) {
+            return $matches[1];
+        }
+        return $addr;
+    }
+
+    /**
+     * Format an address for a header line (From:, To:, Cc:).
+     * Display names are RFC 2047 encoded; bare addresses are used as-is.
+     */
+    private function formatAddressForHeader(string $addr): string
+    {
+        // Check for "Name <addr@host>" format
+        if (\preg_match('/^(.+)\s<([^>]+)>$/', $addr, $matches)) {
+            $displayName = \trim($matches[1]);
+            $emailAddr = $matches[2];
+            // RFC 2047 encode the display name if it contains non-ASCII
+            if (\preg_match('/[^\x00-\x7F]/', $displayName)) {
+                $displayName = '=?UTF-8?B?' . \base64_encode($displayName) . '?=';
+            }
+            return "{$displayName} <{$emailAddr}>";
+        }
+        return $addr;
     }
 
     /**
