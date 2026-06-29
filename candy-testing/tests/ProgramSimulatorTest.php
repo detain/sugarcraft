@@ -148,6 +148,55 @@ final class ProgramSimulatorTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $capturedCmds[0]);
     }
 
+    public function testFakeCmdRunnerInjectedMsgReachesUpdate(): void
+    {
+        // CmdProducingCounterModel.init() returns a non-null cmd (that increments
+        // count via side effect). The fakeRunner intercepts that cmd and returns
+        // KeyMsg('+'). The injected msg should be threaded through applyMsg() to
+        // drive update(), which creates a new model with count incremented.
+        //
+        // Flow: init cmd runs (count 0→1 via side effect), fakeRunner returns
+        // KeyMsg('+'), applyMsg(KeyMsg('+')) calls update (count 1→2 via new model).
+        $model = new CmdProducingCounterModel(0);
+        $program = new Program($model);
+
+        $sim = ProgramSimulator::for($program)->withFakeCmdRunner(
+            static fn (): ?\SugarCraft\Core\Msg => new KeyMsg(
+                type: KeyType::Char,
+                rune: '+',
+                alt: false,
+                ctrl: false,
+                shift: false,
+            )
+        );
+
+        $result = $sim->run();
+
+        /** @var CmdProducingCounterModel $finalModel */
+        $finalModel = $result->model;
+        // Count 0 → 1 (init closure side effect) → 2 (update from injected KeyMsg)
+        $this->assertSame(2, $finalModel->count());
+    }
+
+    public function testInitCmdProducedMsgDrivesFirstUpdate(): void
+    {
+        // MsgProducingInitModel.init() returns a closure that produces KeyMsg('+').
+        // That Msg should be threaded through update() as the first message,
+        // causing the counter to increment via update() (not via the init closure itself).
+        $model = new MsgProducingInitModel(0);
+        $program = new Program($model);
+
+        // Use default runner (no fake runner) so the init cmd executes.
+        $sim = ProgramSimulator::for($program);
+
+        $result = $sim->run();
+
+        /** @var MsgProducingInitModel $finalModel */
+        $finalModel = $result->model;
+        // The init cmd produced KeyMsg('+'), which was fed to update(), incrementing count.
+        $this->assertSame(1, $finalModel->count());
+    }
+
     public function testEmptyQueueRunReturnsResultWithInitialModel(): void
     {
         $model = new CounterModel(99);

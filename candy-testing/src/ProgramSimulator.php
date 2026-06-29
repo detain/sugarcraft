@@ -195,7 +195,8 @@ final class ProgramSimulator
 
         if ($this->fakeCmdRunner !== null) {
             $this->capturedCmds[] = $cmd;
-            return ($this->fakeCmdRunner)($cmd);
+            $cmdResult = $cmd(); // Execute cmd for side effects; ignore return
+            return ($this->fakeCmdRunner)($cmd); // Runner returns injected msg (or null)
         }
 
         // By default, capture but don't execute side-effecting cmds.
