@@ -33,6 +33,7 @@ if ($cmd === 'push') {
     $language = $argv[3] ?? 'unknown';
     $file     = $argv[4] ?? '';
     $duration = (int)($argv[5] ?? 60);
+    $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
     $store->append(new Heartbeat(time(), $project, $language, $file, $duration));
     fwrite(STDOUT, Lang::t('cli.tick_pushed', [
         'project'  => $project,
