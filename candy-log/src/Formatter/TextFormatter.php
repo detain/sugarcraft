@@ -15,6 +15,8 @@ use SugarCraft\Sprinkles\Style;
  */
 final class TextFormatter implements Formatter
 {
+    private const DEFAULT_TIME_FORMAT = 'Y/m/d H:i:s';
+
     private bool $reportTimestamp;
     private ?string $timeFormat;
     private bool $reportCaller;
@@ -45,7 +47,7 @@ final class TextFormatter implements Formatter
         if ($this->reportTimestamp) {
             $ts = $this->timeFormat !== null
                 ? $time->format($this->timeFormat)
-                : $time->format('2006/01/02 15:04:05');
+                : $time->format(self::DEFAULT_TIME_FORMAT);
             $parts[] = $ts;
         }
 

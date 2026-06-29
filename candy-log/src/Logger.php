@@ -15,7 +15,7 @@ use SugarCraft\Sprinkles\Style;
  */
 final class Logger
 {
-    public const DEFAULT_FORMAT = '2006/01/02 15:04:05';
+    public const DEFAULT_FORMAT = 'Y/m/d H:i:s';
 
     private Formatter $formatter;
     private Level $minLevel;
@@ -36,7 +36,7 @@ final class Logger
      * @param Level|null     $minLevel  Minimum level to emit (defaults to Info).
      * @param string|null    $prefix    Prepended string on every line.
      * @param bool           $reportTimestamp
-     * @param string|null    $timeFormat  PHP date format string (default: 2006/01/02 15:04:05).
+     * @param string|null    $timeFormat  PHP date format string (default: Y/m/d H:i:s).
      * @param bool           $reportCaller Show file:line of log call site.
      */
     public function __construct(
