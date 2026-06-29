@@ -31,7 +31,7 @@ for ($i = 1; $i <= 40; $i++) {
     ]));
 }
 
-$table = Table::withColumns([
+$table = Table::fromColumns([
     Column::new('id',      '#',          5),
     Column::new('host',    'Hostname',  15)->withAlignLeft(),
     Column::new('ip',      'IP',        18)->withAlignLeft(),

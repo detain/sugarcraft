@@ -20,7 +20,7 @@ final class BorderlessTableTest extends TestCase
     {
         $rows = array_map(static fn (array $r): Row => Row::new(RowData::from($r)), $data);
 
-        return Table::withColumns($columns)->withRows($rows);
+        return Table::fromColumns($columns)->withRows($rows);
     }
 
     private static function lines(string $out): array

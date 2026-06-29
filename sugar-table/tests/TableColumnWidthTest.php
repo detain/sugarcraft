@@ -42,7 +42,7 @@ final class TableColumnWidthTest extends TestCase
 
     public function testComputeColumnWidthsAllFixed(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
             Column::new('name', 'Name', 20),
         ])->withRows([
@@ -55,7 +55,7 @@ final class TableColumnWidthTest extends TestCase
 
     public function testComputeColumnWidthsWithPercent(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5)->withColumnWidth(ColumnWidth::Percent, 20.0),
             Column::new('name', 'Name', 20),
         ])->withRows([
@@ -70,7 +70,7 @@ final class TableColumnWidthTest extends TestCase
 
     public function testComputeColumnWidthsDynamicUsesContent(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 3)->withColumnWidth(ColumnWidth::Dynamic),
             Column::new('name', 'Name', 3),
         ])->withRows([
@@ -84,7 +84,7 @@ final class TableColumnWidthTest extends TestCase
 
     public function testComputeColumnWidthsContentUsesExactContent(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 3)->withColumnWidth(ColumnWidth::Content),
             Column::new('name', 'Name', 20),
         ])->withRows([
@@ -133,7 +133,7 @@ final class TableColumnWidthTest extends TestCase
      */
     public function testDynamicColumnRendersWithContentWidth(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 3)->withColumnWidth(ColumnWidth::Dynamic),
         ])->withRows([
             Row::new(RowData::from(['id' => 'tiny'])),
@@ -156,7 +156,7 @@ final class TableColumnWidthTest extends TestCase
      */
     public function testContentColumnRendersWithExactContentWidth(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 3)->withColumnWidth(ColumnWidth::Content),
         ])->withRows([
             Row::new(RowData::from(['id' => 'short'])),
@@ -176,7 +176,7 @@ final class TableColumnWidthTest extends TestCase
      */
     public function testPercentColumnRendersWithCalculatedWidth(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 10)->withColumnWidth(ColumnWidth::Percent, 25.0),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -193,7 +193,7 @@ final class TableColumnWidthTest extends TestCase
      */
     public function testMixedColumnWidthTypesRender(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5)->withColumnWidth(ColumnWidth::Fixed),
             Column::new('name', 'Name', 3)->withColumnWidth(ColumnWidth::Dynamic),
             Column::new('city', 'City', 10)->withColumnWidth(ColumnWidth::Percent, 30.0),
@@ -227,7 +227,7 @@ final class TableColumnWidthTest extends TestCase
     public function testRenderUsesComputedWidthsNotColumnWidth(): void
     {
         // Column defined with width=5 but Content mode with longer content
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5)->withColumnWidth(ColumnWidth::Content),
         ])->withRows([
             Row::new(RowData::from(['id' => 'ThisIsLonger'])),
@@ -252,7 +252,7 @@ final class TableColumnWidthTest extends TestCase
      */
     public function testNarrowTableDoesNotCrash(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5)->withColumnWidth(ColumnWidth::Content),
         ])->withRows([
             Row::new(RowData::from(['id' => 'ThisContentIsVeryLong'])),
@@ -277,7 +277,7 @@ final class TableColumnWidthTest extends TestCase
      */
     public function testDynamicColumnMinimumWidthInNarrowTable(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 3)->withColumnWidth(ColumnWidth::Dynamic),
         ])->withRows([
             Row::new(RowData::from(['id' => 'X'])),
@@ -300,7 +300,7 @@ final class TableColumnWidthTest extends TestCase
      */
     public function testPercentColumnInNarrowTable(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 10)->withColumnWidth(ColumnWidth::Percent, 50.0),
             Column::new('name', 'Name', 10),
         ])->withRows([

@@ -163,7 +163,7 @@ final class Table
     {
     }
 
-    public static function withColumns(array $columns): self
+    public static function fromColumns(array $columns): self
     {
         $t = new self();
         $t->columns = $columns;
@@ -180,6 +180,25 @@ final class Table
         $clone->rows    = $rows;
         $clone->selectedIndex = 0;
         // Invalidate cached computations that depend on rows
+        $clone->filteredSortedCache = null;
+        $clone->widthSolveCache = [];
+        return $clone;
+    }
+
+    /**
+     * Replace all columns with a new set.
+     *
+     * Since column definitions affect both the filtered-view (column keys
+     * determine which data fields are searchable/filterable) and the width
+     * solve (column widths, percent values, and flex shares), both caches
+     * must be invalidated.
+     *
+     * @param list<Column> $columns
+     */
+    public function withColumns(array $columns): self
+    {
+        $clone = clone $this;
+        $clone->columns = $columns;
         $clone->filteredSortedCache = null;
         $clone->widthSolveCache = [];
         return $clone;
@@ -1002,10 +1021,21 @@ final class Table
 
     /**
      * Compute actual column widths based on ColumnWidth enum values.
+     * Results are memoized per $tableWidth to avoid redundant computation.
      *
      * @return array<int, int>  colIndex => computed width in chars
      */
     public function computeColumnWidths(int $tableWidth): array
+    {
+        return $this->widthSolveCache[$tableWidth] ??= $this->doComputeColumnWidths($tableWidth);
+    }
+
+    /**
+     * Actual column-width computation (called after cache check).
+     *
+     * @return array<int, int>  colIndex => computed width in chars
+     */
+    private function doComputeColumnWidths(int $tableWidth): array
     {
         $widths = [];
         $flexCount = 0;

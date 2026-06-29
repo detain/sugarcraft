@@ -44,7 +44,7 @@ composer require sugarcraft/sugar-table
 ```php
 use SugarCraft\Table\{Column, Row, RowData, Table};
 
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -106,7 +106,7 @@ $col = Column::new('email', 'Email', 30)
 **Dynamic + Content example** — auto-size two columns while a third takes 25%:
 
 ```php
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5)
         ->withColumnWidth(ColumnWidth::Fixed, 0),
     Column::new('name', 'Name',  20)
@@ -212,7 +212,7 @@ This combines `scrollYForKey()` + `withScrollY()` in one call.
 use SugarCraft\Table\Table;
 
 // Create table with viewport virtualization enabled
-$t = Table::withColumns([...])
+$t = Table::fromColumns([...])
     ->withRows([...])
     ->withViewportHeight(15);
 
@@ -243,7 +243,7 @@ $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
 Search across all columns simultaneously with `search()`:
 
 ```php
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -309,7 +309,7 @@ Control what the footer displays using the `FooterType` enum:
 ```php
 use SugarCraft\Table\{Table, FooterType};
 
-$t = Table::withColumns([...])
+$t = Table::fromColumns([...])
     ->withRows([...])
     ->withPageSize(25)
     ->withFooterType(FooterType::Page);  // Default: "Page 2 of 4"
@@ -338,7 +338,7 @@ The row count footer uses the `showing_rows` i18n key and updates automatically 
 Render only a visible slice of rows for large datasets:
 
 ```php
-$t = Table::withColumns([...])
+$t = Table::fromColumns([...])
     ->withRows($bigDataset)
     ->withViewportHeight(15)           // show 15 rows at a time
     ->withScrollY(30);                 // start at row 30
@@ -356,7 +356,7 @@ The table automatically slices the visible row range from the filtered+sorted vi
 Pin columns from the left so they remain visible when scrolling horizontally:
 
 ```php
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -378,7 +378,7 @@ echo $t->View();                       // ID and Name always visible
 Combine frozen columns with `scrollX` for a spreadsheet-like experience:
 
 ```php
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -415,7 +415,7 @@ A column is visible when:
 Scroll horizontally through columns that exceed the table width:
 
 ```php
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -439,7 +439,7 @@ echo $t->View();
 When combining `withScrollX()` with `withFrozenCols()`:
 
 ```php
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -466,7 +466,7 @@ Hide columns by index without removing them from the table:
 ```php
 use SugarCraft\Table\Table;
 
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -561,7 +561,7 @@ Customize the table border using the `SugarCraft\Sprinkles\Border` family:
 use SugarCraft\Table\Table;
 use SugarCraft\Sprinkles\Border;
 
-$t = Table::withColumns([...])
+$t = Table::fromColumns([...])
     ->withRows([...])
     ->withBorder(Border::rounded());   // ─ │ ╭ ╮ ╰ ╯
     // ->withBorder(Border::thick())  // ━ ┃ ┏ ┓ ┗ ┛
@@ -583,7 +583,7 @@ Add inner spacing inside each cell for better visual breathing room:
 ```php
 use SugarCraft\Table\Table;
 
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -621,7 +621,7 @@ Enable multi-line row rendering to display tall cell content that wraps within i
 ```php
 use SugarCraft\Table\{Table, Column, Row, RowData, WrapMode};
 
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20)->withWrapMode(WrapMode::WordWrap),
     Column::new('city', 'City',  15)->withWrapMode(WrapMode::Character),
@@ -675,7 +675,7 @@ Expand rows to display full content without column width truncation:
 ```php
 use SugarCraft\Table\{Table, Column, Row, RowData};
 
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('desc', 'Desc',  15),   // truncated at 15 chars normally
