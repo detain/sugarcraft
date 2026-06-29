@@ -13,22 +13,22 @@ use SugarCraft\Glow\Highlighter\Highlighter;
  */
 final class HighlighterTest extends TestCase
 {
-    public function testDefaultCreatesChromaJsonHighlighter(): void
+    public function testNewCreatesChromaJsonHighlighter(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         self::assertInstanceOf(Highlighter::class, $highlighter);
     }
 
     public function testHighlightMarkdownWithNoCodeBlocksReturnsUnchanged(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         $markdown = 'This is plain text without any code blocks.';
         self::assertSame($markdown, $highlighter->highlightMarkdown($markdown));
     }
 
     public function testHighlightMarkdownWithPhpCodeBlock(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         $markdown = <<<'MD'
 Here is some PHP code:
 
@@ -50,7 +50,7 @@ MD;
 
     public function testHighlightMarkdownWithJavascriptCodeBlock(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         $markdown = <<<'MD'
 ```javascript
 const x = 42;
@@ -66,7 +66,7 @@ MD;
 
     public function testHighlightMarkdownWithMultipleCodeBlocks(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         $markdown = <<<'MD'
 ```php
 echo "first";
@@ -88,7 +88,7 @@ MD;
 
     public function testHighlightMarkdownWithUnspecifiedLanguageReturnsTextUnchanged(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         $markdown = <<<'MD'
 ```
 some code without a language
@@ -105,7 +105,7 @@ MD;
 
     public function testWithHighlighterReturnsNewInstance(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         $custom = new ChromaJsonHighlighter(['keyword' => '1;91']);
         $newHighlighter = $highlighter->withHighlighter($custom);
 
@@ -114,7 +114,7 @@ MD;
 
     public function testHighlightMarkdownWithEmptyCodeBlock(): void
     {
-        $highlighter = Highlighter::default();
+        $highlighter = Highlighter::new();
         $markdown = <<<'MD'
 ```
 ```

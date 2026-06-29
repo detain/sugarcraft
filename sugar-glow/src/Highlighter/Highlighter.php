@@ -16,7 +16,7 @@ final class Highlighter
     /**
      * Create a highlighter with the default ChromaJsonHighlighter.
      */
-    public static function default(): self
+    public static function new(): self
     {
         return new self(new ChromaJsonHighlighter([
             'comment'     => '90',   // bright black
