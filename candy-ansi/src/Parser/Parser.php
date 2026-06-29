@@ -75,6 +75,7 @@ final class Parser
         $this->state = State::Ground;
         $this->utf8Buffer = '';
         $this->utf8Need = 0;
+        $this->clear();
     }
 
     /**

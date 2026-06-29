@@ -74,6 +74,24 @@ final class ParserTest extends TestCase
         $this->assertSame(0, $parser->currentState()->value);
     }
 
+    public function testResetClearsStaleParams(): void
+    {
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        // Feed partial CSI with params
+        $parser->feed("\x1b[31;5");
+        $parser->reset();
+        // Feed CSI final byte after reset — stale params must not leak
+        $parser->feed("\x1b[m");
+
+        $csis = $handler->filter('csi');
+        // After reset, \x1b[m should dispatch with empty params ([]),
+        // proving the old [31, 5] did not leak
+        $this->assertNotEmpty($csis, 'Should have a CSI dispatch after reset');
+        $this->assertSame([], $csis[count($csis) - 1]['detail']['params']);
+    }
+
     public function testFlushDispatchesInFlightString(): void
     {
         $handler = new DebugHandler();
