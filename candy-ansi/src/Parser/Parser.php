@@ -212,12 +212,18 @@ final class Parser
         $this->cmd = ($this->cmd & ~(0xFF << 8)) | ($byte << 8);
     }
 
+    private const MAX_PARAMS = 32;
+
     private function param(int $byte): void
     {
         // ';' (0x3B) and ':' (0x3A) both start a new param slot.
         // ':' is the sub-parameter separator per VT500 spec.
         if ($byte === 0x3B || $byte === 0x3A) {
-            if (empty($this->params)) {
+            $n = count($this->params);
+            if ($n >= self::MAX_PARAMS) {
+                return; // At cap, ignore separator
+            }
+            if ($n === 0) {
                 $this->params[] = -1; // implicit default before the separator
             }
             $this->params[] = -1;
@@ -235,7 +241,8 @@ final class Parser
             $this->params[$last] = $digit;
             return;
         }
-        $this->params[$last] = $this->params[$last] * 10 + $digit;
+        // Even at cap, allow accumulation into the current (32nd) slot
+        $this->params[$last] = min($this->params[$last] * 10 + $digit, 65535);
     }
 
     private function start(int $byte, State $from): void
