@@ -80,7 +80,8 @@ final class Git implements GitDriver
 
     public function checkout(string $branch): void
     {
-        $this->run(['checkout', $branch]);
+        $this->guardRef($branch);
+        $this->run(['checkout', '--', $branch]);
     }
 
     public function commit(string $message): void
@@ -91,6 +92,16 @@ final class Git implements GitDriver
     public function stageAll(): void
     {
         $this->run(['add', '-A']);
+    }
+
+    public function unstageAll(): void
+    {
+        $this->run(['reset', '--']);
+    }
+
+    public function unstagePatch(string $path, string $hunk): void
+    {
+        $this->runPatch($path, $hunk, ['apply', '--cached', '--reverse', '-']);
     }
 
     /** @return list<string> */
@@ -116,6 +127,7 @@ final class Git implements GitDriver
 
     public function createBranch(string $name): void
     {
+        $this->guardRef($name);
         $this->run(['checkout', '-b', $name]);
     }
 
@@ -126,7 +138,8 @@ final class Git implements GitDriver
 
     public function merge(string $branch): void
     {
-        $this->run(['merge', $branch]);
+        $this->guardRef($branch);
+        $this->run(['merge', '--', $branch]);
     }
 
     public function rebaseContinue(): void
@@ -158,16 +171,19 @@ final class Git implements GitDriver
 
     public function stashApply(string $stashRef): void
     {
+        $this->guardRef($stashRef);
         $this->run(['stash', 'apply', $stashRef]);
     }
 
     public function stashDrop(string $stashRef): void
     {
+        $this->guardRef($stashRef);
         $this->run(['stash', 'drop', $stashRef]);
     }
 
     public function cherryPick(string $commit): void
     {
+        $this->guardRef($commit);
         $this->run(['cherry-pick', $commit]);
     }
 
@@ -190,12 +206,27 @@ final class Git implements GitDriver
 
     public function worktreeAdd(string $path, string $branch): void
     {
+        $this->guardRef($path);
+        $this->guardRef($branch);
         $this->run(['worktree', 'add', $path, $branch]);
     }
 
     public function worktreeRemove(string $path): void
     {
+        $this->guardRef($path);
         $this->run(['worktree', 'remove', $path]);
+    }
+
+    /**
+     * Reject a ref/branch/path that begins with `-` to prevent option injection.
+     *
+     * @throws \InvalidArgumentException
+     */
+    private function guardRef(string $ref): void
+    {
+        if (str_starts_with($ref, '-')) {
+            throw new \InvalidArgumentException(Lang::t('git.error', ['stderr' => "ref cannot start with '-': {$ref}"]));
+        }
     }
 
     /** @return list<string> */

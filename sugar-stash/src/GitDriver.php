@@ -61,6 +61,15 @@ interface GitDriver
      */
     public function stagePatch(string $path, string $hunk): void;
 
+    /** Unstage all staged changes (inverse of stageAll). */
+    public function unstageAll(): void;
+
+    /**
+     * Unstage a single hunk by applying the patch in reverse.
+     * @param string $hunk The hunk patch text (unified diff format)
+     */
+    public function unstagePatch(string $path, string $hunk): void;
+
     /** Create and switch to a new branch. */
     public function createBranch(string $name): void;
 
