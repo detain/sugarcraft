@@ -42,6 +42,7 @@ Arguments:
                ansi256    — 256-color cube + grey ramp
                truecolor  — 24-bit RGB truecolor (default if supported)
                halfblock  — 24-bit half-block characters, 2× vertical resolution
+               quarterblock  — 24-bit quarter-block characters, 2×2 sub-cell resolution
                sixel     — sixel graphics protocol
                kitty     — kitty graphics protocol
                iterm2    — iTerm2 inline image protocol
@@ -84,7 +85,7 @@ if ($arg1 === '--help' || $arg1 === '-h' || $arg1 === '') {
 $pathArg = $arg1 === '' ? 'synthetic' : $arg1;
 $modeArg = $arg2 === '' ? 'auto' : $arg2;
 
-if (!in_array($modeArg, ['auto', 'ascii', 'ansi256', 'truecolor', 'halfblock', 'sixel', 'kitty', 'iterm2'], true)) {
+if (!in_array($modeArg, ['auto', 'ascii', 'ansi256', 'truecolor', 'halfblock', 'quarterblock', 'sixel', 'kitty', 'iterm2'], true)) {
     help($prog);
     exit(1);
 }
