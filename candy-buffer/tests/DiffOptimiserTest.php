@@ -172,16 +172,4 @@ final class DiffOptimiserTest extends TestCase
         $this->assertSame(0, $result[0]->row);
     }
 
-    public function testCoalesceRepeatsInSetCellOpSpan(): void
-    {
-        $cell = Cell::new('X');
-        $ops = [
-            new SetCellOp([$cell, $cell, $cell]),
-        ];
-        $result = $this->optimiser->optimise($ops);
-
-        $this->assertCount(1, $result);
-        $this->assertInstanceOf(SetCellOp::class, $result[0]);
-        $this->assertCount(3, $result[0]->cells);
-    }
 }

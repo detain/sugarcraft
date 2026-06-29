@@ -82,4 +82,30 @@ final class CellTest extends TestCase
 
         $this->assertEquals($style1, $style2);
     }
+
+    public function testEqualsConsidersRuneStyleLinkWidth(): void
+    {
+        $style = Style::bold();
+        $link = Hyperlink::new('https://example.com');
+
+        $cell1 = Cell::new('x', $style, $link, 1);
+        $cell2 = Cell::new('x', $style, $link, 1);
+        $this->assertTrue($cell1->equals($cell2));
+
+        // Rune differs
+        $cell3 = Cell::new('y', $style, $link, 1);
+        $this->assertFalse($cell1->equals($cell3));
+
+        // Style differs
+        $cell4 = Cell::new('x', Style::new(null, null, Style::ATTR_ITALIC), $link, 1);
+        $this->assertFalse($cell1->equals($cell4));
+
+        // Link differs
+        $cell5 = Cell::new('x', $style, Hyperlink::new('https://other.com'), 1);
+        $this->assertFalse($cell1->equals($cell5));
+
+        // Width differs — the key divergence from DiffOptimiser::cellsEqual
+        $cell6 = Cell::new('x', $style, $link, 2);
+        $this->assertFalse($cell1->equals($cell6));
+    }
 }

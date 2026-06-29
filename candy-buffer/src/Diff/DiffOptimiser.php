@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Buffer\Diff;
 
-use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style;
 
 /**
@@ -13,9 +12,7 @@ use SugarCraft\Buffer\Style;
  * Optimizations applied:
  * 1. Adjacent SetStyleOps → keep only the last one (last-wins SGR).
  * 2. Adjacent SetCellOps with the same style → merge into one span.
- * 3. Within a merged SetCellOp span, detect runs of identical
- *    (rune, style, link) cells of length >= 2 → convert to RepeatRunOp.
- * 4. EraseRunOp always overwrites all prior state; no need to
+ * 3. EraseRunOp always overwrites all prior state; no need to
  *    optimize further at this layer.
  *
  * DiffEncoder tracks cursor + SGR state, so the goal here is to
@@ -39,7 +36,6 @@ final class DiffOptimiser
 
         $ops = $this->collapseStyleOps($ops);
         $ops = $this->mergeCellSpans($ops);
-        $ops = $this->coalesceRepeats($ops);
 
         return $ops;
     }
@@ -94,7 +90,6 @@ final class DiffOptimiser
         $buffer = [];
         $bufferStyle = null;
         $bufferLink = null;
-        $bufferOpen = false;
 
         foreach ($ops as $op) {
             if ($op instanceof SetCellOp && $this->canMergeWithBuffer($op, $bufferStyle, $bufferLink)) {
@@ -123,60 +118,6 @@ final class DiffOptimiser
     }
 
     /**
-     * Detect within SetCellOp spans runs of 2+ identical cells
-     * (same rune, same style, same link) that can be expressed
-     * as a RepeatRunOp + one SetCellOp for the remainder.
-     *
-     * @param list<DiffOp> $ops
-     * @return list<DiffOp>
-     */
-    private function coalesceRepeats(array $ops): array
-    {
-        $out = [];
-
-        foreach ($ops as $op) {
-            if ($op instanceof SetCellOp) {
-                $op = $this->extractRepeats($op);
-            }
-            $out[] = $op;
-        }
-
-        return array_values($out);
-    }
-
-    private function extractRepeats(SetCellOp $op): SetCellOp|RepeatRunOp
-    {
-        $cells = $op->cells;
-        if (count($cells) < 2) {
-            return $op;
-        }
-
-        // Find a run of 2+ identical cells at the tail.
-        $n = count($cells);
-        $lastCell = $cells[$n - 1];
-        $runLen = 1;
-
-        for ($i = $n - 2; $i >= 0; $i--) {
-            if ($this->cellsEqual($cells[$i], $lastCell)) {
-                $runLen++;
-            } else {
-                break;
-            }
-        }
-
-        // Only emit REP if run is long enough to justify the overhead (>= 2).
-        // Note: repeat detection is primarily for the diff algorithm itself,
-        // not encoding. The DiffEncoder relies on preceding SetCellOp to
-        // have already written the rune that REP will repeat.
-        if ($runLen >= 2) {
-            // Currently a no-op: the diff algorithm already emits RepeatRunOp
-            // directly; this method would only convert SetCellOp spans.
-        }
-
-        return $op;
-    }
-
-    /**
      * @param list<Cell> $buffer
      */
     private function canMergeWithBuffer(SetCellOp $op, ?Style $bufferStyle, ?string $bufferLink): bool
@@ -190,12 +131,5 @@ final class DiffOptimiser
         }
 
         return false;
-    }
-
-    private function cellsEqual(Cell $a, Cell $b): bool
-    {
-        return $a->rune() === $b->rune()
-            && $a->style() === $b->style()
-            && $a->link()?->url() === $b->link()?->url();
     }
 }

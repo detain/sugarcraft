@@ -280,6 +280,43 @@ final class BufferTest extends TestCase
         $this->assertSame(' ', $result->cellAt(0, 0)->rune());
     }
 
+    public function testWithRegionClipsNegativeOrigin(): void
+    {
+        // 2x2 source with cells at all 4 positions
+        $source = Buffer::new(2, 2);
+        $source = $source->withCellAt(0, 0, Cell::new('A'))
+                         ->withCellAt(1, 0, Cell::new('B'))
+                         ->withCellAt(0, 1, Cell::new('C'))
+                         ->withCellAt(1, 1, Cell::new('D'));
+
+        // 3x3 buffer; region starts at (-1, -1) so only dest (0,0) is in bounds
+        $buf = Buffer::new(3, 3);
+        $region = new Region(Position::new(-1, -1), 2, 2);
+        $result = $buf->withRegion($region, $source);
+
+        // Only the in-bounds cell is written: dest (0,0) ← src (1,1) = 'D'
+        $this->assertSame('D', $result->cellAt(0, 0)->rune());
+
+        // All other cells remain blank
+        $this->assertSame(' ', $result->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $result->cellAt(0, 1)->rune());
+        $this->assertSame(' ', $result->cellAt(1, 1)->rune());
+
+        // Buffer dimensions are unchanged
+        $this->assertSame(3, $result->width());
+        $this->assertSame(3, $result->height());
+
+        // No negative key: round-trip through fromGrid/cellAt does not error
+        $grid = [];
+        for ($row = 0; $row < 3; $row++) {
+            for ($col = 0; $col < 3; $col++) {
+                $grid[$row * 3 + $col] = $result->cellAt($col, $row);
+            }
+        }
+        $roundTrip = Buffer::fromGrid(3, 3, $grid);
+        $this->assertSame('D', $roundTrip->cellAt(0, 0)->rune());
+    }
+
     public function testDiffReturnsEmptyArray(): void
     {
         $buf = Buffer::new(5, 2);
@@ -339,6 +376,15 @@ final class BufferTest extends TestCase
 
         $this->assertIsArray($diff);
         $this->assertEmpty($diff);
+    }
+
+    public function testDiffSameInstanceShortCircuits(): void
+    {
+        $buf = Buffer::new(5, 2)->withCellAt(0, 0, Cell::new('X'));
+
+        $result = $buf->diff($buf);
+
+        $this->assertSame([], $result);
     }
 
     public function testDiffSingleCellChange(): void
@@ -743,5 +789,148 @@ final class BufferTest extends TestCase
         foreach ($optimised as $op) {
             $this->assertInstanceOf(\SugarCraft\Buffer\Diff\DiffOp::class, $op);
         }
+    }
+
+    // ─── toAnsi golden-byte tests ───────────────────────────────────────
+
+    public function testToAnsiPlainText(): void
+    {
+        $buf = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 0, Cell::new('B'))
+            ->withCellAt(2, 0, Cell::new('C'));
+
+        $this->assertSame('ABC', $buf->toAnsi());
+    }
+
+    public function testToAnsiStyledCellOpensAndClosesSgr(): void
+    {
+        // fg=0xff0000 (red) → SGR "38;2;255;0;0"
+        $buf = Buffer::new(1, 1)
+            ->withCellAt(0, 0, Cell::new('X', Style::new(0xff0000)));
+
+        $ansi = $buf->toAnsi();
+
+        // Must contain SGR open (0;38;2;255;0;0) and trailing reset
+        $this->assertStringStartsWith("\x1b[0;38;2;255;0;0m", $ansi);
+        $this->assertStringContainsString('X', $ansi);
+        $this->assertStringEndsWith("\x1b[0m", $ansi);
+    }
+
+    public function testToAnsiWideCharSkipsContinuation(): void
+    {
+        // Wide char '中' at (0,0) with width=2; continuation at (1,0)
+        $buf = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('中', null, null, 2))
+            ->withCellAt(1, 0, Cell::continuation())
+            ->withCellAt(2, 0, Cell::new('X'));
+
+        $ansi = $buf->toAnsi();
+
+        // The continuation cell must not emit a rune or escape sequence
+        $this->assertSame('中X', $ansi);
+        // No stray SGR or hyperlink sequences for the continuation
+        $this->assertStringNotContainsString("\x1b[", substr($ansi, 1));
+    }
+
+    public function testToAnsiHyperlinkOpenClose(): void
+    {
+        $link = Hyperlink::new('https://example.com');
+        $buf = Buffer::new(1, 1)
+            ->withCellAt(0, 0, Cell::new('L', null, $link));
+
+        $ansi = $buf->toAnsi();
+
+        // URL appears in the OSC 8 opening sequence
+        $this->assertStringContainsString('https://example.com', $ansi);
+        // OSC 8 close sequence is present
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $ansi);
+        // The rune is emitted between open and close
+        $this->assertStringContainsString('L', $ansi);
+    }
+
+    public function testToAnsiMultiRowSeparator(): void
+    {
+        $buf = Buffer::new(2, 2)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 1, Cell::new('B'));
+
+        $ansi = $buf->toAnsi();
+
+        // Rows are joined with \n
+        $this->assertStringContainsString("\n", $ansi);
+        // Grid row 0 = "A " (col 0='A', col 1=' '), row 1 = " B"
+        // toAnsi: "A \n B" (5 bytes)
+        $this->assertSame("A \n B", $ansi);
+    }
+
+    public function testDiffEraseRunEmitsEch(): void
+    {
+        // 5-cell buffer; cells 1-4 (4 consecutive) change from 'A' to ' '
+        // (blank, default style) → EraseRunOp(4) must be emitted.
+        // EraseRunOp requires runLen >= 3 in Buffer::diff().
+        $prev = Buffer::new(5, 1)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 0, Cell::new('A'))
+            ->withCellAt(2, 0, Cell::new('A'))
+            ->withCellAt(3, 0, Cell::new('A'))
+            ->withCellAt(4, 0, Cell::new('A'));
+
+        $curr = Buffer::new(5, 1)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 0, Cell::new(' '))
+            ->withCellAt(2, 0, Cell::new(' '))
+            ->withCellAt(3, 0, Cell::new(' '))
+            ->withCellAt(4, 0, Cell::new(' '));
+
+        $diff = $curr->diff($prev);
+
+        $echOps = array_filter($diff, fn($op) => $op instanceof EraseRunOp);
+        $this->assertCount(1, $echOps, 'diff() must emit EraseRunOp for 4 consecutive blanks');
+        $echOps = array_values($echOps);
+        $this->assertSame(4, $echOps[0]->count);
+
+        // Verify the encoder emits ECH: \x1b[4X
+        $encoder = new DiffEncoder();
+        $bytes = $encoder->encode($diff);
+        $this->assertStringContainsString("\x1b[4X", $bytes);
+    }
+
+    public function testFromGridWideCharRoundTrips(): void
+    {
+        // Grid: index = row*width+col
+        // Cols: 0='中'(w=2)  1=continuation  2='X'
+        $grid = [
+            0 => Cell::new('中', null, null, 2),
+            1 => Cell::continuation(),
+            2 => Cell::new('X'),
+        ];
+        $buf = Buffer::fromGrid(3, 1, $grid);
+
+        // width-2 cell round-trips via cellAt()
+        $this->assertSame('中', $buf->cellAt(0, 0)->rune());
+        $this->assertSame(2, $buf->cellAt(0, 0)->width());
+        $this->assertSame('', $buf->cellAt(1, 0)->rune());
+        $this->assertSame(0, $buf->cellAt(1, 0)->width());
+        $this->assertSame('X', $buf->cellAt(2, 0)->rune());
+    }
+
+    public function testApplyDiffHyperlinkReconstructionIsLossy(): void
+    {
+        // applyDiff() reconstructs hyperlinks from the url string stored in
+        // SetHyperlinkOp, losing the id field.  Pin the actual (lossy) behaviour.
+        $link = Hyperlink::new('https://example.com', 'myid');
+        $prev = Buffer::new(1, 1);
+        $curr = $prev->withCellAt(0, 0, Cell::new('L', null, $link));
+
+        $diff = $curr->diff($prev);
+        $reconstructed = $prev->applyDiff($diff);
+
+        $cell = $reconstructed->cellAt(0, 0);
+        $this->assertNotNull($cell->link());
+        // URL is preserved
+        $this->assertSame('https://example.com', $cell->link()->url());
+        // ID is lost (reconstruction omits it)
+        $this->assertSame('', $cell->link()->id());
     }
 }
