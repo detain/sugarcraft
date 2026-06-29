@@ -115,7 +115,7 @@ final class TableRendererTest extends TestCase
         $frame2 = $renderer->render($t2);
 
         // Height change should trigger full re-emit.
-        $this->assertGreaterThan(\strlen($frame2), \strlen($frame1), 'Frame 2 should be full due to height change');
+        $this->assertGreaterThan(\strlen($frame1), \strlen($frame2), 'Frame 2 should be full due to height change');
     }
 
     /**

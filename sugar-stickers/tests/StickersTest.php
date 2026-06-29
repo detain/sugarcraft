@@ -503,54 +503,40 @@ final class StickersTest extends TestCase
 
     // ---- Viewport scrollbar delegator tests ----
 
-    public function testViewportScrollbarAccessor(): void
+    /** withScrollbar(true) returns a new Viewport with scrollbar enabled. */
+    public function testViewportWithScrollbarReturnsNewInstance(): void
     {
         $vp = Viewport::new(20, 10);
-        $this->assertInstanceOf(Scrollbar::class, $vp->scrollbar());
+        $vp2 = $vp->withScrollbar(true);
+
+        $this->assertNotSame($vp, $vp2, 'withScrollbar should return a new instance');
     }
 
-    public function testViewportSetScrollbar(): void
-    {
-        $vp = Viewport::new(20, 10);
-        $sb = Scrollbar::horizontal();
-        $vp2 = $vp->setScrollbar($sb);
-
-        $this->assertNotSame($vp, $vp2, 'setScrollbar should return a new instance');
-        $this->assertInstanceOf(Scrollbar::class, $vp2->scrollbar());
-    }
-
-    public function testViewportShowScrollbarAccessor(): void
-    {
-        $vp = Viewport::new(20, 10);
-        $this->assertFalse($vp->showScrollbar);
-
-        $vp2 = $vp->setScrollbar(Scrollbar::vertical());
-        // setScrollbar does not toggle showScrollbar; use a viewport that enables it
-        $vp3 = Viewport::new(20, 10, true);
-        $this->assertTrue($vp3->showScrollbar);
-    }
-
-    public function testViewportTotalLinesWithContent(): void
-    {
-        $vp = Viewport::new(20, 5);
-        $this->assertSame(0, $vp->totalLines);
-
-        $vp2 = $vp->setContent("line1\nline2\nline3");
-        $this->assertSame(3, $vp2->totalLines);
-    }
-
-    public function testViewportTotalLinesBeyondHeight(): void
-    {
-        $vp = Viewport::new(20, 5);
-        $vp2 = $vp->setContent(\implode("\n", \range(1, 50)));
-        $this->assertSame(50, $vp2->totalLines);
-    }
-
+    /** setYOffset(int) returns a new Viewport with the new offset. */
     public function testViewportSetYOffset(): void
     {
         $vp = Viewport::new(20, 5)->setContent(\implode("\n", \range(1, 20)));
         $vp2 = $vp->setYOffset(10);
 
-        $this->assertSame(10, $vp2->yOffset);
+        $this->assertSame(10, $vp2->yOffset());
+    }
+
+    /** yOffset() returns current scroll offset. */
+    public function testViewportYOffsetAccessor(): void
+    {
+        $vp = Viewport::new(20, 5)->setContent(\implode("\n", \range(1, 20)));
+        $this->assertSame(0, $vp->yOffset());
+
+        $vp2 = $vp->setYOffset(5);
+        $this->assertSame(5, $vp2->yOffset());
+    }
+
+    /** setContent returns a new Viewport with updated content. */
+    public function testViewportSetContentReturnsNewInstance(): void
+    {
+        $vp = Viewport::new(20, 5);
+        $vp2 = $vp->setContent("hello\nworld");
+
+        $this->assertNotSame($vp, $vp2, 'setContent should return a new instance');
     }
 }

@@ -73,15 +73,40 @@ final class ScrollbarTest extends TestCase
         $this->assertNotEmpty($output);
     }
 
-    /** view() output has exactly $height lines. */
-    public function testViewLineCountMatchesHeight(): void
+    /** view() output has exactly $height characters (one per row, no newlines). */
+    public function testViewLengthMatchesHeight(): void
     {
         $sb = Scrollbar::vertical();
         $state = new ScrollbarState(total: 100, position: 0, viewport: 24);
         $output = $sb->view($state, 24);
-        $lines = explode("\n", $output);
 
-        $this->assertCount(24, $lines);
+        $this->assertSame(24, \mb_strlen($output, 'UTF-8'), 'view() should return $height chars, one per row');
+    }
+
+    /** view() returns non-empty string when total > viewport. */
+    public function testViewWithScrollingContent(): void
+    {
+        $sb = Scrollbar::vertical();
+        // thumb should appear somewhere in the rendered string
+        $state = new ScrollbarState(total: 100, position: 50, viewport: 24);
+        $output = $sb->view($state, 24);
+
+        $this->assertSame(24, \mb_strlen($output, 'UTF-8'));
+        // The thumb char '█' should appear at least once
+        $this->assertStringContainsString('█', $output);
+    }
+
+    /** view() returns only track chars when content fits in viewport. */
+    public function testViewFitsInViewport(): void
+    {
+        $sb = Scrollbar::vertical();
+        $state = new ScrollbarState(total: 10, position: 0, viewport: 24);
+        $output = $sb->view($state, 24);
+
+        // Should be all track chars (no thumb when total <= viewport)
+        $this->assertSame(24, \mb_strlen($output, 'UTF-8'));
+        // Every character should be the track char '░'
+        $this->assertSame(\str_repeat('░', 24), $output, 'All chars should be track char when content fits');
     }
 
     /** Immutable: original scrollbar unchanged after with* calls. */
@@ -94,6 +119,10 @@ final class ScrollbarTest extends TestCase
         $state = new ScrollbarState(total: 10, position: 0, viewport: 5);
         $outA = $a->view($state, 5);
         $outB = $b->view($state, 5);
+
+        // Both outputs should have correct length (5 chars = 15 bytes for these chars).
+        $this->assertSame(5, \mb_strlen($outA, 'UTF-8'));
+        $this->assertSame(5, \mb_strlen($outB, 'UTF-8'));
 
         // The outputs should differ (different thumb char).
         // Original should still use default thumb, new one uses 'X'.
