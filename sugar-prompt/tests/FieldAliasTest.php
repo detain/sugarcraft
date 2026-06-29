@@ -14,17 +14,22 @@ use SugarCraft\Prompt\Field\Select;
 use SugarCraft\Prompt\Field\Text;
 
 /**
- * Verifies SugarCraft\Prompt\Field correctly aliases SugarCraft\Forms\Field
- * and that concrete fields satisfy the interface.
+ * Verifies sugar-prompt concrete fields satisfy the SugarCraft\Forms\Field interface.
+ *
+ * Note: SugarCraft\Prompt\Field class_alias re-exports were removed because
+ * SugarCraft\Forms\Field is an interface (not a class), and class_alias cannot
+ * alias an interface to a class name in PHP. The concrete field classes
+ * (Input, Text, Confirm, etc.) implement SugarCraft\Forms\Field directly.
  */
 final class FieldAliasTest extends TestCase
 {
-    public function testPromptFieldAliasesFormsField(): void
+    public function testPromptFieldClassDoesNotExist(): void
     {
-        $this->assertTrue(class_exists(\SugarCraft\Prompt\Field::class));
-        $this->assertSame(
-            \SugarCraft\Forms\Field::class,
-            (new \ReflectionClass(\SugarCraft\Prompt\Field::class))->getName()
+        // The class_alias approach for SugarCraft\Prompt\Field was removed
+        // because SugarCraft\Forms\Field is an interface (class_alias cannot alias an interface)
+        $this->assertFalse(
+            class_exists(\SugarCraft\Prompt\Field::class),
+            'SugarCraft\Prompt\Field should not exist after alias removal'
         );
     }
 
@@ -33,10 +38,10 @@ final class FieldAliasTest extends TestCase
      * @template T of object
      * @param class-string<T> $fieldClass
      */
-    public function testConcreteFieldsSatisfyPromptFieldInterface(string $fieldClass): void
+    public function testConcreteFieldsSatisfyFormsFieldInterface(string $fieldClass): void
     {
         $field = $fieldClass::new('test_key');
-        $this->assertInstanceOf(\SugarCraft\Prompt\Field::class, $field);
+        $this->assertInstanceOf(\SugarCraft\Forms\Field::class, $field);
     }
 
     /**
@@ -51,19 +56,5 @@ final class FieldAliasTest extends TestCase
         yield 'MultiSelect' => [MultiSelect::class];
         yield 'Note' => [Note::class];
         yield 'FilePicker' => [FilePicker::class];
-    }
-
-    public function testPromptFieldFieldIsDistinct(): void
-    {
-        // SugarCraft\Prompt\Field (root alias) and SugarCraft\Prompt\Field\Field (subnamespace alias)
-        // are distinct symbols; the latter points to the value-object form.
-        $this->assertNotSame(
-            \SugarCraft\Prompt\Field::class,
-            \SugarCraft\Prompt\Field\Field::class
-        );
-        $this->assertSame(
-            \SugarCraft\Forms\Field\Field::class,
-            (new \ReflectionClass(\SugarCraft\Prompt\Field\Field::class))->getName()
-        );
     }
 }

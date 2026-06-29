@@ -49,7 +49,7 @@ final class AliasResolutionTest extends TestCase
         yield 'HasHideFunc' => [\SugarCraft\Prompt\HasHideFunc::class, \SugarCraft\Forms\HasHideFunc::class];
 
         // Field/ subnamespace aliases
-        yield 'Field\Field' => [\SugarCraft\Prompt\Field\Field::class, \SugarCraft\Forms\Field\Field::class];
+        // Note: Field\Field alias removed (cannot class_alias an interface)
         yield 'Field\Confirm' => [\SugarCraft\Prompt\Field\Confirm::class, \SugarCraft\Forms\Field\Confirm::class];
         yield 'Field\FilePicker' => [\SugarCraft\Prompt\Field\FilePicker::class, \SugarCraft\Forms\Field\FilePicker::class];
         yield 'Field\Input' => [\SugarCraft\Prompt\Field\Input::class, \SugarCraft\Forms\Field\Input::class];
