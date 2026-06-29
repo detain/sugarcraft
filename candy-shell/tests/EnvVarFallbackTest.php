@@ -6,6 +6,8 @@ namespace SugarCraft\Shell\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Shell\Application;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class EnvVarFallbackTest extends TestCase
@@ -73,5 +75,54 @@ final class EnvVarFallbackTest extends TestCase
         $expectedVersion = is_array($json) ? ($json['version'] ?? '0.0.0') : '0.0.0';
 
         $this->assertSame($expectedVersion, $version);
+    }
+
+    /**
+     * Tests the CANDYSHELL_* env-var fallback path through Application::run()
+     * and doRun(). This is the exact scenario that was throwing "option does
+     * not exist" before the fix.
+     */
+    public function testEnvVarFallbackIsAppliedThroughRun(): void
+    {
+        putenv('CANDYSHELL_FOREGROUND=#ff0000');
+        try {
+            $app = new Application();
+            $out = new BufferedOutput();
+            $status = $app->run(new ArgvInput(['candyshell', 'style', 'hello']), $out);
+
+            $this->assertSame(0, $status);
+            $display = $out->fetch();
+            // Red SGR: \x1b[38;2;255;0;0m
+            $this->assertStringContainsString("\x1b[38;2;255;0;0m", $display);
+            $this->assertStringContainsString('hello', $display);
+        } finally {
+            putenv('CANDYSHELL_FOREGROUND');
+        }
+    }
+
+    /**
+     * Tests that an explicit --foreground flag takes precedence over
+     * CANDYSHELL_FOREGROUND, exercising hasParameterOption() in doRun().
+     */
+    public function testExplicitFlagBeatsEnvVar(): void
+    {
+        putenv('CANDYSHELL_FOREGROUND=#ff0000');
+        try {
+            $app = new Application();
+            $out = new BufferedOutput();
+            $status = $app->run(
+                new ArgvInput(['candyshell', 'style', '--foreground=#0000ff', 'hello']),
+                $out,
+            );
+
+            $this->assertSame(0, $status);
+            $display = $out->fetch();
+            // Blue SGR: \x1b[38;2;0;0;255m — NOT red
+            $this->assertStringContainsString("\x1b[38;2;0;0;255m", $display);
+            $this->assertStringNotContainsString("\x1b[38;2;255;0;0m", $display);
+            $this->assertStringContainsString('hello', $display);
+        } finally {
+            putenv('CANDYSHELL_FOREGROUND');
+        }
     }
 }

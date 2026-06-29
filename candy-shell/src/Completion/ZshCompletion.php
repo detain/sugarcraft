@@ -29,7 +29,8 @@ final class ZshCompletion
 
     public function generate(Application $application): string
     {
-        $appName = $application->getName();
+        $appNameRaw = $application->getName();
+        $appName = CompletionEscaper::safeName($appNameRaw) ?? '';
         $commands = $application->all();
 
         $commandNames = [];
@@ -38,15 +39,23 @@ final class ZshCompletion
             if ($name === '') {
                 continue;
             }
-            $commandNames[] = $name;
+            // Skip commands whose names could inject shell code.
+            $safeName = CompletionEscaper::safeName($name);
+            if ($safeName === null) {
+                continue;
+            }
+            $commandNames[] = $safeName;
             $opts = $command->getDefinition()->getOptions();
             $optNames = [];
             foreach ($opts as $opt) {
                 if (!$opt->isNegatable()) {
-                    $optNames[] = '--' . $opt->getName();
+                    $optName = CompletionEscaper::safeName($opt->getName());
+                    if ($optName !== null) {
+                        $optNames[] = '--' . $optName;
+                    }
                 }
             }
-            $commandOptions[$name] = implode("\n" . str_repeat(' ', 16), $optNames);
+            $commandOptions[$safeName] = implode("\n" . str_repeat(' ', 16), $optNames);
         }
 
         $rootCmds = implode("\n" . str_repeat(' ', 12), $commandNames);

@@ -59,20 +59,20 @@ final class Application extends SymfonyApplication
      */
     public function versionFromComposer(): string
     {
-        $rootComposer = $this->findRootComposer();
-        if ($rootComposer === null) {
-            return '0.0.0';
-        }
-
-        $json = json_decode(file_get_contents($rootComposer), true);
-        if (!is_array($json)) {
+        $json = $this->findRootComposerJson();
+        if ($json === null) {
             return '0.0.0';
         }
 
         return $json['version'] ?? '0.0.0';
     }
 
-    private function findRootComposer(): ?string
+    /**
+     * Finds the root composer.json and returns its decoded JSON.
+     *
+     * @return array<string, mixed>|null Decoded composer.json, or null if not found.
+     */
+    private function findRootComposerJson(): ?array
     {
         $dir = __DIR__;
         while ($dir !== dirname($dir)) {
@@ -80,7 +80,7 @@ final class Application extends SymfonyApplication
             if (file_exists($composerPath)) {
                 $json = json_decode(file_get_contents($composerPath), true);
                 if (is_array($json) && ($json['version'] ?? '') !== '') {
-                    return $composerPath;
+                    return $json;
                 }
             }
             $dir = dirname($dir);
@@ -88,7 +88,7 @@ final class Application extends SymfonyApplication
         return null;
     }
 
-    public function run(InputInterface $input = null, OutputInterface $output = null): int
+    public function run(?InputInterface $input = null, ?OutputInterface $output = null): int
     {
         $this->setAutoExit(false);
         return parent::run($input, $output);
@@ -105,8 +105,18 @@ final class Application extends SymfonyApplication
 
     private function applyEnvVarFallbackToInput(InputInterface $input, Command $command): void
     {
+        // Prepend env-backed options as command-line tokens so they survive
+        // the second bind() call in Command::run() (handleErrors + initialize
+        // both invoke bind/parse, which resets options bag to defaults before
+        // re-processing the token stream). By injecting tokens at the front,
+        // the value is re-parsed and persists.
+        $tokens = [];
         $definition = $command->getDefinition();
         foreach ($definition->getOptions() as $option) {
+            // Explicit CLI flag always wins over env var.
+            if ($input->hasParameterOption('--' . $option->getName(), true)) {
+                continue;
+            }
             $envVar = $this->optionToEnvVar($option);
             $envValue = getenv($envVar);
             if ($envValue === false) {
@@ -117,11 +127,22 @@ final class Application extends SymfonyApplication
             }
             if (!$option->acceptValue()) {
                 if (in_array(strtolower($envValue), ['1', 'true', 'yes'], true)) {
-                    $input->setOption($option->getName(), true);
+                    $tokens[] = '--' . $option->getName();
                 }
             } else {
-                $input->setOption($option->getName(), $envValue);
+                // Escape special characters in the value to prevent token injection.
+                $escaped = escapeshellarg($envValue);
+                // Remove surrounding quotes from escapeshellarg so we get a raw value.
+                $cleanValue = stripslashes(trim($escaped, "'\"")) ?: $envValue;
+                $tokens[] = '--' . $option->getName() . '=' . $cleanValue;
             }
+        }
+        // Inject tokens at the front of the ArgvInput token stream.
+        if ($tokens !== [] && $input instanceof \Symfony\Component\Console\Input\ArgvInput) {
+            $reflector = new \ReflectionProperty($input, 'tokens');
+            $reflector->setAccessible(true);
+            $currentTokens = $reflector->getValue($input);
+            $reflector->setValue($input, array_merge($tokens, $currentTokens));
         }
     }
 
