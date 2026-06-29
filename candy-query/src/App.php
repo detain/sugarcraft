@@ -105,6 +105,7 @@ final class App implements Model
         public readonly bool $adminLoading = false,
         public readonly ?HistoryRecorder $historyRecorder = null,
         public readonly bool $rowsLoading = false,
+        public readonly float $lastAdminFetchAt = 0.0,
     ) {}
 
     /**
@@ -146,7 +147,10 @@ final class App implements Model
         }
         if ($msg instanceof AdminFetchStartedMsg) {
             if (!$this->adminLoading) {
-                return [$this->withAdminLoading(true), null];
+                return [$this->mutate([
+                    'adminLoading' => true,
+                    'lastAdminFetchAt' => microtime(true),
+                ]), null];
             }
             return [$this, null];
         }
@@ -879,9 +883,11 @@ final class App implements Model
         // We call createAdminFetchPromise() directly and manage a cooldown flag.
         // The tick at 1s continues firing so the page-driven query queue
         // (AdminQueryCache) is drained promptly even when the status fetch is throttled.
-        static $lastFetchAt = 0.0;
+        // The throttle timestamp is stored in the model state ($lastAdminFetchAt)
+        // rather than a function-static, so each App instance has independent throttle
+        // state and the timestamp survives across poll cycles.
         $now = microtime(true);
-        $elapsed = $now - $lastFetchAt;
+        $elapsed = $now - $this->lastAdminFetchAt;
 
         if ($elapsed < 3.0) {
             // In cooldown — still fire the tick (for queue draining) but skip the fetch.
@@ -889,7 +895,6 @@ final class App implements Model
                 return Cmd::none();
             });
         }
-        $lastFetchAt = $now;
 
         return (new Subscriptions())->withTick('admin-fetch', 1.0, function (): \SugarCraft\Core\Msg {
             return Cmd::batch(
