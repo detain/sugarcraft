@@ -60,10 +60,10 @@ final class Log
         self::default()->log(Level::Fatal, $message, $context);
     }
 
-    /** Always print, ignoring level filters (uses Info under the hood). */
+    /** Always print, ignoring level filters. */
     public static function print(string $message, array $context = []): void
     {
-        self::default()->log(Level::Info, $message, $context);
+        self::default()->print($message, $context);
     }
 
     /**
