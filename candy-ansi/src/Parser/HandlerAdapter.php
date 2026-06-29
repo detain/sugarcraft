@@ -78,7 +78,8 @@ final class HandlerAdapter implements Handler
 
     public function oscDispatch(string $data): void
     {
-        if (preg_match('/^([0-2]);(.+)$/', $data, $m)) {
+        // .+ requires at least one char; .* allows empty payload (e.g. "2;" = clear title)
+        if (preg_match('/^([0-2]);(.*)$/', $data, $m)) {
             $this->osc->title($m[2]);
         }
     }
