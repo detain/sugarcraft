@@ -197,4 +197,66 @@ final class ToastBorderTest extends TestCase
             }
         }
     }
+
+    /**
+     * Regression test: withMinWidth(n) with n > 0 produces a box width
+     * that respects minWidth and maxWidth constraints. Guards the
+     * resolveWidth() icon-space fix (sugar-toast-3).
+     */
+    public function testAutoWidthRespectsMinWidth(): void
+    {
+        $minWidth = 20;
+        $maxWidth = 50;
+        $t = Toast::new($maxWidth)
+            ->withMinWidth($minWidth)
+            ->withPosition(Position::TopLeft)
+            ->info('Hi');  // short message
+
+        $rows = $this->rows($t->View(\str_repeat("line\n", 12), 80, 12));
+        $borderWidth = Width::string($this->topBorder($rows));
+
+        $this->assertGreaterThanOrEqual($minWidth, $borderWidth);
+        $this->assertLessThanOrEqual($maxWidth, $borderWidth);
+    }
+
+    /**
+     * Regression test: Ascii and NerdFont symbol sets must not produce
+     * different box widths for the same message purely due to enum-name
+     * length (the pre-fix bug). The width must be driven by actual icon
+     * cell count (3 for Ascii [E], 1 for NerdFont icon) plus content.
+     */
+    public function testAutoWidthSameForAsciiAndNerdFont(): void
+    {
+        $minWidth = 15;
+        $maxWidth = 50;
+
+        $tAscii = Toast::new($maxWidth)
+            ->withMinWidth($minWidth)
+            ->withSymbolSet(SymbolSet::Ascii)
+            ->withPosition(Position::TopLeft)
+            ->info('Hi');
+
+        $tNerd = Toast::new($maxWidth)
+            ->withMinWidth($minWidth)
+            ->withSymbolSet(SymbolSet::NerdFont)
+            ->withPosition(Position::TopLeft)
+            ->info('Hi');
+
+        $rowsAscii = $this->rows($tAscii->View(\str_repeat("line\n", 12), 80, 12));
+        $rowsNerd = $this->rows($tNerd->View(\str_repeat("line\n", 12), 80, 12));
+
+        $widthAscii = Width::string($this->topBorder($rowsAscii));
+        $widthNerd = Width::string($this->topBorder($rowsNerd));
+
+        // Before the sugar-toast-3 fix, Ascii produced width ~14 (strlen("Ascii")=5 + 2 + msg + 4)
+        // and NerdFont produced ~17 (strlen("NerdFont")=8 + 2 + msg + 4) for identical messages.
+        // After the fix, both should be driven by actual icon cell count.
+        // For message "Hi" (~2 cells) with minWidth=15: needed = 2 + iconSpace + 4
+        //   Ascii: 2 + 4 + 4 = 10 -> clamped to minWidth 15
+        //   NerdFont: 2 + 2 + 4 = 8 -> clamped to minWidth 15
+        // So both should equal 15 (minWidth) since the message is short.
+        $this->assertSame($widthAscii, $widthNerd,
+            'Ascii and NerdFont produced different widths for identical messages '
+            . '(pre-fix bug: enum-name length drove width calculation)');
+    }
 }
