@@ -53,20 +53,6 @@
         },
         {
             "type": "path",
-            "url": "../candy-mouse",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-async",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "../candy-buffer",
             "options": {
                 "symlink": true
@@ -75,6 +61,13 @@
         {
             "type": "path",
             "url": "../candy-ansi",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-async",
             "options": {
                 "symlink": true
             }

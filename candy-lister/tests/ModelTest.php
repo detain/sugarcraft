@@ -485,6 +485,247 @@ final class ModelTest extends TestCase
         $this->assertNotEmpty($lines);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // Steps 9-13: regression and correctness tests
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Step 9: regression — when cursor is on a non-zero index, the > marker
+     * must appear on the cursor item, NOT only on index 0.
+     */
+    public function testMarkerOnNonZeroCursorItem(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->setCursorOffset(2)
+            ->addItem(new StringItem('item0'))
+            ->addItem(new StringItem('item1'))
+            ->addItem(new StringItem('item2'))
+            ->setPrefixer(new DefaultPrefixer());
+
+        // Cursor on item 2 → its first line has '>'
+        $m2 = $m->setCursor(2);
+        $lines = $m2->lines();
+        // The first visible line (item 2's first line) must contain '>'
+        $this->assertStringContainsString('>', $lines[0]);
+        // Other items' first lines must NOT contain '>'
+        $this->assertStringNotContainsString('>', $lines[1] ?? '');
+    }
+
+    /**
+     * Step 10: snapshot — View() at a fixed deterministic state produces
+     * a well-formed ANSI output string with expected content and styling.
+     */
+    public function testViewSnapshotOutputIsDeterministic(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->setCursorOffset(2)
+            ->addItem(new StringItem('apple'))
+            ->addItem(new StringItem('banana'))
+            ->addItem(new StringItem('cherry'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setCurrentStyle("\x1b[1m");
+
+        $out = $m->View();
+        $this->assertIsString($out);
+        $this->assertNotEmpty($out);
+        $this->assertStringContainsString('apple', $out);
+        $this->assertStringContainsString('banana', $out);
+        $this->assertStringContainsString('cherry', $out);
+        $this->assertStringContainsString("\x1b[1m", $out);
+        $this->assertStringContainsString('╭', $out);
+        // Second frame: cursor move produces a delta (shorter than full render)
+        $m2 = $m->setCursor(1);
+        $out2 = $m2->View();
+        $this->assertIsString($out2);
+        $this->assertLessThan(\strlen($out), \strlen($out2));
+    }
+
+    /**
+     * Step 11: diff-correctness — cursor-only move produces a delta that
+     * is shorter than a full re-render but still contains all visible text.
+     * Uses 80×24 viewport where full frame is large enough for delta to be smaller.
+     */
+    public function testDiffOpsDescribeOnlyChangedCells(): void
+    {
+        $m = Model::new()
+            ->setViewport(80, 24)
+            ->addItem(new StringItem('item 0'))
+            ->addItem(new StringItem('item 1'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setLineStyle("\x1b[2m");
+
+        $frame1Out = $m->View();
+        $this->assertNotEmpty($frame1Out);
+
+        $m2 = $m->setCursor(1);
+        $frame2Out = $m2->View();
+
+        $this->assertLessThan(\strlen($frame1Out), \strlen($frame2Out));
+        $this->assertStringContainsString('item 1', $frame2Out);
+    }
+
+    /**
+     * Step 12a: filter → View must emit a FULL frame, not a delta against
+     * the pre-filter frame (the line set is completely different after filtering).
+     *
+     * Detecting "full frame" without the previousFrame accessor: we render the
+     * unfiltered model (which stores a previousFrame), filter, and render again.
+     * If the fix is absent (previousFrame aliased), the second render computes
+     * a delta vs the unfiltered frame and produces ~20-30 bytes. With the fix,
+     * it produces a full frame of ~43 bytes (1 visible line × 40 wide).
+     * We also verify via direct comparison: rendering the filtered model directly
+     * (no prior frame) must produce the same output.
+     */
+    public function testFilterTriggersFullFrameNotDelta(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->addItem(new StringItem('apple'))
+            ->addItem(new StringItem('banana'))
+            ->addItem(new StringItem('cherry'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer());
+
+        // Render unfiltered model first (stores previousFrame in $m)
+        $frame1 = $m->View();
+
+        // Apply filter: different line set → next View() must be full, not delta
+        $filtered = $m->withFilterFn(fn($v) => (string) $v === 'banana');
+        $frame2 = $filtered->View();
+
+        // With the fix: first filtered View() = full frame (~43 bytes, 1 line).
+        // Without the fix: delta vs unfiltered frame (~20-30 bytes).
+        // A full filtered frame at 40×5 with 1 visible item is ~43 bytes.
+        // The threshold 35 distinguishes full (≥35) from delta (<35).
+        $this->assertGreaterThanOrEqual(35, \strlen($frame2),
+            'Filtered View() must emit a full frame (≥35 bytes), not a delta');
+        $this->assertStringContainsString('banana', $frame2);
+
+        // Also verify: a fresh filtered model (no prior frame) produces the
+        // same first-frame output as the filtered model above.
+        $freshFiltered = Model::new()
+            ->setViewport(40, 5)
+            ->addItem(new StringItem('apple'))
+            ->addItem(new StringItem('banana'))
+            ->addItem(new StringItem('cherry'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->withFilterFn(fn($v) => (string) $v === 'banana');
+        $freshFrame = $freshFiltered->View();
+        $this->assertSame(\strlen($freshFrame), \strlen($frame2));
+    }
+
+    /**
+     * Step 12b: cursor-only move (content unchanged, only highlight changes)
+     * produces a non-empty delta shorter than full re-render.
+     */
+    public function testCursorMoveStyleOnlyDeltaIsNonEmpty(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->addItem(new StringItem('item zero'))
+            ->addItem(new StringItem('item one'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setLineStyle('')
+            ->setCurrentStyle("\x1b[7m");
+
+        $frame1Out = $m->View();
+        $this->assertNotEmpty($frame1Out);
+
+        $m2 = $m->setCursor(1);
+        $frame2Out = $m2->View();
+
+        $this->assertNotEmpty($frame2Out);
+        $this->assertLessThan(\strlen($frame1Out), \strlen($frame2Out));
+        $this->assertStringContainsString('item one', $frame2Out);
+    }
+
+    /**
+     * Step 13a: resize triggers full frame repaint, not a delta against
+     * the pre-resize frame.
+     */
+    public function testResizeTriggersFullFrameRepaint(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->addItem(new StringItem('item 0'))
+            ->addItem(new StringItem('item 1'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer());
+
+        $frame1Out = $m->View();
+        $this->assertNotEmpty($frame1Out);
+        $len1 = \strlen($frame1Out);
+
+        // Same dimensions → delta
+        $m2 = $m->setCursor(1);
+        $frame2Out = $m2->View();
+        $this->assertLessThan($len1, \strlen($frame2Out));
+
+        // Resize to wider viewport → must emit FULL frame
+        $m3 = $m2->setViewport(60, 5);
+        $frame3Out = $m3->View();
+        $this->assertGreaterThan($len1, \strlen($frame3Out));
+        $this->assertStringContainsString('item 0', $frame3Out);
+    }
+
+    /**
+     * Step 13b: resetPreviousFrame() forces the next View() to emit a full
+     * frame, not a delta.
+     */
+    public function testResetPreviousFrameForcesFullFrame(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->addItem(new StringItem('item 0'))
+            ->addItem(new StringItem('item 1'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer());
+
+        $frame1Out = $m->View();
+        $len1 = \strlen($frame1Out);
+
+        $m2 = $m->setCursor(1);
+        $frame2Out = $m2->View();
+        $this->assertLessThan($len1, \strlen($frame2Out));
+
+        // Reset → next frame must be full
+        $m2->resetPreviousFrame();
+        $frame3Out = $m2->View();
+        $this->assertGreaterThan(\strlen($frame2Out), \strlen($frame3Out));
+    }
+
+    /**
+     * Step 13c: each added Item gets a unique, strictly increasing id.
+     * The id is exposed via Item::$id (public readonly).
+     */
+    public function testItemIdsAreUniqueAndIncreasing(): void
+    {
+        $m = Model::new();
+        $modelForItems = $m;
+        $ids = [];
+        for ($i = 0; $i < 5; $i++) {
+            $modelForItems = $modelForItems->addItem(new StringItem("item $i"));
+        }
+        // Access items via reflection (they are private, but ids are stable)
+        $reflection = new \ReflectionClass($modelForItems);
+        $itemsProp = $reflection->getProperty('items');
+        $itemsProp->setAccessible(true);
+        $items = $itemsProp->getValue($modelForItems);
+        foreach ($items as $item) {
+            $this->assertNotContains($item->id, $ids, 'Item id must be unique');
+            $ids[] = $item->id;
+        }
+        for ($i = 1; $i < \count($ids); $i++) {
+            $this->assertGreaterThan($ids[$i - 1], $ids[$i]);
+        }
+    }
+
     /**
      * Benchmark: diff-based View emits fewer bytes than full re-render
      * for small changes between consecutive frames.

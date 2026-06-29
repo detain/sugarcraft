@@ -95,4 +95,31 @@ final class DefaultPrefixerTest extends TestCase
         $w = DefaultPrefixer::ansiWidth("\x1b[1mbold\x1b[0m");
         $this->assertSame(4, $w);
     }
+
+    /**
+     * Regression: when cursor is on a non-zero index, the > marker must appear
+     * on the cursor item, NOT only on index 0.
+     */
+    public function testMarkerOnNonZeroCursorItem(): void
+    {
+        $p = new DefaultPrefixer();
+        // Cursor at index 2, rendering item at index 2 (the cursor item)
+        $p->initPrefixer(new StringItem('item2'), 2, 2, 5, 80, 24);
+        $prefix = $p->prefix(0, 1);
+        $this->assertStringContainsString('>', $prefix);
+
+        // Rendering item at index 0 (not the cursor)
+        $p2 = new DefaultPrefixer();
+        $p2->initPrefixer(new StringItem('item0'), 0, 2, 5, 80, 24);
+        $prefix0 = $p2->prefix(0, 1);
+        $this->assertStringContainsString(' ', $prefix0);
+        $this->assertStringNotContainsString('>', $prefix0);
+
+        // Rendering item at index 1 (not the cursor)
+        $p3 = new DefaultPrefixer();
+        $p3->initPrefixer(new StringItem('item1'), 1, 2, 5, 80, 24);
+        $prefix1 = $p3->prefix(0, 1);
+        $this->assertStringContainsString(' ', $prefix1);
+        $this->assertStringNotContainsString('>', $prefix1);
+    }
 }

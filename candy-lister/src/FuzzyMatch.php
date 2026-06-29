@@ -7,8 +7,8 @@ namespace SugarCraft\Lister;
 /**
  * Fuzzy substring matcher using Smith-Waterman-style local alignment scoring.
  *
- * @deprecated since 1.x, use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher
- * @see SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher
+ * Scores candidates using a two-row DP matrix for memory efficiency.
+ * Higher scores indicate better matches; scores <= 0 indicate no match.
  */
 final class FuzzyMatch
 {
@@ -34,11 +34,13 @@ final class FuzzyMatch
             return 0;
         }
         if ($candidate === '') {
-            return self::GAP_OPEN + (self::GAP_EXTEND * strlen($query));
+            return 0;
         }
 
-        $queryLen = strlen($query);
-        $candidateLen = strlen($candidate);
+        $q = strtolower($query);
+        $c = strtolower($candidate);
+        $queryLen = strlen($q);
+        $candidateLen = strlen($c);
 
         // Two-row Smith-Waterman for memory efficiency
         $prevRow = array_fill(0, $candidateLen + 1, 0);
@@ -47,9 +49,9 @@ final class FuzzyMatch
         $maxScore = 0;
 
         for ($i = 1; $i <= $queryLen; $i++) {
-            $qChar = strtolower($query[$i - 1]);
+            $qChar = $q[$i - 1];
             for ($j = 1; $j <= $candidateLen; $j++) {
-                $cChar = strtolower($candidate[$j - 1]);
+                $cChar = $c[$j - 1];
 
                 $match = $qChar === $cChar
                     ? self::MATCH_SCORE
@@ -58,9 +60,7 @@ final class FuzzyMatch
                 // Consecutive character match bonus
                 $adjBonus = 0;
                 if ($match > 0 && $i > 1 && $j > 1) {
-                    $prevQChar = strtolower($query[$i - 2]);
-                    $prevCChar = strtolower($candidate[$j - 2]);
-                    if ($prevQChar === $prevCChar) {
+                    if ($q[$i - 2] === $c[$j - 2]) {
                         $adjBonus = self::ADJACENT_BONUS;
                     }
                 }

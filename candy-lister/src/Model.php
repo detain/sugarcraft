@@ -190,6 +190,11 @@ final class Model
         ));
         // Clamp cursor to new length
         $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
+        // Reset diff state so the next View() emits a full frame, not a delta
+        // against the pre-filter frame (which has a different line set).
+        $clone->previousFrame = null;
+        $clone->prevWidth = null;
+        $clone->prevHeight = null;
         return $clone;
     }
 
@@ -210,6 +215,11 @@ final class Model
         $clone->originalItems = [];
         // Clamp cursor
         $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
+        // Reset diff state so the next View() emits a full frame, not a delta
+        // against the pre-unfilter frame (which has a different line set).
+        $clone->previousFrame = null;
+        $clone->prevWidth = null;
+        $clone->prevHeight = null;
         return $clone;
     }
 
