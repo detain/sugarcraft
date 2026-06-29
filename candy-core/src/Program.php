@@ -73,6 +73,7 @@ final class Program
     /** @var \Closure(\Throwable): void */
     private \Closure $exceptionHandler;
     private float $lastFrameDuration = 0.0;
+    private ?object $logger = null;
 
     /**
      * Wrap a {@see Model} with runtime options.
@@ -132,13 +133,15 @@ final class Program
 
     /**
      * Attach a logger to receive program lifecycle events.
+     * Returns a cloned program with the logger stored.
      *
      * @param object $logger Object with PSR-3 style log methods (info, error, warning, etc.)
      */
     public function withLogger(object $logger): self
     {
-        // Logger is stored but not yet integrated; reserved for future use.
-        return $this;
+        $clone = clone $this;
+        $clone->logger = $logger;
+        return $clone;
     }
 
     /**
@@ -988,6 +991,14 @@ final class Program
         $this->recorder?->recordOutput($bytes);
     }
 
+    /**
+     * Compare two progress states for equality.
+     *
+     * Null-asymmetry contract: both must be non-null to be considered
+     * equal. When a view returns null progress (field not set), the
+     * comparison returns false so no update is emitted — preserving
+     * whatever the terminal last rendered.
+     */
     private function progressEquals(?Progress $a, ?Progress $b): bool
     {
         return $a !== null && $b !== null
@@ -995,6 +1006,14 @@ final class Program
             && $a->percent === $b->percent;
     }
 
+    /**
+     * Compare two color values for equality.
+     *
+     * Null-asymmetry contract: both must be non-null to be considered
+     * equal. When a view returns null color (field not set), the
+     * comparison returns false so no update is emitted — preserving
+     * whatever the terminal last rendered.
+     */
     private function colorEquals(?Util\Color $a, ?Util\Color $b): bool
     {
         return $a !== null && $b !== null

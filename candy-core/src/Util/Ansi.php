@@ -268,8 +268,8 @@ final class Ansi
      */
     public static function hyperlinkOpen(string $uri, ?string $id = null): string
     {
-        $params = $id === null ? '' : 'id=' . $id;
-        return self::OSC . '8;' . $params . ';' . $uri . self::ST;
+        $params = $id === null ? '' : 'id=' . self::stripOscControlBytes($id);
+        return self::OSC . '8;' . $params . ';' . self::stripOscControlBytes($uri) . self::ST;
     }
 
     /**
@@ -735,48 +735,6 @@ final class Ansi
     public static function iterm2Delete(): string
     {
         return self::OSC . '1337;Pop' . self::BEL;
-    }
-
-    /**
-     * Encoding: `\x1b]8;<id>;<url>\x1b\\`. ST (the String Terminator)
-     * is preferred over BEL because some terminals mis-render BEL
-     * inside an OSC.
-     *
-     * Mirrors charmbracelet/x/ansi. LinkFormatter.
-     *
-     * Control bytes in `$uri` and `$id` are stripped before emission
-     * to prevent terminal-escape injection in the OSC body.
-     *
-     * @param string      $uri  Target URL
-     * @param string|null $id   Optional link ID for shared destinations
-     */
-    public static function hyperlinkOpen(string $uri, ?string $id = null): string
-    {
-        $params = $id === null ? '' : 'id=' . self::stripOscControlBytes($id);
-        return self::OSC . '8;' . $params . ';' . self::stripOscControlBytes($uri) . self::ST;
-    }
-        if (isset($opts['v'])) {
-            $parts[] = 'v=' . $opts['v'];
-        }
-        if (isset($opts['c'])) {
-            $parts[] = 'c=' . $opts['c'];
-        }
-        if (isset($opts['r'])) {
-            $parts[] = 'r=' . $opts['r'];
-        }
-        if (isset($opts['i'])) {
-            $parts[] = 'i=' . $opts['i'];
-        }
-        if (isset($opts['z'])) {
-            $parts[] = 'z=' . $opts['z'];
-        }
-        if (isset($opts['x'])) {
-            $parts[] = 'x=' . $opts['x'];
-        }
-        if (isset($opts['y'])) {
-            $parts[] = 'y=' . $opts['y'];
-        }
-        return self::APC . 'G' . implode(',', $parts) . ';';
     }
 
     /**
