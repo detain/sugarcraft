@@ -130,6 +130,9 @@ final class Decoder
                         if ($subLen === 0) {
                             break; // Block terminator.
                         }
+                        if ($j + $subLen > $len) {
+                            break; // Would overrun — treat truncated tail as end-of-data.
+                        }
                         $j += $subLen; // Skip the sub-block data.
                     }
                     $i = $j;
@@ -160,6 +163,9 @@ final class Decoder
                     $j++;
                     if ($subLen === 0) {
                         break; // Sub-block terminator.
+                    }
+                    if ($j + $subLen > $len) {
+                        break; // Would overrun — treat truncated tail as end-of-data.
                     }
                     $j += $subLen; // Skip the sub-block data.
                 }
@@ -353,6 +359,9 @@ final class Decoder
             $j++;
             if ($subLen === 0) {
                 break;
+            }
+            if ($j + $subLen > $len) {
+                break; // Would overrun — treat truncated tail as end-of-data.
             }
             $j += $subLen;
         }
