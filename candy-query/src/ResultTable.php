@@ -101,7 +101,7 @@ final class ResultTable
      */
     public static function fromRows(array $rows): self
     {
-        return new self(rows: $rows);
+        return new self(rows: $rows ?? []);
     }
 
     // ── Fluents ───────────────────────────────────────────────────────────────
