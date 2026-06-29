@@ -260,8 +260,8 @@ final class Tabs implements Model
         $inactiveDivider = $this->inactiveStyle->render($this->divider);
         $line = implode($inactiveDivider, $parts);
 
-        if ($this->width > 0 && mb_strlen($line, 'UTF-8') > $this->width) {
-            $line = mb_strcut($line, 0, $this->width - 1, 'UTF-8') . '…';
+        if ($this->width > 0 && Width::string($line) > $this->width) {
+            $line = Width::truncateAnsi($line, $this->width - 1) . '…';
         }
 
         return $line;
