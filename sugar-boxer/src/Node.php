@@ -25,7 +25,7 @@ use SugarCraft\Sprinkles\VAlign;
  * @property Border|null           $borderStyle  Canonical border chars (candy-sprinkles)
  * @property Style|null            $style        Canonical style (candy-sprinkles)
  * @property string                $title        Box title text
- * @property array<int,int,int,int> $margin      Outer spacing (top/right/bottom/left)
+ * @property array{int,int,int,int} $margin      Outer spacing (top/right/bottom/left)
  * @property Align|null            $alignH       Horizontal text alignment
  * @property VAlign|null           $alignV       Vertical text alignment
  */
@@ -51,13 +51,13 @@ final class Node
     public readonly ?Border $borderStyle;
     public readonly ?Style $style;
     public readonly string $title;
-    /** @var array<int,int,int,int> */
+    /** @var array{int,int,int,int} */
     public readonly array $margin;
     public readonly ?Align $alignH;
     public readonly ?VAlign $alignV;
 
     /**
-     * @param array<int,int,int,int> $margin top, right, bottom, left
+     * @param array{int,int,int,int} $margin top, right, bottom, left
      */
     private function __construct(
         string $kind,
@@ -152,8 +152,7 @@ final class Node
      * Mark this child as flexible: in a horizontal/vertical parent it grows to
      * fill the space left after the fixed (non-flex) siblings take their natural
      * size, sharing that leftover with other flex children in proportion to the
-     * weight. A weight of 0 is treated as "no change" (like the other dimension
-     * setters) — use {@see withFlex} with weight >= 1, or {@see withGrow}.
+     * weight. A weight of 0 means the child is fixed (non-flex).
      */
     public function withFlex(int $weight): self
     {
@@ -225,9 +224,10 @@ final class Node
      */
     public function withMargin(int $top, int $right = 0, int $bottom = 0, int $left = 0): self
     {
-        $right  = $right  ?: $top;
-        $bottom = $bottom ?: $top;
-        $left   = $left   ?: $right;
+        $n = \func_num_args();
+        $right  = $n >= 2 ? $right  : $top;
+        $bottom = $n >= 3 ? $bottom : $top;
+        $left   = $n >= 4 ? $left   : $right;
         return $this->with(margin: [$top, $right, $bottom, $left], borderStyle: self::nop(), style: self::nop(), alignH: self::nop(), alignV: self::nop());
     }
 
@@ -249,10 +249,7 @@ final class Node
 
     public function withContent(string $content): self
     {
-        return new self(
-            self::LEAF,
-            content: $content,
-        );
+        return $this->with(content: $content);
     }
 
     // -------------------------------------------------------------------------
@@ -327,20 +324,21 @@ final class Node
     }
 
     private function with(
-        int $minWidth = 0,
-        int $maxWidth = 0,
-        int $minHeight = 0,
-        int $maxHeight = 0,
-        int $padding = 0,
+        ?string $content = null,
+        ?int $minWidth = null,
+        ?int $maxWidth = null,
+        ?int $minHeight = null,
+        ?int $maxHeight = null,
+        ?int $padding = null,
         ?bool $border = null,
-        int $spacing = 0,
+        ?int $spacing = null,
         mixed $borderStyle = null,
         mixed $style = null,
         string $title = '',
         array $margin = [0, 0, 0, 0],
         mixed $alignH = null,
         mixed $alignV = null,
-        int $flex = 0,
+        ?int $flex = null,
     ): self {
         // Preserve existing value when sentinel is passed (no arg).
         // Explicitly pass null to clear.
@@ -362,25 +360,25 @@ final class Node
 
         return new self(
             $this->kind,
-            $this->content,
+            $content ?? $this->content,
             $this->children,
-            $minWidth    ?: $this->minWidth,
-            $maxWidth    ?: $this->maxWidth,
-            $minHeight   ?: $this->minHeight,
-            $maxHeight   ?: $this->maxHeight,
-            $padding     ?: $this->padding,
+            $minWidth    ?? $this->minWidth,
+            $maxWidth    ?? $this->maxWidth,
+            $minHeight   ?? $this->minHeight,
+            $maxHeight   ?? $this->maxHeight,
+            $padding     ?? $this->padding,
             // Preserve the existing border unless a with*() call set it explicitly
             // — otherwise any later builder (withMinHeight, withGrow, …) would
             // silently re-enable a border that withBorder(false) turned off.
             $border ?? $this->border,
-            $spacing     ?: $this->spacing,
+            $spacing     ?? $this->spacing,
             $resolvedBorderStyle,
             $resolvedStyle,
             $title       ?: $this->title,
             $margin      !== [0, 0, 0, 0] ? $margin : $this->margin,
             $resolvedAlignH,
             $resolvedAlignV,
-            $flex        ?: $this->flex,
+            $flex        ?? $this->flex,
         );
     }
 }
