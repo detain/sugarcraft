@@ -19,7 +19,7 @@ use SugarCraft\Sprinkles\Style;
  *
  * Mirrors glamour's StyleSheet / CSS stylesheet cascading rules.
  */
-class StyleSheet
+final class StyleSheet
 {
     use Mutable;
 

@@ -83,6 +83,12 @@ final class ThemeTest extends TestCase
         Theme::fromJson('/nonexistent/path/' . uniqid());
     }
 
+    public function testFromJsonRejectsDirectory(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        Theme::fromJson(__DIR__);
+    }
+
     public function testAnsiThemeHasSyntaxTokenStyles(): void
     {
         $t = Theme::ansi();
