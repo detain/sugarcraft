@@ -125,6 +125,47 @@ final class RgbFrameTest extends TestCase
     }
 
     /**
+     * Full byte-level round-trip: raw RGB frame → GD image → PNG bytes →
+     * GD image → pixel values.  Verifies no color drift through the
+     * imagepng/imagecreatefromstring pipeline.
+     */
+    public function testToGdFullPngRoundTrip(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+        // 3×2 frame with distinct RGB pixels
+        $bytes = "\xFF\x00\x00"   // (0,0) red
+                . "\x00\xFF\x00"   // (1,0) green
+                . "\x00\x00\xFF"   // (2,0) blue
+                . "\xFF\xFF\x00"   // (0,1) yellow
+                . "\xFF\x00\xFF"   // (1,1) magenta
+                . "\x00\xFF\xFF";  // (2,1) cyan
+        $frame = new RgbFrame($bytes, 3, 2);
+
+        $img1 = $frame->toGd();
+
+        // Encode to PNG bytes then decode back to a fresh GD image
+        \ob_start();
+        \imagepng($img1);
+        $pngBytes = \ob_get_clean();
+        imagedestroy($img1);
+
+        $img2 = \imagecreatefromstring($pngBytes);
+        $this->assertNotFalse($img2);
+
+        // Verify all six pixels survived the round-trip with exact values.
+        $this->assertSame(0x00FF0000, \imagecolorat($img2, 0, 0)); // red
+        $this->assertSame(0x0000FF00, \imagecolorat($img2, 1, 0)); // green
+        $this->assertSame(0x000000FF, \imagecolorat($img2, 2, 0)); // blue
+        $this->assertSame(0x00FFFF00, \imagecolorat($img2, 0, 1)); // yellow
+        $this->assertSame(0x00FF00FF, \imagecolorat($img2, 1, 1)); // magenta
+        $this->assertSame(0x0000FFFF, \imagecolorat($img2, 2, 1)); // cyan
+
+        imagedestroy($img2);
+    }
+
+    /**
      * @testdox constructor does not validate byte length — caller is responsible
      *
      * RgbFrame is a readonly value object. It accepts any byte string and
