@@ -43,7 +43,7 @@ final class RenderCommand extends Command
         $this
             ->addArgument('file',     InputArgument::OPTIONAL, 'Markdown file. Default: stdin.')
             ->addOption('pager',         'p', InputOption::VALUE_NONE,     'Open the rendered output in a fullscreen pager.')
-            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | notty | dracula | tokyo-night | pink', 'ansi')
+            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github', 'ansi')
             ->addOption('style',         's',  InputOption::VALUE_REQUIRED, 'Alias for --theme (glamour-compat).', null)
             ->addOption('theme-config',  null, InputOption::VALUE_REQUIRED, 'Load a custom JSON theme file (overrides --theme).', '')
             ->addOption('width',         'w',  InputOption::VALUE_REQUIRED, 'Wrap text at this column count. 0 = no wrap.', 0)
