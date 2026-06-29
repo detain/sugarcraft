@@ -11,3 +11,5 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'neznámé téma: {name}',
 ];
+    'render.theme_config_unreadable' => 'konfigurace motivu nečitelná: {path}',
+];

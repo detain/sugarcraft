@@ -11,3 +11,5 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'tema desconhecido: {name}',
 ];
+    'render.theme_config_unreadable' => 'configuração do tema ilegível: {path}',
+];
