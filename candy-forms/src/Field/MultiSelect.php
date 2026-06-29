@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * Multi-checkbox picker. Cursor moves with `↑↓/jk`, `Space` toggles the
@@ -143,7 +144,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         foreach ($this->options as $i => $opt) {
             $box   = empty($this->selected[$i]) ? '[ ]' : '[x]';
             $marker = ($i === $this->cursor && $this->focused) ? '>' : ' ';
-            $line  = $marker . ' ' . $box . ' ' . $opt;
+            $line  = $marker . ' ' . $box . ' ' . RenderSafe::clean($opt);
             if ($i === $this->cursor && $this->focused) {
                 $line = Ansi::sgr(Ansi::REVERSE) . $line . Ansi::reset();
             }
