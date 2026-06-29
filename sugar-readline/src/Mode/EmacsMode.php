@@ -242,20 +242,17 @@ final class EmacsMode implements ModeInterface
             return $prompt;
         }
 
-        // Delete from $start to $cursor
-        $newBuffer = mb_substr($buffer, 0, $start, 'UTF-8')
-                   . mb_substr($buffer, $cursor, null, 'UTF-8');
-
+        // Delete from $start to $cursor using handleKeyDirect to avoid re-entry
         $clone = clone $prompt;
-        $clone = $clone->handleKey(Key::Home); // move to start
+        $clone = $clone->handleKeyDirect(Key::Home); // move to start
         // Walk cursor from home to $start
         for ($i = 0; $i < $start; $i++) {
-            $clone = $clone->handleKey(Key::Right);
+            $clone = $clone->handleKeyDirect(Key::Right);
         }
         // Now delete everything from $start to original cursor
         $diff = $cursor - $start;
         for ($i = 0; $i < $diff; $i++) {
-            $clone = $clone->handleKey(Key::Delete);
+            $clone = $clone->handleKeyDirect(Key::Delete);
         }
 
         return $clone;
@@ -286,14 +283,11 @@ final class EmacsMode implements ModeInterface
             return $prompt;
         }
 
-        $newBuffer = mb_substr($buffer, 0, $cursor, 'UTF-8')
-                   . mb_substr($buffer, $end, null, 'UTF-8');
-
-        // Apply the deletion by calling handleKey multiple times
+        // Apply the deletion by calling handleKeyDirect to avoid re-entry
         $diff = $end - $cursor;
         $p = $prompt;
         for ($i = 0; $i < $diff; $i++) {
-            $p = $p->handleKey(Key::Delete);
+            $p = $p->handleKeyDirect(Key::Delete);
         }
         return $p;
     }
@@ -317,13 +311,12 @@ final class EmacsMode implements ModeInterface
         if ($cursor >= $len) {
             $lastChar = mb_substr($buffer, -1, 1, 'UTF-8');
             $secondLast = mb_substr($buffer, -2, 1, 'UTF-8');
-            $newBuffer = mb_substr($buffer, 0, $len - 2, 'UTF-8') . $lastChar . $secondLast;
             // Move cursor back one
-            $p = $prompt->handleKey(Key::Left);
-            // Delete last char and insert in correct order
-            $p = $p->handleKey(Key::Delete);  // delete last char (now at cursor)
-            $p = $p->handleKey(Key::Left);     // back to second-last position
-            $p = $p->handleKey(Key::Delete);  // delete second-last
+            $p = $prompt->handleKeyDirect(Key::Left);
+            // Delete last char and insert in correct order using handleKeyDirect
+            $p = $p->handleKeyDirect(Key::Delete);  // delete last char (now at cursor)
+            $p = $p->handleKeyDirect(Key::Left);     // back to second-last position
+            $p = $p->handleKeyDirect(Key::Delete);  // delete second-last
             $p = $p->handleChar($secondLast); // insert second-last
             $p = $p->handleChar($lastChar);   // insert last
             return $p;
@@ -332,23 +325,20 @@ final class EmacsMode implements ModeInterface
         // In middle: swap char at cursor with previous char
         $prevChar = mb_substr($buffer, $cursor - 1, 1, 'UTF-8');
         $currChar = mb_substr($buffer, $cursor, 1, 'UTF-8');
-        $newBuffer = mb_substr($buffer, 0, $cursor - 1, 'UTF-8')
-                   . $currChar . $prevChar
-                   . mb_substr($buffer, $cursor + 1, null, 'UTF-8');
 
-        // Simpler approach: move to position, delete both, insert reversed
+        // Simpler approach: move to position, delete both, insert reversed using handleKeyDirect
         $p = $prompt;
         // Go to the character before cursor
         if ($cursor > 1) {
             for ($i = 0; $i < $cursor - 1; $i++) {
-                $p = $p->handleKey(Key::Left);
+                $p = $p->handleKeyDirect(Key::Left);
             }
         } else {
-            $p = $p->handleKey(Key::Left); // at position 0, one left = at 0, cursor now 0
+            $p = $p->handleKeyDirect(Key::Left); // at position 0, one left = at 0, cursor now 0
         }
         // Delete two chars and insert reversed
-        $p = $p->handleKey(Key::Delete); // delete prev
-        $p = $p->handleKey(Key::Delete); // delete curr
+        $p = $p->handleKeyDirect(Key::Delete); // delete prev
+        $p = $p->handleKeyDirect(Key::Delete); // delete curr
         $p = $p->handleChar($currChar);
         $p = $p->handleChar($prevChar);
         return $p;

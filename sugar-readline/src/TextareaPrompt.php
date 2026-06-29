@@ -41,6 +41,11 @@ final class TextareaPrompt
     {
         $clone = clone $this;
         $clone->lines = explode("\n", $value);
+        // Clamp to maxLines if set (ordering caveat: withMaxLines() should precede
+        // withDefault() for the clamp to engage, matching upstream promptkit behavior).
+        if ($clone->maxLines > 0 && count($clone->lines) > $clone->maxLines) {
+            $clone->lines = array_slice($clone->lines, 0, $clone->maxLines);
+        }
         $clone->line  = count($clone->lines) - 1;
         $clone->col   = self::charCount($clone->lines[$clone->line]);
         return $clone;
@@ -138,8 +143,9 @@ final class TextareaPrompt
 
     public function view(): string
     {
-        $out = [Ansi::wrap($this->label, $this->labelStyle)];
+        $out = [Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)];
         foreach ($this->lines as $i => $text) {
+            $text = Ansi::sanitize($text);
             if ($i !== $this->line) {
                 $out[] = $text;
                 continue;

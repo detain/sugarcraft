@@ -296,14 +296,13 @@ final class ViMode implements ModeInterface
         $nextMode = self::VI_MODE_NORMAL;
 
         if ($motion === 'd' && $key === 'd') {
-            // dd — delete entire line
+            // dd — delete entire line; stay in normal mode
             $prompt = $this->deleteLine($prompt);
-            $nextMode = self::VI_MODE_INSERT;
         } elseif ($motion === 'y' && $key === 'y') {
-            // yy — yank line (stored in internal buffer, not yet exposed)
-            $nextMode = self::VI_MODE_INSERT;
+            // yy — yank line (stored in internal buffer, not yet exposed); stay in normal mode
         }
         // Other motion combinations: not implemented, fall through
+        // $nextMode stays VI_MODE_NORMAL
 
         return $this->withViMode($nextMode)->withPendingMotion(null)->attachTo($prompt);
     }
