@@ -6,6 +6,7 @@ namespace SugarCraft\Log;
 
 use SugarCraft\Log\Lang;
 use SugarCraft\Log\Formatter\TextFormatter;
+use SugarCraft\Log\PartsOrder;
 use SugarCraft\Palette\Probe;
 use SugarCraft\Sprinkles\Style;
 
@@ -34,6 +35,9 @@ final class Logger
     /** Whether colors are enabled based on terminal capabilities. */
     private bool $useColors;
 
+    /** Parts order for text formatter. */
+    private ?PartsOrder $partsOrder;
+
     /**
      * @param Formatter|null $formatter Output formatter (defaults to TextFormatter).
      * @param Level|null     $minLevel  Minimum level to emit (defaults to Info).
@@ -50,12 +54,14 @@ final class Logger
         ?string $timeFormat = null,
         bool $reportCaller = false,
         $stream = null,
+        ?PartsOrder $partsOrder = null,
     ) {
         // Probe-driven color decision: disable colors when terminal cannot render them
         $useColors = Probe::colorProfile()->allowsColor();
 
         $this->styles = Styles::default();
         $this->useColors = $useColors;
+        $this->partsOrder = $partsOrder ?? PartsOrder::default();
 
         $this->formatter = $formatter ?? new TextFormatter(
             $reportTimestamp,
@@ -63,6 +69,7 @@ final class Logger
             $reportCaller,
             $useColors,
             $this->styles,
+            $this->partsOrder,
         );
         $this->minLevel = $minLevel ?? Level::Info;
         $this->prefix = $prefix;
@@ -86,8 +93,9 @@ final class Logger
         ?string $timeFormat = null,
         bool $reportCaller = false,
         $stream = null,
+        ?PartsOrder $partsOrder = null,
     ): self {
-        return new self($formatter, $level, $prefix, $reportTimestamp, $timeFormat, $reportCaller, $stream);
+        return new self($formatter, $level, $prefix, $reportTimestamp, $timeFormat, $reportCaller, $stream, $partsOrder);
     }
 
     // -------------------------------------------------------------------------
@@ -227,6 +235,16 @@ final class Logger
         return $child;
     }
 
+    public function withPartsOrder(PartsOrder $partsOrder): self
+    {
+        $child = clone $this;
+        $child->partsOrder = $partsOrder;
+        if ($child->formatter instanceof TextFormatter) {
+            $child->formatter = $child->formatter->withPartsOrder($partsOrder);
+        }
+        return $child;
+    }
+
     public function setFormatter(Formatter $formatter): void
     {
         $this->formatter = $formatter;
@@ -281,6 +299,14 @@ final class Logger
         $this->styles = $styles;
         if ($this->formatter instanceof TextFormatter) {
             $this->formatter = $this->formatter->withStyles($styles);
+        }
+    }
+
+    public function setPartsOrder(PartsOrder $partsOrder): void
+    {
+        $this->partsOrder = $partsOrder;
+        if ($this->formatter instanceof TextFormatter) {
+            $this->formatter = $this->formatter->withPartsOrder($partsOrder);
         }
     }
 
