@@ -103,25 +103,31 @@ class Picker
 
     /**
      * @param list<Endpoint> $endpoints
-     * @return list<array{endpoint: Endpoint, result: ?MatchResult}>
+     * @return list<array{endpoint: Endpoint, result: ?MatchResult, displayLine: string}>
      */
     private function filterMatches(array $endpoints): array
     {
         if ($this->filter === '') {
             return array_map(
-                fn(Endpoint $e) => ['endpoint' => $e, 'result' => null],
+                fn(Endpoint $e) => [
+                    'endpoint' => $e,
+                    'result' => null,
+                    'displayLine' => $this->stripControls($e->displayLine()),
+                ],
                 $endpoints
             );
         }
 
-        // Score each candidate; SmithWatermanMatcher returns null for no match
-        $results = $this->matcher->matchAll(
-            $this->filter,
-            array_map(
-                fn(Endpoint $e) => $e->name . ' ' . $e->host . ' ' . ($e->user ?? ''),
-                $endpoints
-            )
+        // Build sanitized display strings for scoring and rendering.
+        // Using the same string for both ensures matched indices align
+        // with what highlightLine() renders (no re-match needed).
+        $displayLines = array_map(
+            fn(Endpoint $e) => $this->stripControls($e->displayLine()),
+            $endpoints
         );
+
+        // Score each candidate; SmithWatermanMatcher returns null for no match
+        $results = $this->matcher->matchAll($this->filter, $displayLines);
 
         // Build a map from haystack string to MatchResult for quick lookup
         $resultMap = [];
@@ -129,11 +135,15 @@ class Picker
             $resultMap[$r->haystack] = $r;
         }
 
-        // Walk endpoints in original order, attaching MatchResult
+        // Walk endpoints in original order, attaching MatchResult and displayLine
         $out = [];
-        foreach ($endpoints as $e) {
-            $hay = $e->name . ' ' . $e->host . ' ' . ($e->user ?? '');
-            $out[] = ['endpoint' => $e, 'result' => $resultMap[$hay] ?? null];
+        foreach ($endpoints as $idx => $e) {
+            $sanitizedDisplay = $displayLines[$idx];
+            $out[] = [
+                'endpoint' => $e,
+                'result' => $resultMap[$sanitizedDisplay] ?? null,
+                'displayLine' => $sanitizedDisplay,
+            ];
         }
 
         // Filter to only matched (score > 0) and sort by score descending
@@ -146,7 +156,7 @@ class Picker
     }
 
     /**
-     * @param list<array{endpoint: Endpoint, result: ?MatchResult}> $matches
+     * @param list<array{endpoint: Endpoint, result: ?MatchResult, displayLine: string}> $matches
      */
     private function draw(array $matches): void
     {
@@ -159,10 +169,8 @@ class Picker
         foreach ($matches as $i => $record) {
             $e = $record['endpoint'];
             $marker = $i === $this->cursor ? Ansi::sgr(1, 36) . '▸' . Ansi::reset() . ' ' : '  ';
-            // Sanitize the display string before highlighting to prevent
-            // terminal escape sequence injection from config values.
-            $sanitizedDisplay = $this->stripControls($e->displayLine());
-            $line = $this->highlightLine($sanitizedDisplay, $record['result']);
+            // The displayLine is already sanitized from filterMatches()
+            $line = $this->highlightLine($record['displayLine'], $record['result']);
             if ($e->description !== null && $e->description !== '') {
                 $line .= '  ' . Ansi::sgr(Ansi::FAINT) . $this->stripControls($e->description) . Ansi::reset();
             }
@@ -188,23 +196,17 @@ class Picker
     /**
      * Apply bold+cyan highlighting to matched character positions in a display line.
      *
-     * The $line argument is expected to be already sanitized via stripControls().
-     * Re-matches the display line against the filter needle to get fresh
-     * matched indices, then applies ANSI highlighting to those positions.
+     * The $line argument is the sanitized display string; $result contains
+     * matchedIndices computed against that same string in filterMatches().
+     * We walk the grapheme clusters and wrap those at the matched positions.
      */
     private function highlightLine(string $line, ?MatchResult $result): string
     {
-        if ($result === null) {
+        if ($result === null || $result->matchedIndices === []) {
             return $line;
         }
 
-        // Re-match against the display line to get indices aligned with it
-        $dispResult = $this->matcher->match($result->needle, $line);
-        if ($dispResult === null || $dispResult->matchedIndices === []) {
-            return $line;
-        }
-
-        $matchSet = array_flip($dispResult->matchedIndices);
+        $matchSet = array_flip($result->matchedIndices);
 
         // Walk the line as grapheme clusters and wrap matched ones in ANSI bold+cyan
         $highlighted = '';
