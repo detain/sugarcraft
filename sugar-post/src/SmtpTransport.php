@@ -232,13 +232,13 @@ final class SmtpTransport implements Transport
             $lines[] = "Cc: {$this->addrListHeader($email->cc)}";
         }
         if ($email->subject !== null) {
-            $lines[] = "Subject: {$email->subject}";
+            $lines[] = "Subject: {$this->encodeHeaderWord($email->subject)}";
         }
         $lines[] = "MIME-Version: 1.0";
         $lines[] = "Content-Type: multipart/mixed; boundary=\"{$boundary}\"";
 
         if ($email->replyTo !== null) {
-            $lines[] = "Reply-To: {$email->replyTo}";
+            $lines[] = "Reply-To: {$this->addrListHeader([$email->replyTo])}";
         }
 
         $lines[] = '';
@@ -255,11 +255,10 @@ final class SmtpTransport implements Transport
 
         if ($email->body !== null) {
             $body = $email->bodyWithSignature() ?? $email->body;
-            $lines[] = 'Content-Type: text/plain; charset="utf-8"';
-            $lines[] = 'Content-Transfer-Encoding: 7bit';
-            $lines[] = '';
-            // Normalize CRLF/CR to LF before splitting, then re-frame with CRLF
             $normalized = \preg_replace('/\r\n|\r/', "\n", $body);
+            $lines[] = 'Content-Type: text/plain; charset="utf-8"';
+            $lines[] = 'Content-Transfer-Encoding: ' . $this->cteFor($normalized);
+            $lines[] = '';
             $lines = \array_merge($lines, \explode("\n", $normalized));
             $lines[] = '';
         }
@@ -267,9 +266,9 @@ final class SmtpTransport implements Transport
         if ($email->htmlBody !== null) {
             $lines[] = '--' . $bodyBoundary;
             $lines[] = 'Content-Type: text/html; charset="utf-8"';
-            $lines[] = 'Content-Transfer-Encoding: 7bit';
-            $lines[] = '';
             $normalized = \preg_replace('/\r\n|\r/', "\n", $email->htmlBody);
+            $lines[] = 'Content-Transfer-Encoding: ' . $this->cteFor($normalized);
+            $lines[] = '';
             $lines = \array_merge($lines, \explode("\n", $normalized));
             $lines[] = '';
             $lines[] = '--' . $bodyBoundary . '--';
@@ -352,5 +351,27 @@ final class SmtpTransport implements Transport
     private function addrListHeader(array $addrs): string
     {
         return \implode(', ', $addrs);
+    }
+
+    /**
+     * RFC 2047 encode a header word if it contains non-ASCII bytes.
+     *
+     * Mirrors charmbracelet/pop header encoding.
+     */
+    private function encodeHeaderWord(string $word): string
+    {
+        if (\preg_match('/[^\x00-\x7F]/', $word)) {
+            return '=?UTF-8?B?' . \base64_encode($word) . '?=';
+        }
+        return $word;
+    }
+
+    /**
+     * Determine Content-Transfer-Encoding for a body.
+     * Returns '8bit' if the body contains non-ASCII bytes, else '7bit'.
+     */
+    private function cteFor(string $body): string
+    {
+        return \preg_match('/[^\x00-\x7F]/', $body) ? '8bit' : '7bit';
     }
 }
