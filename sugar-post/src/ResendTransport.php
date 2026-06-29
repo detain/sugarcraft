@@ -54,7 +54,7 @@ final class ResendTransport implements Transport
         if ($code < 200 || $code >= 300) {
             throw new \RuntimeException(Lang::t('resend.api_error', [
                 'status' => $code,
-                'body'   => \substr($body, 0, 500),
+                'body'   => \substr((string) $body, 0, 500),
             ]));
         }
     }
@@ -69,7 +69,7 @@ final class ResendTransport implements Transport
      *
      * @return array<string, mixed>
      */
-    private function buildPayload(Email $email): array
+    protected function buildPayload(Email $email): array
     {
         $payload = [
             'from'    => $this->firstAddr($email->from),

@@ -25,12 +25,13 @@ final class AttachmentEdgeTest extends TestCase
         $this->assertSame('', $att->getContent());
     }
 
-    public function testFromPathReturnsNullContentWhenFileReadFails(): void
+    public function testUnreadablePathThrows(): void
     {
-        // Using a path that doesn't exist - should not throw, returns null content
+        // Using a path that doesn't exist - should throw RuntimeException
         $att = Attachment::fromPath('/nonexistent/path/file.txt');
-        $this->assertNull($att->content);
-        $this->assertSame('', $att->getContent());
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('not readable');
+        $att->getContent();
     }
 
     public function testFromPathWithUnknownExtensionFallsBackToOctetStream(): void

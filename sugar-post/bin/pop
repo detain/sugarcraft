@@ -18,48 +18,51 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Post\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
 
-// Parse arguments manually (no getopt dependence on platform)
-$args = parseArgs($argv);
-$bin  = basename($argv[0]);
+// Guard: only run dispatch when called as CLI script (not when required by tests)
+if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
+    // Parse arguments manually (no getopt dependence on platform)
+    $args = parseArgs($argv);
+    $bin  = basename($argv[0]);
 
-if ($args['help'] || ($argc = \count($args['positional'])) === 0 && !isset($args['opts']['from'])) {
-    fwrite(STDOUT, help($bin));
-    exit(0);
-}
-
-// Read body from STDIN if available and no --body given
-$body = $args['opts']['body'] ?? '';
-if ($body === '' && !\feof(STDIN)) {
-    while (!\feof(STDIN)) {
-        $body .= \fgets(STDIN);
+    if ($args['help'] || ($argc = \count($args['positional'])) === 0 && !isset($args['opts']['from'])) {
+        fwrite(STDOUT, help($bin));
+        exit(0);
     }
-    $body = \trim($body);
-}
 
-// Build email
-try {
-    $email = buildEmail($args['opts'], $body);
-} catch (\Throwable $e) {
-    fwrite(STDERR, Lang::t('cli.error', ['message' => $e->getMessage()]) . "\n");
-    exit(1);
-}
+    // Read body from STDIN if available and no --body given
+    $body = $args['opts']['body'] ?? '';
+    if ($body === '' && !\feof(STDIN) && !\stream_isatty(STDIN)) {
+        while (!\feof(STDIN)) {
+            $body .= \fgets(STDIN);
+        }
+        $body = \trim($body);
+    }
 
-// Choose transport
-try {
-    $transport = buildTransport();
-} catch (\Throwable $e) {
-    fwrite(STDERR, Lang::t('cli.transport_error', ['message' => $e->getMessage()]) . "\n");
-    exit(1);
-}
+    // Build email
+    try {
+        $email = buildEmail($args['opts'], $body);
+    } catch (\Throwable $e) {
+        fwrite(STDERR, Lang::t('cli.error', ['message' => $e->getMessage()]) . "\n");
+        exit(1);
+    }
 
-$mailer = new Mailer($transport);
+    // Choose transport
+    try {
+        $transport = buildTransport();
+    } catch (\Throwable $e) {
+        fwrite(STDERR, Lang::t('cli.transport_error', ['message' => $e->getMessage()]) . "\n");
+        exit(1);
+    }
 
-try {
-    $mailer->send($email);
-    echo Lang::t('cli.email_sent', ['transport' => $mailer->transportName()]) . "\n";
-} catch (\Throwable $e) {
-    fwrite(STDERR, Lang::t('cli.send_failed', ['message' => $e->getMessage()]) . "\n");
-    exit(1);
+    $mailer = new Mailer($transport);
+
+    try {
+        $mailer->send($email);
+        echo Lang::t('cli.email_sent', ['transport' => $mailer->transportName()]) . "\n";
+    } catch (\Throwable $e) {
+        fwrite(STDERR, Lang::t('cli.send_failed', ['message' => $e->getMessage()]) . "\n");
+        exit(1);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -106,12 +109,6 @@ function parseArgs(array $argv): array
                 $key = \substr($arg, 2);
                 $opts[$key] = \substr($arg, $pos + 1);
             }
-        } elseif (\str_starts_with($arg, '-') && \strlen($arg) === 2) {
-            // Short combined: -ft user@x.com recipient@x.com
-            $flags = \str_split(\substr($arg, 1));
-            foreach ($flags as $flag) {
-                $opts['flag'][] = $flag;
-            }
         } else {
             $positional[] = $arg;
         }
@@ -123,7 +120,7 @@ function parseArgs(array $argv): array
         $opts['to'] = $positional;
     }
 
-    return ['positional' => $positional, 'opts' => $opts];
+    return ['positional' => $positional, 'opts' => $opts, 'help' => isset($opts['help'])];
 }
 
 function buildEmail(array $opts, string $stdinBody): Email
