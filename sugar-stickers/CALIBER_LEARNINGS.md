@@ -21,6 +21,17 @@ to the sugar-bits Viewport.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 
+## [decision:wrap-border-removed] — FlexBox `wrap` and `border` removed from public API
+
+FlexBox advertised `wrap` (items wrap to next line/column) and `border`
+(box-draw frame) in its public API and README but never implemented them
+in rendering. Per the remediation plan's "prefer removing unimplemented
+advertised capabilities over shipping silent no-ops" guidance, both
+`withWrap()` / `withBorder()` methods and the corresponding `$wrap` / `$border`
+constructor parameters were removed from FlexBox. The README was updated to
+remove the "Wrap" bullet. This keeps the API surface honest — no capability
+is advertised without a working implementation.
+
 ## Buffer diffing
 
 - Table renderer holds a `?Buffer $previousFrame`; on each render it diffs against the prior frame and emits only delta ops via `DiffEncoder`.

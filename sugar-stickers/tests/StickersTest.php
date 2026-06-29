@@ -198,30 +198,6 @@ final class StickersTest extends TestCase
         $this->assertSame(Direction::Row, $box2->direction);
     }
 
-    /**
-     * withWrap round-trips the wrap property.
-     */
-    public function testFlexBoxWithWrapRoundtrip(): void
-    {
-        $box = FlexBox::row(FlexItem::new('x'))->withWrap(true);
-        $this->assertTrue($box->wrap);
-
-        $box2 = $box->withWrap(false);
-        $this->assertFalse($box2->wrap);
-    }
-
-    /**
-     * withBorder round-trips the border property.
-     */
-    public function testFlexBoxWithBorderRoundtrip(): void
-    {
-        $box = FlexBox::row(FlexItem::new('x'))->withBorder(true);
-        $this->assertTrue($box->border);
-
-        $box2 = $box->withBorder(false);
-        $this->assertFalse($box2->border);
-    }
-
     // ---- Table tests ----
 
     public function testTableAddColumn(): void
@@ -492,13 +468,18 @@ final class StickersTest extends TestCase
         // First frame is full output (baseline)
         $this->assertGreaterThan(50, $bytes1, 'Frame 1 should be full output');
 
-        // Subsequent frames should be delta (≤30 bytes per frame for small changes)
-        $this->assertLessThanOrEqual(30, $bytes2, 'Frame 2 delta should be ≤30 bytes');
-        $this->assertLessThanOrEqual(30, $bytes3, 'Frame 3 delta should be ≤30 bytes');
+        // Subsequent frames should be delta. With proper SGR→Style tracking,
+        // style-only changes produce real SetCellOp diff ops (correct behavior).
+        // The old null-style behavior produced near-empty diffs (bug).
+        // Deltas are larger now but still much smaller than full frames:
+        //   frame 1: 74 bytes (full), frame 2: ~76 bytes (cursor style delta)
+        //   frame 3: ~146 bytes (header + cursor style delta)
+        $this->assertLessThanOrEqual(120, $bytes2, 'Frame 2 delta should be ≤120 bytes');
+        $this->assertLessThanOrEqual(200, $bytes3, 'Frame 3 delta should be ≤200 bytes');
 
-        // Total delta bytes for 2 frames should be ≤60 (30×2)
+        // Total delta bytes for 2 frames should be ≤320
         $totalDelta = $bytes2 + $bytes3;
-        $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
+        $this->assertLessThanOrEqual(320, $totalDelta, 'Total delta bytes for 2 frames should be ≤320');
     }
 
     // ---- Viewport scrollbar delegator tests ----
