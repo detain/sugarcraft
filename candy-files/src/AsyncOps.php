@@ -161,10 +161,13 @@ final class AsyncOps
      */
     private static function doCopy(string $src, string $dst): bool
     {
+        if (\is_link($src)) {
+            return @\symlink(\readlink($src), $dst);
+        }
         if (\is_dir($src)) {
             return self::copyDir($src, $dst);
         }
-        return @copy($src, $dst);
+        return @\copy($src, $dst);
     }
 
     /**
@@ -187,7 +190,9 @@ final class AsyncOps
             }
             $srcPath = Pane::join($src, $item);
             $dstPath = Pane::join($dst, $item);
-            if (\is_dir($srcPath)) {
+            if (\is_link($srcPath)) {
+                @\symlink(\readlink($srcPath), $dstPath);
+            } elseif (\is_dir($srcPath)) {
                 if (!self::copyDir($srcPath, $dstPath)) {
                     return false;
                 }

@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-files)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-files)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-files?label=packagist)](https://packagist.org/packages/sugarcraft/candy-files)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -79,8 +79,6 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 | `Manager`           | SugarCraft Model — orchestrates two panes, handles all keys + confirm gate |
 | `FsLister`          | Default lister: `scandir` + `lstat` against the live filesystem          |
 | `Renderer`          | Pure view function — two pane boxes side-by-side + status line           |
-| `BulkRename`       | Bulk rename engine: regex template + sequential {n}/{name}/{ext} placeholders |
-| `PreviewPane`       | File preview: ANSI image render via Mosaic for images, metadata block otherwise |
 | `AsyncOps`          | Async copy/move/rename via React\Promise — keeps TUI responsive during I/O |
 
 ## Test plan
