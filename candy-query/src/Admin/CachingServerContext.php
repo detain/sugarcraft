@@ -82,7 +82,10 @@ final class CachingServerContext implements ServerContextInterface
 
     public function password(): string
     {
-        return $this->inner->password();
+        if (\method_exists($this->inner, 'password')) {
+            return $this->inner->password();
+        }
+        return '';
     }
 
     public function wasReset(): bool
