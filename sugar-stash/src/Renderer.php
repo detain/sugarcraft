@@ -16,6 +16,19 @@ use SugarCraft\Sprinkles\Style;
  */
 final class Renderer
 {
+    /**
+     * Strip C0/C1 control bytes and bare ESC from untrusted git output.
+     * Applied before concatenation to prevent terminal escape injection.
+     */
+    private static function sanitize(string $s): string
+    {
+        // phpcs:ignore Generic.Metrics.CyclomaticComplexity.High
+        if (preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f\x1b]/u', $s)) {
+            return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f\x1b]/u', '', $s);
+        }
+        return $s;
+    }
+
     public static function render(App $a): string
     {
         $left  = self::statusPane($a);
@@ -110,7 +123,7 @@ final class Renderer
         foreach ($a->status as $i => $row) {
             $idx  = $row['index_status'] ?? ' ';
             $work = $row['work_status']  ?? ' ';
-            $path = $row['path']         ?? '';
+            $path = self::sanitize($row['path'] ?? '');
             $marker = sprintf('%s%s ', $idx, $work);
             $line = $marker . $path;
             $st = Style::new();
@@ -134,7 +147,7 @@ final class Renderer
         $rows = [];
         foreach ($a->branches as $i => $b) {
             $marker = $b['current'] ? '* ' : '  ';
-            $line   = $marker . $b['name'];
+            $line   = $marker . self::sanitize($b['name']);
             $st = Style::new();
             $st = $b['current']
                 ? $st->bold()->foreground(Color::hex('#fde68a'))
@@ -155,7 +168,7 @@ final class Renderer
         $rows = [];
         foreach ($a->log as $i => $entry) {
             $sha     = Style::new()->foreground(Color::hex('#fde68a'))->render($entry['sha']);
-            $subject = $entry['subject'];
+            $subject = self::sanitize($entry['subject']);
             if (mb_strlen($subject) > 26) {
                 $subject = mb_substr($subject, 0, 25) . '…';
             }
@@ -243,7 +256,7 @@ final class Renderer
 
         $lines = [];
         $lines[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(' diff: ' . $dv->path . ' ');
+            ->render(' diff: ' . self::sanitize($dv->path) . ' ');
 
         foreach ($dv->lines as $i => $line) {
             $isSelectedHunkLine = false;
@@ -261,6 +274,7 @@ final class Renderer
             }
 
             $st = Style::new();
+            $line = self::sanitize($line);
             if (str_starts_with($line, '+')) {
                 $st = $st->foreground(Color::hex('#6ee7b7'));
             } elseif (str_starts_with($line, '-')) {
@@ -332,7 +346,7 @@ final class Renderer
             $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('stash.empty'));
         } else {
             foreach ($sm->stashes as $i => $entry) {
-                $line = $entry->displayLine();
+                $line = self::sanitize($entry->displayLine());
                 $st = Style::new()->foreground(Color::hex('#c5b6dd'));
                 if ($i === $sm->cursor) {
                     $st = $st->reverse()->foreground(Color::hex('#fde68a'));
@@ -371,14 +385,14 @@ final class Renderer
 
         if ($wt->adding) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('worktree.add_prompt'));
-            $lines[] = '  path: ' . Style::new()->foreground(Color::hex('#fde68a'))->render($wt->newPath) . '_';
-            $lines[] = '  branch: ' . Style::new()->foreground(Color::hex('#fde68a'))->render($wt->newBranch ?: 'HEAD') . '_';
+            $lines[] = '  path: ' . Style::new()->foreground(Color::hex('#fde68a'))->render(self::sanitize($wt->newPath)) . '_';
+            $lines[] = '  branch: ' . Style::new()->foreground(Color::hex('#fde68a'))->render(self::sanitize($wt->newBranch ?: 'HEAD')) . '_';
             $lines[] = '';
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('worktree.confirm_add');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('c') . '  ' . Lang::t('help.close_help');
         } elseif ($wt->removing) {
             $current = $wt->current();
-            $lines[] = Style::new()->foreground(Color::hex('#ff5f87'))->render(Lang::t('worktree.remove_confirm', ['path' => $current?->path ?? '']));
+            $lines[] = Style::new()->foreground(Color::hex('#ff5f87'))->render(Lang::t('worktree.remove_confirm', ['path' => self::sanitize($current?->path ?? '')]));
             $lines[] = '';
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#ff5f87'))->render('enter') . '  ' . Lang::t('worktree.confirm_remove');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('c') . '  ' . Lang::t('help.close_help');
@@ -387,7 +401,7 @@ final class Renderer
                 $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))->render(Lang::t('worktree.empty'));
             } else {
                 foreach ($wt->worktrees as $i => $entry) {
-                    $line = $entry->path . ($entry->branch !== '' ? ' (' . $entry->branch . ')' : '');
+                    $line = self::sanitize($entry->path) . ($entry->branch !== '' ? ' (' . self::sanitize($entry->branch) . ')' : '');
                     $st = Style::new()->foreground(Color::hex('#c5b6dd'));
                     if ($i === $wt->cursor) {
                         $st = $st->reverse()->foreground(Color::hex('#fde68a'));
@@ -446,7 +460,7 @@ final class Renderer
                     $line = sprintf('  %-8s %s %s',
                         Style::new()->foreground(Color::hex($actionColor))->render($commit->action->value),
                         Style::new()->foreground(Color::hex('#fde68a'))->render($commit->sha),
-                        $commit->subject
+                        self::sanitize($commit->subject)
                     );
                     if ($i === $ir->cursor) {
                         $line = Style::new()->reverse()->render($line);
@@ -463,7 +477,7 @@ final class Renderer
 
         if ($ir->error !== null) {
             $lines[] = '';
-            $lines[] = '  ' . Style::new()->foreground(Color::hex('#ff5f87'))->render($ir->error);
+            $lines[] = '  ' . Style::new()->foreground(Color::hex('#ff5f87'))->render(self::sanitize($ir->error));
         }
 
         $border = Border::rounded();

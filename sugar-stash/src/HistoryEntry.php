@@ -90,7 +90,7 @@ final readonly class HistoryEntry
      */
     public static function stagePatch(string $path, string $hunk): self
     {
-        return new self('stagePatch', ['path' => $path, 'hunk' => $hunk], 'unstage', ['path' => $path]);
+        return new self('stagePatch', ['path' => $path, 'hunk' => $hunk], 'unstagePatch', ['path' => $path, 'hunk' => $hunk]);
     }
 
     /**
