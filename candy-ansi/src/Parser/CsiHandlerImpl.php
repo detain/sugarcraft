@@ -12,7 +12,7 @@ namespace SugarCraft\Ansi\Parser;
  * Cursor, Theme). Those dependencies will be wired in step-12 when
  * candy-vt migrates onto candy-ansi.
  *
- * @see Mirrors charmbracelet/x/ansi CsiHandler
+ * Mirrors charmbracelet/x/ansi.CsiHandler
  */
 final class CsiHandlerImpl implements CsiHandler
 {

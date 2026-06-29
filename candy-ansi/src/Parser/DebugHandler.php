@@ -9,7 +9,7 @@ namespace SugarCraft\Ansi\Parser;
  * `['type' => ..., 'detail' => ...]` rows. Used in tests to assert the
  * exact sequence of actions produced by feeding a byte stream.
  *
- * @see Mirrors charmbracelet/x/ansi DebugHandler
+ * Mirrors charmbracelet/x/ansi.DebugHandler
  */
 final class DebugHandler implements Handler
 {

@@ -10,7 +10,7 @@ namespace SugarCraft\Ansi\Parser;
  *
  * Translates parse events into handler method calls.
  *
- * @see Mirrors charmbracelet/x/ansi HandlerAdapter
+ * Mirrors charmbracelet/x/ansi.HandlerAdapter
  */
 final class HandlerAdapter implements Handler
 {

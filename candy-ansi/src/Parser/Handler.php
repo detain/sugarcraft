@@ -11,7 +11,7 @@ namespace SugarCraft\Ansi\Parser;
  * later slices), a debug logger ({@see DebugHandler}), or a unit-test
  * mock for any sub-handler.
  *
- * @see Mirrors charmbracelet/x/ansi Handler
+ * Mirrors charmbracelet/x/ansi.Handler
  */
 interface Handler
 {
