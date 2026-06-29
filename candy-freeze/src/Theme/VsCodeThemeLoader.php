@@ -70,11 +70,9 @@ final class VsCodeThemeLoader
 
         $background = self::resolveColor($colors, [
             'editor.background',
-            'editor.background',
         ], '#0d1117');
 
         $foreground = self::resolveColor($colors, [
-            'editor.foreground',
             'editor.foreground',
         ], '#c9d1d9');
 
