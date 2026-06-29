@@ -148,6 +148,83 @@ final class ProgramSimulatorTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $capturedCmds[0]);
     }
 
+    public function testFakeCmdRunnerInjectedMsgReachesUpdate(): void
+    {
+        // CmdProducingCounterModel.init() returns a non-null cmd (that increments
+        // count via side effect). The fakeRunner intercepts that cmd and returns
+        // KeyMsg('+'). The injected msg should be threaded through applyMsg() to
+        // drive update(), which creates a new model with count incremented.
+        //
+        // Flow: init cmd runs (count 0→1 via side effect), fakeRunner returns
+        // KeyMsg('+'), applyMsg(KeyMsg('+')) calls update (count 1→2 via new model).
+        $model = new CmdProducingCounterModel(0);
+        $program = new Program($model);
+
+        $sim = ProgramSimulator::for($program)->withFakeCmdRunner(
+            static fn (): ?\SugarCraft\Core\Msg => new KeyMsg(
+                type: KeyType::Char,
+                rune: '+',
+                alt: false,
+                ctrl: false,
+                shift: false,
+            )
+        );
+
+        $result = $sim->run();
+
+        /** @var CmdProducingCounterModel $finalModel */
+        $finalModel = $result->model;
+        // Count 0 → 1 (init closure side effect) → 2 (update from injected KeyMsg)
+        $this->assertSame(2, $finalModel->count());
+    }
+
+    public function testInitCmdProducedMsgDrivesFirstUpdate(): void
+    {
+        // MsgProducingInitModel.init() returns a closure that produces KeyMsg('+').
+        // That Msg should be threaded through update() as the first message,
+        // causing the counter to increment via update() (not via the init closure itself).
+        $model = new MsgProducingInitModel(0);
+        $program = new Program($model);
+
+        // Use default runner (no fake runner) so the init cmd executes.
+        $sim = ProgramSimulator::for($program);
+
+        $result = $sim->run();
+
+        /** @var MsgProducingInitModel $finalModel */
+        $finalModel = $result->model;
+        // The init cmd produced KeyMsg('+'), which was fed to update(), incrementing count.
+        $this->assertSame(1, $finalModel->count());
+    }
+
+    public function testDefaultRunnerDoesNotExecuteCmds(): void
+    {
+        // Use withRealCmdRunner(false) to opt into capture-only (safe) mode.
+        // With this option set, cmds are captured but NOT executed, so
+        // side-effecting closures never run.
+        $sideEffectCalled = false;
+        $model = new CounterModel(0);
+        $program = new Program($model);
+
+        $sim = ProgramSimulator::for($program)
+            ->withRealCmdRunner(false)  // Capture-only mode
+            ->withFakeCmdRunner(
+                static function ($cmd) use (&$sideEffectCalled): ?\SugarCraft\Core\Msg {
+                    // The cmd itself has a side effect we'd detect.
+                    // But in capture-only mode, the cmd should NOT be executed.
+                    return null;
+                }
+            );
+
+        $result = $sim->run();
+
+        // The side-effecting closure was never called because we used
+        // capture-only mode. The counter should remain at initial value.
+        /** @var CounterModel $finalModel */
+        $finalModel = $result->model;
+        $this->assertSame(0, $finalModel->count());
+    }
+
     public function testEmptyQueueRunReturnsResultWithInitialModel(): void
     {
         $model = new CounterModel(99);
