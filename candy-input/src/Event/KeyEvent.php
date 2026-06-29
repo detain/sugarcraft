@@ -26,13 +26,13 @@ final readonly class KeyEvent implements Event
         public string $raw,
     ) {}
 
-    public static function plain(string $char, KeyModifier $modifiers = null): self
+    public static function plain(string $char, ?KeyModifier $modifiers = null): self
     {
-        return new self($char, $modifiers ?? KeyModifier::None, $char);
+        return new self($char, $modifiers ?? KeyModifier::none(), $char);
     }
 
-    public static function esc(string $key, KeyModifier $modifiers = null, string $raw = ''): self
+    public static function esc(string $key, ?KeyModifier $modifiers = null, string $raw = ''): self
     {
-        return new self($key, $modifiers ?? KeyModifier::None, $raw ?: "\x1b");
+        return new self($key, $modifiers ?? KeyModifier::none(), $raw ?: "\x1b");
     }
 }

@@ -158,4 +158,26 @@ final class KeyEventTest extends TestCase
         $this->assertTrue($event->modifiers->includes(KeyModifier::SHIFT));
         $this->assertSame($raw, $event->raw);
     }
+
+    // ─── Modifier-defaulted factory tests (Step 9) ───────────────────────────
+
+    public function testPlainWithoutModifierDefaultsToNone(): void
+    {
+        $event = KeyEvent::plain('a');
+
+        $this->assertSame('a', $event->key);
+        $this->assertSame('a', $event->raw);
+        $this->assertSame(KeyModifier::NONE, $event->modifiers->value());
+        $this->assertInstanceOf(KeyModifier::class, $event->modifiers);
+    }
+
+    public function testEscWithoutModifierDefaultsToNone(): void
+    {
+        $event = KeyEvent::esc('F1');
+
+        $this->assertSame('F1', $event->key);
+        $this->assertSame("\x1b", $event->raw);
+        $this->assertSame(KeyModifier::NONE, $event->modifiers->value());
+        $this->assertInstanceOf(KeyModifier::class, $event->modifiers);
+    }
 }
