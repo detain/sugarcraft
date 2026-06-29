@@ -45,11 +45,7 @@ final class FilterCommand extends Command
             ->addOption('no-fuzzy', null, InputOption::VALUE_NONE, 'Disable fuzzy matching (default — gum compat).')
             ->addOption('width', null, InputOption::VALUE_REQUIRED, 'Cap rendered width in cells (0 = auto).', 0)
             ->addOption('show-help', null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
-            ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0)
-            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
-                "Per-element style: '<elem>.<prop>=<value>'. Elements: cursor, header, prompt, indicator, match, selected, unselected.",
-                []
-            );
+            ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
