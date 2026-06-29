@@ -1,6 +1,6 @@
 # SugarCraft
 
-PHP monorepo of 51 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
+PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
 
 @./AGENTS.md
 @./CONTRIBUTING.md
@@ -11,7 +11,7 @@ Per-lib skeleton: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/READ
 
 Cross-cuts: `MATCHUPS.md` · `PROJECT_NAMES.md` · `LOCALES.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `scripts/affected-libs.php` · `tools/check-path-repos.php` · `codecov.yml` · `.php-cs-fixer.dist.php`.
 
-**Foundation** (`Candy-`): `candy-core` · `candy-ansi` · `candy-buffer` · `candy-async` · `candy-input` · `candy-layout` · `candy-sprinkles` · `candy-forms` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-mouse` · `candy-metrics` · `candy-log` · `candy-palette` · `candy-lister` · `candy-fuzzy` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-testing` · `candy-pty`.
+**Foundation** (`Candy-`): `candy-core` · `candy-ansi` · `candy-buffer` · `candy-async` · `candy-input` · `candy-layout` · `candy-sprinkles` · `candy-forms` · `candy-focus` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-mouse` · `candy-metrics` · `candy-log` · `candy-palette` · `candy-lister` · `candy-fuzzy` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-testing` · `candy-pty`.
 
 **Components/apps** (`Sugar-`): `sugar-bits` · `sugar-charts` · `sugar-prompt` · `sugar-glow` · `sugar-spark` · `sugar-skate` · `sugar-stash` · `sugar-table` · `sugar-tick` · `sugar-toast` · `sugar-veil` · `sugar-crumbs` · `sugar-readline` · `sugar-stickers` · `sugar-calendar` · `sugar-boxer` · `sugar-post` · `sugar-wishlist` · `sugar-crush` · `sugar-dash` · `sugar-reel`. **Physics** (`Honey-`): `honey-bounce` · `honey-flap`. **One-off**: `candy-files`.
 
