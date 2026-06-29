@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Modules\Weather;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
+use SugarCraft\Dash\Output\Sanitize;
 
 /**
  * Weather module that fetches live data from wttr.in and falls back to cache.
@@ -61,7 +62,12 @@ class WeatherModule extends BaseModule
         $condition = $this->current->condition;
         $location = $this->current->location;
 
-        return sprintf("%.0f°C %s\n%s", $temp, $condition, $location);
+        return sprintf(
+            "%.0f°C %s\n%s",
+            $temp,
+            Sanitize::untrusted($condition),
+            Sanitize::untrusted($location)
+        );
     }
 
     public function minSize(): array

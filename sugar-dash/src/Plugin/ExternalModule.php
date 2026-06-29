@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Plugin;
 
 use SugarCraft\Dash\Module\LegacyModule;
+use SugarCraft\Dash\Output\Sanitize;
 use SugarCraft\Pty\Posix\PosixProcess;
 
 /**
@@ -104,7 +105,7 @@ final class ExternalModule implements LegacyModule
         $response = $this->readResponse();
 
         if ($response->type === 'view') {
-            return $response->data['content'] ?? '';
+            return Sanitize::untrusted($response->data['content'] ?? '');
         }
 
         return '';

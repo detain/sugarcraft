@@ -10,6 +10,7 @@ use SugarCraft\Dash\Module\BaseModule;
 use SugarCraft\Dash\Module\Module;
 use SugarCraft\Dash\Modules\Clock\ClockModule;
 use SugarCraft\Dash\Modules\Generic\GenericModule;
+use SugarCraft\Dash\Modules\Generic\TickMsg;
 use SugarCraft\Dash\Modules\Greeting\GreetingModule;
 use SugarCraft\Dash\Modules\System\SystemModule;
 use SugarCraft\Dash\Modules\Uptime\UptimeModule;
@@ -123,7 +124,7 @@ final class ModuleSpecConformanceTest extends TestCase
     public function testGenericModuleRunsCommand(): void
     {
         $module = new GenericModule('echo "hello world"');
-        $tickMsg = new class implements Msg {};
+        $tickMsg = new TickMsg();
 
         [$nextModule] = $module->update($tickMsg);
         $view = $nextModule->view();
