@@ -413,7 +413,6 @@ final class VeilTest extends TestCase
     public function testManagerDefaultsToNull(): void
     {
         $this->assertNull($this->veil->manager());
-        $this->assertNull($this->veil->getManager());
     }
 
     public function testWithManager(): void
@@ -730,20 +729,6 @@ final class VeilTest extends TestCase
 
         // At near-full progress, most content visible but still via animation
         $this->assertIsString($result);
-    }
-
-    // ─── getManager() (deprecated) ────────────────────────────────────────────
-
-    public function testGetManagerReturnsSameAsManager(): void
-    {
-        $manager = \SugarCraft\Zone\Manager::newGlobal();
-        $v = $this->veil->withManager($manager);
-        $this->assertSame($v->manager(), $v->getManager());
-    }
-
-    public function testGetManagerReturnsNullWhenNoManager(): void
-    {
-        $this->assertNull($this->veil->getManager());
     }
 
     /**

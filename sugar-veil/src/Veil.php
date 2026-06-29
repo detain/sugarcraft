@@ -233,14 +233,6 @@ final class Veil
     }
 
     /**
-     * @deprecated Use manager() instead
-     */
-    public function getManager(): ?Manager
-    {
-        return $this->manager;
-    }
-
-    /**
      * Wrap content with border chrome using Sprinkles Style.
      *
      * @param string $content The content to wrap
