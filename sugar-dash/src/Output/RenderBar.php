@@ -51,7 +51,7 @@ final class RenderBar
             }
             $result .= str_repeat($filled, $filledWidth);
             if ($filledColor !== null) {
-                $result .= Color::default()->toFg(ColorProfile::TrueColor);
+                $result .= "\x1b[0m";
             }
         }
 
@@ -62,7 +62,7 @@ final class RenderBar
             }
             $result .= str_repeat($empty, $emptyWidth);
             if ($emptyColor !== null) {
-                $result .= Color::default()->toFg(ColorProfile::TrueColor);
+                $result .= "\x1b[0m";
             }
         }
 
@@ -105,7 +105,7 @@ final class RenderBar
         }
 
         if ($color !== null) {
-            $result .= Color::default()->toFg(ColorProfile::TrueColor);
+            $result .= "\x1b[0m";
         }
 
         return $result;
