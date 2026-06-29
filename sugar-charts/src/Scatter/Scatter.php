@@ -81,12 +81,12 @@ final class Scatter
 
     public function withXRange(?float $min, ?float $max): self
     {
-        return $this->copy(minX: $min, maxX: $max);
+        return $this->copy(minX: $min, minXSet: true, maxX: $max, maxXSet: true);
     }
 
     public function withYRange(?float $min, ?float $max): self
     {
-        return $this->copy(minY: $min, maxY: $max);
+        return $this->copy(minY: $min, minYSet: true, maxY: $max, maxYSet: true);
     }
 
     public function withRune(string $rune): self
@@ -336,9 +336,13 @@ final class Scatter
         ?int $width = null,
         ?int $height = null,
         ?float $minX = null,
+        bool $minXSet = false,
         ?float $maxX = null,
+        bool $maxXSet = false,
         ?float $minY = null,
+        bool $minYSet = false,
         ?float $maxY = null,
+        bool $maxYSet = false,
         ?string $rune = null,
         ?bool $showLegend = null,
         ?Position $legendPosition = null,
@@ -353,10 +357,10 @@ final class Scatter
             points:             $points             ?? $this->points,
             width:              $width              ?? $this->width,
             height:             $height             ?? $this->height,
-            minX:               $minX               ?? $this->minX,
-            maxX:               $maxX               ?? $this->maxX,
-            minY:               $minY               ?? $this->minY,
-            maxY:               $maxY               ?? $this->maxY,
+            minX:               $minXSet ? $minX : $this->minX,
+            maxX:               $maxXSet ? $maxX : $this->maxX,
+            minY:               $minYSet ? $minY : $this->minY,
+            maxY:               $maxYSet ? $maxY : $this->maxY,
             rune:               $rune               ?? $this->rune,
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,

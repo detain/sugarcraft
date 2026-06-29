@@ -158,4 +158,22 @@ final class GraphTest extends TestCase
         $ticks = Graph::niceNumbers(0.0, 1.0, 1);
         $this->assertGreaterThanOrEqual(2, count($ticks));
     }
+
+    public function testGetFullCirclePointsWithLimitReturnsBoundedSet(): void
+    {
+        $pts = Graph::getFullCirclePointsWithLimit(0, 0, 5, 8);
+        $this->assertCount(8, $pts);
+        foreach ($pts as $pt) {
+            $this->assertArrayHasKey(0, $pt);
+            $this->assertArrayHasKey(1, $pt);
+        }
+    }
+
+    public function testDrawBraillePatternsPaintsCells(): void
+    {
+        $c = new Canvas(10, 8);
+        Graph::drawBraillePatterns($c, 0, 0, [[0, 0], [1, 1], [2, 2]]);
+        $view = $c->view();
+        $this->assertNotEmpty(trim($view));
+    }
 }

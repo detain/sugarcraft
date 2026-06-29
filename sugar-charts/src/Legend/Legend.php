@@ -6,6 +6,8 @@ namespace SugarCraft\Charts\Legend;
 
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * Renders a chart legend with colored indicators and series labels.
@@ -166,7 +168,18 @@ final class Legend
             'default'=> Ansi::sgr(39),    // default foreground
         ];
 
-        $code = $colorMap[$color] ?? Ansi::sgr(39);
-        return $code . $this->indicatorChar . Ansi::sgr(39);
+        if (isset($colorMap[$color])) {
+            $code = $colorMap[$color];
+            return $code . $this->indicatorChar . Ansi::sgr(39);
+        }
+
+        if (preg_match('/^#?[0-9a-fA-F]{6}$/', $color)) {
+            $hex = ltrim($color, '#');
+            return Style::new()
+                ->foreground(Color::hex($hex))
+                ->render($this->indicatorChar);
+        }
+
+        return Ansi::sgr(39) . $this->indicatorChar . Ansi::sgr(39);
     }
 }

@@ -56,14 +56,14 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 | `Charts\LineChart\LineChart` | Single-series ASCII plot drawn onto a Canvas with configurable axes. | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` |
 | `Charts\LineChart\TimeSeries` | LineChart variant accepting `[\DateTimeImmutable, value]` tuples. | `push` / `withPoints` / `withTimeFormat` / `withXLabelCount` / `withTimeRange(?start, ?end)` / `getTimeRange()` |
 | `Charts\LineChart\Streamline` | Single-row streaming line — auto-windowed to width. | `push` / `pushAll` / `clear` / `withSize` / `withMin` / `withMax` / `withYRange` |
-| `Charts\LineChart\Wavelinechart` | XY scatter / wave plot driven by `(x, y)` pairs. | `push` / `pushAll` / `clear` / `withSize` / `withXRange` / `withYRange` / `withXYRange` / `withPoint` |
+| `Charts\LineChart\Waveline` | XY scatter / wave plot driven by `(x, y)` pairs. | `push` / `pushAll` / `clear` / `withSize` / `withXRange` / `withYRange` / `withXYRange` / `withPoint` |
 | `Charts\Heatmap\Heatmap` | 2D grid coloured by value with optional palette / legend. | `withSize` / `withMin` / `withMax` / `withPalette` / `withLegend` / `withColors(cold, hot)` / `withColorProfile` / `withCellStyle(?Style)` / `withAutoValueRange(bool)` / `pushPoint(HeatPoint)` / `pushAll` |
-| `Charts\OHLC\OHLC` | Candlestick chart for `(high, open, close, low)` rows. | `withSize` / `withCandleStyle` / `withWickStyle` |
-| `Charts\Scatter\Scatter` | XY scatter plot. | `push` / `pushAll` / `withSize` / `withMin` / `withMax` |
+| `Charts\OHLC\OHLCChart` | Candlestick chart for `(high, open, close, low)` rows. | `withSize` / `withBodyRunes(bull,bear)` / `withWickRune(rune)` / `withMin` / `withMax` / `withColors` |
+| `Charts\Scatter\Scatter` | XY scatter plot. | `withPoints` / `withSize` / `withXRange` / `withYRange` / `withRune` |
 | `Charts\Aggregation\BucketByTime` | Groups timestamped values into time buckets with configurable aggregation. | `sum` / `mean` / `min` / `max` / `first` / `last` factory methods + `add` / `addMany` / `compute` |
 | `Charts\Aggregation\MovingAverage` | Sliding-window aggregator — SMA and EMA. | `simple` / `centered` / `ema` static factories + `add` / `addMany` / `computeSimple` / `values` / `clear` |
 | `Charts\Aggregation\Resample` | Upsample or downsample timestamped series to a target cadence. | `last` / `mean` / `linear` / `nearest` factories + `resample` auto-detection |
-| `Charts\Picture\Picture` | Inline image renderer (Sixel today; Kitty / iTerm2 protocols pending). | `withFromFile` / `withDimensions` / `view` |
+| `Charts\Picture\Picture` | Inline image renderer (Sixel today; Kitty / iTerm2 protocols pending). | `fromGrid` / `fromPng` / `withProtocol` / `withPaletteSize` / `view` |
 
 ### Aggregation
 
@@ -209,7 +209,7 @@ sinks. `Heatmap::withCellStyle(Style)` overlays additional attributes
 | BarChart | 🟢 v1 (multi-bar grouped datasets pending) |
 | LineChart | 🟢 v1 (zoom/pan + dataset styles pending) |
 | TimeSeries | 🟢 v1 (multi-dataset + update-handler variants pending) |
-| Streamline, Wavelinechart | 🟢 v1 |
+| Streamline, Waveline | 🟢 v1 |
 | Heatmap | 🟢 v1 (default-color-scale getter/setter pending) |
 | OHLC | 🟡 candlestick rendering only — volume sub-pane + multi-series pending |
 | Scatter | 🟡 single-dataset only — per-point rune/style sets pending |
