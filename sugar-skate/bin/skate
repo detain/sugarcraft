@@ -24,6 +24,7 @@ namespace SugarCraft\Skate;
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Skate\Cli\ArgParser;
 use SugarCraft\Skate\Cli\ImportCommand;
 use SugarCraft\Skate\Cli\ExportCommand;
 use SugarCraft\Skate\Lang;
@@ -41,7 +42,7 @@ $cmd = $argv[1];
 
 switch ($cmd) {
     case 'set':
-        $opts = parseSetOpts($argv, 2);
+        $opts = ArgParser::set($argv, 2);
         if ($opts['key'] === null) {
             fwrite(STDERR, Lang::t('cli.usage_set', ['bin' => $bin]) . "\n");
             exit(1);
@@ -49,7 +50,10 @@ switch ($cmd) {
         // Read value from stdin if not provided as argument
         $value = $opts['value'];
         if ($value === null) {
-            $value = trim(fgets(STDIN) ?: '');
+            $value = stream_get_contents(STDIN);
+            if ($value === false) {
+                $value = '';
+            }
         }
         $store->set($opts['key'], $value, false, $opts['ttl']);
         break;
@@ -65,6 +69,10 @@ switch ($cmd) {
             // Check if key actually exists (might be empty value)
             $entry = $store->entry($argv[2]);
             if ($entry === null) {
+                $suggestion = $store->suggestSimilar($argv[2]);
+                if ($suggestion !== null) {
+                    \fwrite(STDERR, "key not found; did you mean '{$suggestion}'?" . \PHP_EOL);
+                }
                 exit(1);
             }
         }
@@ -72,13 +80,16 @@ switch ($cmd) {
         break;
 
     case 'list':
-        $opts = parseListOpts($argv, 2);
+        $opts = ArgParser::list($argv, 2);
         $delim = $opts['delimiter'];
         foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $delim) as $item) {
             if ($item instanceof Entry) {
-                echo "{$item->key}{$delim}{$item->value}\n";
+                $key = Store::sanitizeForTty($item->key, false);
+                $val = Store::sanitizeForTty($item->rawValue(), $item->binary);
+                echo "{$key}{$delim}{$val}\n";
             } else {
-                echo "{$item}\n";
+                // keys-only or values-only mode: sanitize the yielded string
+                echo Store::sanitizeForTty((string) $item, false) . "\n";
             }
         }
         break;
@@ -99,7 +110,7 @@ switch ($cmd) {
         break;
 
     case 'import':
-        $opts = parseImportOpts($argv, 2);
+        $opts = ArgParser::import($argv, 2);
         if ($opts['format'] === null || $opts['path'] === null) {
             fwrite(STDERR, Lang::t('cli.usage_import', ['bin' => $bin]) . "\n");
             exit(1);
@@ -112,7 +123,7 @@ switch ($cmd) {
         exit($exitCode);
 
     case 'export':
-        $opts = parseExportOpts($argv, 2);
+        $opts = ArgParser::export($argv, 2);
         if ($opts['format'] === null) {
             fwrite(STDERR, Lang::t('cli.usage_export', ['bin' => $bin]) . "\n");
             exit(1);
@@ -171,110 +182,4 @@ Import/Export:
   Use path '-' to read import data from STDIN.
 
 HELP;
-}
-
-function parseSetOpts(array $argv, int $offset): array
-{
-    $key = null;
-    $value = null;
-    $ttl = null;
-    $atomic = true;
-
-    $remaining = \array_slice($argv, $offset);
-    $positional = [];
-
-    foreach ($remaining as $arg) {
-        if (\str_starts_with($arg, '--ttl=')) {
-            $ttl = (int) \substr($arg, 6);
-        } elseif (\str_starts_with($arg, '--')) {
-            // ignore unknown flags
-        } else {
-            $positional[] = $arg;
-        }
-    }
-
-    $key = $positional[0] ?? null;
-    $value = $positional[1] ?? null;
-
-    return ['key' => $key, 'value' => $value, 'ttl' => $ttl];
-}
-
-function parseListOpts(array $argv, int $offset): array
-{
-    $mode = 'all';
-    $reverse = false;
-    $delimiter = "\t";
-    $pattern = null;
-
-    $remaining = \array_slice($argv, $offset);
-    $positional = [];
-
-    foreach ($remaining as $arg) {
-        if ($arg === '-k') {
-            $mode = 'keys';
-        } elseif ($arg === '-v') {
-            $mode = 'values';
-        } elseif ($arg === '-r') {
-            $reverse = true;
-        } elseif (\str_starts_with($arg, '-d')) {
-            $delimiter = \substr($arg, 2) ?: "\t";
-        } elseif (\str_starts_with($arg, '-')) {
-            // ignore unknown flags
-        } else {
-            $positional[] = $arg;
-        }
-    }
-
-    return [
-        'mode' => $mode,
-        'reverse' => $reverse,
-        'delimiter' => $delimiter,
-        'pattern' => $positional[0] ?? null,
-    ];
-}
-
-function parseImportOpts(array $argv, int $offset): array
-{
-    $format = null;
-    $path = null;
-    $atomic = true;
-
-    $remaining = \array_slice($argv, $offset);
-    foreach ($remaining as $arg) {
-        if (\str_starts_with($arg, '--')) {
-            if ($arg === '--no-atomic') {
-                $atomic = false;
-            }
-        } elseif ($format === null) {
-            $format = $arg;
-        } elseif ($path === null) {
-            $path = $arg;
-        }
-    }
-
-    return ['format' => $format, 'path' => $path, 'atomic' => $atomic];
-}
-
-function parseExportOpts(array $argv, int $offset): array
-{
-    $format = null;
-    $db = null;
-    $pattern = null;
-
-    $remaining = \array_slice($argv, $offset);
-    $positional = [];
-
-    foreach ($remaining as $arg) {
-        if (\str_starts_with($arg, '-')) {
-            // ignore unknown flags
-        } else {
-            $positional[] = $arg;
-        }
-    }
-
-    $format = $positional[0] ?? null;
-    $db = $positional[1] ?? null;
-    $pattern = $positional[2] ?? null;
-
-    return ['format' => $format, 'db' => $db, 'pattern' => $pattern];
 }
