@@ -45,7 +45,7 @@ final class HermitRankerTest extends TestCase
                 return $score > 0 ? new MatchResult($query, $candidate, $score, [0]) : null;
             }
 
-            public function matchAll(string $query, iterable $candidates): array
+            public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
                 $results = [];
                 foreach ($candidates as $candidate) {
@@ -75,7 +75,7 @@ final class HermitRankerTest extends TestCase
                 return new MatchResult($query, $candidate, 10, $this->indices);
             }
 
-            public function matchAll(string $query, iterable $candidates): array
+            public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
                 $results = [];
                 foreach ($candidates as $candidate) {
@@ -250,8 +250,10 @@ final class HermitRankerTest extends TestCase
                 return str_starts_with($candidate, '*') ? null : new MatchResult($query, $candidate, 5, [0]);
             }
 
-            public function matchAll(string $query, iterable $candidates): array
+            public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
             {
+                // Simulate the formatted string not matching: matchAll returns empty
+                // so the item appears in the list but without highlight
                 return [];
             }
         };
