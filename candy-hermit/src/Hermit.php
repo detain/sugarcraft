@@ -616,62 +616,45 @@ final class Hermit
      */
     private function printableText(string $text): string
     {
-        $charPositions = [];
         $charString = '';
 
-        $handler = new class($charPositions, $charString) implements \SugarCraft\Ansi\Parser\Handler
+        $handler = new class($charString) implements \SugarCraft\Ansi\Parser\Handler
         {
-            /** @var list<int> */
-            private array $positions;
+            /** @var string */
             private string $string;
-            private int $byteOffset = 0;
 
-            public function __construct(array &$positions, string &$string)
+            public function __construct(string &$string)
             {
-                $this->positions = &$positions;
                 $this->string = &$string;
             }
 
             public function printChar(string $rune): void
             {
-                $this->positions[] = $this->byteOffset;
                 $this->string .= $rune;
-                $this->byteOffset += \strlen($rune);
             }
 
             public function execute(int $byte): void
             {
-                $this->byteOffset += 1;
             }
 
             public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
             {
-                $this->byteOffset += 1;
-                foreach ($params as $p) {
-                    if ($p > 0) {
-                        $this->byteOffset += \strlen((string) $p) + 1;
-                    }
-                }
             }
 
             public function escDispatch(int $final, int $intermediate): void
             {
-                $this->byteOffset += $intermediate > 0 ? 2 : 1;
             }
 
             public function oscDispatch(string $data): void
             {
-                $this->byteOffset += \strlen($data) + 2;
             }
 
             public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
             {
-                $this->byteOffset += 1 + \strlen($data) + 2;
             }
 
             public function sosPmApcDispatch(string $kind, string $data): void
             {
-                $this->byteOffset += \strlen($data) + 2;
             }
         };
 
