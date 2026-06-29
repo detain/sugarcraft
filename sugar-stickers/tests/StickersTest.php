@@ -113,6 +113,120 @@ final class StickersTest extends TestCase
         $this->assertSame('new', $b->content);
     }
 
+    // ---- Structural FlexBox render tests ----
+
+    /**
+     * FlexBox row rendering produces exactly $totalHeight lines.
+     */
+    public function testFlexBoxRowRenderLineCount(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new("line1\nline2\nline3"),
+            FlexItem::new("line4\nline5"),
+        );
+
+        $output = $box->render(40, 5);
+        $lines = \explode("\n", $output);
+
+        $this->assertCount(5, $lines, 'Row render should produce exactly height lines');
+    }
+
+    /**
+     * Every rendered line's visual width should not exceed the requested width.
+     */
+    public function testFlexBoxRowNoLineExceedsWidth(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new('LEFT'),
+            FlexItem::new('RIGHT'),
+        );
+
+        $output = $box->render(20, 3);
+        $lines = \explode("\n", $output);
+
+        foreach ($lines as $line) {
+            $width = \SugarCraft\Core\Util\Width::string($line);
+            $this->assertLessThanOrEqual(20, $width, "Line width {$width} should not exceed 20");
+        }
+    }
+
+    /**
+     * FlexItem::withWidth(k) is equivalent to withBasis(k).
+     */
+    public function testFlexItemWithWidthEqualsWithBasis(): void
+    {
+        $a = FlexItem::new('content')->withWidth(10);
+        $b = FlexItem::new('content')->withBasis(10);
+
+        $this->assertSame($a->basis, $b->basis);
+    }
+
+    /**
+     * addItem appends an item to the FlexBox.
+     */
+    public function testFlexBoxAddItemAppends(): void
+    {
+        $box = FlexBox::row(FlexItem::new('A'));
+        $box2 = $box->addItem(FlexItem::new('B'));
+
+        // Original unchanged.
+        $this->assertStringNotContainsString('B', $box->render(20, 2));
+        // New has both.
+        $this->assertStringContainsString('A', $box2->render(20, 3));
+        $this->assertStringContainsString('B', $box2->render(20, 3));
+    }
+
+    /**
+     * withGap(n) inserts n spaces between items in row mode.
+     */
+    public function testFlexBoxRowWithGap(): void
+    {
+        $box = FlexBox::row(FlexItem::new('A'), FlexItem::new('B'))
+            ->withGap(3);
+
+        $output = $box->render(20, 2);
+
+        // A + 3 spaces + B should fit within 20 width.
+        $this->assertStringContainsString('A', $output);
+        $this->assertStringContainsString('B', $output);
+    }
+
+    /**
+     * withDirection round-trips the direction property.
+     */
+    public function testFlexBoxWithDirectionRoundtrip(): void
+    {
+        $box = FlexBox::row(FlexItem::new('x'))->withDirection(Direction::Column);
+        $this->assertSame(Direction::Column, $box->direction);
+
+        $box2 = $box->withDirection(Direction::Row);
+        $this->assertSame(Direction::Row, $box2->direction);
+    }
+
+    /**
+     * withWrap round-trips the wrap property.
+     */
+    public function testFlexBoxWithWrapRoundtrip(): void
+    {
+        $box = FlexBox::row(FlexItem::new('x'))->withWrap(true);
+        $this->assertTrue($box->wrap);
+
+        $box2 = $box->withWrap(false);
+        $this->assertFalse($box2->wrap);
+    }
+
+    /**
+     * withBorder round-trips the border property.
+     */
+    public function testFlexBoxWithBorderRoundtrip(): void
+    {
+        $box = FlexBox::row(FlexItem::new('x'))->withBorder(true);
+        $this->assertTrue($box->border);
+
+        $box2 = $box->withBorder(false);
+        $this->assertFalse($box2->border);
+    }
+
     // ---- Table tests ----
 
     public function testTableAddColumn(): void
