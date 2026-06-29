@@ -34,7 +34,7 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
             "SELECT table_name FROM information_schema.tables "
             . "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' "
             . "ORDER BY table_name",
-        );
+        ) ?? [];
 
         $names = [];
         foreach ($result as $row) {
@@ -56,7 +56,7 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
             . "FROM information_schema.columns "
             . "WHERE table_schema = DATABASE() AND table_name = {$safeTable} "
             . "ORDER BY ordinal_position",
-        );
+        ) ?? [];
 
         $columns = [];
         foreach ($result as $row) {
@@ -83,7 +83,7 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
             . "FROM information_schema.statistics "
             . "WHERE table_schema = DATABASE() AND table_name = {$safeTable} "
             . "ORDER BY index_name, seq_in_index",
-        );
+        ) ?? [];
 
         $indexMap = [];
         foreach ($result as $row) {
@@ -119,7 +119,7 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
             . "FROM information_schema.key_column_usage "
             . "WHERE table_schema = DATABASE() AND referenced_table_name IS NOT NULL "
             . "AND table_name = {$safeTable}",
-        );
+        ) ?? [];
 
         $fks = [];
         foreach ($result as $row) {
