@@ -23,6 +23,9 @@ final class Slide
     ) {
     }
 
+    /**
+     * Get the easing function, falling back to easeOut if not set.
+     */
     private function easing(): CubicBezier
     {
         return $this->easing ?? CubicBezier::easeOut();
