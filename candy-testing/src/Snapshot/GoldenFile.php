@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Testing\Snapshot;
 
+use SugarCraft\Testing\Lang;
+
 /**
  * Load/save helper for golden ANSI snapshot files.
  *
@@ -51,7 +53,7 @@ final class GoldenFile
         $result = file_put_contents($path, $content);
 
         if ($result === false) {
-            throw new \RuntimeException("Failed to write golden file: {$path}");
+            throw new \RuntimeException(Lang::t('golden.write_failed', ['path' => $path]));
         }
     }
 

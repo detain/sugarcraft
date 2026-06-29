@@ -8,7 +8,6 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 
 /**
  * Drives a TEA {@see Program} with scripted input for deterministic testing.
@@ -37,6 +36,14 @@ final class ProgramSimulator
     private array $outputBytes = [];
 
     private ?\Closure $fakeCmdRunner = null;
+
+    /**
+     * When true, executes cmds and threads their returned messages through
+     * update(). When false, captures cmds but does NOT execute them (safe
+     * deterministic mode). Defaults to true (execute mode) for backward
+     * compatibility with existing tests.
+     */
+    private bool $executeCmds = true;
 
     private function __construct(
         private readonly Program $program,
@@ -79,10 +86,32 @@ final class ProgramSimulator
     }
 
     /**
+     * Opt-out of cmd execution for deterministic capture-only mode.
+     *
+     * By default (or when called with true), cmds are executed and their
+     * returned messages are threaded through update(). When called with
+     * false, cmds are captured but NOT executed — this is the safe,
+     * deterministic mode that avoids side effects from sync cmds.
+     *
+     * @param bool $execute Pass false to capture without executing
+     * @return $this
+     */
+    public function withRealCmdRunner(bool $execute): self
+    {
+        $sim = clone $this;
+        $sim->executeCmds = $execute;
+        return $sim;
+    }
+
+    /**
      * Drain the message queue, running init/update/view in sequence.
      *
      * The program loop is not used — we call the Model's methods directly
      * so tests remain deterministic and side-effect-free.
+     *
+     * Subscriptions are pumped after each update cycle: each subscription's
+     * produce closure is invoked and any returned messages are enqueued for
+     * processing. This keeps tests deterministic (no real timers are started).
      *
      * @return TestResult
      */
@@ -91,37 +120,27 @@ final class ProgramSimulator
         $this->capturedCmds = [];
         $this->outputBytes = [];
 
-        // Use a memory stream pair so writes are captured.
-        [$input, $output] = $this->createMemoryStreamPair();
-
-        // Build a headless program options that avoids real TTY/signal setup.
-        $options = new ProgramOptions(
-            input: $input,
-            output: $output,
-            withoutSignalHandler: true,
-            withoutRenderer: false,
-            useAltScreen: false,
-            hideCursor: false,
-        );
-
-        // Re-create the program with our captured streams.
         // We use a simplified approach: just call init/update/view directly.
-        $model = $this->program instanceof Model ? $this->program : $this->getModelFromProgram();
+        $model = $this->getModelFromProgram();
 
-        // Call init() once at startup.
+        // Call init() once at startup and thread any produced message.
         $initCmd = $model->init();
-        $this->runCmd($initCmd);
+        $initMsg = $this->runCmd($initCmd);
+        if ($initMsg !== null) {
+            [$model, ] = $this->applyMsg($model, $initMsg);
+        }
+
+        // Pump subscriptions after init to collect any startup messages.
+        $model = $this->pumpSubscriptions($model);
 
         // Process queued messages in order.
-        foreach ($this->queue as $msg) {
-            [$model, $cmd] = $model->update($msg);
-            $this->runCmd($cmd);
-
-            // Capture view output by calling view() on the active model.
-            $viewOutput = $model->view();
-            if (is_string($viewOutput)) {
-                $this->outputBytes[] = $viewOutput;
-            }
+        // Use while + array_shift so subscription-pumped messages (appended
+        // mid-loop) are also processed in the same run cycle.
+        while (count($this->queue) > 0) {
+            $msg = array_shift($this->queue);
+            [$model, ] = $this->applyMsg($model, $msg);
+            // Pump subscriptions after each message to capture produce output.
+            $model = $this->pumpSubscriptions($model);
         }
 
         // Final view call.
@@ -140,16 +159,96 @@ final class ProgramSimulator
     }
 
     /**
+     * Pump subscriptions and enqueue any produced messages.
+     *
+     * Calls $model->subscriptions(), iterates over the returned subscription
+     * set, and enqueues any messages produced by the subscription closures.
+     * This mirrors how Program reconciles subscriptions after each update cycle.
+     *
+     * @param Model $model
+     * @return Model The same model (subscriptions are processed for side-effects only)
+     */
+    private function pumpSubscriptions(Model $model): Model
+    {
+        $subs = $model->subscriptions();
+        if ($subs === null) {
+            return $model;
+        }
+
+        foreach ($subs->all() as $subscription) {
+            $msg = $subscription->produce();
+            if ($msg !== null) {
+                $this->queue[] = $msg;
+            }
+        }
+
+        return $model;
+    }
+
+    /**
+     * Apply a single message to the model, running any resulting command
+     * and iteratively draining cmd-produced messages (bounded to prevent
+     * infinite loops).
+     *
+     * @param Model $model
+     * @param Msg $msg
+     * @return array{0: Model, 1: ?\Closure} Updated model and any cmd
+     */
+    private function applyMsg(Model $model, Msg $msg): array
+    {
+        $cycleCount = 0;
+        $maxCycles = 10_000;
+
+        while (true) {
+            if ($cycleCount++ > $maxCycles) {
+                throw new \RuntimeException(
+                    Lang::t('simulator.cmd_loop_overflow', ['max' => $maxCycles])
+                );
+            }
+
+            [$model, $cmd] = $model->update($msg);
+
+            // Capture view output after each update.
+            $viewOutput = $model->view();
+            if (is_string($viewOutput)) {
+                $this->outputBytes[] = $viewOutput;
+            }
+
+            // Run the cmd and get any produced message.
+            $producedMsg = $this->runCmd($cmd);
+
+            // If no message was produced, we're done with this update cycle.
+            if ($producedMsg === null) {
+                break;
+            }
+
+            // A cmd produced a message — feed it back into update().
+            $msg = $producedMsg;
+        }
+
+        return [$model, $cmd ?? null];
+    }
+
+    /**
      * Extract the model from a Program instance via its property.
+     *
      * PHP doesn't give us direct access, so we use a known property path.
+     * This method is robust against ReflectionException by checking for
+     * the property's existence before attempting to access it.
      *
      * @return Model
+     * @throws \RuntimeException If the program lacks a 'model' property
      */
     private function getModelFromProgram(): Model
     {
-        // Program stores the model as a private property.
-        // Use reflection to access it.
         $reflection = new \ReflectionClass($this->program);
+
+        if (!$reflection->hasProperty('model')) {
+            throw new \RuntimeException(
+                Lang::t('simulator.no_model_property')
+            );
+        }
+
         $modelProp = $reflection->getProperty('model');
         $modelProp->setAccessible(true);
         /** @var Model */
@@ -157,51 +256,35 @@ final class ProgramSimulator
     }
 
     /**
-     * Run a Cmd (closure) and capture the result.
+     * Run a Cmd (closure) and return any produced message.
      *
      * @param \Closure|null $cmd
+     * @return ?Msg The message produced by the cmd, or null
      */
-    private function runCmd(?\Closure $cmd): void
+    private function runCmd(?\Closure $cmd): ?Msg
     {
         if ($cmd === null) {
-            return;
+            return null;
         }
 
         if ($this->fakeCmdRunner !== null) {
             $this->capturedCmds[] = $cmd;
-            $injectedMsg = ($this->fakeCmdRunner)($cmd);
-            if ($injectedMsg !== null && $this->getModelFromProgram() instanceof Model) {
-                // Dispatch injected msg to the model.
-                // Note: in the run() flow we pass the model around directly.
+            // Execute the cmd for side effects, then let fakeRunner inject a msg.
+            if ($this->executeCmds) {
+                $cmd();
             }
-            return;
+            return ($this->fakeCmdRunner)($cmd);
         }
 
-        // By default, capture but don't execute side-effecting cmds.
+        // Capture the cmd (for inspection) and optionally execute.
         $this->capturedCmds[] = $cmd;
 
-        // Execute sync-only commands that don't have side effects.
-        $msg = $cmd();
-        if ($msg instanceof Msg) {
-            // For sync dispatching, we'd need the model.
-            // Just record it for inspection.
-        }
-    }
-
-    /**
-     * Create a pair of memory streams for input/output capture.
-     *
-     * @return array{0: resource, 1: resource}
-     */
-    private function createMemoryStreamPair(): array
-    {
-        $input = fopen('php://memory', 'r+');
-        $output = fopen('php://memory', 'w+');
-
-        if ($input === false || $output === false) {
-            throw new \RuntimeException('Failed to create memory streams');
+        if (!$this->executeCmds) {
+            // Capture-only mode: don't execute side-effecting cmds.
+            return null;
         }
 
-        return [$input, $output];
+        // Execute the cmd and return any produced message.
+        return $cmd();
     }
 }

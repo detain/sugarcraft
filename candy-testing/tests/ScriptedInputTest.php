@@ -165,6 +165,10 @@ final class ScriptedInputTest extends TestCase
         $messages = $input->build();
 
         $this->assertCount(3, $messages);
+        foreach ($messages as $msg) {
+            $this->assertInstanceOf(\SugarCraft\Testing\Input\TickMsg::class, $msg);
+            $this->assertSame(1.0, $msg->seconds);
+        }
     }
 
     public function testTicksWithCustomInterval(): void
@@ -174,6 +178,10 @@ final class ScriptedInputTest extends TestCase
         $messages = $input->build();
 
         $this->assertCount(2, $messages);
+        foreach ($messages as $msg) {
+            $this->assertInstanceOf(\SugarCraft\Testing\Input\TickMsg::class, $msg);
+            $this->assertSame(0.5, $msg->seconds);
+        }
     }
 
     public function testMouseAppendsMouseMsg(): void
