@@ -272,4 +272,18 @@ final class DatabaseTest extends TestCase
         $this->assertNotContains('expired', $keys);
         $this->assertContains('good', $keys);
     }
+
+    // ─── Step 15 (e): nested transaction throws ──────────────────────────────
+
+    public function testNestedTransactionThrows(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Nested transactions are not supported');
+        // The PHP-level guard prevents re-entrant transaction() calls.
+        $this->db->transaction(function (): void {
+            $this->db->transaction(function (): void {
+                $this->db->set('nested', 'value');
+            });
+        });
+    }
 }
