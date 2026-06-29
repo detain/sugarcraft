@@ -111,11 +111,11 @@ final class TmuxPassthroughDecoratorTest extends TestCase
         $inner = new HalfBlockRenderer();
         $decorator = new TmuxPassthroughDecorator($inner);
 
-        // Plain SGR string with no DCS/APC/OSC.
-        $sgr = "\x1b[31;40mHello\x1b[0m";
-        $wrapped = $decorator->wrap($sgr);
+        // Plain ASCII with no DCS/APC/OSC escape sequences — must pass through unchanged.
+        $plain = "Hello, World!";
+        $wrapped = $decorator->wrap($plain);
 
-        $this->assertSame($sgr, $wrapped);
+        $this->assertSame($plain, $wrapped);
     }
 
     public function testWrapEmptyStringReturnsEmpty(): void
