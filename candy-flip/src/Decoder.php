@@ -225,7 +225,7 @@ final class Decoder
         $gifData .= "\x21\xF9\x04"
             . chr($disposalByte | $transparentByte)
             . chr($delayLo) . chr($delayHi)
-            . chr($transparentIndex)
+            . chr($transparent && $transparentIndex >= 0 ? $transparentIndex : 0)
             . "\x00";
         // Local color table when present (after the Image Descriptor header).
         if ($hasLct) {
