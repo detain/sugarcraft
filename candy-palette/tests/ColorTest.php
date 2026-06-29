@@ -161,4 +161,33 @@ final class ColorTest extends TestCase
             $this->assertInstanceOf(Color::class, StandardColors::${$name});
         }
     }
+
+    public function testParseInvalidHexThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Color::parse('zzzzzz');
+    }
+
+    public function testParseTooShortHexThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Color::parse('ab');
+    }
+
+    public function testParseValidHex3StillWorks(): void
+    {
+        $c = Color::parse('abc');
+        $this->assertSame(0xaa, $c->r);
+        $this->assertSame(0xbb, $c->g);
+        $this->assertSame(0xcc, $c->b);
+    }
+
+    public function testColorProfileAllowsColor(): void
+    {
+        $this->assertTrue(\SugarCraft\Palette\ColorProfile::Ansi->allowsColor());
+        $this->assertTrue(\SugarCraft\Palette\ColorProfile::Ansi256->allowsColor());
+        $this->assertTrue(\SugarCraft\Palette\ColorProfile::TrueColor->allowsColor());
+        $this->assertFalse(\SugarCraft\Palette\ColorProfile::NoTTY->allowsColor());
+        $this->assertTrue(\SugarCraft\Palette\ColorProfile::Ascii->allowsColor());
+    }
 }

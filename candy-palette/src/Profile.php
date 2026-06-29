@@ -30,6 +30,20 @@ enum Profile: string
     case NoTTY = 'notty';
 
     /**
+     * Bridge from the {@see ColorProfile} enum.
+     */
+    public static function fromColorProfile(ColorProfile $p): self
+    {
+        return match ($p) {
+            ColorProfile::TrueColor => self::TrueColor,
+            ColorProfile::Ansi256   => self::ANSI256,
+            ColorProfile::Ansi     => self::ANSI,
+            ColorProfile::Ascii    => self::Ascii,
+            ColorProfile::NoTTY    => self::NoTTY,
+        };
+    }
+
+    /**
      * Human-readable name for the profile.
      */
     public function label(): string

@@ -30,13 +30,20 @@ final class Palette
     /**
      * Detect the terminal color profile from the environment.
      *
-     * Checks in order:
-     * 1. FORCE_COLOR=0..255  → force a specific profile level
-     * 2. NO_COLOR=          → NoTTY (disabled)
-     * 3. COLORTERM=         → TrueColor if set to any value
-     * 4. TERM_PROGRAM iTerm2 / Apple_Terminal / Hyper → TrueColor
-     * 5. TERM=              → match against known capability strings
-     * 6. TTY detection       → NoTTY if stdout is not a TTY
+     * Priority (aligned with Probe::colorProfile SSOT):
+     *  1. CLICOLOR_FORCE=1   → TrueColor (SugarCraft extension)
+     *  2. FORCE_COLOR=0..3   → profile by level (SugarCraft extension)
+     *  3. NO_COLOR=          → NoTTY
+     *  4. CLICOLOR=0         → NoTTY
+     *  5. TERM=dumb          → NoTTY
+     *  6. COLORTERM=24bit|truecolor|yes → TrueColor
+     *  7. WT_SESSION set     → TrueColor
+     *  8. GOOGLE_CLOUD_SHELL=true → TrueColor
+     *  9. TMUX||STY + TERM screen/tmux → ANSI256
+     * 10. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
+     * 11. TERM=xterm*|screen*|tmux* → ANSI
+     * 12. TTY detection      → NoTTY if not a TTY
+     * 13. Default            → ANSI
      *
      * @param resource|null $stream  Stream to check for TTY (default: STDOUT)
      * @param array<string,string|null> $env     Environment map (default: $_ENV)
@@ -120,15 +127,18 @@ final class Palette
     public static function stripAnsi(string $s): string
     {
         // CSI sequences: \x1b[...{letter}
+        // Extended CSI: \x1b[?... (private mode), \x1b[>... (private mode), \x1b[=... (private mode)
         // OSC sequences: \x1b]...(\x07|\x1b\\)
         // DCS sequences: \x1bP...(\x07|\x1b\\)
         // SS3 sequences: \x1bO{letter}
         // APC sequences: \x1b_...(\x07|\x1b\\)
+        // Charset selectors: \x1b(B, \x1b(U, etc.
         return \preg_replace(
             '/(?:\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
-            . '\x1b\[[0-9;]*[A-Za-z]|'
+            . '\x1b\[[0-9;:<>=?]*[A-Za-z]|'
             . '\x1b[PX^_][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
-            . '\x1b[OopeHMJKhCBDsu])/',
+            . '\x1b[OopeHMJKhCBDsu]|'
+            . '\x1b[()*+][@-~])/',
             '',
             $s,
         ) ?? $s;
@@ -161,24 +171,34 @@ final class Palette
     // -------------------------------------------------------------------------
 
     /**
-     * Core detection logic — mirrors the Go colorprofile algorithm.
+     * Core detection logic — aligned with Probe::colorProfile() SSOT.
      *
-     * Priority:
-     *  1. FORCE_COLOR  — override (any non-empty value, level = min(value, 3))
-     *  2. NO_COLOR     — disable colors entirely
-     *  3. COLORTERM    — "truecolor" or "24bit" → TrueColor
-     *  4. TERM_PROGRAM — iTerm2 / Apple_Terminal / Hyper → TrueColor
-     *  5. TERM         — pattern-match against capability database
-     *  6. isatty()     — no TTY → NoTTY
+     * Priority (mirrors Probe::colorProfile):
+     *  1. CLICOLOR_FORCE=1      → TrueColor (SugarCraft extension; supersedes all)
+     *  2. FORCE_COLOR           → SugarCraft extension level override (0=Ascii, 1=ANSI, 2=ANSI256, 3=TC)
+     *  3. NO_COLOR (any value) → NoTTY
+     *  4. CLICOLOR=0            → NoTTY
+     *  5. TERM=dumb             → NoTTY
+     *  6. COLORTERM=24bit|truecolor|yes → TrueColor
+     *  7. WT_SESSION set        → TrueColor (Windows Terminal)
+     *  8. GOOGLE_CLOUD_SHELL=true → TrueColor
+     *  9. TMUX||STY + screen/tmux base TERM → ANSI256
+     * 10. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
+     * 11. TERM=xterm*|screen*|tmux* → ANSI
+     * 12. isatty()              → NoTTY if not a TTY
+     * 13. Default               → ANSI
      */
     private static function detectProfile($stream, array $env): Profile
     {
-        $env = \array_merge($_ENV, $env);
+        // Only use the explicit env; fall back to getenv() for missing keys.
+        // This prevents setUp's putenv state from leaking into tests that
+        // don't explicitly set those vars.
+        $cliclorForce = $env['CLICOLOR_FORCE'] ?? \getenv('CLICOLOR_FORCE');
+        if ($cliclorForce === '1') {
+            return Profile::TrueColor;
+        }
 
-        // 1. FORCE_COLOR: 0=Ascii, 1=ANSI, 2=ANSI256, 3+=TrueColor
-        // Check getenv() directly since $_ENV may not be populated from the
-        // process environment in some CI configurations (e.g. GitHub Actions
-        // sets FORCE_COLOR but $_ENV is not always populated).
+        // 2. FORCE_COLOR: SugarCraft extension (level-based)
         $force = $env['FORCE_COLOR'] ?? \getenv('FORCE_COLOR');
         if ($force !== null && $force !== '' && $force !== false) {
             $level = \intval($force);
@@ -190,70 +210,69 @@ final class Palette
             };
         }
 
-        // 2. NO_COLOR: presence (any value, including empty) disables colors.
-        // Per https://no-color.org: "when present (regardless of its value)".
+        // 3. NO_COLOR: presence (any value) disables colors.
         if (\array_key_exists('NO_COLOR', $env)) {
             return Profile::NoTTY;
         }
 
-        // 3. COLORTERM env var
-        $ct = $env['COLORTERM'] ?? null;
-        if ($ct !== null && \strtolower($ct) !== 'none') {
-            // Any COLORTERM value other than "none" implies at least TrueColor
+        // 4. CLICOLOR=0 → NoTTY (only from explicit env, not process getenv)
+        if (isset($env['CLICOLOR']) && $env['CLICOLOR'] === '0') {
+            return Profile::NoTTY;
+        }
+
+        // 5. TERM=dumb → NoTTY
+        $term = $env['TERM'] ?? \getenv('TERM') ?? '';
+        if ($term === 'dumb') {
+            return Profile::NoTTY;
+        }
+
+        // 6. COLORTERM=24bit|truecolor|yes → TrueColor
+        $ct = $env['COLORTERM'] ?? \getenv('COLORTERM') ?: null;
+        if ($ct !== null && \in_array(\strtolower($ct), ['24bit', 'truecolor', 'yes'], true)) {
             return Profile::TrueColor;
         }
 
-        // 4. TERM_PROGRAM hints
-        $program = $env['TERM_PROGRAM'] ?? null;
-        if ($program !== null) {
-            $known = [
-                'iTerm.app'       => Profile::TrueColor,
-                'Apple_Terminal'  => Profile::TrueColor,
-                'Hyper'           => Profile::TrueColor,
-                'WezTerm'         => Profile::TrueColor,
-                'vscode'          => Profile::TrueColor,
-                'Ghostty'         => Profile::TrueColor,
-            ];
-            if (isset($known[$program])) {
-                return $known[$program];
+        // 7. WT_SESSION set → TrueColor (Windows Terminal)
+        $wtSession = $env['WT_SESSION'] ?? \getenv('WT_SESSION');
+        if ($wtSession !== null && $wtSession !== '') {
+            return Profile::TrueColor;
+        }
+
+        // 8. GOOGLE_CLOUD_SHELL=true → TrueColor
+        $gcs = $env['GOOGLE_CLOUD_SHELL'] ?? \getenv('GOOGLE_CLOUD_SHELL');
+        if ($gcs === 'true') {
+            return Profile::TrueColor;
+        }
+
+        // 9. TMUX||STY + base TERM screen/tmux → ANSI256
+        $tmux = $env['TMUX'] ?? \getenv('TMUX');
+        $sty = $env['STY'] ?? \getenv('STY');
+        $termLower = \strtolower($term);
+        if (($tmux !== null && $tmux !== '') || ($sty !== null && $sty !== '')) {
+            if (\str_starts_with($termLower, 'screen') || \str_starts_with($termLower, 'tmux')) {
+                return Profile::ANSI256;
             }
         }
 
-        // 5. TERM capability heuristics
-        $term = $env['TERM'] ?? '';
-        $termLower = \strtolower($term);
-
-        // TrueColor terminals: only those that explicitly advertise 24-bit.
-        // The "*-256color" terminfo entries advertise 256 colors, not TrueColor —
-        // 24-bit must be opted into via COLORTERM or a -truecolor/-direct suffix.
+        // 10. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
         if (
-            \preg_match('/-truecolor$/i', $term)
-            || \str_contains($termLower, '24bit')
-            || \str_contains($termLower, 'direct')
-        ) {
-            return Profile::TrueColor;
-        }
-
-        // ANSI256 terminals
-        if (
-            \preg_match('/-256color$/i', $term)
-            || \in_array($termLower, [
-                'xterm-16color', 'rxvt-unicode', 'eterm', 'ansi',
-                'screen', 'tmux',
-            ], true)
+            \str_contains($termLower, '-256color')
+            || $termLower === 'xterm-kitty'
+            || $termLower === 'xterm-ghostty'
         ) {
             return Profile::ANSI256;
         }
 
-        // ANSI / 8-color
+        // 11. TERM=xterm*|screen*|tmux* → ANSI
         if (
-            \str_contains($termLower, 'color')
-            || \in_array($termLower, ['vt100', 'linux', 'cygwin'])
+            \str_starts_with($termLower, 'xterm')
+            || \str_starts_with($termLower, 'screen')
+            || \str_starts_with($termLower, 'tmux')
         ) {
             return Profile::ANSI;
         }
 
-        // 6. TTY detection
+        // 12. TTY detection
         if ($stream !== null && \function_exists('stream_isatty')) {
             if (!@\stream_isatty($stream)) {
                 return Profile::NoTTY;
@@ -264,39 +283,47 @@ final class Palette
             }
         }
 
-        // Conservative default: assume ANSI256 (most modern terminals)
-        return Profile::ANSI256;
+        // 13. Default → ANSI (not ANSI256, matching Probe)
+        return Profile::ANSI;
     }
 
     /**
      * Rewrite ANSI sequences in a string to match $targetProfile.
-     * Handles SGR (CSI 38;2;R;G;B and CSI 48;2;R;G;B) for TrueColor input.
+     * Handles:
+     *   - SGR CSI 38;2;R;G;B / 48;2;R;G;B (TrueColor)
+     *   - SGR CSI 38;5;N / 48;5;N (256-color)
+     *
+     * Targets: ANSI256 passes 256-color through, ANSI/Ascii degrades to 4-bit SGR.
      */
     private function rewriteAnsi(string $s, Profile $targetProfile): string
     {
         return \preg_replace_callback(
-            '/(\x1b\[)(38|48);2;(\d+);(\d+);(\d+)(m)/',
+            '/(\x1b\[)(38|48);(\d);(\d+)(;(\d+);(\d+))?(m)/',
             function (array $m) use ($targetProfile): string {
-                $color = new Color(
-                    (int) $m[3],
-                    (int) $m[4],
-                    (int) $m[5],
-                );
+                $sgrBase = (int) $m[2];
+                $fmt = (int) $m[3];
+                $terminator = $m[8];
+
+                if ($fmt === 2) {
+                    $color = new Color((int) $m[4], (int) $m[5], (int) $m[6]);
+                } else {
+                    $color = Color::fromAnsi256Index((int) $m[4]);
+                }
+
                 $converted = $color->convert($targetProfile);
 
                 if ($targetProfile === Profile::ANSI256) {
                     $idx = $converted->toAnsi256Index();
-                    return "\x1b[{$m[1]}{$m[2]};5;{$idx}{$m[6]}";
+                    return "\x1b[{$sgrBase};5;{$idx}{$terminator}";
                 }
 
-                if ($targetProfile === Profile::ANSI) {
+                if ($targetProfile === Profile::ANSI || $targetProfile === Profile::Ascii) {
                     $idx = $converted->toAnsi16Index();
-                    return "\x1b[{$m[1]}{$m[2]};5;{$idx}{$m[6]}";
+                    $isBackground = $sgrBase === 48;
+                    return "\x1b[" . Color::ansi16Sgr($idx, $isBackground) . "{$terminator}";
                 }
 
-                // Ascii
-                $ascii = $converted->toAscii();
-                return "\x1b[{$m[1]}{$m[2]};5;" . $ascii->toAnsi16Index() . "{$m[6]}";
+                return $m[0];
             },
             $s,
         ) ?? $s;

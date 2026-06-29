@@ -97,7 +97,7 @@ final class ProfileWriter
         if ($this->profile === Profile::NoTTY) {
             $data = Palette::stripAnsi($data);
         } elseif ($this->profile !== Profile::TrueColor) {
-            $palette = new Palette($this->stream, []);
+            $palette = (new Palette($this->stream, ['NO_COLOR' => '1']))->withProfile($this->profile);
             $data = $palette->degrade($data);
         }
 
