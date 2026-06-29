@@ -214,4 +214,21 @@ final class LoggerTest extends TestCase
         $this->assertStringContainsString('global hello', $content);
         $this->assertStringContainsString('key=val', $content);
     }
+
+    public function testDefaultTimestampFormatIsRealDate(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: true,
+            reportCaller: false,
+            stream: $stream,
+        );
+        $log->info('timestamp test');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        // Verify the timestamp is a real date in Y/m/d H:i:s format
+        $this->assertMatchesRegularExpression('/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}/', $content);
+    }
 }
