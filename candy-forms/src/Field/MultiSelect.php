@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Util\RenderSafe;
 
 /**
@@ -231,10 +232,10 @@ final class MultiSelect implements \SugarCraft\Forms\Field
     private function computeConstraintError(int $count): ?string
     {
         if ($this->min > 0 && $count < $this->min) {
-            return "Pick at least {$this->min}.";
+            return Lang::t('multiselect.pick_at_least', ['n' => (string) $this->min]);
         }
         if ($this->max > 0 && $count > $this->max) {
-            return "Pick at most {$this->max}.";
+            return Lang::t('multiselect.pick_at_most', ['n' => (string) $this->max]);
         }
         return null;
     }

@@ -12,4 +12,11 @@ return [
     'scrollbar.total_nonneg' => 'scrollbar total must be >= 0',
     'scrollbar.viewport_nonneg' => 'scrollbar viewport must be >= 0',
     'scrollbar.position_range' => 'scrollbar position must be in range [0, max(0, total - viewport)]',
+    'validator.required' => 'Value is required',
+    'validator.min_length' => 'Must be at least {min} characters',
+    'validator.max_length' => 'Must be no more than {max} characters',
+    'validator.email' => 'Must be a valid email address',
+    'validator.pattern' => 'Input does not match required format',
+    'multiselect.pick_at_least' => 'Pick at least {n}.',
+    'multiselect.pick_at_most' => 'Pick at most {n}.',
 ];

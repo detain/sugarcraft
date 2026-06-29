@@ -521,7 +521,7 @@ final class InputValidationTest extends TestCase
     {
         $validateCount = 0;
         $field = $this->focusInput(Input::new('name'))
-            ->validator(static function (string $v) use (&$validateCount): ?string {
+            ->validator(static function (string $value) use (&$validateCount): ?string {
                 $validateCount++;
                 return null;
             });
@@ -532,5 +532,23 @@ final class InputValidationTest extends TestCase
 
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'b'));
         $this->assertSame(2, $validateCount);
+    }
+
+    /**
+     * Step 12: revalidate() clears error when validation passes.
+     * The errorSet sentinel in Input::mutate() allows explicit error clearing
+     * (validate() uses direct instantiation to apply the sentinel).
+     */
+    public function testRevalidateClearsErrorWhenValidationPasses(): void
+    {
+        $field = $this->focusInput(Input::new('name'))
+            ->validator(static fn (string $v): ?string => $v === '' ? 'Required' : null);
+
+        // Typing 'x' makes value non-empty, validator passes on revalidate
+        [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
+
+        // revalidate() on a value that passes validation clears the error
+        $rf = $field->revalidate();
+        $this->assertNull($rf->getError());
     }
 }
