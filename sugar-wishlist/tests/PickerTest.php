@@ -110,6 +110,21 @@ final class PickerTest extends TestCase
         $this->assertSame('dev', $picked->name);
     }
 
+    public function testSplitArrowUpSequenceIsReassembled(): void
+    {
+        // Verify that a split up-arrow sequence (ESC [ A) fed as a
+        // single buffered write is correctly reassembled and navigates
+        // up. First we move down to staging (index 1), then pressing
+        // up should go back to production.
+        // This exercises the stream_select timeout window: when all
+        // bytes arrive in one read, stream_select fires immediately
+        // and we still reconstruct the full CSI sequence.
+        [, , $p] = $this->makePicker("j\x1b[A\r");
+        $picked = $p->pick($this->endpoints());
+        // j moves to staging (index 1), up arrow goes back to production (index 0)
+        $this->assertSame('production', $picked->name);
+    }
+
     public function testHighlightLineProducesAnsiBoldCyan(): void
     {
         $in = fopen('php://memory', 'w+');

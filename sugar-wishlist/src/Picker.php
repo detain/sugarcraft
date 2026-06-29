@@ -232,17 +232,64 @@ class Picker
             return $b;
         }
         // Try to read a CSI sequence: ESC `[` followed by params and a
-        // final byte in 0x40-0x7e. Non-blocking so a lone Esc doesn't
-        // hang, and a single byte at a time so we don't gobble the
-        // next keypress.
+        // final byte in 0x40-0x7e. Use stream_select with a 50ms timeout
+        // on real TTY streams to wait for continuation bytes — this lets
+        // us distinguish a genuine lone ESC keypress (which arrives without
+        // follow-on bytes) from an arrow-key sequence (where the bytes
+        // arrive in quick succession). Memory streams don't support
+        // stream_select, so we fall back to immediate fread for those.
         stream_set_blocking($this->in, false);
         try {
+            $isMemoryStream = (stream_get_meta_data($this->in)['stream_type'] ?? '') === 'MEMORY';
+
+            if ($isMemoryStream) {
+                // Memory streams: data is already buffered; fread returns
+                // immediately if bytes are present. This preserves the
+                // existing test behavior.
+                $next = fread($this->in, 1);
+                if ($next !== '[') {
+                    return $next === false || $next === '' ? "\x1b" : "\x1b" . $next;
+                }
+                $seq = "\x1b[";
+                for ($i = 0; $i < 16; $i++) {
+                    $c = fread($this->in, 1);
+                    if ($c === false || $c === '') {
+                        break;
+                    }
+                    $seq .= $c;
+                    $code = ord($c);
+                    if ($code >= 0x40 && $code <= 0x7e) {
+                        break;
+                    }
+                }
+                return $seq;
+            }
+
+            // Real TTY / pipe: use stream_select as a 50ms timer to wait
+            // for continuation bytes after the ESC.
+            $r = [$this->in];
+            $w = null;
+            $e = null;
+            $changed = @stream_select($r, $w, $e, 0, 50000);
+            if ($changed === false || $changed === 0) {
+                // Timeout — no continuation bytes arrived, treat as
+                // a genuine lone ESC keypress.
+                return "\x1b";
+            }
             $next = fread($this->in, 1);
             if ($next !== '[') {
                 return $next === false || $next === '' ? "\x1b" : "\x1b" . $next;
             }
             $seq = "\x1b[";
+            // Read remaining CSI bytes, waiting up to 50ms each.
             for ($i = 0; $i < 16; $i++) {
+                $r = [$this->in];
+                $w = null;
+                $e = null;
+                $changed = @stream_select($r, $w, $e, 0, 50000);
+                if ($changed === false || $changed === 0) {
+                    break;
+                }
                 $c = fread($this->in, 1);
                 if ($c === false || $c === '') {
                     break;
