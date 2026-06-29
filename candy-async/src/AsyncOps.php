@@ -13,18 +13,21 @@ use function React\Promise\reject;
 /**
  * Static helpers for async operations on top of ReactPHP.
  *
- * These utilities are pure functions that do not retain state or
- * modify any shared resources. They operate entirely via the
- * Promise/CancelToken plumbing passed in.
+ * withTimeout() and retry() are stateless helpers. debounce() and
+ * throttle() return stateful closures that retain mutable timer/cooldown
+ * state across calls.
  *
  * All timers are bounded \u2014 no real waits >100ms in test fixtures.
  */
 final class AsyncOps
 {
+    /** Never-cancelled sentinel token shared across retry() calls with no explicit token. */
+    private static ?CancellationToken $neverToken = null;
+
     /**
      * Wrap a promise with a timeout. If the timeout fires before the
-     * promise settles, the returned promise rejects with TimeoutException
-     * and the inner promise is cancelled via the CancellationToken.
+     * promise settles, the returned promise rejects with TimeoutException.
+     * The inner promise is NOT cancelled and keeps running to completion.
      *
      * @param LoopInterface $loop
      * @param PromiseInterface $promise
@@ -41,7 +44,6 @@ final class AsyncOps
         }
 
         $deferred = new Deferred();
-        $source = CancellationSource::new();
         $timer = null;
 
         // Settle the outer promise when the inner settles.
@@ -63,20 +65,10 @@ final class AsyncOps
         );
 
         // Schedule the timeout.
-        $timer = $loop->addTimer($seconds, function () use ($source, $deferred, $seconds): void {
-            $source->cancel();
+        $timer = $loop->addTimer($seconds, static function () use ($deferred, $seconds): void {
             $deferred->reject(new TimeoutException(
                 'Operation timed out after ' . $seconds . ' second(s)',
             ));
-        });
-
-        // Wire cancellation: if the token is cancelled (e.g. parent scope cancelled),
-        // propagate the cancellation to the inner promise.
-        $source->token()->onCancel(function () use ($promise): void {
-            // We cannot directly cancel a generic PromiseInterface, but the
-            // caller can hook into the CancellationToken. For PromiseInterface
-            // chains, the caller should provide a cancellable promise.
-            // Here we simply reject the outer promise.
         });
 
         return $deferred->promise();
@@ -104,7 +96,7 @@ final class AsyncOps
             throw new \InvalidArgumentException('Base backoff must be positive');
         }
 
-        $token ??= CancellationSource::new()->token();
+        $token ??= self::$neverToken ??= CancellationSource::new()->token();
 
         return self::retryAttempt($operation, $attempts, $baseBackoffSeconds, $token, 1);
     }
@@ -123,11 +115,7 @@ final class AsyncOps
             return reject(new \RuntimeException('Retry cancelled'));
         }
 
-        return self::withTimeout(
-            \React\EventLoop\Loop::get(),
-            $operation(),
-            $backoff * 2, // Give operation at most backoff*2 seconds to complete
-        )->then(
+        return $operation()->then(
             static fn ($value) => $value,
             static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt): PromiseInterface {
                 if ($token->isCancelled()) {
@@ -143,11 +131,15 @@ final class AsyncOps
                 \React\EventLoop\Loop::get()->addTimer(
                     $backoff,
                     static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred): void {
-                        $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1);
-                        $next->then(
-                            static fn ($v) => $deferred->resolve($v),
-                            static fn ($e) => $deferred->reject($e),
-                        );
+                        try {
+                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1);
+                            $next->then(
+                                static fn ($v) => $deferred->resolve($v),
+                                static fn ($e) => $deferred->reject($e),
+                            );
+                        } catch (\Throwable $e) {
+                            $deferred->reject($e);
+                        }
                     },
                 );
                 return $deferred->promise();
@@ -171,7 +163,6 @@ final class AsyncOps
     ): callable {
         $loop ??= \React\EventLoop\Loop::get();
         $timer = null;
-        $args = null;
 
         return static function (...$args) use ($fn, $seconds, $loop, &$timer): void {
             if ($timer !== null) {
