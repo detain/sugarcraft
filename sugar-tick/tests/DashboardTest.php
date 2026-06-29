@@ -311,4 +311,49 @@ final class DashboardTest extends TestCase
         $stats = Stats::compute([], $from, $end);
         return new Dashboard($store, $end, $days, $stats);
     }
+
+    // ---- cache invalidation via reload() -----------------------------------
+
+    public function testReloadInvalidatesCache(): void
+    {
+        $store = new Store($this->storeDir);
+        $day = new \DateTimeImmutable('2024-06-07');
+
+        // Start dashboard (loads initial data) with 3-day range
+        $d = Dashboard::start($store, $day, 3);
+
+        // Append more data to disk within the same date range (2024-06-05 to 2024-06-07)
+        $hb2 = new Heartbeat(
+            $day->getTimestamp(),  // Same day as endDay (2024-06-07)
+            'new-project',
+            'go',
+            'b.go',
+            120,
+        );
+        $store->append($hb2);
+
+        // After reload, the new data IS visible because reload() invalidates cache
+        $reloaded = $d->reload();
+        $this->assertArrayHasKey('new-project', $reloaded->stats->perProject());
+    }
+
+    public function testWindowSizeMsgStacksPanesWhenNarrow(): void
+    {
+        $store = new Store($this->storeDir);
+        $end = new \DateTimeImmutable('2024-06-07');
+        $stats = new Stats([], []);
+
+        // Send a WindowSizeMsg with narrow width (< 56 threshold)
+        $d = new Dashboard($store, $end, 7, $stats, 40, null);
+
+        $msg = new \SugarCraft\Core\Msg\WindowSizeMsg(40, 24);
+        [$next, ] = $d->update($msg);
+
+        $this->assertSame(40, $next->width);
+        $out = $next->view();
+
+        // When narrow, the view should stack panes (contains newline between projects and languages)
+        $this->assertStringContainsString('Top projects', $out);
+        $this->assertStringContainsString('By language', $out);
+    }
 }

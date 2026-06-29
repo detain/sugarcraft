@@ -129,4 +129,72 @@ final class StoreTest extends TestCase
             }
         }
     }
+
+    public function testLoadDayMemoizesUntilInvalidate(): void
+    {
+        $s = new Store($this->tmp);
+        $day = new \DateTimeImmutable('2026-05-03');
+
+        // Append initial data
+        $hb1 = new Heartbeat($day->getTimestamp(), 'proj1', 'php', 'a.php', 60);
+        $s->append($hb1);
+
+        // First loadDay reads from disk
+        $loaded1 = $s->loadDay($day);
+        $this->assertCount(1, $loaded1);
+
+        // Mutate the file externally (simulate another process writing)
+        $file = $this->tmp . '/2026-05-03.jsonl';
+        file_put_contents($file, json_encode([
+            'time' => $day->getTimestamp(),
+            'project' => 'proj2',
+            'language' => 'go',
+            'file' => 'b.go',
+            'duration' => 120,
+        ]) . "\n", FILE_APPEND);
+
+        // Without invalidate, second loadDay returns cached (original) data
+        $loaded2 = $s->loadDay($day);
+        $this->assertCount(1, $loaded2);  // Still only 1 (cached)
+        $this->assertSame('proj1', $loaded2[0]->project);
+
+        // After invalidate, loadDay sees the new content
+        $s->invalidate();
+        $loaded3 = $s->loadDay($day);
+        $this->assertCount(2, $loaded3);  // Both heartbeats now visible
+    }
+
+    public function testAppendThrowsWhenPreCancelled(): void
+    {
+        $s = new Store($this->tmp);
+        $day = new \DateTimeImmutable('2026-05-03');
+
+        // Create a cancelled token via CancellationSource
+        $source = \SugarCraft\Async\CancellationSource::new();
+        $source->cancel();
+        $token = $source->token();
+
+        $hb = new Heartbeat($day->getTimestamp(), 'proj', 'php', 'a.php', 60);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cancelled');
+        $s->append($hb, $token);
+    }
+
+    public function testAppendCompletesWhenNotCancelled(): void
+    {
+        $s = new Store($this->tmp);
+        $day = new \DateTimeImmutable('2026-05-03');
+
+        // Create an uncancelled token via CancellationSource
+        $source = \SugarCraft\Async\CancellationSource::new();
+        $token = $source->token();
+
+        $hb = new Heartbeat($day->getTimestamp(), 'proj', 'php', 'a.php', 60);
+        $s->append($hb, $token);
+
+        $loaded = $s->loadDay($day);
+        $this->assertCount(1, $loaded);
+        $this->assertSame('proj', $loaded[0]->project);
+    }
 }

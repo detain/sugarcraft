@@ -51,4 +51,19 @@ final class JsonExporterTest extends TestCase
     {
         $this->assertSame('application/json', $this->exporter->contentType());
     }
+
+    public function testEncodeProducesObjects(): void
+    {
+        // Mirrors JsonExporter::encode() producing array of objects keyed by headers()
+        $hb = new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60);
+        $json = $this->exporter->encode([$hb]);
+
+        $decoded = json_decode($json, true);
+        $this->assertIsArray($decoded);
+        $this->assertCount(1, $decoded);
+        $this->assertSame('demo', $decoded[0]['project']);
+        $this->assertSame('php', $decoded[0]['language']);
+        $this->assertSame('a.php', $decoded[0]['file']);
+        $this->assertSame(60, $decoded[0]['duration']);
+    }
 }
