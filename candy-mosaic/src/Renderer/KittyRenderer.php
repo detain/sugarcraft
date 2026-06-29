@@ -85,17 +85,20 @@ final class KittyRenderer implements Renderer
         ?int $height,
         KittyOptions $opts,
     ): string {
+        $optsArr   = $opts->toArray();
+
         if ($opts->isPlace()) {
             return $this->buildBegin([
                 'a' => 'p',
-                'i' => $opts->toArray()['i'],
-                'x' => $opts->toArray()['x'],
-                'y' => $opts->toArray()['y'],
+                'i' => $optsArr['i'],
+                'x' => $optsArr['x'],
+                'y' => $optsArr['y'],
+                'z' => $optsArr['z'],
             ]);
         }
 
         $pngBytes  = $this->ensurePng($image);
-        $compress  = ($opts->toArray()['f'] ?? 100) === 1;
+        $compress  = ($optsArr['f'] ?? 100) === 1;
         if ($compress) {
             $z = gzcompress($pngBytes);
             if ($z === false) {
@@ -107,7 +110,6 @@ final class KittyRenderer implements Renderer
         }
         $chunks    = $this->chunk($base64);
         $total     = count($chunks);
-        $optsArr   = $opts->toArray();
         $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
 
         $action = $opts->useVirtual() ? 'p' : ($optsArr['a'] ?? 'T');
