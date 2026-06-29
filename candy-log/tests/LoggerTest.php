@@ -338,7 +338,6 @@ final class LoggerTest extends TestCase
         $newStream = \fopen($newPath, 'w');
         $cloned = $log->withOutput($newStream);
         $cloned->info('clone');
-        \fclose($stream);
         \fclose($newStream);
 
         // Verify original logger wrote to its stream
