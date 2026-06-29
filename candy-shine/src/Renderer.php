@@ -233,7 +233,7 @@ final class Renderer
     /**
      * Expand `:smile:`-style emoji shortcodes in source Markdown
      * before parsing. Default off; on, the renderer rewrites every
-     * `:shortcode:` token using the {@see EmojiMap} catalogue. Unknown
+     * `:shortcode:` token using the built-in shortcode map. Unknown
      * shortcodes pass through verbatim.
      *
      * Mirrors glamour's `WithEmoji`.
@@ -349,14 +349,6 @@ final class Renderer
     }
 
     /**
-     * Extract sequences of 3+ consecutive newlines from the source,
-     * recording the count for each match. Used by
-     * {@see withPreservedNewLines()} to re-inflate runs that CommonMark
-     * collapses on parse.
-     *
-     * @return list<int> list of blank-line counts, in source order
-     */
-    /**
      * Replace `:shortcode:` tokens with their Unicode equivalent
      * before parsing. Mirrors glamour's `WithEmoji` expansion. Unknown
      * shortcodes pass through verbatim. Map matches the gum format
@@ -382,6 +374,14 @@ final class Renderer
         );
     }
 
+    /**
+     * Extract sequences of 3+ consecutive newlines from the source,
+     * recording the count for each match. Used by
+     * {@see withPreservedNewLines()} to re-inflate runs that CommonMark
+     * collapses on parse.
+     *
+     * @return list<int> list of blank-line counts, in source order
+     */
     private static function extractBlankRuns(string $source): array
     {
         $out = [];
