@@ -176,8 +176,11 @@ final class Palette
         $env = \array_merge($_ENV, $env);
 
         // 1. FORCE_COLOR: 0=Ascii, 1=ANSI, 2=ANSI256, 3+=TrueColor
-        $force = $env['FORCE_COLOR'] ?? null;
-        if ($force !== null && $force !== '') {
+        // Check getenv() directly since $_ENV may not be populated from the
+        // process environment in some CI configurations (e.g. GitHub Actions
+        // sets FORCE_COLOR but $_ENV is not always populated).
+        $force = $env['FORCE_COLOR'] ?? \getenv('FORCE_COLOR');
+        if ($force !== null && $force !== '' && $force !== false) {
             $level = \intval($force);
             return match (true) {
                 $level >= 3 => Profile::TrueColor,
