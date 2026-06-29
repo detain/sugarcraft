@@ -159,9 +159,12 @@ class Picker
         foreach ($matches as $i => $record) {
             $e = $record['endpoint'];
             $marker = $i === $this->cursor ? Ansi::sgr(1, 36) . '▸' . Ansi::reset() . ' ' : '  ';
-            $line = $this->highlightLine($e->displayLine(), $record['result']);
+            // Sanitize the display string before highlighting to prevent
+            // terminal escape sequence injection from config values.
+            $sanitizedDisplay = $this->stripControls($e->displayLine());
+            $line = $this->highlightLine($sanitizedDisplay, $record['result']);
             if ($e->description !== null && $e->description !== '') {
-                $line .= '  ' . Ansi::sgr(Ansi::FAINT) . $e->description . Ansi::reset();
+                $line .= '  ' . Ansi::sgr(Ansi::FAINT) . $this->stripControls($e->description) . Ansi::reset();
             }
             fwrite($this->out, "{$marker}{$line}\r\n");
         }
@@ -169,8 +172,23 @@ class Picker
     }
 
     /**
+     * Strip ANSI escape sequences and C0 control characters from a string
+     * before writing it to the terminal. This prevents malicious config
+     * values (names, descriptions) from injecting escape sequences.
+     */
+    private function stripControls(string $s): string
+    {
+        // Ansi::strip() removes CSI, OSC, and lone ESC sequences.
+        $s = Ansi::strip($s);
+        // Remove remaining C0 control characters except CR/LF (which the
+        // picker handles as line terminators). This catches BEL, STX, etc.
+        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $s);
+    }
+
+    /**
      * Apply bold+cyan highlighting to matched character positions in a display line.
      *
+     * The $line argument is expected to be already sanitized via stripControls().
      * Re-matches the display line against the filter needle to get fresh
      * matched indices, then applies ANSI highlighting to those positions.
      */
