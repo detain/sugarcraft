@@ -39,10 +39,10 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 
 ## Solvers
 
-| Solver          | Use case                            | Edit variables |
-| --------------- | ----------------------------------- | ---------------|
-| GreedySolver   | Deterministic, fast, no deps        | No             |
-| CassowarySolver| Optimal, handles stay constraints   | Yes            |
+| Solver          | Use case                                                    | Edit variables |
+| --------------- | ----------------------------------------------------------- | ---------------|
+| GreedySolver   | Deterministic, fast, no deps                                | No             |
+| CassowarySolver| Experimental simplex prototype; Min/Fill delegate to GreedySolver | No         |
 
 ## Constraint types
 
@@ -55,7 +55,7 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 
 ## Shared foundations
 
-`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`candy-forms` (step-14/15). The `LayoutSolver` interface is the only public contract — swap `GreedySolver` for `CassowarySolver` without touching call-sites.
+`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`candy-forms` (step-14/15). The `LayoutSolver` interface is the only public contract — swap `GreedySolver` for `CassowarySolver` without touching call-sites. Note: CassowarySolver delegates Min and Fill constraint sets to GreedySolver; only pure Length/Percentage/Ratio/Max sets use the simplex path.
 
 ## References
 

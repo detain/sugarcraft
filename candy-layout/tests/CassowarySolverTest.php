@@ -375,10 +375,9 @@ final class CassowarySolverTest extends TestCase
     // simplex algorithm to execute with artificial variables.
 
     /**
-     * Test with only Min constraints - triggers simplex with stay objective.
-     * Note: Min-only constraints without a sum constraint don't fully constrain
-     * the system, so the solver may return 0 values for unconstrained variables.
-     * This test verifies the solver handles this gracefully.
+     * Test with only Min constraints — delegates to GreedySolver (Step 9 Path B).
+     * GreedySolver fully constrains the system: Min(20)+Min(30) @ 100 → 40,60.
+     * Proportional distribution: each min gets its floor plus 50*(n/50) slack.
      */
     public function testSimplexWithMinConstraintsOnly(): void
     {
@@ -390,9 +389,9 @@ final class CassowarySolverTest extends TestCase
         );
 
         $this->assertCount(2, $rects);
-        // Values may be 0 due to unconstrained system, but should not be negative
-        $this->assertGreaterThanOrEqual(0, $rects[0]->width);
-        $this->assertGreaterThanOrEqual(0, $rects[1]->width);
+        // GreedySolver: reservedMinSum=50, slack=50 → 20+(50*20/50)=40, 30+(50*30/50)=60
+        $this->assertSame(40, $rects[0]->width);
+        $this->assertSame(60, $rects[1]->width);
     }
 
     /**
@@ -534,5 +533,163 @@ final class CassowarySolverTest extends TestCase
         // Both should be at most their maximums
         $this->assertLessThanOrEqual(40, $rects[0]->width);
         $this->assertLessThanOrEqual(60, $rects[1]->width);
+    }
+
+    // ── Step 8: Pin CassowarySolver numeric output with exact assertions ────────
+
+    /**
+     * Horizontal length layout: exact widths and x-position chaining from origin.
+     */
+    public function testCassowaryLengthSizesExact(): void
+    {
+        $solver = CassowarySolver::new();
+        $rects = $solver->solve(
+            new Region(0, 0, 100, 24),
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::length(30), Constraint::length(25)]
+        );
+
+        $this->assertCount(3, $rects);
+        // Exact widths
+        $this->assertSame(20, $rects[0]->width);
+        $this->assertSame(30, $rects[1]->width);
+        $this->assertSame(25, $rects[2]->width);
+        // x chain from origin 0
+        $this->assertSame(0, $rects[0]->x);
+        $this->assertSame(20, $rects[1]->x);  // 0 + 20
+        $this->assertSame(50, $rects[2]->x);  // 20 + 30
+        // y is always origin y
+        $this->assertSame(0, $rects[0]->y);
+        $this->assertSame(0, $rects[1]->y);
+        $this->assertSame(0, $rects[2]->y);
+        // heights match region height
+        $this->assertSame(24, $rects[0]->height);
+        $this->assertSame(24, $rects[1]->height);
+        $this->assertSame(24, $rects[2]->height);
+    }
+
+    /**
+     * Vertical length layout: exact heights and y-position chaining from origin.
+     */
+    public function testCassowaryLengthVerticalSizesExact(): void
+    {
+        $solver = CassowarySolver::new();
+        $rects = $solver->solve(
+            new Region(0, 0, 80, 30),
+            Direction::Vertical,
+            [Constraint::length(3), Constraint::length(10), Constraint::length(1)]
+        );
+
+        $this->assertCount(3, $rects);
+        // Exact heights
+        $this->assertSame(3, $rects[0]->height);
+        $this->assertSame(10, $rects[1]->height);
+        $this->assertSame(1, $rects[2]->height);
+        // y chain from origin 0
+        $this->assertSame(0, $rects[0]->y);
+        $this->assertSame(3, $rects[1]->y);   // 0 + 3
+        $this->assertSame(13, $rects[2]->y);  // 3 + 10
+        // x is always origin x
+        $this->assertSame(0, $rects[0]->x);
+        $this->assertSame(0, $rects[1]->x);
+        $this->assertSame(0, $rects[2]->x);
+        // widths match region width
+        $this->assertSame(80, $rects[0]->width);
+        $this->assertSame(80, $rects[1]->width);
+        $this->assertSame(80, $rects[2]->width);
+    }
+
+    /**
+     * Horizontal length+fill: fill absorbs all remaining space exactly.
+     */
+    public function testCassowaryHorizontalFillDistributesRemainder(): void
+    {
+        $solver = CassowarySolver::new();
+        $rects = $solver->solve(
+            new Region(0, 0, 100, 24),
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::fill(1)]
+        );
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(20, $rects[0]->width);
+        $this->assertSame(80, $rects[1]->width);  // 100 - 20 = 80
+        // x chain
+        $this->assertSame(0, $rects[0]->x);
+        $this->assertSame(20, $rects[1]->x);
+        // Total tiles exactly
+        $this->assertSame(100, $rects[0]->width + $rects[1]->width);
+    }
+
+    /**
+     * Vertical length+fill: fill uses height axis (Step 7 fix), absorbs remaining space.
+     * Before the axis fix this read $width instead of $height for vertical layouts.
+     */
+    public function testCassowaryVerticalFillUsesHeightAxis(): void
+    {
+        $solver = CassowarySolver::new();
+        $rects = $solver->solve(
+            new Region(0, 0, 80, 50),
+            Direction::Vertical,
+            [Constraint::length(10), Constraint::fill(1)]
+        );
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(10, $rects[0]->height);
+        $this->assertSame(40, $rects[1]->height);  // 50 - 10 = 40
+        // y chain
+        $this->assertSame(0, $rects[0]->y);
+        $this->assertSame(10, $rects[1]->y);
+        // widths are preserved (region width)
+        $this->assertSame(80, $rects[0]->width);
+        $this->assertSame(80, $rects[1]->width);
+    }
+
+    // ── Step 9: Min/Fill delegation to GreedySolver (Path B) ──────────────────
+
+    /**
+     * Min constraints delegate to GreedySolver — verifies Step 9 Path B contract.
+     * [min(30),min(30)] @ 100 → GreedySolver distributes slack 40 proportionally
+     * (1:1 ratio) giving 50 each, both >= 30, total = 100.
+     */
+    public function testCassowaryMinConstraintsDelegateToGreedySolver(): void
+    {
+        $solver = CassowarySolver::new();
+        $rects = $solver->solve(
+            new Region(0, 0, 100, 24),
+            Direction::Horizontal,
+            [Constraint::min(30), Constraint::min(30)]
+        );
+
+        $this->assertCount(2, $rects);
+        // GreedySolver: reservedMinSum=60, slack=40 → each gets 30 + floor(40*0.5)=30+20=50
+        $this->assertSame(50, $rects[0]->width);
+        $this->assertSame(50, $rects[1]->width);
+        // Both meet their Min floor
+        $this->assertGreaterThanOrEqual(30, $rects[0]->width);
+        $this->assertGreaterThanOrEqual(30, $rects[1]->width);
+        // Total tiles region exactly
+        $this->assertSame(100, $rects[0]->width + $rects[1]->width);
+    }
+
+    /**
+     * Length+Min+Fill via CassowarySolver delegates to GreedySolver.
+     * Length(20)+Min(10)+Fill(1) @ 100 → 20,10,70.
+     */
+    public function testCassowaryLengthMinFillDelegatesToGreedySolver(): void
+    {
+        $solver = CassowarySolver::new();
+        $rects = $solver->solve(
+            new Region(0, 0, 100, 24),
+            Direction::Horizontal,
+            [Constraint::length(20), Constraint::min(10), Constraint::fill(1)]
+        );
+
+        $this->assertCount(3, $rects);
+        $this->assertSame(20, $rects[0]->width);   // Length: fixed
+        $this->assertSame(10, $rects[1]->width);   // Min: floor
+        $this->assertSame(70, $rects[2]->width);  // Fill: all remaining slack
+        // Total tiles
+        $this->assertSame(100, $rects[0]->width + $rects[1]->width + $rects[2]->width);
     }
 }

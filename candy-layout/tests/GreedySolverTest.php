@@ -15,6 +15,7 @@ use SugarCraft\Layout\Constraint\Ratio;
 use SugarCraft\Layout\Direction;
 use SugarCraft\Layout\GreedySolver;
 use SugarCraft\Layout\Region;
+use SugarCraft\Layout\CassowarySolver;
 
 final class GreedySolverTest extends TestCase
 {
@@ -463,8 +464,15 @@ final class GreedySolverTest extends TestCase
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
-    // Note: GreedySolver::cassowary() has a return-type bug (returns CassowarySolver but typed as self)
-    // Line 48 is intentionally not tested here to avoid TypeError
+    /**
+     * Step 6: GreedySolver::cassowary() now correctly returns CassowarySolver
+     * (interface and implementation typed with concrete return types).
+     */
+    public function testFactoryCassowaryFromGreedy(): void
+    {
+        $solver = GreedySolver::cassowary();
+        $this->assertInstanceOf(CassowarySolver::class, $solver);
+    }
 
     // ── LayoutSolver interface ──────────────────────────────────────────
 
@@ -600,5 +608,186 @@ final class GreedySolverTest extends TestCase
         // Verify total equals region width
         $total = $rects[0]->width + $rects[1]->width + $rects[2]->width;
         $this->assertSame(100, $total);
+    }
+
+    // ── Non-zero origin regression (Steps 1-2) ─────────────────────────────────
+
+    /**
+     * Verifies Step 1 fix: vertical layout with non-zero origin must not double-count
+     * the region's x/y when computing internal layout positions.
+     *
+     * Region(5,7,80,30) + [length(3),length(10),length(1)] Vertical
+     * → rects (5,7,80,3), (5,10,80,10), (5,20,80,1)
+     * The running y chain (7→10→20) and fixed x (always 5) are both asserted.
+     */
+    public function testVerticalLayoutNonZeroOrigin(): void
+    {
+        $rects = GreedySolver::solveStatic(
+            new Region(5, 7, 80, 30),
+            [Constraint::length(3), Constraint::length(10), Constraint::length(1)],
+            Direction::Vertical
+        );
+
+        $this->assertCount(3, $rects);
+        // x is the region's origin x — never offset by internal accumulation
+        $this->assertSame(5, $rects[0]->x);
+        $this->assertSame(5, $rects[1]->x);
+        $this->assertSame(5, $rects[2]->x);
+        // y chain: starts at region origin y=7, runs as heights accumulate
+        $this->assertSame(7, $rects[0]->y);
+        $this->assertSame(10, $rects[1]->y);  // 7 + 3
+        $this->assertSame(20, $rects[2]->y);   // 10 + 10
+        // widths are the region's width (80), heights are the constraint sizes
+        $this->assertSame(80, $rects[0]->width);
+        $this->assertSame(80, $rects[1]->width);
+        $this->assertSame(80, $rects[2]->width);
+        $this->assertSame(3, $rects[0]->height);
+        $this->assertSame(10, $rects[1]->height);
+        $this->assertSame(1, $rects[2]->height);
+    }
+
+    /**
+     * Verifies horizontal layout x-chain accumulation from a non-zero region origin.
+     *
+     * Region(5,7,100,24) + [length(20),length(30),length(25)] Horizontal
+     * → rects (5,7,20,24), (25,7,30,24), (55,7,25,24)
+     * The running x chain (5→25→55) and fixed y (always 7) are both asserted.
+     */
+    public function testHorizontalLayoutNonZeroOrigin(): void
+    {
+        $rects = GreedySolver::solveStatic(
+            new Region(5, 7, 100, 24),
+            [Constraint::length(20), Constraint::length(30), Constraint::length(25)],
+            Direction::Horizontal
+        );
+
+        $this->assertCount(3, $rects);
+        // y is the region's origin y — never offset
+        $this->assertSame(7, $rects[0]->y);
+        $this->assertSame(7, $rects[1]->y);
+        $this->assertSame(7, $rects[2]->y);
+        // x chain: starts at region origin x=5
+        $this->assertSame(5, $rects[0]->x);
+        $this->assertSame(25, $rects[1]->x);   // 5 + 20
+        $this->assertSame(55, $rects[2]->x);  // 25 + 30
+        // all same height as region
+        $this->assertSame(24, $rects[0]->height);
+        $this->assertSame(24, $rects[1]->height);
+        $this->assertSame(24, $rects[2]->height);
+    }
+
+    // ── Rounding reclamation (Steps 3-4) ───────────────────────────────────────
+
+    /**
+     * Percentage(33)x3 @ 100 loses 1px to floor() rounding.
+     * Step 3 fix must reclaim it so sum === 100.
+     */
+    public function testPercentageRoundingReclaimed(): void
+    {
+        $rects = GreedySolver::solveStatic(
+            new Region(0, 0, 100, 24),
+            [Constraint::percentage(33), Constraint::percentage(33), Constraint::percentage(33)],
+            Direction::Horizontal
+        );
+
+        $this->assertCount(3, $rects);
+        $total = $rects[0]->width + $rects[1]->width + $rects[2]->width;
+        $this->assertSame(100, $total, 'Three percentage(33) in width 100 must sum to exactly 100 after rounding reclaim');
+    }
+
+    /**
+     * Ratio(1,3)x3 @ 100 loses 1px to floor() rounding (each is 33).
+     * Step 3 fix must reclaim it so sum === 100.
+     */
+    public function testRatioRoundingReclaimed(): void
+    {
+        $rects = GreedySolver::solveStatic(
+            new Region(0, 0, 100, 24),
+            [Constraint::ratio(1, 3), Constraint::ratio(1, 3), Constraint::ratio(1, 3)],
+            Direction::Horizontal
+        );
+
+        $this->assertCount(3, $rects);
+        $total = $rects[0]->width + $rects[1]->width + $rects[2]->width;
+        $this->assertSame(100, $total, 'Three ratio(1,3) in width 100 must sum to exactly 100 after rounding reclaim');
+    }
+
+    /**
+     * Verifies the tiling/sum invariant: for any layout that fits (no overflow,
+     * no min-shortage), the sum of all constraint widths equals the region width.
+     * Excludes overflow truncation and min-shortage cases by design.
+     *
+     * @dataProvider greedyTilingProvider
+     */
+    public function testGreedyOutputTilesRegionExactly(Region $region, array $constraints, Direction $dir): void
+    {
+        $rects = GreedySolver::solveStatic($region, $constraints, $dir);
+        $this->assertNotEmpty($rects, 'Non-empty constraint list must produce at least one rect');
+
+        $axis = $dir === Direction::Horizontal ? 'width' : 'height';
+        $total = array_sum(array_map(fn($r) => $r->$axis, $rects));
+        $this->assertSame(
+            $dir === Direction::Horizontal ? $region->width : $region->height,
+            $total,
+            "Sum of {$axis}s must equal region {$axis} for " . self::describeConstraints($constraints)
+        );
+    }
+
+    /** @return array<string, array{Region, Constraint[], Direction}> */
+    public static function greedyTilingProvider(): array
+    {
+        return [
+            'pure-length fitting exactly' => [
+                new Region(0, 0, 100, 24),
+                [Constraint::length(20), Constraint::length(30), Constraint::length(25), Constraint::length(25)],
+                Direction::Horizontal,
+            ],
+            'pure-fill equal-weight' => [
+                new Region(0, 0, 90, 24),
+                [Constraint::fill(), Constraint::fill(), Constraint::fill()],
+                Direction::Horizontal,
+            ],
+            'percentage-only no rounding gap' => [
+                new Region(0, 0, 100, 24),
+                [Constraint::percentage(25), Constraint::percentage(25), Constraint::percentage(25), Constraint::percentage(25)],
+                Direction::Horizontal,
+            ],
+            'percentage-only rounding reclaim (Step 3)' => [
+                new Region(0, 0, 100, 24),
+                [Constraint::percentage(33), Constraint::percentage(33), Constraint::percentage(33)],
+                Direction::Horizontal,
+            ],
+            'ratio-only' => [
+                new Region(0, 0, 90, 24),
+                [Constraint::ratio(1, 3), Constraint::ratio(2, 3)],
+                Direction::Horizontal,
+            ],
+            'length plus fill' => [
+                new Region(0, 0, 100, 24),
+                [Constraint::length(20), Constraint::fill(1)],
+                Direction::Horizontal,
+            ],
+            'length plus fill vertical' => [
+                new Region(0, 0, 80, 50),
+                [Constraint::length(10), Constraint::fill(1)],
+                Direction::Vertical,
+            ],
+            'mixed length/min/fill' => [
+                new Region(0, 0, 100, 24),
+                [Constraint::length(20), Constraint::min(10), Constraint::fill(1)],
+                Direction::Horizontal,
+            ],
+        ];
+    }
+
+    /**
+     * Helper to describe constraint list for readable test failure messages.
+     *
+     * @param Constraint[] $constraints
+     */
+    private static function describeConstraints(array $constraints): string
+    {
+        $names = array_map(fn($c) => $c::class, $constraints);
+        return '[' . implode(', ', $names) . ']';
     }
 }
