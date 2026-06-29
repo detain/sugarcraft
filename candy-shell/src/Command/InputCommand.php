@@ -33,11 +33,7 @@ final class InputCommand extends Command
             ->addOption('strip-ansi',  null, InputOption::VALUE_NONE,     'Strip ANSI escapes from the printed result.')
             ->addOption('cursor-mode', null, InputOption::VALUE_REQUIRED, 'Cursor mode: blink (default) | static | hidden.', 'blink')
             ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
-            ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0)
-            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
-                "Per-element style: '<elem>.<prop>=<value>'. Elements: cursor, prompt, header, placeholder.",
-                []
-            );
+            ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

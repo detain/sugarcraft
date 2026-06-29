@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Shell\Application;
 use SugarCraft\Shell\Tests\Fixtures\Command\AlphaCommand;
 use SugarCraft\Shell\Tests\Fixtures\Command\BetaCommand;
+use SugarCraft\Shell\Tests\Fixtures\Command\EpsilonCommand;
 use SugarCraft\Shell\Tests\Fixtures\Command\GammaCommand;
 use Symfony\Component\Console\Command\Command;
 
@@ -91,5 +92,24 @@ final class CommandScannerTest extends TestCase
         $gamma = $this->app->find('gamma');
         $this->assertInstanceOf(Command::class, $gamma);
         $this->assertSame('gamma', $gamma->getName());
+    }
+
+    /**
+     * A command with a required non-nullable `string` ctor parameter should be
+     * instantiated with '' (empty string) rather than throwing a TypeError.
+     */
+    public function testScannerHandlesRequiredBuiltinTypeParams(): void
+    {
+        require_once __DIR__ . '/../Fixtures/Command/EpsilonCommand.php';
+
+        // Should not throw TypeError; should fill string param with ''.
+        $discovered = $this->app->scan(
+            \SugarCraft\Shell\Tests\Fixtures\Command::class
+        );
+
+        // EpsilonCommand has a required string param — it should be filled and registered.
+        $this->assertContains(EpsilonCommand::class, $discovered);
+        $cmd = $this->app->find('required-string-command');
+        $this->assertInstanceOf(Command::class, $cmd);
     }
 }

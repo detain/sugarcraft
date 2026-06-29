@@ -40,11 +40,14 @@ final class FormatCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $file = $input->getArgument('file');
-        $raw  = is_string($file) && $file !== ''
-            ? @file_get_contents($file)
-            : self::readStdin();
-        if (!is_string($raw)) {
-            return Command::FAILURE;
+        if (is_string($file) && $file !== '') {
+            $raw = @file_get_contents($file);
+            if ($raw === false) {
+                $output->writeln('<error>' . Lang::t('io.read_failed', ['path' => $file]) . '</error>');
+                return Command::FAILURE;
+            }
+        } else {
+            $raw = self::readStdin();
         }
 
         $type = strtolower((string) $input->getOption('type'));
@@ -57,7 +60,7 @@ final class FormatCommand extends Command
         };
 
         if ($input->getOption('strip-ansi')) {
-            $rendered = (string) preg_replace("/\x1b\[[0-9;:]*[A-Za-z]/", '', $rendered);
+            $rendered = \SugarCraft\Core\Util\Ansi::strip($rendered);
         }
 
         $output->writeln($rendered);
