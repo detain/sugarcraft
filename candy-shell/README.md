@@ -213,8 +213,6 @@ behavioural differences (also see
 - `format` accepts `-t/--type` (`markdown`, `code`, `template`, `emoji`)
   alongside `--theme`. Template support is the lightweight `{{VAR}}`
   expansion — Go template-function helpers are not implemented.
-- `--style` flags using the gum dotted form (`--header.foreground`,
-  `--cursor.foreground`, …) are not yet wired across every command.
 - `--timeout`, `--show-help`, `--strip-ansi`, and the `--cursor-mode`
   flags now accept their gum-equivalent values on every command. Where
   a flag is meaningless to a non-interactive command (`format`, `join`,
@@ -222,49 +220,6 @@ behavioural differences (also see
   as a no-op.
 - `confirm --default=yes|no` is the form to use; the older `--default-yes`
   alias is preserved.
-
-## Theming and customization
-
-Almost every interactive subcommand accepts a `--style` flag in
-`<element>.<property>=<value>` form. Repeat the flag to layer
-properties or target multiple elements:
-
-```sh
-candyshell choose --style "cursor.foreground=212" \
-                  --style "selected.bold=true" \
-                  --style "header.foreground=99" \
-                  --header "Pick a colour" red green blue
-```
-
-Available properties on every element: `foreground`, `background`,
-`bold`, `italic`, `underline`, `strikethrough`, `faint`, `blink`,
-`reverse`. Element names are documented inline in each subcommand's
-`--help` output (`choose` exposes `cursor`, `header`, `selected`,
-`unselected`; `confirm` exposes `prompt`, `selected`, `unselected`;
-`input`/`write` expose `prompt`, `placeholder`, `cursor`, `header`,
-`lineNumber`).
-
-Colour values accept the same surface as
-[CandySprinkles](../candy-sprinkles/README.md): hex (`#ff8800`),
-ANSI 0–15 (`9` for bright red), 8-bit (`212`), and named CSS colours
-(`coral`, `slategray`).
-
-Themes for `format` ride on
-[CandyShine](../candy-shine/README.md): pass `--theme dracula`,
-`--theme tokyo-night`, `--theme dark`, `--theme light`, `--theme pink`,
-`--theme ascii`, or `--theme notty` to swap renderer presets without
-authoring a Style yourself. `--type code --language=go` reuses the
-markdown pipeline for syntax-only rendering, while `--type emoji`
-expands the built-in `:smile:` shortcode set (unknown shortcodes pass
-through verbatim).
-
-The same Style rules apply to the `style` subcommand, which is the
-canonical way to compose lipgloss-style boxes from a script:
-
-```sh
-candyshell style --foreground=212 --bold --border rounded \
-                 --padding "1 4" --margin "0 2" "Welcome aboard"
-```
 
 ## Test
 
