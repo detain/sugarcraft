@@ -6,6 +6,7 @@ namespace SugarCraft\Metrics\Backend;
 
 use SugarCraft\Metrics\Lang;
 use SugarCraft\Metrics\Backend;
+use SugarCraft\Metrics\Descriptor;
 
 /**
  * Newline-delimited JSON emitter. Every metric event gets a fresh
@@ -65,13 +66,20 @@ final class JsonStreamBackend implements Backend
     public function asyncCounter(string $name, float $value, array $tags = []): void      { $this->emit('async_counter',  $name, $value, $tags); }
     public function asyncGauge(string $name, float $value, array $tags = []): void        { $this->emit('async_gauge',    $name, $value, $tags); }
 
+    // JSON stream has no concept of pre-emitted TYPE/HELP metadata.
+    public function describe(Descriptor $descriptor): void
+    {
+        // No-op: JSON stream is a diagnostic format; TYPE/HELP are unnecessary.
+    }
+
     /**
      * @param array<string,string> $tags
      */
     private function emit(string $kind, string $name, float $value, array $tags): void
     {
         $record = [
-            'ts'    => date('c'),
+            // Acceptable for a diagnostic backend; not cached across events.
+            'ts'    => gmdate('c'),
             'kind'  => $kind,
             'name'  => $name,
             'value' => $value,
@@ -81,6 +89,9 @@ final class JsonStreamBackend implements Backend
         if ($line === false) {
             return;
         }
-        fwrite($this->stream, $line . "\n");
+        $written = @fwrite($this->stream, $line . "\n");
+        if ($written === false || $written < strlen($line) + 1) {
+            throw new \RuntimeException(Lang::t('jsonstream.write_failed', ['name' => $name]));
+        }
     }
 }

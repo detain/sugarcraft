@@ -27,6 +27,11 @@ namespace SugarCraft\Metrics;
  * combinations (cardinality explosion), the oldest combination
  * is evicted to stay within the configured limit.
  */
+
+use SugarCraft\Metrics\Instrument\AsyncCounter;
+use SugarCraft\Metrics\Instrument\AsyncGauge;
+use SugarCraft\Metrics\Instrument\UpDownCounter;
+
 final class Registry
 {
     /** @var array<string,string> */
@@ -58,10 +63,15 @@ final class Registry
 
     /**
      * Register a metric descriptor for early TYPE/HELP emission.
+     * Idempotent: a second registration with the same name is a no-op.
      */
     public function register(Descriptor $descriptor): void
     {
+        if (isset($this->descriptors[$descriptor->name])) {
+            return;
+        }
         $this->descriptors[$descriptor->name] = $descriptor;
+        $this->backend->describe($descriptor);
     }
 
     public function counter(string $name, float $value = 1.0, array $tags = []): void
@@ -113,6 +123,38 @@ final class Registry
     {
         $this->backend->asyncGauge($name, $value, $this->mergeTags($tags));
         $this->trackCardinality($name, $tags);
+    }
+
+    /**
+     * Factory: create a new UpDownCounter instrument for repeated add() calls.
+     *
+     * @param array<string,string> $tags Static tags applied on every add() call.
+     */
+    public function newUpDownCounter(string $name, string $help = '', array $tags = []): Instrument\UpDownCounter
+    {
+        return new Instrument\UpDownCounter($this, $name, $help);
+    }
+
+    /**
+     * Factory: create a new AsyncCounter instrument whose value is observed at collection time.
+     *
+     * @param \Closure(): float $callback Called at observe() time to obtain the current value.
+     * @param array<string,string> $tags Static tags attached to observations.
+     */
+    public function newAsyncCounter(string $name, string $help, \Closure $callback, array $tags = []): Instrument\AsyncCounter
+    {
+        return new Instrument\AsyncCounter($this, $name, $help, $callback, $tags);
+    }
+
+    /**
+     * Factory: create a new AsyncGauge instrument whose value is observed at collection time.
+     *
+     * @param \Closure(): float $callback Called at observe() time to obtain the current value.
+     * @param array<string,string> $tags Static tags attached to observations.
+     */
+    public function newAsyncGauge(string $name, string $help, \Closure $callback, array $tags = []): Instrument\AsyncGauge
+    {
+        return new Instrument\AsyncGauge($this, $name, $help, $callback, $tags);
     }
 
     /**

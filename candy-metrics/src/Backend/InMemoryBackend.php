@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Backend;
 
 use SugarCraft\Metrics\Backend;
+use SugarCraft\Metrics\Descriptor;
 
 /**
  * In-memory accumulator. Counters add up, gauges hold the latest
@@ -61,6 +62,12 @@ final class InMemoryBackend implements Backend
     public function asyncGauge(string $name, float $value, array $tags = []): void
     {
         $this->asyncGauges[$this->key($name, $tags)] = $value;
+    }
+
+    // In-memory backend has no concept of pre-emitted metadata.
+    public function describe(Descriptor $descriptor): void
+    {
+        // No-op: in-memory accumulation does not benefit from TYPE/HELP lines.
     }
 
     /** @return array<string,float> */

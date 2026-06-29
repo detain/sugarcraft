@@ -6,6 +6,7 @@ namespace SugarCraft\Metrics\Backend;
 
 use SugarCraft\Metrics\Lang;
 use SugarCraft\Metrics\Backend;
+use SugarCraft\Metrics\Descriptor;
 
 /**
  * UDP StatsD emitter (etsy / DogStatsD wire format).
@@ -65,16 +66,36 @@ final class StatsdBackend implements Backend
     public function counter(string $name, float $value, array $tags = []): void       { $this->send($name, $value, 'c', $tags); }
     public function gauge(string $name, float $value, array $tags = []): void         { $this->send($name, $value, 'g', $tags); }
     public function histogram(string $name, float $value, array $tags = []): void       { $this->send($name, $value, 'h', $tags); }
-    public function upDownCounter(string $name, float $amount, array $tags = []): void { $this->send($name, $amount, 'g', $tags); }
+    public function upDownCounter(string $name, float $amount, array $tags = []): void
+    {
+        // StatsD up/down counters require signed-delta gauge format: name:+1|g / name:-1|g
+        // A bare-value gauge would SET the value, not increment/decrement it.
+        $signed = ($amount >= 0 ? '+' : '') . self::fmt($amount);
+        $this->sendRaw($name, $signed, 'g', $tags);
+    }
     public function asyncCounter(string $name, float $value, array $tags = []): void      { $this->send($name, $value, 'c', $tags); }
     public function asyncGauge(string $name, float $value, array $tags = []): void        { $this->send($name, $value, 'g', $tags); }
+
+    // StatsD / DogStatsD has no concept of pre-emitted TYPE/HELP metadata.
+    public function describe(Descriptor $descriptor): void
+    {
+        // No-op: StatsD wire format does not support TYPE/HELP declarations.
+    }
 
     /**
      * @param array<string,string> $tags
      */
     private function send(string $name, float $value, string $kind, array $tags): void
     {
-        $line = $name . ':' . self::fmt($value) . '|' . $kind;
+        $this->sendRaw($name, self::fmt($value), $kind, $tags);
+    }
+
+    /**
+     * @param array<string,string> $tags
+     */
+    private function sendRaw(string $name, string $valueStr, string $kind, array $tags): void
+    {
+        $line = $name . ':' . $valueStr . '|' . $kind;
         if ($tags !== [] && $this->dogstatsd) {
             $parts = [];
             foreach ($tags as $k => $v) {

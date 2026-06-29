@@ -34,16 +34,16 @@ A `Registry` is the application-facing facade; it forwards every emit to the con
 The registry exposes dedicated factory methods that return instrument objects — useful when an instrument is held for repeated `add()` / `observe()` calls:
 
 ```php
-$connCounter = $reg->upDownCounter('server.active_connections', ['host' => $host]);
+$connCounter = $reg->newUpDownCounter('server.active_connections', 'Active server connections', ['host' => $host]);
 $connCounter->add(1);    // connection opened
 // ... later ...
-$connCounter->add(-1);    // connection closed
+$connCounter->add(-1);   // connection closed
 ```
 
 Async instruments accept a callback that is invoked at collection time:
 
 ```php
-$gcCount = $reg->asyncCounter('jvm.gc.count', 'JVM garbage collection count', fn() => $jvm->gcCount());
+$gcCount = $reg->newAsyncCounter('jvm.gc.count', 'JVM garbage collection count', fn() => $jvm->gcCount());
 $gcCount->observe();   // called during collection sweep
 ```
 
@@ -143,6 +143,8 @@ hits:1|c|#route:/x,env:prod
 ### `PrometheusFileBackend`
 
 Atomically rewrites a `.prom` textfile-collector file with the current state of every metric. Pairs with `node_exporter --collector.textfile.directory=…`. Counter values accumulate across `flush()`s; histograms emit all 14 classic cumulative bucket boundaries (`le="0.005"` … `le="100"`) plus `le="+Inf"`, alongside `_count` and `_sum`.
+
+**Always call `flush()` explicitly** to guarantee delivery and surface errors. The destructor invokes `flush()` automatically, but errors during the atomic rename are silently swallowed in `__destruct`. Explicit calls throw a `RuntimeException` on failure.
 
 ### `MultiBackend`
 

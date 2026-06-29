@@ -64,4 +64,56 @@ final class StatsdBackendTest extends TestCase
         $this->assertSame('a:5|c', (string) stream_get_contents($sock));
         fclose($sock);
     }
+
+    public function testUpDownCounterEmitsSignedDelta(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->upDownCounter('conns', 1.0);
+        rewind($sock);
+        $this->assertSame('conns:+1|g', (string) stream_get_contents($sock));
+        fclose($sock);
+
+        $sock2 = fopen('php://memory', 'w+');
+        $b2 = new StatsdBackend(existingSocket: $sock2);
+        $b2->upDownCounter('conns', -1.0);
+        rewind($sock2);
+        $this->assertSame('conns:-1|g', (string) stream_get_contents($sock2));
+        fclose($sock2);
+    }
+
+    public function testUpDownCounterEmitsZeroWithPlusSign(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->upDownCounter('delta', 0.0);
+        rewind($sock);
+        // StatsD treats +0 as a no-op delta, which is correct for a zero increment.
+        $this->assertSame('delta:+0|g', (string) stream_get_contents($sock));
+        fclose($sock);
+    }
+
+    public function testAsyncCounterEmitsCounter(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->asyncCounter('jvm_gc_count', 1.0, ['gen' => 'young']);
+        rewind($sock);
+        $payload = (string) stream_get_contents($sock);
+        $this->assertStringStartsWith('jvm_gc_count:1|c', $payload);
+        $this->assertStringContainsString('|#', $payload);
+        fclose($sock);
+    }
+
+    public function testAsyncGaugeEmitsGauge(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->asyncGauge('heap_used', 7.5, ['area' => 'old']);
+        rewind($sock);
+        $payload = (string) stream_get_contents($sock);
+        $this->assertStringStartsWith('heap_used:7.5|g', $payload);
+        $this->assertStringContainsString('|#', $payload);
+        fclose($sock);
+    }
 }

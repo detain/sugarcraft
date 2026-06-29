@@ -60,4 +60,11 @@ interface Backend
      * @param array<string,string> $tags
      */
     public function asyncGauge(string $name, float $value, array $tags = []): void;
+
+    /**
+     * Receive a metric descriptor for dialects that support pre-emitted
+     * TYPE/HELP metadata (e.g. Prometheus textfile collector).
+     * Backends that do not support this may implement as a no-op.
+     */
+    public function describe(Descriptor $descriptor): void;
 }
