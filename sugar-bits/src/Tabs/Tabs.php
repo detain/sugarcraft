@@ -189,6 +189,7 @@ final class Tabs implements Model
         $tabWidths = [];
         foreach ($this->labels as $i => $label) {
             $style = $i === $this->active ? $this->activeStyle : $this->inactiveStyle;
+            $label = self::sanitizeCell($label);
             $padded = ' ' . $label . ' ';
             $tabWidths[$i] = Width::string($padded);
 
@@ -593,6 +594,17 @@ final class Tabs implements Model
             $cursor = $nextCursor;
         }
         return $count - 1;
+    }
+
+    /**
+     * Strip C0 control characters from caller-supplied label text so they
+     * cannot inject newlines or corrupt the TUI render. SGR escape
+     * sequences (\x1b[...) are preserved.
+     */
+    private static function sanitizeCell(string $s): string
+    {
+        $s = str_replace(["\n", "\r", "\t"], ' ', $s);
+        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', '', $s) ?? $s;
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
