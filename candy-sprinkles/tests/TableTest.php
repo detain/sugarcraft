@@ -189,10 +189,14 @@ final class TableTest extends TestCase
 
     public function testWidthCapTruncates(): void
     {
+        // When widthCap is set, columns are shrunk to fit and cell content
+        // is truncated to the column width. With 1 column and no border,
+        // the full widthCap is available for content (no column padding).
         $out = Table::new()
             ->row('this is a long row')
             ->width(8)
             ->render();
+        // Cell truncated to 8 chars (full widthCap for single-column no-border).
         $this->assertSame('this is ', $out);
     }
 }

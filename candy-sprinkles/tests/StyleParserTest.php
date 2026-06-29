@@ -637,6 +637,80 @@ final class StyleParserTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // Malformed attribute edge cases — must not throw TypeError
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testParseColorNullSafeNoColonFg(): void
+    {
+        // [hi](fg) has fg with no colon — value is null, parseColor must not throw
+        $cells = StyleParser::parse('[hi](fg)', $this->defaultStyle);
+        $this->assertCount(2, $cells);
+        $this->assertSame('h', $cells[0]->rune);
+        $this->assertSame('i', $cells[1]->rune);
+        // No fg color applied — falls back to default style
+        $this->assertNull($cells[0]->style->getForeground());
+    }
+
+    public function testParseColorNullSafeNoColonBg(): void
+    {
+        // [hi](bg) has bg with no colon — value is null, parseColor must not throw
+        $cells = StyleParser::parse('[hi](bg)', $this->defaultStyle);
+        $this->assertCount(2, $cells);
+        $this->assertSame('h', $cells[0]->rune);
+        $this->assertSame('i', $cells[1]->rune);
+        $this->assertNull($cells[0]->style->getBackground());
+    }
+
+    public function testParseColorEmptyValueAfterColon(): void
+    {
+        // [hi](fg:) has empty value after colon — should be ignored (trimmed to '')
+        $cells = StyleParser::parse('[hi](fg:)', $this->defaultStyle);
+        $this->assertCount(2, $cells);
+        $this->assertSame('h', $cells[0]->rune);
+        // No fg color applied — empty string doesn't match any color
+        $this->assertNull($cells[0]->style->getForeground());
+    }
+
+    public function testUnclosedParenthesis(): void
+    {
+        // [hi](fg:red - unclosed parenthesis means attrs go to end of string,
+        // so fg:red IS applied (parser uses str尾声 as closing boundary).
+        // This is acceptable behavior; the key is it does not throw.
+        $cells = StyleParser::parse('[hi](fg:red', $this->defaultStyle);
+        $this->assertCount(2, $cells);
+        $this->assertSame('h', $cells[0]->rune);
+        // fg:red IS applied because there's no ) to stop parsing
+        $this->assertSame(205, $cells[0]->style->getForeground()->r);
+        $this->assertSame(0, $cells[0]->style->getForeground()->g);
+        $this->assertSame(0, $cells[0]->style->getForeground()->b);
+    }
+
+    public function testUnknownStyleKey(): void
+    {
+        // [hi](wobble) unknown key should be ignored
+        $cells = StyleParser::parse('[hi](wobble)', $this->defaultStyle);
+        $this->assertCount(2, $cells);
+        $this->assertSame('h', $cells[0]->rune);
+        $this->assertSame('i', $cells[1]->rune);
+        // No style applied — unknown key is ignored
+        $this->assertNull($cells[0]->style->getForeground());
+    }
+
+    public function testMixedValidAndInvalidAttributes(): void
+    {
+        // [hi](fg:red,wobble,bg:blue) — wobble ignored, others applied
+        $cells = StyleParser::parse('[hi](fg:red,wobble,bg:blue)', $this->defaultStyle);
+        $this->assertCount(2, $cells);
+        $this->assertSame('h', $cells[0]->rune);
+        $this->assertSame(205, $cells[0]->style->getForeground()->r);
+        $this->assertSame(0, $cells[0]->style->getForeground()->g);
+        $this->assertSame(0, $cells[0]->style->getForeground()->b);
+        $this->assertSame(0, $cells[0]->style->getBackground()->r);
+        $this->assertSame(0, $cells[0]->style->getBackground()->g);
+        $this->assertSame(238, $cells[0]->style->getBackground()->b);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Performance smoke test
     // ═══════════════════════════════════════════════════════════════
 
