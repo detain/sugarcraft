@@ -36,4 +36,20 @@ final class SectionTest extends TestCase
         $this->assertStringContainsString('==', $out);
         $this->assertSame(8, Width::string($out));
     }
+
+    /** Multi-cell runes must never overshoot the requested width. */
+    public function testMultiCellRuneNeverOvershoots(): void
+    {
+        $out = Section::header('X', Theme::plain(), leftPad: 2, width: 20, rune: '──');
+        // '──' is a 2-cell rune; intdiv ensures we never exceed 20 cells.
+        $this->assertLessThanOrEqual(20, Width::string($out));
+    }
+
+    /** rule() applies the theme's muted style (emits SGR for non-plain themes). */
+    public function testRuleAppliesTheme(): void
+    {
+        $out = Section::rule(Theme::ansi(), 10);
+        // Theme::ansi()->muted is Style::new()->faint() which emits SGR 2 (faint).
+        $this->assertStringContainsString("\x1b[2m", $out);
+    }
 }
