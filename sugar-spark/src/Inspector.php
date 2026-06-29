@@ -41,11 +41,11 @@ final class Inspector
     }
 
     /**
-     * Render parsed segments as a machine-readable JSON array.
+     * Render parsed segments as a machine-readable JSON array string.
      *
      * Each entry: {"type": "text"|"sequence", "content": "...", "description": "..."}
      *
-     * @return list<array{type: string, content: string, description: string}>
+     * @return string JSON array string; each entry is {type, content, description}.
      */
     public static function reportAsJson(string $input): string
     {
@@ -58,7 +58,11 @@ final class Inspector
                 'description' => $seg->describe(),
             ];
         }
-        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        // JSON_THROW_ON_ERROR ensures a typed JsonException instead of false-return
+        // + TypeError against the : string return type.  JSON_INVALID_UTF8_SUBSTITUTE
+        // replaces malformed UTF-8 bytes (e.g. in OSC titles / DCS sixel bodies) with
+        // U+FFFD rather than causing encode failure.
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
     }
 
     public static function describeCsi(string $params, string $final): string
