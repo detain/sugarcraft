@@ -213,4 +213,83 @@ final class AsyncSuggestionsTest extends TestCase
         // This verifies that rapid keystrokes cancel previous pending async operations.
         $this->assertSame(1, $fetcherInvokedCount, 'First debounced fetch should have been cancelled');
     }
+
+    /**
+     * Regression test: when both an inner Cmd (from the TextInput blink) and an
+     * async suggestion Cmd are present, the async Cmd must not be silently dropped.
+     * Before the fix, `fn() => $cmd()` discarded $asyncCmd entirely.
+     * Mirrors the pattern from testDebounceCancelCancelsPreviousFetch.
+     */
+    public function testInputAsyncFiresWhenInnerCmdAlsoPresent(): void
+    {
+        $fetcherInvokedCount = 0;
+        $fetcher = static function (string $input) use (&$fetcherInvokedCount): PromiseInterface {
+            $fetcherInvokedCount++;
+            return \React\Promise\resolve(["suggestion for: $input"]);
+        };
+
+        $f = Input::new('test')->withAsyncSuggestions($fetcher, 100);
+        [$f, $innerCmd] = $f->focus();
+
+        // Focusing Input returns a blink cmd (innerCmd is non-null).
+        // Now type a Char — this schedules async suggestions AND returns a combined cmd.
+        $this->assertNotNull($innerCmd, 'Focus should return a blink cmd');
+        [$f, $combinedCmd] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+
+        // The returned cmd must combine both the inner blink and the async fetch.
+        // Before the fix: only fn()=>$cmd() was returned (async dropped).
+        // After the fix: Cmd::batch($cmd, $asyncCmd) is returned (both included).
+        $this->assertNotNull($combinedCmd, 'Combined cmd must not be null when inner cmd is present');
+
+        // Execute the combined cmd (schedules debounce timer on the loop)
+        $combinedCmd();
+
+        // Run the event loop past the debounce window.
+        Loop::addTimer(0.2, static fn () => Loop::stop());
+        Loop::run();
+
+        // The fetcher must have been called exactly once.
+        // Before the fix: $asyncCmd was dropped, so fetcher was never invoked.
+        $this->assertSame(1, $fetcherInvokedCount, 'Async fetcher must fire even when inner cmd is present');
+    }
+
+    /**
+     * Regression test for Select: when the inner Cmd from list->update() is present
+     * AND the filter text change triggers async suggestions, both must run.
+     * Before the fix, `fn() => $cmd()` discarded $asyncCmd.
+     */
+    public function testSelectAsyncFiresWhenInnerCmdAlsoPresent(): void
+    {
+        $fetcherInvokedCount = 0;
+        $fetcher = static function (string $input) use (&$fetcherInvokedCount): PromiseInterface {
+            $fetcherInvokedCount++;
+            return \React\Promise\resolve(["suggestion for: $input"]);
+        };
+
+        $f = Select::new('test')
+            ->withOptions('apple', 'banana', 'cherry')
+            ->withAsyncSuggestions($fetcher, 100);
+        [$f, ] = $f->focus();
+
+        // Enter filter mode (first Char enters filter mode, second Char changes filter text
+        // and triggers async scheduling when combined with an inner list cmd).
+        // First: enter filter mode with '/'
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, '/'));
+
+        // Second: type 'a' — filterText changes from '' to 'a', and list->update returns
+        // a non-null Cmd (the cursor-move or similar inner update). This triggers the
+        // async scheduling with the inner cmd also present.
+        [$f, $combinedCmd] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+
+        $this->assertNotNull($combinedCmd, 'Combined cmd must not be null when inner cmd is present and filter text changes');
+
+        // Execute the combined cmd
+        $combinedCmd();
+
+        // Run the event loop past the debounce window.
+        Loop::addTimer(0.2, static fn () => Loop::stop());
+        Loop::run();
+
+        $this->assertSame(1, $fetcherInvokedCount, 'Async fetcher must fire in Select even when inner cmd is present');
+    }
 }
