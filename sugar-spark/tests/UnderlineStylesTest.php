@@ -76,10 +76,54 @@ final class UnderlineStylesTest extends TestCase
 
     public function testUnderlineStyleUnknownCompoundStillParsesRest(): void
     {
-        // Unknown underline sub-style 99 should not break the rest.
-        $seg = Inspector::parse("\x1b[1;4:99m")[0];
-        $desc = $seg->describe();
+        // Unknown underline sub-style 99 via the colon form (4:99) works at the
+        // describeCsi level (bypasses the Parser param-splitting which loses the
+        // colon separator for sub-params).
+        $desc = Inspector::describeCsi('1;4:99', 'm');
         $this->assertStringContainsString('bold', $desc);
         $this->assertStringContainsString('underline style 99', $desc);
+    }
+
+    /**
+     * The semicolon form 4;NN is two separate SGR params, not a combined
+     * underline style.  After removing the heuristic, 4;99 decodes as
+     * underline + SGR 99 (no special style label).
+     */
+    public function testSemicolonFormUnderlineThenSgrCodeIsNotMisdecoded(): void
+    {
+        $desc = Inspector::describeCsi('4;99', 'm');
+        // Must be separate underline + SGR 99, NOT "underline style 99".
+        $this->assertStringContainsString('underline', $desc);
+        $this->assertStringContainsString('SGR 99', $desc);
+        $this->assertStringNotContainsString('underline style', $desc);
+    }
+
+    /**
+     * Regression: 4;53 (underline + SGR 53=overline) must NOT be misdecoded
+     * as "underline style 53".  The semicolon form is two separate SGR params.
+     */
+    public function testUnderlineThenOverlineNotMisdecoded(): void
+    {
+        $desc = Inspector::describeCsi('4;53', 'm');
+        $this->assertStringContainsString('underline', $desc);
+        // SGR 53 is "overline" — the heuristic must not claim "underline style 53".
+        $this->assertStringNotContainsString('underline style 53', $desc);
+        // The 53 should still appear as an SGR code.
+        $this->assertStringContainsString('SGR 53', $desc);
+    }
+
+    /**
+     * Regression: 4;38;5;200 (underline + 256-color fg) must NOT be misdecoded
+     * as "underline style 38, blink, SGR 200".  The 38;5;200 is a single
+     * foreground 256-color unit.
+     */
+    public function testUnderlineThen256ColorFg(): void
+    {
+        $desc = Inspector::describeCsi('4;38;5;200', 'm');
+        $this->assertStringContainsString('underline', $desc);
+        $this->assertStringContainsString('foreground 256-color 200', $desc);
+        // Must NOT claim "underline style 38" or "blink".
+        $this->assertStringNotContainsString('underline style 38', $desc);
+        $this->assertStringNotContainsString('blink', $desc);
     }
 }
