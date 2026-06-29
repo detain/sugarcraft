@@ -140,11 +140,15 @@ final class Buffer
                 $dstCol = $region->origin->col + $dx;
                 $dstRow = $region->origin->row + $dy;
 
+                if ($dstCol < 0 || $dstRow < 0) {
+                    continue;
+                }
+
                 if ($dstCol >= $this->width || $dstRow >= $this->height) {
                     continue;
                 }
 
-                $grid[$dstRow * $this->width + $dstCol] = $source->cellAt($srcCol, $srcRow);
+                $grid[$dstRow * $this->width + $dstCol] = $source->grid[$srcRow * $srcW + $srcCol];
             }
         }
 
@@ -164,7 +168,7 @@ final class Buffer
      * Large runs of blank cells use EraseRunOp.
      *
      * @param Buffer $previous The previous frame buffer (same dimensions)
-     * @return list<SugarCraft\Buffer\Diff\DiffOp> Ordered delta operations
+     * @return list<\SugarCraft\Buffer\Diff\DiffOp> Ordered delta operations
      * @throws \InvalidArgumentException if buffer dimensions differ
      */
     public function diff(Buffer $previous): array
@@ -173,6 +177,10 @@ final class Buffer
             throw new \InvalidArgumentException(
                 "Buffer dimensions must match for diff: previous ({$previous->width}x{$previous->height}) vs current ({$this->width}x{$this->height})"
             );
+        }
+
+        if ($previous === $this) {
+            return [];
         }
 
         $ops = [];
@@ -191,7 +199,7 @@ final class Buffer
                     continue;
                 }
 
-                if ($this->cellsEqual($prevCell, $currCell)) {
+                if ($prevCell->equals($currCell)) {
                     continue;
                 }
 
@@ -236,7 +244,7 @@ final class Buffer
                     }
                     $nextPrev = $previous->grid[$row * $this->width + $nextCol];
                     // Collect if cell differs AND has same pending style/link.
-                    if (!$this->cellsEqual($nextPrev, $nextCell)
+                    if (!$nextPrev->equals($nextCell)
                         && $nextCell->style() === $runStyle
                         && $nextCell->link()?->url() === $runLinkUrl
                     ) {
@@ -294,17 +302,6 @@ final class Buffer
     }
 
     /**
-     * Check whether two cells are equal in their rendered representation.
-     */
-    private function cellsEqual(Cell $a, Cell $b): bool
-    {
-        return $a->rune() === $b->rune()
-            && $a->style() === $b->style()
-            && $a->link()?->url() === $b->link()?->url()
-            && $a->width() === $b->width();
-    }
-
-    /**
      * Check whether all cells in a run are blank default cells
      * (rune=' ', null style, null link, width=1).
      *
@@ -333,7 +330,7 @@ final class Buffer
      *
      * This is useful for testing:  current.diff(prev).apply(prev) === current.
      *
-     * @param list<DiffOp> $ops
+     * @param list<\SugarCraft\Buffer\Diff\DiffOp> $ops
      * @return self
      */
     public function applyDiff(array $ops): self
@@ -361,10 +358,13 @@ final class Buffer
                     $width = $cell->width() > 0 ? $cell->width() : 1;
                     // Build cell with pending style/link merged.
                     $style = $cell->style() ?? $pendingStyle;
-                    $link = $cell->link();
                     // Note: applyDiff is for round-trip testing only.
                     // Hyperlinks can't be perfectly reconstructed from ops
                     // since we only store the url string in SetHyperlinkOp.
+                    // Reconstruct with only the URL to document this lossy behaviour.
+                    $link = $cell->link() !== null
+                        ? new Hyperlink($cell->link()->url())
+                        : null;
                     $grid[$cursorRow * $this->width + $cursorCol] = new Cell(
                         $cell->rune(),
                         $style,
@@ -488,41 +488,7 @@ final class Buffer
      */
     private function emitSgr(?Style $style): string
     {
-        if ($style === null) {
-            return "\x1b[0m";
-        }
-
-        $codes = ['0'];
-
-        if ($style->fg() !== null) {
-            $rgb = $style->fg();
-            $r = ($rgb >> 16) & 0xFF;
-            $g = ($rgb >> 8) & 0xFF;
-            $b = $rgb & 0xFF;
-            $codes[] = "38;2;{$r};{$g};{$b}";
-        }
-
-        if ($style->bg() !== null) {
-            $rgb = $style->bg();
-            $r = ($rgb >> 16) & 0xFF;
-            $g = ($rgb >> 8) & 0xFF;
-            $b = $rgb & 0xFF;
-            $codes[] = "48;2;{$r};{$g};{$b}";
-        }
-
-        $attrs = $style->attrs();
-        if ($attrs !== 0) {
-            if ($attrs & Style::ATTR_BOLD)       { $codes[] = '1'; }
-            if ($attrs & Style::ATTR_FAINT)     { $codes[] = '2'; }
-            if ($attrs & Style::ATTR_ITALIC)    { $codes[] = '3'; }
-            if ($attrs & Style::ATTR_UNDERLINE) { $codes[] = '4'; }
-            if ($attrs & Style::ATTR_BLINK)     { $codes[] = '5'; }
-            if ($attrs & Style::ATTR_REVERSE)  { $codes[] = '7'; }
-            if ($attrs & Style::ATTR_STRIKE)   { $codes[] = '9'; }
-            if ($attrs & Style::ATTR_OVERLINE) { $codes[] = '53'; }
-        }
-
-        return "\x1b[" . implode(';', $codes) . "m";
+        return Diff\SgrEmitter::emit($style);
     }
 
     // ─── Internals ─────────────────────────────────────────────────────

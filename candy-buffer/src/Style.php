@@ -68,4 +68,51 @@ final class Style
     public function hasReverse(): bool   { return (bool)($this->attrs & self::ATTR_REVERSE); }
     public function hasOverline(): bool { return (bool)($this->attrs & self::ATTR_OVERLINE); }
     public function hasInvisible(): bool { return (bool)($this->attrs & self::ATTR_INVISIBLE); }
+
+    // ─── Fluent builders ────────────────────────────────────────────────
+
+    /**
+     * @return static
+     */
+    private function mutate(array $changes): static
+    {
+        return new static(...array_merge(
+            ['fg' => $this->fg, 'bg' => $this->bg, 'attrs' => $this->attrs],
+            $changes,
+        ));
+    }
+
+    /** Return a new Style with the given foreground colour. */
+    public function withFg(?int $fg): self
+    {
+        return $this->mutate(['fg' => $fg]);
+    }
+
+    /** Return a new Style with the given background colour. */
+    public function withBg(?int $bg): self
+    {
+        return $this->mutate(['bg' => $bg]);
+    }
+
+    /** Return a new Style with the given attribute bitmask (replaces). */
+    public function withAttrs(int $attrs): self
+    {
+        return $this->mutate(['attrs' => $attrs]);
+    }
+
+    /** Return a new Style with bold toggled on or off. */
+    public function withBold(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_BOLD)
+            : ($this->attrs & ~self::ATTR_BOLD)]);
+    }
+
+    /** Return a new Style with reverse toggled on or off. */
+    public function withReverse(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_REVERSE)
+            : ($this->attrs & ~self::ATTR_REVERSE)]);
+    }
 }
