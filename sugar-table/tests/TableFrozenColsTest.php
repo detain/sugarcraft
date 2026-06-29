@@ -79,7 +79,7 @@ final class TableFrozenColsTest extends TestCase
     {
         // Table with 3 columns, first column frozen, scrollX=1 should hide
         // the second column but keep the first (frozen) visible
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  10),
             Column::new('city', 'City',   8),
@@ -108,7 +108,7 @@ final class TableFrozenColsTest extends TestCase
     {
         // Table with 3 columns, first two frozen, scrollX=1 should hide
         // the third column but keep first two (frozen) visible
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  10),
             Column::new('city', 'City',   8),
@@ -139,7 +139,7 @@ final class TableFrozenColsTest extends TestCase
     public function testAllColumnsFrozenNoScrollEffect(): void
     {
         // When all columns are frozen, scrollX should have no effect
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -163,7 +163,7 @@ final class TableFrozenColsTest extends TestCase
     public function testNoFrozenColumnsScrollsNormally(): void
     {
         // Without frozen columns, scrollX should shift all columns
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
             Column::new('city', 'City',  8),
@@ -189,7 +189,7 @@ final class TableFrozenColsTest extends TestCase
     {
         // With 1 frozen column and scrollX=2, columns 0 stays (frozen),
         // columns 1-2 should be hidden (scrollX=2 means skip 2 non-frozen)
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('col1', 'Col1',  8),
             Column::new('col2', 'Col2',  8),
@@ -231,7 +231,7 @@ final class TableFrozenColsTest extends TestCase
     public function testSeparatorsBetweenVisibleColumns(): void
     {
         // When consecutive columns are visible, there should be separators between them
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -256,7 +256,7 @@ final class TableFrozenColsTest extends TestCase
     {
         // With scrollX=1 and no frozen cols, only second column visible
         // Should still have proper separators
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -281,7 +281,7 @@ final class TableFrozenColsTest extends TestCase
     {
         // With frozen=[0] and scrollX=1, columns 0 and 2 are visible (not consecutive indices)
         // But they ARE consecutive in the visible set, so 1 separator between them
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  10),
             Column::new('city', 'City',   8),
@@ -309,7 +309,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testDataRowsRespectFrozenColumns(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -334,7 +334,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testAllFrozenColumnsShowAllData(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
             Column::new('city', 'City',  8),
@@ -357,7 +357,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testScrollXClampedToZero(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -373,7 +373,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testExcessiveScrollXSkipsAllNonFrozen(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('col1', 'Col1',  8),
             Column::new('col2', 'Col2',  8),
@@ -402,7 +402,7 @@ final class TableFrozenColsTest extends TestCase
     public function testEmptyFrozenColsArrayEqualsNoFrozen(): void
     {
         // Empty frozenCols should behave the same as no frozen columns
-        $t1 = Table::withColumns([
+        $t1 = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -410,7 +410,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withFrozenCols([])
           ->withScrollX(1);
 
-        $t2 = Table::withColumns([
+        $t2 = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -434,7 +434,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testImmutabilityOfWithFrozenCols(): void
     {
-        $a = Table::withColumns([Column::new('id', 'ID', 5)])
+        $a = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))]);
 
         $b = $a->withFrozenCols([0]);
@@ -450,7 +450,7 @@ final class TableFrozenColsTest extends TestCase
     public function testViewRendersWithoutCrashWithFrozenAndScroll(): void
     {
         // Regression test: ensure no exceptions or errors with various combinations
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  10),
             Column::new('city', 'City',   8),
@@ -477,7 +477,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testVisibleContentWidthWithFrozenColumns(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  10),
             Column::new('city', 'City',   8),
@@ -503,7 +503,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testVisibleContentWidthWithHiddenColumn(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  10),
             Column::new('city', 'City',   8),
@@ -527,7 +527,7 @@ final class TableFrozenColsTest extends TestCase
 
     public function testVisibleContentWidthWithAllFrozenNoScroll(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
         ])->withRows([

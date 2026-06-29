@@ -96,7 +96,7 @@ final class TableSanitizeTest extends TestCase
      */
     public function testViewRejectsCSIEscapeInjection(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('data', 'Data', 20),
         ])->withRows([
             Row::new(RowData::from(['data' => "\x1b[2J\x1b[0mINJECTED"])),
@@ -117,7 +117,7 @@ final class TableSanitizeTest extends TestCase
      */
     public function testViewRejectsOSCInjection(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('title', 'Title', 20),
         ])->withRows([
             Row::new(RowData::from(['title' => "\x1b]0;pwned\x07HOOKED"])),
@@ -137,7 +137,7 @@ final class TableSanitizeTest extends TestCase
      */
     public function testViewRejectsRawControlBytes(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('raw', 'Raw', 20),
         ])->withRows([
             Row::new(RowData::from(['raw' => "\x00\x07\x7fINJECT"])),
@@ -162,7 +162,7 @@ final class TableSanitizeTest extends TestCase
     public function testHeaderSanitizesTitleControlChars(): void
     {
         $col = Column::new('h', "\x1b[2JEvil", 20);
-        $t = Table::withColumns([$col])->withRows([
+        $t = Table::fromColumns([$col])->withRows([
             Row::new(RowData::from(['h' => 'ok'])),
         ]);
 
@@ -181,7 +181,7 @@ final class TableSanitizeTest extends TestCase
      */
     public function testMultilineCellSanitizePreservesNewlines(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('multi', 'Multi', 20),
         ])->withRows([
             Row::new(RowData::from(['multi' => "line1\nline2\x1b[2J"])),
