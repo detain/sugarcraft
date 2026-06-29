@@ -115,4 +115,25 @@ final class MultiSelectTest extends TestCase
         $this->assertSame(0, $f->min);
         $this->assertSame(0, $f->max);
     }
+
+    /**
+     * Step 7: revalidate() enforces min constraint on an untouched field.
+     * Before revalidate() is called, getError() is null (untouched).
+     * After revalidate(), the min error is computed and returned.
+     * This is what makes Form submit/validateAll() catch min violations
+     * on fields the user never touched.
+     */
+    public function testRevalidateSetsMinError(): void
+    {
+        $f = MultiSelect::new('foods')
+            ->withOptions('Pizza', 'Burger', 'Salad')
+            ->withMin(1);
+
+        // Untouched: no error yet.
+        $this->assertNull($f->getError());
+
+        // revalidate() computes the min constraint error.
+        $rf = $f->revalidate();
+        $this->assertSame('Pick at least 1.', $rf->getError());
+    }
 }
