@@ -79,7 +79,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 | `Manager`           | SugarCraft Model — orchestrates two panes, handles all keys + confirm gate |
 | `FsLister`          | Default lister: `scandir` + `lstat` against the live filesystem          |
 | `Renderer`          | Pure view function — two pane boxes side-by-side + status line           |
-| `AsyncOps`          | Async copy/move/rename via React\Promise — keeps TUI responsive during I/O |
+| `AsyncOps`          | Async copy via React\Promise + futureTick (move/rename available but sync) |
 
 ## Test plan
 
