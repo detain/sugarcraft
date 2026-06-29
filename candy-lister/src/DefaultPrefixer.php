@@ -28,7 +28,8 @@ final class DefaultPrefixer implements Prefixer
     public string $currentMarker = '>';   // marks current item
     public string $emptyMarker   = ' ';   // non-current items
 
-    private int $cursorIndex   = 0;
+    private int $currentIndex  = 0;  // index of the item being rendered
+    private int $cursorIndex   = 0;  // index of the real cursor position
     private int $numWidth      = 1;       // width of number field
     private int $markWidth     = 1;       // width of current marker
     private int $sepWidth      = 1;       // width of separator
@@ -42,7 +43,8 @@ final class DefaultPrefixer implements Prefixer
         int $width,
         int $height,
     ): int {
-        $this->cursorIndex = $currentIndex;
+        $this->currentIndex = $currentIndex;
+        $this->cursorIndex  = $cursorIndex;
 
         // Compute number field width
         if ($this->number) {
@@ -69,7 +71,7 @@ final class DefaultPrefixer implements Prefixer
     public function prefix(int $currentLine, int $totalLines): string
     {
         $isFirst    = ($currentLine === 0);
-        $isCurrent  = ($this->cursorIndex === 0); // resolved via initPrefixer $currentIndex
+        $isCurrent  = ($this->currentIndex === $this->cursorIndex); // true when rendering the cursor item
         $isWrap     = (!$isFirst && $this->prefixWrap);
 
         // Separator
@@ -80,9 +82,9 @@ final class DefaultPrefixer implements Prefixer
         if ($this->number) {
             if ($this->numberRelative && $currentLine === 0) {
                 // Show distance from cursor for first line
-                $numStr = \sprintf("%{$this->numWidth}d ", 0);
+                $numStr = \sprintf("%{$this->numWidth}d ", \abs($this->currentIndex - $this->cursorIndex));
             } elseif ($currentLine === 0) {
-                $numStr = \sprintf("%{$this->numWidth}s ", (string) $this->cursorIndex);
+                $numStr = \sprintf("%{$this->numWidth}s ", (string) $this->currentIndex);
             } else {
                 $numStr = \str_repeat(' ', $this->numWidth) . ' ';
             }
