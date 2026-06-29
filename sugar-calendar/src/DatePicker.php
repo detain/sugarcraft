@@ -119,7 +119,7 @@ final class DatePicker
         } else {
             $clone->viewMonth--;
         }
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -132,7 +132,7 @@ final class DatePicker
         } else {
             $clone->viewMonth++;
         }
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -140,7 +140,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->viewYear--;
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -148,7 +148,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->viewYear++;
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -158,7 +158,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewMonth = (int) $today->format('n');
         $clone->viewYear  = (int) $today->format('Y');
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -184,7 +184,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewMonth = (int) $t->format('n');
         $clone->viewYear  = (int) $t->format('Y');
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -760,7 +760,11 @@ final class DatePicker
         return $firstOfMonth !== false ? (int) $firstOfMonth->format('w') : 0;
     }
 
-    private function clampCursor(): void
+    /**
+     * Compute the clamped cursor index for the current view month.
+     * Pure: returns the clamped value without mutating $this.
+     */
+    private function clampedCursor(int $idx): int
     {
         $daysInMonth = (int) \DateTimeImmutable::createFromFormat(
             'Y-m-d', \sprintf('%04d-%02d-01', $this->viewYear, $this->viewMonth)
@@ -769,6 +773,6 @@ final class DatePicker
         $firstDow = $this->firstDayOffset();
         $lastIndex = $firstDow + $daysInMonth - 1;
 
-        $this->cursorIndex = \min($this->cursorIndex, \max(0, $lastIndex));
+        return \min($idx, \max(0, $lastIndex));
     }
 }

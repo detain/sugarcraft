@@ -28,12 +28,22 @@ final readonly class Navigation
         };
     }
 
-    /** Convert grid index to \DateTimeImmutable for given month/year. */
-    public static function gridIndexToDate(int $gridIndex, int $month, int $year): \DateTimeImmutable
+    /**
+     * Convert grid index to \DateTimeImmutable for given month/year.
+     *
+     * Returns null when the index falls outside the valid day range of the
+     * month (same semantics as DatePicker::dateAtCursor()).
+     */
+    public static function gridIndexToDate(int $gridIndex, int $month, int $year): ?\DateTimeImmutable
     {
         $firstOfMonth = new \DateTimeImmutable("$year-$month-01");
+        $daysInMonth = (int) $firstOfMonth->format('t');
         $firstDow = (int) $firstOfMonth->format('w');
         $dayNum = $gridIndex - $firstDow + 1;
+
+        if ($dayNum < 1 || $dayNum > $daysInMonth) {
+            return null;
+        }
         return $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
     }
 }

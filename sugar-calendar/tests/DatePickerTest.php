@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Calendar\Tests;
 
 use SugarCraft\Calendar\DatePicker;
+use SugarCraft\Calendar\Navigation;
 use PHPUnit\Framework\TestCase;
 
 final class DatePickerTest extends TestCase
@@ -485,5 +486,42 @@ final class DatePickerTest extends TestCase
         // April 30 is at index 3 + 29 = 32 (firstDow=3, lastDayIndex=32)
         $this->assertSame(32, $dp2->CursorIndex(),
             'Cursor must be clamped to last valid index of shorter month');
+    }
+
+    public function testCursorDateMappingsAgree(): void
+    {
+        // dateAtCursor() (uses viewMonth/viewYear) and Navigation::gridIndexToDate()
+        // must agree for every grid index 0-41 in May 2026.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+        $month = $dp->ViewMonth();
+        $year = $dp->ViewYear();
+
+        for ($idx = 0; $idx <= 41; $idx++) {
+            // Simulate what dateAtCursor does for this index
+            $firstOfMonth = new \DateTimeImmutable("$year-$month-01");
+            $firstDow = (int) $firstOfMonth->format('w');
+            $daysInMonth = (int) $firstOfMonth->format('t');
+            $dayNum = $idx - $firstDow + 1;
+
+            if ($dayNum < 1 || $dayNum > $daysInMonth) {
+                $expected = null;
+            } else {
+                $expected = $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
+            }
+
+            $actual = Navigation::gridIndexToDate($idx, $month, $year);
+
+            if ($expected === null) {
+                $this->assertNull($actual,
+                    "Index $idx: expected null but gridIndexToDate returned a date");
+            } else {
+                $this->assertSame(
+                    $expected->format('Y-m-d'),
+                    $actual?->format('Y-m-d'),
+                    "Index $idx: dateAtCursor formula and gridIndexToDate must agree"
+                );
+            }
+        }
     }
 }
