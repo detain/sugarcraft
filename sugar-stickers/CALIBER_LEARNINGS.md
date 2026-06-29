@@ -10,14 +10,11 @@ customisation options open without duplicating scroll/viewport logic.
 - Viewport: `SugarCraft\Stickers\Viewport` wraps `SugarCraft\Bits\Viewport\Viewport`
 - Scrollbar: `SugarCraft\Stickers\Scrollbar` wraps `SugarCraft\Bits\Scrollbar\Scrollbar`
 
-Sticky header/footer positioning and scroll-sync are deferred to step 10.12.
-
-## [pattern:sticky-positioning-deferred] — sticky headers/footers deferred to step 10.12
-
 Viewport sticky positioning (sticky headers/footers that appear/disappear
-as the user scrolls) is out of scope for the SSOT composition step and is
-deferred to step 10.12. The Viewport wrapper currently delegates all rendering
-to the sugar-bits Viewport.
+as the user scrolls) is implemented in the Viewport wrapper at
+`sugar-stickers/src/Viewport.php` via `withStickyHeader()` and
+`withStickyFooter()`. The sticky middle-offset is clamped to prevent
+over-scroll from pulling footer lines into the middle window.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 
