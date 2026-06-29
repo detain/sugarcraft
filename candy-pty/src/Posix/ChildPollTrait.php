@@ -89,6 +89,11 @@ trait ChildPollTrait
 
     /**
      * @see creack/pty.Cmd.ProcessState
+     *
+     * Sharp edge: a child reaped by a prior `waitpid` call may report
+     * `exited() === true` while `exitCode() === null` (proc_get_status
+     * sets exitcode to -1 for reaped children). Callers that need a
+     * guaranteed numeric exit code should prefer `wait()`.
      */
     public function exited(): bool
     {
@@ -174,6 +179,10 @@ trait ChildPollTrait
 
     /**
      * @see creack/pty.Cmd.ExitCode()
+     *
+     * Sharp edge: returns `null` when the child was reaped by a prior
+     * `waitpid` call (proc_get_status exitcode is -1 for reaped
+     * children). Use `wait()` for a guaranteed numeric return value.
      */
     public function exitCode(): ?int
     {

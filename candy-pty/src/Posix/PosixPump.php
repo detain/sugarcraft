@@ -21,6 +21,9 @@ use SugarCraft\Pty\PumpOptions;
  */
 final class PosixPump implements PumpContract
 {
+    /** Buffered stdin bytes not yet written to master (partial-write remainder). */
+    private string $pendingStdin = '';
+
     /**
      * Run the byte pump until pump conditions trigger: child exits,
      * STDOUT hits EPIPE, or STDIN reaches EOF and the post-EOF grace
@@ -212,13 +215,29 @@ final class PosixPump implements PumpContract
             }
             return true;
         }
-        $master->write($bytes);
+
+        // Prepend any buffered remainder from a prior partial write.
+        $toWrite = $this->pendingStdin . $bytes;
+        $this->pendingStdin = '';
+
+        // Flush loop: handle short writes by looping until all bytes are accepted.
+        $written = 0;
+        while ($written < \strlen($toWrite)) {
+            $n = $master->write(\substr($toWrite, $written));
+            if ($n <= 0) {
+                // Would-block or error — buffer remainder for next iteration.
+                $this->pendingStdin = \substr($toWrite, $written);
+                break;
+            }
+            $written += $n;
+        }
+
         // P6.1 Recorder tap: tee stdin bytes into the recorder after
         // they've been written to master so a write failure leaves the
         // cassette consistent with what the child actually saw. Zero
         // overhead when recorder is null (single null-check per chunk).
-        if ($opts->recorder !== null) {
-            $opts->recorder->recordInputBytes($bytes);
+        if ($opts->recorder !== null && $written > 0) {
+            $opts->recorder->recordInputBytes(\substr($toWrite, 0, $written));
         }
         return true;
     }

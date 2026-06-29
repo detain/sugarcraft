@@ -65,6 +65,20 @@ final class ExpectTimeoutException extends PtyException
         );
     }
 
+    public static function forEof(float $timeoutSec, string $buffer): self
+    {
+        return new self(
+            \sprintf(
+                'Expect: timed out after %.3fs waiting for EOF (buffer=%d bytes)',
+                $timeoutSec,
+                \strlen($buffer),
+            ),
+            [],
+            $timeoutSec,
+            $buffer,
+        );
+    }
+
     private static function escape(string $s): string
     {
         return \addcslashes($s, "\\\"\n\r\t");
