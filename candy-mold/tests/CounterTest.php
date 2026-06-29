@@ -58,6 +58,36 @@ final class CounterTest extends TestCase
         $this->assertStringContainsString('q to quit', $view);
     }
 
+    public function testCtrlCDispatchesQuitCmd(): void
+    {
+        [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        $this->assertInstanceOf(Counter::class, $next);
+        $this->assertSame(7, $next->n, 'ctrl+c must not mutate count');
+        $this->assertNotNull($cmd, 'ctrl+c returns Cmd::quit()');
+    }
+
+    public function testEscDispatchesQuitCmd(): void
+    {
+        [$next, $cmd] = (new Counter(7))->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertInstanceOf(Counter::class, $next);
+        $this->assertSame(7, $next->n, 'Esc must not mutate count');
+        $this->assertNotNull($cmd, 'Esc returns Cmd::quit()');
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $this->assertNull((new Counter())->subscriptions());
+    }
+
+    public function testViewRendersStyledBorder(): void
+    {
+        $view = (new Counter(42))->view();
+        // Rounded border corner glyphs must be present
+        $this->assertStringContainsString("\u{256d}", $view, 'top-left corner ╭ missing');
+        $this->assertStringContainsString("\u{2570}", $view, 'bottom-left corner ╰ missing');
+        $this->assertStringContainsString('42', $view);
+    }
+
     public function testUpdateIsPure(): void
     {
         $start = new Counter(10);
