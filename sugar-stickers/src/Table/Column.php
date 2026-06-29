@@ -11,11 +11,6 @@ namespace SugarCraft\Stickers\Table;
  */
 final class Column
 {
-    public readonly string $title;
-    public readonly int $width;
-    public string $align;       // 'left' | 'center' | 'right' — mutated via withAlign() on clones
-    public string $ansiStyle;   // ANSI style for header cells — mutated via withStyle() on clones
-
     /** @var callable(string $value, int $rowIndex): string|null */
     private $formatter;
 
@@ -24,17 +19,33 @@ final class Column
     private int $sortPriority = 0;
 
     private function __construct(
-        string $title,
-        int $width,
-        string $align = 'left',
-        string $ansiStyle = '',
+        public readonly string $title,
+        public readonly int $width,
+        public readonly string $align = 'left',
+        public readonly string $ansiStyle = '',
         ?callable $formatter = null,
     ) {
-        $this->title     = $title;
-        $this->width     = $width;
-        $this->align     = $align;
-        $this->ansiStyle = $ansiStyle;
         $this->formatter = $formatter;
+    }
+
+    /**
+     * Internal constructor that also preserves sort state.
+     * Used by with* methods to create a new instance with modified properties.
+     */
+    private static function fromState(
+        string $title,
+        int $width,
+        string $align,
+        string $ansiStyle,
+        ?callable $formatter,
+        int $sortDir,
+        int $sortPriority,
+    ): self {
+        $col = new self($title, $width, $align, $ansiStyle, $formatter);
+        // Access private properties directly since we're in the same class.
+        $col->sortDir = $sortDir;
+        $col->sortPriority = $sortPriority;
+        return $col;
     }
 
     public static function make(string $title, int $width): self
@@ -44,16 +55,12 @@ final class Column
 
     public function withAlign(string $align): self
     {
-        $clone = clone $this;
-        $clone->align = $align;
-        return $clone;
+        return self::fromState($this->title, $this->width, $align, $this->ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
     public function withStyle(string $ansiStyle): self
     {
-        $clone = clone $this;
-        $clone->ansiStyle = $ansiStyle;
-        return $clone;
+        return self::fromState($this->title, $this->width, $this->align, $ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
     public function withFormatter(callable $fn): self
@@ -66,7 +73,7 @@ final class Column
     public function sorted(int $direction = 1, int $priority = 0): self
     {
         $clone = clone $this;
-        $clone->sortDir     = $direction;
+        $clone->sortDir = $direction;
         $clone->sortPriority = $priority;
         return $clone;
     }
@@ -74,7 +81,7 @@ final class Column
     public function unsorted(): self
     {
         $clone = clone $this;
-        $clone->sortDir     = 0;
+        $clone->sortDir = 0;
         $clone->sortPriority = 0;
         return $clone;
     }

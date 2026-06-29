@@ -40,21 +40,18 @@ enum Align {
  */
 final class FlexBox
 {
-    /** @var list<FlexItem> */
-    private array $items = [];
-
-    public Direction $direction = Direction::Row;
-    public Justify   $justify   = Justify::Start;
-    public Align     $align     = Align::Stretch;
-    public int       $gap       = 0;
-    public bool      $wrap      = false;
-    public bool      $border    = false;
-
-    private function __construct(Direction $direction, FlexItem ...$items)
-    {
-        $this->direction = $direction;
-        $this->items     = $items;
-    }
+    /**
+     * @param list<FlexItem> $items
+     */
+    private function __construct(
+        public readonly Direction $direction = Direction::Row,
+        public readonly Justify $justify = Justify::Start,
+        public readonly Align $align = Align::Stretch,
+        public readonly int $gap = 0,
+        public readonly bool $wrap = false,
+        public readonly bool $border = false,
+        private array $items = [],
+    ) {}
 
     // -------------------------------------------------------------------------
     // Factory
@@ -62,12 +59,12 @@ final class FlexBox
 
     public static function row(FlexItem ...$items): self
     {
-        return (new self(Direction::Row, ...$items));
+        return new self(Direction::Row, Justify::Start, Align::Stretch, 0, false, false, $items);
     }
 
     public static function column(FlexItem ...$items): self
     {
-        return (new self(Direction::Column, ...$items));
+        return new self(Direction::Column, Justify::Start, Align::Stretch, 0, false, false, $items);
     }
 
     // -------------------------------------------------------------------------
@@ -76,51 +73,39 @@ final class FlexBox
 
     public function withDirection(Direction $d): self
     {
-        $clone = clone $this;
-        $clone->direction = $d;
-        return $clone;
+        return new self($d, $this->justify, $this->align, $this->gap, $this->wrap, $this->border, $this->items);
     }
 
     public function withJustify(Justify $j): self
     {
-        $clone = clone $this;
-        $clone->justify = $j;
-        return $clone;
+        return new self($this->direction, $j, $this->align, $this->gap, $this->wrap, $this->border, $this->items);
     }
 
     public function withAlign(Align $a): self
     {
-        $clone = clone $this;
-        $clone->align = $a;
-        return $clone;
+        return new self($this->direction, $this->justify, $a, $this->gap, $this->wrap, $this->border, $this->items);
     }
 
     public function withGap(int $cells): self
     {
-        $clone = clone $this;
-        $clone->gap = $cells;
-        return $clone;
+        return new self($this->direction, $this->justify, $this->align, $cells, $this->wrap, $this->border, $this->items);
     }
 
     public function withWrap(bool $w = true): self
     {
-        $clone = clone $this;
-        $clone->wrap = $w;
-        return $clone;
+        return new self($this->direction, $this->justify, $this->align, $this->gap, $w, $this->border, $this->items);
     }
 
     public function withBorder(bool $b = true): self
     {
-        $clone = clone $this;
-        $clone->border = $b;
-        return $clone;
+        return new self($this->direction, $this->justify, $this->align, $this->gap, $this->wrap, $b, $this->items);
     }
 
     public function addItem(FlexItem $item): self
     {
-        $clone = clone $this;
-        $clone->items[] = $item;
-        return $clone;
+        $newItems = $this->items;
+        $newItems[] = $item;
+        return new self($this->direction, $this->justify, $this->align, $this->gap, $this->wrap, $this->border, $newItems);
     }
 
     // -------------------------------------------------------------------------
