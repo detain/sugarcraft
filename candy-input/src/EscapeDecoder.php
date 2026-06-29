@@ -545,7 +545,7 @@ final class EscapeDecoder
         if ($pasteEndPos === false) {
             // Not complete — accumulate
             $this->pasteBuffer .= $stream;
-            if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE * 2) {
+            if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
                 // Force-close on oversized paste
                 $event = PasteEvent::truncate($this->pasteBuffer);
                 $this->pasteBuffer = '';
@@ -645,17 +645,12 @@ final class EscapeDecoder
         if ($code >= 97 && $code <= 122) return chr($code);
         if ($code >= 65 && $code <= 90)  return chr($code + 32);
 
-        // Arrow keys
+        // Arrow keys (spec codes)
         $arrowCodes = [
             57399 => 'ArrowUp',
             57400 => 'ArrowDown',
             57401 => 'ArrowRight',
             57402 => 'ArrowLeft',
-            // Alternative codes
-            126 => 'ArrowUp',
-            127 => 'ArrowDown',
-            128 => 'ArrowRight',
-            129 => 'ArrowLeft',
         ];
 
         if (isset($arrowCodes[$code])) return $arrowCodes[$code];

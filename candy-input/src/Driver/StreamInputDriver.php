@@ -52,7 +52,7 @@ final class StreamInputDriver implements InputDriver
             if ($more === '' || $more === false) {
                 return null;
             }
-            $events = $this->decoder->decode($this->decoder->remainder() . $more);
+            $events = $this->decoder->decode($more);
             if ($events === []) {
                 return null;
             }
@@ -74,17 +74,15 @@ final class StreamInputDriver implements InputDriver
      */
     private function readNonBlocking(): string|false
     {
-        $meta = stream_get_meta_data($this->stream);
+        // Ensure stream is non-blocking to prevent blocking the event loop
+        stream_set_blocking($this->stream, false);
 
-        // If it's a non-blocking stream, check if data is available
-        if (!($meta['blocked'] ?? false)) {
-            $read = [$this->stream];
-            $write = null;
-            $except = null;
-            $changed = @stream_select($read, $write, $except, 0, 0);
-            if ($changed === false || $changed === 0) {
-                return '';
-            }
+        $read = [$this->stream];
+        $write = null;
+        $except = null;
+        $changed = @stream_select($read, $write, $except, 0, 0);
+        if ($changed === false || $changed === 0) {
+            return '';
         }
 
         return fread($this->stream, 8192);
