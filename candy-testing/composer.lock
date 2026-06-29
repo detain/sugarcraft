@@ -214,12 +214,13 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-async",
-                "reference": "da4cecf42d60c6d575dd7d088da78fb9516d180a"
+                "reference": "d59d32a5c563858d6b63684e2c5ea1f3c2235755"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
-                "react/promise": "^3.3"
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -267,17 +268,18 @@
         },
         {
             "name": "sugarcraft/candy-buffer",
-            "version": "dev-master",
+            "version": "dev-ai/candy-testing-fix",
             "dist": {
                 "type": "path",
                 "url": "../candy-buffer",
-                "reference": "55a25d0d31b3ccfa249769178a0a848b9996fbc6"
+                "reference": "b1c4002ebfa4b8b09c761670d4df19f8891adc70"
             },
             "require": {
                 "php": "^8.3"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-core": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -396,10 +398,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "1d775d2cf576fd650b1940504ffd8057bbb93fed"
+                "reference": "8a55425345b9474869314fcd24f1ad22f8b31aea"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -454,12 +457,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08"
+                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08",
-                "reference": "58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/27eb7e3e157b618c107e2bb36ff873467866ce4d",
+                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d",
                 "shasum": ""
             },
             "require": {
@@ -2201,5 +2204,5 @@
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
