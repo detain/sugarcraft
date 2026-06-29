@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Stickers\Tests;
 
 use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem, Justify};
-use SugarCraft\Stickers\Table\{Column, Table};
+use SugarCraft\Stickers\Table\{Column, Table, TableRenderer};
 use PHPUnit\Framework\TestCase;
 
 final class StickersTest extends TestCase
@@ -340,11 +340,13 @@ final class StickersTest extends TestCase
     // ---- Diff-emission byte benchmark ------------------------------------
 
     /**
-     * Benchmark: diff-based render() emits fewer bytes than full re-render
+     * Benchmark: diff-based TableRenderer::render() emits fewer bytes than full re-render
      * for small changes between consecutive frames.
      *
      * Mirrors sugar-boxer, sugar-dash, sugar-crush, sugar-veil, candy-lister.
      *
+     * TableRenderer tracks diff state across frames. First render emits full output.
+     * Subsequent renders with stable dimensions emit delta-encoded ops.
      * Table diff works only when dimensions (width×height) stay constant.
      * Adding/removing rows changes height and triggers full re-emit.
      * We use style changes (cursorStyle, headerStyle) which are dimension-stable.
@@ -362,18 +364,20 @@ final class StickersTest extends TestCase
             ->addRow(['Bob'])
             ->addRow(['Carol']);
 
-        // Frame 1: full render
-        $out1 = $t->render();
+        $renderer = new TableRenderer();
+
+        // Frame 1: full render via TableRenderer
+        $out1 = $renderer->render($t);
         $bytes1 = \strlen($out1);
 
         // Frame 2: add cursor style (dimension-stable change)
         $t2 = $t->setCursor(1)->withCursorStyle('7');  // reverse video on row 1
-        $out2 = $t2->render();
+        $out2 = $renderer->render($t2);
         $bytes2 = \strlen($out2);
 
         // Frame 3: change header style (dimension-stable change)
         $t3 = $t2->withHeaderStyle('1');  // bold header
-        $out3 = $t3->render();
+        $out3 = $renderer->render($t3);
         $bytes3 = \strlen($out3);
 
         // First frame is full output (baseline)
