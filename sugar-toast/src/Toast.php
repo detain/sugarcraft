@@ -722,7 +722,12 @@ final class Toast
         if ($this->minWidth <= 0) {
             return $this->maxWidth;
         }
-        $iconSpace = \strlen($this->symbols->name) + 2;
+        // WHY: NerdFont/Unicode icons are 1 display cell; ASCII "[E]" is 3 cells.
+        // The +1 accounts for the trailing space after the icon in renderAlert().
+        $iconSpace = match ($this->symbols) {
+            SymbolSet::Ascii => 3,
+            default => 1,
+        } + 1;
         $needed = $messageLen + $iconSpace + 4;  // + borders + padding
         return \max($this->minWidth, \min($needed, $this->maxWidth));
     }
