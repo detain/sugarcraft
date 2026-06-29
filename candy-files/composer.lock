@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "85144c11a47eacc79cc09a6d577be7f1",
+    "content-hash": "a0d03f8b579b37519cfd646518ae2508",
     "packages": [
         {
             "name": "react/event-loop",
@@ -214,12 +214,13 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-async",
-                "reference": "da4cecf42d60c6d575dd7d088da78fb9516d180a"
+                "reference": "d59d32a5c563858d6b63684e2c5ea1f3c2235755"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
-                "react/promise": "^3.3"
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -342,10 +343,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "1d775d2cf576fd650b1940504ffd8057bbb93fed"
+                "reference": "8a55425345b9474869314fcd24f1ad22f8b31aea"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -450,138 +452,17 @@
             }
         },
         {
-            "name": "sugarcraft/candy-mosaic",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "../candy-mosaic",
-                "reference": "3d0ec500a4c0ee9631b384ba3b4f4fe93edaef5a"
-            },
-            "require": {
-                "ext-gd": "*",
-                "ext-mbstring": "*",
-                "php": "^8.3",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-palette": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Mosaic\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Mosaic\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Image-to-cell renderer — PNG/JPEG/static GIF to terminal via Sixel, Kitty, iTerm2, or half-block Unicode fallback. Port of charmbracelet/x/mosaic.",
-            "homepage": "https://github.com/sugarcraft/candy-mosaic",
-            "keywords": [
-                "charmbracelet",
-                "image",
-                "iterm2",
-                "kitty",
-                "sixel",
-                "sugarcraft",
-                "terminal",
-                "tui",
-                "x-mosaic"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-mosaic/issues",
-                "source": "https://github.com/sugarcraft/candy-mosaic",
-                "docs": "https://sugarcraft.github.io/lib/candy-mosaic.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-palette",
-            "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-palette.git",
-                "reference": "690b257fb5670404ea6cb0ff969614693890c063"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-palette/zipball/690b257fb5670404ea6cb0ff969614693890c063",
-                "reference": "690b257fb5670404ea6cb0ff969614693890c063",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "default-branch": true,
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Palette\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/colorprofile — magical terminal color profile detection and color degradation (TrueColor → ANSI256 → ANSI → ASCII).",
-            "homepage": "https://github.com/sugarcraft/candy-palette",
-            "keywords": [
-                "ansi",
-                "color",
-                "colorprofile",
-                "sugarcraft",
-                "terminal",
-                "truecolor",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-palette/issues",
-                "source": "https://github.com/sugarcraft/candy-palette"
-            },
-            "time": "2026-06-02T17:39:06+00:00"
-        },
-        {
             "name": "sugarcraft/candy-pty",
             "version": "dev-master",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08"
+                "reference": "a445fc57928bd511f7f42eeb716b1598ca25a9ff"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08",
-                "reference": "58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/a445fc57928bd511f7f42eeb716b1598ca25a9ff",
+                "reference": "a445fc57928bd511f7f42eeb716b1598ca25a9ff",
                 "shasum": ""
             },
             "require": {
@@ -637,7 +518,7 @@
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
                 "source": "https://github.com/sugarcraft/candy-pty"
             },
-            "time": "2026-06-01T13:14:26+00:00"
+            "time": "2026-06-29T12:12:00+00:00"
         },
         {
             "name": "sugarcraft/candy-sprinkles",
@@ -2378,7 +2259,6 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "sugarcraft/candy-core": 20,
-        "sugarcraft/candy-mosaic": 20,
         "sugarcraft/candy-sprinkles": 20
     },
     "prefer-stable": true,
@@ -2387,5 +2267,5 @@
         "php": ">=8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }

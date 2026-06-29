@@ -55,6 +55,7 @@ final class ManagerBuilder
     private array $redoStack = [];
     private ?string $pendingOpDest = null;
     private ?string $pendingOpType = null;
+    private ?string $inputBuffer = null;
 
     public function __construct()
     {
@@ -185,6 +186,13 @@ final class ManagerBuilder
         return $clone;
     }
 
+    public function withInputBuffer(?string $inputBuffer): self
+    {
+        $clone = clone $this;
+        $clone->inputBuffer = $inputBuffer;
+        return $clone;
+    }
+
     public function build(): \SugarCraft\Files\Manager
     {
         if ($this->left === null || $this->right === null) {
@@ -208,6 +216,7 @@ final class ManagerBuilder
             $this->redoStack,
             $this->pendingOpDest,
             $this->pendingOpType,
+            $this->inputBuffer,
         );
     }
 }

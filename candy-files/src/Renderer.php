@@ -64,6 +64,7 @@ final class Renderer
             $marker  = isset($pane->selected[$entry->name]) ? '✓' : ' ';
             $arrow   = ($i === $pane->cursor) ? '▸' : ' ';
             $name    = $entry->isDir ? $entry->name . '/' : $entry->name;
+            $name    = Entry::sanitizeName($name);
             $size    = $entry->displaySize();
             $rows[] = sprintf("%s%s %-26s %7s", $arrow, $marker, self::truncate($name, 26), $size);
         }
@@ -96,7 +97,7 @@ final class Renderer
         foreach ($m->searchResults as $i => $entry) {
             $prefix = $i === $m->searchCursor ? '> ' : '  ';
             $type = $entry->isDir ? Lang::t('search.type_dir') : Lang::t('search.type_file');
-            $lines[] = "{$prefix}{$type} {$entry->name}";
+            $lines[] = "{$prefix}{$type} " . Entry::sanitizeName($entry->name);
         }
         if ($total === 0) {
             $lines[] = '  ' . Lang::t('search.no_match');

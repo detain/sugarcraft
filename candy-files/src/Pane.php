@@ -101,6 +101,21 @@ final class Pane
         return new self($this->cwd, $this->entries, $last, $this->selected, $this->sort, $this->showHidden);
     }
 
+    /**
+     * Position the cursor on the entry with the given name, if found.
+     * Used to restore cursor position after goUp to the directory we
+     * came from.
+     */
+    public function cursorOnName(string $name): self
+    {
+        foreach ($this->entries as $i => $entry) {
+            if ($entry->name === $name) {
+                return new self($this->cwd, $this->entries, $i, $this->selected, $this->sort, $this->showHidden);
+            }
+        }
+        return $this;
+    }
+
     /** Toggle the entry under the cursor in/out of the selection set. */
     public function toggleSelection(): self
     {
@@ -127,9 +142,20 @@ final class Pane
      */
     public function setSort(Sort $sort, \Closure $lister): self
     {
-        // Re-sort via re-listing rather than in-place: simpler and
-        // keeps the parent sentinel handling consistent.
-        return self::open($this->cwd, $lister, $sort, $this->showHidden);
+        // Re-order in-memory entries without calling the lister:
+        // strip the parent sentinel, sort the rest, re-prepend it.
+        $parent = null;
+        $rest = [];
+        foreach ($this->entries as $e) {
+            if ($e->isParentSentinel()) {
+                $parent = $e;
+                continue;
+            }
+            $rest[] = $e;
+        }
+        $sorted = $sort->apply($rest);
+        $entries = $parent !== null ? array_merge([$parent], $sorted) : $sorted;
+        return new self($this->cwd, $entries, 0, $this->selected, $sort, $this->showHidden);
     }
 
     /**

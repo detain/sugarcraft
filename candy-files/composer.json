@@ -33,17 +33,9 @@
         "php": ">=8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-mosaic": "dev-master",
         "react/promise": "^3.3"
     },
     "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-mosaic",
-            "options": {
-                "symlink": true
-            }
-        },
         {
             "type": "path",
             "url": "../candy-core",
