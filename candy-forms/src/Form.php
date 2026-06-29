@@ -337,6 +337,33 @@ final class Form implements Model
                         $this->groupIndex + 1, +1,
                     ) === null;
                     if ($isLastGroup) {
+                        // Revalidate every field in the current group so that
+                        // untouched-but-required fields surface their errors.
+                        $currentFields = $this->fieldsByGroup[$this->groupIndex];
+                        $revalidated = [];
+                        $hasErrors = false;
+                        foreach ($currentFields as $f) {
+                            $rf = $f->revalidate();
+                            $revalidated[] = $rf;
+                            if ($rf->getError() !== null && $rf->getError() !== '') {
+                                $hasErrors = true;
+                            }
+                        }
+                        if ($hasErrors) {
+                            // Rebuild the form with revalidated fields and re-focus
+                            // the first erroring field in the current group.
+                            $newByGroup = $this->fieldsByGroup;
+                            $newByGroup[$this->groupIndex] = $revalidated;
+                            $firstErrorIdx = null;
+                            foreach ($revalidated as $idx => $rf) {
+                                if ($rf->getError() !== null && $rf->getError() !== '') {
+                                    $firstErrorIdx = $idx;
+                                    break;
+                                }
+                            }
+                            $focusedIdx = $firstErrorIdx ?? $this->focusedIndex;
+                            return [$this->mutate(fieldsByGroup: $newByGroup, focusedIndex: $focusedIdx), null];
+                        }
                         return [$this->mutate(submitted: true), Cmd::quit()];
                     }
                     return $this->advanceGroup(+1);
@@ -646,7 +673,9 @@ final class Form implements Model
                 $accumulated[$f->key()] = $f->value();
             }
         }
-        // Re-validate all fields by collecting their current errors.
+        // Re-validate all fields by calling revalidate() on each field
+        // (which forces validators/constraints to run even on untouched fields)
+        // then collect the recomputed errors.
         foreach ($this->groups as $i => $group) {
             if ($group->isHidden($accumulated)) {
                 continue;
@@ -655,7 +684,8 @@ final class Form implements Model
                 if ($f->skippable()) {
                     continue;
                 }
-                $err = $f->getError();
+                $rf = $f->revalidate();
+                $err = $rf->getError();
                 if ($err !== null && $err !== '') {
                     $out[$f->key()] = $err;
                 }

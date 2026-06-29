@@ -640,4 +640,42 @@ final class FormTest extends TestCase
         $form3 = $form2->withConstraints(null);
         $this->assertNull($form3->constraints);
     }
+
+    /**
+     * Submit is blocked when the current group has validation errors.
+     * The form revalidates all fields, finds the error, re-focuses the
+     * first erroring field, and returns without submitting.
+     */
+    public function testSubmitBlockedWhenCurrentGroupHasErrors(): void
+    {
+        $form = Form::new(
+            Input::new('name')->required(),
+        );
+        // Field is focused but empty — required validation fails.
+        $this->assertFalse($form->isSubmitted());
+        // Press Enter on the (only) last field — should NOT submit.
+        [$form, $cmd] = $form->update(new KeyMsg(KeyType::Enter));
+        $this->assertFalse($form->isSubmitted());
+        // No quit Cmd was returned (submission was blocked).
+        $this->assertNull($cmd);
+        // The field is still focused (focus moved to the erroring field, which is index 0).
+        $this->assertSame(0, $form->focusedIndex);
+    }
+
+    /**
+     * A clean form (no validation errors) submits normally on Enter.
+     */
+    public function testSubmitSucceedsWhenClean(): void
+    {
+        $form = Form::new(
+            Input::new('name')->required(),
+        );
+        // Type a value to satisfy the required validator.
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'J'));
+        $this->assertFalse($form->isSubmitted());
+        // Press Enter — should submit cleanly.
+        [$form, $cmd] = $form->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($form->isSubmitted());
+        $this->assertNotNull($cmd);
+    }
 }
