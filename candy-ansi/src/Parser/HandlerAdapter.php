@@ -10,7 +10,7 @@ namespace SugarCraft\Ansi\Parser;
  *
  * Translates parse events into handler method calls.
  *
- * @see Mirrors charmbracelet/x/ansi HandlerAdapter
+ * Mirrors charmbracelet/x/ansi.HandlerAdapter
  */
 final class HandlerAdapter implements Handler
 {
@@ -23,8 +23,10 @@ final class HandlerAdapter implements Handler
     public function printChar(string $rune): void
     {
         $byte = $rune[0] ?? '';
-        if ($byte !== '' && ord($byte) >= 0x20 && ord($byte) <= 0x7E) {
-            $this->csi->printable($byte);
+        // Forward printable ASCII OR any valid UTF-8 lead byte (>= 0xC2).
+        // Drop C0 (< 0x20) and C1 (0x80-0xBF continuation) control bytes.
+        if ($byte !== '' && ord($byte) >= 0x20) {
+            $this->csi->printable($rune);
         }
     }
 
@@ -76,7 +78,8 @@ final class HandlerAdapter implements Handler
 
     public function oscDispatch(string $data): void
     {
-        if (preg_match('/^([0-2]);(.+)$/', $data, $m)) {
+        // .+ requires at least one char; .* allows empty payload (e.g. "2;" = clear title)
+        if (preg_match('/^([0-2]);(.*)$/', $data, $m)) {
             $this->osc->title($m[2]);
         }
     }
