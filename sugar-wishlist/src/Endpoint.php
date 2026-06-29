@@ -48,17 +48,40 @@ final class Endpoint
             $argv[] = $this->identityFiles[0];
         }
         if ($this->proxyJump !== null && $this->proxyJump !== '') {
+            $this->assertNotOption('proxyJump', $this->proxyJump);
             $argv[] = '-J';
             $argv[] = $this->proxyJump;
         }
         foreach ($this->options as $opt) {
+            $this->assertNotOption('option', $opt);
             $argv[] = '-o';
             $argv[] = $opt;
         }
-        $argv[] = $this->user !== null && $this->user !== ''
+        // `--` stops SSH from interpreting the destination as an option.
+        // Belt-and-suspenders with the leading-dash guard below.
+        $argv[] = '--';
+        $dest = $this->user !== null && $this->user !== ''
             ? "{$this->user}@{$this->host}"
             : $this->host;
+        $this->assertNotOption('host', $dest);
+        $argv[] = $dest;
         return $argv;
+    }
+
+    /**
+     * Guard against option-injection: a leading dash makes a string
+     * look like an ssh flag. Throws if $value would be misinterpreted
+     * as a flag by ssh(1).
+     *
+     * @throws \InvalidArgumentException
+     */
+    private function assertNotOption(string $field, string $value): void
+    {
+        if ($value !== '' && str_starts_with($value, '-')) {
+            throw new \InvalidArgumentException(
+                Lang::t('endpoint.option_injection', ['field' => $field, 'value' => $value])
+            );
+        }
     }
 
     public function displayLine(): string

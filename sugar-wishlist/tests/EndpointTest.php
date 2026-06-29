@@ -12,7 +12,7 @@ final class EndpointTest extends TestCase
     public function testToSshArgvBare(): void
     {
         $e = new Endpoint(name: 'prod', host: 'prod.example.com');
-        $this->assertSame(['ssh', 'prod.example.com'], $e->toSshArgv());
+        $this->assertSame(['ssh', '--', 'prod.example.com'], $e->toSshArgv());
     }
 
     public function testToSshArgvWithUserPortIdentity(): void
@@ -22,7 +22,7 @@ final class EndpointTest extends TestCase
             user: 'deploy', identityFiles: ['/home/me/.ssh/prod'],
         );
         $this->assertSame(
-            ['ssh', '-p', '2222', '-i', '/home/me/.ssh/prod', 'deploy@prod.example.com'],
+            ['ssh', '-p', '2222', '-i', '/home/me/.ssh/prod', '--', 'deploy@prod.example.com'],
             $e->toSshArgv(),
         );
     }
@@ -42,7 +42,7 @@ final class EndpointTest extends TestCase
     public function testCustomBinaryPath(): void
     {
         $e = new Endpoint(name: 'a', host: 'a.test');
-        $this->assertSame(['/usr/local/bin/ssh', 'a.test'], $e->toSshArgv('/usr/local/bin/ssh'));
+        $this->assertSame(['/usr/local/bin/ssh', '--', 'a.test'], $e->toSshArgv('/usr/local/bin/ssh'));
     }
 
     public function testDisplayLineFormatting(): void
