@@ -322,12 +322,19 @@ final class Server
         \fwrite($pipes[0], $body);
         \fclose($pipes[0]);
 
-        // Read response
+        // Read response (with memory cap to prevent OOM on large packfiles)
+        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
         $packData = '';
         while (!\feof($pipes[1])) {
             $chunk = \fread($pipes[1], 65536);
             if ($chunk === false) break;
             $packData .= $chunk;
+            if (\strlen($packData) > $maxBytes) {
+                \fclose($pipes[1]);
+                \fclose($pipes[2]);
+                \proc_close($proc);
+                return $this->errorResponse(413, 'Packfile too large');
+            }
         }
         \fclose($pipes[1]);
         \fclose($pipes[2]);
