@@ -35,7 +35,8 @@ final class SshConfigParser
         $this->globalOptions = [];
         $this->hostBlocks = [];
 
-        $currentHost = null;
+        /** @var list<string>|null $currentHostPatterns */
+        $currentHostPatterns = null;
         /** @var array<string,string|list<string>> $currentOptions */
         $currentOptions = [];
         $inGlobalBlock = false;
@@ -49,12 +50,20 @@ final class SshConfigParser
 
             // Host keyword opens a new block
             if (preg_match('/^host\s+(.+)$/i', $line, $m)) {
-                if ($currentHost !== null) {
-                    $this->storeHostBlock($currentHost, $currentOptions);
+                if ($currentHostPatterns !== null) {
+                    $this->storeHostBlock($currentHostPatterns, $currentOptions);
                 }
-                $currentHost = $m[1];
+                // Split multi-pattern Host lines (e.g. "Host a b c") into
+                // individual patterns. First-match-wins ordering: preserve
+                // left-to-right order.
+                $rawPatterns = preg_split('/\s+/', trim($m[1]));
+                $currentHostPatterns = array_values(array_filter(
+                    $rawPatterns,
+                    static fn(string $p) => $p !== ''
+                ));
                 $currentOptions = [];
-                $inGlobalBlock = strtolower($currentHost) === '*';
+                // Check if ANY pattern is '*' to determine global block
+                $inGlobalBlock = in_array('*', $currentHostPatterns, true);
                 if ($inGlobalBlock) {
                     $currentOptions = $this->globalOptions;
                 }
@@ -62,7 +71,7 @@ final class SshConfigParser
             }
 
             // Keyword VALUE lines (inside a Host block)
-            if ($currentHost !== null && preg_match('/^(\w+)\s+(.+)$/i', $line, $m)) {
+            if ($currentHostPatterns !== null && preg_match('/^(\w+)\s+(.+)$/i', $line, $m)) {
                 $key = strtolower($m[1]);
                 $value = trim($m[2]);
                 $this->applyKeyword($currentOptions, $key, $value, $inGlobalBlock);
@@ -71,23 +80,27 @@ final class SshConfigParser
         }
 
         // Flush final block
-        if ($currentHost !== null) {
-            $this->storeHostBlock($currentHost, $currentOptions);
+        if ($currentHostPatterns !== null) {
+            $this->storeHostBlock($currentHostPatterns, $currentOptions);
         }
 
         return $this->buildEndpoints();
     }
 
     /**
+     * @param list<string> $hostPatterns
      * @param array<string,string|list<string>> $options
      */
-    private function storeHostBlock(string $hostPattern, array $options): void
+    private function storeHostBlock(array $hostPatterns, array $options): void
     {
-        if (strtolower($hostPattern) === '*') {
-            $this->globalOptions = $options;
-            return;
+        foreach ($hostPatterns as $pattern) {
+            if (strtolower($pattern) === '*') {
+                // Host * sets global options only; no endpoint is created.
+                $this->globalOptions = $options;
+                continue;
+            }
+            $this->hostBlocks[] = ['host' => $pattern, 'options' => $options, 'line' => 0];
         }
-        $this->hostBlocks[] = ['host' => $hostPattern, 'options' => $options, 'line' => 0];
     }
 
     /**
