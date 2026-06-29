@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Post;
 
+use SugarCraft\Async\CancellationToken;
 use SugarCraft\Post\Lang;
 
 /**
@@ -20,8 +21,12 @@ final class ResendTransport implements Transport
         $this->apiKey = $apiKey;
     }
 
-    public function send(Email $email): void
+    public function send(Email $email, ?CancellationToken $token = null): void
     {
+        if ($token !== null && $token->isCancelled()) {
+            throw new \RuntimeException(Lang::t('resend.send_cancelled'));
+        }
+
         $payload = $this->buildPayload($email);
         $json = \json_encode($payload, \JSON_THROW_ON_ERROR);
 

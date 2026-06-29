@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Post;
 
+use SugarCraft\Async\CancellationToken;
 use SugarCraft\Post\Lang;
 
 /**
@@ -23,8 +24,11 @@ final class Mailer
      *
      * @throws \RuntimeException if the transport fails.
      */
-    public function send(Email $email): void
+    public function send(Email $email, ?CancellationToken $token = null): void
     {
+        if ($token !== null && $token->isCancelled()) {
+            throw new \RuntimeException(Lang::t('mailer.send_cancelled'));
+        }
         if ($email->to === [] && $email->cc === [] && $email->bcc === []) {
             throw new \InvalidArgumentException(Lang::t('mailer.no_recipient'));
         }
@@ -32,7 +36,7 @@ final class Mailer
             throw new \InvalidArgumentException(Lang::t('mailer.no_from'));
         }
 
-        $this->transport->send($email);
+        $this->transport->send($email, $token);
     }
 
     /**
