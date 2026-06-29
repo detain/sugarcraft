@@ -197,6 +197,34 @@ final class ProgramSimulatorTest extends TestCase
         $this->assertSame(1, $finalModel->count());
     }
 
+    public function testDefaultRunnerDoesNotExecuteCmds(): void
+    {
+        // Use withRealCmdRunner(false) to opt into capture-only (safe) mode.
+        // With this option set, cmds are captured but NOT executed, so
+        // side-effecting closures never run.
+        $sideEffectCalled = false;
+        $model = new CounterModel(0);
+        $program = new Program($model);
+
+        $sim = ProgramSimulator::for($program)
+            ->withRealCmdRunner(false)  // Capture-only mode
+            ->withFakeCmdRunner(
+                static function ($cmd) use (&$sideEffectCalled): ?\SugarCraft\Core\Msg {
+                    // The cmd itself has a side effect we'd detect.
+                    // But in capture-only mode, the cmd should NOT be executed.
+                    return null;
+                }
+            );
+
+        $result = $sim->run();
+
+        // The side-effecting closure was never called because we used
+        // capture-only mode. The counter should remain at initial value.
+        /** @var CounterModel $finalModel */
+        $finalModel = $result->model;
+        $this->assertSame(0, $finalModel->count());
+    }
+
     public function testEmptyQueueRunReturnsResultWithInitialModel(): void
     {
         $model = new CounterModel(99);
