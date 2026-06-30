@@ -230,29 +230,15 @@ final class ProgramSimulator
     }
 
     /**
-     * Extract the model from a Program instance via its property.
+     * Extract the model from a Program instance.
      *
-     * PHP doesn't give us direct access, so we use a known property path.
-     * This method is robust against ReflectionException by checking for
-     * the property's existence before attempting to access it.
+     * Uses the Program's public getModel() method rather than Reflection.
      *
      * @return Model
-     * @throws \RuntimeException If the program lacks a 'model' property
      */
     private function getModelFromProgram(): Model
     {
-        $reflection = new \ReflectionClass($this->program);
-
-        if (!$reflection->hasProperty('model')) {
-            throw new \RuntimeException(
-                Lang::t('simulator.no_model_property')
-            );
-        }
-
-        $modelProp = $reflection->getProperty('model');
-        $modelProp->setAccessible(true);
-        /** @var Model */
-        return $modelProp->getValue($this->program);
+        return $this->program->getModel();
     }
 
     /**

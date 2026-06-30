@@ -68,12 +68,12 @@ final class TapeRecorderTest extends TestCase
     public function testHeaderRespectsCustomValues(): void
     {
         TapeRecorder::to($this->tapePath)
-            ->header(theme: ' Dracula', width: 1024, height: 768, fontSize: 16)
+            ->header(theme: 'Dracula', width: 1024, height: 768, fontSize: 16)
             ->save();
 
         $content = file_get_contents($this->tapePath);
 
-        $this->assertStringContainsString('Set Theme " Dracula"', $content);
+        $this->assertStringContainsString('Set Theme "Dracula"', $content);
         $this->assertStringContainsString('Set Width 1024', $content);
         $this->assertStringContainsString('Set Height 768', $content);
         $this->assertStringContainsString('Set FontSize 16', $content);
