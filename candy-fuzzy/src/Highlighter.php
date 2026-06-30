@@ -28,10 +28,6 @@ final class Highlighter
         $candidate = $result->haystack;
         $indices = $result->indices();
 
-        if ($indices === []) {
-            return $candidate;
-        }
-
         // Normalize: MatchResult is publicly constructible, so external callers
         // may pass unsorted or duplicate indices.  groupIntoRuns() assumes
         // ascending order — enforce that invariant here.
