@@ -38,6 +38,9 @@ final class PngRenderer
 
     private const DEFAULT_FONT = 5;
 
+    /** @var \WeakMap<\GdImage, array<string, int>> Per-image colour cache */
+    private \WeakMap $colorCache;
+
     public function __construct(
         public readonly Theme $theme       = new Theme(
             background:   '#0d1117',
@@ -56,7 +59,9 @@ final class PngRenderer
         public readonly bool $lineNumbers  = false,
         public readonly int $borderRadius  = 8,
         public readonly WindowStyle $windowStyle = WindowStyle::Macos,
-    ) {}
+    ) {
+        $this->colorCache = new \WeakMap();
+    }
 
     public static function dark():       self { return new self(theme: Theme::dark()); }
     public static function light():      self { return new self(theme: Theme::light()); }
@@ -230,12 +235,13 @@ final class PngRenderer
      */
     private function allocateColor(\GdImage $img, string $hex): int
     {
-        static $cache = [];
-        $oid = spl_object_id($img);
-        $key = $hex;
+        if (!isset($this->colorCache[$img])) {
+            $this->colorCache[$img] = [];
+        }
+        $cache = &$this->colorCache[$img];
 
-        if (isset($cache[$oid][$key])) {
-            return $cache[$oid][$key];
+        if (isset($cache[$hex])) {
+            return $cache[$hex];
         }
 
         $r = hexdec(substr($hex, 1, 2));
@@ -247,7 +253,7 @@ final class PngRenderer
             $color = imagecolorallocate($img, 255, 255, 255);
         }
 
-        $cache[$oid][$key] = $color;
+        $cache[$hex] = $color;
         return $color;
     }
 
