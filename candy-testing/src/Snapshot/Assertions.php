@@ -181,10 +181,19 @@ final class Assertions
      */
     private static function escapeAnsi(string $bytes): string
     {
-        return preg_replace_callback(
+        // First escape raw ESC bytes as \x1b for display.
+        $withEscaped = str_replace("\x1b", '\\x1b', $bytes);
+
+        // Then convert ANSI SGR sequences (ESC[...m) to readable \x1b[...m form.
+        $result = preg_replace_callback(
             '/\\x1b\\[([0-9;]*)m/',
             static fn (array $m): string => '\\x1b[' . ($m[1] ?: '') . ']m',
-            str_replace("\x1b", '\\x1b', $bytes),
-        ) ?? $bytes;
+            $withEscaped,
+        );
+
+        // preg_replace_callback returns null only on error (invalid regex or subject type).
+        // With a valid static regex and string input this never happens, but handle it
+        // explicitly so intent is clear rather than relying on ?? which is ambiguous here.
+        return is_string($result) ? $result : $withEscaped;
     }
 }
