@@ -324,4 +324,5 @@ final class FixtureMaster implements \SugarCraft\Pty\Contract\MasterPty
     public function stream(): mixed { throw new \LogicException('FixtureMaster has no real stream'); }
     public function close(): void {}
     public function isClosed(): bool { return false; }
+    public function fd(): int { return -1; }
 }

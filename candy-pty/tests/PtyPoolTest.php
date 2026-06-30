@@ -271,4 +271,9 @@ final class FakeMasterPty implements \SugarCraft\Pty\Contract\MasterPty
     {
         return $this->closed;
     }
+
+    public function fd(): int
+    {
+        return -1;
+    }
 }

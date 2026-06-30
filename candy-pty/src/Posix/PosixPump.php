@@ -123,13 +123,9 @@ final class PosixPump implements PumpContract
             $r = $stdinClosed ? [$masterStream] : [$stdinStream, $masterStream];
             $w = null;
             $e = null;
-            $ready = @\stream_select($r, $w, $e, 0, $opts->selectTimeoutUs);
+            $ready = PosixMasterPty::retryOnEintr($r, $w, $e, 0, $opts->selectTimeoutUs);
 
             if ($ready === false) {
-                if (\function_exists('pcntl_signal_dispatch')) {
-                    @\pcntl_signal_dispatch();
-                    continue;
-                }
                 return;
             }
 
