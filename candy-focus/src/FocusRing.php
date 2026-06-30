@@ -333,6 +333,15 @@ final class FocusRing
         ));
     }
 
+    /** @return list<string> ids of all disabled regions in traversal order */
+    public function disabledIds(): array
+    {
+        return array_values(array_filter(
+            $this->ids,
+            fn (string $id): bool => isset($this->disabled[$id]),
+        ));
+    }
+
     /** The focused region id, or null when the ring is empty. */
     public function current(): ?string
     {
@@ -358,7 +367,7 @@ final class FocusRing
     /** @return list<string> registered region ids in traversal order */
     public function ids(): array
     {
-        return $this->ids;
+        return array_values($this->ids);
     }
 
     public function count(): int
