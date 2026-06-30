@@ -265,6 +265,8 @@ final class Logger
                 $this->timeFormat,
                 $on,
                 $this->useColors,
+                $this->styles,
+                $this->partsOrder,
             );
         }
     }
@@ -279,6 +281,8 @@ final class Logger
                 $this->timeFormat,
                 $this->reportCaller,
                 $this->useColors,
+                $this->styles,
+                $this->partsOrder,
             );
         }
     }

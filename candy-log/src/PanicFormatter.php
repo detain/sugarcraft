@@ -97,6 +97,11 @@ final class PanicFormatter
         $file = $e->getFile();
         $line = $e->getLine();
 
+        // Redact paths in primary exception file to match backtrace redaction
+        foreach ($this->redactPaths as $path) {
+            $file = str_replace($path, '[redacted]', $file);
+        }
+
         // Group consecutive repeated frames.
         $grouped = [];
         $lastFrame = null;
