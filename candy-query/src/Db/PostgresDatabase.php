@@ -79,10 +79,9 @@ final class PostgresDatabase implements DatabaseInterface
             return [];
         }
 
-        // PostgreSQL uses double-quotes for identifiers
         $sql = sprintf(
-            'SELECT * FROM "%s" LIMIT %d',
-            str_replace('"', '""', $table),
+            'SELECT * FROM %s LIMIT %d',
+            Identifier::quote(Flavor::Postgres, $table),
             $limit,
         );
         $stmt = $this->pdo->query($sql);
