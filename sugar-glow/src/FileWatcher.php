@@ -38,6 +38,11 @@ final class FileWatcher
      * Uses (mtime, size) tuple polling to catch same-second edits that
      * mtime alone would miss on filesystems with 1-second granularity.
      *
+     * @blocking This generator runs an infinite blocking loop with usleep().
+     *           Must be consumed in a worker process or with async event loop integration.
+     *           Never foreach directly outside a coroutine dispatcher or the event loop will block.
+     * @see \SugarCraft\Glow\FileWatcher::watch() — CALIBER_LEARNINGS.md pattern:glow
+     *
      * @param string $path Path to watch
      * @param int $intervalMs Polling interval in milliseconds
      * @return \Generator<bool> Yields true on each change

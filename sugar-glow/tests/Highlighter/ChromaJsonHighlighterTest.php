@@ -67,12 +67,30 @@ final class ChromaJsonHighlighterTest extends TestCase
         self::assertStringContainsString("\x1b[1;35m", $result);
     }
 
-    public function testSupportsAlwaysReturnsTrue(): void
+    public function testSupportsReturnsTrueForSupportedLanguages(): void
     {
         $highlighter = new ChromaJsonHighlighter([]);
+        // Supported languages
         self::assertTrue($highlighter->supports('php'));
         self::assertTrue($highlighter->supports('javascript'));
-        self::assertTrue($highlighter->supports('unknown'));
+        self::assertTrue($highlighter->supports('js'));
+        self::assertTrue($highlighter->supports('typescript'));
+        self::assertTrue($highlighter->supports('html'));
+        self::assertTrue($highlighter->supports('css'));
+        // Case insensitive
+        self::assertTrue($highlighter->supports('PHP'));
+        self::assertTrue($highlighter->supports('JavaScript'));
+    }
+
+    public function testSupportsReturnsFalseForUnsupportedLanguages(): void
+    {
+        $highlighter = new ChromaJsonHighlighter([]);
+        // Unsupported: unknown language
+        self::assertFalse($highlighter->supports('unknown'));
+        self::assertFalse($highlighter->supports('cobol'));
+        // Unsupported: empty string and text sentinel
+        self::assertFalse($highlighter->supports(''));
+        self::assertFalse($highlighter->supports('text'));
     }
 
     public function testHighlightPhpCode(): void
