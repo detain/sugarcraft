@@ -1454,8 +1454,10 @@ final class Style
         if ($value < 0) {
             throw new \InvalidArgumentException(Lang::t('style.label_nonneg', ['label' => $label]));
         }
-        $cur[$idx] = $value;
-        return $cur;
+        $result = $cur;
+        $result[$idx] = $value;
+        /** @var array{int,int,int,int} $result */
+        return $result;
     }
 
     /**

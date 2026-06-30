@@ -40,8 +40,9 @@ final class SpringCollectionTest extends TestCase
 
         $collection->add('spring1', $spring, 0.0, 0.0, 100.0);
 
-        // First tick should move the spring toward target
-        $positions = $collection->tick();
+        // First tick should move the spring toward target (immutable - returns new collection)
+        $newCollection = $collection->tick();
+        $positions = $newCollection->all();
         $this->assertGreaterThan(0.0, $positions['spring1']);
     }
 
@@ -67,9 +68,9 @@ final class SpringCollectionTest extends TestCase
         $collection->add('fast', $spring, 0.0, 0.0, 100.0);
         $collection->add('slow', $spring, 0.0, 0.0, 50.0);
 
-        // Run many ticks
+        // Run many ticks (immutable - each tick returns a new collection)
         for ($i = 0; $i < 600; $i++) {
-            $collection->tick();
+            $collection = $collection->tick();
         }
 
         $all = $collection->all();
