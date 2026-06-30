@@ -100,6 +100,7 @@ final class Spinner
             $action();
             return;
         }
+        $pid = null;
         $pid = @pcntl_fork();
         if ($pid === -1) {
             $action();
@@ -130,11 +131,11 @@ final class Spinner
         $hadAsyncSignals = false;
         $prevSigintHandler = null;
         $prevSigtermHandler = null;
-        if (function_exists('pcntl_signal') && function_exists('pcntl_async_signals')) {
+        if ($pid > 0 && function_exists('pcntl_signal') && function_exists('pcntl_async_signals')) {
             $hadAsyncSignals = true;
             pcntl_async_signals(true);
             $prevSigintHandler = pcntl_signal(SIGINT, function (int $signo) use ($pid, $isTty) {
-                if (function_exists('posix_kill')) {
+                if ($pid > 0 && function_exists('posix_kill')) {
                     posix_kill($pid, SIGTERM);
                 }
                 pcntl_waitpid($pid, $status);
@@ -147,7 +148,7 @@ final class Spinner
                 }
             });
             $prevSigtermHandler = pcntl_signal(SIGTERM, function (int $signo) use ($pid, $isTty) {
-                if (function_exists('posix_kill')) {
+                if ($pid > 0 && function_exists('posix_kill')) {
                     posix_kill($pid, SIGTERM);
                 }
                 pcntl_waitpid($pid, $status);
