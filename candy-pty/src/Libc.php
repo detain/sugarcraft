@@ -122,6 +122,10 @@ int   ioctl(int fd, unsigned long request, void *arg);
    declaration — add a separate `int fcntl_lock(...)` cdef if needed. */
 int   fcntl(int fd, int cmd, int arg);
 
+/* errno is thread-local; __errno_location() is the POSIX interface
+   (glibc + musl on Linux, __error() on Darwin). Returns int*. */
+int * __errno_location(void);
+
 /* termios — struct termios is treated as opaque (≥80 bytes) because
    layout differs across glibc/musl (60 bytes) and Darwin (72 bytes).
    Only call cfmakeraw/tcgetattr/tcsetattr; do NOT read individual fields. */
@@ -134,6 +138,22 @@ unsigned int cfgetispeed(void *termios_p);
 int   cfsetispeed(void *termios_p, int speed);
 CPROTO;
     }
+
+    /**
+     * Return the current value of errno for this thread.
+     *
+     * This is the only portable way to read errno after an FFI call,
+     * since PHP's own errno constants (like EIO) are not available
+     * until PHP 8.4+ and FFI calls do not set PHP's errno.
+     */
+    public static function errno(): int
+    {
+        $ptr = self::lib()->__errno_location();
+        return $ptr === null ? 0 : $ptr[0];
+    }
+
+    /** EINTR is the errno value for "interrupted system call". */
+    public const EINTR = 4;
 
     /**
      * Reset the cached FFI handle.

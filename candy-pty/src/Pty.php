@@ -135,4 +135,9 @@ final class Pty implements MasterPty
     {
         return $this->impl->isClosed();
     }
+
+    public function fd(): int
+    {
+        return $this->impl->fd();
+    }
 }

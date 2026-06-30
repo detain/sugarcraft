@@ -77,12 +77,8 @@ final class PosixMasterPty implements MasterPty
                 $sec  = (int) \floor($remaining);
                 $usec = (int) \round(($remaining - $sec) * 1_000_000);
                 $r = [$stream]; $w = null; $e = null;
-                $ready = @\stream_select($r, $w, $e, $sec, $usec);
+                $ready = self::retryOnEintr($r, $w, $e, $sec, $usec);
                 if ($ready === false) {
-                    if (\function_exists('pcntl_signal_dispatch')) {
-                        @\pcntl_signal_dispatch();
-                        continue;
-                    }
                     throw new PtyException(
                         \SugarCraft\Pty\Lang::t('read.select_failed', ['fd' => $this->fd])
                     );
@@ -183,7 +179,11 @@ final class PosixMasterPty implements MasterPty
             return $this->stream;
         }
 
-        $stream = @\fopen('php://fd/' . $this->fd, 'r+b');
+        // Use 'w+' so fopen fails atomically if $this->fd has been
+        // closed since we were constructed — 'r+b' silently succeeds
+        // and returns a stream on whatever fd now occupies that number,
+        // which can cause us to close an unrelated fd in close().
+        $stream = @\fopen('php://fd/' . $this->fd, 'w+');
         if (!\is_resource($stream)) {
             throw new PtyException(
                 \SugarCraft\Pty\Lang::t('stream.fopen_failed', ['fd' => $this->fd])
@@ -264,6 +264,36 @@ final class PosixMasterPty implements MasterPty
     public function fd(): int
     {
         return $this->fd;
+    }
+
+    /**
+     * Call stream_select, retrying automatically when EINTR is detected.
+     *
+     * stream_select returns false when interrupted (EINTR). Rather than
+     * conflating EINTR with fatal errors, this wrapper retries on EINTR
+     * after dispatching any pending signals.
+     *
+     * @param array<int, resource> &$read
+     * @param array<int, resource>|null &$write  null when caller is not interested in write readiness
+     * @param array<int, resource>|null &$except null when caller is not interested in exception readiness
+     * @return int|false  false on real error, 0 on timeout, >0 on ready
+     */
+    public static function retryOnEintr(array &$read, ?array &$write, ?array &$except, ?int $sec, ?int $usec): int|false
+    {
+        while (true) {
+            $ready = @\stream_select($read, $write, $except, $sec, $usec);
+            if ($ready !== false) {
+                return $ready;
+            }
+            // stream_select returned false — check if it was EINTR.
+            if (Libc::errno() !== Libc::EINTR) {
+                return false;
+            }
+            // EINTR: dispatch any pending signal handlers and retry.
+            if (\function_exists('pcntl_signal_dispatch')) {
+                @\pcntl_signal_dispatch();
+            }
+        }
     }
 
     private function assertOpen(): void

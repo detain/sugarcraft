@@ -77,4 +77,16 @@ interface MasterPty
      * dependency.
      */
     public function isClosed(): bool;
+
+    /**
+     * Return the raw POSIX file descriptor number.
+     *
+     * This is exposed on the contract so callers do not need to cast
+     * to {@see PosixMasterPty} to access the underlying fd — a common
+     * need when wiring FFI-level integrations.
+     *
+     * Note: Windows does not have POSIX fd semantics; any Windows Pty
+     * implementation (not yet built) should throw if this is called.
+     */
+    public function fd(): int;
 }
