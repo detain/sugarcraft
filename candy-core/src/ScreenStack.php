@@ -9,7 +9,7 @@ namespace SugarCraft\Core;
  *
  * @readonly
  */
-final class ScreenStack
+final class ScreenStack implements \Countable
 {
     /** @var list<Screen> */
     private readonly array $screens;
