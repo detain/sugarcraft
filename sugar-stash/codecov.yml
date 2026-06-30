@@ -1,0 +1,18 @@
+# Per-lib Codecov configuration for sugar-stash
+# Flag and component are defined in root codecov.yml
+# This file allows lib-specific threshold overrides
+
+coverage:
+  status:
+    project:
+      sugar-stash:
+        target: auto
+        threshold: 1%
+    patch:
+      sugar-stash:
+        target: 80%
+        threshold: 1%
+
+comment:
+  layout: "header, diff, flags, components"
+  require_changes: false
