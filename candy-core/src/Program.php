@@ -166,6 +166,17 @@ final class Program
     }
 
     /**
+     * Return the current model.
+     *
+     * Exposed for use by test utilities (e.g. ProgramSimulator) that need
+     * to inspect or manipulate the model without using Reflection.
+     */
+    public function getModel(): Model
+    {
+        return $this->model;
+    }
+
+    /**
      * Run the program loop until a QuitMsg is dispatched (or the loop is
      * stopped externally). Returns the final Model.
      */
