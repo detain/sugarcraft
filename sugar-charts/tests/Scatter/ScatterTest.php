@@ -13,7 +13,8 @@ final class ScatterTest extends TestCase
     public function testEmptyPointsRendersBlankCanvas(): void
     {
         $out = Scatter::new([], 5, 3)->view();
-        $this->assertSame("\n\n", $out);
+        // Empty chart returns '' per unified empty-output behavior (task 1.4)
+        $this->assertSame('', $out);
     }
 
     public function testZeroSizeIsEmpty(): void
