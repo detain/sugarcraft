@@ -20,6 +20,7 @@ return [
     'image_source.url_bad_status'    => 'Unexpected HTTP status {status} while fetching image from URL',
     'image_source.url_http_missing'  => 'Async URL loading requires react/http. Install it with: composer require react/http',
     'image_source.header_crlf'       => 'Request header names and values must not contain CR or LF characters',
+    'image_source.url_invalid_scheme'=> 'URL scheme {scheme} is not in the allowed list: {allowed}',
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',
