@@ -132,4 +132,9 @@ final class FakePtyForInputDecoder implements MasterPty
     {
         return false;
     }
+
+    public function fd(): int
+    {
+        return -1;  // sentinel invalid fd for test fixture
+    }
 }

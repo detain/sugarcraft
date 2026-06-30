@@ -169,12 +169,9 @@ final class MultiPump
         }
         $w = null;
         $e = null;
-        $ready = @\stream_select($r, $w, $e, 0, $timeoutUs);
+        $ready = PosixMasterPty::retryOnEintr($r, $w, $e, 0, $timeoutUs);
 
         if ($ready === false) {
-            if (\function_exists('pcntl_signal_dispatch')) {
-                @\pcntl_signal_dispatch();
-            }
             return 0;
         }
         if ($ready === 0) {
