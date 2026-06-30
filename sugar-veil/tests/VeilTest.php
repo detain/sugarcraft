@@ -325,15 +325,28 @@ final class VeilTest extends TestCase
 
     public function testIsClickOutsideReturnsFalseWhenDismissDisabled(): void
     {
-        $mouse = new MouseMsg(999, 999, MouseButton::Left, MouseAction::Press);
-        $this->assertFalse($this->veil->isClickOutside($mouse));
+        // Mark content covering coordinate (1,1) and scan it so click at (1,1) is inside the zone
+        $marked = $this->veil->mark('test-zone', 'X');
+        $v = $this->veil->withClickOutsideDismiss(true)->scan($marked);
+        $mouse = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
+        $this->assertFalse($v->isClickOutside($mouse));
     }
 
     public function testIsClickOutsideReturnsFalseWhenManagerNotSet(): void
     {
+        // Mark content covering coordinate (1,1) and scan it so click at (1,1) is inside the zone
+        $marked = $this->veil->mark('test-zone', 'X');
+        $v = $this->veil->withClickOutsideDismiss(true)->scan($marked);
+        $mouse = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
+        $this->assertFalse($v->isClickOutside($mouse));
+    }
+
+    public function testIsClickOutsideThrowsWhenNotScanned(): void
+    {
         $v = $this->veil->withClickOutsideDismiss(true);
         $mouse = new MouseMsg(999, 999, MouseButton::Left, MouseAction::Press);
-        $this->assertFalse($v->isClickOutside($mouse));
+        $this->expectException(\RuntimeException::class);
+        $v->isClickOutside($mouse);
     }
 
     // ─── auto-size ──────────────────────────────────────────────────────────

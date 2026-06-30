@@ -318,7 +318,8 @@ final class Veil
      *
      * Requires scan($renderedOutput) to be called first with the
      * rendered veil output so the scanner knows the zone bounds.
-     * Returns false if no scan data is available (nothing has been scanned yet).
+     *
+     * @throws \RuntimeException if called without prior scan()
      *
      * @see scan()
      * @see hit()
@@ -328,9 +329,10 @@ final class Veil
         if (!$this->clickOutsideDismiss) {
             return false;
         }
-        // If no rendered output has been scanned, cannot determine click position
         if ($this->lastRendered === null) {
-            return false;
+            throw new \RuntimeException(
+                'isClickOutside() requires scan() to be called first with the rendered veil output.'
+            );
         }
         return $this->hit($mouse->x, $mouse->y) === null;
     }
@@ -537,12 +539,6 @@ final class Veil
     }
 
     /**
-     * Dim a single background line by wrapping it in SGR FAINT, repeated per the
-     * backdrop opacity (0–100 → 0–3 passes). An empty line or a zero backdrop is
-     * returned unchanged so the overlay footprint (empty prefix/suffix) and the
-     * no-backdrop path stay free of stray escape codes.
-     */
-    /**
      * Dim a single background line using truecolor opacity blend toward black.
      *
      * Uses a truecolor foreground color that is the default terminal foreground
@@ -570,7 +566,7 @@ final class Veil
         // This matches the old FAINT behavior: styled text (starting with bold,
         // color, etc.) was not dimmed. Lines that start with \e[2m (old FAINT
         // dim codes) are replaced with truecolor for the gradient effect.
-        if (isset($line[0]) && $line[0] === "\e" && isset($line[1]) && $line[1] === '[') {
+        if ($line[0] === "\e" && $line[1] === '[') {
             return $line;
         }
 
