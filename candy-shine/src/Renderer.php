@@ -76,10 +76,10 @@ final class Renderer
     private bool $inTableCell = false;
 
     /** Active block context stack for indent/width computation. */
-    private BlockStack $blockStack;
+    private ?BlockStack $blockStack = null;
 
     /** Cascading stylesheet for per-depth block styling. */
-    private StyleSheet $styleSheet;
+    private ?StyleSheet $styleSheet = null;
 
     public function __construct(
         ?Theme $theme = null,
@@ -303,9 +303,12 @@ final class Renderer
             $markdown = self::expandEmojiShortcodes($markdown);
         }
 
-        // Initialize block stack with root Document context.
-        $this->blockStack = new BlockStack();
-        $this->styleSheet = StyleSheet::base();
+        // Lazy-initialize block stack with root Document context.
+        // Using null check ensures fresh state when Renderer is reused via copy().
+        if ($this->blockStack === null) {
+            $this->blockStack = new BlockStack();
+            $this->styleSheet = StyleSheet::base();
+        }
 
         $document = $this->parser->parse($markdown);
         $this->blockStack->push(new BlockContext(
