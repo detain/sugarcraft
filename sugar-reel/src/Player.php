@@ -1189,30 +1189,28 @@ final class Player implements Model
     private function mutate(array $changes): self
     {
         return new self(
-            decoder: $changes['decoder'] ?? $this->decoder,
-            mode: $changes['mode'] ?? $this->mode,
-            speed: $changes['speed'] ?? $this->speed,
-            paused: $changes['paused'] ?? $this->paused,
-            videoTime: $changes['videoTime'] ?? $this->videoTime,
-            frameIndex: $changes['frameIndex'] ?? $this->frameIndex,
-            currentFrame: $changes['currentFrame'] ?? $this->currentFrame,
-            lastTickTime: $changes['lastTickTime'] ?? $this->lastTickTime,
-            fps: $changes['fps'] ?? $this->fps,
-            totalFrames: $changes['totalFrames'] ?? $this->totalFrames,
-            cellsW: $changes['cellsW'] ?? $this->cellsW,
-            cellsH: $changes['cellsH'] ?? $this->cellsH,
+            decoder: array_key_exists('decoder', $changes) ? $changes['decoder'] : $this->decoder,
+            mode: array_key_exists('mode', $changes) ? $changes['mode'] : $this->mode,
+            speed: array_key_exists('speed', $changes) ? $changes['speed'] : $this->speed,
+            paused: array_key_exists('paused', $changes) ? $changes['paused'] : $this->paused,
+            videoTime: array_key_exists('videoTime', $changes) ? $changes['videoTime'] : $this->videoTime,
+            frameIndex: array_key_exists('frameIndex', $changes) ? $changes['frameIndex'] : $this->frameIndex,
+            currentFrame: array_key_exists('currentFrame', $changes) ? $changes['currentFrame'] : $this->currentFrame,
+            lastTickTime: array_key_exists('lastTickTime', $changes) ? $changes['lastTickTime'] : $this->lastTickTime,
+            fps: array_key_exists('fps', $changes) ? $changes['fps'] : $this->fps,
+            totalFrames: array_key_exists('totalFrames', $changes) ? $changes['totalFrames'] : $this->totalFrames,
+            cellsW: array_key_exists('cellsW', $changes) ? $changes['cellsW'] : $this->cellsW,
+            cellsH: array_key_exists('cellsH', $changes) ? $changes['cellsH'] : $this->cellsH,
             videoPath: $this->videoPath, // pinned — videoPath is immutable for the player's lifetime
-            audioPlayer: $changes['audioPlayer'] ?? $this->audioPlayer,
-            // ?? is null-coalescing, so passing ended => false / frameIndex => 0
-            // through mutate() is honourée (false/0 are not null).
-            ended: $changes['ended'] ?? $this->ended,
-            loop: $changes['loop'] ?? $this->loop,
-            ramp: $changes['ramp'] ?? $this->ramp,
-            audioFactory: $changes['audioFactory'] ?? $this->audioFactory,
-            cellPxW: $changes['cellPxW'] ?? $this->cellPxW,
-            cellPxH: $changes['cellPxH'] ?? $this->cellPxH,
-            subtitles: $changes['subtitles'] ?? $this->subtitles,
-            renderer: $changes['renderer'] ?? $this->renderer,
+            audioPlayer: array_key_exists('audioPlayer', $changes) ? $changes['audioPlayer'] : $this->audioPlayer,
+            ended: array_key_exists('ended', $changes) ? $changes['ended'] : $this->ended,
+            loop: array_key_exists('loop', $changes) ? $changes['loop'] : $this->loop,
+            ramp: array_key_exists('ramp', $changes) ? $changes['ramp'] : $this->ramp,
+            audioFactory: array_key_exists('audioFactory', $changes) ? $changes['audioFactory'] : $this->audioFactory,
+            cellPxW: array_key_exists('cellPxW', $changes) ? $changes['cellPxW'] : $this->cellPxW,
+            cellPxH: array_key_exists('cellPxH', $changes) ? $changes['cellPxH'] : $this->cellPxH,
+            subtitles: array_key_exists('subtitles', $changes) ? $changes['subtitles'] : $this->subtitles,
+            renderer: array_key_exists('renderer', $changes) ? $changes['renderer'] : $this->renderer,
         );
     }
 
