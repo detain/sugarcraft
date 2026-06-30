@@ -114,30 +114,41 @@ class AudioPlayer
     }
 
     /**
-     * Suspend audio output (SIGSTOP) so it stays aligned with a paused video.
+     * Suspend audio playback by terminating the subprocess.
      *
-     * Safe no-op when no process is running. POSIX-only; on platforms without
-     * job-control signals this is a best-effort no-op.
-     */
-    public function pause(): void
-    {
-        if (!is_resource($this->processHandle) || !\defined('SIGSTOP')) {
-            return;
-        }
-        proc_terminate($this->processHandle, SIGSTOP);
-    }
-
-    /**
-     * Resume previously-paused audio output (SIGCONT).
+     * SIGSTOP is ineffective under PTY (child runs in different process group),
+     * so we SIGTERM the subprocess and store the exit code. resume() restarts
+     * from the stored startMs position.
      *
      * Safe no-op when no process is running.
      */
-    public function resume(): void
+    public function pause(): void
     {
-        if (!is_resource($this->processHandle) || !\defined('SIGCONT')) {
+        if (!is_resource($this->processHandle)) {
             return;
         }
-        proc_terminate($this->processHandle, SIGCONT);
+        proc_terminate($this->processHandle, SIGTERM);
+        $exitCode = proc_close($this->processHandle);
+        $this->processHandle = null;
+        $this->exitCode = $exitCode;
+    }
+
+    /**
+     * Resume audio playback.
+     *
+     * If the process was killed by pause() (processHandle is null), restart
+     * from the stored startMs position. Otherwise, send SIGCONT to the running
+     * process.
+     *
+     * Safe no-op when no process has ever been started.
+     */
+    public function resume(): void
+    {
+        if (!is_resource($this->processHandle)) {
+            $this->start(); // start() respects startMs
+        } else {
+            proc_terminate($this->processHandle, SIGCONT);
+        }
     }
 
     /**
@@ -206,4 +217,20 @@ class AudioPlayer
 
     /** True once start() has been invoked. */
     private bool $started = false;
+
+    /** Exit code from the last process termination, or null if still running. */
+    private ?int $exitCode = null;
+
+    /**
+     * Return the exit code from the last process termination.
+     *
+     * Returns null when:
+     * - The process has never been started.
+     * - The process is still running.
+     * - The process was stopped via stop() (which discards the exit code).
+     */
+    public function getExitCode(): ?int
+    {
+        return $this->exitCode;
+    }
 }

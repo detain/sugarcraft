@@ -57,7 +57,7 @@ final class SqliteDatabase implements DatabaseInterface
     /** @return list<array<string,mixed>> */
     public function rows(string $table, int $limit = 100): array
     {
-        $sql = sprintf('SELECT * FROM "%s" LIMIT %d', str_replace('"', '""', $table), $limit);
+        $sql = sprintf('SELECT * FROM %s LIMIT %d', Identifier::quote(Flavor::Sqlite, $table), $limit);
         $stmt = $this->pdo->query($sql);
         return $stmt === false ? [] : $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }

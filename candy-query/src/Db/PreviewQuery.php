@@ -63,13 +63,13 @@ final class PreviewQuery
                 str_replace('"', '""', $table),
             ),
             Flavor::Postgres => 'SELECT column_name, data_type FROM information_schema.columns '
-                . "WHERE table_schema = CURRENT_SCHEMA() AND table_name = '"
-                . str_replace("'", "''", $table)
-                . "' ORDER BY ordinal_position",
+                . 'WHERE table_schema = CURRENT_SCHEMA() AND table_name = '
+                . Identifier::quote(Flavor::Postgres, $table)
+                . ' ORDER BY ordinal_position',
             default => 'SELECT column_name, data_type FROM information_schema.columns '
-                . "WHERE table_schema = DATABASE() AND table_name = '"
-                . str_replace("'", "''", $table)
-                . "' ORDER BY ordinal_position",
+                . "WHERE table_schema = DATABASE() AND table_name = "
+                . Identifier::quote(Flavor::MySQL, $table)
+                . " ORDER BY ordinal_position",
         };
     }
 
