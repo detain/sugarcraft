@@ -313,7 +313,6 @@ final class SvgRenderer
 
         // Windows-style buttons (minimize, maximize, close)
         $buttonColors = ['#444444', '#444444', '#444444'];
-        $buttonHoverColors = ['#555555', '#555555', '#e81123'];
         $buttonY = $titleBarY + ($titleBarHeight - $buttonSize) / 2;
 
         foreach ([0, 1, 2] as $i) {
