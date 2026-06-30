@@ -75,7 +75,7 @@ final class Stack implements \SugarCraft\Dash\Foundation\Sizer
         $renderedItems = [];
 
         foreach ($this->items as $item) {
-            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer&& $useWidth > 0) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer && $useWidth > 0) {
                 $item = $item->setSize($useWidth, 0);
             }
             $renderedItems[] = $item->render();

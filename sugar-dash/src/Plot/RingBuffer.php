@@ -125,11 +125,11 @@ final class RingBuffer
             return null;
         }
 
-        if ($this->count < $this->size) {
-            return $this->data[0];
-        }
-
-        return $this->data[$this->index];
+        // When count < size, data[0..count-1] holds valid entries (pre-wrap or just started wrap).
+        // When count == size (full), oldest is at data[($index - $count + $size) % $size].
+        // Use the formula for all non-empty cases to handle wrapped partial buffer correctly.
+        $oldestIndex = ($this->index - $this->count + $this->size) % $this->size;
+        return $this->data[$oldestIndex];
     }
 
     /**
