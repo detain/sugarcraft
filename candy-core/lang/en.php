@@ -32,4 +32,7 @@ return [
 
     // Program.php
     'program.proc_open_failed'    => 'proc_open failed for: {cmd}',
+
+    // Util/Validation.php
+    'errors.negative_not_allowed' => 'negative not allowed for {name}',
 ];
