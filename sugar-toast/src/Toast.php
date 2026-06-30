@@ -427,7 +427,7 @@ final class Toast
         // will only move further down/center — no need to re-derive.
         $contentHeight = max($h, $lastAlertY + $lastAlertHeight);
 
-        $contentWidth = $this->maxWidth;
+        $contentWidth = min($this->maxWidth, $viewportWidth);
 
         $viewport = Buffer::new($contentWidth, $contentHeight);
         $viewport = $this->fillViewportFromString($viewport, $bgLines);

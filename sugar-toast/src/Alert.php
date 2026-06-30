@@ -30,6 +30,11 @@ final class Alert
         return \microtime(true) >= $this->expiresAt;
     }
 
+    public function withCancelledExpiry(): self
+    {
+        return new self($this->type, $this->message, null, $this->progress, $this->actions);
+    }
+
     public function withExpiry(float $duration): self
     {
         return new self($this->type, $this->message, \microtime(true) + $duration, $this->progress, $this->actions);
