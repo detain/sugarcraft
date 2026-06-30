@@ -27,8 +27,15 @@ final class SyncAsyncRenderer implements AsyncRenderer
         $deferred = new Deferred();
 
         // Defer the actual work to the next tick so the caller can set up
-        // downstream consumers before the render runs.
-        Loop::futureTick(fn() => $this->doRender($image, $width, $height, $deferred));
+        // downstream consumers before the render runs. Wrap in try/catch so
+        // that any exception escaping the futureTick callback is caught and
+        // the promise is properly rejected instead of propagating into the
+        // event loop (which could crash or leave the promise pending forever).
+        try {
+            Loop::futureTick(fn() => $this->doRender($image, $width, $height, $deferred));
+        } catch (\Throwable $e) {
+            $deferred->reject($e);
+        }
 
         return $deferred->promise();
     }

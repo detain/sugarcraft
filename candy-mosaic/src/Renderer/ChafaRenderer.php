@@ -47,6 +47,13 @@ final class ChafaRenderer implements Renderer
             $pipes,
         );
         if (!is_resource($proc)) {
+            // proc_open() may have created pipes before failing — close them
+            // to avoid file descriptor leaks in long-running processes.
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
             return self::$available = false;
         }
         foreach ($pipes as $pipe) {
