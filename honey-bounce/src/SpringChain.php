@@ -20,10 +20,12 @@ final class SpringChain
 
     /**
      * @param list<array{0: Spring, 1:float, 2:float, 3:float}> $stages
+     * @param int $activeIndex Internal index for the active stage (used by tick())
      */
-    public function __construct(array $stages)
+    public function __construct(array $stages, int $activeIndex = 0)
     {
         $this->stages = $stages;
+        $this->activeIndex = $activeIndex;
     }
 
     /**
@@ -58,26 +60,34 @@ final class SpringChain
      * stage becomes active. Returns current positions of all settled stages
      * plus the active stage.
      *
-     * @return array{0: list<float>, 1: bool}  [positions, chainComplete]
+     * @return array{0: list<float>, 1: bool, 2: self}  [positions, chainComplete, newChain]
      */
     public function tick(): array
     {
         if ($this->activeIndex >= count($this->stages)) {
-            return [$this->currentPositions(), true];
+            return [$this->currentPositions(), true, new self($this->stages, $this->activeIndex)];
         }
 
         [$spring, $pos, $vel, $target] = $this->stages[$this->activeIndex];
 
         if ($this->isSettled($pos, $vel, $target)) {
-            $this->activeIndex++;
-            return [$this->currentPositions(), $this->activeIndex >= count($this->stages)];
+            $newActiveIndex = $this->activeIndex + 1;
+            return [$this->currentPositions(), $newActiveIndex >= count($this->stages), new self($this->stages, $newActiveIndex)];
         }
 
         [$newPos, $newVel] = $spring->update($pos, $vel, $target);
-        $this->stages[$this->activeIndex][1] = $newPos;
-        $this->stages[$this->activeIndex][2] = $newVel;
 
-        return [$this->currentPositions(), false];
+        // Build new stages array with updated position and velocity
+        $newStages = [];
+        foreach ($this->stages as $i => $stage) {
+            if ($i === $this->activeIndex) {
+                $newStages[] = [$spring, $newPos, $newVel, $target];
+            } else {
+                $newStages[] = $stage;
+            }
+        }
+
+        return [$this->currentPositions(), false, new self($newStages, $this->activeIndex)];
     }
 
     /**
