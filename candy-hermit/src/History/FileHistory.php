@@ -27,8 +27,18 @@ final class FileHistory
      */
     public function append(Item $item): void
     {
-        $line = \json_encode(['n' => $item->number(), 'v' => $item->value()], \JSON_THROW_ON_ERROR);
-        \file_put_contents($this->path, $line . "\n", \FILE_APPEND | \LOCK_EX);
+        $line = \json_encode(['n' => $item->number(), 'v' => $item->value()], \JSON_THROW_ON_ERROR) . "\n";
+        $handle = \fopen($this->path, 'a');
+        if ($handle === false) {
+            return;
+        }
+        try {
+            \flock($handle, \LOCK_EX);
+            \fwrite($handle, $line);
+            \flock($handle, \LOCK_UN);
+        } finally {
+            \fclose($handle);
+        }
     }
 
     /**
@@ -52,6 +62,7 @@ final class FileHistory
 
         $items = [];
         try {
+            \flock($handle, \LOCK_SH);
             while (($line = \fgets($handle)) !== false) {
                 $line = \trim($line);
                 if ($line === '') {
@@ -67,6 +78,7 @@ final class FileHistory
                     (string) ($decoded['v'] ?? ''),
                 );
             }
+            \flock($handle, \LOCK_UN);
         } finally {
             \fclose($handle);
         }
