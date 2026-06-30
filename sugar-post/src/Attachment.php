@@ -62,15 +62,23 @@ final class Attachment
 
     /**
      * Create an inline (embedded) image attachment.
+     *
+     * @throws \RuntimeException if the file cannot be read
      */
     public static function inline(string $path, string $cid, string $filename = null): self
     {
         $name = $filename ?? \basename($path);
+        $mime = self::detectMimeType($path);
+        // Suppress warning when file doesn't exist - store null and throw on getContent()
+        $prev = \error_reporting(E_ALL & ~\E_WARNING);
+        $content = @\file_get_contents($path);
+        \error_reporting($prev);
+
         return new self(
             filename:  $name,
             path:      $path,
-            content:   null,
-            mimeType:  self::detectMimeType($path),
+            content:   $content !== false ? $content : null,
+            mimeType:  $mime,
             encoding:  'base64',
             cid:       $cid,
         );

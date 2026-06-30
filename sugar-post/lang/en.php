@@ -20,8 +20,11 @@ return [
     'smtp.starttls_failed'       => 'STARTTLS negotiation failed',
     'smtp.not_connected'         => 'Not connected',
     'smtp.no_response'           => 'Server sent no response',
+    'smtp.empty_response'        => 'Server sent empty response',
     'smtp.unexpected_response'   => 'SMTP unexpected response: {response}',
     'smtp.send_cancelled'        => 'SMTP send cancelled before completion',
+    'smtp.write_error'           => 'Failed to write to SMTP server',
+    'smtp.incomplete_write'      => 'Incomplete write to SMTP server',
 
     // Email.php
     'email.crlf_in_address'     => 'CRLF injection detected in email address',
