@@ -257,6 +257,12 @@ final class Table
      */
     public function withFrozenCols(array $indices): self
     {
+        $overlap = \array_intersect($indices, $this->hiddenCols);
+        if ($overlap !== []) {
+            throw new \InvalidArgumentException(
+                'Frozen column indices [' . \implode(',', $overlap) . '] cannot be hidden'
+            );
+        }
         $clone = clone $this;
         $clone->frozenCols = $indices;
         return $clone;
@@ -448,6 +454,12 @@ final class Table
      */
     public function withHiddenCols(array $indices): self
     {
+        $overlap = \array_intersect($indices, $this->frozenCols);
+        if ($overlap !== []) {
+            throw new \InvalidArgumentException(
+                'Hidden column indices [' . \implode(',', $overlap) . '] cannot be frozen'
+            );
+        }
         $clone = clone $this;
         $clone->hiddenCols = $indices;
         return $clone;
@@ -471,6 +483,9 @@ final class Table
         $clone = clone $this;
         $paged = $clone->pagedRows();
         $clone->expandedRows = [];
+        if ($paged === [] && $indices !== []) {
+            throw new \OutOfBoundsException("Invalid row index {$indices[0]}: current page has no rows");
+        }
         foreach ($indices as $idx) {
             $row = $paged[$idx] ?? null;
             if ($row === null) {
@@ -700,6 +715,9 @@ final class Table
      */
     public function SortBy(string $colKey, bool $ascending = true, bool $primary = true): self
     {
+        if (!$this->columnExists($colKey)) {
+            throw new \InvalidArgumentException("SortBy column key '{$colKey}' does not exist");
+        }
         $clone = clone $this;
 
         if ($primary) {
@@ -744,6 +762,9 @@ final class Table
 
     public function Filter(string $colKey, string $text): self
     {
+        if (!$this->columnExists($colKey)) {
+            throw new \InvalidArgumentException("Filter column key '{$colKey}' does not exist");
+        }
         $clone = clone $this;
 
         // If this column is not filterable (and at least one column IS declared
@@ -827,6 +848,19 @@ final class Table
     {
         foreach ($this->columns as $col) {
             if ($col->filterable === true) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if a column with the given key exists.
+     */
+    private function columnExists(string $key): bool
+    {
+        foreach ($this->columns as $col) {
+            if ($col->key === $key) {
                 return true;
             }
         }
