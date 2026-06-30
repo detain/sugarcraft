@@ -28,11 +28,11 @@ final class Theme
     /** @var array<int, int> 256-color palette as RGB ints (0xRRGGBB). */
     private array $palette;
 
-    /** @var array<int, int> Maps ANSI slot 0-15 → 256-color index (foreground). */
-    private static array $fgIndexMap = [];
+    /** @var array<int, int> Maps ANSI slot 0-15 → 256-color index (foreground). Identity map. */
+    private static array $fgIndexMap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
-    /** @var array<int, int> Maps ANSI slot 0-15 → 256-color index (background). */
-    private static array $bgIndexMap = [];
+    /** @var array<int, int> Maps ANSI slot 0-15 → 256-color index (background). Identity map. */
+    private static array $bgIndexMap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
     /**
      * @param array<int, int>|null $palette
@@ -231,7 +231,6 @@ final class Theme
         if ($slot < 0 || $slot > 15) {
             return 0;
         }
-        self::buildAnsiMaps();
         return self::$fgIndexMap[$slot];
     }
 
@@ -243,7 +242,6 @@ final class Theme
         if ($slot < 0 || $slot > 15) {
             return 0;
         }
-        self::buildAnsiMaps();
         return self::$bgIndexMap[$slot];
     }
 
@@ -289,20 +287,6 @@ final class Theme
             ($rgb >> 16) & 0xff,
             ($rgb >> 8) & 0xff,
             $rgb & 0xff,
-        ];
-    }
-
-    private static function buildAnsiMaps(): void
-    {
-        if (self::$fgIndexMap !== []) {
-            return;
-        }
-
-        self::$fgIndexMap = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-        ];
-        self::$bgIndexMap = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
         ];
     }
 }

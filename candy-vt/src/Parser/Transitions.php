@@ -34,7 +34,7 @@ final class Transitions
      */
     public static function get(int $state, int $byte): int
     {
-        return ord((self::$table ??= self::build())[($state << self::STATE_SHIFT) | $byte]);
+        return ord(self::build()[($state << self::STATE_SHIFT) | $byte]);
     }
 
     public static function action(int $entry): int
@@ -48,6 +48,19 @@ final class Transitions
     }
 
     private static function build(): string
+    {
+        // Thread-safe guard: static $initialized is process-local and atomic.
+        // The 4096-byte table is built exactly once on first call.
+        static $initialized = false;
+        if ($initialized) {
+            return self::$table ?? self::buildInternal();
+        }
+        self::$table = self::buildInternal();
+        $initialized = true;
+        return self::$table;
+    }
+
+    private static function buildInternal(): string
     {
         $g = State::Ground->value;
         $t = str_repeat(self::pack(Action::None->value, $g), self::SIZE);
