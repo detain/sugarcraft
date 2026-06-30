@@ -96,23 +96,16 @@ final class Mosaic
         try {
             $report = TerminalProbe::run();
 
-            // Try to use Detect::probe() for full protocol detection first
-            // since it has DA1 sixel probing and better terminal detection
-            try {
-                $cap = Detect::probe();
-                $renderer = self::bestBackend($cap);
+            // Try Detect::probe() for full protocol detection (DA1 sixel probing,
+            // better terminal detection). If it fails the outer catch handles it.
+            $cap = Detect::probe();
+            $renderer = self::bestBackend($cap);
 
-                if ($cap->inTmux) {
-                    $renderer = new TmuxPassthroughDecorator($renderer);
-                }
-
-                return new self($renderer, $cap, null, null, null);
-            } catch (\Throwable) {
-                // @codeCoverageIgnoreStart — Detect::probe() never throws; this block is
-            // here for future-proofing but is unreachable with the current implementation.
-            // If Detect::probe() is ever refactored to throw, this provides a clean fallback.
-            // @codeCoverageIgnoreEnd
+            if ($cap->inTmux) {
+                $renderer = new TmuxPassthroughDecorator($renderer);
             }
+
+            return new self($renderer, $cap, null, null, null);
 
             // Fallback: use TerminalProbe capabilities from candy-palette
             // Pick best renderer based on palette capabilities
@@ -293,6 +286,19 @@ final class Mosaic
     public function protocol(): string
     {
         return $this->renderer->name();
+    }
+
+    /**
+     * All protocols supported by this library, in preferred order.
+     *
+     * Use {@see Mosaic::auto()} to probe the terminal and pick the best one,
+     * or pick explicitly with {@see Mosaic::kitty()}, {@see Mosaic::sixel()}, etc.
+     *
+     * @return list<string>
+     */
+    public static function supportedProtocols(): array
+    {
+        return ['kitty', 'sixel', 'iterm2', 'halfblock', 'quarterblock', 'chafa'];
     }
 
     /**
@@ -491,32 +497,22 @@ final class Mosaic
  */
 final class MosaicBuilder
 {
-    private ?Renderer $renderer = null;
-    private ?int $width = null;
-    private ?int $height = null;
-    private ?Dither $dither = null;
-    private ?Scale $scale = null;
+    public function __construct(
+        private readonly ?Renderer $renderer = null,
+        private readonly ?int $width = null,
+        private readonly ?int $height = null,
+        private readonly ?Dither $dither = null,
+        private readonly ?Scale $scale = null,
+    ) {}
 
     public function withRenderer(Renderer $renderer): self
     {
-        $clone = new self();
-        $clone->renderer = $renderer;
-        $clone->width    = $this->width;
-        $clone->height   = $this->height;
-        $clone->dither   = $this->dither;
-        $clone->scale    = $this->scale;
-        return $clone;
+        return new self($renderer, $this->width, $this->height, $this->dither, $this->scale);
     }
 
     public function withResize(int $width, ?int $height = null): self
     {
-        $clone = new self();
-        $clone->renderer = $this->renderer;
-        $clone->width    = $width;
-        $clone->height   = $height;
-        $clone->dither   = $this->dither;
-        $clone->scale    = $this->scale;
-        return $clone;
+        return new self($this->renderer, $width, $height, $this->dither, $this->scale);
     }
 
     /**
@@ -525,13 +521,7 @@ final class MosaicBuilder
      */
     public function withDither(Dither $dither): self
     {
-        $clone = new self();
-        $clone->renderer = $this->renderer;
-        $clone->width    = $this->width;
-        $clone->height   = $this->height;
-        $clone->dither   = $dither;
-        $clone->scale    = $this->scale;
-        return $clone;
+        return new self($this->renderer, $this->width, $this->height, $dither, $this->scale);
     }
 
     /**
@@ -539,13 +529,7 @@ final class MosaicBuilder
      */
     public function withScale(Scale $scale): self
     {
-        $clone = new self();
-        $clone->renderer = $this->renderer;
-        $clone->width    = $this->width;
-        $clone->height   = $this->height;
-        $clone->dither   = $this->dither;
-        $clone->scale    = $scale;
-        return $clone;
+        return new self($this->renderer, $this->width, $this->height, $this->dither, $scale);
     }
 
     /**

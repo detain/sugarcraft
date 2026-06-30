@@ -177,9 +177,32 @@ final class ImageSource
      *                                    a supported image
      * @throws \RuntimeException          if ext-gd is not available
      */
-    public static function fromUrl(string $url, ?array $headers = null): self
+    public static function fromUrl(string $url, ?array $headers = null, ?array $allowedSchemes = ['http', 'https']): self
     {
+        self::validateUrlScheme($url, $allowedSchemes);
         return self::fromString(self::fetchUrlSync($url, $headers));
+    }
+
+    /**
+     * @param array<string>|null $allowedSchemes  null skips validation (opt-in to insecure)
+     * @throws \InvalidArgumentException  if scheme is not in the allowed list
+     */
+    private static function validateUrlScheme(string $url, ?array $allowedSchemes): void
+    {
+        if ($allowedSchemes === null) {
+            return;
+        }
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        if ($scheme === false || $scheme === null) {
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.url_invalid_scheme', ['scheme' => 'unknown', 'allowed' => implode(', ', $allowedSchemes)])
+            );
+        }
+        if (!in_array($scheme, $allowedSchemes, true)) {
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.url_invalid_scheme', ['scheme' => $scheme, 'allowed' => implode(', ', $allowedSchemes)])
+            );
+        }
     }
 
     /**
@@ -208,7 +231,10 @@ final class ImageSource
         string $url,
         ?array $headers = null,
         ?Browser $browser = null,
+        ?array $allowedSchemes = ['http', 'https'],
     ): PromiseInterface {
+        self::validateUrlScheme($url, $allowedSchemes);
+
         if ($browser === null) {
             if (!class_exists(Browser::class)) {
                 return reject(new \RuntimeException(Lang::t('image_source.url_http_missing')));
