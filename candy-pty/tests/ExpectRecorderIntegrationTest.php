@@ -68,6 +68,7 @@ final class ExpectRecorderIntegrationTest extends TestCase
             public function stream(): mixed { throw new \LogicException('no stream'); }
             public function close(): void {}
             public function isClosed(): bool { return false; }
+            public function fd(): int { return -1; }
         };
 
         $expect = Expect::on($master)->withRecorder($recorder);
@@ -195,6 +196,7 @@ final class ExpectRecorderIntegrationTest extends TestCase
             public function stream(): mixed { throw new \LogicException('no stream'); }
             public function close(): void {}
             public function isClosed(): bool { return false; }
+            public function fd(): int { return -1; }
         };
 
         $expect = Expect::on($master)->withRecorder($recorder);
