@@ -471,6 +471,9 @@ final class Table
         $clone = clone $this;
         $paged = $clone->pagedRows();
         $clone->expandedRows = [];
+        if ($paged === [] && $indices !== []) {
+            throw new \OutOfBoundsException("Invalid row index {$indices[0]}: current page has no rows");
+        }
         foreach ($indices as $idx) {
             $row = $paged[$idx] ?? null;
             if ($row === null) {
