@@ -40,7 +40,8 @@ final class CancellationToken
     }
 
     /**
-     * @internal
+     * @internal  Called by CancellationSource::cancel() to trigger cancellation.
+     *            Consumers must use CancellationSource::cancel() — not this method.
      */
     public function markCancelled(): void
     {
@@ -73,9 +74,17 @@ final class CancellationToken
             return;
         }
         $this->callbacksFired = true;
+        $errors = [];
         foreach ($this->callbacks as $callback) {
-            $callback();
+            try {
+                $callback();
+            } catch (\Throwable $e) {
+                $errors[] = $e;
+            }
         }
         $this->callbacks = [];
+        if ($errors !== []) {
+            throw $errors[0];
+        }
     }
 }
