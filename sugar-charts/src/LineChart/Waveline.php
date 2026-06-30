@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\LineChart;
 
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Canvas\Canvas;
+use SugarCraft\Charts\Canvas\Graph;
 
 /**
  * Waveline (XY-point) LineChart variant. Mirrors ntcharts'
@@ -166,25 +167,18 @@ final class Waveline
     /** Bresenham-ish straight-line connector — picks slope-aware glyphs. */
     private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2): void
     {
-        $dx = abs($x2 - $x1);
-        $dy = -abs($y2 - $y1);
-        $sx = $x1 < $x2 ? 1 : -1;
-        $sy = $y1 < $y2 ? 1 : -1;
-        $err = $dx + $dy;
-        $rune = match (true) {
+        $rune = self::connectorRune($x1, $y1, $x2, $y2);
+        Graph::drawLine($c, $x1, $y1, $x2, $y2, $rune);
+    }
+
+    /** Determine the appropriate line rune based on slope direction. */
+    private static function connectorRune(int $x1, int $y1, int $x2, int $y2): string
+    {
+        return match (true) {
             $y1 === $y2 => '─',
             $x1 === $x2 => '│',
             ($x2 > $x1 && $y2 < $y1) || ($x2 < $x1 && $y2 > $y1) => '╱',
             default => '╲',
         };
-        while (true) {
-            $c->setCell($x1, $y1, $rune);
-            if ($x1 === $x2 && $y1 === $y2) {
-                break;
-            }
-            $e2 = 2 * $err;
-            if ($e2 >= $dy) { $err += $dy; $x1 += $sx; }
-            if ($e2 <= $dx) { $err += $dx; $y1 += $sy; }
-        }
     }
 }
