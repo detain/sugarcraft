@@ -97,10 +97,9 @@ final class MysqlDatabase implements DatabaseInterface
             return [];
         }
 
-        // Safe: backtick identifiers are properly escaped via placeholder
         $sql = sprintf(
-            'SELECT * FROM `%s` LIMIT %d',
-            str_replace('`', '``', $table),
+            'SELECT * FROM %s LIMIT %d',
+            Identifier::quote(Flavor::MySQL, $table),
             $limit,
         );
         $stmt = $this->pdo->query($sql);
