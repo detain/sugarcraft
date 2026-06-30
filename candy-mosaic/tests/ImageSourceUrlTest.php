@@ -44,7 +44,7 @@ final class ImageSourceUrlTest extends TestCase
 
     public function testFromUrlLoadsFileScheme(): void
     {
-        $img = ImageSource::fromUrl('file://' . $this->fixture);
+        $img = ImageSource::fromUrl('file://' . $this->fixture, null, ['file']);
 
         $this->assertSame('image/png', $img->format);
         $this->assertSame(4, $img->width);
@@ -55,7 +55,7 @@ final class ImageSourceUrlTest extends TestCase
     {
         $uri = 'data://image/png;base64,' . base64_encode($this->pngBytes);
 
-        $img = ImageSource::fromUrl($uri);
+        $img = ImageSource::fromUrl($uri, null, ['data']);
 
         $this->assertSame(4, $img->width);
         $this->assertSame(2, $img->height);
@@ -68,6 +68,7 @@ final class ImageSourceUrlTest extends TestCase
         $img = ImageSource::fromUrl(
             'file://' . $this->fixture,
             ['Authorization' => 'Bearer token123', 'Accept' => 'image/png'],
+            ['file'],
         );
 
         $this->assertSame(4, $img->width);
@@ -78,6 +79,7 @@ final class ImageSourceUrlTest extends TestCase
         $img = ImageSource::fromUrl(
             'file://' . $this->fixture,
             ['Authorization: Bearer token123'],
+            ['file'],
         );
 
         $this->assertSame(4, $img->width);
@@ -88,7 +90,7 @@ final class ImageSourceUrlTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Failed to fetch image from URL');
 
-        ImageSource::fromUrl('file:///nonexistent/path/to/poster.png');
+        ImageSource::fromUrl('file:///nonexistent/path/to/poster.png', null, ['file']);
     }
 
     public function testFromUrlThrowsOnNonImagePayload(): void
@@ -97,7 +99,7 @@ final class ImageSourceUrlTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
 
-        ImageSource::fromUrl($uri);
+        ImageSource::fromUrl($uri, null, ['data']);
     }
 
     public function testFromUrlRejectsCrlfInHeaderValue(): void
@@ -108,7 +110,25 @@ final class ImageSourceUrlTest extends TestCase
         ImageSource::fromUrl(
             'file://' . $this->fixture,
             ['X-Evil' => "value\r\nX-Injected: 1"],
+            ['file'],
         );
+    }
+
+    public function testFromUrlRejectsFileSchemeByDefault(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('URL scheme file is not in the allowed list');
+
+        ImageSource::fromUrl('file:///etc/passwd');
+    }
+
+    public function testFromUrlWithExplicitFileSchemeAllowed(): void
+    {
+        // Security: opt-in to file:// only when needed and the source is trusted.
+        $img = ImageSource::fromUrl('file://' . $this->fixture, null, ['file']);
+
+        $this->assertSame(4, $img->width);
+        $this->assertSame(2, $img->height);
     }
 
     // ---- asynchronous fromUrlAsync -------------------------------------
