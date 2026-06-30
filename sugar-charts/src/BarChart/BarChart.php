@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\BarChart;
 
+use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Legend\Legend;
@@ -31,6 +32,7 @@ use SugarCraft\Charts\Legend\Legend;
  */
 final class BarChart
 {
+    use ChartExtras;
     /**
      * @param list<Bar>                        $bars
      * @param list<array{label: string, color: string}> $legendItems
@@ -256,6 +258,19 @@ final class BarChart
     /** @param list<array{label: string, color: string}> $items */
     public function legendItems(array $items): self   { return $this->withLegendItems($items); }
 
+    // ─── ChartExtras Getters ────────────────────────────────────────────
+
+    protected function chartExtrasGetWidth(): int   { return $this->width; }
+    protected function chartExtrasShowLegend(): bool { return $this->showLegend; }
+    /** @return list<array{label: string, color: string}> */
+    protected function chartExtrasGetLegendItems(): array { return $this->legendItems; }
+    protected function chartExtrasGetLegendPosition(): Position { return $this->legendPosition; }
+    protected function chartExtrasGetLegendIndicatorChar(): ?string { return $this->legendIndicatorChar; }
+    protected function chartExtrasGetTitle(): ?string { return $this->title; }
+    protected function chartExtrasGetTitlePosition(): Position { return $this->titlePosition; }
+    protected function chartExtrasGetXLabel(): ?string { return $this->xLabel; }
+    protected function chartExtrasGetYLabel(): ?string { return $this->yLabel; }
+
     // ─── Rendering ──────────────────────────────────────────────────────
 
     public function view(): string
@@ -270,117 +285,8 @@ final class BarChart
             return $chart;
         }
 
-        return $this->buildChartWithExtras($chart);
-    }
-
-    /**
-     * Compose chart output with legend, title, and axis labels.
-     */
-    private function buildChartWithExtras(string $chart): string
-    {
-        $lines = $chart !== '' ? explode("\n", $chart) : [];
-
-        if ($this->showLegend && $this->legendItems !== []) {
-            $legend = $this->buildLegend();
-            $lines = $this->mergeLegend($lines, $legend);
-        }
-
-        if ($this->title !== null) {
-            $lines = $this->addTitle($lines);
-        }
-
-        if ($this->yLabel !== null) {
-            $lines = $this->addYLabel($lines);
-        }
-
-        if ($this->xLabel !== null) {
-            $lines[] = $this->xLabel;
-        }
-
-        return implode("\n", $lines);
-    }
-
-    private function buildLegend(): Legend
-    {
-        $legend = Legend::new($this->legendItems)
-            ->withPosition($this->legendPosition);
-
-        if ($this->legendIndicatorChar !== null) {
-            $legend = $legend->withIndicatorChar($this->legendIndicatorChar);
-        }
-
-        return $legend;
-    }
-
-    /**
-     * @param list<string> $chartLines
-     * @param list<string> $legendLines
-     * @return list<string>
-     */
-    private function mergeLegend(array $chartLines, Legend $legend): array
-    {
-        $legendLines = explode("\n", $legend->view());
-        $chartHeight = count($chartLines);
-        $legendHeight = count($legendLines);
-
-        return match ($this->legendPosition) {
-            Position::Top    => [...$legendLines, ...$chartLines],
-            Position::Bottom => [...$chartLines, ...$legendLines],
-            Position::Left   => $this->mergeLegendLeftRight($chartLines, $legendLines),
-            Position::Right  => $this->mergeLegendLeftRight($chartLines, $legendLines, true),
-        };
-    }
-
-    /**
-     * @param list<string> $chartLines
-     * @param list<string> $legendLines
-     * @return list<string>
-     */
-    private function mergeLegendLeftRight(array $chartLines, array $legendLines, bool $legendOnRight = false): array
-    {
-        $maxHeight = max(count($chartLines), count($legendLines));
-        $result = [];
-
-        for ($i = 0; $i < $maxHeight; $i++) {
-            $chartLine = $chartLines[$i] ?? '';
-            $legendLine = $legendLines[$i] ?? '';
-
-            if ($legendOnRight) {
-                $result[] = str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT) . ' ' . $legendLine;
-            } else {
-                $result[] = $legendLine . ' ' . str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT);
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param list<string> $lines
-     * @return list<string>
-     */
-    private function addTitle(array $lines): array
-    {
-        $titleLen = mb_strlen($this->title, 'UTF-8');
-        $centered = str_pad($this->title, $this->width, ' ', STR_PAD_BOTH);
-
-        return match ($this->titlePosition) {
-            Position::Top    => [$centered, ...$lines],
-            Position::Bottom => [...$lines, $centered],
-            Position::Left, Position::Right => $lines,
-        };
-    }
-
-    /**
-     * @param list<string> $lines
-     * @return list<string>
-     */
-    private function addYLabel(array $lines): array
-    {
-        return array_map(
-            fn(string $line) => $this->yLabel . ' ' . $line,
-            $lines,
-        );
+        $parts = $this->buildChartWithExtras($chart);
+        return implode("\n", $parts);
     }
 
     public function __toString(): string

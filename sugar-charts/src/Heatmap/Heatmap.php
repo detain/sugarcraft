@@ -202,7 +202,7 @@ final class Heatmap
     public function view(): string
     {
         if ($this->grid === [] || $this->width === 0 || $this->height === 0) {
-            return (new Canvas($this->width, $this->height))->view();
+            return '';
         }
 
         // Auto-detect range when not pinned. Empty grids are caught above.

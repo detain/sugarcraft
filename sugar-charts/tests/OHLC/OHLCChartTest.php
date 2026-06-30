@@ -14,7 +14,8 @@ final class OHLCChartTest extends TestCase
     public function testEmptyRendersBlank(): void
     {
         $out = OHLCChart::new([], 6, 3)->view();
-        $this->assertSame(3, substr_count($out, "\n") + 1);
+        // Empty chart returns '' per unified empty-output behavior (task 1.4)
+        $this->assertSame('', $out);
     }
 
     public function testSingleBullishBarRendersBodyAndWick(): void
