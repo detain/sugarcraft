@@ -82,8 +82,20 @@ final class Cell
      */
     public function equals(Cell $other): bool
     {
+        $thisStyle = $this->style();
+        $otherStyle = $other->style();
+
+        // Both null = equal; one null ≠ the other
+        if ($thisStyle === null && $otherStyle === null) {
+            $styleEqual = true;
+        } elseif ($thisStyle === null || $otherStyle === null) {
+            $styleEqual = false;
+        } else {
+            $styleEqual = $thisStyle->equals($otherStyle);
+        }
+
         return $this->rune() === $other->rune()
-            && $this->style() === $other->style()
+            && $styleEqual
             && $this->link()?->url() === $other->link()?->url()
             && $this->width() === $other->width();
     }

@@ -244,8 +244,12 @@ final class Buffer
                     }
                     $nextPrev = $previous->grid[$row * $this->width + $nextCol];
                     // Collect if cell differs AND has same pending style/link.
+                    // Style comparison by value, not identity.
+                    $nextStyle = $nextCell->style();
+                    $styleEqual = ($runStyle === null && $nextStyle === null)
+                        || ($runStyle !== null && $nextStyle !== null && $runStyle->equals($nextStyle));
                     if (!$nextPrev->equals($nextCell)
-                        && $nextCell->style() === $runStyle
+                        && $styleEqual
                         && $nextCell->link()?->url() === $runLinkUrl
                     ) {
                         // This cell also differs AND has same style.
@@ -271,8 +275,12 @@ final class Buffer
                     $repeatWidth = $first->width() > 0 ? $first->width() : 1;
                     $allSame = true;
                     for ($i = 1; $i < $runLen; $i++) {
+                        $cellStyle = $run[$i]->style();
+                        // Style equality by value, not identity
+                        $styleEqual = ($runStyle === null && $cellStyle === null)
+                            || ($runStyle !== null && $cellStyle !== null && $runStyle->equals($cellStyle));
                         if ($run[$i]->rune() !== $repeatRune
-                            || $run[$i]->style() !== $runStyle
+                            || !$styleEqual
                             || $run[$i]->link()?->url() !== $runLinkUrl
                         ) {
                             $allSame = false;
@@ -382,6 +390,7 @@ final class Buffer
                 }
             } elseif ($op instanceof Diff\EraseRunOp) {
                 // ECH: replace $count cells at cursor with blank (style=null).
+                // ECH erases in-place; the logical cursor does NOT advance.
                 for ($i = 0; $i < $op->count; $i++) {
                     $c = $cursorCol + $i;
                     if ($c >= $this->width) {
@@ -389,7 +398,6 @@ final class Buffer
                     }
                     $grid[$cursorRow * $this->width + $c] = Cell::new();
                 }
-                $cursorCol += $op->count;
             } elseif ($op instanceof Diff\RepeatRunOp) {
                 // REP: repeat the rune $count times at current cursor.
                 if ($op->count > 0) {
@@ -397,7 +405,7 @@ final class Buffer
                     // Width=0 treated as 1.
                     $width = $op->width > 0 ? $op->width : 1;
                     for ($i = 0; $i < $op->count; $i++) {
-                        $c = $cursorCol + $i;
+                        $c = $cursorCol + $i * $width;
                         if ($c >= $this->width) {
                             break;
                         }
@@ -409,7 +417,7 @@ final class Buffer
                             }
                         }
                     }
-                    $cursorCol += $op->count;
+                    $cursorCol += $op->count * $width;
                 }
             }
         }

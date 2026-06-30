@@ -115,4 +115,15 @@ final class Style
             ? ($this->attrs | self::ATTR_REVERSE)
             : ($this->attrs & ~self::ATTR_REVERSE)]);
     }
+
+    /**
+     * Value equality: two styles are equal iff their fg, bg, and attrs
+     * values are identical.
+     */
+    public function equals(self $other): bool
+    {
+        return $this->fg === $other->fg
+            && $this->bg === $other->bg
+            && $this->attrs === $other->attrs;
+    }
 }
