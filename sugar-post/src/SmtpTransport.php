@@ -26,7 +26,7 @@ final class SmtpTransport implements Transport
     private bool $tls;
     private string $heloHost;
 
-    /** @var resource|\Socket|null */
+    /** @var resource|null */
     private $socket = null;
     private string $lastResponse = '';
 
@@ -96,18 +96,23 @@ final class SmtpTransport implements Transport
     private function connect(): void
     {
         $addr = "tcp://{$this->host}:{$this->port}";
-        $this->socket = @\stream_socket_client(
+        $context = \stream_context_create([
+            'socket' => ['connect_timeout' => $this->timeout],
+        ]);
+        $socket = @\stream_socket_client(
             $addr,
             $errno,
             $errstr,
             $this->timeout,
             \STREAM_CLIENT_CONNECT,
+            $context,
         );
 
-        if ($this->socket === false) {
+        if ($socket === false) {
             throw new \RuntimeException(Lang::t('smtp.connect_failed', ['addr' => $addr, 'errstr' => (string) $errstr, 'errno' => (string) $errno]));
         }
 
+        $this->socket = $socket;
         \stream_set_timeout($this->socket, $this->timeout);
         $this->readResponse(220);
 
@@ -319,7 +324,13 @@ final class SmtpTransport implements Transport
         if ($this->socket === null) {
             throw new \RuntimeException(Lang::t('smtp.not_connected'));
         }
-        \fwrite($this->socket, $data);
+        $written = \fwrite($this->socket, $data);
+        if ($written === false) {
+            throw new \RuntimeException(Lang::t('smtp.write_error'));
+        }
+        if ($written < \strlen($data)) {
+            throw new \RuntimeException(Lang::t('smtp.incomplete_write'));
+        }
     }
 
     private function readResponse(int $expectedCode): void
@@ -331,6 +342,9 @@ final class SmtpTransport implements Transport
         $line = \fgets($this->socket);
         if ($line === false) {
             throw new \RuntimeException(Lang::t('smtp.no_response'));
+        }
+        if ($line === '') {
+            throw new \RuntimeException(Lang::t('smtp.empty_response'));
         }
 
         $this->lastResponse = \trim($line);
