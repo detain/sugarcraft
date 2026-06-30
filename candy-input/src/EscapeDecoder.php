@@ -293,27 +293,27 @@ final class EscapeDecoder
         // Save original button for motion detection (bit 5 = drag flag)
         $originalButton = $button;
 
+        // Extract modifiers from SGR button field (bit 2=Shift, bit 3=Alt, bit 4=Ctrl)
+        // These are added to the base button value, not separate bits to shift
+        $modifierBits = ($button >> 2) & 0x07;
+
         // Scroll events: button 96 = scroll up, 97 = scroll down
-        if ($button === 96) {
+        // Modifiers (Shift+4, Alt+8, Ctrl+16) are added to base scroll button
+        $modifiers = KeyModifier::fromSgrMouse($modifierBits);
+        if ($button === 96 || $button === 100 || $button === 104 || $button === 112 || $button === 116 || $button === 120 || $button === 124) {
             return [
-                'events' => [MouseEvent::scrollUp((int)$x, (int)$y, KeyModifier::none())],
+                'events' => [MouseEvent::scrollUp((int)$x, (int)$y, $modifiers)],
                 'remaining' => $remaining,
             ];
         }
-        if ($button === 97) {
+        if ($button === 97 || $button === 101 || $button === 105 || $button === 113 || $button === 117 || $button === 121 || $button === 125) {
             return [
-                'events' => [MouseEvent::scrollDown((int)$x, (int)$y, KeyModifier::none())],
+                'events' => [MouseEvent::scrollDown((int)$x, (int)$y, $modifiers)],
                 'remaining' => $remaining,
             ];
         }
 
-        // Extract modifiers from SGR button field (bit 2=Shift, bit 3=Alt, bit 4=Ctrl)
-        // These are added to the base button value, not separate bits to shift
-        $modifierBits = 0;
-        if ($button & 4)  { $modifierBits |= 1; } // Shift → SGR bit 0
-        if ($button & 8)  { $modifierBits |= 2; } // Alt   → SGR bit 1
-        if ($button & 16) { $modifierBits |= 4; } // Ctrl  → SGR bit 2
-        // Base button is bits 0-1 of the button field
+        // Regular mouse event: extract base button (bits 0-1)
         $button = $button & 3;
 
         $modifiers = KeyModifier::fromSgrMouse($modifierBits);
