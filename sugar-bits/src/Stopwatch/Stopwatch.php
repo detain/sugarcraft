@@ -17,6 +17,16 @@ use SugarCraft\Core\Msg;
  */
 final class Stopwatch implements Model
 {
+    /**
+     * Monotonically increasing ID counter.
+     *
+     * IDs are assigned sequentially starting from 1 on first construction.
+     * This is intentional — stable, predictable IDs aid debugging when
+     * tracing tick routing in a live application.
+     *
+     * Test suites that need isolated ID state may call resetIdCounter()
+     * via Reflection to ensure deterministic ID sequences.
+     */
     private static int $nextId = 0;
 
     public readonly int $id;
@@ -28,6 +38,19 @@ final class Stopwatch implements Model
         ?int $id = null,
     ) {
         $this->id = $id ?? ++self::$nextId;
+    }
+
+    /**
+     * Reset the monotonic ID counter to zero.
+     *
+     * Primarily for use in test teardown to ensure test isolation when
+     * many Stopwatch instances are constructed across the test suite.
+     *
+     * @internal
+     */
+    public static function resetIdCounter(): void
+    {
+        self::$nextId = 0;
     }
 
     public static function new(float $interval = 1.0): self

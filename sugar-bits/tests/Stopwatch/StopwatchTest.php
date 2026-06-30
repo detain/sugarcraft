@@ -11,6 +11,14 @@ use PHPUnit\Framework\TestCase;
 
 final class StopwatchTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        $reflection = new \ReflectionClass(Stopwatch::class);
+        $prop = $reflection->getProperty('nextId');
+        $prop->setAccessible(true);
+        $prop->setValue(null, 0);
+    }
+
     public function testInitialState(): void
     {
         $s = Stopwatch::new();
@@ -79,6 +87,16 @@ final class StopwatchTest extends TestCase
     {
         $s = Stopwatch::new();
         $this->assertSame($s->id, $s->id());
+    }
+
+    public function testIdsAreMonotonicAcrossInstances(): void
+    {
+        $s1 = Stopwatch::new();
+        $s2 = Stopwatch::new();
+        $s3 = Stopwatch::new();
+        $this->assertSame(1, $s1->id);
+        $this->assertSame(2, $s2->id);
+        $this->assertSame(3, $s3->id);
     }
 
     public function testElapsedAccessor(): void
