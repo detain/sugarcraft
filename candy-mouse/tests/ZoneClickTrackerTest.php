@@ -247,7 +247,8 @@ final class ZoneClickTrackerTest extends TestCase
     }
 
     /**
-     * Double-press on distinct zones attributes to the last press (last wins).
+     * Double-press on distinct zones: last press wins, and releasing on a
+     * different zone clears the pending state per the documented state machine.
      */
     public function testDoublePressOnDistinctZonesAttributesToLastPress(): void
     {
@@ -266,11 +267,15 @@ final class ZoneClickTrackerTest extends TestCase
         // Press again on zone B — overwrites pending.
         $this->tracker->track(MouseEvent::press(10, 1, 0), $zoneB);
 
-        // Release at zone A — no click (pending was overwritten to B).
+        // Release at zone A — pending was for B, so this is a different zone.
+        // State machine says: "Release on different zone → clear state, idle".
         $resultA = $this->tracker->track(MouseEvent::release(1, 1, 0));
         self::assertNull($resultA);
 
-        // Release at zone B — click for B.
+        // Must press again on zone B to restore pending state.
+        $this->tracker->track(MouseEvent::press(10, 1, 0), $zoneB);
+
+        // Release at zone B — now emits click.
         $resultB = $this->tracker->track(MouseEvent::release(10, 1, 0));
         self::assertInstanceOf(ClickResult::class, $resultB);
         self::assertSame('b', $resultB->zone->id);
