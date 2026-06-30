@@ -51,20 +51,56 @@ final class SpringCollection
     /**
      * Advance all springs by one step.
      *
-     * @return array<string, float> Updated positions keyed by id
+     * Returns a NEW SpringCollection with updated positions/velocities,
+     * leaving the original instance unchanged (immutable pattern).
+     *
+     * @return self New SpringCollection with updated state
      */
-    public function tick(): array
+    public function tick(): self
     {
+        $newPositions = [];
+        $newVelocities = [];
+
         foreach ($this->springs as $id => $spring) {
             [$pos, $vel] = $spring->update(
                 $this->positions[$id],
                 $this->velocities[$id],
                 $this->targets[$id]
             );
-            $this->positions[$id] = $pos;
-            $this->velocities[$id] = $vel;
+            $newPositions[$id] = $pos;
+            $newVelocities[$id] = $vel;
         }
-        return $this->positions;
+
+        return $this->withState($newPositions, $newVelocities);
+    }
+
+    /**
+     * @param array<string, Spring> $springs
+     * @param array<string, float> $positions
+     * @param array<string, float> $velocities
+     * @param array<string, float> $targets
+     */
+    public function __construct(
+        array $springs = [],
+        array $positions = [],
+        array $velocities = [],
+        array $targets = []
+    ) {
+        $this->springs = $springs;
+        $this->positions = $positions;
+        $this->velocities = $velocities;
+        $this->targets = $targets;
+    }
+
+    /**
+     * Create a new collection with updated state (used by tick()).
+     *
+     * @param array<string, float> $positions
+     * @param array<string, float> $velocities
+     */
+    private function withState(array $positions, array $velocities): self
+    {
+        return new self($this->springs, $positions, $velocities, $this->targets);
     }
 
     /**

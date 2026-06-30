@@ -25,9 +25,10 @@ final class SpringChainTest extends TestCase
         $this->assertFalse($chain->isComplete());
         $this->assertEquals(0, $chain->activeStage());
 
-        // Advance until settled
+        // Advance until settled (immutable - each tick returns new chain)
+        $positions = [];
         for ($i = 0; $i < 600; $i++) {
-            [$positions, $complete] = $chain->tick();
+            [$positions, $complete, $chain] = $chain->tick();
             if ($complete) {
                 break;
             }
@@ -50,9 +51,9 @@ final class SpringChainTest extends TestCase
         // First stage is active
         $this->assertEquals(0, $chain->activeStage());
 
-        // Advance first stage until settled
+        // Advance first stage until settled (immutable - each tick returns new chain)
         for ($i = 0; $i < 600; $i++) {
-            $chain->tick();
+            [, , $chain] = $chain->tick();
             if ($chain->activeStage() > 0) {
                 break;
             }
@@ -77,8 +78,9 @@ final class SpringChainTest extends TestCase
         ]);
 
         $complete = false;
+        $positions = [];
         for ($i = 0; $i < 2000 && !$complete; $i++) {
-            [$positions, $complete] = $chain->tick();
+            [$positions, $complete, $chain] = $chain->tick();
         }
 
         $this->assertTrue($complete);
@@ -103,9 +105,10 @@ final class SpringChainTest extends TestCase
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
         $chain = SpringChain::build([[$spring, 0.0, 0.0, 100.0]]);
 
-        [$positions, $complete] = $chain->tick();
+        [$positions, $complete, $newChain] = $chain->tick();
 
         $this->assertIsArray($positions);
         $this->assertFalse($complete);
+        $this->assertInstanceOf(SpringChain::class, $newChain);
     }
 }
