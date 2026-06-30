@@ -12,6 +12,14 @@ use PHPUnit\Framework\TestCase;
 
 final class TimerTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        $reflection = new \ReflectionClass(Timer::class);
+        $prop = $reflection->getProperty('nextId');
+        $prop->setAccessible(true);
+        $prop->setValue(null, 0);
+    }
+
     public function testInitialState(): void
     {
         $t = Timer::new(10.0);
@@ -116,6 +124,16 @@ final class TimerTest extends TestCase
     {
         $t = Timer::new(3.0);
         $this->assertSame($t->id, $t->id());
+    }
+
+    public function testIdsAreMonotonicAcrossInstances(): void
+    {
+        $t1 = Timer::new(3.0);
+        $t2 = Timer::new(3.0);
+        $t3 = Timer::new(3.0);
+        $this->assertSame(1, $t1->id);
+        $this->assertSame(2, $t2->id);
+        $this->assertSame(3, $t3->id);
     }
 
     public function testToggleStartsWhenStopped(): void
