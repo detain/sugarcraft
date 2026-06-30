@@ -28,6 +28,7 @@ final class StreamInputDriver implements InputDriver
         private readonly mixed $stream,
     ) {
         $this->decoder = new EscapeDecoder();
+        stream_set_blocking($this->stream, false);
     }
 
     /**
@@ -74,9 +75,6 @@ final class StreamInputDriver implements InputDriver
      */
     private function readNonBlocking(): string|false
     {
-        // Ensure stream is non-blocking to prevent blocking the event loop
-        stream_set_blocking($this->stream, false);
-
         $read = [$this->stream];
         $write = null;
         $except = null;
