@@ -17,8 +17,6 @@ namespace SugarCraft\Core;
  * `Closure(): ?Msg`. PHP lacks tuples; destructure with
  * `[$model, $cmd] = $model->update($msg)`.
  *
- * @property list<\SugarCraft\Core\Msg> $log RecordingModel message log
- *
  * @method list<\SugarCraft\Core\Pane> panes() Panes implementation: list of panes
  * @method int activeIndex() Panes implementation: index of active pane
  * @method int count() Panes implementation: number of panes

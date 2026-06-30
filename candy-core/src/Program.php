@@ -508,7 +508,9 @@ final class Program
                 try {
                     ($this->exceptionHandler)($e);
                 } catch (\Throwable) {
-                    // Intentionally swallowed — see comment above.
+                    // Swallowed: the error is already surfaced via ExceptionMsg
+                    // at line 502, so this rethrow is noise. The rationale above
+                    // (lines 500-507) explains the safety-net contract.
                 }
             });
             return;

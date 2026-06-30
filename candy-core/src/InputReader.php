@@ -192,7 +192,7 @@ final class InputReader
                 $remaining = $len - 1;
                 // If we don't have all continuation bytes yet, break and
                 // wait for the next read — same as the ESC/OSC branches.
-                if (($i + $len) > $len_of_buf) {
+                if (($i + $len) > strlen($this->buf)) {
                     break;
                 }
                 // Validate all continuation bytes are 0x80-0xBF.
