@@ -21,9 +21,6 @@ use function React\Promise\reject;
  */
 final class AsyncOps
 {
-    /** Never-cancelled sentinel token shared across retry() calls with no explicit token. */
-    private static ?CancellationToken $neverToken = null;
-
     /**
      * Wrap a promise with a timeout. If the timeout fires before the
      * promise settles, the returned promise rejects with TimeoutException.
@@ -96,7 +93,7 @@ final class AsyncOps
             throw new \InvalidArgumentException('Base backoff must be positive');
         }
 
-        $token ??= self::$neverToken ??= CancellationSource::new()->token();
+        $token ??= CancellationSource::new()->token();
 
         return self::retryAttempt($operation, $attempts, $baseBackoffSeconds, $token, 1);
     }
@@ -115,7 +112,13 @@ final class AsyncOps
             return reject(new \RuntimeException('Retry cancelled'));
         }
 
-        return $operation()->then(
+        $operationPromise;
+        try {
+            $operationPromise = $operation();
+        } catch (\Throwable $e) {
+            $operationPromise = reject($e);
+        }
+        return $operationPromise->then(
             static fn ($value) => $value,
             static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt): PromiseInterface {
                 if ($token->isCancelled()) {
