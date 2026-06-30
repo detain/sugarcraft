@@ -77,9 +77,11 @@ final class ZoneClickTracker
                 return null;
             }
 
-            // Release on a different zone — return null but keep pending
-            // so the next release on the correct zone can still emit.
+            // Release on a different zone — clear state and return null per
+            // the documented state machine: "waiting → Release on different zone
+            // → clear state, idle".
             if (!$pending['zone']->inBounds($event)) {
+                unset($this->pending[$btn]);
                 return null;
             }
 
