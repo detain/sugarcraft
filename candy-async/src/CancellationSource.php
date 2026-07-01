@@ -54,6 +54,10 @@ final class CancellationSource implements Cancellable
             return;
         }
         $this->cancelled = true;
+        // markCancelled() is @internal but must remain public — CancellationSource
+        // is the sole caller and needs access to propagate cancellation into the
+        // token. Marking it private would break CancellationSource::cancel().
+        // @see CancellationToken::markCancelled()
         $this->token->markCancelled();
     }
 

@@ -67,4 +67,16 @@ interface Backend
      * Backends that do not support this may implement as a no-op.
      */
     public function describe(Descriptor $descriptor): void;
+
+    /**
+     * Flush all pending metric samples to the persistent backend.
+     *
+     * For backends that accumulate samples in memory before writing
+     * (e.g. Prometheus textfile), this writes all pending samples to
+     * durable storage. For transient backends (StatsD UDP), this may
+     * be a no-op.
+     *
+     * @throws \RuntimeException if the flush operation fails
+     */
+    public function flush(): void;
 }

@@ -130,7 +130,7 @@ final class Scan
                 $j = $i + 2;
                 while ($j < $len) {
                     if ($rendered[$j] === "\x07") { $j++; break; }
-                    if ($rendered[$j] === "\x1b" && ($rendered[$j + 1] ?? '') === '\\') { $j += 2; break; }
+                    if ($j + 1 < $len && $rendered[$j] === "\x1b" && $rendered[$j + 1] === '\\') { $j += 2; break; }
                     $j++;
                 }
                 $i = $j;

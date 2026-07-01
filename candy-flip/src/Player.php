@@ -41,7 +41,7 @@ final class Player implements Model
         if ($this->frames === [] || $this->paused) {
             return null;
         }
-        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg());
+        return Cmd::tick($this->frames[$this->index]->delay / 100.0, static fn(): Msg => new TickMsg());
     }
 
     public function update(Msg $msg): array
@@ -118,7 +118,7 @@ final class Player implements Model
 
     private function scheduleTick(): \Closure
     {
-        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg());
+        return Cmd::tick($this->frames[$this->index]->delay / 100.0, static fn(): Msg => new TickMsg());
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

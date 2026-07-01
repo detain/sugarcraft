@@ -230,7 +230,7 @@ final class ToastRenderingTest extends TestCase
         $ref = new \ReflectionClass($this->toast);
         $meth = $ref->getMethod('renderAlertToBuffer');
         $meth->setAccessible(true);
-        return $meth->invoke($this->toast, $alert);
+        return $meth->invoke($this->toast, $alert, 50);
     }
 
     private function invokeNextCluster(string $s, int $i): string
