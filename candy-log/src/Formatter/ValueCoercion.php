@@ -90,4 +90,48 @@ final class ValueCoercion
         }
         return $class;
     }
+
+    /**
+     * Coerce a value for JSON encoding in JsonFormatter.
+     *
+     * Preserves native JSON types (int, float, bool) while converting
+     * objects and arrays to formats suitable for json_encode.
+     * Resources are converted to null (json_encode default behavior).
+     *
+     * Mirrors the coercion logic previously duplicated in JsonFormatter::coerceValue().
+     *
+     * @param mixed $v The value to coerce.
+     * @return mixed   Coerced value suitable for json_encode.
+     */
+    public static function coerce(mixed $v): mixed
+    {
+        if (\is_bool($v) || \is_int($v) || \is_float($v)) {
+            return $v;
+        }
+
+        if (\is_string($v)) {
+            return $v;
+        }
+
+        if (\is_array($v)) {
+            return \array_map(fn($i) => self::coerce($i), $v);
+        }
+
+        if ($v === null) {
+            return null;
+        }
+
+        // Resources cannot be JSON-encoded; json_encode converts them to null
+        if (\is_resource($v)) {
+            return null;
+        }
+
+        // Objects with __toString
+        if ($v instanceof \Stringable || \method_exists($v, '__toString')) {
+            return (string) $v;
+        }
+
+        // Object without __toString — return class name
+        return \get_class($v);
+    }
 }
