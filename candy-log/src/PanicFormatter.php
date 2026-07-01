@@ -138,7 +138,7 @@ final class PanicFormatter
             $frameLine = $frame['line'] ?? '?';
 
             foreach ($this->redactPaths as $path) {
-                $frameFile = str_replace($path, '[redacted]', (string) $frameFile);
+                $frameFile = str_replace($path, '[redacted]', $frameFile);
             }
 
             $line = sprintf('    %s:%d %s()', $frameFile, $frameLine, $func);

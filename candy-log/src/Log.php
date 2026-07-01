@@ -94,7 +94,10 @@ final class Log
     ): void {
         $formatter ??= PanicFormatter::pretty($showLocals, $redactPaths);
 
-        // First, register a no-op handler just to capture what was previously registered.
+        // set_exception_handler() returns the previously registered handler, but
+        // only when we call it. To preserve chaining, we first register a no-op
+        // handler purely to capture what was registered before us. We then
+        // replace it with the real handler while keeping the previous one in scope.
         $previousHandler = \set_exception_handler(static function (): void {});
 
         // Now register the real handler with the captured previous handler.
@@ -128,6 +131,12 @@ final class Log
      */
     public static function restoreTerminal(): void
     {
+        // Guard: only emit ANSI codes when running in a real TTY.
+        // fwrite to a closed or non-TTY stream can cause warnings.
+        if (!\is_resource(\STDERR) || !\posix_isatty(\STDERR)) {
+            return;
+        }
+
         // Exit altscreen mode (SGR 1049).
         \fwrite(\STDERR, "\x1b[?1049l");
         // Show cursor.
