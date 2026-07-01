@@ -134,10 +134,10 @@ final class ProgramSimulator
         $model = $this->pumpSubscriptions($model);
 
         // Process queued messages in order.
-        // Use while + array_shift so subscription-pumped messages (appended
+        // Use index pointer so subscription-pumped messages (appended
         // mid-loop) are also processed in the same run cycle.
-        while (count($this->queue) > 0) {
-            $msg = array_shift($this->queue);
+        for ($i = 0; $i < count($this->queue); $i++) {
+            $msg = $this->queue[$i];
             [$model, ] = $this->applyMsg($model, $msg);
             // Pump subscriptions after each message to capture produce output.
             $model = $this->pumpSubscriptions($model);
