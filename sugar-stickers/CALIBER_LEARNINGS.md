@@ -34,3 +34,36 @@ is advertised without a working implementation.
 - Table renderer holds a `?Buffer $previousFrame`; on each render it diffs against the prior frame and emits only delta ops via `DiffEncoder`.
 - Reset `previousFrame` on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
 - **Source:** step-27 ai/buffer-diff-consumers
+
+## Performance characteristics
+
+### FlexBox $measured array allocation (GC pressure)
+
+`FlexBox::renderRow()` (lines 114-120) and `FlexBox::renderColumn()` (lines 195-201) create a `$measured` array on every render using `array_map()` with closures:
+
+```php
+$measured = \array_map(fn(FlexItem $item): array => [
+    'item'   => $item,
+    'width'  => $this->measureWidth($item),
+    'height' => $this->measureHeight($item),
+    'ratio'  => $item->ratio,
+    'basis'  => $item->basis,
+], $items);
+```
+
+This allocates a new array with closures on every render call, creating GC pressure for frequently-updated layouts. Could be cached if items haven't changed, but adds complexity for marginal gain. Document as known pattern — no immediate fix required.
+
+### TableRenderer $strippedPosToStyle array (memory usage)
+
+`TableRenderer::renderLine()` (lines 119-150) builds a `$strippedPosToStyle` associative array per line to track ANSI SGR styles through the diff algorithm:
+
+```php
+$strippedPosToStyle = [];
+// ... populated per character in the line
+```
+
+Creates approximately 5,000 entries for a 100×50 character buffer. This is necessary for correct ANSI style tracking but represents a known memory usage pattern for large renders. Could be replaced with a more memory-efficient structure if profiling shows it to be a bottleneck.
+
+### Viewport scroll defaults
+
+`Viewport::scrollLeft(int $n = 1)` and `Viewport::scrollRight(int $n = 1)` default to 1 (not 0) for consistency with other navigation methods like `lineUp()` and `lineDown()`. A default of 0 would make no-argument calls a no-op.

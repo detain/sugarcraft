@@ -298,8 +298,11 @@ final class FlexBox
         $s = \preg_replace('/\x1b(?!\[)/', '', $s);
         // Remove C0 controls except HT (0x09) and LF (0x0A).
         $s = \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
-        // Remove C1 controls (0x7F, 0x80-0x9F).
-        $s = \preg_replace('/[\x7F\x80-\x9F]/', '', $s);
+        // Remove DEL (0x7F).  Do NOT remove 0x80-0x9F — those are valid
+        // UTF-8 continuation bytes (e.g. CJK `東京` = e6[9d]b1 e4[ba]ac
+        // where bytes in brackets fall in that range).  Stripping them
+        // corrupts any multi-byte character whose encoding includes them.
+        $s = \preg_replace('/\x7F/', '', $s);
         return $s;
     }
 }

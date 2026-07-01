@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem, Justify};
+use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem};
 
 // Row layout: 3 panels in ratio 1:2:1
 $row = FlexBox::row(
