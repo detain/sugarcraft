@@ -122,4 +122,22 @@ final class CubicBezierTest extends TestCase
         $this->assertGreaterThanOrEqual(0.0, $cb->evaluate(0.0));
         $this->assertLessThanOrEqual(1.0, $cb->evaluate(1.0));
     }
+
+    /**
+     * @see plan_honey-bounce.md — Item 4.1 (Item 5.7 in findings_resume_plan)
+     */
+    public function testInvalidControlPointX1ThrowsException(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new CubicBezier(-0.5, 0.0, 0.5, 1.0);
+    }
+
+    /**
+     * @see plan_honey-bounce.md — Item 4.1 (Item 5.7 in findings_resume_plan)
+     */
+    public function testInvalidControlPointX2ThrowsException(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new CubicBezier(0.0, 0.0, 1.5, 1.0);
+    }
 }
