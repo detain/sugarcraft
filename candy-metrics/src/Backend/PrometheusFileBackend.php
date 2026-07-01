@@ -56,6 +56,19 @@ final class PrometheusFileBackend implements Backend
     /** @var array<string, Descriptor> Metric descriptors indexed by sanitized name. */
     private array $descriptors = [];
 
+    /** @var array<string,bool> Dirty flags per counter key — true means metric changed since last flush. */
+    private array $dirtyCounters = [];
+    /** @var array<string,bool> Dirty flags per gauge key. */
+    private array $dirtyGauges = [];
+    /** @var array<string,bool> Dirty flags per histogram key. */
+    private array $dirtyHistograms = [];
+    /** @var array<string,bool> Dirty flags per up-down-counter key. */
+    private array $dirtyUpDownCounters = [];
+    /** @var array<string,bool> Dirty flags per async-counter key. */
+    private array $dirtyAsyncCounters = [];
+    /** @var array<string,bool> Dirty flags per async-gauge key. */
+    private array $dirtyAsyncGauges = [];
+
     public function __construct(private readonly string $path)
     {}
 
@@ -72,11 +85,14 @@ final class PrometheusFileBackend implements Backend
     {
         $key = $this->key($name, $tags);
         $this->counters[$key] = ($this->counters[$key] ?? 0.0) + $value;
+        $this->dirtyCounters[$key] = true;
     }
 
     public function gauge(string $name, float $value, array $tags = []): void
     {
-        $this->gauges[$this->key($name, $tags)] = $value;
+        $key = $this->key($name, $tags);
+        $this->gauges[$key] = $value;
+        $this->dirtyGauges[$key] = true;
     }
 
     public function histogram(string $name, float $value, array $tags = []): void
@@ -93,6 +109,7 @@ final class PrometheusFileBackend implements Backend
         // +Inf bucket always gets the sample
         $h['buckets']['+Inf']++;
         $this->histograms[$key] = $h;
+        $this->dirtyHistograms[$key] = true;
     }
 
     /** Returns a fresh zeroed bucket array for use in new histogram series. */
@@ -110,16 +127,21 @@ final class PrometheusFileBackend implements Backend
     {
         $key = $this->key($name, $tags);
         $this->upDownCounters[$key] = ($this->upDownCounters[$key] ?? 0.0) + $amount;
+        $this->dirtyUpDownCounters[$key] = true;
     }
 
     public function asyncCounter(string $name, float $value, array $tags = []): void
     {
-        $this->asyncCounters[$this->key($name, $tags)] = $value;
+        $key = $this->key($name, $tags);
+        $this->asyncCounters[$key] = $value;
+        $this->dirtyAsyncCounters[$key] = true;
     }
 
     public function asyncGauge(string $name, float $value, array $tags = []): void
     {
-        $this->asyncGauges[$this->key($name, $tags)] = $value;
+        $key = $this->key($name, $tags);
+        $this->asyncGauges[$key] = $value;
+        $this->dirtyAsyncGauges[$key] = true;
     }
 
     public function describe(Descriptor $descriptor): void
@@ -132,109 +154,149 @@ final class PrometheusFileBackend implements Backend
     public function flush(): void
     {
         $body = '';
+
+        // Only process sampled metrics if something changed since last flush.
+        // This avoids re-serializing unchanged metrics and unnecessary file I/O.
+        $hasDirty = !(
+            $this->dirtyCounters === []
+            && $this->dirtyGauges === []
+            && $this->dirtyHistograms === []
+            && $this->dirtyUpDownCounters === []
+            && $this->dirtyAsyncCounters === []
+            && $this->dirtyAsyncGauges === []
+        );
         // Track which sanitized names have had TYPE emitted (to avoid duplicates per family).
         $typeEmitted = [];
-        // Track which names were actually sampled (for unsampled-descriptor emission below).
-        $sampledNames = [];
         // Track which descriptors were already emitted (descriptor type wins over inferred).
         $descriptorEmitted = [];
 
-        // --- Sampled metrics: emit HELP+TYPE once per family (descriptor wins), then sample lines ---
-        foreach ($this->counters as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
-            $sampledNames[$name] = true;
-            if (!isset($typeEmitted[$name])) {
-                $typeEmitted[$name] = true;
-                if (isset($this->descriptors[$name])) {
-                    $d = $this->descriptors[$name];
-                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
-                    $body .= "# TYPE {$name} {$d->type}\n";
-                    $descriptorEmitted[$name] = true;
-                } else {
-                    $body .= "# TYPE {$name} counter\n";
-                }
+        // Helper: emit TYPE/HELP header for a metric family if not already emitted.
+        $emitType = function (string $name, string $inferredType) use (&$typeEmitted, &$descriptorEmitted, &$body) {
+            if (isset($typeEmitted[$name])) {
+                return;
             }
+            $typeEmitted[$name] = true;
+            if (isset($this->descriptors[$name])) {
+                $d = $this->descriptors[$name];
+                $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
+                $body .= "# TYPE {$name} {$d->type}\n";
+                $descriptorEmitted[$name] = true;
+            } else {
+                $body .= "# TYPE {$name} {$inferredType}\n";
+            }
+        };
+
+        // --- Dirty counters: emit HELP+TYPE once per family, then sample lines for dirty keys ---
+        foreach ($this->dirtyCounters as $key => $_) {
+            $val = $this->counters[$key] ?? 0.0;
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'counter');
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->dirtyUpDownCounters as $key => $_) {
+            $val = $this->upDownCounters[$key] ?? 0.0;
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'gauge');
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->dirtyAsyncCounters as $key => $_) {
+            $val = $this->asyncCounters[$key] ?? 0.0;
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'counter');
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->dirtyAsyncGauges as $key => $_) {
+            $val = $this->asyncGauges[$key] ?? 0.0;
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'gauge');
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->dirtyGauges as $key => $_) {
+            $val = $this->gauges[$key] ?? 0.0;
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'gauge');
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->dirtyHistograms as $key => $_) {
+            $h = $this->histograms[$key] ?? ['count' => 0, 'sum' => 0.0, 'buckets' => self::emptyBuckets()];
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'histogram');
+            // Bucket lines
+            foreach (self::BUCKETS as $b) {
+                $leAttr = $labels !== '' ? substr($labels, 0, -1) . ',le="' . $b . '"}' : '{le="' . $b . '"}';
+                $body .= "{$name}_bucket{$leAttr} {$h['buckets'][(string) $b]}\n";
+            }
+            $infAttr = $labels !== '' ? substr($labels, 0, -1) . ',le="+Inf"}' : '{le="+Inf"}';
+            $body .= "{$name}_bucket{$infAttr} {$h['buckets']['+Inf']}\n";
+            $body .= "{$name}_count{$labels} {$h['count']}\n";
+            $body .= "{$name}_sum{$labels} " . self::fmt($h['sum']) . "\n";
+        }
+
+        // Snapshot dirty keys before clearing, so non-dirty loop can skip them.
+        $dirtyCounterKeys = array_keys($this->dirtyCounters);
+        $dirtyGaugeKeys = array_keys($this->dirtyGauges);
+        $dirtyHistogramKeys = array_keys($this->dirtyHistograms);
+        $dirtyUpDownCounterKeys = array_keys($this->dirtyUpDownCounters);
+        $dirtyAsyncCounterKeys = array_keys($this->dirtyAsyncCounters);
+        $dirtyAsyncGaugeKeys = array_keys($this->dirtyAsyncGauges);
+
+        // Clear dirty flags now that we've processed them.
+        $this->dirtyCounters = [];
+        $this->dirtyGauges = [];
+        $this->dirtyHistograms = [];
+        $this->dirtyUpDownCounters = [];
+        $this->dirtyAsyncCounters = [];
+        $this->dirtyAsyncGauges = [];
+
+        // If there are non-dirty metrics, we must still emit their full state so the
+        // Prometheus textfile collector sees complete data. Emit all non-dirty metrics
+        // that were not already covered by the dirty iterations above.
+        foreach ($this->counters as $key => $val) {
+            if (in_array($key, $dirtyCounterKeys, true)) {
+                continue;
+            }
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'counter');
             $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->upDownCounters as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
-            $sampledNames[$name] = true;
-            if (!isset($typeEmitted[$name])) {
-                $typeEmitted[$name] = true;
-                if (isset($this->descriptors[$name])) {
-                    $d = $this->descriptors[$name];
-                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
-                    $body .= "# TYPE {$name} {$d->type}\n";
-                    $descriptorEmitted[$name] = true;
-                } else {
-                    $body .= "# TYPE {$name} gauge\n";
-                }
+            if (in_array($key, $dirtyUpDownCounterKeys, true)) {
+                continue;
             }
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'gauge');
             $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->asyncCounters as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
-            $sampledNames[$name] = true;
-            if (!isset($typeEmitted[$name])) {
-                $typeEmitted[$name] = true;
-                if (isset($this->descriptors[$name])) {
-                    $d = $this->descriptors[$name];
-                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
-                    $body .= "# TYPE {$name} {$d->type}\n";
-                    $descriptorEmitted[$name] = true;
-                } else {
-                    $body .= "# TYPE {$name} counter\n";
-                }
+            if (in_array($key, $dirtyAsyncCounterKeys, true)) {
+                continue;
             }
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'counter');
             $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->asyncGauges as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
-            $sampledNames[$name] = true;
-            if (!isset($typeEmitted[$name])) {
-                $typeEmitted[$name] = true;
-                if (isset($this->descriptors[$name])) {
-                    $d = $this->descriptors[$name];
-                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
-                    $body .= "# TYPE {$name} {$d->type}\n";
-                    $descriptorEmitted[$name] = true;
-                } else {
-                    $body .= "# TYPE {$name} gauge\n";
-                }
+            if (in_array($key, $dirtyAsyncGaugeKeys, true)) {
+                continue;
             }
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'gauge');
             $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->gauges as $key => $val) {
-            [$name, $labels] = self::splitKey($key);
-            $sampledNames[$name] = true;
-            if (!isset($typeEmitted[$name])) {
-                $typeEmitted[$name] = true;
-                if (isset($this->descriptors[$name])) {
-                    $d = $this->descriptors[$name];
-                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
-                    $body .= "# TYPE {$name} {$d->type}\n";
-                    $descriptorEmitted[$name] = true;
-                } else {
-                    $body .= "# TYPE {$name} gauge\n";
-                }
+            if (in_array($key, $dirtyGaugeKeys, true)) {
+                continue;
             }
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'gauge');
             $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->histograms as $key => $h) {
-            [$name, $labels] = self::splitKey($key);
-            $sampledNames[$name] = true;
-            if (!isset($typeEmitted[$name])) {
-                $typeEmitted[$name] = true;
-                if (isset($this->descriptors[$name])) {
-                    $d = $this->descriptors[$name];
-                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
-                    $body .= "# TYPE {$name} {$d->type}\n";
-                    $descriptorEmitted[$name] = true;
-                } else {
-                    $body .= "# TYPE {$name} histogram\n";
-                }
+            if (in_array($key, $dirtyHistogramKeys, true)) {
+                continue;
             }
-            // Bucket lines (must use sanitized $name as base)
+            [$name, $labels] = self::splitKey($key);
+            $emitType($name, 'histogram');
             foreach (self::BUCKETS as $b) {
                 $leAttr = $labels !== '' ? substr($labels, 0, -1) . ',le="' . $b . '"}' : '{le="' . $b . '"}';
                 $body .= "{$name}_bucket{$leAttr} {$h['buckets'][(string) $b]}\n";

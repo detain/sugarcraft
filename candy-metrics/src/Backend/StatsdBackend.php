@@ -82,6 +82,14 @@ final class StatsdBackend implements Backend
         // No-op: StatsD wire format does not support TYPE/HELP declarations.
     }
 
+    // StatsD emits immediately via UDP; flush ensures the socket buffer is drained.
+    public function flush(): void
+    {
+        if (is_resource($this->sock)) {
+            fflush($this->sock);
+        }
+    }
+
     /**
      * @param array<string,string> $tags
      */

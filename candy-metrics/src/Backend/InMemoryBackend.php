@@ -70,6 +70,12 @@ final class InMemoryBackend implements Backend
         // No-op: in-memory accumulation does not benefit from TYPE/HELP lines.
     }
 
+    // In-memory backend stores data inline; flush is a no-op.
+    public function flush(): void
+    {
+        // No-op: data is already in memory and persists for the lifetime of the object.
+    }
+
     /** @return array<string,float> */
     public function counters(): array { return $this->counters; }
     /** @return array<string,float> */
