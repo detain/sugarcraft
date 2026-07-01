@@ -15,7 +15,7 @@ interface Formatter
      *
      * @param Level              $level    The log level.
      * @param string             $message  The primary message.
-     * @param array<string,mixed> $context Key/value pairs attached to this entry.
+     * @param array<string,mixed> $context Key/value pairs attached to this entry (PSR-3).
      * @param \DateTimeImmutable $time     Timestamp of the log event.
      * @param string|null        $caller   Source location (file:line) if reportCaller is on.
      * @param string|null        $prefix   Logger prefix string.
