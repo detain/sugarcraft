@@ -190,4 +190,60 @@ final class CancellationTokenTest extends TestCase
 
         $this->assertSame(1, $count);
     }
+
+    /**
+     * Verify that CancellationSource::cancel() properly sets the token's
+     * cancelled state. This is the intended public API for triggering
+     * cancellation — consumers must use CancellationSource::cancel(), not
+     * bypass it by calling markCancelled() directly on the token.
+     *
+     * The CancellationToken::markCancelled() method is @internal and must
+     * remain accessible to CancellationSource (same package) so that the
+     * source can propagate cancellation into the token. Consumers who
+     * bypass CancellationSource and call markCancelled() directly would
+     * corrupt token state — this test validates the correct path works.
+     */
+    public function testCancellationSourceCancelSetsTokenState(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        // Before cancellation — token is NOT cancelled
+        $this->assertFalse($token->isCancelled(), 'Token must not be cancelled before cancel() is called');
+
+        // The intended public cancellation path: CancellationSource::cancel()
+        $source->cancel();
+
+        // After cancellation — token IS cancelled (verified via public API)
+        $this->assertTrue($token->isCancelled(), 'Token must be cancelled after CancellationSource::cancel()');
+
+        // Subsequent calls to isCancelled() remain true (no state corruption)
+        $this->assertTrue($token->isCancelled(), 'Token cancelled state must be stable (no corruption on repeated checks)');
+
+        // Source and token states are consistent
+        $this->assertSame($source->isCancelled(), $token->isCancelled(),
+            'CancellationSource and CancellationToken must agree on cancelled state');
+    }
+
+    /**
+     * CancellationSource::cancel() must work correctly across multiple
+     * independent source/token pairs — no shared state interference.
+     */
+    public function testIndependentSourceTokenPairs(): void
+    {
+        $source1 = CancellationSource::new();
+        $source2 = CancellationSource::new();
+        $token1 = $source1->token();
+        $token2 = $source2->token();
+
+        // Cancel only source 1
+        $source1->cancel();
+
+        // Token 1 must be cancelled; token 2 must NOT be cancelled
+        $this->assertTrue($token1->isCancelled());
+        $this->assertFalse($token2->isCancelled());
+
+        // Source 2 and token 2 remain consistent
+        $this->assertSame($source2->isCancelled(), $token2->isCancelled());
+    }
 }
