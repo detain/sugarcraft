@@ -130,20 +130,18 @@ final class Application extends SymfonyApplication
                 continue;
             }
             if (!$option->acceptValue()) {
+                // Flag option — setOption works fine for these since they have no
+                // value that could be reset by a second bind() call.
                 if (in_array(strtolower($envValue), ['1', 'true', 'yes'], true)) {
-                    $tokens[] = '--' . $option->getName();
+                    $input->setOption($option->getName(), true);
                 }
             } else {
-                // Use setOption() to directly inject the option value, avoiding
-                // shell interpolation entirely. The escapeshellarg→stripslashes→trim
-                // chain leaves backslashes in values (e.g. "foo'bar" becomes
-                // "foo\bar" after strip), which can cause token injection issues.
-                try {
-                    $input->setOption($option->getName(), $envValue);
-                } catch (\Throwable) {
-                    // Option may not support setOption; fall back to token injection.
-                    $tokens[] = '--' . $option->getName() . '=' . $envValue;
-                }
+                // Value option — MUST use token injection. setOption() appears to
+                // succeed but the value does NOT survive the second bind() call in
+                // Command::run() (handleErrors). Token injection is the only approach
+                // that survives because bind()/parse() re-populates the options bag
+                // from the token stream.
+                $tokens[] = '--' . $option->getName() . '=' . $envValue;
             }
         }
         // Inject tokens at the front of the ArgvInput token stream only for
