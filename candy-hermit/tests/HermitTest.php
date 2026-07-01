@@ -648,4 +648,102 @@ final class HermitTest extends TestCase
         $this->assertIsString($result);
         $this->assertStringContainsString('banana', $result);
     }
+
+    public function testPrintableTextReturnsPlainTextUnchanged(): void
+    {
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('printableText');
+        $method->setAccessible(true);
+
+        // Plain ASCII text passes through unchanged.
+        $result = $method->invoke($h, 'hello world');
+        $this->assertSame('hello world', $result);
+    }
+
+    public function testPrintableTextStripsAnsiEscapeSequences(): void
+    {
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('printableText');
+        $method->setAccessible(true);
+
+        // SGR color code should be stripped, leaving only the text.
+        $colored = "\x1b[33mWarning\x1b[0m";
+        $result = $method->invoke($h, $colored);
+        $this->assertSame('Warning', $result);
+    }
+
+    public function testPrintableTextStripsComplexAnsiSequences(): void
+    {
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('printableText');
+        $method->setAccessible(true);
+
+        // Bold + italic + red + underscore (a complex multi-sequence ANSI string).
+        $complex = "\x1b[1;3;31;4mAlert\x1b[0m";
+        $result = $method->invoke($h, $complex);
+        $this->assertSame('Alert', $result);
+    }
+
+    public function testPrintableTextStripsCursorMovementSequences(): void
+    {
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('printableText');
+        $method->setAccessible(true);
+
+        // CSI cursor movement sequences should be stripped.
+        $withCursor = "\x1b[10C\x1b[5Dtext\x1b[0m";
+        $result = $method->invoke($h, $withCursor);
+        $this->assertSame('text', $result);
+    }
+
+    public function testHighlightFuzzyAppliesStyleToMatchedCharacters(): void
+    {
+        // When the ranker returns a valid (non-empty) match, the Highlighter
+        // should wrap the matched runes with the configured style ANSI codes.
+        $h = $this->makeHermit()->show()->setMatchStyle("\x1b[33m"); // yellow
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('highlightFuzzy');
+        $method->setAccessible(true);
+
+        // 'an' matches 'banana' at indices 1,2 → highlight should wrap 'an'.
+        $matchResult = new MatchResult('an', 'banana', 2, [1, 2]);
+        $mockRanker = $this->createMock(FuzzyMatcher::class);
+        $mockRanker->method('match')->willReturn($matchResult);
+
+        $result = $method->invoke($h, $mockRanker, 'banana', 'an');
+
+        // The matched substring 'an' should be wrapped in the yellow style.
+        $this->assertStringContainsString("\x1b[33man\x1b[0m", $result);
+    }
+
+    public function testHighlightFuzzyStyleWrapsMatchedRunesWithAnsiReset(): void
+    {
+        // Verify the style code appears BEFORE the matched text and ANSI reset
+        // appears AFTER, forming a proper SGR sequence.
+        $h = $this->makeHermit()->show()->setMatchStyle("\x1b[32m"); // green
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('highlightFuzzy');
+        $method->setAccessible(true);
+
+        $matchResult = new MatchResult('x', 'hex', 1, [1]);
+        $mockRanker = $this->createMock(FuzzyMatcher::class);
+        $mockRanker->method('match')->willReturn($matchResult);
+
+        $result = $method->invoke($h, $mockRanker, 'hex', 'x');
+
+        // Verify the green code opens, the matched character appears, then reset closes.
+        $this->assertStringContainsString("\x1b[32m", $result);
+        $this->assertStringContainsString("\x1b[0m", $result);
+        $this->assertStringContainsString('x', $result);
+    }
 }
