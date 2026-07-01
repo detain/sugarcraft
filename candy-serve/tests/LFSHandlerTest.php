@@ -151,7 +151,8 @@ final class LFSHandlerTest extends TestCase
         $this->assertArrayHasKey('actions', $result['objects'][0]);
         $this->assertArrayHasKey('download', $result['objects'][0]['actions']);
         $this->assertArrayHasKey('href', $result['objects'][0]['actions']['download']);
-        $this->assertArrayHasKey('Authorization', $result['objects'][0]['actions']['download']['header']);
+        // Authorization header is no longer hardcoded — clients add their own Bearer token
+        $this->assertArrayNotHasKey('header', $result['objects'][0]['actions']['download']);
     }
 
     public function testHandleBatchUploadPreparesUploadEndpoint(): void

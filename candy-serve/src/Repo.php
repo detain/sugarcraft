@@ -142,7 +142,8 @@ final class Repo
         if (!\is_dir($gitDir)) {
             $out = [];
             $rc  = 0;
-            \exec('git init --bare 2>&1', $out, $rc);
+            $path = \escapeshellarg($this->path);
+            \exec("git -C {$path} init --bare 2>&1", $out, $rc);
             if ($rc !== 0) {
                 throw new \RuntimeException(Lang::t('repo.git_init_failed', ['output' => \implode("\n", $out)]));
             }

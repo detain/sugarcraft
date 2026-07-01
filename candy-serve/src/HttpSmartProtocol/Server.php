@@ -562,8 +562,8 @@ final class Server
                         $password = \substr($credentials, $colon + 1);
                         $user = $this->users[$username] ?? null;
                         if ($user === null) return null;
-                        // Verify password
-                        if ($user->password !== null && !\hash_equals($user->password, $password)) {
+                        // Verify password — reject null/empty passwords (deny auth bypass)
+                        if ($user->password === null || !\hash_equals($user->password, $password)) {
                             return null;
                         }
                         return $user;

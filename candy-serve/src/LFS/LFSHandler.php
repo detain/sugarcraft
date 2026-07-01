@@ -197,7 +197,6 @@ final class LFSHandler
                 'actions' => [
                     'download' => [
                         'href'   => $this->objectUrl($oid),
-                        'header' => ['Authorization' => 'Bearer lfs-token'],
                     ],
                 ],
             ];
@@ -210,7 +209,6 @@ final class LFSHandler
             'actions' => [
                 'upload' => [
                     'href'   => $this->objectUrl($oid),
-                    'header' => ['Authorization' => 'Bearer lfs-token'],
                 ],
             ],
         ];
