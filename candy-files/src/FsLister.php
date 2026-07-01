@@ -29,8 +29,11 @@ final class FsLister
                 if ($stat === false) {
                     continue;
                 }
-                $isLink = \is_link($full);
-                $isDir  = \is_dir($full);
+                $mode = $stat['mode'];
+                // Use bitmask from mode bits — avoids 2 extra syscalls per entry
+                // S_IFMT=0170000 mask, S_IFLNK=0120000 symlink, S_IFDIR=0040000 directory
+                $isLink = ($mode & 0170000) === 0120000;
+                $isDir  = ($mode & 0170000) === 0040000;
                 $out[] = new Entry(
                     name:     $name,
                     isDir:    $isDir,

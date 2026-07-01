@@ -90,12 +90,13 @@ final class AsyncOps
     }
 
     /**
-     * Copy multiple files/directories in parallel.
+     * Copy multiple files/directories in parallel with concurrency limiting.
      *
      * @param array<string, string> $map Source → Destination mapping
+     * @param int $concurrency Maximum concurrent copy operations (default 4)
      * @return PromiseInterface<array<string, bool>> Map of source → success
      */
-    public function copyManyAsync(array $map): PromiseInterface
+    public function copyManyAsync(array $map, int $concurrency = 4): PromiseInterface
     {
         if ($map === []) {
             $deferred = new Deferred();
@@ -103,22 +104,49 @@ final class AsyncOps
             return $deferred->promise();
         }
 
-        $promises = [];
+        $concurrency = max(1, $concurrency);
+        $keys = array_keys($map);
+        $total = \count($keys);
+        $results = [];
+        $pending = 0;
+        $index = 0;
 
-        foreach ($map as $src => $dst) {
-            $promises[] = $this->copyAsync($src, $dst);
-        }
+        $deferred = new Deferred();
+        $self = $this;
 
-        // Wrap all promises and map back to source→result
-        return \React\Promise\all($promises)
-            ->then(static function (array $values) use ($map): array {
-                $result = [];
-                $keys = array_keys($map);
-                foreach ($keys as $i => $src) {
-                    $result[$src] = $values[$i] ?? false;
-                }
-                return $result;
-            });
+        // Start up to $concurrency copies; when each completes, start next if any remain
+        $startNext = function () use (&$pending, &$index, $keys, $map, $concurrency, &$results, $deferred, $total, $self, &$startNext): void {
+            while ($pending < $concurrency && $index < $total) {
+                $src = $keys[$index++];
+                $dst = $map[$src];
+                ++$pending;
+
+                $self->copyAsync($src, $dst)->then(
+                    function ($value) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
+                        $results[$src] = $value;
+                        --$pending;
+                        // Continue the pipeline by starting next pending copy
+                        $startNext();
+                        if ($index >= $total && $pending === 0) {
+                            $deferred->resolve($results);
+                        }
+                    },
+                    function (\Throwable $e) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
+                        $results[$src] = false;
+                        --$pending;
+                        // Continue the pipeline by starting next pending copy
+                        $startNext();
+                        if ($index >= $total && $pending === 0) {
+                            $deferred->resolve($results);
+                        }
+                    }
+                );
+            }
+        };
+
+        $startNext();
+
+        return $deferred->promise();
     }
 
     /**
