@@ -49,10 +49,8 @@ final readonly class HistoryManager
         }
         $idx = array_key_last($this->undoStack);
         $entry = $this->undoStack[$idx];
-        $newUndoStack = $this->undoStack;
-        array_pop($newUndoStack);
         $newManager = new self(
-            undoStack: $newUndoStack,
+            undoStack: array_slice($this->undoStack, 0, -1),
             redoStack: [...$this->redoStack, $entry],
         );
         return ['entry' => $entry, 'manager' => $newManager];
@@ -72,11 +70,9 @@ final readonly class HistoryManager
         }
         $idx = array_key_last($this->redoStack);
         $entry = $this->redoStack[$idx];
-        $newRedoStack = $this->redoStack;
-        array_pop($newRedoStack);
         $newManager = new self(
             undoStack: [...$this->undoStack, $entry],
-            redoStack: $newRedoStack,
+            redoStack: array_slice($this->redoStack, 0, -1),
         );
         return ['entry' => $entry, 'manager' => $newManager];
     }

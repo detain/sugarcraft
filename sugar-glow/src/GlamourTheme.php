@@ -30,6 +30,11 @@ final class GlamourTheme
 
     /**
      * Parse a Glamour theme from a JSON string.
+     *
+     * @param string $json Valid JSON string representing a Glamour theme.
+     * @return self A new GlamourTheme. On invalid JSON (json_decode failure),
+     *              returns a default empty theme — does NOT throw.
+     *              Callers needing validation should use json_validate() beforehand.
      */
     public static function fromJson(string $json): self
     {
@@ -50,6 +55,10 @@ final class GlamourTheme
 
     /**
      * Load a Glamour theme from a JSON file.
+     *
+     * @param string $path Path to a JSON theme file.
+     * @return self A new GlamourTheme. On unreadable files or parse failures,
+     *              returns a default empty theme — does NOT throw.
      */
     public static function fromFile(string $path): self
     {

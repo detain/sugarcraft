@@ -149,6 +149,12 @@ final class RenderCommand extends Command
 
     /**
      * @param resource|null $stream Defaults to STDIN; allows unit-testing stdin paths.
+     *
+     * @return string|null Returns null when:
+     *   - file path provided but file does not exist or is unreadable
+     *   - no file path and STDIN is a TTY (interactive terminal)
+     *   - no file path and STDIN is empty
+     * Note: It is not possible to distinguish these failure modes from the return value.
      */
     public static function loadInput(string $file, $stream = null): ?string
     {

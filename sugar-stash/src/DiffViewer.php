@@ -81,6 +81,9 @@ final readonly class DiffViewer
 
     public function withHunkCursor(int $cursor): self
     {
+        if ($this->hunkStarts === []) {
+            return new self(lines: $this->lines, hunkCursor: 0, path: $this->path, hunkStarts: [], header: $this->header);
+        }
         $max = count($this->hunkStarts) - 1;
         $newIdx = max(0, min($cursor, $max >= 0 ? $max : 0));
         $lineIdx = ($max >= 0 && isset($this->hunkStarts[$newIdx]))
