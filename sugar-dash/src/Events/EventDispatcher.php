@@ -9,7 +9,7 @@ namespace SugarCraft\Dash\Events;
  */
 final class EventDispatcher
 {
-    /** @var array<string, list<EventHandler>> */
+    /** @var array<string, list<callable>> */
     private array $listeners = [];
 
     /** @var array<string, list<int>> */
@@ -30,7 +30,7 @@ final class EventDispatcher
      *
      * @template T of Event
      * @param class-string<T>|string $eventType
-     * @param EventHandler<T> $handler
+     * @param callable(T): void $handler
      */
     public function on(string $eventType, callable $handler): self
     {
@@ -48,7 +48,7 @@ final class EventDispatcher
      *
      * @template T of Event
      * @param class-string<T>|string $eventType
-     * @param EventHandler<T> $handler
+     * @param callable(T): void $handler
      */
     public function once(string $eventType, callable $handler): self
     {
