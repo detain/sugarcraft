@@ -54,4 +54,14 @@ final class SpyDecoder implements Decoder
             yield $frame;
         }
     }
+
+    /**
+     * @inheritDoc
+     *
+     * Resets the index (same as open()).
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    {
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+    }
 }

@@ -98,37 +98,39 @@ class TerminalProbe
     /**
      * Step 1: Check environment variables.
      *
+     * Uses DetectionChain for the core detection logic, with TerminalProbe-specific
+     * overrides for WT_SESSION and GOOGLE_CLOUD_SHELL (set-but-don't-return behavior).
+     *
      * @return array<Capability, string>
      */
     private function checkEnvVars(): array
     {
         $caps = [];
 
-        // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything)
-        if ($this->getEnv('CLICOLOR_FORCE') === '1') {
-            $caps[capabilityKey(Capability::TrueColor)] = 'env:CLICOLOR_FORCE';
+        // 1-5: Use DetectionChain via env array for clean early-exit checks
+        $chain = DetectionChain::detect($this->env);
+
+        // Map DetectionChain level to early-exit cases
+        if (!$chain->allowsColor()) {
+            // NO_COLOR, CLICOLOR=0, TERM=dumb all map to NoColor
+            $source = match (true) {
+                str_contains($chain->source(), 'CLICOLOR_FORCE') => 'env:CLICOLOR_FORCE',
+                str_contains($chain->source(), 'NO_COLOR') => 'env:NO_COLOR',
+                str_contains($chain->source(), 'CLICOLOR=0') => 'env:CLICOLOR=0',
+                str_contains($chain->source(), 'TERM=dumb') => 'env:TERM=dumb',
+                default => $chain->source(),
+            };
+            $caps[capabilityKey(Capability::NoColor)] = $source;
             return $caps;
         }
 
-        // 2. NO_COLOR (any value) → NoColor
-        if ($this->getEnv('NO_COLOR') !== null) {
-            $caps[capabilityKey(Capability::NoColor)] = 'env:NO_COLOR';
-            return $caps;
+        if ($chain->level() === DetectionChain::LEVEL_TRUECOLOR
+            && !str_contains($chain->source(), 'COLORTERM')) {
+            // TrueColor from sources other than COLORTERM (which is handled below)
+            // Don't return - continue to check for xterm-kitty special case
         }
 
-        // 3. CLICOLOR=0 → NoColor
-        if ($this->getEnv('CLICOLOR') === '0') {
-            $caps[capabilityKey(Capability::NoColor)] = 'env:CLICOLOR=0';
-            return $caps;
-        }
-
-        // 4. TERM=dumb → NoColor
-        if ($this->getEnv('TERM') === 'dumb') {
-            $caps[capabilityKey(Capability::NoColor)] = 'env:TERM=dumb';
-            return $caps;
-        }
-
-        // 5. COLORTERM=24bit|truecolor|yes → TrueColor
+        // 5. COLORTERM=24bit|truecolor|yes → TrueColor (returns immediately)
         $colorterm = $this->getEnv('COLORTERM');
         if ($colorterm !== null) {
             $ctLower = strtolower($colorterm);
@@ -138,12 +140,12 @@ class TerminalProbe
             }
         }
 
-        // 6. WT_SESSION set → TrueColor (Windows Terminal)
+        // 6. WT_SESSION set → TrueColor (set but don't return - continue to step 8)
         if ($this->getEnv('WT_SESSION') !== null) {
             $caps[capabilityKey(Capability::TrueColor)] = 'env:WT_SESSION';
         }
 
-        // 7. GOOGLE_CLOUD_SHELL=true → TrueColor
+        // 7. GOOGLE_CLOUD_SHELL=true → TrueColor (set but don't return - continue to step 8)
         if ($this->getEnv('GOOGLE_CLOUD_SHELL') === 'true') {
             $caps[capabilityKey(Capability::TrueColor)] = 'env:GOOGLE_CLOUD_SHELL';
         }
@@ -176,7 +178,7 @@ class TerminalProbe
             return $caps;
         }
 
-        // 11. Default → Color16
+        // 11. Default (TERM is empty) → Color16
         if ($term === '') {
             $caps[capabilityKey(Capability::Color16)] = 'fallback:default';
         }

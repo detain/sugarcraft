@@ -370,6 +370,17 @@ final class FfmpegDecoder implements Decoder
     }
 
     /**
+     * @inheritDoc
+     *
+     * Closes and re-opens the decoder with the given parameters.
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    {
+        $this->close();
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+    }
+
+    /**
      * Return the cached fps value from the last open() call.
      *
      * Allows callers (e.g. Player) to retrieve the fps without re-probing

@@ -19,6 +19,7 @@ use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Msg\TickMsg;
+use SugarCraft\Reel\Tests\FakeDecoder;
 use SugarCraft\Reel\Render\FrameRenderer;
 use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
@@ -892,17 +893,18 @@ final class Player implements Model
     /**
      * Close-and-recreate the decoder at a given size+mode, advanced to $frameIndex.
      * Real paths close the old decoder first (fixes the F21 leak) and build a fresh
-     * one via DecoderFactory. The '/fake' test path cannot go through DecoderFactory,
-     * so it RE-OPENS the injected decoder instead (a mode-aware fake regenerates its
-     * frames at the new mode/size) — this is the test equivalent of a rebuild, not a
-     * real-process spawn.
+     * one via DecoderFactory. FakeDecoder cannot go through DecoderFactory,
+     * so it RE-OPENS via reopen() instead (a mode-aware fake regenerates its
+     * frames at the new mode/size) — this is the test equivalent of a rebuild,
+     * not a real-process spawn. Uses instanceof to avoid '/fake' path string
+     * comparison in production code.
      *
      * @return array{0: Decoder, 1: ?RgbFrame}
      */
     private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $frameIndex): array
     {
-        if ($this->videoPath === '/fake') {
-            $this->decoder->open($this->videoPath, $cellsW, $cellsH, $this->fps, $mode);
+        if ($this->decoder instanceof FakeDecoder) {
+            $this->decoder->reopen($this->videoPath, $cellsW, $cellsH, $this->fps, $mode);
             $decoder = $this->decoder;
         } else {
             $this->decoder->close();                 // F21: never leak the old ffmpeg process

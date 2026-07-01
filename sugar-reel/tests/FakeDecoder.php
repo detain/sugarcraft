@@ -17,7 +17,7 @@ use SugarCraft\Reel\Render\Mode;
 final class FakeDecoder implements Decoder
 {
     /** @var list<RgbFrame> */
-    private array $frames;
+    protected array $frames;
 
     private int $index = 0;
 
@@ -74,6 +74,20 @@ final class FakeDecoder implements Decoder
         while (($frame = $this->next()) !== null) {
             yield $frame;
         }
+    }
+
+    /**
+     * Re-open the decoder, resetting the frame index to replay the
+     * predetermined frame sequence from the start.
+     *
+     * Mirrors open() but preserves the existing frame sequence rather
+     * than re-allocating.
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    {
+        $this->index = 0;
+        $this->opened = true;
+        $this->everOpened = true;
     }
 
     /**

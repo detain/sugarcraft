@@ -139,4 +139,15 @@ final class GifDecoder implements Decoder
         $this->frames = [];
         $this->frameIndex = 0;
     }
+
+    /**
+     * @inheritDoc
+     *
+     * Closes and re-opens the decoder with the given parameters.
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    {
+        $this->close();
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+    }
 }

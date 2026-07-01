@@ -27,70 +27,32 @@ final class Probe
 {
     /**
      * Negotiated color profile after walking every environment variable in precedence order.
+     *
+     * Uses DetectionChain for core env-based detection, then applies
+     * Probe-specific infocmp upgrade (phase 2).
      */
     public static function colorProfile(): ColorProfile
     {
-        // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything below)
+        // Use DetectionChain for the core detection (steps 1-11)
+        $chain = DetectionChain::detect();
+
+        // Handle CLICOLOR_FORCE=1 separately since it's checked first
+        // and DetectionChain doesn't differentiate force color from env-based detection
         if (self::isForceColor()) {
             return ColorProfile::TrueColor;
         }
 
-        // 2. NO_COLOR set (any value) → NoTTY
-        if (self::isNoColor()) {
-            return ColorProfile::NoTTY;
-        }
+        $profile = $chain->toColorProfile();
 
-        // 3. CLICOLOR=0 → NoTTY
-        if (self::clicolor() === '0') {
-            return ColorProfile::NoTTY;
-        }
-
-        // 4. TERM=dumb → NoTTY
-        if (self::term() === 'dumb') {
-            return ColorProfile::NoTTY;
-        }
-
-        // 5. COLORTERM=24bit|truecolor|yes → TrueColor
-        if (self::colorterm() === '24bit' || self::colorterm() === 'truecolor' || self::colorterm() === 'yes') {
-            return ColorProfile::TrueColor;
-        }
-
-        // 6. WT_SESSION set → TrueColor (Windows Terminal)
-        if (self::wtSession() !== null) {
-            return ColorProfile::TrueColor;
-        }
-
-        // 7. GOOGLE_CLOUD_SHELL=true → TrueColor
-        if (self::googleCloudShell() === 'true') {
-            return ColorProfile::TrueColor;
-        }
-
-        // 8. TMUX || STY set + base TERM checks tmux/screen first
-        $term = self::term() ?? '';
-        if (self::tmux() !== null || self::sty() !== null) {
-            if (self::termIsScreen($term) || self::termIsTmux($term)) {
-                return ColorProfile::Ansi256;
+        // Phase 2: infocmp Tc/RGB upgrade (Probe-specific)
+        if ($profile === ColorProfile::Ansi) {
+            $upgraded = self::infocmpUpgrade(ColorProfile::Ansi);
+            if ($upgraded === ColorProfile::TrueColor) {
+                return ColorProfile::TrueColor;
             }
         }
 
-        // 9. TERM=xterm-kitty|xterm-ghostty|*-256color → Ansi256
-        if (self::termIs256Color($term)) {
-            return ColorProfile::Ansi256;
-        }
-
-        // 10. TERM=xterm*|screen*|tmux* → Ansi
-        if (self::termIsXterm($term) || self::termIsScreen($term) || self::termIsTmux($term)) {
-            return ColorProfile::Ansi;
-        }
-
-        // 11. Default → Ansi
-        // Phase 2: infocmp Tc/RGB upgrade
-        $upgraded = self::infocmpUpgrade(ColorProfile::Ansi);
-        if ($upgraded === ColorProfile::TrueColor) {
-            return ColorProfile::TrueColor;
-        }
-
-        return ColorProfile::Ansi;
+        return $profile;
     }
 
     /**

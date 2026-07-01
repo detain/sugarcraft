@@ -45,4 +45,20 @@ interface Decoder
      * Close resources (pipes, processes) held by the decoder.
      */
     public function close(): void;
+
+    /**
+     * Re-open the decoder for a source file at the given grid size and fps.
+     *
+     * Unlike close() + open(), reopen() may reuse existing resources when
+     * appropriate (e.g., FakeDecoder resets its frame index without
+     * reallocating frames). Used as a test seam in rebuildDecoderAt().
+     *
+     * @param string $source Path to the video source (mp4, avi, gif, etc.)
+     * @param int $cellsW Target width in terminal cells
+     * @param int $cellsH Target height in terminal cells
+     * @param float $fps Target frames per second
+     * @param Mode|null $mode Rendering mode (null = HalfBlock for backward compatibility)
+     * @param float $startSec Seconds to seek into the source before the first frame
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void;
 }

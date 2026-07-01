@@ -172,15 +172,15 @@ final class Palette
     // -------------------------------------------------------------------------
 
     /**
-     * Core detection logic — aligned with Probe::colorProfile() SSOT.
+     * Core detection logic — uses DetectionChain for env-based detection.
      *
-     * Priority (mirrors Probe::colorProfile):
-     *  1. CLICOLOR_FORCE=1      → TrueColor (SugarCraft extension; supersedes all)
+     * Priority:
+     *  1. CLICOLOR_FORCE=1      → TrueColor (overrides everything)
      *  2. FORCE_COLOR           → SugarCraft extension level override (0=Ascii, 1=ANSI, 2=ANSI256, 3=TC)
      *  3. NO_COLOR (any value) → NoTTY
      *  4. CLICOLOR=0            → NoTTY
-     *  5. COLORTERM=24bit|truecolor|yes → TrueColor (before TERM=dumb, per Probe)
-     *  6. TERM_PROGRAM=iTerm.app → TrueColor
+     *  5. COLORTERM=24bit|truecolor|yes → TrueColor
+     *  6. TERM_PROGRAM=iTerm.app → TrueColor (Palette-specific, not in Probe)
      *  7. TERM=dumb             → NoTTY
      *  8. WT_SESSION set        → TrueColor (Windows Terminal)
      *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
@@ -198,8 +198,7 @@ final class Palette
             return Profile::TrueColor;
         }
 
-        // 2. FORCE_COLOR: SugarCraft extension (level-based)
-        // Use isset() so explicitly-passed '0' is honored and parent state can't leak.
+        // 2. FORCE_COLOR: SugarCraft extension (level-based) — not in DetectionChain
         $force = isset($env['FORCE_COLOR']) ? $env['FORCE_COLOR'] : (isset($_ENV['FORCE_COLOR']) ? $_ENV['FORCE_COLOR'] : \getenv('FORCE_COLOR'));
         if ($force !== null && $force !== '' && $force !== false) {
             $level = \intval($force);
@@ -211,75 +210,29 @@ final class Palette
             };
         }
 
-        // 3. NO_COLOR: presence (any value) disables colors.
-        if (\array_key_exists('NO_COLOR', $env)) {
+        // Use DetectionChain for core env-based detection (steps 3-12)
+        $chain = DetectionChain::detect($env);
+
+        // 3-7: Handle NO_COLOR, CLICOLOR=0, TERM=dumb via DetectionChain
+        if (!$chain->allowsColor()) {
+            // TERM_PROGRAM=iTerm.app check is Palette-specific (not in Probe/TerminalProbe)
+            $termProgram = $env['TERM_PROGRAM'] ?? $_ENV['TERM_PROGRAM'] ?? \getenv('TERM_PROGRAM') ?: null;
+            if ($termProgram === 'iTerm.app') {
+                return Profile::TrueColor;
+            }
             return Profile::NoTTY;
         }
 
-        // 4. CLICOLOR=0 → NoTTY
-        if (isset($env['CLICOLOR']) && $env['CLICOLOR'] === '0') {
-            return Profile::NoTTY;
-        }
+        // 8-12: Return the profile from DetectionChain
+        $profile = $chain->toProfile();
 
-        // 5. COLORTERM=24bit|truecolor|yes → TrueColor
-        $ct = $env['COLORTERM'] ?? $_ENV['COLORTERM'] ?? \getenv('COLORTERM') ?: null;
-        if (\is_string($ct) && \in_array(\strtolower($ct), ['24bit', 'truecolor', 'yes'], true)) {
-            return Profile::TrueColor;
-        }
-
-        // 6. TERM_PROGRAM=iTerm.app → TrueColor (iTerm2 supports TrueColor)
+        // TERM_PROGRAM=iTerm.app check (only if color is allowed)
         $termProgram = $env['TERM_PROGRAM'] ?? $_ENV['TERM_PROGRAM'] ?? \getenv('TERM_PROGRAM') ?: null;
         if ($termProgram === 'iTerm.app') {
             return Profile::TrueColor;
         }
 
-        // 7. TERM=dumb → NoTTY
-        $term = $env['TERM'] ?? \getenv('TERM') ?: '';
-        if ($term === 'dumb') {
-            return Profile::NoTTY;
-        }
-
-        // 8. WT_SESSION set → TrueColor (Windows Terminal)
-        $wtSession = $env['WT_SESSION'] ?? \getenv('WT_SESSION') ?: null;
-        if ($wtSession !== null && $wtSession !== '') {
-            return Profile::TrueColor;
-        }
-
-        // 9. GOOGLE_CLOUD_SHELL=true → TrueColor
-        $gcs = $env['GOOGLE_CLOUD_SHELL'] ?? \getenv('GOOGLE_CLOUD_SHELL') ?: null;
-        if ($gcs === 'true') {
-            return Profile::TrueColor;
-        }
-
-        // 10. TMUX||STY + base TERM screen/tmux → ANSI256
-        $tmux = $env['TMUX'] ?? \getenv('TMUX') ?: null;
-        $sty = $env['STY'] ?? \getenv('STY') ?: null;
-        $termLower = \strtolower($term);
-        if (($tmux !== null && $tmux !== '') || ($sty !== null && $sty !== '')) {
-            if (\str_starts_with($termLower, 'screen') || \str_starts_with($termLower, 'tmux')) {
-                return Profile::ANSI256;
-            }
-        }
-
-        // 10. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
-        if (
-            \str_contains($termLower, '-256color')
-            || $termLower === 'xterm-kitty'
-            || $termLower === 'xterm-ghostty'
-        ) {
-            return Profile::ANSI256;
-        }
-
-        // 11. TERM=xterm*|screen*|tmux* → ANSI
-        if (
-            \str_starts_with($termLower, 'xterm')
-            || \str_starts_with($termLower, 'screen')
-            || \str_starts_with($termLower, 'tmux')
-        ) {
-            return Profile::ANSI;
-        }
-
-        // 12. TTY detection
+        // 13. TTY detection — Palette-specific (Probe and TerminalProbe don't check TTY)
         if ($stream !== null && \function_exists('stream_isatty')) {
             if (!@\stream_isatty($stream)) {
                 return Profile::NoTTY;
@@ -290,8 +243,7 @@ final class Palette
             }
         }
 
-        // 13. Default → ANSI (not ANSI256, matching Probe)
-        return Profile::ANSI;
+        return $profile;
     }
 
     /**
