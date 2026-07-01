@@ -274,9 +274,81 @@ final class TapeRecorderTest extends TestCase
         $this->assertSame('Right', $result);
     }
 
-    public function testKeyMsgToVhsReturnsNullForUnsupported(): void
+    public function testKeyMsgToVhsWithHome(): void
     {
         $msg = new KeyMsg(type: KeyType::Home, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('Home', $result);
+    }
+
+    public function testKeyMsgToVhsWithEnd(): void
+    {
+        $msg = new KeyMsg(type: KeyType::End, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('End', $result);
+    }
+
+    public function testKeyMsgToVhsWithPageUp(): void
+    {
+        $msg = new KeyMsg(type: KeyType::PageUp, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('PageUp', $result);
+    }
+
+    public function testKeyMsgToVhsWithPageDown(): void
+    {
+        $msg = new KeyMsg(type: KeyType::PageDown, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('PageDown', $result);
+    }
+
+    public function testKeyMsgToVhsWithDelete(): void
+    {
+        $msg = new KeyMsg(type: KeyType::Delete, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('Delete', $result);
+    }
+
+    public function testKeyMsgToVhsWithInsert(): void
+    {
+        $msg = new KeyMsg(type: KeyType::Insert, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('Insert', $result);
+    }
+
+    public function testKeyMsgToVhsWithF1(): void
+    {
+        $msg = new KeyMsg(type: KeyType::F1, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('F1', $result);
+    }
+
+    public function testKeyMsgToVhsWithF12(): void
+    {
+        $msg = new KeyMsg(type: KeyType::F12, rune: '');
+
+        $result = TapeRecorder::keyMsgToVhs($msg);
+
+        $this->assertSame('F12', $result);
+    }
+
+    public function testKeyMsgToVhsReturnsNullForUnsupported(): void
+    {
+        $msg = new KeyMsg(type: KeyType::CapsLock, rune: '');
 
         $result = TapeRecorder::keyMsgToVhs($msg);
 
