@@ -128,6 +128,18 @@ final class ChafaRenderer implements Renderer
         return 'chafa';
     }
 
+    /**
+     * Reset the memoised availability check.
+     *
+     * For long-running CLI tools that may install chafa after startup,
+     * call this to force a fresh probe rather than relying on the
+     * per-process memoised result.
+     */
+    public static function reset(): void
+    {
+        self::$available = null;
+    }
+
     public function supportsAlpha(): bool
     {
         return true;

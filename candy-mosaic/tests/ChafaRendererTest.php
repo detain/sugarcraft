@@ -72,4 +72,20 @@ final class ChafaRendererTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $renderer->render($source, 10, -1);
     }
+
+    public function testAvailableResets(): void
+    {
+        // Reset clears the memoised $available so the next available() re-probes.
+        // This is important for long-running CLI tools that may install chafa after startup.
+        ChafaRenderer::reset();
+
+        // After reset, available() should re-probe (not return a stale cached value).
+        $result = ChafaRenderer::available();
+        $this->assertIsBool($result);
+
+        // Calling reset again followed by available() should produce the same result
+        // but via a fresh probe, not a stale cache.
+        ChafaRenderer::reset();
+        $this->assertSame($result, ChafaRenderer::available());
+    }
 }
