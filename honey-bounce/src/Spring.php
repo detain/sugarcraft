@@ -21,6 +21,9 @@ final class Spring
 {
     private const EPSILON = 1e-9;
 
+    /** Threshold below which a spring is considered settled (resting at target). */
+    public const SETTLING_THRESHOLD = 1e-4;
+
     private readonly float $posPosCoef;
     private readonly float $posVelCoef;
     private readonly float $velPosCoef;

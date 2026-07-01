@@ -46,25 +46,46 @@ final class Theme
         }
     }
 
-    /** @return Style */
+    /**
+     * @return Style
+     * @since 1.0.0
+     */
     public function success(): Style { return $this->success; }
 
-    /** @return Style */
+    /**
+     * @return Style
+     * @since 1.0.0
+     */
     public function error(): Style { return $this->error; }
 
-    /** @return Style */
+    /**
+     * @return Style
+     * @since 1.0.0
+     */
     public function warn(): Style { return $this->warn; }
 
-    /** @return Style */
+    /**
+     * @return Style
+     * @since 1.0.0
+     */
     public function info(): Style { return $this->info; }
 
-    /** @return Style */
+    /**
+     * @return Style
+     * @since 1.0.0
+     */
     public function prompt(): Style { return $this->prompt; }
 
-    /** @return Style */
+    /**
+     * @return Style
+     * @since 1.0.0
+     */
     public function accent(): Style { return $this->accent; }
 
-    /** @return Style */
+    /**
+     * @return Style
+     * @since 1.0.0
+     */
     public function muted(): Style { return $this->muted; }
 
     public static function ansi(): self
