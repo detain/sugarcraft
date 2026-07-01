@@ -72,7 +72,9 @@ final class Player implements Model
         }
         if ($msg instanceof TickMsg && !$this->paused && $this->frames !== []) {
             $next = $this->withIndex($this->index + 1);
-            return [$next, $next->scheduleTick()];
+            // Use $this (current frame) not $next (advanced frame) so that
+            // scheduleTick() reads the CURRENT frame's delay, not the next.
+            return [$next, $this->scheduleTick()];
         }
         if ($msg instanceof WindowSizeMsg) {
             // Re-clamp renderer to new window size, reserving one row for the status line.
