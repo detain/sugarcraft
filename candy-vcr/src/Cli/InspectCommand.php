@@ -116,7 +116,9 @@ final class InspectCommand implements Command
 
         $total = 0;
         $unique = 0;
+        $dedupCount = 0;
         $prev = null;
+        $prevUnique = null;
 
         foreach ($stream as $snapshot) {
             $total++;
@@ -130,16 +132,14 @@ final class InspectCommand implements Command
             ));
             if ($prev === null || !$snapshot->equals($prev)) {
                 $unique++;
+                // Track consecutive unique snapshots for dedup count
+                if ($prevUnique === null || !$snapshot->equals($prevUnique)) {
+                    $dedupCount++;
+                }
+                $prevUnique = $snapshot;
             }
             $prev = $snapshot;
         }
-
-        // FrameDedup walks the stream again — but FrameStream is a fresh
-        // generator on each iteration, so this is safe. We could instead
-        // tally inline against `$prev` above; doing it this way keeps the
-        // dedup count consistent with the actual encoder pipeline.
-        $stream2 = (new Renderer())->render(new Player($cassette), $terminal, $fps);
-        $dedupCount = iterator_count(FrameDedup::dedup($stream2));
 
         fwrite($stdout, sprintf(
             "\nframes: %d  unique: %d  deduped: %d\n",

@@ -198,6 +198,9 @@ final class RelativeFormat implements Format
             throw new \RuntimeException("candy-vcr: event on line {$lineNo} has unknown kind '{$bad}'");
         }
         $dt = (float) $data['dt'];
+        if ($dt < 0) {
+            throw new \InvalidArgumentException("candy-vcr: negative dt on line {$lineNo}");
+        }
         $absoluteT = round($cumulativeBase + $dt, self::T_PRECISION);
         unset($data['dt'], $data['k']);
         return new Event(t: $absoluteT, kind: $kind, payload: $data);
