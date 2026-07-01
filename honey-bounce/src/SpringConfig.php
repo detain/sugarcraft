@@ -30,7 +30,12 @@ final readonly class SpringConfig
         public float $friction,
         public float $mass,
     ) {
-        $safeMass   = max(0.001, $mass);
+        if ($mass <= 0.0) {
+            throw new \InvalidArgumentException(
+                "SpringConfig mass must be > 0; got {$mass}"
+            );
+        }
+        $safeMass   = $mass;
         $safeTension = max(0.0, $tension);
 
         $root = sqrt($safeTension * $safeMass);
