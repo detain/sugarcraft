@@ -32,6 +32,16 @@ final class Progress
     public readonly int $width;
     public readonly string $fullChar;
     public readonly string $emptyChar;
+    public readonly bool $showPercent;
+    public readonly ?Color $fillColor;
+    public readonly ?Color $emptyColor;
+    public readonly ColorProfile $profile;
+    public readonly ?Color $gradientStart;
+    public readonly ?Color $gradientEnd;
+    public readonly string $percentFormat;
+    public readonly bool $showValue;
+    public readonly string $showValueFormat;
+    public readonly ProgressRenderMode $renderMode;
 
     /** @var list<Color> */
     public readonly array $gradientStops;

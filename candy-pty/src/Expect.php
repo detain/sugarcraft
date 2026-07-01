@@ -322,7 +322,8 @@ final class Expect
                 ? \substr($buffer, -$this->searchWindow)
                 : $buffer;
 
-            $rc = \preg_match($regex, $searchBuffer, $matches, PREG_OFFSET_CAPTURE);
+            // Suppress warning for invalid regex — we handle the false case below.
+            $rc = @\preg_match($regex, $searchBuffer, $matches, PREG_OFFSET_CAPTURE);
             if ($rc === false) {
                 $error = \preg_last_error();
                 $msg = \preg_last_error_msg() ?: "preg_match failed (error code {$error})";
