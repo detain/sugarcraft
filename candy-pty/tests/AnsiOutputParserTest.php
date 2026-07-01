@@ -103,13 +103,27 @@ final class AnsiOutputParserTest extends TestCase
         $this->assertSame(SgrState::COLOR_RED, $after->foreground);
     }
 
-    public function testReadChunkWithTransitionsReturnsEmptyOnResetAfterChange(): void
+    public function testReadChunkWithTransitionsReturnsTransitionOnResetAfterChange(): void
     {
+        // \x1b[31m = SGR 1 (red foreground), \x1b[0m = SGR 0 (reset)
+        // This produces TWO transitions:
+        //   1. default → red (on \x1b[31m)
+        //   2. red → reset/default (on \x1b[0m)
         $master = new FakeMasterPty2("\x1b[31m\x1b[0m");
         $parser = AnsiOutputParser::forMaster($master);
 
         $transitions = $parser->readChunkWithTransitions(0.001);
-        $this->assertSame([], $transitions);
+        $this->assertCount(2, $transitions);
+
+        // Transition 1: default → red
+        [$from1, $to1] = $transitions[0];
+        $this->assertSame(SgrState::COLOR_DEFAULT, $from1->foreground);
+        $this->assertSame(SgrState::COLOR_RED, $to1->foreground);
+
+        // Transition 2: red → reset (back to default)
+        [$from2, $to2] = $transitions[1];
+        $this->assertSame(SgrState::COLOR_RED, $from2->foreground);
+        $this->assertSame(SgrState::COLOR_DEFAULT, $to2->foreground);
     }
 
     public function testStateReturnsHandlerState(): void
