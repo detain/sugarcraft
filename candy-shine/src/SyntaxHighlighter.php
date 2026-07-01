@@ -109,14 +109,41 @@ final class SyntaxHighlighter
         $lines = explode("\n", $highlighted);
         $paddedWidth = strlen((string) count($lines));
 
-        foreach ($lines as $index => &$line) {
-            $lineNum = $index + 1;
-            $padded  = str_pad((string) $lineNum, $paddedWidth, ' ', STR_PAD_LEFT);
-            $styled  = $commentStyle?->render($padded) ?? $padded;
-            $line    = $styled . "\t" . $line;
-        }
+        return implode("\n", array_map(
+            static function (string $line, int $i) use ($commentStyle, $paddedWidth): string {
+                $padded = str_pad((string) ($i + 1), $paddedWidth, ' ', STR_PAD_LEFT);
+                $styled = $commentStyle?->render($padded) ?? $padded;
+                return $styled . "\t" . $line;
+            },
+            $lines,
+            array_keys($lines),
+        ));
+    }
 
-        return implode("\n", $lines);
+    /** @var array<string, string> cached compiled regex patterns, keyed by keyword list */
+    private static array $patternCache = [];
+
+    /**
+     * @param list<string> $keywords
+     */
+    private static function getPattern(array $keywords): string
+    {
+        $key = implode("\x00", $keywords);
+        return self::$patternCache[$key] ??= self::buildPattern($keywords);
+    }
+
+    /**
+     * @param list<string> $keywords
+     */
+    private static function buildPattern(array $keywords): string
+    {
+        $kw = implode('|', array_map(static fn(string $k): string => preg_quote($k, '/'), $keywords));
+        return '/'
+            . '(?P<comment>\/\/[^\n]*|\#[^\n]*|\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/|<!--(?:[^-]|-(?!->))*-->)'
+            . '|(?P<string>"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`)'
+            . '|(?P<keyword>\b(?:' . $kw . ')\b)'
+            . '|(?P<number>\b\d+(?:\.\d+)?\b)'
+            . '/su';
     }
 
     /**
@@ -127,13 +154,7 @@ final class SyntaxHighlighter
         // Build a single combined regex with named alternatives. Order
         // matters — comment/string before keyword/number so the latter
         // can't match inside the former.
-        $kw = implode('|', array_map(static fn(string $k): string => preg_quote($k, '/'), $keywords));
-        $pattern = '/'
-            . '(?P<comment>\/\/[^\n]*|\#[^\n]*|\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/|<!--(?:[^-]|-(?!->))*-->)'
-            . '|(?P<string>"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`)'
-            . '|(?P<keyword>\b(?:' . $kw . ')\b)'
-            . '|(?P<number>\b\d+(?:\.\d+)?\b)'
-            . '/su';
+        $pattern = self::getPattern($keywords);
 
         $base = $theme->codeBlock ?? null;
         $out  = '';
