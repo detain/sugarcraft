@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Palette\Probe;
 
+use SugarCraft\Palette\DetectionChain;
+
 /**
  * Terminal capability probe — the single source of truth for capability detection.
  *
@@ -107,14 +109,18 @@ class TerminalProbe
     {
         $caps = [];
 
-        // 1-5: Use DetectionChain via env array for clean early-exit checks
+        // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything, including NO_COLOR)
+        if ($this->getEnv('CLICOLOR_FORCE') === '1') {
+            $caps[capabilityKey(Capability::TrueColor)] = 'env:CLICOLOR_FORCE';
+            return $caps;
+        }
+
+        // Use DetectionChain for NO_COLOR, CLICOLOR=0, TERM=dumb, COLORTERM, and TERM patterns
         $chain = DetectionChain::detect($this->env);
 
-        // Map DetectionChain level to early-exit cases
+        // 2-4: Handle NO_COLOR, CLICOLOR=0, TERM=dumb via DetectionChain
         if (!$chain->allowsColor()) {
-            // NO_COLOR, CLICOLOR=0, TERM=dumb all map to NoColor
             $source = match (true) {
-                str_contains($chain->source(), 'CLICOLOR_FORCE') => 'env:CLICOLOR_FORCE',
                 str_contains($chain->source(), 'NO_COLOR') => 'env:NO_COLOR',
                 str_contains($chain->source(), 'CLICOLOR=0') => 'env:CLICOLOR=0',
                 str_contains($chain->source(), 'TERM=dumb') => 'env:TERM=dumb',
@@ -124,10 +130,11 @@ class TerminalProbe
             return $caps;
         }
 
+        // 5. TrueColor from sources other than COLORTERM (which is handled below)
+        // CLICOLOR_FORCE=1 was already handled above, so this catches WT_SESSION, GOOGLE_CLOUD_SHELL, etc.
         if ($chain->level() === DetectionChain::LEVEL_TRUECOLOR
             && !str_contains($chain->source(), 'COLORTERM')) {
-            // TrueColor from sources other than COLORTERM (which is handled below)
-            // Don't return - continue to check for xterm-kitty special case
+            // These set TrueColor but don't return - continue to check TMUX||STY
         }
 
         // 5. COLORTERM=24bit|truecolor|yes → TrueColor (returns immediately)

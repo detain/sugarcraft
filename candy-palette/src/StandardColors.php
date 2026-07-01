@@ -38,31 +38,39 @@ final class StandardColors
     public static Color $brightCyan;
     public static Color $brightWhite;
 
+    /** @var array<int, Color>|null Cached return value of all() */
+    private static ?array $cachedAll = null;
+
     /**
      * All 16 colors as an indexed array.
+     *
+     * Returns the same array instance on repeated calls (static caching).
      *
      * @return array<int, Color>
      */
     public static function all(): array
     {
-        return [
-            self::$black,
-            self::$red,
-            self::$green,
-            self::$yellow,
-            self::$blue,
-            self::$magenta,
-            self::$cyan,
-            self::$white,
-            self::$brightBlack,
-            self::$brightRed,
-            self::$brightGreen,
-            self::$brightYellow,
-            self::$brightBlue,
-            self::$brightMagenta,
-            self::$brightCyan,
-            self::$brightWhite,
-        ];
+        if (self::$cachedAll === null) {
+            self::$cachedAll = [
+                self::$black,
+                self::$red,
+                self::$green,
+                self::$yellow,
+                self::$blue,
+                self::$magenta,
+                self::$cyan,
+                self::$white,
+                self::$brightBlack,
+                self::$brightRed,
+                self::$brightGreen,
+                self::$brightYellow,
+                self::$brightBlue,
+                self::$brightMagenta,
+                self::$brightCyan,
+                self::$brightWhite,
+            ];
+        }
+        return self::$cachedAll;
     }
 
     /**
