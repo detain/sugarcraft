@@ -40,3 +40,27 @@ Anti-pattern: Do not normalise or collapse U+E000+ during text
 processing — the sentinel codepoints would be lost and zones would fail to
 parse.
 Source: step-05 ai/candy-mouse-new
+
+## Synchronous-only design (async gap)
+
+- candy-mouse is **synchronous-only** — no ReactPHP async integration.
+- `ZoneClickTracker::track()` and `Scanner::hit()` are blocking operations.
+- If async TUI use cases emerge, consider an async variant of the scanner.
+Source: plan_candy-mouse.md — Item 5.1
+
+## O(n) Scanner::hit() — spatial index opportunity
+
+- `Scanner::hit()` performs a linear O(n) scan over all zones.
+- For n > 100 interactive zones (tables, lists), consider a grid-based
+  spatial index or sorting zones by area as a heuristic.
+- This is a known limitation documented in `Scanner.php:83-86`.
+Source: plan_candy-mouse.md — Item 5.2
+
+## Memoization opportunity for repeated scans
+
+- `Scan::parse()` processes the entire rendered string in one pass.
+- For static UIs where the terminal buffer rarely changes, caching or
+  memoizing scan results could avoid redundant parsing.
+- A `ScanIterator` (implementing `IteratorAggregate`) could also yield
+  zones incrementally to support streaming renderers.
+Source: plan_candy-mouse.md — Item 5.3
