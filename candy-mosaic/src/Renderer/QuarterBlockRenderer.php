@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mosaic\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\ColorUtil;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Lang;
 use SugarCraft\Mosaic\PixelGrid;
@@ -20,6 +21,7 @@ use SugarCraft\Mosaic\PixelGrid;
  */
 final class QuarterBlockRenderer implements Renderer
 {
+    use \SugarCraft\Mosaic\Concerns\RenderValidationTrait;
     /**
      * 16 Unicode quadrant glyphs indexed by a 4-bit mask of which quadrants
      * belong to the FOREGROUND group: bit 0 = upper-left, bit 1 = upper-right,
@@ -50,18 +52,7 @@ final class QuarterBlockRenderer implements Renderer
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
-        if ($width <= 0) {
-            throw new \InvalidArgumentException(Lang::t('renderer.invalid_width', ['width' => $width]));
-        }
-
-        if ($height !== null && $height <= 0) {
-            throw new \InvalidArgumentException(Lang::t('renderer.invalid_height', ['height' => $height]));
-        }
-
-        $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
-        if ($effectiveHeight <= 0) {
-            $effectiveHeight = 1;
-        }
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         $img = imagecreatefromstring($image->bytes);
         if ($img === false) {
@@ -99,13 +90,43 @@ final class QuarterBlockRenderer implements Renderer
      */
     private static function renderCell(array $quads): string
     {
-        // Most-distant pair seeds the two colour groups.
+        [$a, $b] = self::findSeedPair($quads);
+
+        // A flat cell — all four quadrants identical — is a solid block.
+        if (ColorUtil::squaredDistance($quads[$a], $quads[$b]) === 0) {
+            [$r, $g, $b] = $quads[0];
+            return Ansi::fgRgb($r, $g, $b) . Ansi::bgRgb($r, $g, $b) . self::GLYPH_MAP[15] . Ansi::reset();
+        }
+
+        // Brighter seed is the foreground.
+        [$fgSeed, $bgSeed] = ColorUtil::luma($quads[$a][0], $quads[$a][1], $quads[$a][2])
+            >= ColorUtil::luma($quads[$b][0], $quads[$b][1], $quads[$b][2])
+            ? [$quads[$a], $quads[$b]]
+            : [$quads[$b], $quads[$a]];
+
+        [$mask, $fgSum, $bgSum, $fgN, $bgN] = self::groupQuadrantsBySeed($quads, $fgSeed, $bgSeed);
+        [$fg, $bg] = self::computeCellColors($fgSeed, $bgSeed, $fgSum, $fgN, $bgSum, $bgN);
+
+        return Ansi::fgRgb($fg[0], $fg[1], $fg[2])
+            . Ansi::bgRgb($bg[0], $bg[1], $bg[2])
+            . self::GLYPH_MAP[$mask]
+            . Ansi::reset();
+    }
+
+    /**
+     * Find the indices of the two most-distant quadrants.
+     *
+     * @param list<array{int,int,int}> $quads
+     * @return array{0:int, 1:int} Indices of the most-distant pair
+     */
+    private static function findSeedPair(array $quads): array
+    {
         $maxD = -1;
         $a = 0;
         $b = 0;
         for ($i = 0; $i < 4; $i++) {
             for ($j = $i + 1; $j < 4; $j++) {
-                $d = self::dist($quads[$i], $quads[$j]);
+                $d = ColorUtil::squaredDistance($quads[$i], $quads[$j]);
                 if ($d > $maxD) {
                     $maxD = $d;
                     $a = $i;
@@ -113,25 +134,26 @@ final class QuarterBlockRenderer implements Renderer
                 }
             }
         }
+        return [$a, $b];
+    }
 
-        // A flat cell — all four quadrants identical — is a solid block.
-        if ($maxD === 0) {
-            [$r, $g, $b0] = $quads[0];
-            return Ansi::fgRgb($r, $g, $b0) . Ansi::bgRgb($r, $g, $b0) . self::GLYPH_MAP[15] . Ansi::reset();
-        }
-
-        // Brighter seed is the foreground.
-        [$fgSeed, $bgSeed] = self::luma($quads[$a]) >= self::luma($quads[$b])
-            ? [$quads[$a], $quads[$b]]
-            : [$quads[$b], $quads[$a]];
-
+    /**
+     * Group quadrants by their nearest seed colour.
+     *
+     * @param list<array{int,int,int}> $quads
+     * @param array{int,int,int} $fgSeed
+     * @param array{int,int,int} $bgSeed
+     * @return array{0:int, 1:array, 2:array, 3:int, 4:int} mask, fgSum, bgSum, fgN, bgN
+     */
+    private static function groupQuadrantsBySeed(array $quads, array $fgSeed, array $bgSeed): array
+    {
         $mask = 0;
         $fgSum = [0, 0, 0];
         $bgSum = [0, 0, 0];
         $fgN = 0;
         $bgN = 0;
         for ($i = 0; $i < 4; $i++) {
-            if (self::dist($quads[$i], $fgSeed) <= self::dist($quads[$i], $bgSeed)) {
+            if (ColorUtil::squaredDistance($quads[$i], $fgSeed) <= ColorUtil::squaredDistance($quads[$i], $bgSeed)) {
                 $mask |= (1 << $i);
                 $fgSum[0] += $quads[$i][0];
                 $fgSum[1] += $quads[$i][1];
@@ -144,32 +166,35 @@ final class QuarterBlockRenderer implements Renderer
                 $bgN++;
             }
         }
-
-        $fg = $fgN > 0 ? [intdiv($fgSum[0], $fgN), intdiv($fgSum[1], $fgN), intdiv($fgSum[2], $fgN)] : $fgSeed;
-        $bg = $bgN > 0 ? [intdiv($bgSum[0], $bgN), intdiv($bgSum[1], $bgN), intdiv($bgSum[2], $bgN)] : $bgSeed;
-
-        return Ansi::fgRgb($fg[0], $fg[1], $fg[2])
-            . Ansi::bgRgb($bg[0], $bg[1], $bg[2])
-            . self::GLYPH_MAP[$mask]
-            . Ansi::reset();
+        return [$mask, $fgSum, $bgSum, $fgN, $bgN];
     }
 
     /**
-     * @param array{int,int,int} $x
-     * @param array{int,int,int} $y
+     * Compute averaged foreground and background colours from group sums.
+     *
+     * @param array{int,int,int} $fgSeed Fallback fg if group is empty
+     * @param array{int,int,int} $bgSeed Fallback bg if group is empty
+     * @param array{int,int,int} $fgSum
+     * @param int $fgN
+     * @param array{int,int,int} $bgSum
+     * @param int $bgN
+     * @return array{0:array, 1:array} fg, bg
      */
-    private static function dist(array $x, array $y): int
-    {
-        $dr = $x[0] - $y[0];
-        $dg = $x[1] - $y[1];
-        $db = $x[2] - $y[2];
-        return $dr * $dr + $dg * $dg + $db * $db;
-    }
-
-    /** @param array{int,int,int} $rgb */
-    private static function luma(array $rgb): int
-    {
-        return (($rgb[0] * 77) + ($rgb[1] * 150) + ($rgb[2] * 29)) >> 8;
+    private static function computeCellColors(
+        array $fgSeed,
+        array $bgSeed,
+        array $fgSum,
+        int $fgN,
+        array $bgSum,
+        int $bgN,
+    ): array {
+        $fg = $fgN > 0
+            ? [intdiv($fgSum[0], $fgN), intdiv($fgSum[1], $fgN), intdiv($fgSum[2], $fgN)]
+            : $fgSeed;
+        $bg = $bgN > 0
+            ? [intdiv($bgSum[0], $bgN), intdiv($bgSum[1], $bgN), intdiv($bgSum[2], $bgN)]
+            : $bgSeed;
+        return [$fg, $bg];
     }
 
     public function name(): string

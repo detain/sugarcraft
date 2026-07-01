@@ -28,6 +28,8 @@ use SugarCraft\Mosaic\Lang;
  */
 final class SixelRenderer implements Renderer
 {
+    use \SugarCraft\Mosaic\Concerns\RenderValidationTrait;
+
     /**
      * @param int $cellWidth  Pixel width of a terminal cell — the render() cell
      *                        dimensions are multiplied by this so a sixel poster
@@ -49,22 +51,7 @@ final class SixelRenderer implements Renderer
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
-        if ($width <= 0) {
-            throw new \InvalidArgumentException(
-                Lang::t('renderer.invalid_width', ['width' => $width])
-            );
-        }
-
-        if ($height !== null && $height <= 0) {
-            throw new \InvalidArgumentException(
-                Lang::t('renderer.invalid_height', ['height' => $height])
-            );
-        }
-
-        $cellH = $height ?? (int) round($width / $image->aspectRatio());
-        if ($cellH <= 0) {
-            $cellH = 1;
-        }
+        $cellH = $this->prepareRender($image, $width, $height);
 
         // The cell box maps to a PIXEL canvas (cells × terminal cell size) so the
         // image fills its area; one device-pixel-per-cell would be microscopic.
@@ -578,37 +565,53 @@ final class SixelRenderer implements Renderer
             $first = false;
 
             $out .= Ansi::sixelColorSelect($palIndex);
+            $out .= $this->emitRleForColor($grid, $palIndex, $bandTop, $bandBottom, $width);
+        }
 
-            $col      = 0;
-            $runCount = 0;
-            $prevBits = -1;
+        return $out;
+    }
 
-            while ($col < $width) {
-                // The data byte holds ONLY the 6-row bitmask for the active
-                // colour (the colour itself was selected above) — the previous
-                // `palIndex << 6` corrupted every byte.
-                $bits = 0;
-                for ($row = $bandTop; $row < $bandBottom; $row++) {
-                    if (($grid[$row][$col] ?? 0) === $palIndex) {
-                        $bits |= (1 << ($row - $bandTop));
-                    }
+    /**
+     * Emit RLE-encoded sixel data for one colour across an entire band width.
+     *
+     * @param list<list<int>> $grid
+     */
+    private function emitRleForColor(
+        array $grid,
+        int $palIndex,
+        int $bandTop,
+        int $bandBottom,
+        int $width,
+    ): string {
+        $out = '';
+        $col = 0;
+        $runCount = 0;
+        $prevBits = -1;
+
+        while ($col < $width) {
+            // The data byte holds ONLY the 6-row bitmask for the active
+            // colour (the colour itself was selected above).
+            $bits = 0;
+            for ($row = $bandTop; $row < $bandBottom; $row++) {
+                if (($grid[$row][$col] ?? 0) === $palIndex) {
+                    $bits |= (1 << ($row - $bandTop));
                 }
-
-                if ($bits === $prevBits) {
-                    $runCount++;
-                } else {
-                    if ($runCount > 0) {
-                        $out .= $this->emitRle($prevBits, $runCount);
-                    }
-                    $prevBits = $bits;
-                    $runCount = 1;
-                }
-                $col++;
             }
 
-            if ($runCount > 0) {
-                $out .= $this->emitRle($prevBits, $runCount);
+            if ($bits === $prevBits) {
+                $runCount++;
+            } else {
+                if ($runCount > 0) {
+                    $out .= $this->emitRle($prevBits, $runCount);
+                }
+                $prevBits = $bits;
+                $runCount = 1;
             }
+            $col++;
+        }
+
+        if ($runCount > 0) {
+            $out .= $this->emitRle($prevBits, $runCount);
         }
 
         return $out;

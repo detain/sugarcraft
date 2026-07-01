@@ -18,20 +18,11 @@ use SugarCraft\Mosaic\Lang;
  */
 final class Iterm2Renderer implements Renderer
 {
+    use \SugarCraft\Mosaic\Concerns\RenderValidationTrait;
+
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
-        if ($width <= 0) {
-            throw new \InvalidArgumentException(Lang::t('renderer.invalid_width', ['width' => $width]));
-        }
-
-        if ($height !== null && $height <= 0) {
-            throw new \InvalidArgumentException(Lang::t('renderer.invalid_height', ['height' => $height]));
-        }
-
-        $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
-        if ($effectiveHeight <= 0) {
-            $effectiveHeight = 1;
-        }
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         // Use the stored bytes directly if already PNG, otherwise re-encode.
         if ($image->format === 'image/png') {
