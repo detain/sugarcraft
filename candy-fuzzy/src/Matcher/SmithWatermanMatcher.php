@@ -111,10 +111,8 @@ final class SmithWatermanMatcher implements FuzzyMatcher
     /**
      * Compute match result with traceback for matched indices.
      *
-     * LOCAL ALIGNMENT CONSTRAINT: This implementation requires every query character
-     * to appear in the candidate for a match (queryLen must be <= candidateLen).
-     * This is a stricter requirement than classical Smith-Waterman local alignment,
-     * which can find partial matches. The algorithm bails early when query > candidate.
+     * Bit-equivalent in score and ranking to SugarCraft\Forms\Fuzzy\FuzzyMatcher.
+     * Uses full Smith-Waterman local alignment with traceback for matched indices.
      */
     private function compute(string $query, string $candidate): ?MatchResult
     {
@@ -122,12 +120,6 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         $candidateLen = mb_strlen($candidate, 'UTF-8');
 
         if ($queryLen === 0 || $candidateLen === 0) {
-            return null;
-        }
-
-        // A full-query alignment requires every query char to appear in the candidate;
-        // if the query is longer than the candidate, no such alignment exists.
-        if ($queryLen > $candidateLen) {
             return null;
         }
 
