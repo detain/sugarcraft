@@ -34,5 +34,7 @@ return [
     'program.proc_open_failed'    => 'proc_open failed for: {cmd}',
 
     // Util/Validation.php
-    'errors.negative_not_allowed' => 'negative not allowed for {name}',
+    'errors.negative_not_allowed'  => 'negative not allowed for {name}',
+    'errors.value_must_be_positive' => '{name} must be positive, got {value}',
+    'errors.value_out_of_range'    => '{name} must be between {min} and {max}, got {value}',
 ];
