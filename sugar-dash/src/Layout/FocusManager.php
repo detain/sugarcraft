@@ -67,9 +67,13 @@ final class FocusManager
             return $this;
         }
 
-        $currentIndex = $this->focusedId !== null
-            ? array_search($this->focusedId, $ids, true)
-            : -1;
+        $currentIndex = -1;
+        if ($this->focusedId !== null) {
+            $idx = array_search($this->focusedId, $ids, true);
+            if ($idx !== false) {
+                $currentIndex = $idx;
+            }
+        }
 
         $nextIndex = ($currentIndex + 1) % count($ids);
         return $this->focus($ids[$nextIndex]);
@@ -82,9 +86,13 @@ final class FocusManager
             return $this;
         }
 
-        $currentIndex = $this->focusedId !== null
-            ? array_search($this->focusedId, $ids, true)
-            : 0;
+        $currentIndex = 0;
+        if ($this->focusedId !== null) {
+            $idx = array_search($this->focusedId, $ids, true);
+            if ($idx !== false) {
+                $currentIndex = $idx;
+            }
+        }
 
         $prevIndex = $currentIndex > 0 ? $currentIndex - 1 : count($ids) - 1;
         return $this->focus($ids[$prevIndex]);

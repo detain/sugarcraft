@@ -33,6 +33,38 @@ final readonly class ChartDataPoint
 }
 
 /**
+ * Render context for diff-based chart rendering.
+ *
+ * Tracks the previous frame and dimensions to enable efficient
+ * delta emission (only changed cells are sent). The context must
+ * be passed back to render() on subsequent calls with the same Chart.
+ */
+final class ChartRenderContext
+{
+    public function __construct(
+        public ?Buffer $previousFrame = null,
+        public ?int $prevWidth = null,
+        public ?int $prevHeight = null,
+    ) {}
+
+    /**
+     * Create a fresh context (no previous frame).
+     */
+    public static function fresh(): self
+    {
+        return new self();
+    }
+
+    /**
+     * Create a new context with updated values after render.
+     */
+    public function withNext(Buffer $frame, int $width, int $height): self
+    {
+        return new self(previousFrame: $frame, prevWidth: $width, prevHeight: $height);
+    }
+}
+
+/**
  * A bar/line chart component with axes, labels, and grid.
  *
  * Displays data as either vertical bars or connected line points.
@@ -46,17 +78,11 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     private ?int $width = null;
     private ?int $height = null;
 
-    /** @var Buffer|null Previous rendered frame for diff-based emission */
-    private ?Buffer $previousFrame = null;
-
-    /** @var int|null Previous output width for resize detection */
-    private ?int $prevWidth = null;
-
-    /** @var int|null Previous output height for resize detection */
-    private ?int $prevHeight = null;
-
     /** @var list<ChartDataPoint> */
     private array $dataPoints;
+
+    /** @var ChartRenderContext|null Render context for diff-based emission (avoids mutating scattered properties) */
+    private ?ChartRenderContext $renderContext = null;
 
     /**
      * Block characters for bar chart.
@@ -120,6 +146,11 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
      * On the first render (or after a resize), emits the full output.
      * On subsequent renders with the same dimensions, emits only the
      * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     *
+     * Uses a render-context object stored on the instance to track diff state
+     * instead of mutating multiple scattered properties ($previousFrame,
+     * $prevWidth, $prevHeight). This consolidates mutation into a single
+     * context object that can be reset via resetPreviousFrame().
      */
     public function render(): string
     {
@@ -127,11 +158,12 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         $chartHeight = $this->getChartHeight();
 
         // Detect window resize — reset diff state so we emit a full frame.
-        if ($this->prevWidth !== null && ($this->prevWidth !== $chartWidth || $this->prevHeight !== $chartHeight)) {
-            $this->previousFrame = null;
+        if ($this->renderContext !== null &&
+            ($this->renderContext->prevWidth !== null &&
+             ($this->renderContext->prevWidth !== $chartWidth ||
+              $this->renderContext->prevHeight !== $chartHeight))) {
+            $this->renderContext = null;
         }
-        $this->prevWidth = $chartWidth;
-        $this->prevHeight = $chartHeight;
 
         if ($chartWidth <= 0 || $chartHeight <= 0 || empty($this->dataPoints)) {
             return '';
@@ -158,15 +190,23 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // First frame or resize: emit full output and store as previousFrame.
-        if ($this->previousFrame === null) {
-            $this->previousFrame = $this->bufferFromOutput($output, $chartWidth, $chartHeight);
+        if ($this->renderContext === null) {
+            $this->renderContext = new ChartRenderContext(
+                previousFrame: $this->bufferFromOutput($output, $chartWidth, $chartHeight),
+                prevWidth: $chartWidth,
+                prevHeight: $chartHeight
+            );
             return $output;
         }
 
         // Subsequent frames with same dimensions: compute diff and emit delta.
         $currentFrame = $this->bufferFromOutput($output, $chartWidth, $chartHeight);
-        $ops = $currentFrame->diff($this->previousFrame);
-        $this->previousFrame = $currentFrame;
+        $ops = $currentFrame->diff($this->renderContext->previousFrame);
+        $this->renderContext = new ChartRenderContext(
+            previousFrame: $currentFrame,
+            prevWidth: $chartWidth,
+            prevHeight: $chartHeight
+        );
 
         $encoder = new DiffEncoder();
         return $encoder->encode($ops);
@@ -722,6 +762,6 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function resetPreviousFrame(): void
     {
-        $this->previousFrame = null;
+        $this->renderContext = null;
     }
 }
