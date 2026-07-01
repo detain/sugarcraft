@@ -16,7 +16,7 @@ namespace SugarCraft\Buffer;
  *
  * @readonly
  */
-final class Style
+final class Style implements \JsonSerializable
 {
     /** Attribute bits: bold=1, italic=2, underline=4, strike=8, … */
     public const ATTR_BOLD      = 1 << 0;
@@ -116,6 +116,62 @@ final class Style
             : ($this->attrs & ~self::ATTR_REVERSE)]);
     }
 
+    /** Return a new Style with italic toggled on or off. */
+    public function withItalic(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_ITALIC)
+            : ($this->attrs & ~self::ATTR_ITALIC)]);
+    }
+
+    /** Return a new Style with underline toggled on or off. */
+    public function withUnderline(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_UNDERLINE)
+            : ($this->attrs & ~self::ATTR_UNDERLINE)]);
+    }
+
+    /** Return a new Style with strike toggled on or off. */
+    public function withStrike(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_STRIKE)
+            : ($this->attrs & ~self::ATTR_STRIKE)]);
+    }
+
+    /** Return a new Style with faint toggled on or off. */
+    public function withFaint(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_FAINT)
+            : ($this->attrs & ~self::ATTR_FAINT)]);
+    }
+
+    /** Return a new Style with blink toggled on or off. */
+    public function withBlink(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_BLINK)
+            : ($this->attrs & ~self::ATTR_BLINK)]);
+    }
+
+    /** Return a new Style with overline toggled on or off. */
+    public function withOverline(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_OVERLINE)
+            : ($this->attrs & ~self::ATTR_OVERLINE)]);
+    }
+
+    /** Return a new Style with invisible toggled on or off. */
+    public function withInvisible(bool $on = true): self
+    {
+        return $this->mutate(['attrs' => $on
+            ? ($this->attrs | self::ATTR_INVISIBLE)
+            : ($this->attrs & ~self::ATTR_INVISIBLE)]);
+    }
+
     /**
      * Value equality: two styles are equal iff their fg, bg, and attrs
      * values are identical.
@@ -125,5 +181,37 @@ final class Style
         return $this->fg === $other->fg
             && $this->bg === $other->bg
             && $this->attrs === $other->attrs;
+    }
+
+    /**
+     * Serialization hook for caching/IPC use cases.
+     *
+     * @return array{fg: ?int, bg: ?int, attrs: int}
+     */
+    public function __serialize(): array
+    {
+        return ['fg' => $this->fg, 'bg' => $this->bg, 'attrs' => $this->attrs];
+    }
+
+    /**
+     * Unserialization hook for caching/IPC use cases.
+     *
+     * @param array{fg: ?int, bg: ?int, attrs: int} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->fg = $data['fg'];
+        $this->bg = $data['bg'];
+        $this->attrs = $data['attrs'];
+    }
+
+    /**
+     * JSON serialization support.
+     *
+     * @return array{fg: ?int, bg: ?int, attrs: int}
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__serialize();
     }
 }

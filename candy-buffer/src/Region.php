@@ -8,9 +8,13 @@ namespace SugarCraft\Buffer;
  * A rectangular sub-region of a Buffer, identified by its top-left
  * {@see Position} and dimensions.
  *
+ * Note: zero-width or zero-height regions are edge cases — a cell at
+ * the origin is contained only if the region has positive dimensions.
+ * See {@see contains()} for the zero-size boundary behaviour.
+ *
  * @readonly
  */
-final class Region
+final class Region implements \JsonSerializable
 {
     public function __construct(
         public readonly Position $origin,
@@ -46,6 +50,8 @@ final class Region
 
     /**
      * Whether a cell at ($col, $row) falls within this region.
+     *
+     * @see For zero-width/height edge cases, see class docblock.
      */
     public function contains(int $col, int $row): bool
     {
@@ -53,5 +59,41 @@ final class Region
             && $col <= $this->right()
             && $row >= $this->origin->row
             && $row <= $this->bottom();
+    }
+
+    /**
+     * Serialization hook for caching/IPC use cases.
+     *
+     * @return array{origin: array{col: int, row: int}, width: int, height: int}
+     */
+    public function __serialize(): array
+    {
+        return [
+            'origin' => $this->origin->__serialize(),
+            'width' => $this->width,
+            'height' => $this->height,
+        ];
+    }
+
+    /**
+     * Unserialization hook for caching/IPC use cases.
+     *
+     * @param array{origin: array{col: int, row: int}, width: int, height: int} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->origin = new Position($data['origin']['col'], $data['origin']['row']);
+        $this->width = $data['width'];
+        $this->height = $data['height'];
+    }
+
+    /**
+     * JSON serialization support.
+     *
+     * @return array{origin: array{col: int, row: int}, width: int, height: int}
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__serialize();
     }
 }

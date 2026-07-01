@@ -13,7 +13,7 @@ namespace SugarCraft\Buffer;
  *
  * @readonly
  */
-final class Hyperlink
+final class Hyperlink implements \JsonSerializable
 {
     public function __construct(
         public readonly string $url,
@@ -44,5 +44,36 @@ final class Hyperlink
     public function equals(self $other): bool
     {
         return $this->url === $other->url && $this->id === $other->id;
+    }
+
+    /**
+     * Serialization hook for caching/IPC use cases.
+     *
+     * @return array{url: string, id: string}
+     */
+    public function __serialize(): array
+    {
+        return ['url' => $this->url, 'id' => $this->id];
+    }
+
+    /**
+     * Unserialization hook for caching/IPC use cases.
+     *
+     * @param array{url: string, id: string} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->url = $data['url'];
+        $this->id = $data['id'];
+    }
+
+    /**
+     * JSON serialization support.
+     *
+     * @return array{url: string, id: string}
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__serialize();
     }
 }
