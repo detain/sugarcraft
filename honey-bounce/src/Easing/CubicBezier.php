@@ -39,6 +39,11 @@ final class CubicBezier
      */
     public function __construct(float $x1, float $y1, float $x2, float $y2)
     {
+        if ($x1 < 0.0 || $x1 > 1.0 || $x2 < 0.0 || $x2 > 1.0) {
+            throw new \InvalidArgumentException(
+                "CubicBezier control points must have x-values in [0, 1]; got x1={$x1}, x2={$x2}"
+            );
+        }
         $this->x1 = $x1;
         $this->y1 = $y1;
         $this->x2 = $x2;
