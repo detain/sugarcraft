@@ -30,9 +30,31 @@ final class Alert
         return \microtime(true) >= $this->expiresAt;
     }
 
+    /**
+     * Alias for withCancelledExpiry — makes the alert never expire.
+     */
+    public function withoutExpiry(): self
+    {
+        return $this->withCancelledExpiry();
+    }
+
     public function withCancelledExpiry(): self
     {
         return new self($this->type, $this->message, null, $this->progress, $this->actions);
+    }
+
+    /**
+     * Extend the expiry by $additionalSeconds from now.
+     */
+    public function withExtendedExpiry(float $additionalSeconds): self
+    {
+        return new self(
+            $this->type,
+            $this->message,
+            \microtime(true) + $additionalSeconds,
+            $this->progress,
+            $this->actions,
+        );
     }
 
     public function withExpiry(float $duration): self

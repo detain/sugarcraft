@@ -178,8 +178,10 @@ final class Toast
      *
      * When maxConcurrent is set and the queue would exceed it, applies
      * the configured overflow strategy (DropOldest, DropNewest, or Enqueue).
+     *
+     * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
      */
-    public function alert(ToastType|string $type, string $message, ?float $expiresAt = null): self
+    public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null): self
     {
         $resolvedType = $type instanceof ToastType
             ? $type
@@ -187,7 +189,7 @@ final class Toast
                 ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
 
         $clone = clone $this;
-        $alert = new Alert($resolvedType, $message, $expiresAt);
+        $alert = new Alert($resolvedType, $message, $expiresAt, null, $actions ?? []);
         if ($expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
@@ -211,8 +213,9 @@ final class Toast
      * Add a progress toast — renders a progress bar beneath the message.
      *
      * @param float $progress  Value between 0.0 and 1.0 (clamped)
+     * @param list<Action>|null $actions  Clickable action buttons to render beneath the progress bar
      */
-    public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null): self
+    public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null): self
     {
         $resolvedType = $type instanceof ToastType
             ? $type
@@ -220,7 +223,7 @@ final class Toast
                 ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
 
         $clone = clone $this;
-        $alert = (new Alert($resolvedType, $message, $expiresAt))->withProgress($progress);
+        $alert = (new Alert($resolvedType, $message, $expiresAt, null, $actions ?? []))->withProgress($progress);
         if ($expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
@@ -308,6 +311,42 @@ final class Toast
         $clone = clone $this;
         $clone->queue = [];
         return $clone;
+    }
+
+    /**
+     * Cancel the auto-dismiss timer on the alert at $index, making it persistent.
+     * Has no effect if $index is out of bounds or the alert is already non-expiring.
+     */
+    public function cancelAlert(int $index): self
+    {
+        if ($index < 0 || $index >= \count($this->queue)) {
+            return $this;
+        }
+        return $this->mutate(fn($t) => $t->queue[$index] = $this->queue[$index]->withoutExpiry());
+    }
+
+    /**
+     * Extend the auto-dismiss timer on the alert at $index by $additionalSeconds from now.
+     * Has no effect if $index is out of bounds.
+     */
+    public function extendAlert(int $index, float $additionalSeconds): self
+    {
+        if ($index < 0 || $index >= \count($this->queue)) {
+            return $this;
+        }
+        return $this->mutate(fn($t) => $t->queue[$index] = $this->queue[$index]->withExtendedExpiry($additionalSeconds));
+    }
+
+    /**
+     * Extend the auto-dismiss timer on all alerts by $additionalSeconds from now.
+     * Only affects alerts that have an expiry; non-expiring alerts are unchanged.
+     */
+    public function extendAll(float $additionalSeconds): self
+    {
+        return $this->mutate(fn($t) => $t->queue = \array_map(
+            fn(Alert $a) => $a->expiresAt !== null ? $a->withExtendedExpiry($additionalSeconds) : $a,
+            $t->queue,
+        ));
     }
 
     /**
