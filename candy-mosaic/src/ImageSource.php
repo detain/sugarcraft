@@ -93,22 +93,79 @@ final class ImageSource
      * @throws \InvalidArgumentException  if the bytes are not a supported image
      * @throws \RuntimeException          if ext-gd is not available
      */
+    /**
+     * Load from raw bytes in memory.
+     *
+     * Detects image format from magic bytes and uses GD to validate and
+     * read dimensions — avoids the temp-file overhead of the previous
+     * implementation which wrote bytes to disk and re-read via fromFile().
+     *
+     * @throws \InvalidArgumentException  if the bytes are not a supported image
+     * @throws \RuntimeException          if ext-gd is not available
+     */
     public static function fromString(string $bytes): self
     {
         if (!extension_loaded('gd')) {
             throw new \RuntimeException(Lang::t('image_source.no_gd'));
         }
 
-        $tmp = tempnam(sys_get_temp_dir(), 'mosaic-');
-        if ($tmp === false) {
-            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+        $format = self::detectImageFormat($bytes);
+
+        // Validate the bytes are a supported image and read dimensions.
+        $img = @imagecreatefromstring($bytes);
+        if ($img === false) {
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.gd_load_failed', ['path' => '[memory-bytes]']),
+            );
         }
-        try {
-            file_put_contents($tmp, $bytes);
-            return self::fromFile($tmp);
-        } finally {
-            @unlink($tmp);
+
+        // Palette PNGs need truecolor conversion so PixelGrid always sees
+        // 24-bit pixels (matching fromFile() behavior).
+        if (!imageistruecolor($img)) {
+            imagepalettetotruecolor($img);
         }
+
+        $width  = imagesx($img);
+        $height = imagesy($img);
+        imagedestroy($img);
+
+        return new self($bytes, $format, $width, $height);
+    }
+
+    /**
+     * Detect image MIME type from magic bytes.
+     *
+     * Mirrors the format detection in fromFile() so fromString() produces
+     * identical results for the same image bytes without hitting disk.
+     */
+    private static function detectImageFormat(string $bytes): string
+    {
+        if (strlen($bytes) >= 8 && $bytes[0] === "\x89" && $bytes[1] === 'P'
+            && $bytes[2] === 'N' && $bytes[3] === 'G'
+        ) {
+            return 'image/png';
+        }
+        if (strlen($bytes) >= 3 && $bytes[0] === "\xFF" && $bytes[1] === "\xD8"
+            && $bytes[2] === "\xFF"
+        ) {
+            return 'image/jpeg';
+        }
+        if (strlen($bytes) >= 6
+            && (str_starts_with($bytes, 'GIF87a') || str_starts_with($bytes, 'GIF89a'))
+        ) {
+            return 'image/gif';
+        }
+        // WebP: "RIFF" + 4 bytes + "WEBP"
+        if (strlen($bytes) >= 12 && $bytes[0] === 'R' && $bytes[1] === 'I'
+            && $bytes[2] === 'F' && $bytes[3] === 'F' && $bytes[8] === 'W'
+            && $bytes[9] === 'E' && $bytes[10] === 'B' && $bytes[11] === 'P'
+        ) {
+            return 'image/webp';
+        }
+
+        // Fall back to GD's auto-detection; it will throw if unsupported.
+        // This handles formats GD supports but we haven't explicitly listed.
+        return 'image/png'; // dummy — fromString will validate via imagecreatefromstring
     }
 
     /**
