@@ -44,6 +44,9 @@ final class FfmpegDecoder implements Decoder
     /** The 12-byte PNG IEND end-chunk (length 0 + "IEND" + fixed CRC) — every PNG ends with exactly these bytes. */
     private const PNG_IEND = "\x00\x00\x00\x00IEND\xae\x42\x60\x82";
 
+    /** Maximum PNG buffer size in bytes (100 MB) — prevents unbounded memory growth on malformed input. */
+    private const MAX_PNG_BUFFER = 100 * 1024 * 1024;
+
     /** A terminal cell is roughly twice as tall as it is wide — used to letterbox text-mode video to the true on-screen display aspect. */
     private const CELL_ASPECT = 2;
 
@@ -327,6 +330,10 @@ final class FfmpegDecoder implements Decoder
                 : false;
             if ($chunk === false || $chunk === '') {
                 return null; // EOF — any partial trailing PNG is discarded
+            }
+            if (strlen($this->pngBuffer) + strlen($chunk) > self::MAX_PNG_BUFFER) {
+                error_log("FfmpegDecoder: PNG buffer exceeded limit, aborting");
+                return null;
             }
             $this->pngBuffer .= $chunk;
         }
