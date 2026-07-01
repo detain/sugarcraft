@@ -56,8 +56,8 @@ final class DefaultPrefixer implements Prefixer
         }
 
         // Separator widths
-        $this->sepWidth     = self::ansiWidth($this->separator);
-        $this->markWidth    = self::ansiWidth($this->currentMarker);
+        $this->sepWidth     = Width::string($this->separator);
+        $this->markWidth    = Width::string($this->currentMarker);
 
         // The prefix = [sep] [number] [mark] + 2 spaces
         $this->prefixWidth  = $this->sepWidth
@@ -99,10 +99,4 @@ final class DefaultPrefixer implements Prefixer
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
-
-    /** Compute the printable (non-ANSI) cell width of a string. */
-    public static function ansiWidth(string $s): int
-    {
-        return Width::string($s);
-    }
 }

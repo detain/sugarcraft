@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Lister\Tests;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Lister\{DefaultPrefixer, DefaultSuffixer, StringItem};
 use PHPUnit\Framework\TestCase;
 
@@ -86,13 +87,13 @@ final class DefaultPrefixerTest extends TestCase
 
     public function testAnsiWidthHelper(): void
     {
-        $w = DefaultPrefixer::ansiWidth('hello');
+        $w = Width::string('hello');
         $this->assertSame(5, $w);
     }
 
     public function testAnsiWidthHelperWithAnsi(): void
     {
-        $w = DefaultPrefixer::ansiWidth("\x1b[1mbold\x1b[0m");
+        $w = Width::string("\x1b[1mbold\x1b[0m");
         $this->assertSame(4, $w);
     }
 
