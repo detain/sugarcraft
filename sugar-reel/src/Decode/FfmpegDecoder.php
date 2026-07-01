@@ -71,6 +71,9 @@ final class FfmpegDecoder implements Decoder
     /** Cached fps value from the last open() call — avoids re-probing the source. */
     private float $fps = 0.0;
 
+    /** Captured exit code from the ffmpeg process, populated on close(). */
+    private ?int $exitCode = null;
+
     /**
      * @param int $cellPxW Pixel width of one terminal cell — graphics modes decode at
      *                     cellsW·cellPxW pixels so the image fills the cell box at full
@@ -146,7 +149,7 @@ final class FfmpegDecoder implements Decoder
 
         // stderr goes to a file sink (the OS null device), never a pipe — an
         // unread stderr pipe deadlocks ffmpeg once its ~64KB buffer fills.
-        $devNull = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $devNull = DIRECTORY_SEPARATOR === '\\' ? '\\\\.\\NUL' : '/dev/null';
 
         $descriptorSpec = [
             ['pipe', 'r'],            // stdin
@@ -360,13 +363,21 @@ final class FfmpegDecoder implements Decoder
         }
 
         if ($this->process !== null && is_resource($this->process)) {
-            $exitCode = proc_close($this->process);
+            $this->exitCode = proc_close($this->process);
             $this->process = null;
 
-            // If ffmpeg exited non-zero (and we didn't already consume all frames),
-            // that indicates an error. We don't throw here since next() returning
-            // null will signal end of stream to the caller.
+            if ($this->exitCode !== 0) {
+                error_log("FfmpegDecoder: ffmpeg exited with code {$this->exitCode}");
+            }
         }
+    }
+
+    /**
+     * Returns the exit code from the last ffmpeg process, or null if still running.
+     */
+    public function getExitCode(): ?int
+    {
+        return $this->exitCode;
     }
 
     /**

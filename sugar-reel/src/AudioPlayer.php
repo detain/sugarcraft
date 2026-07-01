@@ -68,7 +68,7 @@ class AudioPlayer
         // immediately can hand the child a SIGPIPE on its first write and kill
         // it. A file sink opens no parent-side FD, so there is nothing to race
         // against and nothing to clean up.
-        $devNull = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $devNull = DIRECTORY_SEPARATOR === '\\' ? '\\\\.\\NUL' : '/dev/null';
         $descriptorSpec = [
             0 => ['file', $devNull, 'r'],  // stdin — unused
             1 => ['file', $devNull, 'w'],  // stdout — discarded

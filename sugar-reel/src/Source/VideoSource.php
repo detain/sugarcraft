@@ -116,7 +116,7 @@ final class VideoSource
             $path,
         ];
 
-        $devNull = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $devNull = DIRECTORY_SEPARATOR === '\\' ? '\\\\.\\NUL' : '/dev/null';
         $descriptorSpec = [
             0 => ['file', $devNull, 'r'],  // stdin — unused
             1 => ['pipe', 'w'],             // stdout — read result
