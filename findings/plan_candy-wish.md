@@ -42,21 +42,21 @@ Address all critical, high, medium, and low severity issues identified in the ca
 
 ## Phase 2: High Severity Issues [PENDING]
 
-- [ ] **2.1 Double getenv() call in Session::fromEnvironment()**  
+- [x] **2.1 Double getenv() call in Session::fromEnvironment()** ✅  
   `src/Session.php:71-74`  
   Fix: Cache getenv() result: `($v = getenv($k)) === false || $v === '' ? null : (string) $v`
 
-- [ ] **2.2 Non-atomic RateLimit token consumption**  
+- [x] **2.2 Non-atomic RateLimit token consumption** ✅  
   `src/Middleware/RateLimit.php:69-101`  
   Fix: Use file_put_contents() with LOCK_EX on temp file + rename for atomicity
 
-- [ ] **2.3 stream_set_blocking failures silently ignored**  
+- [x] **2.3 stream_set_blocking failures silently ignored** ✅  
   `src/Transport/InProcessTransport.php:252-253`  
-  Fix: Check return values or document why failure is acceptable
+  Fix: Documented why failure is acceptable (lines 259-265)
 
-- [ ] **2.4 Inconsistent setTransport injection between transports**  
+- [x] **2.4 Inconsistent setTransport injection between transports** ✅  
   `InProcessTransport.php:165` vs `HostSshdTransport.php`  
-  Fix: Normalize setTransport behavior across both transports, or extract MiddlewareStack
+  Fix: Only call setTransport() when transport implements ChildSpawner
 
 - [ ] **2.5 $stdin/$stdout resource type hints too generic**  
   `src/Transport/InProcessTransport.php:231-236`  
