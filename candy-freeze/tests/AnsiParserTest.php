@@ -68,4 +68,14 @@ final class AnsiParserTest extends TestCase
         $this->assertFalse($segs[1]->bold);
         $this->assertNull($segs[1]->fg);
     }
+
+    public function testMixedXterm256AndTrueColor(): void
+    {
+        // Red fg (256-color) + green bg (truecolor)
+        $segs = AnsiParser::parse("\x1b[38;5;196m\x1b[48;2;0;255;0mcolored\x1b[0m");
+        $this->assertCount(1, $segs);
+        $this->assertSame('#ff0000', $segs[0]->fg); // ANSI 196 = bright red
+        $this->assertSame('#00ff00', $segs[0]->bg); // truecolor 0;255;0
+        $this->assertSame('colored', $segs[0]->text);
+    }
 }

@@ -32,20 +32,28 @@ final class CliTest extends TestCase
 
         $handle = proc_open($cmd, $desc, $pipes);
 
-        if ($stdin !== null) {
-            fwrite($pipes[0], $stdin);
+        try {
+            if ($stdin !== null) {
+                fwrite($pipes[0], $stdin);
+            }
+            fclose($pipes[0]);
+
+            $stdout = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+
+            $exitCode = proc_close($handle);
+            return ['stdout' => $stdout, 'stderr' => $stderr, 'exitCode' => $exitCode];
+        } catch (\Throwable $e) {
+            // Ensure cleanup on exception
+            if (is_resource($pipes[0])) fclose($pipes[0]);
+            if (is_resource($pipes[1])) fclose($pipes[1]);
+            if (is_resource($pipes[2])) fclose($pipes[2]);
+            proc_close($handle);
+            throw $e;
         }
-        fclose($pipes[0]);
-
-        $stdout = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
-
-        $exitCode = proc_close($handle);
-
-        return ['stdout' => $stdout, 'stderr' => $stderr, 'exitCode' => $exitCode];
     }
 
     public function testHelpExitsZeroAndPrintsToStdout(): void

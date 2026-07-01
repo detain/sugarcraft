@@ -44,8 +44,7 @@ foreach (['dark', 'light', 'dracula', 'tokyoNight', 'nord'] as $themeName) {
 }
 
 // Also demonstrate ANSI colours.
-$ansi = (new PngRenderer())
-    ->withTheme(PngRenderer::dark()->theme)
+$ansi = PngRenderer::dark()
     ->withWindow(true)
     ->withPadding(16)
     ->withBorderRadius(8)

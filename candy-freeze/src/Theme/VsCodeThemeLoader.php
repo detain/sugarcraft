@@ -47,7 +47,7 @@ final class VsCodeThemeLoader
             throw new \InvalidArgumentException("VS Code theme file not found: {$path}");
         }
 
-        $json = file_get_contents($path);
+        $json = file_get_contents($path, false, null, 0, 1_000_000);
         if ($json === false) {
             throw new \InvalidArgumentException("Failed to read VS Code theme file: {$path}");
         }

@@ -100,4 +100,21 @@ final class SvgRendererTest extends TestCase
         $this->assertStringContainsString('&lt;script&gt;', $svg);
         $this->assertStringNotContainsString('<script>', $svg);
     }
+
+    public function testAnsiBackgroundBecomesRectFill(): void
+    {
+        // ANSI 44 = blue background
+        $svg = SvgRenderer::dark()->render("\x1b[44mblue background\x1b[0m text");
+        // ANSI 44 = #0000ee (blue)
+        $this->assertStringContainsString('fill="#0000ee"', $svg);
+        $this->assertStringContainsString('blue background', $svg);
+    }
+
+    public function testEmptyInputRendersMinimalFrame(): void
+    {
+        $svg = SvgRenderer::dark()->withWindow(false)->render("");
+        $this->assertStringStartsWith('<?xml version="1.0" encoding="UTF-8"?>', $svg);
+        $this->assertStringEndsWith("</svg>\n", $svg);
+        $this->assertStringContainsString('fill="#0d1117"', $svg);
+    }
 }

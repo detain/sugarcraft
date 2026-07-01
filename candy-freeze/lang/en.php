@@ -12,9 +12,12 @@ return [
     'cli.unknown_flag'         => "candyfreeze: unrecognised flag '{flag}'",
     'cli.unknown_theme'       => "candyfreeze: unknown theme '{name}'. Known: dark, light, dracula, tokyo-night, nord",
     'cli.unknown_window_style' => "candyfreeze: unknown window style '{style}'. Known: macos, windows-terminal, iterm, hyper, none",
+    'cli.unknown_format'      => "candyfreeze: unknown format '{format}'. Known: svg, png",
+    'cli.gd_required'         => 'candyfreeze: ext-gd is required for PNG output',
     'cli.font_not_found'      => "candyfreeze: font file not found: '{path}'",
     'cli.bad_highlight'       => "candyfreeze: invalid highlight format '{format}'. Use start:end (e.g. 3:7) or start:end:#color (e.g. 3:7:#fffbe6)",
     'cli.read_failed'          => 'candyfreeze: failed to read input',
+    'cli.path_outside_cwd'    => 'candyfreeze: input path is outside the current working directory',
     'cli.write_failed'        => "candyfreeze: failed to write '{path}'",
     'cli.usage'               => <<<'USAGE'
 candyfreeze - render code or terminal output to an SVG screenshot
@@ -36,6 +39,7 @@ Options:
   --font <path>           Path to a TTF font file to embed in the SVG
   --highlight <start:end[:color]>
                           Highlight lines start:end with optional color (default color: #fffbe6)
+  --format <svg|png>      Output format (default: svg)
   -o, --output <path>     Write output to file instead of stdout
   -h, --help              Show this help message
 

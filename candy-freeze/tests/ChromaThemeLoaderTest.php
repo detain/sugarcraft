@@ -124,4 +124,36 @@ final class ChromaThemeLoaderTest extends TestCase
             unlink($tmp);
         }
     }
+
+    public function testFullChromaThemeWithAllColors(): void
+    {
+        $data = [
+            'background' => '#1a1b26',
+            'foreground' => '#a9b1d6',
+            'colors' => [
+                'comment' => '#565f89',
+                'keyword' => '#f7768e',
+                'string' => '#9ece6a',
+                'number' => '#ff9e64',
+                'variable' => '#9ece6a',
+                'constant' => '#ff9e64',
+                'operator' => '#89ddff',
+                'type' => '#e0af68',
+                'class' => '#e0af68',
+                'function' => '#7dcfff',
+                'punctuation' => '#89ddff',
+                'attribute' => '#e0af68',
+                'tag' => '#f7768e',
+                'error' => '#f7768e',
+            ],
+        ];
+
+        $theme = ChromaThemeLoader::fromArray($data);
+        $this->assertSame('#1a1b26', $theme->background);
+        $this->assertSame('#a9b1d6', $theme->foreground);
+        $this->assertSame('#565f89', $theme->lineNumber);
+        $this->assertSame('#f7768e', $theme->windowRed);
+        $this->assertSame('#9ece6a', $theme->windowGreen);
+        $this->assertSame('#ff9e64', $theme->windowYellow);
+    }
 }

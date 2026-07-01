@@ -108,6 +108,10 @@ final class SvgRenderer
     /**
      * Render `$text` (which may contain ANSI escape sequences) to an
      * SVG document and return the bytes.
+     *
+     * @note Rendering is synchronous and CPU-bound. For very large
+     *       screenshots (>1MB SVG), a future major version may offer
+     *       streaming output via a dedicated renderToStream() method.
      */
     public function render(string $text): string
     {
@@ -256,16 +260,13 @@ final class SvgRenderer
 
     private function buildMacosWindow(int $shadowMargin): string
     {
-        $cy = $shadowMargin + 18;
-        $base = $shadowMargin + 18;
-        $r = 6;
-        $gap = 18;
+        $geo = WindowChromeGeometry::macos($shadowMargin);
         $colors = [$this->theme->windowRed, $this->theme->windowYellow, $this->theme->windowGreen];
         $svg = '';
         foreach ($colors as $i => $c) {
             $svg .= sprintf(
                 '<circle cx="%d" cy="%d" r="%d" fill="%s" />' . "\n",
-                $base + $i * $gap, $cy, $r, self::xmlEscape($c),
+                $geo->base + $i * $geo->gap, $geo->cy, $geo->r, self::xmlEscape($c),
             );
         }
         return $svg;
@@ -273,11 +274,9 @@ final class SvgRenderer
 
     private function buildWindowsTerminalWindow(int $shadowMargin, int $contentWidth): string
     {
-        $titleBarHeight = 28;
-        $buttonSize = 14;
-        $buttonGap = 8;
-        $rightEdge = $shadowMargin + $contentWidth - 12;
+        $geo = WindowChromeGeometry::windowsTerminal($shadowMargin, $contentWidth);
         $titleBarY = $shadowMargin;
+        $rightEdge = $shadowMargin + $contentWidth - 12;
 
         $svg = '';
 
@@ -286,8 +285,8 @@ final class SvgRenderer
             '<rect x="%d" y="%d" width="%d" height="%d" fill="%s" />' . "\n",
             $shadowMargin,
             $titleBarY,
-            $contentWidth,
-            $titleBarHeight,
+            $geo->frameWidth,
+            $geo->titleBarHeight,
             self::xmlEscape('#1e1e1e'),
         );
 
@@ -296,20 +295,20 @@ final class SvgRenderer
             '<rect x="%d" y="%d" width="%d" height="%d" fill="none" stroke="%s" stroke-width="1" />' . "\n",
             $shadowMargin,
             $titleBarY,
-            $contentWidth,
-            $titleBarHeight,
+            $geo->frameWidth,
+            $geo->titleBarHeight,
             self::xmlEscape('#303030'),
         );
 
         // Windows-style buttons (minimize, maximize, close)
         $buttonColors = ['#444444', '#444444', '#444444'];
-        $buttonY = $titleBarY + ($titleBarHeight - $buttonSize) / 2;
+        $buttonY = $titleBarY + ($geo->titleBarHeight - $geo->buttonSize) / 2;
 
         foreach ([0, 1, 2] as $i) {
-            $bx = $rightEdge - ($buttonSize + $buttonGap) * (3 - $i);
+            $bx = $rightEdge - ($geo->buttonSize + $geo->buttonGap) * (3 - $i);
             $svg .= sprintf(
                 '<rect x="%d" y="%d" width="%d" height="%d" rx="1" fill="%s" />' . "\n",
-                $bx, $buttonY, $buttonSize, $buttonSize, $buttonColors[$i],
+                $bx, $buttonY, $geo->buttonSize, $geo->buttonSize, $buttonColors[$i],
             );
         }
 
@@ -318,17 +317,13 @@ final class SvgRenderer
 
     private function buildITerm2Window(int $shadowMargin): string
     {
-        // iTerm2 style: smaller traffic lights, no outer border effect visible
-        $cy = $shadowMargin + 14;
-        $base = $shadowMargin + 14;
-        $r = 4; // smaller radius
-        $gap = 14; // tighter spacing
+        $geo = WindowChromeGeometry::iterm2($shadowMargin);
         $colors = [$this->theme->windowRed, $this->theme->windowYellow, $this->theme->windowGreen];
         $svg = '';
         foreach ($colors as $i => $c) {
             $svg .= sprintf(
                 '<circle cx="%d" cy="%d" r="%d" fill="%s" />' . "\n",
-                $base + $i * $gap, $cy, $r, self::xmlEscape($c),
+                $geo->base + $i * $geo->gap, $geo->cy, $geo->r, self::xmlEscape($c),
             );
         }
         return $svg;
@@ -336,10 +331,8 @@ final class SvgRenderer
 
     private function buildHyperWindow(int $shadowMargin, int $contentWidth): string
     {
-        $titleBarHeight = 24;
+        $geo = WindowChromeGeometry::hyper($shadowMargin, $contentWidth);
         $titleBarY = $shadowMargin;
-        $r = 5;
-        $gap = 16;
         $colors = [$this->theme->windowRed, $this->theme->windowYellow, $this->theme->windowGreen];
 
         $svg = '';
@@ -349,18 +342,16 @@ final class SvgRenderer
             '<rect x="%d" y="%d" width="%d" height="%d" fill="%s" />' . "\n",
             $shadowMargin,
             $titleBarY,
-            $contentWidth,
-            $titleBarHeight,
+            $geo->frameWidth,
+            $geo->titleBarHeight,
             self::xmlEscape($this->theme->border),
         );
 
         // Traffic lights in title bar
-        $cy = $titleBarY + ($titleBarHeight - $r * 2) / 2;
-        $base = $shadowMargin + 12;
         foreach ($colors as $i => $c) {
             $svg .= sprintf(
                 '<circle cx="%d" cy="%d" r="%d" fill="%s" />' . "\n",
-                $base + $i * $gap, $cy, $r, self::xmlEscape($c),
+                $geo->base + $i * $geo->gap, $geo->cy, $geo->r, self::xmlEscape($c),
             );
         }
 

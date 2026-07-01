@@ -23,6 +23,8 @@ foreach ([__DIR__ . '/../vendor/autoload.php', $root . '/vendor/autoload.php'] a
 }
 
 use SugarCraft\Freeze\Lang;
+use SugarCraft\Freeze\LanguageDetector;
+use SugarCraft\Freeze\PngRenderer;
 use SugarCraft\Freeze\SvgRenderer;
 use SugarCraft\Freeze\Theme;
 
@@ -42,6 +44,8 @@ $fontPath       = null;
 $highlight      = null;
 $output         = null;
 $inputPath      = null;
+$format         = 'svg';
+$language       = null;
 
 while (($arg = array_shift($argv)) !== null) {
     switch ($arg) {
@@ -70,9 +74,9 @@ while (($arg = array_shift($argv)) !== null) {
             }
             break;
         case '--highlight':
-            $format = (string) array_shift($argv);
-            if (!preg_match('/^(\d+):(\d+)(?::([^:]+))?$/', $format, $m)) {
-                fwrite(STDERR, Lang::t('cli.bad_highlight', ['format' => $format]) . "\n");
+            $hlFormat = (string) array_shift($argv);
+            if (!preg_match('/^(\d+):(\d+)(?::([^:]+))?$/', $hlFormat, $m)) {
+                fwrite(STDERR, Lang::t('cli.bad_highlight', ['format' => $hlFormat]) . "\n");
                 exit(2);
             }
             $start = (int) $m[1];
@@ -82,6 +86,17 @@ while (($arg = array_shift($argv)) !== null) {
             break;
         case '-o':
         case '--output':        $output       = (string) array_shift($argv); break;
+        case '--format':
+            $format = (string) array_shift($argv);
+            if (!in_array($format, ['svg', 'png'], true)) {
+                fwrite(STDERR, Lang::t('cli.unknown_format', ['format' => $format]) . "\n");
+                exit(2);
+            }
+            break;
+        case '-t':
+        case '--type':
+            $language = (string) array_shift($argv);
+            break;
         case '-h':
         case '--help':
             fwrite(STDOUT, Lang::t('cli.usage') . "\n");
@@ -109,6 +124,15 @@ if ($theme === null) {
     exit(2);
 }
 
+if ($inputPath !== null && is_link($inputPath)) {
+    $realPath = realpath($inputPath);
+    $cwd = getcwd();
+    if ($realPath !== false && str_starts_with($realPath, $cwd) === false) {
+        fwrite(STDERR, Lang::t('cli.path_outside_cwd') . "\n");
+        exit(2);
+    }
+}
+
 $text = $inputPath !== null
     ? @file_get_contents($inputPath)
     : stream_get_contents(STDIN);
@@ -117,41 +141,63 @@ if ($text === false || $text === null) {
     exit(1);
 }
 
-$renderer = (new SvgRenderer(
-    theme:        $theme,
-    padding:      $padding,
-    window:       $window,
-    shadow:       $shadow,
-    border:       $border,
-    lineNumbers:  $lineNumbers,
-    borderRadius: $borderRadius,
-));
+// Detect language for syntax highlighting (future use with Chroma).
+$detectedLang = LanguageDetector::detect($text);
+if ($language === null) {
+    $language = $detectedLang;
+}
+
+if ($format === 'png') {
+    if (!extension_loaded('gd')) {
+        fwrite(STDERR, Lang::t('cli.gd_required') . "\n");
+        exit(2);
+    }
+    $renderer = new PngRenderer(
+        theme:        $theme,
+        padding:      $padding,
+        window:       $window,
+        shadow:       $shadow,
+        border:       $border,
+        lineNumbers:  $lineNumbers,
+        borderRadius: $borderRadius,
+    );
+} else {
+    $renderer = new SvgRenderer(
+        theme:        $theme,
+        padding:      $padding,
+        window:       $window,
+        shadow:       $shadow,
+        border:       $border,
+        lineNumbers:  $lineNumbers,
+        borderRadius: $borderRadius,
+    );
+    if ($ligatures) {
+        $renderer = $renderer->withLigatures(true);
+    }
+    if ($fontPath !== null) {
+        try {
+            $renderer = $renderer->withFont($fontPath);
+        } catch (\InvalidArgumentException $e) {
+            fwrite(STDERR, Lang::t('cli.font_not_found', ['path' => $fontPath]) . "\n");
+            exit(2);
+        }
+    }
+    if ($highlight !== null) {
+        [$start, $end, $color] = $highlight;
+        $renderer = $renderer->withHighlight($start, $end, $color);
+    }
+}
 if ($windowStyle !== null) {
     $renderer = $renderer->withWindowStyle($windowStyle);
 }
-if ($ligatures) {
-    $renderer = $renderer->withLigatures(true);
-}
-if ($fontPath !== null) {
-    try {
-        $renderer = $renderer->withFont($fontPath);
-    } catch (\InvalidArgumentException $e) {
-        fwrite(STDERR, Lang::t('cli.font_not_found', ['path' => $fontPath]) . "\n");
-        exit(2);
-    }
-}
-if ($highlight !== null) {
-    [$start, $end, $color] = $highlight;
-    $renderer = $renderer->withHighlight($start, $end, $color);
-}
 
-$svg = $renderer->render($text);
+$result = $renderer->render($text);
 
 if ($output !== null) {
-    if (@file_put_contents($output, $svg) === false) {
+    if (@file_put_contents($output, $result) === false) {
         fwrite(STDERR, Lang::t('cli.write_failed', ['path' => $output]) . "\n");
         exit(1);
     }
 } else {
-    echo $svg;
+    echo $result;
 }
