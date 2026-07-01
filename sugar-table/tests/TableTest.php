@@ -829,4 +829,71 @@ final class TableTest extends TestCase
         // Should not contain "Page" style footer
         $this->assertStringNotContainsString('Page 1 of 1', $view);
     }
+
+    // -------------------------------------------------------------------------
+    // Item 5.1 — Frozen/hidden conflict detection
+    // -------------------------------------------------------------------------
+
+    public function testWithFrozenColsThrowsOnOverlapWithHiddenCols(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/frozen.*hidden|hidden.*frozen/i');
+        $this->makeTable()->withFrozenCols([0])->withHiddenCols([0]);
+    }
+
+    public function testWithHiddenColsThrowsOnOverlapWithFrozenCols(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/hidden.*frozen|frozen.*hidden/i');
+        $this->makeTable()->withHiddenCols([0])->withFrozenCols([0]);
+    }
+
+    public function testWithFrozenColsMultipleOverlapReportsAllConflicting(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        // Columns 0 and 1 are both frozen and hidden
+        $this->makeTable()->withFrozenCols([0, 1])->withHiddenCols([0, 1, 2]);
+    }
+
+    public function testWithFrozenColsNonOverlappingIsAllowed(): void
+    {
+        $t = $this->makeTable()->withFrozenCols([0])->withHiddenCols([1]);
+        $this->assertSame(3, $t->TotalRows()); // no exception
+    }
+
+    public function testWithHiddenColsNonOverlappingIsAllowed(): void
+    {
+        $t = $this->makeTable()->withHiddenCols([0])->withFrozenCols([1]);
+        $this->assertSame(3, $t->TotalRows()); // no exception
+    }
+
+    // -------------------------------------------------------------------------
+    // Item 5.2 — Filter/SortBy invalid column key validation
+    // -------------------------------------------------------------------------
+
+    public function testSortByThrowsOnInvalidColumnKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/does not exist/i');
+        $this->makeTable()->SortBy('nonexistent_key');
+    }
+
+    public function testFilterThrowsOnInvalidColumnKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/does not exist/i');
+        $this->makeTable()->Filter('invalid_key', 'text');
+    }
+
+    public function testSortByWithValidKeyDoesNotThrow(): void
+    {
+        $t = $this->makeTable()->SortBy('name');
+        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+    }
+
+    public function testFilterWithValidKeyDoesNotThrow(): void
+    {
+        $t = $this->makeTable()->Filter('name', 'ali');
+        $this->assertSame(1, $t->TotalRows());
+    }
 }
