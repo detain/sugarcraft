@@ -716,6 +716,14 @@ final class Veil
     /**
      * Reset the previous-frame buffer, forcing the next composite to emit
      * a full frame (used on window resize or cursor-position-lost events).
+     *
+     * NOTE: This does NOT reset the scanner state. The scanner accumulates
+     * zone data across frames intentionally — zones from previous renders
+     * persist for hit-testing. If you need a fresh scanner, create a new
+     * Veil instance instead.
+     *
+     * @see scan()
+     * @see withoutSession()
      */
     public function resetPreviousFrame(): void
     {
