@@ -26,8 +26,8 @@ final class Logger
     private ?string $prefix;
     /** @var array<string,mixed> */
     private array $fields;
-    /** @var resource */
-    private $stream;
+    /** @var resource|null */
+    private mixed $stream;
 
     /** Styles for text-formatter level coloring. */
     private Styles $styles;
@@ -48,7 +48,7 @@ final class Logger
      */
     public function __construct(
         ?Formatter $formatter = null,
-        ?Level $minLevel = null,
+        ?Level $level = null,
         ?string $prefix = null,
         bool $reportTimestamp = true,
         ?string $timeFormat = null,
@@ -71,7 +71,7 @@ final class Logger
             $this->styles,
             $this->partsOrder,
         );
-        $this->minLevel = $minLevel ?? Level::Info;
+        $this->minLevel = $level ?? Level::Info;
         $this->prefix = $prefix;
         $this->reportTimestamp = $reportTimestamp;
         $this->timeFormat = $timeFormat;
@@ -298,7 +298,7 @@ final class Logger
      * @param resource $stream A valid output stream resource.
      * @throws \InvalidArgumentException If $stream is not a resource.
      */
-    public function setOutput($stream): void
+    public function setOutput(mixed $stream): void
     {
         if (!\is_resource($stream)) {
             throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));
@@ -312,7 +312,7 @@ final class Logger
      * @param resource $stream A valid output stream resource.
      * @throws \InvalidArgumentException If $stream is not a resource.
      */
-    public function withOutput($stream): self
+    public function withOutput(mixed $stream): self
     {
         if (!\is_resource($stream)) {
             throw new \InvalidArgumentException(Lang::t('logger.invalid_stream'));

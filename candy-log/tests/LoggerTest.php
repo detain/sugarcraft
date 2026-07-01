@@ -87,14 +87,9 @@ final class LoggerTest extends TestCase
     public function testFatalCallsExit(): void
     {
         $log = $this->logger();
-        // Override stream to capture; fatal still exits so only test output before exit
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('exit(1)');
-        try {
-            $log->fatal('bye');
-        } catch (\RuntimeException $e) {
-            throw new \RuntimeException('exit(1)');
-        }
+        $this->expectExceptionMessage('fatal log: bye');
+        $log->fatal('bye');
     }
 
     public function testWithCreatesChildWithExtraFields(): void

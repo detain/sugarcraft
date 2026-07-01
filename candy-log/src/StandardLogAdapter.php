@@ -27,6 +27,8 @@ final class StandardLogAdapter
 
     /**
      * Print a line at the configured or forced level.
+     *
+     * @param mixed ...$args Values to concatenate and log.
      */
     public function print(...$args): void
     {
