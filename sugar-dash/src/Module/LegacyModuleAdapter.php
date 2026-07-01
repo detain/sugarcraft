@@ -51,10 +51,16 @@ final class LegacyModuleAdapter implements Module
         return null;
     }
 
+    /**
+     * Update the legacy module.
+     *
+     * NOTE: The $msg parameter is intentionally discarded. Legacy modules
+     * operate on accumulated array state rather than typed messages.
+     * The adapter advances state on every message, regardless of type.
+     * This is a design limitation — legacy modules cannot filter by Msg type.
+     */
     public function update(Msg $msg): array
     {
-        // Legacy update() takes array state, not a Msg.
-        // We discard the Msg and feed our accumulated state instead.
         $this->state = $this->legacy->update($this->state);
         return [$this, null];
     }

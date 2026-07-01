@@ -199,9 +199,9 @@ final class EventTest extends TestCase
         };
 
         $dispatcher = EventDispatcher::new()->on('key', $handler);
-        $result = $dispatcher->dispatch($originalEvent);
+        [$returnedEvent, $newDispatcher] = $dispatcher->dispatch($originalEvent);
 
-        $this->assertSame($newEvent, $result);
+        $this->assertSame($newEvent, $returnedEvent);
     }
 
     public function testDispatchToMultipleHandlers(): void
@@ -302,9 +302,11 @@ final class EventTest extends TestCase
         $dispatcher = EventDispatcher::new()->once('key', $handler);
 
         $event = new KeyEvent(time(), 'a');
-        $dispatcher->dispatch($event);
-        $dispatcher->dispatch($event);
-        $dispatcher->dispatch($event);
+        // dispatch() returns [Event, newDispatcher] — use the returned dispatcher
+        // to get the immutable behavior where once-handlers are removed after dispatch
+        [$event, $dispatcher] = $dispatcher->dispatch($event);
+        [$event, $dispatcher] = $dispatcher->dispatch($event);
+        [$event, $dispatcher] = $dispatcher->dispatch($event);
 
         $this->assertSame(1, $callCount);
     }
