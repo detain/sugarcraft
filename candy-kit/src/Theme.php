@@ -27,6 +27,27 @@ final class Theme
         public readonly Style $muted,
     ) {}
 
+    /** @return Style */
+    public function success(): Style { return $this->success; }
+
+    /** @return Style */
+    public function error(): Style { return $this->error; }
+
+    /** @return Style */
+    public function warn(): Style { return $this->warn; }
+
+    /** @return Style */
+    public function info(): Style { return $this->info; }
+
+    /** @return Style */
+    public function prompt(): Style { return $this->prompt; }
+
+    /** @return Style */
+    public function accent(): Style { return $this->accent; }
+
+    /** @return Style */
+    public function muted(): Style { return $this->muted; }
+
     public static function ansi(): self
     {
         return new self(

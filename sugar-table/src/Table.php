@@ -899,6 +899,21 @@ final class Table
     /** @return list<Column> */
     public function Columns(): array { return $this->columns; }
 
+    /**
+     * Return the column with the given key, or null if not found.
+     *
+     * @return ?Column
+     */
+    public function column(string $key): ?Column
+    {
+        foreach ($this->columns as $col) {
+            if ($col->key === $key) {
+                return $col;
+            }
+        }
+        return null;
+    }
+
     /** @return list<Row> */
     public function Rows(): array { return $this->rows; }
 
@@ -1234,11 +1249,15 @@ final class Table
         $bottomBorderRows = $this->borderless ? 0 : 1;
         $rowCount = \count($rows);
 
+        // Pre-compute visible column indices once before any row loops.
+        // Avoids O(rows×cols) repeated isColumnVisible() calls.
+        $visibleColumnIndices = $this->getVisibleColumnIndices();
+
         // When multilineMode is enabled, pre-calculate row heights
         $rowHeights = [];
         if ($this->multilineMode) {
             foreach ($rows as $ri => $row) {
-                $rowHeights[$ri] = $this->calculateRowHeight($row, $this->computedColumnWidths);
+                $rowHeights[$ri] = $this->calculateRowHeight($row, $this->computedColumnWidths, $visibleColumnIndices);
             }
             $totalRowHeight = \array_sum($rowHeights);
         } else {
@@ -1284,10 +1303,10 @@ final class Table
             foreach ($rows as $ri => $row) {
                 $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
                 if ($this->multilineMode) {
-                    $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri]);
+                    $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices);
                     $bufferRow += $rowHeights[$ri];
                 } else {
-                    $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths);
+                    $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $visibleColumnIndices);
                     $bufferRow++;
                 }
             }
@@ -1325,6 +1344,25 @@ final class Table
         }
         $scrollableStartIndex = \count($this->frozenCols) + $this->scrollX;
         return $colIndex >= $scrollableStartIndex;
+    }
+
+    /**
+     * Return the list of visible column indices, in column order.
+     *
+     * Pre-computed once per render pass and reused by all row-rendering
+     * methods to avoid O(rows×cols) repeated isColumnVisible() calls.
+     *
+     * @return list<int>
+     */
+    private function getVisibleColumnIndices(): array
+    {
+        $indices = [];
+        foreach ($this->columns as $ci => $column) {
+            if ($this->isColumnVisible($ci)) {
+                $indices[] = $ci;
+            }
+        }
+        return $indices;
     }
 
     /**
@@ -1428,12 +1466,14 @@ final class Table
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
         [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
 
+        $visibleColumnIndices = $this->getVisibleColumnIndices();
+
         // Header cells - render only visible columns
         foreach ($this->columns as $ci => $column) {
             $colWidth = $computedWidths[$ci] ?? $column->width;
 
             // Skip hidden columns (non-frozen before scrollX offset)
-            if (!$this->isColumnVisible($ci)) {
+            if (!\in_array($ci, $visibleColumnIndices, true)) {
                 $col += $colWidth;
                 continue;
             }
@@ -1451,7 +1491,7 @@ final class Table
             // - ci is visible AND the next column (ci+1) is also visible
             if ($ci < \count($this->columns) - 1) {
                 $ciFrozen = \in_array($ci, $this->frozenCols, true);
-                $nextVisible = $this->isColumnVisible($ci + 1);
+                $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
                 if ($ciFrozen || $nextVisible) {
                     [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
                 }
@@ -1473,7 +1513,7 @@ final class Table
         return $this->writeRightEdge($buffer, $row, $col, $style);
     }
 
-    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths): Buffer
+    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths, array $visibleColumnIndices): Buffer
     {
         // Determine row-level style
         $rowStyle = '';
@@ -1495,7 +1535,7 @@ final class Table
             $colWidth = $computedWidths[$ci] ?? $column->width;
 
             // Skip hidden columns (non-frozen before scrollX offset)
-            if (!$this->isColumnVisible($ci)) {
+            if (!\in_array($ci, $visibleColumnIndices, true)) {
                 $col += $colWidth;
                 continue;
             }
@@ -1561,7 +1601,7 @@ final class Table
             // - ci is visible AND the next column (ci+1) is also visible
             if ($ci < \count($this->columns) - 1) {
                 $ciFrozen = \in_array($ci, $this->frozenCols, true);
-                $nextVisible = $this->isColumnVisible($ci + 1);
+                $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
                 if ($ciFrozen || $nextVisible) {
                     [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
                 }
@@ -1577,12 +1617,12 @@ final class Table
      * When multilineMode is enabled, row height equals the maximum number of
      * lines across all visible cells. This accounts for text wrapping in each cell.
      */
-    private function calculateRowHeight(Row $row, array $computedWidths): int
+    private function calculateRowHeight(Row $row, array $computedWidths, array $visibleColumnIndices): int
     {
         $maxLines = 1;
 
         foreach ($this->columns as $ci => $column) {
-            if (!$this->isColumnVisible($ci)) {
+            if (!\in_array($ci, $visibleColumnIndices, true)) {
                 continue;
             }
 
@@ -1620,7 +1660,7 @@ final class Table
      * all cells). Cells with fewer lines are padded vertically with empty space.
      * Row borders span the full row height.
      */
-    private function fillDataRowLines(Buffer $buffer, int $startRow, Row $row, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths, int $rowHeight): Buffer
+    private function fillDataRowLines(Buffer $buffer, int $startRow, Row $row, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices): Buffer
     {
         // Determine row-level style
         $rowStyle = '';
@@ -1640,7 +1680,7 @@ final class Table
         $cellLines = [];
         $colWidths = [];
         foreach ($this->columns as $ci => $column) {
-            if (!$this->isColumnVisible($ci)) {
+            if (!\in_array($ci, $visibleColumnIndices, true)) {
                 continue;
             }
 
@@ -1701,7 +1741,7 @@ final class Table
 
             // Render each visible cell
             foreach ($this->columns as $ci => $column) {
-                if (!$this->isColumnVisible($ci)) {
+                if (!\in_array($ci, $visibleColumnIndices, true)) {
                     $col += $computedWidths[$ci] ?? $column->width;
                     continue;
                 }
@@ -1724,14 +1764,14 @@ final class Table
                 $buffer = $this->fillCellContent($buffer, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
                 $col += $colWidth;
 
-                // Column separator - only drawn between actual visible columns.
-                // A separator is needed after ci if:
-                // - ci is frozen (always marks boundary even when next is hidden), OR
-                // - ci is visible AND the next column (ci+1) is also visible
-                if ($ci < \count($this->columns) - 1) {
-                    $ciFrozen = \in_array($ci, $this->frozenCols, true);
-                    $nextVisible = $this->isColumnVisible($ci + 1);
-                    if ($ciFrozen || $nextVisible) {
+            // Column separator - only drawn between actual visible columns.
+            // A separator is needed after ci if:
+            // - ci is frozen (always marks boundary even when next is hidden), OR
+            // - ci is visible AND the next column (ci+1) is also visible
+            if ($ci < \count($this->columns) - 1) {
+                $ciFrozen = \in_array($ci, $this->frozenCols, true);
+                $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
+                if ($ciFrozen || $nextVisible) {
                         [$buffer, $col] = $this->writeColumnSeparator($buffer, $bufferRow, $col, $style, $sepStyle);
                     }
                 }
