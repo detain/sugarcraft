@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Hermit;
 
+use SugarCraft\Hermit\Concerns\Visible;
+
 /**
  * HelpBar — renders a single-line keyboard shortcut summary for the Hermit overlay.
  *
@@ -12,17 +14,19 @@ namespace SugarCraft\Hermit;
  */
 final class HelpBar
 {
+    use Visible;
+
     /** @var array<string, string> key → description mappings */
     private array $shortcuts = [];
-
-    private bool $visible = true;
 
     public function __construct(array $shortcuts = [], bool $visible = true)
     {
         foreach ($shortcuts as $key => $description) {
             $this->shortcuts[(string) $key] = (string) $description;
         }
-        $this->visible = $visible;
+        if (!$visible) {
+            $this->visible = false;
+        }
     }
 
     /**
@@ -43,25 +47,6 @@ final class HelpBar
         $clone = clone $this;
         unset($clone->shortcuts[(string) $key]);
         return $clone;
-    }
-
-    public function show(): self
-    {
-        $clone = clone $this;
-        $clone->visible = true;
-        return $clone;
-    }
-
-    public function hide(): self
-    {
-        $clone = clone $this;
-        $clone->visible = false;
-        return $clone;
-    }
-
-    public function isVisible(): bool
-    {
-        return $this->visible;
     }
 
     /** @return array<string, string> */
