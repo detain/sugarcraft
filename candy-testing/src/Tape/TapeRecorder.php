@@ -161,7 +161,7 @@ final class TapeRecorder
         $content = implode("\n", $this->lines) . "\n";
         $result = \file_put_contents($this->outputPath, $content);
 
-        if ($result === false) {
+        if ($result === false || $result === 0) {
             throw new \RuntimeException(Lang::t('tape.write_failed', ['path' => $this->outputPath]));
         }
     }

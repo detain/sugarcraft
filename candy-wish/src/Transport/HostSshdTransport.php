@@ -23,10 +23,20 @@ use SugarCraft\Wish\Transport;
  * Opt-in via `Server::new()->withTransport(new HostSshdTransport())`.
  * The default transport is {@see InProcessTransport}.
  */
-final class HostSshdTransport implements Transport
+    final class HostSshdTransport implements Transport
 {
     public function run(Context $ctx, Session $session, array $stack): void
     {
+        // Normalize transport injection across both transport implementations.
+        // InProcessTransport calls setTransport on all middleware in its run()
+        // before dispatching; HostSshdTransport was missing this, causing
+        // middleware that relies on setTransport to behave inconsistently.
+        foreach ($stack as $mw) {
+            if (\method_exists($mw, 'setTransport')) {
+                $mw->setTransport($this);
+            }
+        }
+
         $this->dispatch($ctx, $session, $stack, 0);
     }
 

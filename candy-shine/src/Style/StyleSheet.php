@@ -119,6 +119,10 @@ final class StyleSheet
      * Override mutate() because StyleSheet uses a private no-arg constructor.
      * The standard Mutable trait pattern relies on constructor parameters,
      * which doesn't work when the constructor takes no arguments.
+     *
+     * This override creates a new instance via `new static()`, copies the
+     * styles array, and merges in any changes — bypassing the trait's
+     * constructor-based approach.
      */
     protected function mutate(array $changes): static
     {

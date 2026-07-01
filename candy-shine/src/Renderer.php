@@ -62,6 +62,8 @@ use League\CommonMark\Parser\MarkdownParser;
  */
 final class Renderer
 {
+    private const EMOJI_SHORTCODE_PATTERN = '/:([a-z0-9_+-]+):/i';
+
     public readonly Theme $theme;
     private readonly MarkdownParser $parser;
     private readonly ?int $wrapWidth;
@@ -368,9 +370,20 @@ final class Renderer
             'tada'     => '🎉', 'sparkles' => '✨',
             'candy'    => '🍬', 'sugar'   => '🍭',
             'honey'    => '🍯',
+            'clap'     => '👏', 'eyes'    => '👀',
+            'tongue'   => '👅', 'wink'   => '😉',
+            'sob'      => '😭', 'sleeping' => '😴',
+            'zzz'      => '💤', ' headphones' => '🎧',
+            'mail'     => '📧', 'email'  => '📧',
+            'phone'    => '📞', 'camera' => '📷',
+            'gift'     => '🎁', 'pencil' => '📝',
+            'hammer'   => '🔨', 'wrench' => '🔧',
+            'bug'      => '🐛', 'dragon' => '🐉',
+            'koala'    => '🐨', 'tiger'  => '🐯',
+            'rabbit'   => '🐰', 'snake'  => '🐍',
         ];
         return (string) preg_replace_callback(
-            '/:([a-z0-9_+-]+):/i',
+            self::EMOJI_SHORTCODE_PATTERN,
             static fn (array $m): string => $map[strtolower($m[1])] ?? $m[0],
             $markdown,
         );

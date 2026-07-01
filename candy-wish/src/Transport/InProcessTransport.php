@@ -86,9 +86,16 @@ final class InProcessTransport implements Transport, ChildSpawner
      */
     private ?ChannelHandler $channelHandler = null;
 
+    /**
+     * Whether SIGWINCH can be forwarded on this platform.
+     * Cached at construction so runChild() doesn't call pcntlReady() every time.
+     */
+    private readonly bool $sigwinchSupported;
+
     public function __construct(?PtySystem $system = null)
     {
         $this->system = $system ?? PtySystemFactory::default();
+        $this->sigwinchSupported = SignalForwarder::pcntlReady() && \defined('SIGWINCH');
     }
 
     /**
@@ -249,6 +256,13 @@ final class InProcessTransport implements Transport, ChildSpawner
         $pumpResult = -1;
 
         try {
+            // Failure is non-fatal: stream_set_blocking returns false when
+            // the stream does not support non-blocking mode (e.g. certain
+            // pipe types in Windows or sandboxed environments). The pump
+            // loop uses stream_select which handles blocking correctly,
+            // so a failure here simply means we fall back to blocking I/O
+            // for that particular stream — no data corruption or protocol
+            // violation can result.
             \stream_set_blocking($master->stream(), false);
             @\stream_set_blocking($stdin, false);
 
@@ -268,7 +282,7 @@ final class InProcessTransport implements Transport, ChildSpawner
             // WindowChangeMsg through the handler so it can update its
             // state, then apply the resize to the master PTY.
             $sigwinchAttached = false;
-            if (SignalForwarder::pcntlReady() && \defined('SIGWINCH')) {
+            if ($this->sigwinchSupported) {
                 $sizeProvider = $this->sizeProvider ?? fn (): array => $this->readHostStdinSize($stdin, $cols, $rows);
                 $sigwinchAttached = SignalForwarder::attachSigwinch(
                     $master,

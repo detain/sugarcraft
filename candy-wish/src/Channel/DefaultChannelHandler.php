@@ -239,7 +239,7 @@ final class DefaultChannelHandler implements ChannelHandler
             'TERM'  => $session->term ?: 'xterm-256color',
             'USER'  => $session->user,
             'LANG'  => $session->lang ?: 'C.UTF-8',
-            'PATH'  => '/usr/local/bin:/usr/bin:/bin',
+            'PATH'  => getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin',
             'HOME'  => '/home/' . $session->user,
         ];
 

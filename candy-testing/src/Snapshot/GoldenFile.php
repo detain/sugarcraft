@@ -52,7 +52,7 @@ final class GoldenFile
 
         $result = file_put_contents($path, $content);
 
-        if ($result === false) {
+        if ($result === false || $result === 0) {
             throw new \RuntimeException(Lang::t('golden.write_failed', ['path' => $path]));
         }
     }
