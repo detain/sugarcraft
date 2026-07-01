@@ -427,7 +427,11 @@ final class Graph
         ];
         $code = 0x2800;
         foreach ($dots as [$col, $row]) {
-            if ($col < 0 || $col > 1 || $row < 0 || $row > 3) {
+            // Skip out-of-range OR malformed dots. A non-int/"" key passes the
+            // numeric range check under PHP's loose comparison yet has no bitmap
+            // entry, triggering an "Undefined array key" warning — isset() covers
+            // both without warning.
+            if (!isset($bitmap[$col][$row])) {
                 continue;
             }
             $code |= $bitmap[$col][$row];
