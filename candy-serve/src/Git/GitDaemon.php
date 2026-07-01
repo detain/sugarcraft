@@ -470,6 +470,12 @@ final class GitDaemon
             $oldHash = $cmd['old'];
             $newHash = $cmd['new'];
             $ref = $cmd['ref'];
+            // Validate ref name against git ref naming rules to prevent shell injection
+            if (\preg_match('/^refs\/[a-zA-Z0-9._\/.-]+$/', $ref) !== 1) {
+                $out = ["Invalid ref name: {$ref}"];
+                $rc = 128;
+                continue;
+            }
             $escapedRef = \escapeshellarg($ref);
 
             $out = [];

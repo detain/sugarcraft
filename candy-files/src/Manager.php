@@ -449,8 +449,8 @@ final class Manager implements Model
     {
         $trashDir = sys_get_temp_dir() . '/candyfiles-trash-' . getmypid();
         $basename = basename($originalPath);
-        // Avoid collisions: use microtime + uniqid to make a unique filename
-        $trashName = sprintf('%s_%s_%s', microtime(true), uniqid('', true), $basename);
+        // Use cryptographically secure random bytes for unpredictable trash path
+        $trashName = sprintf('%s_%s', bin2hex(random_bytes(16)), $basename);
         $trashDir = $trashDir . '/' . $trashName;
         return $trashDir;
     }
@@ -726,6 +726,16 @@ final class Manager implements Model
         }
         // Path-traversal guard: reject names containing directory separators
         if (str_contains($newName, '/') || str_contains($newName, '\\') || str_contains($newName, '..')) {
+            return $this->withActivePane(fn(Pane $p) =>
+                Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))
+                ->withInputBuffer(null);
+        }
+        // Additional path traversal guard: validate resolved path stays within source directory
+        $dst = Pane::join($pane->cwd, $newName);
+        $resolvedDst = \Phar::canonicalize($dst);
+        $resolvedCwd = \Phar::canonicalize($pane->cwd);
+        if (str_starts_with($resolvedDst, $resolvedCwd) === false) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
                 ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))
