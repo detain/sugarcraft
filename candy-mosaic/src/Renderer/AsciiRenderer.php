@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic\Renderer;
 
+use SugarCraft\Core\Util\ColorUtil;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Lang;
 use SugarCraft\Palette\Color;
@@ -24,6 +25,8 @@ use SugarCraft\Palette\Color;
  */
 final class AsciiRenderer implements Renderer
 {
+    use \SugarCraft\Mosaic\Concerns\RenderValidationTrait;
+
     /** Standard 15-step luminance ramp, darkest → brightest. */
     private const RAMP = ' .,:;i1tfLCG08@';
 
@@ -34,17 +37,7 @@ final class AsciiRenderer implements Renderer
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
-        if ($width <= 0) {
-            throw new \InvalidArgumentException(Lang::t('renderer.invalid_width', ['width' => $width]));
-        }
-        if ($height !== null && $height <= 0) {
-            throw new \InvalidArgumentException(Lang::t('renderer.invalid_height', ['height' => $height]));
-        }
-
-        $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
-        if ($effectiveHeight <= 0) {
-            $effectiveHeight = 1;
-        }
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         $src = imagecreatefromstring($image->bytes);
         if ($src === false) {
@@ -83,7 +76,7 @@ final class AsciiRenderer implements Renderer
                     $g = $rgb['green'];
                     $b = $rgb['blue'];
 
-                    $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
+                    $luma = ColorUtil::luma($r, $g, $b);
                     $ch = self::RAMP[(int) round($luma / 255 * $rampMax)];
 
                     $line .= match ($this->color) {

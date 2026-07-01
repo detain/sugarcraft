@@ -15,6 +15,8 @@ use SugarCraft\Mosaic\Lang;
  */
 final class ChafaRenderer implements Renderer
 {
+    use \SugarCraft\Mosaic\Concerns\RenderValidationTrait;
+
     /** Memoised result of {@see available()} (null = not probed yet). */
     private static ?bool $available = null;
 
@@ -67,22 +69,7 @@ final class ChafaRenderer implements Renderer
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
-        if ($width <= 0) {
-            throw new \InvalidArgumentException(
-                Lang::t('renderer.invalid_width', ['width' => $width])
-            );
-        }
-
-        if ($height !== null && $height <= 0) {
-            throw new \InvalidArgumentException(
-                Lang::t('renderer.invalid_height', ['height' => $height])
-            );
-        }
-
-        $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
-        if ($effectiveHeight <= 0) {
-            $effectiveHeight = 1;
-        }
+        $effectiveHeight = $this->prepareRender($image, $width, $height);
 
         $size = "{$width}x{$effectiveHeight}";
         $cmd = ['chafa', '--size=' . $size];

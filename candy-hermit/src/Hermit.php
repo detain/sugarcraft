@@ -547,7 +547,7 @@ final class Hermit
         }
 
         // Composite onto background
-        return $this->compositeOver($lines, $backgroundView);
+        return $this->compositeOver($lines, $backgroundView, $winWidth);
     }
 
     // -------------------------------------------------------------------------
@@ -817,14 +817,13 @@ final class Hermit
         );
     }
 
-    private function compositeOver(array $overlayLines, string $background): string
+    private function compositeOver(array $overlayLines, string $background, int $winWidth): string
     {
         $bgLines = \explode("\n", $background);
         if (\end($bgLines) === '') \array_pop($bgLines);
 
         $x = $this->xOffset;
         $y = $this->yOffset;
-        $winWidth = $this->windowWidth > 0 ? $this->windowWidth : $this->computeWidth();
 
         foreach ($overlayLines as $lineIdx => $line) {
             $destY = $y + $lineIdx;

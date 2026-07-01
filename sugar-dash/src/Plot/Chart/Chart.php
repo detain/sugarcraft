@@ -730,6 +730,46 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
+     * Canonical wither accepting an overrides array.
+     *
+     * Merges $overrides into the current property values and returns a new
+     * Chart instance. This replaces the boilerplate of 12 individual withers
+     * with a single unified method.
+     *
+     * @param array{
+     *   dataPoints?: list<ChartDataPoint>,
+     *   type?: ChartType,
+     *   widthConstraint?: int|null,
+     *   heightConstraint?: int,
+     *   showGrid?: bool,
+     *   showValues?: bool,
+     *   showLabels?: bool,
+     *   xAxisLabel?: string|null,
+     *   yAxisLabel?: string|null,
+     *   color?: Color|null,
+     *   gridColor?: Color|null,
+     *   labelColor?: Color|null,
+     * } $overrides
+     */
+    public function with(array $overrides): self
+    {
+        return new self(
+            dataPoints: $overrides['dataPoints'] ?? $this->dataPoints,
+            type: $overrides['type'] ?? $this->type,
+            widthConstraint: $overrides['widthConstraint'] ?? $this->widthConstraint,
+            heightConstraint: $overrides['heightConstraint'] ?? $this->heightConstraint,
+            showGrid: $overrides['showGrid'] ?? $this->showGrid,
+            showValues: $overrides['showValues'] ?? $this->showValues,
+            showLabels: $overrides['showLabels'] ?? $this->showLabels,
+            xAxisLabel: $overrides['xAxisLabel'] ?? $this->xAxisLabel,
+            yAxisLabel: $overrides['yAxisLabel'] ?? $this->yAxisLabel,
+            color: $overrides['color'] ?? $this->color,
+            gridColor: $overrides['gridColor'] ?? $this->gridColor,
+            labelColor: $overrides['labelColor'] ?? $this->labelColor,
+        );
+    }
+
+    /**
      * Build a Buffer from a multi-line string output.
      *
      * All cells are created with null style — the diff algorithm will
