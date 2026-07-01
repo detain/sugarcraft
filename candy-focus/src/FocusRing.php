@@ -22,7 +22,7 @@ namespace SugarCraft\Focus;
  * Mirrors the focus-traversal role of charmbracelet/bubbles' focus handling and
  * sugar-dash's FocusManager, but as a standalone, dependency-free, ordered ring.
  */
-final class FocusRing
+final class FocusRing implements \IteratorAggregate, \JsonSerializable
 {
     /**
      * @param list<string>            $ids       registered region ids, in traversal order
@@ -340,6 +340,33 @@ final class FocusRing
             $this->ids,
             fn (string $id): bool => isset($this->disabled[$id]),
         ));
+    }
+
+    /** Zero-cost enabled region count (avoids array allocation of enabledIds()). */
+    public function enabledCount(): int
+    {
+        return count($this->ids) - count($this->disabled);
+    }
+
+    /** Zero-cost disabled region count. */
+    public function disabledCount(): int
+    {
+        return count($this->disabled);
+    }
+
+    /** @return \Traversable<int, string> Yields region ids in traversal order */
+    public function getIterator(): \Traversable
+    {
+        yield from $this->ids;
+    }
+
+    public function jsonSerialize(): array
+    {
+        return [
+            'ids' => $this->ids,
+            'index' => $this->index,
+            'disabled' => array_keys($this->disabled),
+        ];
     }
 
     /** The focused region id, or null when the ring is empty. */
