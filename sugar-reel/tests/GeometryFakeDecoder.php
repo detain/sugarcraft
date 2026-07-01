@@ -50,4 +50,15 @@ final class GeometryFakeDecoder extends FakeDecoder
 
         parent::open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
     }
+
+    /**
+     * @inheritDoc
+     *
+     * Re-opens with geometry-aware frame regeneration.
+     */
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    {
+        // Regenerate frames at the new geometry, then reset index.
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+    }
 }
