@@ -191,6 +191,24 @@ final class TapeRecorder
             \SugarCraft\Core\KeyType::Down => 'Down',
             \SugarCraft\Core\KeyType::Left => 'Left',
             \SugarCraft\Core\KeyType::Right => 'Right',
+            \SugarCraft\Core\KeyType::Home => 'Home',
+            \SugarCraft\Core\KeyType::End => 'End',
+            \SugarCraft\Core\KeyType::PageUp => 'PageUp',
+            \SugarCraft\Core\KeyType::PageDown => 'PageDown',
+            \SugarCraft\Core\KeyType::Delete => 'Delete',
+            \SugarCraft\Core\KeyType::Insert => 'Insert',
+            \SugarCraft\Core\KeyType::F1 => 'F1',
+            \SugarCraft\Core\KeyType::F2 => 'F2',
+            \SugarCraft\Core\KeyType::F3 => 'F3',
+            \SugarCraft\Core\KeyType::F4 => 'F4',
+            \SugarCraft\Core\KeyType::F5 => 'F5',
+            \SugarCraft\Core\KeyType::F6 => 'F6',
+            \SugarCraft\Core\KeyType::F7 => 'F7',
+            \SugarCraft\Core\KeyType::F8 => 'F8',
+            \SugarCraft\Core\KeyType::F9 => 'F9',
+            \SugarCraft\Core\KeyType::F10 => 'F10',
+            \SugarCraft\Core\KeyType::F11 => 'F11',
+            \SugarCraft\Core\KeyType::F12 => 'F12',
             default => null,
         };
     }
@@ -206,18 +224,7 @@ final class TapeRecorder
      */
     private static function escapeVhsRune(string $rune): string
     {
-        $result = '';
-        for ($i = 0; $i < strlen($rune); $i++) {
-            $c = $rune[$i];
-            if ($c === '\\') {
-                $result .= '\\\\'; // escape backslash as \\
-            } elseif ($c === '"') {
-                $result .= '\\"';  // escape quote as \"
-            } else {
-                $result .= $c;
-            }
-        }
-        return $result;
+        return addcslashes($rune, '\\"');
     }
 
     /**
