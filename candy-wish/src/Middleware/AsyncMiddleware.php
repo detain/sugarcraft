@@ -45,8 +45,10 @@ abstract class AsyncMiddleware implements MiddlewareContract
         };
 
         $result = $this->handleAsync($ctx, $session, $wrappedNext);
+        // Return the promise directly so the event loop is not blocked.
+        // The caller is responsible for settling the promise.
         if ($result instanceof PromiseInterface) {
-            PromiseAwait::settle($result);
+            return $result;
         }
         return \React\Promise\resolve(null);
     }

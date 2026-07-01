@@ -58,11 +58,14 @@ final class PromiseAwait
         $timed = \React\Promise\Timer\timeout($promise, $timeout, Loop::get());
 
         // When the timeout fires (or the wrapped promise settles), catch it.
+        // Only set $ex if not already set to preserve the original rejection.
         $timed->then(
             null,
             function (\Throwable $e) use (&$ex, &$done): void {
-                $ex = $e;
-                $done = true;
+                if ($ex === null) {
+                    $ex = $e;
+                    $done = true;
+                }
             },
         );
 

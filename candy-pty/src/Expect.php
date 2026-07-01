@@ -386,7 +386,7 @@ final class Expect
     /**
      * Wait for the master to signal EOF on the PTY.
      *
-     * Mirrors charmbracelet/m泡泡/expect.Exp.
+     * Mirrors charmbracelet/mbubbletea/expect.Exp.
      *
      * @throws ExpectEofException when the master already reached EOF.
      */

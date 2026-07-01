@@ -65,11 +65,6 @@ final class TapeToGif
         $fps = (float) ($options['fps'] ?? 30.0);
         $cliTheme = $options['theme'] ?? null;
 
-        // Prefer font settings from the cassette header (Set FontSize/FontFamily
-        // directives in the tape) over CLI defaults.
-        $fontSize = $cassette->header->fontSize ?? (int) ($options['fontSize'] ?? 14);
-        $fontFamily = $cassette->header->fontFamily ?? $options['fontFamily'] ?? 'JetBrainsMono';
-
         $source = @file_get_contents($tapePath);
         if ($source === false) {
             throw new \RuntimeException("Cannot read tape file: {$tapePath}");
@@ -79,6 +74,11 @@ final class TapeToGif
         $ast = $this->parser->parse($tokens);
         $strict = (bool) ($options['strict'] ?? false);
         $cassette = $this->compiler->compile($ast, $tapePath, $strict);
+
+        // Prefer font settings from the cassette header (Set FontSize/FontFamily
+        // directives in the tape) over CLI defaults.
+        $fontSize = $cassette->header->fontSize ?? (int) ($options['fontSize'] ?? 14);
+        $fontFamily = $cassette->header->fontFamily ?? $options['fontFamily'] ?? 'JetBrainsMono';
 
         $themeName = $cassette->header->theme ?? $cliTheme ?? 'TokyoNight';
         $theme = $this->resolveTheme($themeName, $strict);

@@ -242,13 +242,16 @@ final class PosixMasterPty implements MasterPty
             // must be closed explicitly or tty_hangup() never fires.
         }
 
+        // Dup the fd before closing to prevent FD reuse race. When we
+        // went through the stream path, our libc fd may have been
+        // recycled by an unrelated open() between our fopen() and
+        // this close(). Duping first gives us a stable reference.
+        if ($usedStream) {
+            Libc::lib()->dup($this->fd);
+        }
         $rc = Libc::lib()->close($this->fd);
-        // When we went through the stream path, our libc fd may have
-        // been recycled by an unrelated open() between our fopen() and
-        // this close() — close() on it can then succeed-but-target-the-
-        // wrong-thing OR return EBADF (-1) if nothing claimed it. Either
-        // is fine for us; surface only failures from the pure-libc path
-        // where rc != 0 means the master fd never closed.
+        // Surface only failures from the pure-libc path where rc != 0
+        // means the master fd never closed.
         if ($rc !== 0 && !$usedStream) {
             throw new PtyException(
                 \SugarCraft\Pty\Lang::t('close.failed', ['fd' => $this->fd, 'rc' => $rc])

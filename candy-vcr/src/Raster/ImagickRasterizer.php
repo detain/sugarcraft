@@ -59,7 +59,12 @@ final class ImagickRasterizer implements Rasterizer
     {
         $clone = new self($this->fontSize, $this->fontFamily, $theme);
         $clone->cacheDisabled = $this->cacheDisabled;
-        $clone->tileCache = $this->tileCache;
+        // Deep-clone tileCache so each instance has independent Imagick objects.
+        // Without this, clearTileCache() on a clone would destroy tiles the
+        // original instance is still using.
+        foreach ($this->tileCache as $key => $tile) {
+            $clone->tileCache[$key] = clone $tile;
+        }
         $clone->tileCacheFingerprint = $this->tileCacheFingerprint;
         $clone->hits = $this->hits;
         $clone->misses = $this->misses;
@@ -74,7 +79,12 @@ final class ImagickRasterizer implements Rasterizer
             $this->theme,
         );
         $clone->cacheDisabled = $this->cacheDisabled;
-        $clone->tileCache = $this->tileCache;
+        // Deep-clone tileCache so each instance has independent Imagick objects.
+        // Without this, clearTileCache() on a clone would destroy tiles the
+        // original instance is still using.
+        foreach ($this->tileCache as $key => $tile) {
+            $clone->tileCache[$key] = clone $tile;
+        }
         $clone->tileCacheFingerprint = $this->tileCacheFingerprint;
         $clone->hits = $this->hits;
         $clone->misses = $this->misses;

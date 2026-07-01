@@ -111,6 +111,7 @@ int   grantpt(int fd);
 int   unlockpt(int fd);
 int   ptsname_r(int fd, char *buf, unsigned long buflen);
 {$openpty}int   waitpid(int pid, int *status, int options);
+int   dup(int fd);
 int   close(int fd);
 int   open(const char *path, int flags);
 int   ioctl(int fd, unsigned long request, void *arg);
