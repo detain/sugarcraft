@@ -43,7 +43,7 @@ final class CancellationToken
      * @internal  Called by CancellationSource::cancel() to trigger cancellation.
      *            Consumers must use CancellationSource::cancel() — not this method.
      */
-    public function markCancelled(): void
+    public function acceptCancellationSource(): void
     {
         if ($this->cancelled) {
             return;
