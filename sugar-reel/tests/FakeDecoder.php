@@ -14,7 +14,7 @@ use SugarCraft\Reel\Render\Mode;
  * Used in tests to provide deterministic frame sequences without any
  * real video file or external process.
  */
-final class FakeDecoder implements Decoder
+class FakeDecoder implements Decoder
 {
     /** @var list<RgbFrame> */
     protected array $frames;
