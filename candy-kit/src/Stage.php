@@ -67,4 +67,56 @@ final class Stage
         $pad   = str_repeat(' ', max(0, $indent));
         return $pad . $theme->muted->render($glyph) . ' ' . $message;
     }
+
+    /**
+     * Render a sub-step with an inline progress bar.
+     *
+     * Output: `  ├─ message ████░░░░ 40%`
+     *
+     * The bar is drawn with 10 segments (█ for filled, ░ for empty).
+     * Both $current and $total are clamped: negatives become 0, and
+     * values exceeding $total are capped at $total.
+     *
+     * @param string $message  descriptive label for the step
+     * @param int    $current  completed units
+     * @param int    $total    total units; pass 0 to show a indeterminate spinner
+     * @param bool   $isLast   use the corner glyph (`└─`) for the terminal step
+     * @param int    $indent   left margin in cells
+     */
+    public static function subStepWithProgress(
+        string $message,
+        int $current,
+        int $total,
+        ?Theme $theme = null,
+        bool $isLast = false,
+        int $indent = 2,
+    ): string {
+        $theme   ??= Theme::ansi();
+        $current  = max(0, $current);
+        $total    = max(0, $total);
+        if ($total > 0) {
+            $current = min($current, $total);
+        }
+
+        $bar = '';
+        $pct = '';
+        if ($total > 0) {
+            $filled = (int) round(10 * $current / $total);
+            $bar = $theme->accent->render(str_repeat('█', $filled))
+               . $theme->muted->render(str_repeat('░', 10 - $filled));
+            $pct = $theme->muted->render(sprintf(' %3d%%', (int) round(100 * $current / $total)));
+        } else {
+            // Indeterminate: cycle through a rotating spinner glyph
+            static $spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+            $frame = $spinnerFrames[(int) (microtime(false) * 10) % 10];
+            $bar = $theme->accent->render($frame);
+        }
+
+        $glyph = $isLast ? '└─' : '├─';
+        $pad   = str_repeat(' ', max(0, $indent));
+
+        return $pad . $theme->muted->render($glyph) . ' '
+             . $message . ' '
+             . $bar . $pct;
+    }
 }

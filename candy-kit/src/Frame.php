@@ -66,6 +66,17 @@ final class Frame
         return new self($title, $this->status, $this->borderStyle);
     }
 
+    /**
+     * Theme-aware title rendering — applies $style to $text and sets
+     * the result as the title bar. This is a convenience over
+     * {@see withTitle()} for callers that already have a Style
+     * rather than a pre-rendered string.
+     */
+    public function withTitleText(string $text, Style $style): self
+    {
+        return $this->withTitle($style->render($text));
+    }
+
     /** The (pre-rendered) status-bar string, left-aligned on the bottom row. */
     public function withStatus(string $status): self
     {
@@ -133,18 +144,7 @@ final class Frame
      */
     private static function padRight(string $s, int $width): string
     {
-        $len = Width::string($s);
-
-        if ($len > $width) {
-            // Width::truncateAnsi preserves CSI/OSC sequences so foreground/
-            // background/bold survive the cut; reset SGR afterwards to guarantee
-            // no bleed past the frame boundary.
-            $s = Width::truncateAnsi($s, max(0, $width - 1)) . '…' . Ansi::reset();
-            // Re-measure: truncate can stop short of $width (it won't split a
-            // wide glyph), so `truncated + …` is NOT guaranteed to be exactly
-            // $width cells — fall through to pad it out.
-            $len = Width::string($s);
-        }
+        [$s, $len] = self::truncateWithEllipsis($s, $width);
 
         if ($len < $width) {
             return $s . str_repeat(' ', $width - $len);
@@ -161,6 +161,28 @@ final class Frame
      */
     private static function padCenter(string $s, int $width): string
     {
+        [$s, $len] = self::truncateWithEllipsis($s, $width);
+
+        $pad = max(0, $width - $len);
+        $left = (int) floor($pad / 2);
+        $right = $pad - $left;
+
+        return str_repeat(' ', $left) . $s . str_repeat(' ', $right);
+    }
+
+    /**
+     * Truncate a string to at most $width cells, appending a single-cell
+     * ellipsis (…). Width::truncateAnsi preserves ANSI sequences so
+     * colours/sgr survive the cut; a final reset is appended to prevent
+     * bleed past the frame boundary.
+     *
+     * Re-measures after truncation: truncate can stop short of $width (a
+     * wide glyph won't be split), so this returns the measured length too.
+     *
+     * @return array{string, int} [$truncated, $measuredWidth]
+     */
+    private static function truncateWithEllipsis(string $s, int $width): array
+    {
         $len = Width::string($s);
 
         if ($len > $width) {
@@ -168,10 +190,6 @@ final class Frame
             $len = Width::string($s);
         }
 
-        $pad = max(0, $width - $len);
-        $left = (int) floor($pad / 2);
-        $right = $pad - $left;
-
-        return str_repeat(' ', $left) . $s . str_repeat(' ', $right);
+        return [$s, $len];
     }
 }

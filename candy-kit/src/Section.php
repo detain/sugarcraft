@@ -65,4 +65,38 @@ final class Section
         $bare   = str_repeat($rune, $repeat);
         return $theme->muted->render($bare);
     }
+
+    /**
+     * Render an indented section divider for sub-sections.
+     *
+     * Unlike {@see header()} which uses a left-pad rune count, subHeader()
+     * uses a fixed left-margin of spaces (default 4 cells) followed by
+     * a lighter divider rune (`·` by default). This visually nests the
+     * section under a parent {@see header()} or {@see rule()}.
+     *
+     * @param string $label     sub-section label; empty = divider line only
+     * @param Theme|null $theme
+     * @param int $indent       left margin in cells (default 4)
+     * @param int|null $width   total width; null = fill to terminal
+     * @param string $rune      divider rune between label and end fill
+     */
+    public static function subHeader(
+        string $label,
+        ?Theme $theme = null,
+        int $indent = 4,
+        ?int $width = 80,
+        string $rune = '·',
+    ): string {
+        $theme  ??= Theme::ansi();
+        $runeW  = max(1, Width::string($rune));
+        $pad    = str_repeat(' ', max(0, $indent));
+        $labelOut = $label === '' ? '' : ' ' . $theme->accent->render($label) . ' ';
+        $head    = $pad . $labelOut;
+        if ($width === null) {
+            return $head . $rune;
+        }
+        $remaining = max(0, $width - Width::string($head));
+        $repeat = intdiv($remaining, $runeW);
+        return $head . str_repeat($rune, $repeat);
+    }
 }
