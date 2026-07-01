@@ -349,12 +349,12 @@ final readonly class Viewport
     public function pageUp(): self   { return new self($this->inner->pageUp(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
     public function pageDown(): self { return new self($this->inner->pageDown(), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport); }
 
-    public function scrollLeft(int $n = 0): self
+    public function scrollLeft(int $n = 1): self
     {
         return new self($this->inner->scrollLeft($n), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
-    public function scrollRight(int $n = 0): self
+    public function scrollRight(int $n = 1): self
     {
         return new self($this->inner->scrollRight($n), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }

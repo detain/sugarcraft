@@ -74,6 +74,11 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Sort rows by column index.
+     *
+     * NOTE: Triggers rebuildView() which resets cursorRow to 0.
+     */
     public function sortBy(int $colIndex, bool $ascending = true): self
     {
         $clone = clone $this;
@@ -83,6 +88,11 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Toggle sort direction on column, or start ascending if different column.
+     *
+     * NOTE: Triggers rebuildView() which resets cursorRow to 0.
+     */
     public function sortByNext(int $colIndex): self
     {
         if ($this->sortColIndex === $colIndex) {
@@ -93,6 +103,11 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Filter rows by text (case-insensitive substring match).
+     *
+     * NOTE: Triggers rebuildView() which resets cursorRow to 0.
+     */
     public function filter(string $text): self
     {
         $clone = clone $this;
@@ -244,6 +259,10 @@ final class Table
      * sort and filter state. Called whenever rows, sort, or filter change so
      * that filter('') (clearFilter) restores the full set instead of operating
      * on already-shrunk data.
+     *
+     * NOTE: This method unconditionally resets cursorRow to 0. If you need
+     * to preserve cursor position across rebuilds, you must track and restore
+     * it manually after calling sortBy() or filter().
      */
     private function rebuildView(): void
     {
