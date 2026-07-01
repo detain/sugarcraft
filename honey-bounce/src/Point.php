@@ -11,7 +11,7 @@ namespace SugarCraft\Bounce;
  * The `$z` axis defaults to `0.0` so existing 2D call sites keep working
  * unchanged.
  */
-final class Point
+final class Point implements \JsonSerializable
 {
     public function __construct(
         public readonly float $x,
@@ -37,5 +37,18 @@ final class Point
         $dy = $this->y - $other->y;
         $dz = $this->z - $other->z;
         return sqrt($dx * $dx + $dy * $dy + $dz * $dz);
+    }
+
+    public function __toString(): string
+    {
+        return "Point(x: {$this->x}, y: {$this->y}, z: {$this->z})";
+    }
+
+    /**
+     * @return array{0: float, 1: float, 2: float}
+     */
+    public function jsonSerialize(): array
+    {
+        return [$this->x, $this->y, $this->z];
     }
 }

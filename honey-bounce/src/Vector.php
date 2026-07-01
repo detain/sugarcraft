@@ -15,7 +15,7 @@ namespace SugarCraft\Bounce;
  * unchanged. Use the third component for true 3D simulations or to
  * express depth in pseudo-3D scenes.
  */
-final class Vector
+final class Vector implements \JsonSerializable
 {
     public function __construct(
         public readonly float $x,
@@ -111,5 +111,18 @@ final class Vector
             $this->y + ($other->y - $this->y) * $t,
             $this->z + ($other->z - $this->z) * $t,
         );
+    }
+
+    public function __toString(): string
+    {
+        return "Vector(x: {$this->x}, y: {$this->y}, z: {$this->z})";
+    }
+
+    /**
+     * @return array{0: float, 1: float, 2: float}
+     */
+    public function jsonSerialize(): array
+    {
+        return [$this->x, $this->y, $this->z];
     }
 }

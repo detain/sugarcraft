@@ -7,6 +7,13 @@ namespace SugarCraft\Bounce\Tests;
 use SugarCraft\Bounce\Spring;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * @group parallel-unsafe
+ *
+ * These tests modify global process environment via putenv() and cannot run
+ * in parallel (e.g., with Paratest). The putenv() calls affect the entire
+ * process state, not just the current test context.
+ */
 final class ReducedMotionTest extends TestCase
 {
     protected function setUp(): void

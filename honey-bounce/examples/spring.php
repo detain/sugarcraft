@@ -8,7 +8,7 @@ declare(strict_types=1);
  *   php examples/spring.php
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+require dirname(__DIR__) . '/vendor/autoload.php';
 
 use SugarCraft\Bounce\Spring;
 

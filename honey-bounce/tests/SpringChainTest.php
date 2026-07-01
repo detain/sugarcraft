@@ -12,7 +12,7 @@ final class SpringChainTest extends TestCase
 {
     public function testEmptyChainIsComplete(): void
     {
-        $chain = SpringChain::build([]);
+        $chain = SpringChain::new([]);
         $this->assertTrue($chain->isComplete());
         $this->assertEquals([], $chain->currentPositions());
     }
@@ -20,7 +20,7 @@ final class SpringChainTest extends TestCase
     public function testSingleStageCompletesWhenSettled(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
-        $chain = SpringChain::build([[$spring, 0.0, 0.0, 100.0]]);
+        $chain = SpringChain::new([[$spring, 0.0, 0.0, 100.0]]);
 
         $this->assertFalse($chain->isComplete());
         $this->assertEquals(0, $chain->activeStage());
@@ -43,7 +43,7 @@ final class SpringChainTest extends TestCase
         $spring1 = new Spring(1.0 / 60.0, 6.0, 1.0);
         $spring2 = new Spring(1.0 / 60.0, 6.0, 1.0);
 
-        $chain = SpringChain::build([
+        $chain = SpringChain::new([
             [$spring1, 0.0, 0.0, 100.0],
             [$spring2, 0.0, 0.0, 50.0],
         ]);
@@ -71,7 +71,7 @@ final class SpringChainTest extends TestCase
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
 
-        $chain = SpringChain::build([
+        $chain = SpringChain::new([
             [$spring, 0.0, 0.0, 100.0],
             [$spring, 0.0, 0.0, 50.0],
             [$spring, 0.0, 0.0, 75.0],
@@ -93,7 +93,7 @@ final class SpringChainTest extends TestCase
     public function testWithStageAddsNewStage(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
-        $chain = SpringChain::build([
+        $chain = SpringChain::new([
             [$spring, 0.0, 0.0, 100.0],
         ])->withStage($spring, 0.0, 0.0, 50.0);
 
@@ -103,7 +103,7 @@ final class SpringChainTest extends TestCase
     public function testTickReturnsPositionsAndCompleteStatus(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
-        $chain = SpringChain::build([[$spring, 0.0, 0.0, 100.0]]);
+        $chain = SpringChain::new([[$spring, 0.0, 0.0, 100.0]]);
 
         [$positions, $complete, $newChain] = $chain->tick();
 
