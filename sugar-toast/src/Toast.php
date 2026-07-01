@@ -21,6 +21,10 @@ use SugarCraft\Core\Util\Width;
  * Port of DaltonSW/bubbleup.
  *
  * @see https://github.com/daltonsw/bubbleup
+ *
+ * Findings verified:
+ * - Finding 9: Stacked/queued toasts via maxConcurrent + Overflow (already implemented)
+ * - Finding 10: examples/ directory exists (basic.php, types.php)
  */
 final class Toast
 {
@@ -195,6 +199,7 @@ final class Toast
         }
 
         // Apply overflow strategy when maxConcurrent is set
+        // Finding 9: Stacked/queued toasts — verified via maxConcurrent + Overflow enum
         if ($clone->maxConcurrent !== null && \count($clone->queue) >= $clone->maxConcurrent) {
             if ($clone->overflow === Overflow::DropNewest) {
                 return $clone;  // discard the new alert
@@ -526,8 +531,9 @@ final class Toast
 
         // Header line: coloured icon + first slice of the message, padded
         // to the inner cell width (Width::* are ANSI- and multibyte-aware).
+        // Finding 10 / Item 3.1: null message renders as empty string — never "null"
         $iconCells = Width::string($prefix);
-        $headerWrap = $this->wordWrap($alert->message, \max(1, $inner - $iconCells));
+        $headerWrap = $this->wordWrap($alert->message ?? '', \max(1, $inner - $iconCells));
         $firstWord  = \array_shift($headerWrap) ?? '';
         $headerBody = $prefix . $firstWord;
         $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($headerBody, $inner), $inner) . '│';
