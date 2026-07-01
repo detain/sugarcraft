@@ -41,4 +41,18 @@ interface FuzzyMatcher
      * @return array<MatchResult> Ranked match results
      */
     public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array;
+
+    /**
+     * Match a query against an iterable of candidates, yielding results as they are found.
+     *
+     * Generator-based iteration for memory efficiency with large candidate lists.
+     * Results are yielded as they are computed, then sorted and sliced at the end.
+     *
+     * @param string    $query      The search query
+     * @param iterable<string> $candidates Candidate strings to score
+     * @param int|null  $limit      Maximum number of results to return (null = unlimited)
+     * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
+     * @return \Generator<MatchResult> Yields MatchResult as they are computed
+     */
+    public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator;
 }

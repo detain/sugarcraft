@@ -6,6 +6,7 @@ namespace SugarCraft\Fuzzy\Matcher;
 
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Fuzzy\MatchResultSorter;
 
 /**
  * Smith-Waterman-style local alignment fuzzy matcher.
@@ -68,20 +69,38 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             }
         }
 
-        // Sort by score descending, then candidate ascending as tiebreak.
-        // Use ?: (not ??) so an equal-score comparison (0) falls through to the
-        // haystack tiebreak; <=> never yields null, so ?? would skip it entirely.
-        usort($results, static fn(MatchResult $a, MatchResult $b) =>
-            ($b->score <=> $a->score) ?: ($a->haystack <=> $b->haystack)
-        );
+        return MatchResultSorter::sortAndSlice($results, $limit);
+    }
 
-        // Simple full-sort-then-slice — no heap/partial-sort needed for typical
-        // TUI list sizes; preserves the stable-tiebreak contract.
-        if ($limit !== null && $limit >= 0) {
-            $results = array_slice($results, 0, $limit);
+    /**
+     * Match a query against an iterable of candidates, yielding results as they are found.
+     *
+     * Generator-based iteration for memory efficiency with large candidate lists.
+     * Results are yielded as they are computed, then sorted and sliced at the end.
+     *
+     * @param string    $query      The search query
+     * @param iterable<string> $candidates Candidate strings to score
+     * @param int|null  $limit      Maximum number of results to return (null = unlimited)
+     * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
+     * @return \Generator<MatchResult> Yields MatchResult as they are computed
+     */
+    public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+    {
+        if ($query === '') {
+            return;
         }
 
-        return $results;
+        $results = [];
+        foreach ($candidates as $candidate) {
+            $result = $this->compute($query, $candidate);
+            if ($result !== null && $result->score >= $minScore) {
+                $results[] = $result;
+            }
+        }
+
+        foreach (MatchResultSorter::sortAndSlice($results, $limit) as $result) {
+            yield $result;
+        }
     }
 
     /**
