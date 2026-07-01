@@ -9,8 +9,6 @@ namespace SugarCraft\Lister;
  *
  * Transitions:
  * - unfiltered → filtering  (filter function set, filter applied)
- * - filtering → filtered    (filter produced a result)
- * - filtered → unfiltered   (filter function cleared)
  * - filtering → unfiltered  (filter cleared before producing result)
  */
 enum FilterState
@@ -20,7 +18,4 @@ enum FilterState
 
     /** A filter function is configured and actively filtering. */
     case filtering;
-
-    /** Filtering produced results; filter remains active. */
-    case filtered;
 }
