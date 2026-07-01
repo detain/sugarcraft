@@ -10,6 +10,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Zone\Manager;
@@ -189,7 +190,7 @@ final class Tabs implements Model
         $tabWidths = [];
         foreach ($this->labels as $i => $label) {
             $style = $i === $this->active ? $this->activeStyle : $this->inactiveStyle;
-            $label = self::sanitizeCell($label);
+            $label = Sanitize::controlChars($label);
             $padded = ' ' . $label . ' ';
             $tabWidths[$i] = Width::string($padded);
 
@@ -455,16 +456,6 @@ final class Tabs implements Model
     }
 
     /**
-     * Strip C0 control characters from caller-supplied label text so they
-     * cannot inject newlines or corrupt the TUI render. SGR escape
-     * sequences (\x1b[...) are preserved.
-     */
-    private static function sanitizeCell(string $s): string
-    {
-        $s = str_replace(["\n", "\r", "\t"], ' ', $s);
-        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', '', $s) ?? $s;
-    }
-
     /**
      * Internal copy-with-overrides helper — rebuilds the Tabs via the
      * constructor with the same pattern as Tree::copy() / Table::mutate().

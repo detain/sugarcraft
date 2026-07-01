@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -165,7 +166,7 @@ final class Tree implements Model
                 ? $this->leafGlyph
                 : ($row['expanded'] ? $this->expandedGlyph : $this->collapsedGlyph);
             $indent = str_repeat('  ', $row['depth']);
-            $label = $this->sanitizeCell($row['label']);
+            $label = Sanitize::controlChars($row['label']);
             $line = $cursor . $indent . $glyph . $label;
             if ($this->width > 0) {
                 $line = Width::truncate($line, $this->width);
@@ -356,19 +357,6 @@ final class Tree implements Model
             $this->collapsedGlyph,
             $this->leafGlyph,
         );
-    }
-
-    /**
-     * Strip C0 control characters from caller-supplied cell/label text
-     * so they cannot inject newlines or corrupt the TUI render.
-     * SGR escape sequences (\x1b[...) are preserved.
-     */
-    private static function sanitizeCell(string $s): string
-    {
-        // Replace \n \r \t with spaces; strip other C0 except ESC (\x1b)
-        // which is legitimate for SGR sequences used by Style.
-        $s = str_replace(["\n", "\r", "\t"], ' ', $s);
-        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', '', $s) ?? $s;
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
