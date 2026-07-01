@@ -557,9 +557,11 @@ final class Theme
         if (!is_file($path)) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
         }
-        $raw = @file_get_contents($path);
+        $raw = file_get_contents($path);
         if ($raw === false) {
-            throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
+            $error = error_get_last();
+            $msg = $error['message'] ?? 'unknown error';
+            throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]) . ": {$msg}");
         }
         return self::fromJsonString($raw);
     }
