@@ -105,13 +105,16 @@ final class Theme
     }
 
     /**
-     * Resolve a theme by name. Presets: `'ansi'`, `'plain'`, `'charm'`,
+     * Resolve a theme by name. Presets: `'ansi'`, `'plain'`, `'charm`,
      * `'dracula'`, `'nord'`, `'catppuccin'`. Case-insensitive.
      *
-     * @throws \InvalidArgumentException if the name is not recognised
+     * @throws \InvalidArgumentException if the name is not a string or not recognised
      */
     public static function byName(string $name): self
     {
+        if (\is_string($name) === false) {
+            throw new \InvalidArgumentException('Theme name must be a string, ' . \gettype($name) . ' given');
+        }
         return match (strtolower($name)) {
             'ansi'        => self::ansi(),
             'plain'       => self::plain(),

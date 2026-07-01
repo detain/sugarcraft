@@ -31,7 +31,8 @@ final class Section
     ): string {
         $theme   ??= Theme::ansi();
         $runeW   = max(1, Width::string($rune));  // cell width of the fill rune
-        $left    = str_repeat($rune, intdiv(max(0, $leftPad), $runeW));
+        // $leftPad is a rune count (not cell count) — each rune repeats once
+        $left    = str_repeat($rune, max(0, $leftPad));
         $labelOut  = $label === '' ? '' : ' ' . $theme->accent->render($label) . ' ';
         $head      = $left . $labelOut;
         if ($width === null) {
@@ -47,6 +48,11 @@ final class Section
      * directly. Pass `width: null` to use a fixed two-rune dash.
      * The rule is styled with the theme's `muted` style and accepts
      * a custom fill rune (measured in cells for multi-cell glyphs).
+     *
+     * Note: when `$width` is null, rule() always produces at least 2 cells
+     * (unlike header() with null width which produces only 1 trailing rune).
+     * This minimum-2 behavior ensures the rule remains visible even at
+     * minimal terminal widths.
      */
     public static function rule(
         ?Theme $theme = null,
