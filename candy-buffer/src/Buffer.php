@@ -455,7 +455,7 @@ final class Buffer
                 }
 
                 // Close hyperlink when link changes or before new style.
-                if ($prevLink !== null && $cell->link() !== $prevLink) {
+                if ($prevLink !== null && ($cell->link() === null || !$cell->link()->equals($prevLink))) {
                     $out .= "\x1b]8;;\x1b\\";
                 }
 

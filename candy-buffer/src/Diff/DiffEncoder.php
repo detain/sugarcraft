@@ -49,6 +49,14 @@ final class DiffEncoder
      */
     public function encode(array $ops): string
     {
+        // Reset all state at start of encode() so the instance is safe
+        // to reuse across multiple diffs without stale cursor/style bleed.
+        $this->cursorCol = 1;
+        $this->cursorRow = 1;
+        $this->currentStyle = null;
+        $this->currentLinkUrl = null;
+        $this->lastRune = null;
+
         $out = '';
 
         foreach ($ops as $op) {

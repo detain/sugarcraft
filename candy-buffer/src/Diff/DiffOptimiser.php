@@ -93,7 +93,9 @@ final class DiffOptimiser
 
         foreach ($ops as $op) {
             if ($op instanceof SetCellOp && $this->canMergeWithBuffer($op, $bufferStyle, $bufferLink)) {
-                $buffer = array_merge($buffer, $op->cells);
+                foreach ($op->cells as $cell) {
+                    $buffer[] = $cell;
+                }
                 if (count($op->cells) > 0) {
                     $lastCell = $op->cells[count($op->cells) - 1];
                     $bufferStyle = $lastCell->style();

@@ -53,11 +53,13 @@ final class DiffEncoderTest extends TestCase
 
     public function testEncodeMoveCursorAlreadyAtPositionFromDifferentCursor(): void
     {
+        // Each encode() call resets state, so subsequent calls are independent.
+        // Here the second call starts from (1,1) and moves to (3,2).
         $encoder = new DiffEncoder();
         $encoder->encode([new MoveCursorOp(3, 2)]);
         $bytes = $encoder->encode([new MoveCursorOp(3, 2)]);
 
-        $this->assertSame('', $bytes);
+        $this->assertSame("\x1b[3;4H", $bytes);
     }
 
     public function testEncodeRepeatRunOp(): void

@@ -37,4 +37,12 @@ final class Hyperlink
 
     public function url(): string  { return $this->url; }
     public function id(): string   { return $this->id; }
+
+    /**
+     * Value equality: two hyperlinks are equal iff their url and id match.
+     */
+    public function equals(self $other): bool
+    {
+        return $this->url === $other->url && $this->id === $other->id;
+    }
 }
