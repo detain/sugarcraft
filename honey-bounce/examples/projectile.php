@@ -9,7 +9,7 @@ declare(strict_types=1);
  *   php examples/projectile.php
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+require dirname(__DIR__) . '/vendor/autoload.php';
 
 use SugarCraft\Bounce\Point;
 use SugarCraft\Bounce\Projectile;

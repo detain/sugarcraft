@@ -127,9 +127,9 @@ final class Spring
     }
 
     /** Frame-time (seconds) for a given frame rate. `Spring::fps(60)` → 1/60. */
-    public static function fps(int $n): float
+    public static function fps(float $n): float
     {
-        if ($n <= 0) {
+        if ($n <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('spring.fps_positive', ['fps' => $n]));
         }
         return 1.0 / $n;

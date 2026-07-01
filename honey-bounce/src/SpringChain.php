@@ -13,6 +13,9 @@ namespace SugarCraft\Bounce;
  */
 final class SpringChain
 {
+    /** Threshold below which a spring is considered settled (position and velocity near zero). */
+    private const SETTLING_THRESHOLD = 0.0005;
+
     /** @var list<array{0: Spring, 1:float, 2:float, 3:float}> */
     private array $stages;
 
@@ -33,7 +36,7 @@ final class SpringChain
      *
      * @param list<array{0: Spring, 1:float, 2:float, 3:float}> $stages
      */
-    public static function build(array $stages): self
+    public static function new(array $stages): self
     {
         return new self($stages);
     }
@@ -122,6 +125,6 @@ final class SpringChain
 
     private function isSettled(float $pos, float $vel, float $target): bool
     {
-        return abs($pos - $target) < 0.001 && abs($vel) < 0.001;
+        return abs($pos - $target) < self::SETTLING_THRESHOLD && abs($vel) < self::SETTLING_THRESHOLD;
     }
 }
