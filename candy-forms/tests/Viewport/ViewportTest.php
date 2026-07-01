@@ -214,11 +214,11 @@ final class ViewportTest extends TestCase
     public function testViewDropsLeftCellsOnXOffset(): void
     {
         // viewport must be narrower than the line for setXOffset to stick.
-        // After dropping left cells, the remaining content is also truncated
-        // to the viewport width (no-scrollbar overflow fix).
+        // After dropping left cells the remaining content fills the viewport
+        // without right-side truncation (xOffset already shifts the window).
         $v = Viewport::new(5, 1)->setContent('abcdefghij')->setXOffset(3);
-        // 'abcdefghij' drop 3 cells → 'defghij' (7 chars). Truncate to width=5 → 'defgh'.
-        $this->assertSame('defgh', $v->view());
+        // 'abcdefghij' drop 3 cells → 'defghij' (7 chars).
+        $this->assertSame('defghij', $v->view());
     }
 
     public function testSetWidthAndSetHeightAreIndependent(): void
