@@ -15,7 +15,7 @@ namespace SugarCraft\Buffer;
  * Mirrors charmbracelet/vte's Buffer and charmbracelet/lipgloss's
  * Style as the foundation for terminal rendering.
  */
-final class Buffer
+final class Buffer implements \JsonSerializable
 {
     /**
      * @param list<Cell> $grid Flat grid: index = $row * $width + $col
@@ -121,6 +121,10 @@ final class Buffer
      *
      * Cells from $source are copied into the region defined by
      * $region->origin and $region->size, clipped to buffer edges.
+     *
+     * Note: negative origins are silently clipped — a region origin at
+     * (-1, -1) starts one cell left/above the buffer's top-left corner
+     * and no cells are written until the region enters buffer bounds.
      */
     public function withRegion(Region $region, Buffer $source): self
     {
@@ -141,6 +145,7 @@ final class Buffer
                 $dstRow = $region->origin->row + $dy;
 
                 if ($dstCol < 0 || $dstRow < 0) {
+                    // Negative origins: silently skip cells outside buffer bounds.
                     continue;
                 }
 
@@ -153,6 +158,72 @@ final class Buffer
         }
 
         return $this->mutate(['grid' => $grid]);
+    }
+
+    /**
+     * Efficiently fill a rectangular $region with a single $cell.
+     *
+     * @param Region $region The region to fill (clipped to buffer bounds)
+     * @param Cell   $cell   The cell to write at each position in the region
+     */
+    public function fill(Region $region, Cell $cell): self
+    {
+        $grid = $this->grid;
+
+        for ($dy = 0; $dy < $region->height; $dy++) {
+            for ($dx = 0; $dx < $region->width; $dx++) {
+                $dstCol = $region->origin->col + $dx;
+                $dstRow = $region->origin->row + $dy;
+
+                if ($dstCol < 0 || $dstRow < 0) {
+                    continue;
+                }
+
+                if ($dstCol >= $this->width || $dstRow >= $this->height) {
+                    continue;
+                }
+
+                $grid[$dstRow * $this->width + $dstCol] = $cell;
+            }
+        }
+
+        return $this->mutate(['grid' => $grid]);
+    }
+
+    /**
+     * Extract a sub-region of this buffer into a new buffer.
+     *
+     * @param Region $region The region to copy (origin is always (0,0) in the returned buffer)
+     * @return self A new buffer containing the copied region
+     */
+    public function copy(Region $region): self
+    {
+        $newWidth = $region->width;
+        $newHeight = $region->height;
+        $newGrid = [];
+
+        for ($dy = 0; $dy < $region->height; $dy++) {
+            for ($dx = 0; $dx < $region->width; $dx++) {
+                $srcCol = $region->origin->col + $dx;
+                $srcRow = $region->origin->row + $dy;
+
+                if ($srcCol < 0 || $srcRow < 0) {
+                    // Outside source bounds — use blank cell.
+                    $newGrid[] = Cell::new();
+                    continue;
+                }
+
+                if ($srcCol >= $this->width || $srcRow >= $this->height) {
+                    // Outside source bounds — use blank cell.
+                    $newGrid[] = Cell::new();
+                    continue;
+                }
+
+                $newGrid[] = $this->grid[$srcRow * $this->width + $srcCol];
+            }
+        }
+
+        return self::fromGrid($newWidth, $newHeight, $newGrid);
     }
 
     // ─── Diff ───────────────────────────────────────────────────────────
@@ -522,5 +593,49 @@ final class Buffer
                 "Cell ({$col}, {$row}) is out of buffer bounds ({$this->width}x{$this->height})"
             );
         }
+    }
+
+    /**
+     * Serialization hook for caching/IPC use cases.
+     *
+     * @return array{width: int, height: int, grid: list<array>}
+     */
+    public function __serialize(): array
+    {
+        return [
+            'width' => $this->width,
+            'height' => $this->height,
+            'grid' => array_map(fn(Cell $cell) => $cell->__serialize(), $this->grid),
+        ];
+    }
+
+    /**
+     * Unserialization hook for caching/IPC use cases.
+     *
+     * @param array{width: int, height: int, grid: list<array>} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->width = $data['width'];
+        $this->height = $data['height'];
+        $this->grid = array_map(function (array $cellData): Cell {
+            $style = $cellData['style'] !== null
+                ? new Style($cellData['style']['fg'], $cellData['style']['bg'], $cellData['style']['attrs'])
+                : null;
+            $link = $cellData['link'] !== null
+                ? new Hyperlink($cellData['link']['url'], $cellData['link']['id'])
+                : null;
+            return new Cell($cellData['rune'], $style, $link, $cellData['width']);
+        }, $data['grid']);
+    }
+
+    /**
+     * JSON serialization support.
+     *
+     * @return array{width: int, height: int, grid: list<array>}
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__serialize();
     }
 }

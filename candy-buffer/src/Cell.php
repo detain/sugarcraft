@@ -22,7 +22,7 @@ namespace SugarCraft\Buffer;
  *
  * @readonly
  */
-final class Cell
+final class Cell implements \JsonSerializable
 {
     /**
      * @param string      $rune   Displayed grapheme(s) — empty string for continuation cells
@@ -98,5 +98,43 @@ final class Cell
             && $styleEqual
             && $this->link()?->url() === $other->link()?->url()
             && $this->width() === $other->width();
+    }
+
+    /**
+     * Serialization hook for caching/IPC use cases.
+     *
+     * @return array{rune: string, style: ?array, link: ?array, width: int}
+     */
+    public function __serialize(): array
+    {
+        return [
+            'rune' => $this->rune,
+            'style' => $this->style?->__serialize(),
+            'link' => $this->link?->__serialize(),
+            'width' => $this->width,
+        ];
+    }
+
+    /**
+     * Unserialization hook for caching/IPC use cases.
+     *
+     * @param array{rune: string, style: ?array, link: ?array, width: int} $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->rune = $data['rune'];
+        $this->style = $data['style'] !== null ? new Style($data['style']['fg'], $data['style']['bg'], $data['style']['attrs']) : null;
+        $this->link = $data['link'] !== null ? new Hyperlink($data['link']['url'], $data['link']['id']) : null;
+        $this->width = $data['width'];
+    }
+
+    /**
+     * JSON serialization support.
+     *
+     * @return array{rune: string, style: ?array, link: ?array, width: int}
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->__serialize();
     }
 }

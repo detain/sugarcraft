@@ -17,21 +17,28 @@ namespace SugarCraft\Buffer\Diff;
  */
 abstract class DiffOp
 {
-    /** Move cursor to ($col, $row) before other ops. */
+    /**
+     * Historical artifacts — these constants predate the op class
+     * split and are no longer referenced in the current implementation.
+     * Kept for API compatibility only.
+     *
+     * @deprecated Remove in a future major version. The type strings
+     *             are now encapsulated in the concrete op class names.
+     */
     public const TYPE_MOVE_CURSOR = 'move_cursor';
 
-    /** Write one or more cells starting at current cursor position. */
+    /** @deprecated See above */
     public const TYPE_SET_CELL = 'set_cell';
 
-    /** Erase N characters starting at current cursor position (ECH). */
+    /** @deprecated See above */
     public const TYPE_ERASE_RUN = 'erase_run';
 
-    /** Repeat the preceding character N times (REP). */
+    /** @deprecated See above */
     public const TYPE_REPEAT_RUN = 'repeat_run';
 
-    /** Transition SGR style before next cell write. */
+    /** @deprecated See above */
     public const TYPE_SET_STYLE = 'set_style';
 
-    /** Open or close OSC 8 hyperlink before next cell write. */
+    /** @deprecated See above */
     public const TYPE_SET_HYPERLINK = 'set_hyperlink';
 }
