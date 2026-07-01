@@ -81,6 +81,19 @@ final class Manager implements Model
             'right' => $right,
             'activeIdx' => 0,
         ];
+
+        // Register shutdown handler to clean up trash directory
+        static $shutdownRegistered = false;
+        if ($shutdownRegistered === false) {
+            $shutdownRegistered = true;
+            register_shutdown_function(static function (): void {
+                $trashDir = sys_get_temp_dir() . '/candyfiles-trash-' . getmypid();
+                if (\is_dir($trashDir)) {
+                    self::removePath($trashDir);
+                }
+            });
+        }
+
         return new self(
             $left,
             $right,
