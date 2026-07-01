@@ -29,6 +29,12 @@ use SugarCraft\Sprinkles\VAlign;
  * @property Align|null            $alignH       Horizontal text alignment
  * @property VAlign|null           $alignV       Vertical text alignment
  */
+
+/**
+ * Sentinel for "do not change" vs explicit null.
+ */
+final class Preserve {}
+
 final class Node
 {
     public const LEAF       = 'leaf';
@@ -193,7 +199,7 @@ final class Node
     public function withBorderStyle(?Border $b): self
     {
         // Pass sentinel to preserve all other properties via with()'s fallback
-        return $this->with(borderStyle: $b, style: self::nop(), alignH: self::nop(), alignV: self::nop());
+        return $this->with(borderStyle: $b, style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
     }
 
     /**
@@ -201,7 +207,7 @@ final class Node
      */
     public function withStyle(?Style $s): self
     {
-        return $this->with(style: $s, borderStyle: self::nop(), alignH: self::nop(), alignV: self::nop());
+        return $this->with(style: $s, borderStyle: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
     }
 
     /**
@@ -209,7 +215,7 @@ final class Node
      */
     public function withTitle(string $t): self
     {
-        return $this->with(title: $t, borderStyle: self::nop(), style: self::nop(), alignH: self::nop(), alignV: self::nop());
+        return $this->with(title: $t, borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
     }
 
     /**
@@ -217,18 +223,17 @@ final class Node
      * sugar-boxer-specific: candy-sprinkles Style does not ship margin as a
      * first-class concept.
      *
-     * @param int $top
-     * @param int $right  Defaults to 0 (uses $top)
-     * @param int $bottom Defaults to 0 (uses $top)
-     * @param int $left   Defaults to 0 (uses $right)
+     * @param int      $top
+     * @param int|null $right  Defaults to $top when null
+     * @param int|null $bottom Defaults to $top when null
+     * @param int|null $left   Defaults to $right when null
      */
-    public function withMargin(int $top, int $right = 0, int $bottom = 0, int $left = 0): self
+    public function withMargin(int $top, ?int $right = null, ?int $bottom = null, ?int $left = null): self
     {
-        $n = \func_num_args();
-        $right  = $n >= 2 ? $right  : $top;
-        $bottom = $n >= 3 ? $bottom : $top;
-        $left   = $n >= 4 ? $left   : $right;
-        return $this->with(margin: [$top, $right, $bottom, $left], borderStyle: self::nop(), style: self::nop(), alignH: self::nop(), alignV: self::nop());
+        $right  ??= $top;
+        $bottom ??= $top;
+        $left   ??= $right;
+        return $this->with(margin: [$top, $right, $bottom, $left], borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
     }
 
     /**
@@ -236,7 +241,7 @@ final class Node
      */
     public function withAlignH(Align $a): self
     {
-        return $this->with(alignH: $a, borderStyle: self::nop(), style: self::nop(), alignV: self::nop());
+        return $this->with(alignH: $a, borderStyle: self::preserve(), style: self::preserve(), alignV: self::preserve());
     }
 
     /**
@@ -244,7 +249,7 @@ final class Node
      */
     public function withAlignV(VAlign $v): self
     {
-        return $this->with(alignV: $v, borderStyle: self::nop(), style: self::nop(), alignH: self::nop());
+        return $this->with(alignV: $v, borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve());
     }
 
     public function withContent(string $content): self
@@ -314,13 +319,11 @@ final class Node
 
     /**
      * Sentinel for "do not change" vs explicit null.
-     * Using a private static method as a sentinel factory to avoid passing
-     * an instance into the constructor and to keep the type clean.
      */
-    private static function nop(): \stdClass
+    private static function preserve(): Preserve
     {
         static $sentinel;
-        return $sentinel ??= new \stdClass();
+        return $sentinel ??= new Preserve();
     }
 
     private function with(
@@ -342,19 +345,19 @@ final class Node
     ): self {
         // Preserve existing value when sentinel is passed (no arg).
         // Explicitly pass null to clear.
-        $resolvedBorderStyle = $borderStyle === self::nop()
+        $resolvedBorderStyle = $borderStyle === self::preserve()
             ? $this->borderStyle
             : ($borderStyle ?? ($this->borderStyle ?? null));
 
-        $resolvedStyle = $style === self::nop()
+        $resolvedStyle = $style === self::preserve()
             ? $this->style
             : ($style ?? $this->style);
 
-        $resolvedAlignH = $alignH === self::nop()
+        $resolvedAlignH = $alignH === self::preserve()
             ? $this->alignH
             : ($alignH ?? $this->alignH);
 
-        $resolvedAlignV = $alignV === self::nop()
+        $resolvedAlignV = $alignV === self::preserve()
             ? $this->alignV
             : ($alignV ?? $this->alignV);
 
