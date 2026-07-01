@@ -24,6 +24,14 @@ class InMemoryHistory implements HistoryInterface
      */
     private int $position = -1;
 
+    /** Maximum number of history entries to retain. 0 = unlimited. */
+    private int $maxHistory;
+
+    public function __construct(int $maxHistory = 0)
+    {
+        $this->maxHistory = $maxHistory;
+    }
+
     public function push(string $line): void
     {
         if ($line === '') {
@@ -36,6 +44,24 @@ class InMemoryHistory implements HistoryInterface
         // Prepend so index 0 = most recent.
         array_unshift($this->history, $line);
         $this->position = -1;
+        // Enforce maxHistory limit by evicting oldest entries.
+        if ($this->maxHistory > 0 && \count($this->history) > $this->maxHistory) {
+            $this->history = \array_slice($this->history, 0, $this->maxHistory);
+        }
+    }
+
+    /**
+     * Returns a new instance with the specified maxHistory limit.
+     */
+    public function withMaxHistory(int $limit): self
+    {
+        $clone = clone $this;
+        $clone->maxHistory = $limit;
+        // Immediately trim if current history exceeds new limit.
+        if ($limit > 0 && \count($clone->history) > $limit) {
+            $clone->history = \array_slice($clone->history, 0, $limit);
+        }
+        return $clone;
     }
 
     public function getPrevious(): ?string

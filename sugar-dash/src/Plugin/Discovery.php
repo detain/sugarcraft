@@ -29,29 +29,22 @@ final class Discovery
         }
 
         $plugins = [];
-        $handle = opendir($directory);
 
-        if ($handle === false) {
+        try {
+            $iterator = new \FilesystemIterator($directory, \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_FILEINFO);
+        } catch (\UnexpectedValueException) {
             return [];
         }
 
-        while (($entry = readdir($handle)) !== false) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-
-            $path = $directory . DIRECTORY_SEPARATOR . $entry;
-
+        foreach ($iterator as $entry) {
             // Skip non-executable files
             // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
-            if (!is_file($path) || !is_executable($path)) {
+            if (!$entry->isFile() || !$entry->isExecutable()) {
                 continue;
             }
 
-            $plugins[] = $path;
+            $plugins[] = $entry->getPathname();
         }
-
-        closedir($handle);
 
         return $plugins;
     }

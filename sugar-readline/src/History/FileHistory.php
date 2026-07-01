@@ -14,23 +14,30 @@ namespace SugarCraft\Readline\History;
 final class FileHistory extends InMemoryHistory
 {
     private string $filePath;
+    private string $tempDir;
 
     /**
-     * @param string $filePath Path to the history file.  Created automatically if absent.
+     * @param string $filePath    Path to the history file.  Created automatically if absent.
+     * @param int    $maxHistory  Maximum number of entries to retain. 0 = unlimited.
+     * @param string $tempDir     Directory for temporary files during atomic writes.
      */
-    public function __construct(string $filePath)
+    public function __construct(string $filePath, int $maxHistory = 0, string $tempDir = '')
     {
+        parent::__construct($maxHistory);
         $this->filePath = $filePath;
-        // Touch the file so it exists after construction.
+        $this->tempDir = $tempDir !== '' ? $tempDir : \dirname($filePath);
+        // Touch the file so it exists after construction and set restrictive perms.
         if (!file_exists($this->filePath)) {
             touch($this->filePath);
+            chmod($this->filePath, 0600);
         }
         $this->load();
     }
 
     /**
      * Append $line to the history file and notify the parent to update its
-     * in-memory state.
+     * in-memory state.  Uses atomic write (read existing + write temp + rename)
+     * to prevent corruption on crash and ensures 0600 permissions.
      */
     public function push(string $line): void
     {
@@ -45,14 +52,32 @@ final class FileHistory extends InMemoryHistory
             return;
         }
 
-        $fp = fopen($this->filePath, 'a');
+        // Atomic write: read existing content, append new line to temp file,
+        // then rename to target. This prevents corruption if the process
+        // crashes during write and ensures no data loss.
+        $tempFile = $this->tempDir . '/.history.tmp.' . getmypid();
+        $fp = fopen($tempFile, 'w');
         if ($fp === false) {
             return;
         }
         flock($fp, LOCK_EX);
+        // Copy existing content to temp file.
+        if (file_exists($this->filePath)) {
+            $existing = file_get_contents($this->filePath);
+            if ($existing !== false && $existing !== '') {
+                fwrite($fp, $existing);
+                // Ensure file ends with newline before appending.
+                if (substr($existing, -1) !== "\n") {
+                    fwrite($fp, "\n");
+                }
+            }
+        }
         fwrite($fp, $line . "\n");
+        fflush($fp);
         flock($fp, LOCK_UN);
         fclose($fp);
+        rename($tempFile, $this->filePath);
+        chmod($this->filePath, 0600);
 
         parent::push($line);
     }
@@ -138,10 +163,15 @@ final class FileHistory extends InMemoryHistory
 
     /**
      * Clear all entries from both in-memory history and the persistence file.
+     * Uses atomic write (temp + rename) to prevent corruption on crash.
      */
     public function clear(): void
     {
         parent::clear();
-        file_put_contents($this->filePath, '');
+        // Atomic write via temp file to prevent corruption on crash.
+        $tempFile = $this->tempDir . '/.history.tmp.' . getmypid();
+        file_put_contents($tempFile, '');
+        chmod($tempFile, 0600);
+        rename($tempFile, $this->filePath);
     }
 }

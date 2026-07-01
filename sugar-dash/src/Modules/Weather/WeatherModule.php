@@ -195,7 +195,8 @@ class WeatherModule extends BaseModule
 
     protected function cachePath(): string
     {
-        $home = $_SERVER['HOME'] ?? $_SERVER['USERPROFILE'] ?? '/tmp';
+        // getenv('HOME') is more portable than $_SERVER['HOME'] across CGI/FastCGI
+        $home = getenv('HOME') ?: $_SERVER['HOME'] ?? $_SERVER['USERPROFILE'] ?? sys_get_temp_dir();
         return $home . '/.cache/sugar-dash/weather.json';
     }
 }
