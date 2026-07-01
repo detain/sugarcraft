@@ -6,6 +6,7 @@ namespace SugarCraft\Pty;
 
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Posix\PosixMasterPty;
+use SugarCraft\Pty\TermiosFactory;
 
 /**
  * @deprecated since v0.x, use `SugarCraft\Pty\Posix\PosixPtySystem` instead
@@ -26,9 +27,6 @@ use SugarCraft\Pty\Posix\PosixMasterPty;
  */
 final class Pty implements MasterPty
 {
-    /** `O_RDWR` flag — value identical on Linux and macOS. */
-    private const O_RDWR = 0x0002;
-
     public const DEFAULT_COLS = 80;
     public const DEFAULT_ROWS = 24;
 
@@ -41,7 +39,7 @@ final class Pty implements MasterPty
     {
         $libc = Libc::lib();
 
-        $masterFd = $libc->posix_openpt(self::O_RDWR | self::oNoCtty());
+        $masterFd = $libc->posix_openpt(TermiosFactory::O_RDWR | TermiosFactory::oNoCtty());
         if ($masterFd < 0) {
             throw new PtyException(Lang::t('open.posix_openpt_failed', ['rc' => $masterFd]));
         }
@@ -62,12 +60,6 @@ final class Pty implements MasterPty
         $master = new Master($masterFd, $slavePath);
 
         return new self($master, $impl);
-    }
-
-    /** Platform-specific `O_NOCTTY`: Linux 0o400, macOS 0x20000. */
-    private static function oNoCtty(): int
-    {
-        return \PHP_OS_FAMILY === 'Darwin' ? 0x20000 : 0o400;
     }
 
     /** Read the slave PTY path via `ptsname_r` into a 256-byte buffer. */

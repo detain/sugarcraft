@@ -13,9 +13,6 @@ use SugarCraft\Pty\Contract\PtySystem;
  */
 final class PosixPtySystem implements PtySystem
 {
-    /** `O_RDWR` flag — value identical on Linux and macOS. */
-    private const O_RDWR = 0x0002;
-
     /** `F_SETFD` — fcntl cmd to set the fd flags. Linux + macOS = 2. */
     private const F_SETFD = 2;
 
@@ -91,7 +88,7 @@ final class PosixPtySystem implements PtySystem
         // ptmx doesn't need this AND the open()/close() round-trip
         // would change empty-PTY read semantics, so it's Darwin-only.
         if (\PHP_OS_FAMILY === 'Darwin') {
-            $slaveFd = $libc->open($slavePath, self::O_RDWR | self::oNoCtty());
+            $slaveFd = $libc->open($slavePath, \SugarCraft\Pty\TermiosFactory::O_RDWR | \SugarCraft\Pty\TermiosFactory::oNoCtty());
             if ($slaveFd >= 0) {
                 // Same fork+exec leak as the master fd above — the
                 // anchor only exists to keep the kernel slave-count ≥ 1
@@ -123,12 +120,6 @@ final class PosixPtySystem implements PtySystem
         ];
     }
 
-    /** Platform-specific `O_NOCTTY`: Linux 0o400, macOS 0x20000. */
-    private static function oNoCtty(): int
-    {
-        return PHP_OS_FAMILY === 'Darwin' ? 0x20000 : 0o400;
-    }
-
     /**
      * Open the master PTY fd.
      *
@@ -158,7 +149,7 @@ final class PosixPtySystem implements PtySystem
             // fall through to quartet on -1
         }
 
-        return $libc->posix_openpt(self::O_RDWR | self::oNoCtty());
+        return $libc->posix_openpt(\SugarCraft\Pty\TermiosFactory::O_RDWR | \SugarCraft\Pty\TermiosFactory::oNoCtty());
     }
 
     /**
