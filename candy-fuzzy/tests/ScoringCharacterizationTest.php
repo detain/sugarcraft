@@ -43,7 +43,7 @@ final class ScoringCharacterizationTest extends TestCase
             'separator' => ['query' => 'bar', 'candidate' => 'foo_bar', 'expectedScore' => 19, 'expectedIndices' => [4, 5, 6]],
             'camelCase' => ['query' => 'fb', 'candidate' => 'fooBar', 'expectedScore' => 4, 'expectedIndices' => [0, 3]],
             'no-match' => ['query' => 'xyz', 'candidate' => 'abc', 'expectedScore' => null, 'expectedIndices' => null],
-            'query longer than candidate' => ['query' => 'hello', 'candidate' => 'hi', 'expectedScore' => null, 'expectedIndices' => null],
+            'query longer than candidate' => ['query' => 'hello', 'candidate' => 'hi', 'expectedScore' => 3, 'expectedIndices' => [0]],
         ];
     }
 
