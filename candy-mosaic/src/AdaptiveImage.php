@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic;
 
-use React\EventLoop\Loop;
-use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
 /**
@@ -89,15 +87,14 @@ final class AdaptiveImage
 
         $key = "{$cellWidth}x{$cellHeight}";
 
-        // Serve from cache if available (resolve immediately).
+        // Serve from cache if available — resolve immediately without an
+        // unnecessary event-loop iteration. This is the hot path for redraws
+        // of the same viewport size (e.g., terminal resize or animation frame
+        // at the same cell dimensions).
         if (isset($this->cache[$key])) {
             $this->touchLru($key);
 
-            // Resolve in the next tick so the behaviour is consistently async.
-            $deferred = new \React\Promise\Deferred();
-            Loop::futureTick(fn() => $deferred->resolve($this->cache[$key]));
-
-            return $deferred->promise();
+            return \React\Promise\resolve($this->cache[$key]);
         }
 
         return $this->asyncRenderer->renderAsync($this->image, $cellWidth, $cellHeight)

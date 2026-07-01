@@ -17,7 +17,17 @@ final class ChafaRenderer implements Renderer
 {
     use \SugarCraft\Mosaic\Concerns\RenderValidationTrait;
 
-    /** Memoised result of {@see available()} (null = not probed yet). */
+    /**
+     * Memoised result of {@see available()} — null means not yet probed,
+     * true/false are cached for the lifetime of the process.
+     *
+     * This memoisation is intentional: spawning `chafa --version` on every
+     * frame of an animation would be catastrophic for performance. The cost
+     * is that if chafa is installed after process startup, {@see reset()}
+     * must be called to re-probe. For short-lived CLI tools this is fine;
+     * for long-running daemons consider calling reset() after package
+     * installation if you need to use chafa dynamically.
+     */
     private static ?bool $available = null;
 
     /**

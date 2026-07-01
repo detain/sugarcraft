@@ -23,4 +23,9 @@ enum MouseAction: string
 
     /** Scroll wheel activated — pass-through, not a click. */
     case Scroll = 'scroll';
+
+    /** Mouse button constants — mirrors candy-input convention. */
+    public const BUTTON_LEFT = 0;
+    public const BUTTON_MIDDLE = 1;
+    public const BUTTON_RIGHT = 2;
 }

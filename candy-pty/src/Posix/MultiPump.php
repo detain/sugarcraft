@@ -128,7 +128,7 @@ final class MultiPump
         $live = [];
         $now = \microtime(true);
         foreach ($this->sessions as $session) {
-            if ($session->done) {
+            if ($session->isDone()) {
                 continue;
             }
 
@@ -139,17 +139,17 @@ final class MultiPump
             // are drained from the master buffer.
             if ($session->child !== null
                 && $session->child->exited()
-                && $session->childExitedAt === null
+                && $session->childExitedAt() === null
             ) {
-                $session->childExitedAt = $now;
+                $session->markChildExitedAt($now);
             }
 
             // Past the flush deadline → child long gone and the master
             // has been quiet — mark done so the loop can finish.
-            if ($session->childExitedAt !== null
-                && $now - $session->childExitedAt > $session->opts->flushDeadlineSec
+            if ($session->childExitedAt() !== null
+                && $now - $session->childExitedAt() > $session->opts->flushDeadlineSec
             ) {
-                $session->done = true;
+                $session->markDone();
                 continue;
             }
 
@@ -211,7 +211,7 @@ final class MultiPump
     public function allDone(): bool
     {
         foreach ($this->sessions as $session) {
-            if (!$session->done) {
+            if (!$session->isDone()) {
                 return false;
             }
         }
@@ -228,7 +228,7 @@ final class MultiPump
             // Master EOF — child is gone and there's nothing left to
             // tee. Mark done immediately; no point waiting for the
             // flush window when the kernel already returned 0.
-            $session->done = true;
+            $session->markDone();
             return;
         }
         if ($session->opts->recorder !== null) {
@@ -245,14 +245,15 @@ final class MultiPump
  */
 final class MultiPumpSession
 {
-    public bool $done = false;
+    /** @var bool Whether this session has reached its done state. */
+    private bool $done = false;
 
     /**
      * First wall-clock timestamp at which `tick()` observed the child
      * as exited. Used to bound the post-child master drain to
      * `opts->flushDeadlineSec`. Null until that moment.
      */
-    public ?float $childExitedAt = null;
+    private ?float $childExitedAt = null;
 
     /**
      * @param resource $stdoutSink
@@ -264,4 +265,27 @@ final class MultiPumpSession
         public readonly ?Child $child,
         public readonly PumpOptions $opts,
     ) {}
+
+    public function isDone(): bool
+    {
+        return $this->done;
+    }
+
+    public function markDone(): void
+    {
+        $this->done = true;
+    }
+
+    public function childExitedAt(): ?float
+    {
+        return $this->childExitedAt;
+    }
+
+    public function markChildExitedAt(float $now): void
+    {
+        // Only record the FIRST moment; subsequent calls are no-ops.
+        if ($this->childExitedAt === null) {
+            $this->childExitedAt = $now;
+        }
+    }
 }

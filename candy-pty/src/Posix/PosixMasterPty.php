@@ -74,8 +74,13 @@ final class PosixMasterPty implements MasterPty
                 if ($remaining <= 0) {
                     return null;
                 }
-                $sec  = (int) \floor($remaining);
-                $usec = (int) \round(($remaining - $sec) * 1_000_000);
+                // Decompose seconds + microseconds using intdiv/% to guarantee
+                // $usec < 1_000_000 (stream_select contract). Rounding the
+                // fractional part directly can produce 1_000_000 when
+                // $remaining is very close to the next whole second.
+                $totalUsec = (int) ($remaining * 1_000_000);
+                $sec  = \intdiv($totalUsec, 1_000_000);
+                $usec = $totalUsec % 1_000_000;
                 $r = [$stream]; $w = null; $e = null;
                 $ready = self::retryOnEintr($r, $w, $e, $sec, $usec);
                 if ($ready === false) {

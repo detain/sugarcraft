@@ -87,17 +87,24 @@ final class Mosaic
      * NEVER throws — falls back to BasicAscii (HalfBlock) on every error.
      * This is the safe, user-friendly entry point for new users.
      *
+     * Detection strategy: Primary detection via Detect::probe() which sends
+     * DA1 queries to the terminal for sixel capability detection and probes
+     * font size via XTWINOPS. This is the authoritative detection path.
+     * If Detect::probe() throws (e.g., not a TTY, probing times out),
+     * falls back to TerminalProbe capabilities from candy-palette via
+     * autoFromPalette(). If that also fails, falls back to HalfBlock.
+     *
      * Precedence: Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii
      *
      * @see Mosaic::diagnose() for structured probe report
+     * @see Detect::probe() for the primary TTY-probing implementation
      */
     public static function auto(): self
     {
         try {
-            $report = TerminalProbe::run();
-
-            // Try Detect::probe() for full protocol detection (DA1 sixel probing,
-            // better terminal detection). If it fails the outer catch handles it.
+            // Detect::probe() is the primary detection path: sends DA1 queries
+            // for sixel capability and XTWINOPS for font-size probing. Results
+            // are cached per-process. If this succeeds we have a definitive answer.
             $cap = Detect::probe();
             $renderer = self::bestBackend($cap);
 
@@ -107,13 +114,12 @@ final class Mosaic
 
             return new self($renderer, $cap, null, null, null);
 
-            // Fallback: use TerminalProbe capabilities from candy-palette
-            // Pick best renderer based on palette capabilities
-            return self::autoFromPalette($report);
-
         } catch (\Throwable) {
-            // TerminalProbe::run() itself threw — never let that bubble up
-            return self::halfBlock();
+            // Detect::probe() threw (not a TTY, probing timeout, etc.).
+            // Fall back to TerminalProbe from candy-palette which uses
+            // environment-variable detection only (no TTY I/O). If that
+            // also fails, fall back to HalfBlock (always available).
+            return self::autoFromPalette();
         }
     }
 
@@ -132,29 +138,55 @@ final class Mosaic
     /**
      * Auto-detect using candy-palette's TerminalProbe when Detect::probe() is unavailable.
      *
-     * @param ProbeReport $report  The capability report from TerminalProbe
+     * Uses TerminalProbe to check TrueColor, Color256, and BasicAscii capabilities
+     * before falling back to HalfBlock. This provides graceful degradation for
+     * environments where TTY probing is not possible (daemons, CI, etc.).
      */
-    private static function autoFromPalette(ProbeReport $report): self
+    private static function autoFromPalette(): self
     {
+        try {
+            $report = TerminalProbe::run();
+        } catch (\Throwable) {
+            // TerminalProbe itself threw — fall back to HalfBlock
+            return self::halfBlock();
+        }
+
         // Map palette capabilities to mosaic renderers
         // Prefer: Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii
 
         // Check for Kitty keyboard support (implies Kitty protocol)
         if ($report->has(PaletteCapability::KittyKeyboard)) {
-            // If we also have truecolor, Kitty is ideal
+            // If we also have truecolor, Kitty is ideal; otherwise fall back
             $renderer = new KittyRenderer();
             $cap = Capability::kitty(null, $report->has(PaletteCapability::Color256));
             return new self($renderer, $cap, null, null, null);
         }
 
-        // Check for Sixel via terminfo or explicit detection
-        // Note: Sixel needs actual DA1 probing which Detect::probe() handles
-        // If we're in this path, Detect::probe() already failed, so use HalfBlock
+        // Check for iTerm2 inline image support
+        if ($report->has(PaletteCapability::Iterm2Image)) {
+            $renderer = new Iterm2Renderer();
+            $cap = Capability::universal();
+            return new self($renderer, $cap, null, null, null);
+        }
+
+        // Check for TrueColor (24-bit) support — HalfBlock with color
+        if ($report->has(PaletteCapability::TrueColor)) {
+            // TrueColor terminals support HalfBlock with 24-bit color
+            return self::halfBlock();
+        }
+
+        // Check for 256-color support
+        if ($report->has(PaletteCapability::Color256)) {
+            // At least 256 colors available
+            return self::halfBlock();
+        }
+
+        // NoColor terminal — still usable with HalfBlock (monochrome fallback)
         if ($report->has(PaletteCapability::NoColor)) {
             return self::halfBlock();
         }
 
-        // For everything else, HalfBlock is the safe fallback
+        // For everything else (BasicAscii or unknown), HalfBlock is the safe fallback
         return self::halfBlock();
     }
 
@@ -530,6 +562,32 @@ final class MosaicBuilder
     public function withScale(Scale $scale): self
     {
         return new self($this->renderer, $this->width, $this->height, $this->dither, $scale);
+    }
+
+    /**
+     * Configure the builder to use Sixel rendering with an optional dither.
+     *
+     * This is the explicit alternative to relying on build() defaulting to
+     * Sixel when no renderer is set — using this factory makes the intent
+     * unambiguous in calling code.
+     *
+     * ```php
+     * $mosaic = Mosaic::builder()
+     *     ->sixel()                       // Floyd–Steinberg (default)
+     *     ->sixel(Dither::Stucki)         // Stucki dithering
+     *     ->sixel(Dither::None)           // no dithering
+     *     ->build();
+     * ```
+     */
+    public function sixel(Dither $dither = Dither::FloydSteinberg): self
+    {
+        return new self(
+            new SixelRenderer($dither),
+            $this->width,
+            $this->height,
+            $this->dither,
+            $this->scale,
+        );
     }
 
     /**

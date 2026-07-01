@@ -292,12 +292,7 @@ final class Expect
 
             // Enforce maxBuffer: trim from front, keeping enough trailing bytes
             // to still match the longest needle.
-            if ($this->maxBuffer !== null && \strlen($buffer) > $this->maxBuffer) {
-                $keep = \max(0, $this->maxBuffer - $maxNeedleLen);
-                if ($keep < \strlen($buffer)) {
-                    $buffer = \substr($buffer, -$keep);
-                }
-            }
+            $buffer = $this->trimBuffer($buffer, $maxNeedleLen);
         }
     }
 
@@ -327,10 +322,12 @@ final class Expect
                 ? \substr($buffer, -$this->searchWindow)
                 : $buffer;
 
-            $rc = @\preg_match($regex, $searchBuffer, $matches, PREG_OFFSET_CAPTURE);
+            $rc = \preg_match($regex, $searchBuffer, $matches, PREG_OFFSET_CAPTURE);
             if ($rc === false) {
+                $error = \preg_last_error();
+                $msg = \preg_last_error_msg() ?: "preg_match failed (error code {$error})";
                 throw new \InvalidArgumentException(
-                    "Expect::expectPattern: invalid regex '{$regex}'",
+                    "Expect::expectPattern: invalid regex '{$regex}': {$msg}",
                 );
             }
             if ($rc === 1) {
@@ -374,12 +371,7 @@ final class Expect
 
             // Enforce maxBuffer: trim from front, keeping enough trailing bytes
             // for any plausible match (use a safe minimum of 1 KiB).
-            if ($this->maxBuffer !== null && \strlen($buffer) > $this->maxBuffer) {
-                $keep = \max(0, $this->maxBuffer - 1024);
-                if ($keep < \strlen($buffer)) {
-                    $buffer = \substr($buffer, -$keep);
-                }
-            }
+            $buffer = $this->trimBuffer($buffer, 1024);
         }
     }
 
@@ -425,9 +417,27 @@ final class Expect
             $buffer .= $chunk;
 
             // Enforce maxBuffer while waiting for EOF.
-            if ($this->maxBuffer !== null && \strlen($buffer) > $this->maxBuffer) {
-                $buffer = \substr($buffer, -$this->maxBuffer);
-            }
+            // Pass 0 for needleLen since EOF doesn't need to match anything.
+            $buffer = $this->trimBuffer($buffer, 0);
         }
+    }
+
+    /**
+     * Trim the buffer to at most `$this->maxBuffer` bytes, keeping
+     * enough trailing bytes to match a needle of `$needleLen`.
+     *
+     * When `$needleLen` is 0 (e.g. waiting for EOF), only the max
+     * buffer cap is applied.
+     */
+    private function trimBuffer(string $buffer, int $needleLen): string
+    {
+        if ($this->maxBuffer === null || \strlen($buffer) <= $this->maxBuffer) {
+            return $buffer;
+        }
+        $keep = \max(0, $this->maxBuffer - $needleLen);
+        if ($keep >= \strlen($buffer)) {
+            return $buffer;
+        }
+        return \substr($buffer, -$keep);
     }
 }
