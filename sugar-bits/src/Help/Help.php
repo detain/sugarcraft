@@ -9,6 +9,7 @@ use SugarCraft\Bits\Key\Binding;
 use SugarCraft\Bits\Key\KeyMap;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 
@@ -247,14 +248,17 @@ final class Help
         if ($b->disabled || ($b->help->key === '' && $b->help->desc === '')) {
             return '';
         }
+        // C0 sanitization prevents terminal control sequence injection.
+        $key = Sanitize::controlChars($b->help->key);
+        $desc = Sanitize::controlChars($b->help->desc);
         if ($this->styles === null) {
-            return $b->help->key . $this->keyDescGap . $b->help->desc;
+            return $key . $this->keyDescGap . $desc;
         }
         $keyStyle  = $full ? $this->styles->fullKey  : $this->styles->shortKey;
         $descStyle = $full ? $this->styles->fullDesc : $this->styles->shortDesc;
-        return $keyStyle->render($b->help->key)
+        return $keyStyle->render($key)
              . $this->keyDescGap
-             . $descStyle->render($b->help->desc);
+             . $descStyle->render($desc);
     }
 
     /**

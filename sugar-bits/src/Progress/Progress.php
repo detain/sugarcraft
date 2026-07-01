@@ -8,6 +8,7 @@ use SugarCraft\Bits\Lang;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -28,6 +29,9 @@ use SugarCraft\Core\Util\Width;
 final class Progress
 {
     public readonly float $percent;
+    public readonly int $width;
+    public readonly string $fullChar;
+    public readonly string $emptyChar;
 
     /** @var list<Color> */
     public readonly array $gradientStops;
@@ -37,19 +41,19 @@ final class Progress
 
     public function __construct(
         float $percent = 0.0,
-        public readonly int $width = 40,
-        public readonly string $fullChar  = '█',
-        public readonly string $emptyChar = '░',
-        public readonly bool $showPercent = true,
-        public readonly ?Color $fillColor  = null,
-        public readonly ?Color $emptyColor = null,
-        public readonly ColorProfile $profile = ColorProfile::TrueColor,
-        public readonly ?Color $gradientStart = null,
-        public readonly ?Color $gradientEnd   = null,
-        public readonly string $percentFormat = '%3d%%',
-        public readonly bool $showValue = false,
-        public readonly string $showValueFormat = '%d/%d',
-        public readonly ProgressRenderMode $renderMode = ProgressRenderMode::Block,
+        int $width = 40,
+        string $fullChar = '█',
+        string $emptyChar = '░',
+        bool $showPercent = true,
+        ?Color $fillColor = null,
+        ?Color $emptyColor = null,
+        ColorProfile $profile = ColorProfile::TrueColor,
+        ?Color $gradientStart = null,
+        ?Color $gradientEnd = null,
+        string $percentFormat = '%3d%%',
+        bool $showValue = false,
+        string $showValueFormat = '%d/%d',
+        ProgressRenderMode $renderMode = ProgressRenderMode::Block,
         array $gradientStops = [],
         ?\Closure $colorFunc = null,
     ) {
@@ -57,6 +61,19 @@ final class Progress
             throw new \InvalidArgumentException(Lang::t('progress.width_nonneg'));
         }
         $this->percent = max(0.0, min(1.0, $percent));
+        $this->width = $width;
+        $this->fullChar = Sanitize::controlChars($fullChar);
+        $this->emptyChar = Sanitize::controlChars($emptyChar);
+        $this->showPercent = $showPercent;
+        $this->fillColor = $fillColor;
+        $this->emptyColor = $emptyColor;
+        $this->profile = $profile;
+        $this->gradientStart = $gradientStart;
+        $this->gradientEnd = $gradientEnd;
+        $this->percentFormat = $percentFormat;
+        $this->showValue = $showValue;
+        $this->showValueFormat = $showValueFormat;
+        $this->renderMode = $renderMode;
         $this->gradientStops = array_values($gradientStops);
         $this->colorFunc = $colorFunc;
     }
@@ -87,7 +104,10 @@ final class Progress
     public function withWidth(int $w): self        { return $this->mutate(width: $w); }
     public function withRunes(string $full, string $empty): self
     {
-        return $this->mutate(fullChar: $full, emptyChar: $empty);
+        return $this->mutate(
+            fullChar: Sanitize::controlChars($full),
+            emptyChar: Sanitize::controlChars($empty),
+        );
     }
     public function withShowPercent(bool $show): self { return $this->mutate(showPercent: $show); }
     public function withShowValue(bool $show, ?string $format = null): self
