@@ -79,4 +79,18 @@ interface Backend
      * @throws \RuntimeException if the flush operation fails
      */
     public function flush(): void;
+
+    /**
+     * Remove a specific metric series by name and tags.
+     * No-op for backends that do not support removal.
+     *
+     * @param array<string,string> $tags
+     */
+    public function remove(string $name, array $tags = []): void;
+
+    /**
+     * Reset all accumulated metrics to zero / empty state.
+     * No-op for backends that do not support clearing.
+     */
+    public function clear(): void;
 }

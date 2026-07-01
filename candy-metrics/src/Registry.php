@@ -35,7 +35,7 @@ use SugarCraft\Metrics\Instrument\UpDownCounter;
 final class Registry
 {
     /** @var array<string,string> */
-    private array $defaultTags;
+    private readonly array $defaultTags;
 
     /** @var array<string, Descriptor> */
     private array $descriptors = [];
@@ -228,6 +228,19 @@ final class Registry
     }
 
     /**
+     * Remove a specific metric series from the backend and the
+     * cardinality cache. Useful for long-running processes or
+     * testing cleanup.
+     *
+     * @param array<string,string> $tags
+     */
+    public function remove(string $name, array $tags = []): void
+    {
+        $this->backend->remove($name, $tags);
+        $this->deleteLabelValues($name, $tags);
+    }
+
+    /**
      * @param array<string,string> $tags
      * @return array<string,string>
      */
@@ -261,21 +274,15 @@ final class Registry
     }
 
     /**
-     * Build a stable string key from a sorted tag array so identical
-     * (name, tags) tuples share a cardinality slot.
+     * Build a stable tag-only string key for cardinality tracking.
+     * Returns `k1=v1|k2=v2` (no metric name prefix) with tags sorted by key.
+     * Distinct from InMemoryBackend::key() which includes the metric name
+     * and uses a different separator for storage accumulation.
      *
      * @param array<string,string> $tags
      */
     private function tagKey(array $tags): string
     {
-        if ($tags === []) {
-            return '';
-        }
-        ksort($tags);
-        $parts = [];
-        foreach ($tags as $k => $v) {
-            $parts[] = "{$k}={$v}";
-        }
-        return implode('|', $parts);
+        return Util::tagKey($tags);
     }
 }

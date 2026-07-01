@@ -45,16 +45,37 @@ final class SessionMetrics implements Middleware
         if ($this->extraTags !== null) {
             $tags = array_merge($tags, ($this->extraTags)($session));
         }
-        $this->registry->counter('wish.session.connect', 1.0, $tags);
-        $stop = $this->registry->time('wish.session.duration', $tags);
+
+        try {
+            $this->registry->counter('wish.session.connect', 1.0, $tags);
+        } catch (\Throwable) {
+            // Registry failures must not prevent session handling.
+        }
+
+        $stop = null;
+        try {
+            $stop = $this->registry->time('wish.session.duration', $tags);
+        } catch (\Throwable) {
+            // Registry failures must not prevent session handling.
+        }
 
         try {
             $next($ctx, $session);
         } catch (\Throwable $e) {
-            $this->registry->counter('wish.session.error', 1.0, $tags + ['exception' => $e::class]);
+            try {
+                $this->registry->counter('wish.session.error', 1.0, $tags + ['exception' => $e::class]);
+            } catch (\Throwable) {
+                // Registry failures must not suppress the original exception.
+            }
             throw $e;
         } finally {
-            $stop();
+            if ($stop !== null) {
+                try {
+                    $stop();
+                } catch (\Throwable) {
+                    // Timer stop failures must not suppress the original exception.
+                }
+            }
         }
     }
 }

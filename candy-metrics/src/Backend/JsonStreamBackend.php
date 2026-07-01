@@ -22,11 +22,13 @@ final class JsonStreamBackend implements Backend
     /** @var resource */
     private $stream;
     private bool $owns = false;
+    private bool $throwOnError;
 
     /**
      * @param resource|string|null $target
+     * @param bool $throwOnError If false, silently drop metrics on partial write failure.
      */
-    public function __construct($target = null)
+    public function __construct($target = null, bool $throwOnError = true)
     {
         if (is_string($target)) {
             $stream = fopen($target, 'a');
@@ -35,6 +37,7 @@ final class JsonStreamBackend implements Backend
             }
             $this->stream = $stream;
             $this->owns = true;
+            $this->throwOnError = $throwOnError;
             return;
         }
         if ($target === null) {
@@ -44,12 +47,14 @@ final class JsonStreamBackend implements Backend
             }
             $this->stream = $stream;
             $this->owns = true;
+            $this->throwOnError = $throwOnError;
             return;
         }
         if (!is_resource($target)) {
             throw new \InvalidArgumentException(Lang::t('jsonstream.invalid_target'));
         }
         $this->stream = $target;
+        $this->throwOnError = $throwOnError;
     }
 
     public function __destruct()
@@ -81,6 +86,25 @@ final class JsonStreamBackend implements Backend
     }
 
     /**
+     * JSON stream backend has no in-memory accumulation;
+     * metrics are already written to the stream and cannot be retracted.
+     *
+     * @param array<string,string> $tags
+     */
+    public function remove(string $name, array $tags = []): void
+    {
+        // No-op: metrics are already written to the stream.
+    }
+
+    /**
+     * JSON stream backend has no in-memory accumulation to clear.
+     */
+    public function clear(): void
+    {
+        // No-op: no local state is held between writes.
+    }
+
+    /**
      * @param array<string,string> $tags
      */
     private function emit(string $kind, string $name, float $value, array $tags): void
@@ -99,7 +123,10 @@ final class JsonStreamBackend implements Backend
         }
         $written = @fwrite($this->stream, $line . "\n");
         if ($written === false || $written < strlen($line) + 1) {
-            throw new \RuntimeException(Lang::t('jsonstream.write_failed', ['name' => $name]));
+            if ($this->throwOnError) {
+                throw new \RuntimeException(Lang::t('jsonstream.write_failed', ['name' => $name]));
+            }
+            return;
         }
     }
 }

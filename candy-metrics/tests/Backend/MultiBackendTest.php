@@ -11,6 +11,46 @@ use PHPUnit\Framework\TestCase;
 
 final class MultiBackendTest extends TestCase
 {
+    public function testDescribeIsForwardedToAllChildren(): void
+    {
+        $spyA = new class implements \SugarCraft\Metrics\Backend {
+            public array $describeCalls = [];
+            public function counter(string $name, float $value, array $tags = []): void {}
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void {}
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(Descriptor $descriptor): void { $this->describeCalls[] = $descriptor; }
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void {}
+            public function clear(): void {}
+        };
+
+        $spyB = new class implements \SugarCraft\Metrics\Backend {
+            public array $describeCalls = [];
+            public function counter(string $name, float $value, array $tags = []): void {}
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void {}
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(Descriptor $descriptor): void { $this->describeCalls[] = $descriptor; }
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void {}
+            public function clear(): void {}
+        };
+
+        $multi = new MultiBackend($spyA, $spyB);
+        $descriptor = new Descriptor('my_metric', 'A counter metric', 'counter');
+        $multi->describe($descriptor);
+
+        $this->assertCount(1, $spyA->describeCalls);
+        $this->assertSame($descriptor, $spyA->describeCalls[0]);
+        $this->assertCount(1, $spyB->describeCalls);
+        $this->assertSame($descriptor, $spyB->describeCalls[0]);
+    }
+
     public function testFanoutToAllChildren(): void
     {
         $a = new InMemoryBackend();
@@ -50,6 +90,8 @@ final class MultiBackendTest extends TestCase
             public function asyncGauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
             public function describe(Descriptor $descriptor): void { throw new \RuntimeException('always fails'); }
             public function flush(): void { throw new \RuntimeException('always fails'); }
+            public function remove(string $name, array $tags = []): void { throw new \RuntimeException('always fails'); }
+            public function clear(): void { throw new \RuntimeException('always fails'); }
         };
 
         $inMemory = new InMemoryBackend();
@@ -77,6 +119,8 @@ final class MultiBackendTest extends TestCase
             public function asyncGauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
             public function describe(Descriptor $descriptor): void { throw new \RuntimeException('always fails'); }
             public function flush(): void { throw new \RuntimeException('always fails'); }
+            public function remove(string $name, array $tags = []): void { throw new \RuntimeException('always fails'); }
+            public function clear(): void { throw new \RuntimeException('always fails'); }
         };
 
         $inMemory = new InMemoryBackend();
