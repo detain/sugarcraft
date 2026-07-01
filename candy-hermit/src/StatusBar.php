@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Hermit;
 
+use SugarCraft\Hermit\Concerns\Visible;
+
 /**
  * StatusBar — renders a single-line status message for the Hermit overlay.
  *
@@ -12,9 +14,9 @@ namespace SugarCraft\Hermit;
  */
 final class StatusBar
 {
-    private string $message = '';
+    use Visible;
 
-    private bool $visible = true;
+    private string $message = '';
 
     /** @var array<string, string> Optional named segments for compound status */
     private array $segments = [];
@@ -22,7 +24,10 @@ final class StatusBar
     public function __construct(string $message = '', bool $visible = true)
     {
         $this->message = $message;
-        $this->visible = $visible;
+        // Visible trait initializes $visible = true; re-apply if false passed.
+        if (!$visible) {
+            $this->visible = false;
+        }
     }
 
     /**
@@ -43,25 +48,6 @@ final class StatusBar
         $clone = clone $this;
         $clone->message = '';
         return $clone;
-    }
-
-    public function show(): self
-    {
-        $clone = clone $this;
-        $clone->visible = true;
-        return $clone;
-    }
-
-    public function hide(): self
-    {
-        $clone = clone $this;
-        $clone->visible = false;
-        return $clone;
-    }
-
-    public function isVisible(): bool
-    {
-        return $this->visible;
     }
 
     public function message(): string

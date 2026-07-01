@@ -7,6 +7,7 @@ namespace SugarCraft\Hermit\Tests;
 use SugarCraft\Hermit\{Hermit, FilteredItem, Item, HelpBar, StatusBar};
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Fuzzy\{FuzzyMatcher, MatchResult};
 use PHPUnit\Framework\TestCase;
 
 final class HermitTest extends TestCase
@@ -464,5 +465,187 @@ final class HermitTest extends TestCase
         // The sanitized item should show 'foo' (newline replaced with space, becoming 'foo bar')
         $this->assertStringContainsString('foo', $result, 'item value should be present');
         $this->assertStringNotContainsString("foo\nbar", $result, 'raw newline should not appear in output');
+    }
+
+    public function testMaxFilterLengthConstant(): void
+    {
+        $this->assertSame(256, Hermit::MAX_FILTER_LENGTH);
+    }
+
+    public function testTypeRejectsInputAtMaxFilterLength(): void
+    {
+        // Fill filter to exactly the max length.
+        $chars = [];
+        for ($i = 0; $i < Hermit::MAX_FILTER_LENGTH; $i++) {
+            $chars[] = 'a';
+        }
+        $h = $this->makeHermit()->show();
+        foreach ($chars as $char) {
+            $h = $h->type($char);
+        }
+
+        // Cursor should still be at 0 (filter is full).
+        $this->assertSame(Hermit::MAX_FILTER_LENGTH, \strlen($h->filterText()));
+
+        // Additional type() calls must be silently ignored.
+        $h2 = $h->type('b');
+        $this->assertSame(Hermit::MAX_FILTER_LENGTH, \strlen($h2->filterText()));
+        $this->assertSame($h->filterText(), $h2->filterText());
+    }
+
+    public function testBackgroundPaddingWhenOverlayExceedsBackgroundLines(): void
+    {
+        // windowHeight=5 means overlay needs at least 5 lines.
+        // Provide only 2 background lines — Hermit must pad the background.
+        $h = $this->makeHermit()
+            ->setWindowHeight(5)
+            ->setWindowWidth(20)
+            ->show();
+
+        $bg = "line1\nline2"; // only 2 lines
+        $result = $h->View($bg);
+
+        // The result should have enough lines to render the overlay without
+        // silently dropping content (the padding code ensures this).
+        $this->assertIsString($result);
+        // Verify the prompt appears (Hermit is rendering).
+        $this->assertStringContainsString('> ', $result);
+    }
+
+    public function testCursorBottomOnEmptyFilteredList(): void
+    {
+        // When filteredItems is empty, cursorBottom() must floor at 0 (not -1).
+        // The \max(0, count-1) ensures count=0 → max(0,-1) → 0.
+        // show() must come BEFORE setFilterFn so the filter is applied to allItems.
+        $h = $this->makeHermit()
+            ->show()
+            ->setFilterFn(static fn(Item $i): bool => false);
+
+        $this->assertSame(0, $h->itemCount());
+        $h = $h->cursorBottom();
+        $this->assertSame(0, $h->cursor(), 'cursorBottom on empty list must floor at 0');
+        $this->assertNull($h->selected());
+    }
+
+    public function testSelectedReturnsNullWhenCursorOutOfBounds(): void
+    {
+        // When filtered list is empty, cursor is 0 but items[0] doesn't exist → null.
+        // show() must come BEFORE setFilterFn so the filter is applied to allItems.
+        $h = $this->makeHermit()
+            ->show()
+            ->setFilterFn(static fn(Item $i): bool => false);
+
+        $this->assertNull($h->selected());
+    }
+
+    public function testReplaceSegmentWithEmptyLine(): void
+    {
+        // When background line is empty (lineLen=0), replaceSegment returns
+        // the replacement string unchanged (early exit path).
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('replaceSegment');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($h, '', 0, 10, 'hello');
+        $this->assertSame('hello', $result);
+    }
+
+    public function testReplaceSegmentWithGraphemeCluster(): void
+    {
+        // Grapheme clusters (emoji, CJK) must be handled correctly.
+        // '日本語' has 3 grapheme clusters but different byte lengths.
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('replaceSegment');
+        $method->setAccessible(true);
+
+        // Replace at x=0, width=2 from a CJK string.
+        $result = $method->invoke($h, '日本語', 0, 2, 'XX');
+        // 'XX' + '本' (remaining graphemes after consuming 2)
+        $this->assertStringStartsWith('XX', $result);
+    }
+
+    public function testCompositeOverWithShortBackground(): void
+    {
+        // compositeOver with background shorter than overlay should not crash;
+        // lines beyond the background are skipped (destY >= count(bgLines) check).
+        $h = $this->makeHermit()
+            ->setWindowHeight(5)
+            ->setWindowWidth(10)
+            ->show();
+
+        // Only 1 line in background, overlay needs 5+.
+        $bg = "short";
+        $result = $h->View($bg);
+
+        $this->assertIsString($result);
+        // Prompt should still appear in output.
+        $this->assertStringContainsString('> ', $result);
+    }
+
+    public function testCachedComputedWidthInvalidatedOnType(): void
+    {
+        // With windowWidth=0 (auto), calling type() must invalidate the cached
+        // width so the next View() recomputes rather than reusing a stale value.
+        $h = $this->makeHermit()
+            ->setWindowWidth(0) // auto
+            ->show();
+
+        // First render — populates the cache.
+        $bg1 = str_repeat(str_repeat(' ', 30) . "\n", 5);
+        $h->View($bg1);
+
+        $reflection = new \ReflectionClass($h);
+        $cached = $reflection->getProperty('cachedComputedWidth');
+        $cached->setAccessible(true);
+        $firstCache = $cached->getValue($h);
+        $this->assertNotNull($firstCache, 'cache should be populated after first render');
+
+        // type() changes filter → cache must be cleared.
+        $h = $h->type('a');
+        $this->assertNull($cached->getValue($h), 'cache must be invalidated after type()');
+    }
+
+    public function testHighlightFuzzyWithNullResultFallsBackToPrintableText(): void
+    {
+        // When ranker->match() returns null, highlightFuzzy should return the
+        // plain printable text without crashing.
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('highlightFuzzy');
+        $method->setAccessible(true);
+
+        $mockRanker = $this->createMock(FuzzyMatcher::class);
+        $mockRanker->method('match')->willReturn(null);
+
+        $result = $method->invoke($h, $mockRanker, '● banana', 'x');
+        $this->assertIsString($result);
+        // Falls back to printable text: the marker prefix is stripped, leaving 'banana'.
+        $this->assertStringContainsString('banana', $result);
+        // No ANSI reset codes since we're in the null-result fallback path.
+        $this->assertStringNotContainsString("\x1b[33m", $result);
+    }
+
+    public function testHighlightFuzzyWithEmptyResultFallsBackToPrintableText(): void
+    {
+        // score=0 and empty indices means isMatched()=false and isEmpty()=true.
+        // highlightFuzzy should return the plain printable text.
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('highlightFuzzy');
+        $method->setAccessible(true);
+
+        $emptyResult = new MatchResult('x', 'banana', 0, []);
+        $mockRanker = $this->createMock(FuzzyMatcher::class);
+        $mockRanker->method('match')->willReturn($emptyResult);
+
+        $result = $method->invoke($h, $mockRanker, '● banana', 'x');
+        $this->assertIsString($result);
+        $this->assertStringContainsString('banana', $result);
     }
 }

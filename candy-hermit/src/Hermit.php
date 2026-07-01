@@ -58,6 +58,8 @@ final class Hermit
     /** @var \Closure(Item $item): bool Filter function applied to items. */
     private \Closure $filterFn;
 
+    private ItemFactory $itemFactory;
+
     /**
      * Optional fuzzy ranker. When set, a non-empty filter text is scored against
      * every item's value via candy-fuzzy (true subsequence matching) and the
@@ -74,6 +76,9 @@ final class Hermit
 
     /** Width of the overlay window (0 = auto from prompt). */
     private int $windowWidth = 0;
+
+    /** Cached auto-computed width (invalidated when filter or items change). */
+    private ?int $cachedComputedWidth = null;
 
     /** Top-left X offset for the overlay. */
     private int $xOffset = 0;
@@ -106,6 +111,7 @@ final class Hermit
         ?\Closure $itemFormatter = null,
         ?\Closure $filterFn = null,
     ) {
+        $this->itemFactory   = new ItemFactory();
         $this->allItems      = $this->coerceItems($items);
         $this->filteredItems = $this->allItems;
         $this->itemFormatter = $itemFormatter
@@ -131,6 +137,7 @@ final class Hermit
     public function withItems(array $items): self
     {
         $clone = clone $this;
+        $clone->cachedComputedWidth = null;
         $clone->allItems = $clone->coerceItems($items);
         // Early exit when no filter active — avoid applyFilter() overhead for the common empty-text case.
         $clone->filteredItems = $clone->filterText === ''
@@ -193,6 +200,7 @@ final class Hermit
     public function setFilterFn(\Closure $fn): self
     {
         $clone = clone $this;
+        $clone->cachedComputedWidth = null;
         $clone->filterFn = $fn;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
@@ -209,6 +217,7 @@ final class Hermit
     public function setRanker(?FuzzyMatcher $matcher): self
     {
         $clone = clone $this;
+        $clone->cachedComputedWidth = null;
         $clone->ranker = $matcher;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
@@ -284,6 +293,9 @@ final class Hermit
             return false;
         }
 
+        // Capture $this in a local variable so the static closure can
+        // dereference the live Hermit instance when invoked asynchronously
+        // (the closure outlives the attachSigwinch() call frame).
         $hermit = $this;
         return SignalForwarder::attachSigwinchToFd(
             (int) \STDIN, // int fd, not resource (PHP 8+ casts resource to its fd number)
@@ -323,6 +335,7 @@ final class Hermit
     public function show(): self
     {
         $clone = clone $this;
+        $clone->cachedComputedWidth = null;
         $clone->isShown = true;
         $clone->cursor  = 0;
         $clone->filterText = '';
@@ -339,7 +352,11 @@ final class Hermit
 
     public function type(string $char): self
     {
+        if (\strlen($this->filterText) >= self::MAX_FILTER_LENGTH) {
+            return $this; // reject input when cap reached
+        }
         $clone = clone $this;
+        $clone->cachedComputedWidth = null;
         $clone->filterText .= $char;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
@@ -352,6 +369,7 @@ final class Hermit
         if ($clone->filterText === '') {
             return $clone;
         }
+        $clone->cachedComputedWidth = null;
         $clone->filterText = \substr($clone->filterText, 0, -1);
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = \max(0, \min($clone->cursor, \count($clone->filteredItems) - 1));
@@ -361,6 +379,7 @@ final class Hermit
     public function clear(): self
     {
         $clone = clone $this;
+        $clone->cachedComputedWidth = null;
         $clone->filterText = '';
         $clone->filteredItems = $clone->allItems;
         $clone->cursor = 0;
@@ -392,8 +411,7 @@ final class Hermit
     public function cursorBottom(): self
     {
         $clone = clone $this;
-        $clone->cursor = \count($clone->filteredItems) - 1;
-        if ($clone->cursor < 0) $clone->cursor = 0;
+        $clone->cursor = \max(0, \count($clone->filteredItems) - 1);
         return $clone;
     }
 
@@ -416,6 +434,10 @@ final class Hermit
         return $this->filterText;
     }
 
+    /**
+     * Returns the currently selected item, or null if the cursor is out of
+     * bounds (e.g., empty filtered list).
+     */
     public function selected(): ?Item
     {
         $items = $this->filteredItems;
@@ -483,28 +505,42 @@ final class Hermit
             return $backgroundView;
         }
 
+        $winWidth = $this->windowWidth > 0 ? $this->windowWidth : ($this->cachedComputedWidth ??= $this->computeWidth());
+
+        $bgLines = \explode("\n", $backgroundView);
+        if (\end($bgLines) === '') \array_pop($bgLines);
+        $totalOverlayLines = \count($this->buildOverlayLines($winWidth));
+        if ($totalOverlayLines > \count($bgLines)) {
+            // Pad background with empty lines so compositeOver has room.
+            $padding = \array_fill(0, $totalOverlayLines - \count($bgLines), '');
+            $bgLines = \array_merge($bgLines, $padding);
+            $backgroundView = \implode("\n", $bgLines);
+        }
+
+        $lines = $this->buildOverlayLines($winWidth);
+
+        return $this->compositeOver($lines, $backgroundView, $winWidth, $bgLines);
+    }
+
+    /**
+     * Build the array of overlay lines for the current state at the given width.
+     *
+     * @return list<string>
+     */
+    private function buildOverlayLines(int $winWidth): array
+    {
         $prompt   = $this->prompt;
         $filter   = $this->filterText;
-        $winWidth = $this->windowWidth > 0 ? $this->windowWidth : $this->computeWidth();
-
-        // Build the overlay string
-        $headerLine = $prompt . $filter;
-
-        // Pad header to window width (ANSI- and width-aware so wide/styled runes
-        // measure in visible cells, not bytes).
-        $headerLine = Width::padRight($headerLine, $winWidth);
+        $headerLine = Width::padRight($prompt . $filter, $winWidth);
 
         $lines = [$headerLine];
 
-        // Separator
         $sep = \str_repeat('─', $winWidth);
         $lines[] = $sep;
 
-        // Item lines — scrolling viewport keeps $this->cursor in view
         $items = $this->filteredItems;
         $visibleRows = \max(0, $this->windowHeight - 2);
         $maxShow = \min(\count($items), $visibleRows);
-        // Center the cursor in the visible window when possible
         $top = $this->cursor < $visibleRows
             ? 0
             : \min($this->cursor - $visibleRows + 1, \count($items) - $visibleRows);
@@ -521,23 +557,15 @@ final class Hermit
                     : $this->highlightMatches($itemStr, $filter);
             }
 
-            // ANSI-aware truncate + pad: a matchStyle-highlighted item keeps its
-            // escape sequences and the box edge stays straight (the old
-            // mb_substr/str_pad counted escape bytes as visible columns).
-            // Sanitize: strip control bytes (newline/cr) that break one-line-per-row invariant
             $itemStr = \str_replace(["\r\n", "\r", "\n"], ' ', $itemStr);
             $itemStr = Width::padRight(Width::truncateAnsi($itemStr, $winWidth), $winWidth);
             $lines[] = $itemStr;
         }
 
-        // Fill remaining lines if fewer items than window height,
-        // then append visible HelpBar/StatusBar if set and non-empty.
-        // Bars are rendered inside the windowHeight constraint.
         while (\count($lines) < $this->windowHeight) {
             $lines[] = \str_repeat(' ', $winWidth);
         }
 
-        // HelpBar renders below items (bars extend the overlay past windowHeight)
         if ($this->helpBar !== null && $this->helpBar->isVisible()) {
             $helpLine = $this->helpBar->render();
             if ($helpLine !== '') {
@@ -546,7 +574,6 @@ final class Hermit
             }
         }
 
-        // StatusBar renders below HelpBar (bars extend the overlay past windowHeight)
         if ($this->statusBar !== null && $this->statusBar->isVisible()) {
             $statusLine = $this->statusBar->render();
             if ($statusLine !== '') {
@@ -555,8 +582,7 @@ final class Hermit
             }
         }
 
-        // Composite onto background
-        return $this->compositeOver($lines, $backgroundView, $winWidth);
+        return $lines;
     }
 
     // -------------------------------------------------------------------------
@@ -566,21 +592,14 @@ final class Hermit
     /**
      * Coerce a mixed input array into a list of Item objects.
      *
-     * Strings are wrapped as FilteredItem with a 1-based ordinal.
-     * Items already implementing Item are passed through unchanged.
+     * Delegates to ItemFactory::coerce().
      *
      * @param array<Item|string> $items
      * @return list<Item>
      */
     private function coerceItems(array $items): array
     {
-        $result = [];
-        foreach (\array_values($items) as $i => $item) {
-            $result[] = $item instanceof Item
-                ? $item
-                : new FilteredItem($i + 1, (string) $item);
-        }
-        return $result;
+        return $this->itemFactory->coerce($items);
     }
 
     /**
@@ -706,7 +725,7 @@ final class Hermit
             $itemLen = Width::of(($this->itemFormatter)($item->value(), false, $item->number()));
             if ($itemLen > $itemMax) $itemMax = $itemLen;
         }
-        return \max($promptLen + $filterLen + 5, $itemMax + 2);
+        return \max($promptLen + $filterLen + self::WIDTH_PAD_HEADER, $itemMax + self::WIDTH_PAD_ITEM);
     }
 
     /**
@@ -826,11 +845,8 @@ final class Hermit
         );
     }
 
-    private function compositeOver(array $overlayLines, string $background, int $winWidth): string
+    private function compositeOver(array $overlayLines, string $background, int $winWidth, array $bgLines): string
     {
-        $bgLines = \explode("\n", $background);
-        if (\end($bgLines) === '') \array_pop($bgLines);
-
         $x = $this->xOffset;
         $y = $this->yOffset;
 
@@ -847,6 +863,15 @@ final class Hermit
         return \implode("\n", $bgLines);
     }
 
+    /**
+     * Replace a segment of a line with overlay characters.
+     *
+     * Uses grapheme-aware functions (\grapheme_substr, \grapheme_strlen) to
+     * correctly handle CJK characters, emoji with ZWJ, and other complex runes
+     * that occupy a single visible cell but multiple bytes. For pure ASCII
+     * input this is equivalent to byte-level replacement but preserves
+     * visual integrity for international text.
+     */
     private function replaceSegment(string $line, int $x, int $width, string $replacement): string
     {
         $lineLen = \grapheme_strlen($line);
