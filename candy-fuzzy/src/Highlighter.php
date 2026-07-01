@@ -15,11 +15,11 @@ final class Highlighter
     /**
      * Highlight matched runs in a candidate string.
      *
-     * @param MatchResult          $result The match result containing matched indices
-     * @param callable(string):string $styler Callable that wraps matched text
+     * @param MatchResult            $result The match result containing matched indices
+     * @param \Closure(string):string $styler Closure that wraps matched text
      * @return string The candidate with matched runs styled
      */
-    public function highlight(MatchResult $result, callable $styler): string
+    public function highlight(MatchResult $result, \Closure $styler): string
     {
         if ($result->isEmpty()) {
             return $result->haystack;
@@ -78,12 +78,12 @@ final class Highlighter
     /**
      * Apply styler to each run in the candidate string.
      *
-     * @param string                      $candidate The haystack string
+     * @param string                            $candidate The haystack string
      * @param list<array{start: int, end: int}> $runs     List of [start, end] inclusive ranges
-     * @param callable(string):string    $styler  Callable that wraps matched text
+     * @param \Closure(string):string          $styler   Closure that wraps matched text
      * @return string The candidate with matched runs styled
      */
-    private function applyRuns(string $candidate, array $runs, callable $styler): string
+    private function applyRuns(string $candidate, array $runs, \Closure $styler): string
     {
         // Build the result by iterating through runs in reverse order
         // (to preserve string positions when inserting)
