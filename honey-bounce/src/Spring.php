@@ -26,16 +26,21 @@ final class Spring
     private readonly float $velPosCoef;
     private readonly float $velVelCoef;
 
+    private readonly ?bool $reducedMotionOverride;
+
     /**
-     * @param float $deltaTime         seconds elapsed per integration step
-     * @param float $angularFrequency  rad/sec (note: NOT Hz; multiply Hz by 2π)
-     * @param float $dampingRatio      <1 = oscillating, =1 = critical, >1 = over-damped
+     * @param float  $deltaTime           seconds elapsed per integration step
+     * @param float  $angularFrequency    rad/sec (note: NOT Hz; multiply Hz by 2π)
+     * @param float  $dampingRatio        <1 = oscillating, =1 = critical, >1 = over-damped
+     * @param bool|null $reducedMotionOverride If provided, overrides Probe::reducedMotion() lookup
      */
     public function __construct(
         float $deltaTime,
         float $angularFrequency,
         float $dampingRatio,
+        ?bool $reducedMotionOverride = null,
     ) {
+        $this->reducedMotionOverride = $reducedMotionOverride;
         $angularFrequency = max(0.0, $angularFrequency);
         $dampingRatio     = max(0.0, $dampingRatio);
 
@@ -111,7 +116,7 @@ final class Spring
      */
     public function update(float $pos, float $vel, float $target): array
     {
-        if (Probe::reducedMotion()) {
+        if ($this->reducedMotionOverride ?? Probe::reducedMotion()) {
             return [$target, 0.0];
         }
 

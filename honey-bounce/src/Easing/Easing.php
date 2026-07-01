@@ -11,7 +11,7 @@ namespace SugarCraft\Bounce\Easing;
  *
  * @see https://easings.net/ for visual reference
  */
-enum Easing
+enum Easing implements EasingFunction
 {
     case Linear;
 
