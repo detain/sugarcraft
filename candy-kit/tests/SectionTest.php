@@ -40,9 +40,15 @@ final class SectionTest extends TestCase
     /** Multi-cell runes must never overshoot the requested width. */
     public function testMultiCellRuneNeverOvershoots(): void
     {
+        // '──' is a 2-cell rune; leftPad=2 means 2 runes = 4 cells.
+        // With label ' X ' (3 cells) + fill, total is 19 (not 20 — the
+        // 2-cell rune cannot fill the last slot exactly). The important
+        // guarantee is that it never EXCEEDS 20.
         $out = Section::header('X', Theme::plain(), leftPad: 2, width: 20, rune: '──');
-        // '──' is a 2-cell rune; intdiv ensures we never exceed 20 cells.
         $this->assertLessThanOrEqual(20, Width::string($out));
+        // Verify exact width for a single-cell rune case (leftPad=2, rune='─')
+        $out2 = Section::header('X', Theme::plain(), leftPad: 2, width: 20, rune: '─');
+        $this->assertSame(20, Width::string($out2));
     }
 
     /** rule() applies the theme's muted style (emits SGR for non-plain themes). */
