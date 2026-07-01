@@ -154,4 +154,39 @@ final class VsCodeThemeLoaderTest extends TestCase
             unlink($tmp);
         }
     }
+
+    public function testFullVsCodeThemeWithAllColors(): void
+    {
+        $data = [
+            'colors' => [
+                'editor.background' => '#1a1b26',
+                'editor.foreground' => '#a9b1d6',
+                'editorLineNumber.foreground' => '#565f89',
+            ],
+            'tokenColors' => [
+                ['scope' => 'comment', 'settings' => ['foreground' => '#565f89']],
+                ['scope' => 'keyword', 'settings' => ['foreground' => '#f7768e']],
+                ['scope' => 'string', 'settings' => ['foreground' => '#9ece6a']],
+                ['scope' => 'number', 'settings' => ['foreground' => '#ff9e64']],
+                ['scope' => 'variable', 'settings' => ['foreground' => '#9ece6a']],
+                ['scope' => 'constant', 'settings' => ['foreground' => '#ff9e64']],
+                ['scope' => 'operator', 'settings' => ['foreground' => '#89ddff']],
+                ['scope' => 'type', 'settings' => ['foreground' => '#e0af68']],
+                ['scope' => 'class', 'settings' => ['foreground' => '#e0af68']],
+                ['scope' => 'function', 'settings' => ['foreground' => '#7dcfff']],
+                ['scope' => 'punctuation', 'settings' => ['foreground' => '#89ddff']],
+                ['scope' => 'attribute', 'settings' => ['foreground' => '#e0af68']],
+                ['scope' => 'tag', 'settings' => ['foreground' => '#f7768e']],
+                ['scope' => 'error', 'settings' => ['foreground' => '#f7768e']],
+            ],
+        ];
+
+        $theme = VsCodeThemeLoader::fromArray($data);
+        $this->assertSame('#1a1b26', $theme->background);
+        $this->assertSame('#a9b1d6', $theme->foreground);
+        $this->assertSame('#565f89', $theme->lineNumber);
+        $this->assertSame('#f7768e', $theme->windowRed);
+        $this->assertSame('#9ece6a', $theme->windowGreen);
+        $this->assertSame('#ff9e64', $theme->windowYellow);
+    }
 }

@@ -84,6 +84,9 @@ final class LanguageDetector
      */
     public static function detect(string $content): string
     {
+        if (strlen($content) > 1_000_000) {
+            return 'text';
+        }
         $content = ltrim($content);
 
         // Check shebang first

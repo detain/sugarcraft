@@ -65,6 +65,17 @@ final class PngRendererTest extends TestCase
         $this->assertSame("\x89PNG\r\n\x1a\n", substr($png, 0, 8));
     }
 
+    public function testAnsiBackgroundColorsDoNotRenderInPng(): void
+    {
+        // ANSI 44 = blue background
+        $png = PngRenderer::dark()->withWindow(false)->withShadow(false)
+            ->render("\x1b[44mblue background\x1b[0m\n");
+
+        // GD imagestring() does not support per-character colors,
+        // so background is informational only in PNG output.
+        $this->assertSame("\x89PNG\r\n\x1a\n", substr($png, 0, 8));
+    }
+
     public function testThemePresetsProduceDifferentOutput(): void
     {
         $presets = [

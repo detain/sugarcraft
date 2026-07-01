@@ -24,6 +24,10 @@ use SugarCraft\Core\Util\Ansi;
  *
  * Uses GD's built-in bitmap fonts (imagestring) for portability — no
  * TTF font file required.
+ *
+ * @warning GD bitmap fonts do not support Unicode; multi-byte characters
+ *          (including emoji, CJK, and most non-Latin scripts) will render
+ *          as garbage. Use {@see SvgRenderer} for non-ASCII content.
  */
 final class PngRenderer
 {
@@ -87,6 +91,11 @@ final class PngRenderer
      * PNG image and return the bytes.
      *
      * @throws \RuntimeException if ext-gd is not loaded
+     * @note Unicode content produces incorrect output with GD's built-in
+     *       bitmap fonts. For syntax highlighted code with non-ASCII
+     *       characters, use {@see SvgRenderer} instead.
+     * @note Rendering is synchronous and CPU-bound. For very large
+     *       screenshots, a future major version may offer streaming output.
      */
     public function render(string $text): string
     {
@@ -265,10 +274,9 @@ final class PngRenderer
 
     private function buildMacosWindow(\GdImage $img, int $shadowMargin): void
     {
-        $cy  = $shadowMargin + 18;
-        $cx  = $shadowMargin + 18;
-        $r   = 6;
-        $gap = 18;
+        $geo = WindowChromeGeometry::macos($shadowMargin);
+        // Note: $geo->base == $geo->cy in macOS geometry (center x == left edge of first circle)
+        $cx = $geo->base;
 
         $red    = $this->allocateColor($img, $this->theme->windowRed);
         $yellow = $this->allocateColor($img, $this->theme->windowYellow);
@@ -276,44 +284,40 @@ final class PngRenderer
 
         $colors = [$red, $yellow, $green];
         foreach ($colors as $i => $color) {
-            imagefilledellipse($img, $cx + $i * $gap, $cy, $r * 2, $r * 2, $color);
+            imagefilledellipse($img, $cx + $i * $geo->gap, $geo->cy, $geo->r * 2, $geo->r * 2, $color);
         }
     }
 
     private function buildWindowsTerminalWindow(\GdImage $img, int $shadowMargin, int $frameWidth): void
     {
-        $titleBarHeight = 28;
-        $buttonSize = 14;
-        $buttonGap = 8;
-        $rightEdge = $shadowMargin + $frameWidth - 12;
+        $geo = WindowChromeGeometry::windowsTerminal($shadowMargin, $frameWidth);
         $titleBarY = $shadowMargin;
+        $rightEdge = $shadowMargin + $frameWidth - 12;
 
         // Title bar background (dark)
         $titleBarBg = $this->allocateColor($img, '#1e1e1e');
-        imagefilledrectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $frameWidth - 1, $titleBarY + $titleBarHeight - 1, $titleBarBg);
+        imagefilledrectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $geo->frameWidth - 1, $titleBarY + $geo->titleBarHeight - 1, $titleBarBg);
 
         // Title bar border
         $titleBarBorder = $this->allocateColor($img, '#303030');
-        imagerectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $frameWidth - 1, $titleBarY + $titleBarHeight - 1, $titleBarBorder);
+        imagerectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $geo->frameWidth - 1, $titleBarY + $geo->titleBarHeight - 1, $titleBarBorder);
 
         // Windows-style buttons
         $buttonColors = ['#444444', '#444444', '#444444'];
-        $buttonY = $titleBarY + ($titleBarHeight - $buttonSize) / 2;
+        $buttonY = $titleBarY + ($geo->titleBarHeight - $geo->buttonSize) / 2;
 
         foreach ([0, 1, 2] as $i) {
-            $bx = $rightEdge - ($buttonSize + $buttonGap) * (3 - $i);
+            $bx = $rightEdge - ($geo->buttonSize + $geo->buttonGap) * (3 - $i);
             $btnColor = $this->allocateColor($img, $buttonColors[$i]);
-            imagefilledrectangle($img, $bx, $buttonY, $bx + $buttonSize - 1, $buttonY + $buttonSize - 1, $btnColor);
+            imagefilledrectangle($img, $bx, $buttonY, $bx + $geo->buttonSize - 1, $buttonY + $geo->buttonSize - 1, $btnColor);
         }
     }
 
     private function buildITerm2Window(\GdImage $img, int $shadowMargin): void
     {
-        // iTerm2 style: smaller traffic lights
-        $cy  = $shadowMargin + 14;
-        $cx  = $shadowMargin + 14;
-        $r   = 4;
-        $gap = 14;
+        $geo = WindowChromeGeometry::iterm2($shadowMargin);
+        // Note: $geo->base == $geo->cy in iTerm2 geometry
+        $cx = $geo->base;
 
         $red    = $this->allocateColor($img, $this->theme->windowRed);
         $yellow = $this->allocateColor($img, $this->theme->windowYellow);
@@ -321,32 +325,27 @@ final class PngRenderer
 
         $colors = [$red, $yellow, $green];
         foreach ($colors as $i => $color) {
-            imagefilledellipse($img, $cx + $i * $gap, $cy, $r * 2, $r * 2, $color);
+            imagefilledellipse($img, $cx + $i * $geo->gap, $geo->cy, $geo->r * 2, $geo->r * 2, $color);
         }
     }
 
     private function buildHyperWindow(\GdImage $img, int $shadowMargin, int $frameWidth): void
     {
-        $titleBarHeight = 24;
+        $geo = WindowChromeGeometry::hyper($shadowMargin, $frameWidth);
         $titleBarY = $shadowMargin;
-        $r = 5;
-        $gap = 16;
 
         // Title bar background
         $titleBarBg = $this->allocateColor($img, $this->theme->border);
-        imagefilledrectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $frameWidth - 1, $titleBarY + $titleBarHeight - 1, $titleBarBg);
+        imagefilledrectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $geo->frameWidth - 1, $titleBarY + $geo->titleBarHeight - 1, $titleBarBg);
 
         // Traffic lights
-        $cy = $titleBarY + ($titleBarHeight - $r * 2) / 2;
-        $base = $shadowMargin + 12;
-
         $red    = $this->allocateColor($img, $this->theme->windowRed);
         $yellow = $this->allocateColor($img, $this->theme->windowYellow);
         $green  = $this->allocateColor($img, $this->theme->windowGreen);
 
         $colors = [$red, $yellow, $green];
         foreach ($colors as $i => $color) {
-            imagefilledellipse($img, $base + $i * $gap, $cy, $r * 2, $r * 2, $color);
+            imagefilledellipse($img, $geo->base + $i * $geo->gap, $geo->cy, $geo->r * 2, $geo->r * 2, $color);
         }
     }
 

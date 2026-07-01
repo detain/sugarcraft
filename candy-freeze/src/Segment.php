@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Freeze;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * One styled run produced by {@see AnsiParser::parse()}. Holds the
  * literal text plus the foreground colour, background colour, and
@@ -11,6 +13,8 @@ namespace SugarCraft\Freeze;
  */
 final class Segment
 {
+    use Mutable;
+
     public function __construct(
         public readonly string $text,
         public readonly ?string $fg,
@@ -22,13 +26,6 @@ final class Segment
 
     public function withBg(?string $bg): self
     {
-        return new self(
-            text:      $this->text,
-            fg:        $this->fg,
-            bold:      $this->bold,
-            italic:    $this->italic,
-            underline: $this->underline,
-            bg:        $bg,
-        );
+        return $this->mutate(['bg' => $bg]);
     }
 }
