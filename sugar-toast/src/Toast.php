@@ -434,7 +434,7 @@ final class Toast
 
         $cumulativeHeight = 0;
         foreach ($active as $alert) {
-            $alertBuf = $this->renderAlertToBuffer($alert);
+            $alertBuf = $this->renderAlertToBuffer($alert, $contentWidth);
             $alertHeight = $alertBuf->height();
             $alertWidth = $alertBuf->width();
 
@@ -521,16 +521,18 @@ final class Toast
      * sequences and builds cells with proper Buffer Style objects, so
      * toAnsi() produces correct styled output. Mirrors charmbracelet/bubbleup's
      * alert rendering pipeline.
+     *
+     * @param int $clampedWidth Pre-clamped width (min(maxWidth, viewportWidth)) to avoid
+     *                          negative xOffset when maxWidth > viewportWidth.
      */
-    private function renderAlertToBuffer(Alert $alert): Buffer
+    private function renderAlertToBuffer(Alert $alert, int $clampedWidth): Buffer
     {
         $alertStr = $this->renderAlert($alert);
         $lines = $this->splitLines($alertStr);
 
         $height = \count($lines);
-        $width = $this->maxWidth;
 
-        $buf = Buffer::new($width, $height);
+        $buf = Buffer::new($clampedWidth, $height);
         for ($row = 0; $row < $height; $row++) {
             $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row]);
         }

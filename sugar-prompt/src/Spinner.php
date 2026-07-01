@@ -138,7 +138,7 @@ final class Spinner
                 if ($pid > 0 && function_exists('posix_kill')) {
                     posix_kill($pid, SIGTERM);
                 }
-                pcntl_waitpid($pid, $status);
+                pcntl_waitpid($pid, $waitStatus);
                 if ($isTty) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }
@@ -151,7 +151,7 @@ final class Spinner
                 if ($pid > 0 && function_exists('posix_kill')) {
                     posix_kill($pid, SIGTERM);
                 }
-                pcntl_waitpid($pid, $status);
+                pcntl_waitpid($pid, $waitStatus);
                 if ($isTty) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }

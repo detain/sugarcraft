@@ -134,14 +134,20 @@ final class Application extends SymfonyApplication
                     $tokens[] = '--' . $option->getName();
                 }
             } else {
-                // Escape special characters in the value to prevent token injection.
-                $escaped = escapeshellarg($envValue);
-                // Remove surrounding quotes from escapeshellarg so we get a raw value.
-                $cleanValue = stripslashes(trim($escaped, "'\"")) ?: $envValue;
-                $tokens[] = '--' . $option->getName() . '=' . $cleanValue;
+                // Use setOption() to directly inject the option value, avoiding
+                // shell interpolation entirely. The escapeshellarg→stripslashes→trim
+                // chain leaves backslashes in values (e.g. "foo'bar" becomes
+                // "foo\bar" after strip), which can cause token injection issues.
+                try {
+                    $input->setOption($option->getName(), $envValue);
+                } catch (\Throwable) {
+                    // Option may not support setOption; fall back to token injection.
+                    $tokens[] = '--' . $option->getName() . '=' . $envValue;
+                }
             }
         }
-        // Inject tokens at the front of the ArgvInput token stream.
+        // Inject tokens at the front of the ArgvInput token stream only for
+        // options that couldn't be set via setOption().
         if ($tokens !== [] && $input instanceof \Symfony\Component\Console\Input\ArgvInput) {
             $reflector = new \ReflectionProperty($input, 'tokens');
             $reflector->setAccessible(true);

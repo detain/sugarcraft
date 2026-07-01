@@ -137,18 +137,21 @@ class AudioPlayer
      * Resume audio playback.
      *
      * If the process was killed by pause() (processHandle is null), restart
-     * from the stored startMs position. Otherwise, send SIGCONT to the running
-     * process.
+     * from the stored startMs position. Otherwise, terminate the existing
+     * process and restart to avoid SIGCONT PTY issues (SIGCONT has the same
+     * PTY problems as SIGSTOP).
      *
      * Safe no-op when no process has ever been started.
      */
     public function resume(): void
     {
-        if (!is_resource($this->processHandle)) {
-            $this->start(); // start() respects startMs
-        } else {
-            proc_terminate($this->processHandle, SIGCONT);
+        if (is_resource($this->processHandle)) {
+            // SIGCONT has PTY issues like SIGSTOP; terminate and restart.
+            proc_terminate($this->processHandle, SIGTERM);
+            proc_close($this->processHandle);
+            $this->processHandle = null;
         }
+        $this->start(); // start() respects startMs
     }
 
     /**

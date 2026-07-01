@@ -59,8 +59,8 @@ final class PreviewQuery
     {
         return match ($flavor) {
             Flavor::Sqlite => sprintf(
-                'PRAGMA table_info("%s")',
-                str_replace('"', '""', $table),
+                'PRAGMA table_info(%s)',
+                Identifier::quote(Flavor::Sqlite, $table),
             ),
             Flavor::Postgres => 'SELECT column_name, data_type FROM information_schema.columns '
                 . 'WHERE table_schema = CURRENT_SCHEMA() AND table_name = '
