@@ -26,6 +26,7 @@
     },
     "require": {
         "php": "^8.3",
+        "react/child-process": "^0.6",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
     },
