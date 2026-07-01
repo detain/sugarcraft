@@ -8,39 +8,30 @@ use FilesystemIterator;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SugarCraft\Testing\Tests\Concerns\TemporaryDirectoryTrait;
 use SugarCraft\Testing\Snapshot\GoldenFile;
 
 final class GoldenFileTest extends TestCase
 {
-    private string $tmpDir;
+    use TemporaryDirectoryTrait;
+
     private string $tmpFile;
+
+    protected function getTempDirSuffix(): string
+    {
+        return 'golden';
+    }
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/candy-testing-test-' . getmypid();
-        mkdir($this->tmpDir, 0755, true);
+        $this->setUpTemporaryDirectory();
         $this->tmpFile = $this->tmpDir . '/test.golden';
     }
 
     protected function tearDown(): void
     {
-        $dir = $this->tmpDir;
-        $this->tmpDir = '';
         $this->tmpFile = '';
-        if ($dir !== '' && is_dir($dir)) {
-            $files = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::CHILD_FIRST
-            );
-            foreach ($files as $file) {
-                if ($file->isDir()) {
-                    rmdir($file->getPathname());
-                } else {
-                    unlink($file->getPathname());
-                }
-            }
-            rmdir($dir);
-        }
+        $this->tearDownTemporaryDirectory();
     }
 
     public function testLoadReturnsNullOnMissingFile(): void
