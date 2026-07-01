@@ -220,14 +220,9 @@ final class Viewport implements Model
                 fn(string $l) => Width::dropAnsi($l, $this->xOffset),
                 $window,
             );
-            // Cap each line on the right to $this->width using ANSI-aware truncation
-            // when there is no scrollbar (scrollbar path is separate).
-            if (!$this->showScrollbar && $this->width > 0) {
-                $window = array_map(
-                    fn(string $l) => Width::truncateAnsi($l, $this->width),
-                    $window,
-                );
-            }
+            // When xOffset > 0 the visible window has already been shifted by the
+            // offset — do not apply right-side truncation here; the caller is
+            // explicitly controlling what portion of the content is shown.
         } elseif (!$this->showScrollbar) {
             // Cap each line on the right to $this->width using ANSI-aware truncation.
             if ($this->width > 0) {
