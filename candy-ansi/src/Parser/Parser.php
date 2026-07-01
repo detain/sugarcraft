@@ -31,6 +31,9 @@ final class Parser
     /** OSC / DCS / SOS / PM / APC payload accumulator. */
     private string $stringBuffer = '';
 
+    /** Maximum size for string buffer to prevent memory exhaustion from malicious sequences. */
+    private const MAX_STRING_BUFFER = 65536;
+
     /** Bytes of the current UTF-8 rune in flight. */
     private string $utf8Buffer = '';
 
@@ -228,6 +231,8 @@ final class Parser
 
     private const MAX_PARAMS = 32;
 
+    private const MAX_PARAM_VALUE = 65535;
+
     private function param(int $byte): void
     {
         // ';' (0x3B) and ':' (0x3A) both start a new param slot.
@@ -255,7 +260,7 @@ final class Parser
             return;
         }
         // Even at cap, allow accumulation into the current (32nd) slot
-        $this->params[$last] = min($this->params[$last] * 10 + $digit, 65535);
+        $this->params[$last] = min($this->params[$last] * 10 + $digit, self::MAX_PARAM_VALUE);
     }
 
     private function start(int $byte, State $from): void
@@ -268,6 +273,9 @@ final class Parser
 
     private function put(int $byte): void
     {
+        if (strlen($this->stringBuffer) >= self::MAX_STRING_BUFFER) {
+            return;
+        }
         $this->stringBuffer .= chr($byte);
     }
 
