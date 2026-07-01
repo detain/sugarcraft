@@ -47,4 +47,33 @@ final class AttachmentEdgeTest extends TestCase
         $att = Attachment::fromContent('{"key":"value"}', 'data.json', 'application/json');
         $this->assertSame('application/json', $att->mimeType);
     }
+
+    public function testInlineAttachmentGetContentThrowsOnUnreadable(): void
+    {
+        // Using a path that doesn't exist - should throw RuntimeException on getContent()
+        $att = Attachment::inline('/nonexistent/path/img.png', 'img-cid-123@example.com');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('not readable');
+        $att->getContent();
+    }
+
+    public function testInlineAttachmentRejectsInvalidCid(): void
+    {
+        // CID with spaces and special characters is invalid
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid Content-ID format');
+        Attachment::inline('/tmp/img.png', 'cid with spaces and <special> chars');
+    }
+
+    public function testInlineAttachmentAcceptsValidCidWithCidPrefix(): void
+    {
+        $att = Attachment::inline('/tmp/img.png', 'cid:img-cid-123@example.com');
+        $this->assertSame('cid:img-cid-123@example.com', $att->cid);
+    }
+
+    public function testInlineAttachmentAcceptsValidCidWithoutCidPrefix(): void
+    {
+        $att = Attachment::inline('/tmp/img.png', 'img-cid-123@example.com');
+        $this->assertSame('img-cid-123@example.com', $att->cid);
+    }
 }

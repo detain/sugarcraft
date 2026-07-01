@@ -64,10 +64,19 @@ final class Attachment
      * Create an inline (embedded) image attachment.
      *
      * @throws \RuntimeException if the file cannot be read
+     * @throws \InvalidArgumentException if the CID is not a valid RFC 2392 format
      */
     public static function inline(string $path, string $cid, string $filename = null): self
     {
         $name = $filename ?? \basename($path);
+
+        // RFC 2392 Content-ID format: accepts msg-id (addr-spec) or cid:uri
+        // Valid formats: "cid:user@host", "user@host", or simple identifiers like "cid-1", "logo"
+        // Simple identifiers (no @) are widely supported by email clients despite being non-standard
+        if (!\preg_match('/^(cid:[a-zA-Z0-9\.\+\-]+@[a-zA-Z0-9\.\-]+|[a-zA-Z0-9\.\+\-]+@[a-zA-Z0-9\.\-]+|[a-zA-Z0-9\.\+\-]+)$/', $cid)) {
+            throw new \InvalidArgumentException(Lang::t('attachment.invalid_cid', ['cid' => $cid]));
+        }
+
         $mime = self::detectMimeType($path);
         // Suppress warning when file doesn't exist - store null and throw on getContent()
         $prev = \error_reporting(E_ALL & ~\E_WARNING);

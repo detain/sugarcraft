@@ -160,7 +160,7 @@ final class Email
 
     public function withTo(string ...$to): self
     {
-        return $this->mutate(['to' => \array_merge($this->to, $to)]);
+        return $this->mutate(['to' => \array_unique(\array_merge($this->to, $to))]);
     }
 
     public function withSubject(string $subject): self
@@ -180,12 +180,12 @@ final class Email
 
     public function withCc(string ...$cc): self
     {
-        return $this->mutate(['cc' => \array_merge($this->cc, $cc)]);
+        return $this->mutate(['cc' => \array_unique(\array_merge($this->cc, $cc))]);
     }
 
     public function withBcc(string ...$bcc): self
     {
-        return $this->mutate(['bcc' => \array_merge($this->bcc, $bcc)]);
+        return $this->mutate(['bcc' => \array_unique(\array_merge($this->bcc, $bcc))]);
     }
 
     public function withReplyTo(string $replyTo): self
