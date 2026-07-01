@@ -269,21 +269,21 @@ final class DiffWriter
     {
         // Find the ranges for the hunk
         $expStart = null;
-        $expCount = 0;
+        $expCountOut = 0;
         $actStart = null;
-        $actCount = 0;
+        $actCountOut = 0;
 
         foreach ($contents as $c) {
             if ($c['type'] === '-') {
                 if ($expStart === null) {
                     $expStart = $c['line'];
                 }
-                $expCount++;
+                $expCountOut++;
             } elseif ($c['type'] === '+') {
                 if ($actStart === null) {
                     $actStart = $c['line'];
                 }
-                $actCount++;
+                $actCountOut++;
             } else {
                 // context line counts to both
                 if ($expStart === null) {
@@ -298,7 +298,7 @@ final class DiffWriter
         $expStart = $expStart ?? 1;
         $actStart = $actStart ?? 1;
 
-        $hunkHeader = "@@ -{$expStart},{$expCount} +{$actStart},{$actCount} @@";
+        $hunkHeader = "@@ -{$expStart},{$expCountOut} +{$actStart},{$actCountOut} @@";
 
         $hunkLines = [$hunkHeader];
         foreach ($contents as $c) {
