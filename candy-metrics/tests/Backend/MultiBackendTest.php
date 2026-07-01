@@ -49,6 +49,7 @@ final class MultiBackendTest extends TestCase
             public function asyncCounter(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
             public function asyncGauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
             public function describe(Descriptor $descriptor): void { throw new \RuntimeException('always fails'); }
+            public function flush(): void { throw new \RuntimeException('always fails'); }
         };
 
         $inMemory = new InMemoryBackend();
@@ -75,6 +76,7 @@ final class MultiBackendTest extends TestCase
             public function asyncCounter(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
             public function asyncGauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
             public function describe(Descriptor $descriptor): void { throw new \RuntimeException('always fails'); }
+            public function flush(): void { throw new \RuntimeException('always fails'); }
         };
 
         $inMemory = new InMemoryBackend();

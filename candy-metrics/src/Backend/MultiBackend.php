@@ -84,6 +84,11 @@ final class MultiBackend implements Backend
         $this->fanout(fn(Backend $b) => $b->describe($descriptor));
     }
 
+    public function flush(): void
+    {
+        $this->fanout(fn(Backend $b) => $b->flush());
+    }
+
     /**
      * Fan out an operation to all children, with optional error isolation.
      *

@@ -72,6 +72,14 @@ final class JsonStreamBackend implements Backend
         // No-op: JSON stream is a diagnostic format; TYPE/HELP are unnecessary.
     }
 
+    // Flush ensures the stream buffer is drained to the underlying resource.
+    public function flush(): void
+    {
+        if (is_resource($this->stream)) {
+            fflush($this->stream);
+        }
+    }
+
     /**
      * @param array<string,string> $tags
      */
