@@ -56,17 +56,14 @@ final class HelpText
             return '';
         }
         $theme ??= Theme::ansi();
-        $maxKey = 0;
-        foreach (array_keys($rows) as $k) {
-            if (mb_strlen($k, 'UTF-8') > $maxKey) {
-                $maxKey = mb_strlen($k, 'UTF-8');
-            }
-        }
-        $lines = [];
-        foreach ($rows as $key => $desc) {
-            $padded = $key . str_repeat(' ', max(0, $maxKey - mb_strlen($key, 'UTF-8')));
-            $lines[] = '  ' . $theme->prompt->render($padded) . '  ' . $desc;
-        }
-        return implode("\n", $lines);
+        $maxKey = array_reduce(array_keys($rows), static fn (int $max, string $k): int
+            => max($max, mb_strlen($k, 'UTF-8')), 0);
+        return implode("\n", array_map(
+            static fn (string $key, string $desc) => '  ' . $theme->prompt->render(
+                $key . str_repeat(' ', max(0, $maxKey - mb_strlen($key, 'UTF-8')))
+            ) . '  ' . $desc,
+            array_keys($rows),
+            array_values($rows),
+        ));
     }
 }
