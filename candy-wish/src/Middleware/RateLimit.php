@@ -111,8 +111,25 @@ final class RateLimit implements Middleware
         if ($payload === false) {
             return;
         }
-        rewind($fh);
-        ftruncate($fh, 0);
-        fwrite($fh, $payload);
+        // Atomic write: write to a temp file in the same directory,
+        // then rename over the original. rename() is atomic on POSIX
+        // filesystems, so readers either see the old complete content
+        // or the new complete content — never an empty/truncated file.
+        $dir = \dirname($this->statePath);
+        $tmp = $dir . '/.ratelimit_tmp_' . \bin2hex(\random_bytes(8));
+        try {
+            if (@file_put_contents($tmp, $payload) === false) {
+                return;
+            }
+            // The lock is still held from take(), so rename is safe.
+            if (!\rename($tmp, $this->statePath)) {
+                @\unlink($tmp);
+            }
+        } finally {
+            // Clean up temp file if rename somehow failed mid-operation.
+            if (\file_exists($tmp)) {
+                @\unlink($tmp);
+            }
+        }
     }
 }

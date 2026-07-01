@@ -32,8 +32,8 @@ final class ProgramSimulator
     /** @var list<\Closure> */
     private array $capturedCmds = [];
 
-    /** @var list<string> */
-    private array $outputBytes = [];
+    /** @var string */
+    private string $outputBytes = '';
 
     private ?\Closure $fakeCmdRunner = null;
 
@@ -45,6 +45,15 @@ final class ProgramSimulator
      */
     private bool $executeCmds = true;
 
+    /**
+     * @param private readonly Program $program PHP's readonly keyword prevents
+     *                                          re-assignment of this property,
+     *                                          but does NOT prevent internal
+     *                                          mutation of the Program or its
+     *                                          model. The model is safe to
+     *                                          read but may be modified by
+     *                                          update() calls during run().
+     */
     private function __construct(
         private readonly Program $program,
     ) {}
@@ -154,7 +163,7 @@ final class ProgramSimulator
             model: $model,
             view: $finalView,
             cmds: $this->capturedCmds,
-            output: implode('', $this->outputBytes),
+            output: $this->outputBytes,
         );
     }
 
@@ -190,6 +199,13 @@ final class ProgramSimulator
      * and iteratively draining cmd-produced messages (bounded to prevent
      * infinite loops).
      *
+     * The $maxCycles limit of 10,000 prevents infinite cmd loops in models
+     * that produce a cmd on every update (e.g., models with continuous
+     * subscriptions). This is a safety guard — if your model legitimately
+     * needs more cycles, you can increase this limit, but it typically
+     * indicates a model design issue. For stress tests with many tick
+     * messages, consider using a smaller tick count or mocking subscriptions.
+     *
      * @param Model $model
      * @param Msg $msg
      * @return array{0: Model, 1: ?\Closure} Updated model and any cmd
@@ -211,7 +227,7 @@ final class ProgramSimulator
             // Capture view output after each update.
             $viewOutput = $model->view();
             if (is_string($viewOutput)) {
-                $this->outputBytes[] = $viewOutput;
+                $this->outputBytes .= $viewOutput;
             }
 
             // Run the cmd and get any produced message.

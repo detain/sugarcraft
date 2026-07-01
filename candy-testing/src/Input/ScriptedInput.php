@@ -6,10 +6,16 @@ namespace SugarCraft\Testing\Input;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\Msg\ClipboardMsg;
 use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Testing\Lang;
 
 /**

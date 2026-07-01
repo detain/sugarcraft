@@ -68,10 +68,16 @@ final class Session
      */
     public static function fromEnvironment(): self
     {
-        $env = static fn(string $k): ?string =>
-            (isset($_SERVER[$k]) && $_SERVER[$k] !== '')
-                ? (string) $_SERVER[$k]
-                : (getenv($k) === false || getenv($k) === '' ? null : (string) getenv($k));
+        // Cache getenv result to avoid calling it multiple times per key.
+        // getenv() queries the system environment which may involve
+        // syscall overhead on each invocation.
+        $env = static fn(string $k): ?string => {
+            if (isset($_SERVER[$k]) && $_SERVER[$k] !== '') {
+                return (string) $_SERVER[$k];
+            }
+            $v = getenv($k);
+            return ($v === false || $v === '') ? null : (string) $v;
+        };
 
         $conn = $env('SSH_CONNECTION') ?? $env('SSH_CLIENT') ?? '';
         $parts = preg_split('/\s+/', $conn) ?: [];
