@@ -169,6 +169,11 @@ final class Model
         return $this->mutate(fn($m) => $m->currentStyle = $ansiStyle);
     }
 
+    public function setLineOffset(int $n): self
+    {
+        return $this->mutate(fn($m) => $m->lineOffset = $n);
+    }
+
     /**
      * Set a filter function and return a new Model with filtering active.
      *
@@ -267,18 +272,16 @@ final class Model
             return $this;
         }
         $selected = $this->items[$this->cursorIndex] ?? null;
+        $selectedId = $selected?->id;
         $items = $this->items;
         \usort($items, fn(Item $a, Item $b) =>
             ($this->lessFunc)($a->value, $b->value)
         );
+        // O(1) cursor relocation via identity map instead of O(n) foreach
         $cursorIndex = $this->cursorIndex;
         if ($selected !== null) {
-            foreach ($items as $i => $item) {
-                if ($item === $selected) {
-                    $cursorIndex = $i;
-                    break;
-                }
-            }
+            $idMap = \array_flip(\array_map(fn(Item $item): int => $item->id, $items));
+            $cursorIndex = $idMap[$selectedId] ?? $this->cursorIndex;
         }
         return $this->mutate(fn($m) => [$m->items, $m->cursorIndex] = [$items, $cursorIndex]);
     }
@@ -320,6 +323,38 @@ final class Model
     public function cursorDown(int $n = 1): self
     {
         return $this->setCursor($this->cursorIndex + $n);
+    }
+
+    /**
+     * Move cursor up by one viewport height (page up).
+     */
+    public function cursorPageUp(int $pages = 1): self
+    {
+        return $this->setCursor($this->cursorIndex - ($this->height * $pages));
+    }
+
+    /**
+     * Move cursor down by one viewport height (page down).
+     */
+    public function cursorPageDown(int $pages = 1): self
+    {
+        return $this->setCursor($this->cursorIndex + ($this->height * $pages));
+    }
+
+    /**
+     * Move cursor to the first item (index 0).
+     */
+    public function cursorToStart(): self
+    {
+        return $this->setCursor(0);
+    }
+
+    /**
+     * Move cursor to the last item.
+     */
+    public function cursorToEnd(): self
+    {
+        return $this->setCursor(\count($this->items) - 1);
     }
 
     // -------------------------------------------------------------------------
