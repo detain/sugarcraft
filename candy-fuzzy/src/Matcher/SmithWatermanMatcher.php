@@ -15,6 +15,11 @@ use SugarCraft\Fuzzy\MatchResultSorter;
  * SugarCraft\Forms\Fuzzy\FuzzyMatcher implementation.
  * Added: traceback walk to capture matched character indices.
  *
+ * PERFORMANCE NOTE: This implementation allocates a full O(queryLen × candidateLen)
+ * scoring matrix and traceback matrix in memory. For queries or candidates exceeding
+ * ~1,000 characters, consider using SahilmMatcher (O(1) memory) instead, or chunk
+ * large candidate lists to avoid excessive memory pressure.
+ *
  * @implements FuzzyMatcher
  */
 final class SmithWatermanMatcher implements FuzzyMatcher
@@ -105,6 +110,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
 
     /**
      * Compute match result with traceback for matched indices.
+     *
+     * LOCAL ALIGNMENT CONSTRAINT: This implementation requires every query character
+     * to appear in the candidate for a match (queryLen must be <= candidateLen).
+     * This is a stricter requirement than classical Smith-Waterman local alignment,
+     * which can find partial matches. The algorithm bails early when query > candidate.
      */
     private function compute(string $query, string $candidate): ?MatchResult
     {

@@ -28,6 +28,15 @@ use SugarCraft\Pty\SignalForwarder;
  */
 final class Hermit
 {
+    /** Maximum length of filter text before input is rejected. */
+    public const MAX_FILTER_LENGTH = 256;
+
+    /** Padding added to prompt+filter length when computing auto width. */
+    private const WIDTH_PAD_HEADER = 5;
+
+    /** Padding added to longest item length when computing auto width. */
+    private const WIDTH_PAD_ITEM = 2;
+
     /** @var list<Item> */
     private array $allItems = [];
 

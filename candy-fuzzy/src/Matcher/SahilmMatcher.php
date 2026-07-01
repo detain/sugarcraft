@@ -35,6 +35,13 @@ final class SahilmMatcher implements FuzzyMatcher
 
     private readonly bool $caseSensitive;
 
+    /**
+     * @param bool $caseSensitive When false (default), matching is case-insensitive but
+     *                            bonuses (separator, camelCase, first-char, lower-case) are
+     *                            still computed from the ORIGINAL character case in the candidate.
+     *                            This matches the behavior of sahilm/fuzzy: bonuses reflect what
+     *                            the user actually typed, not the lowercased comparison text.
+     */
     public function __construct(bool $caseSensitive = false)
     {
         $this->caseSensitive = $caseSensitive;
@@ -143,7 +150,7 @@ final class SahilmMatcher implements FuzzyMatcher
         $queryIdx = 0;
         $candidateIdx = 0;
         $prevMatch = false;
-        $prevCandidateLower = '';
+        $prevCharLower = '';
 
         while ($queryIdx < $queryLen && $candidateIdx < $candidateLen) {
             $queryChar = $qLow[$queryIdx];
@@ -163,8 +170,8 @@ final class SahilmMatcher implements FuzzyMatcher
                 }
 
                 // Check for separator bonus (match after separator char)
-                if ($prevCandidateLower !== '') {
-                    if (in_array($prevCandidateLower, self::SEPARATOR_CHARS, true)) {
+                if ($prevCharLower !== '') {
+                    if (in_array($prevCharLower, self::SEPARATOR_CHARS, true)) {
                         $charScore += self::SEPARATOR_BONUS;
                     }
                     // CamelCase bonus - current is lowercase but prev was uppercase
@@ -189,7 +196,7 @@ final class SahilmMatcher implements FuzzyMatcher
                 $prevMatch = false;
             }
 
-            $prevCandidateLower = $candidateChar;
+            $prevCharLower = $candidateChar;
             $candidateIdx++;
         }
 

@@ -22,6 +22,15 @@ Do NOT drop the traceback walk — it is the reason this library exists.
 - UTF-8 safety: use `mb_substr` and `mb_strlen` throughout, not raw byte
   indexing. Character indices (not byte offsets) are the contract.
 
+## Future Enhancements (Pre-1.0)
+
+- **Configurable scoring in SahilmMatcher**: The scoring constants
+  (MATCH_SCORE, CONSECUTIVE_BONUS, SEPARATOR_BONUS, CAMEL_BONUS,
+  FIRST_CHAR_BONUS, LOWER_CASE_BONUS) are hardcoded. Consider adding a
+  `SahilmMatcherConfig` class or constructor parameters to allow tuning
+  these values at instantiation time. This would be a non-breaking
+  addition if default values preserve existing behavior.
+
 ## Testing
 
 - Golden parity tests: every fixture from `candy-forms/tests/Fuzzy/FuzzyMatcherTest.php`
