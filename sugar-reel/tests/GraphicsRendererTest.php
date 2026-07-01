@@ -155,9 +155,9 @@ final class GraphicsRendererTest extends TestCase
             $this->markTestSkipped('Kitty protocol returned empty — skipping header check');
         }
 
-        // DCS kitty intro: ESC _ (0x1b 0x5f) — the Kitty protocol uses DCS (0x1b 0x50 0x47)
-        // followed by 'Ga=T,f=100,...' as the first payload chunk.
-        $this->assertStringStartsWith("\x1b_Ga=", $output, 'Kitty output should begin with DCS kitty header Ga=T');
+        // DCS kitty intro: ESC P (0x1b 0x50) — the Kitty protocol uses DCS (0x1b 0x50)
+        // followed by 'q' (graphics command) and 'c=<w>,r=<h>' as the first payload chunk.
+        $this->assertStringStartsWith("\x1bPqc=", $output, 'Kitty output should begin with DCS kitty header qc=');
     }
 
     /**
@@ -226,7 +226,7 @@ final class GraphicsRendererTest extends TestCase
 
         $output = (new GraphicsRenderer(Mode::Kitty))->render($frame, Mode::Kitty);
 
-        $this->assertStringStartsWith("\x1b_Ga=", $output);
+        $this->assertStringStartsWith("\x1bPqc=", $output);
     }
 
     /**
