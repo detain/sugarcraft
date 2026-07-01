@@ -471,7 +471,7 @@ final class Model
 
             $encoder = new DiffEncoder();
             return $encoder->encode($ops);
-        } catch (\RuntimeException $e) {
+        } catch (\Throwable $e) {
             return $e->getMessage() . "\n";
         }
     }
@@ -510,7 +510,7 @@ final class Model
             return [''];
         }
 
-        $rawLines = $this->hardWrap((string) $item->value, $contentWidth);
+        $rawLines = $this->hardWrap(Ansi::strip((string) $item->value), $contentWidth);
         if ($this->wrap > 0 && \count($rawLines) > $this->wrap) {
             $rawLines = \array_slice($rawLines, 0, $this->wrap);
         }
@@ -586,16 +586,16 @@ final class Model
     }
 
     /**
-     * Split a word that exceeds maxWidth into chunks.
+     * Split a word that exceeds maxWidth into chunks using grapheme boundaries.
      *
      * @return list<string>
      */
     private function splitOverWidth(string $word, int $maxWidth): array
     {
         $chunks = [];
-        $len = \strlen($word);
+        $len = \grapheme_strlen($word);
         for ($i = 0; $i < $len; $i += $maxWidth) {
-            $chunks[] = \substr($word, $i, $maxWidth);
+            $chunks[] = \grapheme_substr($word, $i, $maxWidth);
         }
         return $chunks ?: [''];
     }

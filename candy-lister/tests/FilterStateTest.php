@@ -15,7 +15,6 @@ final class FilterStateTest extends TestCase
         $this->assertSame('unfiltered', match ($state) {
             FilterState::unfiltered => 'unfiltered',
             FilterState::filtering => 'filtering',
-            FilterState::filtered => 'filtered',
         });
     }
 
@@ -25,24 +24,13 @@ final class FilterStateTest extends TestCase
         $this->assertSame('filtering', match ($state) {
             FilterState::unfiltered => 'unfiltered',
             FilterState::filtering => 'filtering',
-            FilterState::filtered => 'filtered',
-        });
-    }
-
-    public function testFiltered(): void
-    {
-        $state = FilterState::filtered;
-        $this->assertSame('filtered', match ($state) {
-            FilterState::unfiltered => 'unfiltered',
-            FilterState::filtering => 'filtering',
-            FilterState::filtered => 'filtered',
         });
     }
 
     public function testAllCases(): void
     {
         $cases = FilterState::cases();
-        $this->assertCount(3, $cases);
+        $this->assertCount(2, $cases);
         $this->assertContainsOnly(FilterState::class, $cases);
     }
 }
