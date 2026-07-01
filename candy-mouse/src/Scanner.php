@@ -80,9 +80,20 @@ final class Scanner
 
     /**
      * Reverse-lookup: return the first zone whose bounding box contains
-     * (col, row), or null if no zone matches. O(n) scan of the zone list —
-     * adequate for n < 100; callers with many zones should sort by area
-     * and consider a spatial index.
+     * (col, row), or null if no zone matches.
+     *
+     * Performance: O(n) linear scan — adequate for n < 100 zones.
+     * For large interactive UIs (tables, lists, grids), callers should
+     * consider a spatial index for sub-linear lookup:
+     *   - Grid-based: quantize the terminal into cells, map zones to grid
+     *     buckets, query only buckets overlapping (col, row).
+     *   - R-tree: bulk-load all zones into an R-tree for bounding-box
+     *     intersection queries (see php-rtree or similar).
+     *   - Sort-by-area: sort zones largest-to-smallest so early exits
+     *     hit the most-visible zones first (good heuristic, not a index).
+     *
+     * @param int $col Terminal column (1-based).
+     * @param int $row Terminal row (1-based).
      */
     public function hit(int $col, int $row): ?Zone
     {

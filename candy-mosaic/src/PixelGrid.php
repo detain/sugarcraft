@@ -12,6 +12,13 @@ namespace SugarCraft\Mosaic;
  *
  * @phpstan-type RgbCell array{0:int,1:int,2:int}
  * @phpstan-type RgbaCell array{0:int,1:int,2:int,3:?int}  // alpha=0 means fully transparent
+ *
+ * Semi-transparent pixel limitation: alpha values 1-126 (GD range where
+ * 0=opaque, 127=fully transparent) are treated as fully opaque in the
+ * PixelGrid cell tuple. Only alpha=127 maps to null (fully transparent)
+ * and alpha=0 maps to 0 (fully opaque). This is a simplification — true
+ * alpha blending would require compositor support which these renderers
+ * do not implement. Semi-transparent pixels will display as opaque.
  */
 final class PixelGrid
 {

@@ -165,6 +165,13 @@ trait ChildPollTrait
                 }
                 break;
             }
+            // Tight polling: 10 ms sleep between proc_get_status checks.
+            // This is intentional — waitpid FFI may be unavailable (ext-ffi
+            // disabled) or may return null on the first call before the
+            // child has exited. The fallback poll loop needs a small sleep
+            // to avoid spinning the CPU at 100% while still detecting exit
+            // within ~10 ms. This matches the granularity shells use for
+            // $SECONDS-level polling.
             \usleep(10_000);
         }
 

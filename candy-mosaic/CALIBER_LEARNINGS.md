@@ -78,4 +78,16 @@ Accumulated patterns and gotchas specific to this library.
   for large images on slow links; adds modest CPU overhead on both sides.
   Compression level 1 (fastest) is the Kitty spec minimum and sufficient.
 
-- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+ - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+ - **[ProcessAsyncRenderer (future)]** A process-based AsyncRenderer that forks
+   a child PHP process per render could bypass PHP's single-threaded GIL
+   constraint and parallelize encoding across CPU cores. This is a known
+   future consideration but not yet implemented. The current SyncAsyncRenderer
+   runs on the event loop thread and does not parallelize work.
+ - **[AsyncRenderer cancellation (known limitation)]** The current AsyncRenderer
+   interface does not support cancellation. If a render is in-flight and the
+   caller abandons the promise (e.g., user navigated away), the render
+   continues to completion internally. Implementing cancellation would require
+   cooperative cancellation tokens passed through the render chain. This is
+   a known limitation for long-running renders (large GIFs, high-res images).

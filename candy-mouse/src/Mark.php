@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mouse;
 
+use SugarCraft\Mouse\Sentinel;
+
 /**
  * Wrap $content with invisible zone markers so {@see Scanner} can later
  * extract bounding boxes without any external Manager wiring.
@@ -24,11 +26,6 @@ namespace SugarCraft\Mouse;
  */
 final class Mark
 {
-    /** Sentinel: opens a zone. */
-    private const SENTINEL_OPEN = "\u{E000}";
-
-    /** Sentinel: closes a zone. */
-    private const SENTINEL_CLOSE = "\u{E001}";
 
     /**
      * @param bool $enabled Whether sentinels are emitted.  Defaults to true.
@@ -72,14 +69,14 @@ final class Mark
             return $content;
         }
 
-        return self::SENTINEL_OPEN
+        return Sentinel::OPEN
             . $id
-            . self::SENTINEL_CLOSE
+            . Sentinel::CLOSE
             . $content
-            . self::SENTINEL_OPEN
+            . Sentinel::OPEN
             . '/'
             . $id
-            . self::SENTINEL_CLOSE;
+            . Sentinel::CLOSE;
     }
 
     /**

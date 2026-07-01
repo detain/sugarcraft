@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mouse;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Mouse\Sentinel;
 
 /**
  * Parse zone sentinels from a rendered string and compute bounding boxes
@@ -18,12 +19,6 @@ use SugarCraft\Core\Util\Width;
  */
 final class Scan
 {
-    // Sentinel bytes (UTF-8 encoding):
-    //   U+E000 = EE 80 80  (open sentinel lead)
-    //   U+E001 = EE 80 81  (close sentinel lead)
-    private const SENTINEL_OPEN  = "\xEE\x80\x80";
-    private const SENTINEL_CLOSE = "\xEE\x80\x81";
-
     /** @var array<string, array{int,int,int,int}> id => [startCol,startRow,maxCol,maxRow] */
     private array $open = [];
 
@@ -70,7 +65,7 @@ final class Scan
                     $isClose = ($i + 3 < $len) && ($rendered[$i + 3] === '/');
 
                     // Find the next U+E001 to locate the end of the id field.
-                    $idEnd = strpos($rendered, self::SENTINEL_CLOSE, $i + 3);
+                    $idEnd = strpos($rendered, Sentinel::CLOSE, $i + 3);
                     if ($idEnd === false) {
                         $i += 3;
                         continue;

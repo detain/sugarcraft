@@ -92,6 +92,14 @@ final class AnimationDriver implements Model
         return $delete . $render;
     }
 
+    /**
+     * No active subscriptions — this Model is purely tick-driven.
+     *
+     * Frame advancement is scheduled via Cmd::tick() in init() and update(),
+     * not via subscriber callbacks. Returning null here tells the Program
+     * loop there is nothing to poll; the Model's own tick handler drives
+     * all state changes (frame index, pause/resume).
+     */
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
         return null;
