@@ -85,15 +85,6 @@ final class ReactMysqlConnection implements AsyncConnection
 
     private function extractDsnValue(string $dsn, string $key): ?string
     {
-        // The key is anchored so that a value containing the key as a
-        // substring (e.g. "xhost=foo") cannot produce a false match.
-        // The lookbehind (?<=\Amysql:|(?<=;)|(?<=\A)) matches the key when:
-        //   - preceded by the start-of-string + "mysql:" prefix (first key)
-        //   - preceded by ";" (subsequent keys)
-        //   - preceded by start-of-string alone (no-prefix DSNs)
-        if (preg_match("/(?:mysql:)?(?<=\Amysql:|(?<=;)|(?<=\A)){$key}=([^;]+)/", $dsn, $matches)) {
-            return $matches[1];
-        }
-        return null;
+        return DsnParser::extract($dsn, $key);
     }
 }
