@@ -1,0 +1,8 @@
+[1m[38;2;255;0;255mUSAGE[0m
+  myapp [flags] <file>
+
+A sample application.
+
+[1m[38;2;255;0;255mFLAGS[0m
+  [1m[38;2;255;95;135m-h[0m  show help
+  [1m[38;2;255;95;135m-v[0m  verbose

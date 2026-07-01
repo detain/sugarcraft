@@ -41,6 +41,13 @@ final class Logo
 
     /**
      * Built-in SugarCraft logo in box-drawing characters.
+     *
+     * NOTE: the logo contains two visual layers — the double-line box border
+     * (lines 1, 2, 7, 8) and the text content (lines 3–6). Both layers use
+     * the same foreground colour via {@see withColor()}. If you need separate
+     * border and text colours, use {@see fromAscii()} to supply your own art
+     * and apply colours in two passes, or treat the border as a fixed
+     * decorative element separate from the text layer.
      */
     public static function sugarcraft(): self
     {
