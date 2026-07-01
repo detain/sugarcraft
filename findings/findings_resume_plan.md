@@ -1151,7 +1151,7 @@ Same verification as previous phases.
 | `plan_sugar-reel.md` | 1.4, 2.4, 3.3-3.8, 4.1-4.9, 5.2-5.9, 6.2-6.9, 7.1-7.5, 8.1-8.6 | Exit code capture, mutate false/0, HalfBlock path, GifDecoder silent fallback, mode switch rebuild, renderPlaceholder memo, subtitle not found, skip limit, autoMode sentinel, decoderFactory, color packing, Windows NUL, tickMsg singleton, frame PTS |
 | `plan_sugar-stash.md` | 3.1-3.2, 5.1 | DiffViewer early return, HistoryManager spread syntax, async git driver |
 | `plan_sugar-table.md` | 2.2-2.4, 3.1-3.3, 4.1-4.3 | Navigation short-circuit, totalRows double-compute, widthSolveCache LRU, styleFunc doc, visibleColumnIndices helper |
-| `plan_sugar-toast.md` | 3.1-3.3, 5.3, 6.3 | Null message handling, Finding 9 marker, Finding 10 marker |
+| `plan_sugar-toast.md` | 3.1-3.3, 5.3, 6.3 | Null message handling, Finding 9 marker, Finding 10 marker ✅ COMPLETE d0f85418 |
 | `plan_sugar-veil.md` | 7 | VeilStack::compositeAll() misleading doc |
 | `plan_sugar-boxer.md` | 1.1, 2.1-2.5, 3.1, 3.3-3.7 | Division guard, MAX_CARRY, func_num_args, WeakMap cache, flex separator docs, empty() check, function_exists cache, static regex, sentinel class |
 | `plan_sugar-calendar.md` | 2.1-2.2, 3.1, 4.1, 5.1 | Viewport width config, month grid cache, week-boundary docs, ISO week column |
