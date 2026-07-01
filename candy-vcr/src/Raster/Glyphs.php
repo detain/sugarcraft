@@ -23,6 +23,9 @@ final class Glyphs
     /** @var array<string, \GdImage> */
     private array $cache = [];
 
+    /** @var \SplQueue<string> FIFO queue for O(1) eviction order */
+    private \SplQueue $evictionQueue;
+
     private const MAX_CACHE_TILES = 4096;
 
     private int $fontSize;
@@ -48,6 +51,7 @@ final class Glyphs
     ) {
         $this->fontSize = $fontSize;
         $this->theme = $theme ?? new Theme();
+        $this->evictionQueue = new \SplQueue();
     }
 
     /**
@@ -107,6 +111,7 @@ final class Glyphs
         $this->evictIfNeeded();
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $this->cellW);
         $this->cache[$key] = $tile;
+        $this->evictionQueue->enqueue($key);
 
         return $tile;
     }
@@ -136,19 +141,20 @@ final class Glyphs
         $wideW = $this->cellW * 2;
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $wideW);
         $this->cache[$key] = $tile;
+        $this->evictionQueue->enqueue($key);
 
         return $tile;
     }
 
     /**
      * Evict the oldest cache entry if the cache has reached the size limit.
-     * Uses simple FIFO eviction via array_key_first.
+     * Uses SplQueue for O(1) FIFO eviction order.
      */
     private function evictIfNeeded(): void
     {
         if (count($this->cache) >= self::MAX_CACHE_TILES) {
-            $oldestKey = array_key_first($this->cache);
-            if ($oldestKey !== null) {
+            $oldestKey = $this->evictionQueue->dequeue();
+            if ($oldestKey !== null && isset($this->cache[$oldestKey])) {
                 $oldImage = $this->cache[$oldestKey];
                 unset($this->cache[$oldestKey]);
                 imagedestroy($oldImage);

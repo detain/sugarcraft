@@ -314,3 +314,39 @@ in `tests/fixtures/` with a `.golden` extension. Re-record goldens with
 `UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes.
 Mirrors: `docs/repo_map_step_28.md`.
 
+## Phase 6 audit findings (2026-07-01)
+
+### ImagickRasterizer tileCache sharing between clones (Finding #1.2 / #3.4)
+
+`ImagickRasterizer::withTheme()` and `withFont()` perform shallow copy of
+`$this->tileCache`, sharing the same `\Imagick` object references between
+original and clone. When `clearTileCache()` is called on either instance,
+it destroys Imagick tiles that the other instance may still need.
+
+**Fix:** Deep-clone the tileCache array in `withTheme()` and `withFont()`
+so each clone has independent Imagick objects. See `src/Raster/ImagickRasterizer.php`.
+
+### Async defer opportunities (Findings #2.6–#2.9)
+
+These are design considerations for future performance optimization:
+
+- **Recorder::writeLine (2.6):** `fflush()` on every event is blocking and
+  intentional for crash-safety. Consider an optional batch-flush mode for
+  performance testing where events are buffered and flushed periodically.
+
+- **FfmpegGifEncoder (2.7):** Sequential `Process::run()` for 100+ frames is
+  slow. Consider `encodeBatchAsync()` using ReactPHP promises for parallel
+  ffmpeg encoding across multiple frames.
+
+- **Player::playAsync (2.8):** `stream_socket_pair()` and `fopen()` are
+  blocking calls. Consider implementing `Player::playAsync()` for concurrent
+  replay using ReactPHP event loop.
+
+- **PhpGifEncoder LZW (2.9):** String concatenation per pixel (`$pixels .= chr(...)`)
+  for 384,000 iterations is inefficient. Consider preallocating string or
+  using `pack()` for pixel data.
+
+None of these are blocking issues — the current implementation is correct
+and production-ready. They are logged here for future optimization work.
+
+
