@@ -15,6 +15,7 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Util\Clamp;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -461,8 +462,8 @@ final class Viewport implements Model
 
     private function clamp(): self
     {
-        $offset  = max(0, min($this->yOffset, $this->maxOffset()));
-        $xOffset = max(0, min($this->xOffset, $this->maxXOffset()));
+        $offset  = Clamp::int($this->yOffset, 0, $this->maxOffset());
+        $xOffset = Clamp::int($this->xOffset, 0, $this->maxXOffset());
         if ($offset === $this->yOffset && $xOffset === $this->xOffset) {
             return $this;
         }
