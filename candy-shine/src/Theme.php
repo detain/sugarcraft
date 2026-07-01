@@ -568,6 +568,9 @@ final class Theme
     public static function fromJsonString(string $json): self
     {
         $data = json_decode($json, associative: true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \InvalidArgumentException(Lang::t('theme.json_invalid'));
+        }
         if (!is_array($data)) {
             throw new \InvalidArgumentException(Lang::t('theme.json_object'));
         }
