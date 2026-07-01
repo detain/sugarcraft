@@ -99,30 +99,25 @@ final class PngRenderer
         $lines = explode("\n", rtrim($text, "\n"));
         [$cellW, $cellH] = self::FONT_SIZE[self::DEFAULT_FONT];
 
-        // Strip ANSI for sizing.
-        $maxCols = 0;
-        foreach ($lines as $line) {
-            $cols = mb_strlen(Ansi::strip($line), 'UTF-8');
-            if ($cols > $maxCols) {
-                $maxCols = $cols;
-            }
-        }
-        $gutter = $this->lineNumbers
-            ? max(2, strlen((string) count($lines))) + 2
-            : 0;
+        [$maxCols, $gutter, $contentWidth, $contentHeight, $headerHeight, $shadowMargin, $totalW, $totalH] =
+            LayoutCalculator::calculate(
+                lines: $lines,
+                lineNumbers: $this->lineNumbers,
+                padding: $this->padding,
+                window: $this->window,
+                shadow: $this->shadow,
+                cellW: $cellW,
+                cellH: $cellH,
+            );
 
-        $contentWidth  = ($maxCols + $gutter) * $cellW;
-        $contentHeight = count($lines) * $cellH;
+        // Ensure integer dimensions for GD functions.
+        $totalW = (int) $totalW;
+        $totalH = (int) $totalH;
 
-        $headerHeight = $this->window ? 36 : 0;
-        $frameWidth   = $contentWidth + $this->padding * 2;
-        $frameHeight  = $contentHeight + $this->padding * 2 + $headerHeight;
+        $frameWidth  = (int) ($contentWidth + $this->padding * 2);
+        $frameHeight = (int) ($contentHeight + $this->padding * 2 + $headerHeight);
 
-        $shadowMargin = $this->shadow ? 32 : 0;
-        $totalW = $frameWidth + $shadowMargin * 2;
-        $totalH = $frameHeight + $shadowMargin * 2;
-
-        $img = imagecreatetruecolor($totalW, $totalH);
+        $img = imagecreatetruecolor((int) $totalW, (int) $totalH);
         if ($img === false) {
             throw new \RuntimeException('Failed to create GD image resource.');
         }
@@ -159,7 +154,7 @@ final class PngRenderer
                 $shadowColor,
             );
 
-            imagecopy($img, $shadowImg, 0, 0, 0, 0, $totalW, $totalH);
+            imagecopy($img, $shadowImg, 0, 0, 0, 0, (int) $totalW, (int) $totalH);
             imagedestroy($shadowImg);
         }
 

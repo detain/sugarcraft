@@ -119,18 +119,25 @@ final class AnsiParser
                 $count = count($params);
                 for ($i = 0; $i < $count; $i++) {
                     $p = $params[$i];
-                    if ($p === 0) {
-                        $fg = null; $bg = null; $bold = false; $italic = false; $underline = false;
+                    $applied = match (true) {
+                        $p === 0  => fn() => ['fg' => null, 'bg' => null, 'bold' => false, 'italic' => false, 'underline' => false],
+                        $p === 1  => fn() => ['bold' => true],
+                        $p === 3  => fn() => ['italic' => true],
+                        $p === 4  => fn() => ['underline' => true],
+                        $p === 22 => fn() => ['bold' => false],
+                        $p === 23 => fn() => ['italic' => false],
+                        $p === 24 => fn() => ['underline' => false],
+                        $p === 39 => fn() => ['fg' => null],
+                        $p === 49 => fn() => ['bg' => null],
+                        default   => null,
+                    };
+                    if ($applied !== null) {
+                        $changes = $applied();
+                        foreach ($changes as $k => $v) {
+                            $$k = $v;
+                        }
                         continue;
                     }
-                    if ($p === 1) { $bold = true; continue; }
-                    if ($p === 3) { $italic = true; continue; }
-                    if ($p === 4) { $underline = true; continue; }
-                    if ($p === 22) { $bold = false; continue; }
-                    if ($p === 23) { $italic = false; continue; }
-                    if ($p === 24) { $underline = false; continue; }
-                    if ($p === 39) { $fg = null; continue; }
-                    if ($p === 49) { $bg = null; continue; }
                     if ($p >= 30 && $p <= 37) {
                         $fg = AnsiParser::ANSI16[$p - 30] ?? null;
                         continue;

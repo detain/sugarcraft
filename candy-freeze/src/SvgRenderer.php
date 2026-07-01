@@ -115,29 +115,19 @@ final class SvgRenderer
         $cellW = $this->theme->fontSize * 0.6;
         $cellH = $this->theme->fontSize * $this->theme->lineHeight;
 
-        // Strip ANSI for sizing; the actual emit honours the styling
-        // via tspans built by the parser.
-        $maxCols = 0;
-        foreach ($lines as $line) {
-            $cols = mb_strlen(Ansi::strip($line), 'UTF-8');
-            if ($cols > $maxCols) {
-                $maxCols = $cols;
-            }
-        }
-        $gutter = $this->lineNumbers
-            ? max(2, strlen((string) count($lines))) + 2
-            : 0;
+        [$maxCols, $gutter, $contentWidth, , $headerHeight, $shadowMargin, $totalW, $totalH] =
+            LayoutCalculator::calculate(
+                lines: $lines,
+                lineNumbers: $this->lineNumbers,
+                padding: $this->padding,
+                window: $this->window,
+                shadow: $this->shadow,
+                cellW: $cellW,
+                cellH: $cellH,
+            );
 
-        $contentWidth  = ($maxCols + $gutter) * $cellW;
-        $contentHeight = count($lines) * $cellH;
-
-        $headerHeight = $this->window ? 36 : 0;
-        $svgWidth  = (int) ceil($contentWidth + $this->padding * 2);
-        $svgHeight = (int) ceil($contentHeight + $this->padding * 2 + $headerHeight);
-
-        $shadowMargin = $this->shadow ? 32 : 0;
-        $totalW = $svgWidth + $shadowMargin * 2;
-        $totalH = $svgHeight + $shadowMargin * 2;
+        $svgWidth  = (int) ($totalW - $shadowMargin * 2);
+        $svgHeight = (int) ($totalH - $shadowMargin * 2);
 
         $svg  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $svg .= '<svg xmlns="http://www.w3.org/2000/svg" '
