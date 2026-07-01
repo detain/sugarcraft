@@ -1,0 +1,14 @@
+includes:
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+
+parameters:
+    level: 5
+    treatPhpDocTypesAsCertain: false
+    paths:
+        - src
+    excludePaths:
+        - vendor
+        - tests
+    ignoreErrors:
+        -
+            identifier: missingType.iterableValue

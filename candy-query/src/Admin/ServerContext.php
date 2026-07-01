@@ -264,20 +264,29 @@ final class ServerContext implements ServerContextInterface
     }
 
     /**
+     * MySQL error codes that indicate missing privileges or unavailable features.
+     *
+     * Using codes instead of message strings makes this locale-independent — MySQL
+     * error messages are returned in the server's locale, but error codes are fixed.
+     *
+     * @see https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference/
+     * @see https://dev.mysql.com/doc/mysql-errors/8.0/en/client-error-reference/
+     */
+    private const IGNORABLE_ERROR_CODES = [
+        '42000', // ER_UNKNOWN_ERROR_CLASS / syntax/access denied (general)
+        '1142',  // ER_TABLEACCESS_DENIED_ERROR
+        '1146',  // ER_NO_SUCH_TABLE
+        '1227',  // ER_SPECIFIC_ACCESS_DENIED_ERROR (proxy, replication grants)
+        '2002',  // CR_CONNECTION_ERROR (Can't connect to MySQL server)
+        '2003',  // CR_CONN_HOST_ERROR (Unknown MySQL server host)
+        '2013',  // CR_SERVER_LOST (Lost connection to MySQL server during query)
+    ];
+
+    /**
      * True for errors that indicate missing privileges or unavailable features.
      */
     private function isIgnorableError(\PDOException $e): bool
     {
-        $code = $e->getCode();
-        if ($code === '42000') {
-            return true;
-        }
-        $message = strtolower($e->getMessage());
-        return str_contains($message, 'access denied')
-            || str_contains($message, 'command denied')
-            || (str_contains($message, 'table') && str_contains($message, 'doesn\'t exist'))
-            || str_contains($message, 'can\'t connect')
-            || str_contains($message, 'lost connection')
-            || str_contains($message, 'timeout');
+        return \in_array((string) $e->getCode(), self::IGNORABLE_ERROR_CODES, true);
     }
 }

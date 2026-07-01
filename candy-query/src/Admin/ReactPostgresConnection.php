@@ -77,9 +77,6 @@ final class ReactPostgresConnection implements AsyncConnection
 
     private function extractDsnValue(string $dsn, string $key): ?string
     {
-        if (preg_match("/{$key}=([^;]+)/", $dsn, $matches)) {
-            return $matches[1];
-        }
-        return null;
+        return DsnParser::extract($dsn, $key);
     }
 }
