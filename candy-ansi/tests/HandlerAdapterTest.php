@@ -316,4 +316,91 @@ final class HandlerAdapterTest extends TestCase
 
         $this->parser->feed("\x0A"); // LF
     }
+
+    // -------------------------------------------------------------------------
+    // Item 4.1: HandlerAdapter edge cases
+    // -------------------------------------------------------------------------
+
+    public function testOscMalformedNoCommandNumberDoesNothing(): void
+    {
+        // OSC without a valid command number before semicolon
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b];Hello World\x07");
+    }
+
+    public function testOscMalformedNoSemicolonDoesNothing(): void
+    {
+        // OSC with command but no semicolon separator - the regex won't match
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]2Hello World\x07");
+    }
+
+    public function testOscVeryLongPayloadHandled(): void
+    {
+        // Very long OSC payload should not cause issues
+        $longTitle = str_repeat('x', 10000);
+        $this->osc->expects($this->once())->method('title')->with($longTitle);
+
+        $this->parser->feed("\x1b]2;" . $longTitle . "\x07");
+    }
+
+    public function testOscCommand3DoesNothing(): void
+    {
+        // OSC 3 (X11 window name) is not in [0-2] pattern, should be ignored
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]3;Some Window Name\x07");
+    }
+
+    public function testOscCommand4AndAboveDoNothing(): void
+    {
+        // OSC commands 4+ are not in [0-2] pattern, should be ignored
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]4;Some Data\x07");
+    }
+
+    public function testOscEmptyPayloadDispatched(): void
+    {
+        // OSC with empty payload after semicolon should dispatch empty string
+        $this->osc->expects($this->once())->method('title')->with('');
+
+        $this->parser->feed("\x1b]2;\x07");
+    }
+
+    // -------------------------------------------------------------------------
+    // Item 4.2: DCS passthrough completeness
+    // -------------------------------------------------------------------------
+
+    public function testDcsPassthroughToHandlerInterface(): void
+    {
+        // Verify the parser correctly dispatches DCS sequences to the Handler interface
+        $debugHandler = new \SugarCraft\Ansi\Parser\DebugHandler();
+        $parser = new \SugarCraft\Ansi\Parser\Parser($debugHandler);
+
+        // Feed a DCS sequence: ESC P (0x50) starts DCS
+        // Format: DCS p s ... F (ST)
+        // Feed DCS with params 1;2;3, final 'm', data 'test'
+        $parser->feed("\x1bP1;2;3m\x1b\\");
+
+        $dcsEvents = $debugHandler->filter('dcs');
+        $this->assertNotEmpty($dcsEvents, 'DCS should be dispatched');
+        $this->assertSame(ord('m'), $dcsEvents[0]['detail']['final']);
+        $this->assertSame([1, 2, 3], $dcsEvents[0]['detail']['params']);
+    }
+
+    public function testDcsWithSubparams(): void
+    {
+        $debugHandler = new \SugarCraft\Ansi\Parser\DebugHandler();
+        $parser = new \SugarCraft\Ansi\Parser\Parser($debugHandler);
+
+        // DCS with sub-parameter separator ':'
+        $parser->feed("\x1bP1:2:3m\x1b\\");
+
+        $dcsEvents = $debugHandler->filter('dcs');
+        $this->assertNotEmpty($dcsEvents);
+        $this->assertSame([1, 2, 3], $dcsEvents[0]['detail']['params']);
+    }
 }
