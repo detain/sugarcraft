@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Palette;
 
+use SugarCraft\Core\Util\Clamp;
+
 /**
  * RGBA color value object.
  *
@@ -25,10 +27,10 @@ final class Color
         int $b,
         int $a = 255,
     ) {
-        $this->r = self::clamp($r);
-        $this->g = self::clamp($g);
-        $this->b = self::clamp($b);
-        $this->a = self::clamp($a);
+        $this->r = Clamp::byte($r);
+        $this->g = Clamp::byte($g);
+        $this->b = Clamp::byte($b);
+        $this->a = Clamp::byte($a);
     }
 
     /**
@@ -62,11 +64,6 @@ final class Color
             $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
         }
         return self::fromHex((int) \hexdec($hex), $a);
-    }
-
-    private static function clamp(int $v): int
-    {
-        return \max(0, \min(255, $v));
     }
 
     // -------------------------------------------------------------------------

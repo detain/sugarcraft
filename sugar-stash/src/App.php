@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Clamp;
 
 /**
  * Three-pane git TUI: status (left), branches (top right), log (bottom
@@ -501,21 +502,15 @@ final class App implements Model
     {
         return match ($this->pane) {
             Pane::Status => $this->withAll(
-                statusCursor: $this->clamp($this->statusCursor + $dir, count($this->status)),
+                statusCursor: Clamp::int($this->statusCursor + $dir, 0, count($this->status) - 1),
             ),
             Pane::Branches => $this->withAll(
-                branchesCursor: $this->clamp($this->branchesCursor + $dir, count($this->branches)),
+                branchesCursor: Clamp::int($this->branchesCursor + $dir, 0, count($this->branches) - 1),
             ),
             Pane::Log => $this->withAll(
-                logCursor: $this->clamp($this->logCursor + $dir, count($this->log)),
+                logCursor: Clamp::int($this->logCursor + $dir, 0, count($this->log) - 1),
             ),
         };
-    }
-
-    private function clamp(int $i, int $size): int
-    {
-        if ($size <= 0) return 0;
-        return max(0, min($size - 1, $i));
     }
 
     /** Runs `git restore --worktree -- <path>` via the GitDriver, then refreshes. */
