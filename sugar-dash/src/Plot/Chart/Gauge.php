@@ -77,11 +77,11 @@ final class Gauge implements \SugarCraft\Dash\Foundation\Sizer
             return '';
         }
 
-        // Ratio is clamped at construction (new()) and via withRatio() withers.
-        // No additional clamping needed here.
-        $ratio = $this->ratio;
+        // Ratio is clamped at construction via new() factory and withRatio() withers.
+        // Guard against invalid ratios (e.g., direct construction bypasses factory clamping).
+        $ratio = max(0.0, min(1.0, $this->ratio));
         $filledWidth = (int) floor($ratio * $width);
-        $emptyWidth = $width - $filledWidth;
+        $emptyWidth = max(0, $width - $filledWidth);
         $percentage = (int) round($ratio * 100);
 
         // Build the filled and empty portions
