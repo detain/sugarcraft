@@ -9,6 +9,9 @@ namespace SugarCraft\Stash;
  * `git` binary). Tests inject a fixture closure-driven implementation
  * so transition correctness can be asserted without staging real
  * repos in tmp dirs.
+ *
+ * @deprecated All methods are synchronous-only. Async git operations
+ * (using React\ChildProcess\Process) are planned for v2.
  */
 interface GitDriver
 {

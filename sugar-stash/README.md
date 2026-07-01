@@ -75,6 +75,8 @@ sugar-stash    # run inside any git working tree
 
 `SugarStash` shells out to `git` directly via the system, so users keep their existing aliases, hooks, and signing config.
 
+**Note:** All git operations are synchronous and block the event loop. This is by design for v1 — a TTY application naturally runs synchronously at the terminal. Async git operations are planned for v2 (see `GitDriver` interface for deprecation notes).
+
 ## Internationalization
 
 User-facing strings are internationalized via `SugarCraft\Stash\Lang::t()`.
