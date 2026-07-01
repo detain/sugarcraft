@@ -1095,7 +1095,7 @@ final class PerfSchemaPage extends PageBase
             ]));
         }
 
-        $table = Table::withColumns($columns)
+        $table = Table::fromColumns($columns)
             ->withRows($rows)
             ->withSelectable(true)
             ->withSelectedIndex($this->selectedRowIndex)
@@ -1136,7 +1136,7 @@ final class PerfSchemaPage extends PageBase
             ]));
         }
 
-        $table = Table::withColumns($columns)->withRows($rows)->withShowFooter(false)->View();
+        $table = Table::fromColumns($columns)->withRows($rows)->withShowFooter(false)->View();
 
         return implode("\n", [
             $this->tabTitle('Timer Options'),

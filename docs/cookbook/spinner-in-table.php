@@ -38,7 +38,7 @@ $frame = $spinner->view();                       // e.g. "⠹"
 $running = StyledCell::new($frame . ' running', '33');   // yellow
 $done    = StyledCell::new('✓ done', '32');              // green
 
-$table = Table::withColumns([
+$table = Table::fromColumns([
     Column::new('id',     'Job',     6),
     Column::new('name',   'Task',    22),
     Column::new('status', 'Status',  16)->withAlignLeft(),

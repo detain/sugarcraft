@@ -280,7 +280,7 @@ final class Renderer
             $tableRows[] = Row::new(RowData::from($data));
         }
 
-        $table = Table::withColumns($columns)
+        $table = Table::fromColumns($columns)
             ->withRows($tableRows)
             ->withSelectable()
             ->withZebra()

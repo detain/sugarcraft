@@ -56,7 +56,7 @@ foreach ($hosts as $i => [$name, $data]) {
     ]));
 }
 
-$table = Table::withColumns([
+$table = Table::fromColumns([
     Column::new('host', 'Host',       12),
     Column::new('cpu',  'CPU (20m)',  24)->withAlignLeft(),
     Column::new('now',  'Current',     9),

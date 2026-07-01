@@ -93,13 +93,11 @@ final class VeilStack implements \Countable
     }
 
     /**
-     * Composite all veils at fixed TOP,LEFT positions.
+     * Composite all veils at their individual fixed TOP,LEFT positions.
      *
-     * NOTE: This method is currently a pass-through — each veil composites
-     * the accumulated result as foreground over the original background.
-     * Since Veil stores no per-veil content, the practical effect is that
-     * the original background is returned unchanged when all veils have
-     * empty content. Use composite() directly for per-veil positioning.
+     * Each veil is composited onto the accumulated result at its own
+     * vPosition()/hPosition() anchor with positionX()/positionY() offsets,
+     * so higher z-index veils appear on top of lower ones.
      *
      * @param string $background The base content
      * @return string The composited output

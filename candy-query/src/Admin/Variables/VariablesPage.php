@@ -823,7 +823,7 @@ final class VariablesPage extends PageBase
         }
 
         // sugar-table owns the grid; withSelectedIndex highlights the cursor row.
-        return Table::withColumns($columns)
+        return Table::fromColumns($columns)
             ->withRows($rows)
             ->withSelectable(true)
             ->withSelectedIndex($this->selectedRowIndex)

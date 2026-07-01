@@ -11,14 +11,14 @@ final class Alert
 {
     /**
      * @param ToastType $type  Alert severity
-     * @param string $message  User-visible message text
+     * @param string|null $message  User-visible message text (null renders as empty)
      * @param float|null $expiresAt  Seconds since epoch; null = never expires
      * @param float|null $progress  Progress 0.0–1.0; null = no progress bar
      * @param list<Action> $actions  Clickable action buttons
      */
     public function __construct(
         public readonly ToastType $type,
-        public readonly string $message,
+        public readonly ?string $message = null,
         public readonly ?float $expiresAt = null,
         public readonly ?float $progress = null,
         public readonly array $actions = [],
