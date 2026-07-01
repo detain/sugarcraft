@@ -60,6 +60,15 @@ final class DatePicker
     /** Whether range selection mode is active. */
     private bool $rangeMode = false;
 
+    /** Cached month grid cells (6 weeks × 7 days). */
+    private ?array $cachedCells = null;
+
+    /** Cached rendered view string. */
+    private ?string $cachedView = null;
+
+    /** Whether the cached cells/view are valid. */
+    private bool $cacheValid = false;
+
     /** Styling (SGR ANSI codes). */
     private string $headerStyle       = '1;37';  // bold white
     private string $dayNameStyle      = '90';    // bright black
@@ -120,6 +129,7 @@ final class DatePicker
             $clone->viewMonth--;
         }
         $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -133,6 +143,7 @@ final class DatePicker
             $clone->viewMonth++;
         }
         $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -141,6 +152,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewYear--;
         $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -149,6 +161,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewYear++;
         $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -159,6 +172,7 @@ final class DatePicker
         $clone->viewMonth = (int) $today->format('n');
         $clone->viewYear  = (int) $today->format('Y');
         $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -170,6 +184,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->today = $today;
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -185,17 +200,25 @@ final class DatePicker
         $clone->viewMonth = (int) $t->format('n');
         $clone->viewYear  = (int) $t->format('Y');
         $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        $clone->cacheValid = false;
         return $clone;
     }
 
     // -------------------------------------------------------------------------
     // Cursor movement
+    //
+    // NOTE: Cursor navigation is GRID-INDEX based (0-41), not date-based like
+    // upstream bubbles/calendar (which uses DateTimeImmutable cursor). When at
+    // index 0 and pressing Left, the cursor stays at 0 (no month-boundary wrap).
+    // When at index 41 and pressing Right, the cursor stays at 41.
+    // This is an architectural difference from upstream.
     // -------------------------------------------------------------------------
 
     public function MoveCursorLeft(): self
     {
         $clone = clone $this;
         $clone->cursorIndex = \max(0, $clone->cursorIndex - 1);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -203,6 +226,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->cursorIndex = \min(41, $clone->cursorIndex + 1);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -210,6 +234,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->cursorIndex = \max(0, $clone->cursorIndex - self::DAYS_IN_WEEK);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -217,6 +242,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->cursorIndex = \min(41, $clone->cursorIndex + self::DAYS_IN_WEEK);
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -234,6 +260,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->selecting = true;
         $clone->selectedDate = $clone->dateAtCursor() ?? $clone->firstOfViewMonth();
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -245,6 +272,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->selecting = false;
         $clone->selectedDate = null;
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -265,6 +293,7 @@ final class DatePicker
             $clone->rangeStart = null;
             $clone->rangeEnd = null;
         }
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -309,10 +338,12 @@ final class DatePicker
         }
         if ($key === self::KEY_HOME) {
             $clone->cursorIndex = 0;
+            $clone->cacheValid = false;
             return $clone;
         }
         if ($key === self::KEY_END) {
             $clone->cursorIndex = 41;
+            $clone->cacheValid = false;
             return $clone;
         }
         if ($key === self::KEY_ENTER && $this->rangeMode) {
@@ -321,6 +352,7 @@ final class DatePicker
         if ($key === self::KEY_ESCAPE && $this->rangeMode) {
             $clone->rangeStart = null;
             $clone->rangeEnd = null;
+            $clone->cacheValid = false;
             return $clone;
         }
 
@@ -350,7 +382,7 @@ final class DatePicker
             $clone->rangeStart = $date;
             $clone->rangeEnd = null;
         }
-
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -421,33 +453,59 @@ final class DatePicker
 
     /**
      * Render the calendar view as an ANSI string using a Buffer.
+     *
+     * @param int $width    Terminal width in characters (default 21 = 7 days × 3 chars).
+     *                      Must be at least 15 (5 days minimum) and at most 63 (21 days max).
+     * @param bool $showWeekNumbers Show ISO week number column on the left (default false).
      */
-    public function View(): string
+    public function View(int $width = 21, bool $showWeekNumbers = false): string
     {
-        $width = 21; // 7 days × 3 chars each: "Su Mo Tu We Th Fr Sa" is 21 chars (2 + 1) × 7
+        $width = \max(15, \min(63, $width));
+        $weekColWidth = $showWeekNumbers ? 4 : 0; // 3 chars for week number + 1 space
+        $totalWidth = $width + $weekColWidth;
         $height = 9; // header + day-names + sep + 6 week rows
-        $buffer = Buffer::new($width, $height);
+
+        // Return cached view if valid and parameters match default
+        if ($this->cacheValid && $this->cachedView !== null && !$showWeekNumbers && $width === 21) {
+            return $this->cachedView;
+        }
+
+        $buffer = Buffer::new($totalWidth, $height);
 
         // Row 0: header "May 2026" (left-aligned)
         $headerText = self::monthName($this->viewMonth) . ' ' . $this->viewYear;
-        $buffer = $this->placeStringAt($buffer, 0, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
+        $buffer = $this->placeStringAt($buffer, $weekColWidth, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
 
         // Row 1: day-name row
         for ($dow = 0; $dow < 7; $dow++) {
-            $col = $dow * 3; // 3-char cells: "Su" at col 0, "Mo" at col 3, …
+            $col = $weekColWidth + $dow * 3; // 3-char cells
             $dayName = self::dayName($dow);
             $buffer = $this->placeStringAt($buffer, $col, 1, $dayName, $this->sgrToBufferStyle($this->dayNameStyle));
         }
 
         // Row 2: separator
-        for ($col = 0; $col < 21; $col++) {
+        for ($col = $weekColWidth; $col < $totalWidth; $col++) {
             $buffer = $buffer->withCellAt($col, 2, Cell::new('─'));
         }
 
-        // Rows 3-8: week rows
-        $cells = $this->buildCells();
+        // Rows 3-8: week rows — use cached cells when valid
+        $cells = ($this->cacheValid && $this->cachedCells !== null)
+            ? $this->cachedCells
+            : $this->buildCells();
+
+        // Update cells cache after computation if needed
+        if (!$this->cacheValid || $this->cachedCells === null) {
+            $this->cachedCells = $cells;
+        }
+
         for ($week = 0; $week < 6; $week++) {
             $row = 3 + $week;
+
+            // Optional week number column
+            if ($showWeekNumbers) {
+                $weekNum = $this->isoWeekNumber($week);
+                $buffer = $this->placeStringAt($buffer, 0, $row, $weekNum, $this->sgrToBufferStyle('90'));
+            }
 
             // Day cells — each day is a 2-char number centered in a 3-char cell
             for ($dow = 0; $dow < 7; $dow++) {
@@ -456,12 +514,41 @@ final class DatePicker
                 if ($plain === '  ' && $style === null) {
                     continue;
                 }
-                $col = $dow * 3;
+                $col = $weekColWidth + $dow * 3;
                 $buffer = $this->placeStringAt($buffer, $col, $row, $plain, $style);
             }
         }
 
+        // Only cache the default-param view for subsequent calls with same params
+        if (!$showWeekNumbers && $width === 21) {
+            $this->cachedView = $buffer->toAnsi();
+            $this->cacheValid = true;
+        }
+
         return $buffer->toAnsi();
+    }
+
+    /**
+     * Compute the ISO week number for a given grid row (0-5).
+     *
+     * Uses the ISO week number algorithm: week 1 is the first week of the
+     * year with at least 4 days in the new year (Mon-Sun week start).
+     *
+     * @param int $weekRow 0-based week row index (0 = first week displayed)
+     */
+    private function isoWeekNumber(int $weekRow): string
+    {
+        // Compute the date of the first day shown in this week row
+        $firstOfMonth = $this->firstOfViewMonth();
+        if ($firstOfMonth === null) {
+            return '   ';
+        }
+        $firstDow = (int) $firstOfMonth->format('w'); // 0=Sun
+        $firstDayOfWeekRow = $firstOfMonth->modify('+' . (-$firstDow + $weekRow * 7) . ' days');
+
+        // ISO week: Mon=1 … Sun=7, week 1 contains Jan 4
+        $isoWeek = (int) $firstDayOfWeekRow->format('W');
+        return \sprintf('%2d ', $isoWeek);
     }
 
     // -------------------------------------------------------------------------
@@ -473,6 +560,7 @@ final class DatePicker
         self::assertSgr($s);
         $clone = clone $this;
         $clone->headerStyle = $s;
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -481,6 +569,7 @@ final class DatePicker
         self::assertSgr($s);
         $clone = clone $this;
         $clone->todayStyle = $s;
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -489,6 +578,7 @@ final class DatePicker
         self::assertSgr($s);
         $clone = clone $this;
         $clone->selectedStyle = $s;
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -497,6 +587,7 @@ final class DatePicker
         self::assertSgr($s);
         $clone = clone $this;
         $clone->cursorStyle = $s;
+        $clone->cacheValid = false;
         return $clone;
     }
 
@@ -505,6 +596,7 @@ final class DatePicker
         self::assertSgr($s);
         $clone = clone $this;
         $clone->rangeStyle = $s;
+        $clone->cacheValid = false;
         return $clone;
     }
 
