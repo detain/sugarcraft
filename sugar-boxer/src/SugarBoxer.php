@@ -25,6 +25,12 @@ use SugarCraft\Sprinkles\VAlign;
  */
 final class SugarBoxer
 {
+    /** Cap for combining character carry string to prevent memory exhaustion. */
+    private const MAX_CARRY = 100;
+
+    /** @var array<int, string> SGR prefix cache keyed by spl_object_id for style object reuse */
+    private array $sgrPrefixCache = [];
+
     /** @var Buffer|null Lazily-built previous frame buffer for diff-based emission */
     private ?Buffer $previousFrame = null;
 
@@ -42,6 +48,11 @@ final class SugarBoxer
     public static function new(): self
     {
         return new self();
+    }
+
+    public function __construct()
+    {
+        // SGR prefix cache initialized as empty array
     }
 
     // -------------------------------------------------------------------------
@@ -213,6 +224,22 @@ final class SugarBoxer
         $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells, $node->style, $node->alignH, $node->alignV);
     }
 
+    /**
+     * Render a horizontal (left-to-right) panel layout.
+     *
+     * Flex children: separators between children are ONLY drawn when
+     * spacing === 0 AND the layout has NO flex children. This is because
+     * the flex distribution algorithm resizes children dynamically, making
+     * a fixed separator position meaningless. Use spacing >= 1 to add
+     * visual gaps, or use bordered panels for explicit separation.
+     *
+     * @param Node                           $node  Node to render
+     * @param int                            $x     Left offset
+     * @param int                            $y     Top offset
+     * @param int                            $w     Available width
+     * @param int                            $h     Available height
+     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     */
     private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
     {
         $children = $node->children;
@@ -230,13 +257,14 @@ final class SugarBoxer
         // Flex children grow to fill the leftover after fixed siblings; without
         // any flex child, fall back to distributing width by minWidth weights.
         if ($this->hasFlex($children)) {
-            $offsets = $this->distributeFlex(
-                $availableW,
-                \array_map(fn(Node $c) => $c->totalWidth(), $children),
-                \array_map(fn(Node $c) => $c->flex, $children),
-                $sp,
-                $b,
-            );
+            // Single-pass: build bases and flexes arrays together
+            $bases = [];
+            $flexes = [];
+            foreach ($children as $c) {
+                $bases[] = $c->totalWidth();
+                $flexes[] = $c->flex;
+            }
+            $offsets = $this->distributeFlex($availableW, $bases, $flexes, $sp, $b);
         } else {
             $weights = \array_map(fn(Node $c) => $c->minWidth > 0 ? $c->minWidth : 1, $children);
             $totalWeight = \array_sum($weights);
@@ -271,6 +299,22 @@ final class SugarBoxer
         }
     }
 
+    /**
+     * Render a vertical (top-to-bottom) panel layout.
+     *
+     * Flex children: separators between children are ONLY drawn when
+     * spacing === 0 AND the layout has NO flex children. This is because
+     * the flex distribution algorithm resizes children dynamically, making
+     * a fixed separator position meaningless. Use spacing >= 1 to add
+     * visual gaps, or use bordered panels for explicit separation.
+     *
+     * @param Node                           $node  Node to render
+     * @param int                            $x     Left offset
+     * @param int                            $y     Top offset
+     * @param int                            $w     Available width
+     * @param int                            $h     Available height
+     * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
+     */
     private function renderVertical(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
     {
         $children = $node->children;
@@ -289,13 +333,14 @@ final class SugarBoxer
         // any flex child, fall back to distributing height by minHeight weights
         // (the historical 1/3-style split).
         if ($this->hasFlex($children)) {
-            $offsets = $this->distributeFlex(
-                $availableH,
-                \array_map(fn(Node $c) => $c->totalHeight(), $children),
-                \array_map(fn(Node $c) => $c->flex, $children),
-                $sp,
-                $b,
-            );
+            // Single-pass: build bases and flexes arrays together
+            $bases = [];
+            $flexes = [];
+            foreach ($children as $c) {
+                $bases[] = $c->totalHeight();
+                $flexes[] = $c->flex;
+            }
+            $offsets = $this->distributeFlex($availableH, $bases, $flexes, $sp, $b);
         } else {
             $weights = \array_map(fn(Node $c) => $c->minHeight > 0 ? $c->minHeight : 1, $children);
             $totalWeight = \array_sum($weights);
@@ -359,13 +404,20 @@ final class SugarBoxer
         $topPad = \max(0, $topPad);
 
         // Pre-compute the SGR prefix from the style (render a single-char probe and strip trailing reset)
+        // Use array cache keyed by spl_object_id to avoid recomputing the same style's prefix repeatedly
         $sgrPrefix = '';
         if ($style !== null) {
-            $probe = $style->render(' ');
-            // The render output is: SGR-open + ' ' + SGR-close
-            // Split on the sentinel byte (NUL) to isolate the opening SGR.
-            $parts = \explode("\x00", $probe, 2);
-            $sgrPrefix = $parts[0] ?? '';
+            $id = \spl_object_id($style);
+            if (isset($this->sgrPrefixCache[$id])) {
+                $sgrPrefix = $this->sgrPrefixCache[$id];
+            } else {
+                $probe = $style->render(' ');
+                // The render output is: SGR-open + ' ' + SGR-close
+                // Split on the sentinel byte (NUL) to isolate the opening SGR.
+                $parts = \explode("\x00", $probe, 2);
+                $sgrPrefix = $parts[0] ?? '';
+                $this->sgrPrefixCache[$id] = $sgrPrefix;
+            }
         }
 
         foreach ($linesToRender as $lineIdx => $line) {
@@ -421,9 +473,15 @@ final class SugarBoxer
             // to the previous cell, else carry it onto the next visible one.
             if ($gw <= 0) {
                 if ($lastCol >= 0) {
-                    $cells[$y][$x + $lastCol] .= $seg;
+                    // Cap carry to prevent unbounded growth when attaching to a previous cell
+                    if (\strlen($carry) < self::MAX_CARRY) {
+                        $cells[$y][$x + $lastCol] .= $seg;
+                    }
                 } else {
-                    $carry .= $seg;
+                    // Cap carry accumulation to prevent memory exhaustion
+                    if (\strlen($carry) < self::MAX_CARRY) {
+                        $carry .= $seg;
+                    }
                 }
                 $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
                 continue;
@@ -543,7 +601,11 @@ final class SugarBoxer
     /** Read one extended grapheme cluster starting at byte $i (intl, with a UTF-8 fallback). */
     private function nextGrapheme(string $s, int $i): string
     {
-        if (\function_exists('grapheme_extract')) {
+        static $hasGrapheme = null;
+        if ($hasGrapheme === null) {
+            $hasGrapheme = \function_exists('grapheme_extract');
+        }
+        if ($hasGrapheme) {
             $next    = 0;
             $cluster = \grapheme_extract($s, 1, \GRAPHEME_EXTR_COUNT, $i, $next);
             if (\is_string($cluster) && $cluster !== '') {
@@ -785,6 +847,13 @@ final class SugarBoxer
     {
         $n = \count($weights);
         $contentSpan = $available - $spacing * \max(0, $n - 1);
+
+        // Guard: if all weights are 0, distribute equally to prevent division by zero
+        if ($totalWeight === 0) {
+            $totalWeight = $n;
+            $weights = \array_fill(0, $n, 1);
+        }
+
         $offsets = [0 => $borderPad];
         $used = $borderPad;
 
