@@ -280,7 +280,7 @@ final class SgrHandlerTest extends TestCase
         $h = new SgrHandler();
         $h->csiDispatch(0x6D, [38, 2, 255, 128, 0], 0, 0, []);
         $this->assertSame(SgrState::COLOR_DEFAULT, $h->state->foreground);
-        $this->assertSame(SgrState::COLOR_256, $h->state->foreground256);
+        $this->assertSame(SgrState::COLOR_RGB, $h->state->foreground256);
         $this->assertSame((255 << 16) | (128 << 8) | 0, $h->state->foregroundRgb);
     }
 
@@ -297,7 +297,7 @@ final class SgrHandlerTest extends TestCase
         $h = new SgrHandler();
         $h->csiDispatch(0x6D, [48, 2, 0, 255, 128], 0, 0, []);
         $this->assertSame(SgrState::COLOR_DEFAULT, $h->state->background);
-        $this->assertSame(SgrState::COLOR_256, $h->state->background256);
+        $this->assertSame(SgrState::COLOR_RGB, $h->state->background256);
         $this->assertSame((0 << 16) | (255 << 8) | 128, $h->state->backgroundRgb);
     }
 
