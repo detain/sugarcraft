@@ -123,7 +123,10 @@ final class Hermit
     {
         $clone = clone $this;
         $clone->allItems = $clone->coerceItems($items);
-        $clone->filteredItems = $clone->applyFilter($clone->filterText);
+        // Early exit when no filter active — avoid applyFilter() overhead for the common empty-text case.
+        $clone->filteredItems = $clone->filterText === ''
+            ? $clone->allItems
+            : $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
         return $clone;
     }
@@ -583,28 +586,29 @@ final class Hermit
     {
         $fn = $this->filterFn;
         if ($text === '') {
-            return \array_values(
-                \array_filter(
-                    $this->allItems,
-                    fn(Item $item): bool => $fn($item),
-                )
-            );
+            // Single-pass collect — avoids array_filter + array_values creating two intermediate arrays.
+            $filtered = [];
+            foreach ($this->allItems as $item) {
+                if ($fn($item)) {
+                    $filtered[] = $item;
+                }
+            }
+            return $filtered;
         }
         if ($this->ranker !== null) {
             return $this->applyRankedFilter($this->ranker, $text);
         }
         $lower = \strtolower($text);
-        return \array_values(
-            \array_filter(
-                $this->allItems,
-                function (Item $item) use ($lower, $fn): bool {
-                    $value = $item->value();
-                    $pos = \strpos(\strtolower($value), $lower);
-                    $anchorOk = $pos !== false && $pos * 2 < \strlen($value);
-                    return $anchorOk && $fn($item);
-                }
-            )
-        );
+        $filtered = [];
+        foreach ($this->allItems as $item) {
+            $value = $item->value();
+            $pos = \strpos(\strtolower($value), $lower);
+            $anchorOk = $pos !== false && $pos * 2 < \strlen($value);
+            if ($anchorOk && $fn($item)) {
+                $filtered[] = $item;
+            }
+        }
+        return $filtered;
     }
 
     /**
