@@ -34,6 +34,9 @@ final class AnimatedProgress implements Model
 {
     private const TOLERANCE = 0.0005;
 
+    /** Cached spring instance — reused across ticks to avoid per-tick allocation. */
+    private ?Spring $spring = null;
+
     public function __construct(
         public readonly Progress $progress,
         public readonly float $current,
@@ -76,8 +79,7 @@ final class AnimatedProgress implements Model
         if (!$this->animating) {
             return [$this, null];
         }
-        $spring = new Spring(Spring::fps((int) $this->fps), $this->angularFrequency, $this->dampingRatio);
-        [$pos, $vel] = $spring->update($this->current, $this->velocity, $this->target);
+        [$pos, $vel] = $this->getSpring()->update($this->current, $this->velocity, $this->target);
 
         // Settle when both position is near the target and velocity is small.
         $settled = abs($pos - $this->target) < self::TOLERANCE && abs($vel) < self::TOLERANCE;
@@ -90,6 +92,20 @@ final class AnimatedProgress implements Model
             return [$next->copy(current: $this->target, velocity: 0.0), null];
         }
         return [$next, $next->scheduleTick()];
+    }
+
+    /**
+     * Lazily create and cache a Spring instance tuned to the current fps,
+     * angular frequency, and damping ratio. The cached instance is reused
+     * across ticks to avoid the per-tick allocation of a new Spring.
+     */
+    private function getSpring(): Spring
+    {
+        return $this->spring ??= new Spring(
+            Spring::fps((int) $this->fps),
+            $this->angularFrequency,
+            $this->dampingRatio,
+        );
     }
 
     /**

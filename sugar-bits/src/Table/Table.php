@@ -511,18 +511,25 @@ final class Table implements Model
             return $this->rows;
         }
 
+        // Single-pass usort: comparator evaluates all criteria in priority order,
+        // returning immediately on first non-zero comparison.
+        // Work on a mutable copy — $this->rows is readonly.
         $rows = $this->rows;
-        // Apply sort criteria in reverse order (last criterion is applied first
-        // by usort, so we need to reverse the chain).
-        $criteria = array_reverse($state->criteria);
-        foreach ($criteria as [$col, $dir]) {
-            usort($rows, static function (array $a, array $b) use ($col, $dir): int {
-                $va = $a[$col] ?? '';
-                $vb = $b[$col] ?? '';
-                $cmp = strnatcasecmp((string) $va, (string) $vb);
-                return $dir === SortDirection::Desc ? -$cmp : $cmp;
-            });
-        }
+        $criteria = $state->criteria;
+        \usort(
+            $rows,
+            static function (array $a, array $b) use ($criteria): int {
+                foreach ($criteria as [$col, $dir]) {
+                    $va = $a[$col] ?? '';
+                    $vb = $b[$col] ?? '';
+                    $cmp = strnatcasecmp((string) $va, (string) $vb);
+                    if ($cmp !== 0) {
+                        return $dir === SortDirection::Desc ? -$cmp : $cmp;
+                    }
+                }
+                return 0;
+            }
+        );
         return $rows;
     }
 
