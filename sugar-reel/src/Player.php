@@ -929,17 +929,7 @@ final class Player implements Model
         $targetIndex = max(0, $targetIndex);
 
         // F6: realign audio to the seek target position.
-        $newAudio = $this->audioPlayer;
-        if ($this->audioPlayer !== null) {
-            $this->audioPlayer->stop();
-            $startMs = (int)round(($targetIndex / $this->fps) * 1000);
-            // Use the audioFactory seam so tests can intercept AudioPlayer creation.
-            $factory = $this->audioFactory ?? static fn(string $path, ?int $ms): AudioPlayer => new AudioPlayer($path, $ms);
-            $newAudio = $factory($this->videoPath, $startMs);
-            if (!$this->paused) {
-                $newAudio->start();
-            }
-        }
+        $newAudio = $this->rebuildAudio((int)round(($targetIndex / $this->fps) * 1000));
 
         // Backward seek: decoders are forward-only, so close-and-rebuild the
         // decoder and skip forward to the target. rebuildDecoderAt() closes the
@@ -1056,16 +1046,7 @@ final class Player implements Model
         $targetIndex = (int) round($sec * $this->fps);
 
         // Realign audio to the seek target (same factory seam as withSeek()).
-        $newAudio = $this->audioPlayer;
-        if ($this->audioPlayer !== null) {
-            $this->audioPlayer->stop();
-            $startMs = (int) round($sec * 1000);
-            $factory = $this->audioFactory ?? static fn(string $path, ?int $ms): AudioPlayer => new AudioPlayer($path, $ms);
-            $newAudio = $factory($this->videoPath, $startMs);
-            if (!$this->paused) {
-                $newAudio->start();
-            }
-        }
+        $newAudio = $this->rebuildAudio((int)round($sec * 1000));
 
         [$decoder, $frame] = $this->rebuildDecoderAtSeconds($this->cellsW, $this->cellsH, $this->mode, $sec);
 
@@ -1142,6 +1123,27 @@ final class Player implements Model
         $frame = $decoder->next(); // with -ss, the first frame IS the seek target
 
         return [$decoder, $frame];
+    }
+
+    /**
+     * Rebuild the audio player for a seek operation.
+     *
+     * Mirrors the factory seam in withSeek() and seekToSeconds() so the
+     * same stop/rebuild/start logic is used in both places.
+     */
+    private function rebuildAudio(?int $startMs): ?AudioPlayer
+    {
+        if ($this->audioPlayer === null) {
+            return null;
+        }
+        $this->audioPlayer->stop();
+        $factory = $this->audioFactory ?? static fn(string $path, ?int $ms): AudioPlayer
+            => new AudioPlayer($path, $ms);
+        $newAudio = $factory($this->videoPath, $startMs);
+        if (!$this->paused) {
+            $newAudio->start();
+        }
+        return $newAudio;
     }
 
     /**
