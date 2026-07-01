@@ -19,9 +19,17 @@ final class PlayerTest extends TestCase
     {
         $f = [];
         for ($i = 0; $i < $n; $i++) {
-            $f[] = new Frame([[[($i * 30) % 255, 0, 0]]]);
+            $f[] = new Frame([[[($i * 30) % 255, 0, 0]]], delay: 10);
         }
         return $f;
+    }
+
+    private function framesWithDelays(array $delays): array
+    {
+        return \array_map(
+            fn(int $d) => new Frame([[[255, 0, 0]]], delay: $d),
+            $delays
+        );
     }
 
     public function testTickAdvancesIndex(): void
@@ -148,5 +156,35 @@ final class PlayerTest extends TestCase
         $cells = preg_replace('/\033\[[0-9;]+m/', '', $pic);
         $this->assertLessThanOrEqual(80, strlen($cells),
             'Re-clamped renderer output must be ≤ 80 chars');
+    }
+
+    /**
+     * Item 5.3 — per-frame delay scheduling.
+     * Each frame carries its own delay (in centiseconds). scheduleTick() must
+     * use Frame::$delay / 100.0 as the interval so variable-rate GIFs play
+     * at the correct speed rather than a uniform fixed interval.
+     */
+    public function testPerFrameDelaySchedulesAppropriateInterval(): void
+    {
+        // Frame 0: 20 centiseconds (0.2s), Frame 1: 5 centiseconds (0.05s)
+        $p = new Player($this->framesWithDelays([20, 5]));
+
+        // First tick should schedule ~0.2s (frame 0 delay)
+        [, $cmd] = $p->update(new TickMsg());
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $tickRequest = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tickRequest);
+        $this->assertEqualsWithDelta(0.2, $tickRequest->seconds, 0.001,
+            'First frame delay (20cs) should schedule ~0.2s');
+
+        // Advance to frame 1 — next tick should schedule ~0.05s (frame 1 delay)
+        [$p2, ] = $p->update(new TickMsg());
+        $this->assertSame(1, $p2->index);
+
+        [, $cmd2] = $p2->update(new TickMsg());
+        $tickRequest2 = $cmd2();
+        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tickRequest2);
+        $this->assertEqualsWithDelta(0.05, $tickRequest2->seconds, 0.001,
+            'Second frame delay (5cs) should schedule ~0.05s');
     }
 }
