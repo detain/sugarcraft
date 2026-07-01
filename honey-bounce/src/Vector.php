@@ -73,4 +73,43 @@ final class Vector
             $this->x * $other->y - $this->y * $other->x,
         );
     }
+
+    /**
+     * Squared Euclidean length — avoids sqrt() for comparisons.
+     */
+    public function lengthSquared(): float
+    {
+        return $this->x * $this->x + $this->y * $this->y + $this->z * $this->z;
+    }
+
+    /**
+     * Normalized (unit) vector.
+     *
+     * @throws \RuntimeException if called on a zero-length vector
+     */
+    public function normalize(): self
+    {
+        $len = $this->length();
+        if ($len < self::EPSILON) {
+            throw new \RuntimeException('Cannot normalize a zero-length vector');
+        }
+        return $this->scale(1.0 / $len);
+    }
+
+    private const EPSILON = 1e-9;
+
+    /**
+     * Linear interpolation between this vector and $other.
+     *
+     * @param self $other  The target vector
+     * @param float $t     Interpolation factor (0.0 = this, 1.0 = $other)
+     */
+    public function lerp(self $other, float $t): self
+    {
+        return new self(
+            $this->x + ($other->x - $this->x) * $t,
+            $this->y + ($other->y - $this->y) * $t,
+            $this->z + ($other->z - $this->z) * $t,
+        );
+    }
 }
