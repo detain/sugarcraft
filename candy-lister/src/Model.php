@@ -18,9 +18,21 @@ use SugarCraft\Core\Util\Width;
  * Port of treilik/bubblelister Model. Key properties:
  * - Items are stored as {@see Item} wrappers around \Stringable values
  * - CursorOffset keeps the cursor N lines from the visible viewport edge
+ * - lineOffset controls how many lines *before* the cursor to show in the
+ *   prefixer/suffixer gap — distinct from cursorOffset which is the viewport
+ *   anchor; lineOffset is passed to initPrefixer()/initSuffixer() to compute
+ *   relative positioning markers
  * - Wrap limits how many physical lines a multi-line item may produce
  * - Prefixer/Suffixer hooks customise per-line prefix and suffix strings
  * - LessFunc/EqualsFunc plug in external sorting/equality logic
+ *
+ * ## Per-instance state
+ *
+ * Each Model instance has its own $idCounter starting at 0. Cloned models
+ * via mutate() share the counter's current value (clone is a shallow copy of
+ * primitives), so two independent model instances may produce items with the
+ * same ID. This is fine for display but IDs should not be used for cross-model
+ * identity without coordination.
  *
  * Usage:
  * ```php
@@ -77,6 +89,9 @@ final class Model
     private array $originalItems = [];
 
     private int $cursorIndex = 0;
+    /** Per-instance item ID counter. Cloned models inherit the counter's
+     * current value, so different Model instances may produce items with
+     * colliding IDs. Use getItemIds() for stable in-model identity only. */
     private int $idCounter = 0;
 
     /** @var Buffer|null Previous rendered frame for diff-based emission */
@@ -208,6 +223,12 @@ final class Model
      * Clear the filter and return a new Model with unfiltered items.
      *
      * Restores the original item list and transitions filterState to unfiltered.
+     *
+     * Note: When no filter is active ($filterFn is null), this returns $this
+     * directly rather than a clone via mutate(). This is intentional — cloning
+     * to return an identical instance would add unnecessary overhead for a
+     * guaranteed no-op. Callers checking referential identity will see $this
+     * when the filter is already absent, which is the expected no-op behavior.
      */
     public function withoutFilter(): self
     {
