@@ -134,6 +134,7 @@ final class StubMasterPty implements MasterPty
         $this->stream = $stream;
     }
 
+    public function fd(): int { return -1; }
     public function read(int $len = 8192, ?float $timeout = null): ?string { return ''; }
     public function write(string $bytes): int { return \strlen($bytes); }
     public function resize(int $cols, int $rows): void { $this->resizeCalls++; }
