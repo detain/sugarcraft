@@ -8,6 +8,10 @@ namespace SugarCraft\Glow;
  * Streaming pager that reads input in chunks and yields lines.
  *
  * Used for large files where loading the entire content into memory is impractical.
+ *
+ * Note: Empty streams yield no chunks. A consumer calling iterator_to_array($pager)
+ * on an empty stream will receive an empty array with no indication of whether
+ * the stream was genuinely empty vs. seekable-and-closed vs. other edge case.
  */
 final class Pager implements \IteratorAggregate
 {
