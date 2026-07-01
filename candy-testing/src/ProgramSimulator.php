@@ -127,7 +127,7 @@ final class ProgramSimulator
     public function run(): TestResult
     {
         $this->capturedCmds = [];
-        $this->outputBytes = [];
+        $this->outputBytes = '';
 
         // We use a simplified approach: just call init/update/view directly.
         $model = $this->getModelFromProgram();

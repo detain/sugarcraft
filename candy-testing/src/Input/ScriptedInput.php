@@ -244,4 +244,62 @@ final readonly class ScriptedInput
     {
         return count($this->messages);
     }
+
+    /**
+     * Append a mouse wheel scroll event.
+     *
+     * @param \SugarCraft\Core\MouseButton $button WheelUp or WheelDown
+     * @param int                          $x      1-based column
+     * @param int                          $y      1-based row
+     * @return self
+     */
+    public function wheel(
+        \SugarCraft\Core\MouseButton $button,
+        int $x,
+        int $y,
+    ): self {
+        return $this->push(new MouseWheelMsg(
+            x: $x,
+            y: $y,
+            button: $button,
+            action: MouseAction::Press,
+        ));
+    }
+
+    /**
+     * Append a paste message with the given text content.
+     *
+     * @param string $content Raw pasted text (newlines/controls preserved)
+     * @return self
+     */
+    public function paste(string $content): self
+    {
+        return $this->push(new PasteMsg($content));
+    }
+
+    /**
+     * Append a clipboard message with the given content.
+     *
+     * @param string $content    Decoded clipboard content
+     * @param string $selection  Selection key (default 'c' for clipboard)
+     * @return self
+     */
+    public function clipboard(string $content, string $selection = 'c'): self
+    {
+        return $this->push(new ClipboardMsg($content, $selection));
+    }
+
+    /**
+     * Append a keyboard enhancements reply message.
+     *
+     * Use this to simulate responses to kitty keyboard protocol requests.
+     * Combine flags as a bitmask: DISAMBIGUATE | REPORT_EVENT_TYPES | etc.
+     *
+     * @param int $flags Kitty keyboard protocol flag bitmask
+     * @return self
+     */
+    public function keyboardEnhancements(int $flags): self
+    {
+        return $this->push(new KeyboardEnhancementsMsg($flags));
+    }
 }

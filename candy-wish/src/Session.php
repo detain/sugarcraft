@@ -71,7 +71,7 @@ final class Session
         // Cache getenv result to avoid calling it multiple times per key.
         // getenv() queries the system environment which may involve
         // syscall overhead on each invocation.
-        $env = static fn(string $k): ?string => {
+        $env = static function(string $k): ?string {
             if (isset($_SERVER[$k]) && $_SERVER[$k] !== '') {
                 return (string) $_SERVER[$k];
             }
