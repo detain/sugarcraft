@@ -10,39 +10,30 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Testing\Tests\Concerns\TemporaryDirectoryTrait;
 use SugarCraft\Testing\Tape\TapeRecorder;
 
 final class TapeRecorderTest extends TestCase
 {
-    private string $tmpDir;
+    use TemporaryDirectoryTrait;
+
     private string $tapePath;
+
+    protected function getTempDirSuffix(): string
+    {
+        return 'tape';
+    }
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/candy-testing-tape-' . getmypid();
-        mkdir($this->tmpDir, 0755, true);
+        $this->setUpTemporaryDirectory();
         $this->tapePath = $this->tmpDir . '/demo.tape';
     }
 
     protected function tearDown(): void
     {
-        $dir = $this->tmpDir;
-        $this->tmpDir = '';
         $this->tapePath = '';
-        if ($dir !== '' && is_dir($dir)) {
-            $files = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::CHILD_FIRST
-            );
-            foreach ($files as $file) {
-                if ($file->isDir()) {
-                    rmdir($file->getPathname());
-                } else {
-                    unlink($file->getPathname());
-                }
-            }
-            rmdir($dir);
-        }
+        $this->tearDownTemporaryDirectory();
     }
 
     public function testToFactory(): void

@@ -9,37 +9,30 @@ use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Testing\Snapshot\Assertions;
 use SugarCraft\Testing\Snapshot\GoldenFile;
+use SugarCraft\Testing\Tests\Concerns\TemporaryDirectoryTrait;
 
 final class AssertionsTest extends TestCase
 {
-    private string $tmpDir;
+    use TemporaryDirectoryTrait;
+
     private string $fixturesDir;
+
+    protected function getTempDirSuffix(): string
+    {
+        return 'assertions';
+    }
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/candy-testing-assertions-' . getmypid();
-        mkdir($this->tmpDir, 0755, true);
+        $this->setUpTemporaryDirectory();
         $this->fixturesDir = $this->tmpDir . '/fixtures';
         mkdir($this->fixturesDir, 0755, true);
     }
 
     protected function tearDown(): void
     {
-        $files = glob($this->tmpDir . '/*');
-        foreach ($files as $file) {
-            if (is_dir($file)) {
-                $subFiles = glob($file . '/*');
-                foreach ($subFiles as $sub) {
-                    unlink($sub);
-                }
-                rmdir($file);
-            } else {
-                unlink($file);
-            }
-        }
-        if (is_dir($this->tmpDir)) {
-            rmdir($this->tmpDir);
-        }
+        $this->fixturesDir = '';
+        $this->tearDownTemporaryDirectory();
     }
 
     public function testAssertGoldenAnsiPassesOnExactMatch(): void
