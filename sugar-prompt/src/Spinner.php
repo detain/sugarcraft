@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Prompt;
 
-use SugarCraft\Bits\Spinner\Spinner as BitsSpinner;
 use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\TtyDetect;
 
 /**
@@ -18,6 +18,16 @@ use SugarCraft\Core\Util\TtyDetect;
  * the spinner via a sleep loop on the main process. Use it for
  * scripts and CLIs (CandyShell, ad-hoc tooling) that want a visible
  * "doing something" indicator without setting up a full Program.
+ *
+ * ### Platform compatibility
+ *
+ * - **Windows:** The `pcntl_*` functions are not available. The action
+ *   runs **inline** (blocking, no animation). The spinner title is
+ *   printed once before the action begins and erased when it completes.
+ * - **SAPI/cli-server:** Same as Windows — no forking, inline execution.
+ * - **TTY detection:** On non-TTY contexts (piped output, CI), the spinner
+ *   glyph is suppressed but the title is still printed, keeping output
+ *   machines-readable.
  *
  * ### Fork semantics (pcntl hosts)
  *
@@ -42,13 +52,35 @@ use SugarCraft\Core\Util\TtyDetect;
  *     })
  *     ->run();
  * ```
+ *
+ * @note Spinner instances are not reusable after run() completes.
+ *       Create a new Spinner for each action.
  */
 final class Spinner
 {
+    use Mutable;
+
     private string $title = '';
+    // SpinnerStyle is immutable (confirmed: has readonly props, no setters per
+    // candy-forms/src/Spinner/Style.php:17-30). Defensive clone in withStyle is
+    // unnecessary but kept forbelt-and-suspenders safety if the Style API evolves.
     private SpinnerStyle $style;
     /** @var ?\Closure(): void */
     private ?\Closure $action = null;
+
+    /**
+     * @inheritDoc
+     * Spinner has a no-arg constructor, so we override mutate() to manually
+     * clone and set properties instead of passing them as constructor args.
+     */
+    protected function mutate(array $changes): static
+    {
+        $clone = clone $this;
+        foreach ($changes as $k => $v) {
+            $clone->{$k} = $v;
+        }
+        return $clone;
+    }
 
     public function __construct()
     {
@@ -62,24 +94,21 @@ final class Spinner
 
     public function withTitle(string $t): self
     {
-        $clone = clone $this;
-        $clone->title = $t;
-        return $clone;
+        return $this->mutate(['title' => $t]);
     }
 
     public function withStyle(SpinnerStyle $s): self
     {
-        $clone = clone $this;
-        $clone->style = $s;
-        return $clone;
+        return $this->mutate(['style' => $s]);
     }
 
-    /** @param \Closure(): void $fn  long-running work to perform */
+    /**
+     * @param \Closure(): void $fn  long-running work to perform
+     * @blocking  runs the closure inline when pcntl is unavailable
+     */
     public function withAction(\Closure $fn): self
     {
-        $clone = clone $this;
-        $clone->action = $fn;
-        return $clone;
+        return $this->mutate(['action' => $fn]);
     }
 
     /**
@@ -87,6 +116,8 @@ final class Spinner
      * STDERR is used so stdout stays clean for piped output.
      *
      * If no action was set, this is a no-op (returns immediately).
+     *
+     * @throws \RuntimeException if the forked action exits with non-zero status
      */
     public function run(): void
     {
@@ -131,10 +162,13 @@ final class Spinner
         $hadAsyncSignals = false;
         $prevSigintHandler = null;
         $prevSigtermHandler = null;
-        if ($pid > 0 && function_exists('pcntl_signal') && function_exists('pcntl_async_signals')) {
+        if ($pid > 0 && function_exists('pcntl_signal') && function_exists('pcntl_async_signals') && function_exists('pcntl_signal_get_handler')) {
             $hadAsyncSignals = true;
             pcntl_async_signals(true);
-            $prevSigintHandler = pcntl_signal(SIGINT, function (int $signo) use ($pid, $isTty) {
+            // Capture previous handlers BEFORE installing new ones so we can restore them.
+            $prevSigintHandler = pcntl_signal_get_handler(SIGINT);
+            $prevSigtermHandler = pcntl_signal_get_handler(SIGTERM);
+            pcntl_signal(SIGINT, function (int $signo) use ($pid, $isTty) {
                 if ($pid > 0 && function_exists('posix_kill')) {
                     posix_kill($pid, SIGTERM);
                 }
@@ -147,7 +181,7 @@ final class Spinner
                     posix_kill(posix_getpid(), $signo);
                 }
             });
-            $prevSigtermHandler = pcntl_signal(SIGTERM, function (int $signo) use ($pid, $isTty) {
+            pcntl_signal(SIGTERM, function (int $signo) use ($pid, $isTty) {
                 if ($pid > 0 && function_exists('posix_kill')) {
                     posix_kill($pid, SIGTERM);
                 }
@@ -167,6 +201,7 @@ final class Spinner
                 fwrite(STDERR, "\r" . $glyph . $titlePrefix);
             }
             usleep(max(50_000, $usleepInterval)); // 50ms floor caps animation at 20fps; stock styles top out at ~12fps (miniDot) so this never bites, but a custom high-fps Style is clamped here.
+            // $waitStatus is always set by waitpid before any signal handler fires.
             $waitStatus = 0;
             $check = @pcntl_waitpid($pid, $waitStatus, WNOHANG);
             if ($check === $pid) {
@@ -174,10 +209,14 @@ final class Spinner
             }
             $frame++;
         }
-        // Restore signal handlers (avoid re-entrant calls from now on).
+        // Restore previous signal handlers (avoid re-entrant calls from now on).
         if ($hadAsyncSignals) {
-            pcntl_signal(SIGINT, SIG_DFL);
-            pcntl_signal(SIGTERM, SIG_DFL);
+            if ($prevSigintHandler !== null) {
+                pcntl_signal(SIGINT, $prevSigintHandler);
+            }
+            if ($prevSigtermHandler !== null) {
+                pcntl_signal(SIGTERM, $prevSigtermHandler);
+            }
         }
         if ($isTty) {
             // Erase the spinner line cleanly.

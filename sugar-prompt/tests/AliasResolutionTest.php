@@ -69,4 +69,60 @@ final class AliasResolutionTest extends TestCase
         // Fuzzy/ subnamespace alias
         yield 'Fuzzy\FuzzyMatcher' => [\SugarCraft\Prompt\Fuzzy\FuzzyMatcher::class, \SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher::class];
     }
+
+    /**
+     * Verifies that every class in SugarCraft\Forms\* has a corresponding
+     * re-export alias in SugarCraft\Prompt\*. This prevents silent drift
+     * when a new class is added to candy-forms without a sugar-prompt alias.
+     *
+     * @see https://github.com/sugarcraft/sugar-prompt/issues/20
+     */
+    public function testAllFormsClassesHavePromptAlias(): void
+    {
+        $formsNamespace = 'SugarCraft\\Forms\\';
+        $promptNamespace = 'SugarCraft\\Prompt\\';
+
+        // Walk all classes in the Forms namespace using reflection.
+        $formsClasses = [];
+        $formsDir = dirname(__DIR__) . '/vendor/sugarcraft/candy-forms/src';
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($formsDir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+            $relativePath = substr($file->getPathname(), strlen($formsDir) + 1);
+            $className = $formsNamespace . str_replace('/', '\\', substr($relativePath, 0, -4));
+            if (!class_exists($className) && !interface_exists($className)) {
+                continue;
+            }
+            $formsClasses[] = $className;
+        }
+
+        $missing = [];
+        foreach ($formsClasses as $formsClass) {
+            // Derive the expected Prompt alias path.
+            $shortName = ltrim(substr($formsClass, strlen($formsNamespace)), '\\');
+            $promptAlias = $promptNamespace . $shortName;
+
+            // Skip if the Prompt class doesn't exist yet — this test ensures it should.
+            if (!class_exists($promptAlias) && !interface_exists($promptAlias)) {
+                $missing[] = $shortName;
+                continue;
+            }
+
+            // Verify it aliases back to the Forms class.
+            $this->assertSame(
+                $formsClass,
+                (new \ReflectionClass($promptAlias))->getName(),
+                "{$promptAlias} should alias {$formsClass}"
+            );
+        }
+
+        $this->assertEmpty(
+            $missing,
+            'New candy-forms classes found without sugar-prompt re-exports: ' . implode(', ', $missing)
+        );
+    }
 }
