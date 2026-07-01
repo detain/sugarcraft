@@ -546,7 +546,7 @@ final class ConnectionsPage extends PageBase
         $columns = $this->buildColumns();
         $tableRows = $this->buildRows($rows);
 
-        $table = Table::withColumns($columns)
+        $table = Table::fromColumns($columns)
             ->withRows($tableRows)
             ->withSelectable()
             ->withZebra();

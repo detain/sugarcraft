@@ -654,7 +654,7 @@ final class ReportsPage extends PageBase
         $columns = $this->buildColumns($report);
         $tableRows = $this->buildRows($rows);
 
-        $table = Table::withColumns($columns)
+        $table = Table::fromColumns($columns)
             ->withRows($tableRows)
             ->withSelectable(true)
             ->withShowFooter(true);
