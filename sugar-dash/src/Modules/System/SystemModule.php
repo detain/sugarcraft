@@ -42,11 +42,13 @@ final class SystemModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        $this->fetchSystemData();
+        // Compute fresh state without mutating $this — withSystemState() reads
+        // /proc/* files directly and accumulates history internally.
+        $newModule = $this->withSystemState();
         if ($msg instanceof RefreshMsg) {
-            return [$this->withSystemState(), Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg())];
+            return [$newModule, Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg())];
         }
-        return [$this->withSystemState(), null];
+        return [$newModule, null];
     }
 
     public function view(): string
@@ -81,17 +83,53 @@ final class SystemModule extends BaseModule
 
     /**
      * Create a clone with updated system state in the state array.
+     *
+     * Reads fresh values from /proc/* and accumulates history without
+     * mutating $this — follows Elm-architecture immutability contract.
+     *
+     * Also updates direct properties on the clone so that view() (which reads
+     * from direct properties) gets current values.
      */
     private function withSystemState(): static
     {
-        return $this->withState([
-            'cpuLoad' => $this->cpuLoad,
-            'memLoad' => $this->memLoad,
-            'gpuLoad' => $this->gpuLoad,
-            'uptime' => $this->uptime,
-            'cpuHistory' => $this->cpuHistory,
-            'memHistory' => $this->memHistory,
+        // Read fresh values directly from /proc/*
+        $cpuLoad = $this->readCpuLoad();
+        $memLoad = $this->readMemLoad();
+        $gpuLoad = $this->readGpuLoad();
+        $uptime = $this->readUptime();
+
+        // Accumulate history without mutating $this
+        $cpuHistory = $this->cpuHistory;
+        $memHistory = $this->memHistory;
+        $cpuHistory[] = (int) $cpuLoad;
+        $memHistory[] = (int) $memLoad;
+        if (count($cpuHistory) > self::HISTORY_SIZE) {
+            array_shift($cpuHistory);
+        }
+        if (count($memHistory) > self::HISTORY_SIZE) {
+            array_shift($memHistory);
+        }
+
+        $clone = $this->withState([
+            'cpuLoad' => $cpuLoad,
+            'memLoad' => $memLoad,
+            'gpuLoad' => $gpuLoad,
+            'uptime' => $uptime,
+            'cpuHistory' => $cpuHistory,
+            'memHistory' => $memHistory,
         ]);
+
+        // Update direct properties on clone so view() (which reads from
+        // direct properties) gets the current values. This is a controlled
+        // mutation at a well-defined boundary - the original $this is unchanged.
+        $clone->cpuLoad = $cpuLoad;
+        $clone->memLoad = $memLoad;
+        $clone->gpuLoad = $gpuLoad;
+        $clone->uptime = $uptime;
+        $clone->cpuHistory = $cpuHistory;
+        $clone->memHistory = $memHistory;
+
+        return $clone;
     }
 
     private function fetchSystemData(): void

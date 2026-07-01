@@ -35,10 +35,11 @@ final class EventDispatcher
     public function on(string $eventType, callable $handler): self
     {
         $clone = clone $this;
+        $handlerObjId = \spl_object_id($handler);
         if (!isset($clone->listeners[$eventType])) {
             $clone->listeners[$eventType] = [];
         }
-        $clone->listeners[$eventType][] = $handler;
+        $clone->listeners[$eventType][$handlerObjId] = $handler;
         return $clone;
     }
 
@@ -53,18 +54,18 @@ final class EventDispatcher
     {
         $clone = clone $this;
 
-        // Add wrapper to the clone's listeners
+        // Use object_id as key to avoid index-shift issues after off() calls
+        $handlerObjId = \spl_object_id($handler);
+
         if (!isset($clone->listeners[$eventType])) {
             $clone->listeners[$eventType] = [];
         }
-        $key = array_push($clone->listeners[$eventType], $handler);
-        $onceKey = $key - 1; // array_push returns new count, index is count-1
+        $clone->listeners[$eventType][$handlerObjId] = $handler;
 
-        // Mark this key for removal after first dispatch
         if (!isset($clone->onceKeysToRemove[$eventType])) {
             $clone->onceKeysToRemove[$eventType] = [];
         }
-        $clone->onceKeysToRemove[$eventType][] = $onceKey;
+        $clone->onceKeysToRemove[$eventType][] = $handlerObjId;
 
         return $clone;
     }
@@ -80,10 +81,19 @@ final class EventDispatcher
         if ($handler === null) {
             unset($clone->listeners[$eventType]);
         } elseif (isset($clone->listeners[$eventType])) {
-            $clone->listeners[$eventType] = array_filter(
-                $clone->listeners[$eventType],
-                fn($h) => $h !== $handler
-            );
+            // Use object_id for consistent key-based removal (avoid array_filter key-shift issues)
+            $handlerObjId = \is_object($handler) ? \spl_object_id($handler) : null;
+            if ($handlerObjId !== null && isset($clone->listeners[$eventType][$handlerObjId])) {
+                unset($clone->listeners[$eventType][$handlerObjId]);
+            } else {
+                // Fallback for non-object callables (strings, arrays) — scan and unset
+                foreach ($clone->listeners[$eventType] as $key => $h) {
+                    if ($h === $handler) {
+                        unset($clone->listeners[$eventType][$key]);
+                        break;
+                    }
+                }
+            }
         }
         return $clone;
     }
@@ -91,32 +101,36 @@ final class EventDispatcher
     /**
      * Dispatch an event to all registered handlers.
      *
+     * Returns a tuple of [event, new-dispatcher] to maintain immutability.
+     * Once-handlers are removed only in the returned new dispatcher.
+     *
      * @template T of Event
      * @param T $event
-     * @return T The event (possibly modified by handlers)
+     * @return array{0: T, 1: self}
      */
-    public function dispatch(Event $event): Event
+    public function dispatch(Event $event): array
     {
         $eventType = $event->getType();
         $handlers = $this->listeners[$eventType] ?? [];
 
+        $clone = clone $this;
+
         foreach ($handlers as $handler) {
             $result = $handler($event);
-            // If handler returns an Event, use that instead
             if ($result instanceof Event) {
                 $event = $result;
             }
         }
 
-        // Remove once handlers that were marked for removal
-        if (isset($this->onceKeysToRemove[$eventType])) {
-            foreach ($this->onceKeysToRemove[$eventType] as $key) {
-                unset($this->listeners[$eventType][$key]);
+        // Remove once handlers only in the cloned dispatcher (immutable)
+        if (isset($clone->onceKeysToRemove[$eventType])) {
+            foreach ($clone->onceKeysToRemove[$eventType] as $handlerObjId) {
+                unset($clone->listeners[$eventType][$handlerObjId]);
             }
-            unset($this->onceKeysToRemove[$eventType]);
+            unset($clone->onceKeysToRemove[$eventType]);
         }
 
-        return $event;
+        return [$event, $clone];
     }
 
     /**
