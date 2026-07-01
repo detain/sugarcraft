@@ -351,18 +351,26 @@ final class ModelTest extends TestCase
         $this->assertSame($this->model, $result);
     }
 
-    public function testRemoveItemAtInvalidIndexReturnsSelf(): void
+    public function testRemoveItemAtInvalidIndexReturnsNewInstance(): void
     {
         $m = $this->model->addItem(new StringItem('item'));
         $result = $m->removeItem(99);
-        $this->assertSame($m, $result);
+        // Returns a new instance (no-op clone) for referential transparency
+        $this->assertNotSame($m, $result);
+        // Content unchanged since index was invalid
+        $this->assertSame(1, $result->length());
+        $this->assertSame(1, $m->length());
     }
 
-    public function testRemoveItemAtNegativeIndexReturnsSelf(): void
+    public function testRemoveItemAtNegativeIndexReturnsNewInstance(): void
     {
         $m = $this->model->addItem(new StringItem('item'));
         $result = $m->removeItem(-1);
-        $this->assertSame($m, $result);
+        // Returns a new instance (no-op clone) for referential transparency
+        $this->assertNotSame($m, $result);
+        // Content unchanged since index was invalid
+        $this->assertSame(1, $result->length());
+        $this->assertSame(1, $m->length());
     }
 
     public function testMultilineItemRendersMultipleLines(): void

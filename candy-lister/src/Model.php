@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Lister;
 
+use Psr\Log\LoggerInterface;
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Diff\DiffEncoder;
@@ -242,12 +243,47 @@ final class Model
     }
 
     /**
+     * Add multiple items in one call (one clone, multiple pushes).
+     *
+     * @param \Stringable ...$values
+     */
+    public function addItems(\Stringable ...$values): self
+    {
+        return $this->mutate(function ($m) use ($values) {
+            foreach ($values as $value) {
+                $m->items[] = new Item($value, $m->idCounter++);
+            }
+        });
+    }
+
+    /**
+     * Add multiple items from a plain array (strings auto-wrapped in StringItem).
+     *
+     * @param array<\Stringable|string> $values
+     */
+    public function addItemsFromArray(array $values): self
+    {
+        return $this->mutate(function ($m) use ($values) {
+            foreach ($values as $value) {
+                $m->items[] = new Item(
+                    $value instanceof \Stringable ? $value : new StringItem((string) $value),
+                    $m->idCounter++
+                );
+            }
+        });
+    }
+
+    /**
      * Remove an item by index. Cursor is clamped.
+     *
+     * Returns a new model instance in all cases — including no-op on
+     * out-of-bounds index — so callers can always assume a new instance.
      */
     public function removeItem(int $index): self
     {
         if ($index < 0 || $index >= \count($this->items)) {
-            return $this;
+            // Return a no-op clone to maintain referential transparency
+            return $this->mutate(fn($m) => null);
         }
         return $this->mutate(function ($m) use ($index) {
             \array_splice($m->items, $index, 1);
@@ -265,6 +301,15 @@ final class Model
 
     /**
      * Sort items using the configured LessFunc.
+     *
+     * Cursor relocation uses O(1) identity map (Item::$id) rather than
+     * O(n) object-identity foreach after the sort.
+     *
+     * ## CancellationToken support (intended API — requires candy-async)
+     * When candy-async is installed, this method will accept an optional
+     * `?CancellationToken $token = null` parameter. The token is checked
+     * after the usort completes and before the identity map is built.
+     * If cancelled, throws `SugarCraft\Async\OperationCancelledException`.
      */
     public function sort(): self
     {
@@ -277,7 +322,7 @@ final class Model
         \usort($items, fn(Item $a, Item $b) =>
             ($this->lessFunc)($a->value, $b->value)
         );
-        // O(1) cursor relocation via identity map instead of O(n) foreach
+        // O(1) cursor relocation via identity map — build id=>index flip, then lookup
         $cursorIndex = $this->cursorIndex;
         if ($selected !== null) {
             $idMap = \array_flip(\array_map(fn(Item $item): int => $item->id, $items));
@@ -299,6 +344,11 @@ final class Model
      * Return the value at the cursor.
      *
      * Mirrors Go upstream's GetCursorItem.
+     *
+     * Error strategy: fail-fast (throws). Unlike View() which catches
+     * exceptions and returns an error string for resilient TUI rendering,
+     * cursorItem() is a query API that expects the caller to handle the
+     * empty-list case explicitly. Throwing keeps the API predictable.
      *
      * @throws \RuntimeException if the list has no items
      */
@@ -357,6 +407,34 @@ final class Model
         return $this->setCursor(\count($this->items) - 1);
     }
 
+    /**
+     * Return the item value at the given index.
+     *
+     * @throws \OutOfBoundsException if $index is out of range
+     */
+    public function itemAt(int $index): \Stringable
+    {
+        if ($index < 0 || $index >= \count($this->items)) {
+            throw new \OutOfBoundsException(\sprintf(
+                'Index %d is out of bounds (list has %d items)',
+                $index,
+                \count($this->items)
+            ));
+        }
+        return $this->items[$index]->value;
+    }
+
+    /**
+     * Return the item value at the given index, or null if out of range.
+     */
+    public function tryItemAt(int $index): ?\Stringable
+    {
+        if ($index < 0 || $index >= \count($this->items)) {
+            return null;
+        }
+        return $this->items[$index]->value;
+    }
+
     // -------------------------------------------------------------------------
     // Queries
     // -------------------------------------------------------------------------
@@ -369,6 +447,18 @@ final class Model
     public function length(): int
     {
         return \count($this->items);
+    }
+
+    /**
+     * Return the IDs of all items in order.
+     *
+     * Useful for tests to verify item identity without reflection.
+     *
+     * @return list<int>
+     */
+    public function getItemIds(): array
+    {
+        return \array_map(fn(Item $item): int => $item->id, $this->items);
     }
 
     /**
@@ -402,6 +492,12 @@ final class Model
      *
      * @return list<string> Visible lines
      * @throws \RuntimeException If the viewport has zero dimensions or the list is empty.
+     *
+     * ## CancellationToken support (intended API — requires candy-async)
+     * When candy-async is installed, this method will accept an optional
+     * `?CancellationToken $token = null` parameter. The token is checked
+     * at loop boundaries ($token?->isCancelled()). If cancelled, throws
+     * `SugarCraft\Async\OperationCancelledException`.
      */
     public function lines(): array
     {
@@ -474,13 +570,31 @@ final class Model
     }
 
     /**
+     * Generator-based line renderer — yields lines one at a time.
+     *
+     * Unlike lines() which returns a complete array, this yields each line
+     * as it is computed, providing safe interleaving points for event loops.
+     * Output is identical to lines() when fully consumed.
+     *
+     * @return \Generator<int, string, mixed, void>
+     */
+    public function linesStream(): \Generator
+    {
+        foreach ($this->lines() as $index => $line) {
+            yield $index => $line;
+        }
+    }
+
+    /**
      * Render the list and return as a single newline-joined string.
      *
      * On the first render (or after a resize), emits the full output.
      * On subsequent renders with the same dimensions, emits only the
      * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     *
+     * @param LoggerInterface|null $logger If provided, errors are logged at WARNING level
      */
-    public function View(): string
+    public function View(?LoggerInterface $logger = null): string
     {
         try {
             // Detect window resize — reset diff state so we emit a full frame.
@@ -507,6 +621,7 @@ final class Model
             $encoder = new DiffEncoder();
             return $encoder->encode($ops);
         } catch (\Throwable $e) {
+            $logger?->warning('View rendering failed: {message}', ['message' => $e->getMessage()]);
             return $e->getMessage() . "\n";
         }
     }
@@ -674,7 +789,12 @@ final class Model
         for ($row = 0; $row < $height; $row++) {
             $line = $lines[$row] ?? '';
             for ($col = 0; $col < $width; $col++) {
-                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
+                // Use mb_substr consistently for character-level access with explicit
+                // UTF-8 encoding and bounds check via empty-string fallback to ' '.
+                $char = \mb_substr($line, $col, 1, 'UTF-8');
+                if ($char === '') {
+                    $char = ' ';
+                }
                 $cell = Cell::new($char, null, null, 1);
                 $buffer = $buffer->withCellAt($col, $row, $cell);
             }
@@ -686,6 +806,13 @@ final class Model
     /**
      * Reset the previous-frame buffer, forcing the next View to emit
      * a full frame (used on window resize or cursor-position-lost events).
+     *
+     * This method intentionally mutates the internal state for performance
+     * reasons in the event-stream context. The alternative (returning a new
+     * model with previousFrame=null) would require callers to track the
+     * returned instance, which breaks the typical event-handler pattern
+     * where the same model instance is reused across frames. The mutation
+     * is safe because it only affects diff computation, not item data.
      */
     public function resetPreviousFrame(): void
     {

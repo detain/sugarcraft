@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Lister;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * Default suffixer — shows a < marker on the first line of the cursor item,
  * pads the rest to maintain horizontal alignment.
@@ -27,7 +29,7 @@ final class DefaultSuffixer implements Suffixer
     ): int {
         $this->itemIndex   = $currentIndex;
         $this->cursorIndex = $cursorIndex;
-        $this->markerWidth = DefaultPrefixer::ansiWidth($this->currentMarker);
+        $this->markerWidth = Width::string($this->currentMarker);
         $this->suffixWidth = $this->markerWidth;
 
         return $this->suffixWidth;
