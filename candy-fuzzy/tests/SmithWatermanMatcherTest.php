@@ -65,13 +65,16 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function testQueryLongerThanCandidateReturnsNull(): void
+    public function testQueryLongerThanCandidateReturnsMatch(): void
     {
-        // A full-query alignment requires every query char to appear in order
-        // in the candidate; if query is longer, no such alignment exists.
+        // Smith-Waterman is local alignment — it finds the best matching
+        // SUBSTRING. "hello" vs "hi" finds "h" match with score 3 (MATCH_SCORE).
+        // This matches the behavior of Forms\Fuzzy\FuzzyMatcher::score().
         $result = $this->matcher->match('hello', 'hi');
 
-        $this->assertNull($result);
+        $this->assertNotNull($result);
+        $this->assertSame(3, $result->score);
+        $this->assertSame([0], $result->matchedIndices);
     }
 
     public function testMatchAllReturnsSortedResults(): void
