@@ -413,6 +413,88 @@ final class EscapeDecoderTest extends TestCase
         $this->assertFalse($events[0]->gained);
     }
 
+    /**
+     * Focus event with intermediate bytes — e.g. CSI 1 I.
+     * Terminals may send 参数 in some focus sequences. The decoder should
+     * handle these gracefully without crashing.
+     */
+    public function testFocusGainedWithIntermediateBytes(): void
+    {
+        // CSI 1 I — intermediate byte '1' before final 'I'
+        $events = $this->decoder->decode("\x1b[1I");
+        // Should not crash; may produce empty (unknown CSI) or fall through
+        $this->assertIsArray($events);
+    }
+
+    /**
+     * Focus event with private-mode prefix — e.g. CSI ? 1 I.
+     * Some terminals send DECSET mode 1004 (focus tracking) with the
+     * private-mode indicator 0x3f (?). The decoder should handle this
+     * gracefully without treating it as a focus event.
+     */
+    public function testFocusEventWithPrivateModePrefix(): void
+    {
+        // CSI ? 1 I — private-mode focus tracking sequence
+        $events = $this->decoder->decode("\x1b[?1I");
+        $this->assertIsArray($events);
+        // DECSET 1004 sequences use the '?' prefix — current decoder routes
+        // this to the Kitty keyboard protocol handler; verify no crash occurs.
+    }
+
+    /**
+     * Focus event with private-mode prefix and explicit mode number.
+     * CSI ? 1004 I is the actual DECSET 1004 sequence some terminals send.
+     */
+    public function testFocusEventWithDecset1004Sequence(): void
+    {
+        // CSI ? 1004 I — DECSET 1004 focus tracking
+        $events = $this->decoder->decode("\x1b[?1004I");
+        $this->assertIsArray($events);
+        // No crash; the private-mode prefix routes to Kitty handler
+    }
+
+    /**
+     * Focus event immediately followed by another sequence — the decoder
+     * must correctly partition the byte stream and emit separate events.
+     */
+    public function testFocusEventFollowedByArrow(): void
+    {
+        // Focus gained immediately followed by arrow right
+        $events = $this->decoder->decode("\x1b[IA\x1b[C");
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(FocusEvent::class, $events[0]);
+        $this->assertTrue($events[0]->gained);
+        $this->assertInstanceOf(KeyEvent::class, $events[1]);
+        $this->assertSame('ArrowRight', $events[1]->key);
+    }
+
+    /**
+     * Focus lost followed by a key — verifies the CSI O handler
+     * correctly partitions remaining bytes.
+     */
+    public function testFocusLostFollowedByKey(): void
+    {
+        $events = $this->decoder->decode("\x1b[Oa");
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(FocusEvent::class, $events[0]);
+        $this->assertFalse($events[0]->gained);
+        $this->assertInstanceOf(KeyEvent::class, $events[1]);
+        $this->assertSame('a', $events[1]->key);
+    }
+
+    /**
+     * Multiple consecutive focus sequences in one decode call.
+     */
+    public function testMultipleFocusEventsInOneChunk(): void
+    {
+        $events = $this->decoder->decode("\x1b[I\x1b[O");
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(FocusEvent::class, $events[0]);
+        $this->assertTrue($events[0]->gained);
+        $this->assertInstanceOf(FocusEvent::class, $events[1]);
+        $this->assertFalse($events[1]->gained);
+    }
+
     // ─── Bracketed paste ────────────────────────────────────────────────────
 
     public function testBracketedPasteStart(): void

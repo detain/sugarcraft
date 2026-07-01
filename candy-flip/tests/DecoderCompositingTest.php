@@ -276,4 +276,38 @@ final class DecoderCompositingTest extends TestCase
 
         return $header1 . $gce1 . $rest1 . $gce2 . $rest2;
     }
+
+    /**
+     * Assemble two single-frame GIF byte sequences into a single
+     * multi-frame GIF89a with specified disposal methods per frame.
+     */
+    private function assembleMultiFrameGifWithDisposal(string $bytes1, string $bytes2, int $disposal1, int $disposal2): string
+    {
+        $id1 = strpos($bytes1, "\x2C");
+        $id2 = strpos($bytes2, "\x2C");
+        if ($id1 === false || $id2 === false) {
+            return $bytes1;
+        }
+
+        $header1 = substr($bytes1, 0, $id1);
+
+        // GCE: 0x21 0xF9 0x04 <packed disposal+flags> <delay lo> <delay hi> <transparent> 0x00
+        $gce1 = "\x21\xF9\x04"
+            . chr(($disposal1 & 0x07) << 2)
+            . "\x01\x00" // delay = 1
+            . "\x00"     // no transparent index
+            . "\x00";    // GCE block terminator
+
+        $rest1 = substr($bytes1, $id1);
+
+        $gce2 = "\x21\xF9\x04"
+            . chr(($disposal2 & 0x07) << 2)
+            . "\x01\x00"
+            . "\x00"
+            . "\x00";
+
+        $rest2 = substr($bytes2, $id2);
+
+        return $header1 . $gce1 . $rest1 . $gce2 . $rest2;
+    }
 }
