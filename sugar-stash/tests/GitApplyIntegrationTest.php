@@ -6,10 +6,12 @@ namespace SugarCraft\Stash\Tests;
 
 use SugarCraft\Stash\Git;
 use SugarCraft\Stash\DiffViewer;
+use SugarCraft\Stash\Tests\Concerns\RecursiveDirCleanup;
 use PHPUnit\Framework\TestCase;
 
 final class GitApplyIntegrationTest extends TestCase
 {
+    use RecursiveDirCleanup;
     private string $cwd;
 
     protected function setUp(): void
@@ -32,16 +34,6 @@ final class GitApplyIntegrationTest extends TestCase
         if (isset($this->cwd)) {
             $this->removeDir($this->cwd);
         }
-    }
-
-    private function removeDir(string $dir): void
-    {
-        $files = array_diff(scandir($dir), ['.', '..']);
-        foreach ($files as $file) {
-            $path = $dir . '/' . $file;
-            is_dir($path) ? $this->removeDir($path) : unlink($path);
-        }
-        rmdir($dir);
     }
 
     public function testStageSingleHunkApplies(): void

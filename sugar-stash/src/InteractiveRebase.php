@@ -190,6 +190,13 @@ final readonly class InteractiveRebase
 
     /**
      * Mark rebase as complete.
+     *
+     * TODO: executeInteractiveRebase() — Interactive rebase execution is not yet
+     * wired into App::update(). This sets done=true but no GitDriver method exists
+     * to apply the built todo list. Full implementation requires:
+     * - GitDriver::interactiveRebase(list<RebaseCommit> $commits): void
+     * - Enter key binding in App.php to trigger execution when not selectingN
+     * See: findings/plan_sugar-stash.md §4.1 (Option B)
      */
     public function markDone(): self
     {

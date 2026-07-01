@@ -6,10 +6,12 @@ namespace SugarCraft\Stash\Tests;
 
 use SugarCraft\Stash\Git;
 use SugarCraft\Stash\GitDriver;
+use SugarCraft\Stash\Tests\Concerns\RecursiveDirCleanup;
 use PHPUnit\Framework\TestCase;
 
 final class GitGuardTest extends TestCase
 {
+    use RecursiveDirCleanup;
     private string $cwd;
 
     protected function setUp(): void
@@ -22,16 +24,6 @@ final class GitGuardTest extends TestCase
     protected function tearDown(): void
     {
         $this->removeDir($this->cwd);
-    }
-
-    private function removeDir(string $dir): void
-    {
-        $files = array_diff(scandir($dir), ['.', '..']);
-        foreach ($files as $file) {
-            $path = $dir . '/' . $file;
-            is_dir($path) ? $this->removeDir($path) : unlink($path);
-        }
-        rmdir($dir);
     }
 
     public function testCheckoutRejectsLeadingDashBranch(): void
