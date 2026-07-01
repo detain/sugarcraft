@@ -29,6 +29,9 @@ final class Styles
 
     private const PAD_LENGTH = 5;
 
+    /** @var Styles|null Cached default styles instance */
+    private static ?Styles $defaultInstance = null;
+
     public function __construct()
     {
         $this->timestamp = Style::new()->foreground(Color::ansi(8));
@@ -58,7 +61,7 @@ final class Styles
 
     public static function default(): self
     {
-        return new self();
+        return self::$defaultInstance ??= new self();
     }
 
     /**

@@ -64,24 +64,6 @@ final class JsonFormatter implements Formatter
 
     private function coerceValue(mixed $v): mixed
     {
-        if (\is_bool($v) || \is_int($v) || \is_float($v)) {
-            return $v;
-        }
-        if (\is_string($v)) {
-            return $v;
-        }
-        if (\is_array($v)) {
-            // Recurse so nested objects/resources become strings for json_encode
-            return \array_map(fn($i) => $this->coerceValue($i), $v);
-        }
-        if ($v === null) {
-            return null;
-        }
-        // Objects with __toString
-        if ($v instanceof \Stringable || \method_exists($v, '__toString')) {
-            return (string) $v;
-        }
-        // Object without __toString — return class name (top-level only; arrays already recursed)
-        return \get_class($v);
+        return ValueCoercion::coerce($v);
     }
 }
