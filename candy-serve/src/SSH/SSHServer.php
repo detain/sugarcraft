@@ -103,6 +103,13 @@ final class SSHServer
         $path   = \rtrim($m[2], '/');
         $repoName = \basename($path);  // e.g. "/repos/foo.git" -> "foo.git"
 
+        // Validate repo name to prevent path traversal via ".." after basename()
+        // Only allow alphanumeric, dots, hyphens, and underscores
+        if (\preg_match('/^[a-zA-Z0-9._-]+$/', $repoName) !== 1) {
+            \fwrite(\STDERR, "Invalid repo name: {$repoName}\n");
+            return 1;
+        }
+
         // Find repo
         $repo = $this->repos[$repoName]
              ?? $this->findRepoByPath($path);

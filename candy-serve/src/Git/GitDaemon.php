@@ -210,9 +210,11 @@ final class GitDaemon
         $now = \time();
         $idleTimeout = $this->config->gitIdleTimeout;
 
+        // Collect stale indices first to avoid array modification during iteration
+        $staleIndices = [];
         foreach ($this->clients as $idx => &$client) {
             if ($idleTimeout > 0 && ($now - $client['last_activity']) > $idleTimeout) {
-                $this->closeClient($idx);
+                $staleIndices[] = $idx;
                 continue;
             }
 
@@ -220,6 +222,11 @@ final class GitDaemon
             if (!$client['handled'] && $client['buffer'] !== '') {
                 $this->handleClientData($idx);
             }
+        }
+
+        // Close stale connections in reverse order to preserve indices
+        foreach (\array_reverse($staleIndices) as $idx) {
+            $this->closeClient($idx);
         }
     }
 
@@ -311,13 +318,15 @@ final class GitDaemon
         \chmod($stdinFile, 0600);
         \file_put_contents($stdinFile, $buffer);
 
-        if ($handler instanceof UploadPack) {
-            $this->handleUploadPack($socket, $handler, $stdinFile);
-        } elseif ($handler instanceof ReceivePack) {
-            $this->handleReceivePack($socket, $handler, $stdinFile);
+        try {
+            if ($handler instanceof UploadPack) {
+                $this->handleUploadPack($socket, $handler, $stdinFile);
+            } elseif ($handler instanceof ReceivePack) {
+                $this->handleReceivePack($socket, $handler, $stdinFile);
+            }
+        } finally {
+            @\unlink($stdinFile);
         }
-
-        @\unlink($stdinFile);
     }
 
     /**
