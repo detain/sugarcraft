@@ -39,6 +39,8 @@ final class StatsdBackend implements Backend
         string $host = '127.0.0.1',
         int $port = 8125,
         private readonly bool $dogstatsd = true,
+        private readonly bool $failSilently = true,
+        float $timeout = 1.0,
         $existingSocket = null,
     ) {
         if ($existingSocket !== null) {
@@ -48,7 +50,7 @@ final class StatsdBackend implements Backend
             $this->sock = $existingSocket;
             return;
         }
-        $sock = @fsockopen("udp://{$host}", $port, $errno, $errstr, 1.0);
+        $sock = @fsockopen("udp://{$host}", $port, $errno, $errstr, $timeout);
         if ($sock === false) {
             throw new \RuntimeException(Lang::t('statsd.connect_failed', ['errstr' => (string) $errstr, 'errno' => (string) $errno]));
         }
@@ -91,6 +93,24 @@ final class StatsdBackend implements Backend
     }
 
     /**
+     * StatsD is fire-and-forget; metrics cannot be removed once sent.
+     *
+     * @param array<string,string> $tags
+     */
+    public function remove(string $name, array $tags = []): void
+    {
+        // No-op: UDP datagrams are already on the wire.
+    }
+
+    /**
+     * StatsD is fire-and-forget; there is nothing to clear.
+     */
+    public function clear(): void
+    {
+        // No-op: StatsD has no local state to reset.
+    }
+
+    /**
      * @param array<string,string> $tags
      */
     private function send(string $name, float $value, string $kind, array $tags): void
@@ -111,7 +131,11 @@ final class StatsdBackend implements Backend
             }
             $line .= '|#' . implode(',', $parts);
         }
-        @fwrite($this->sock, $line);
+        if ($this->failSilently) {
+            @fwrite($this->sock, $line);
+        } else {
+            fwrite($this->sock, $line);
+        }
     }
 
     private static function fmt(float $v): string

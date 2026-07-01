@@ -6,6 +6,7 @@ namespace SugarCraft\Metrics\Backend;
 
 use SugarCraft\Metrics\Backend;
 use SugarCraft\Metrics\Descriptor;
+use SugarCraft\Metrics\Util;
 
 /**
  * In-memory accumulator. Counters add up, gauges hold the latest
@@ -121,6 +122,43 @@ final class InMemoryBackend implements Backend
     }
 
     /**
+     * Reset all accumulated metrics to zero.
+     * Useful for long-running processes or test cleanup.
+     */
+    public function clear(): void
+    {
+        $this->counters = [];
+        $this->gauges = [];
+        $this->histograms = [];
+        $this->upDownCounters = [];
+        $this->asyncCounters = [];
+        $this->asyncGauges = [];
+    }
+
+    /**
+     * Remove a specific metric series by name and tags.
+     * Removes from whichever accumulator(s) hold a value for that key.
+     *
+     * @param array<string,string> $tags
+     */
+    public function remove(string $name, array $tags = []): void
+    {
+        $key = $this->key($name, $tags);
+        unset(
+            $this->counters[$key],
+            $this->gauges[$key],
+            $this->histograms[$key],
+            $this->upDownCounters[$key],
+            $this->asyncCounters[$key],
+            $this->asyncGauges[$key],
+        );
+    }
+
+    /**
+     * Build a storage key for this backend's accumulator arrays.
+     * Format: `name|k1=v1|k2=v2` with tags sorted by key.
+     * This format is for in-memory storage accumulation (not cardinality tracking).
+     *
      * @param array<string,string> $tags
      */
     private function key(string $name, array $tags): string
@@ -128,11 +166,6 @@ final class InMemoryBackend implements Backend
         if ($tags === []) {
             return $name;
         }
-        ksort($tags);
-        $parts = [];
-        foreach ($tags as $k => $v) {
-            $parts[] = "{$k}={$v}";
-        }
-        return $name . '|' . implode('|', $parts);
+        return $name . '|' . Util::tagKey($tags);
     }
 }

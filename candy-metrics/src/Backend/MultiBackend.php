@@ -84,6 +84,16 @@ final class MultiBackend implements Backend
         $this->fanout(fn(Backend $b) => $b->describe($descriptor));
     }
 
+    public function remove(string $name, array $tags = []): void
+    {
+        $this->safeFanout(fn(Backend $b) => $b->remove($name, $tags));
+    }
+
+    public function clear(): void
+    {
+        $this->safeFanout(fn(Backend $b) => $b->clear());
+    }
+
     public function flush(): void
     {
         $this->fanout(fn(Backend $b) => $b->flush());
@@ -112,10 +122,25 @@ final class MultiBackend implements Backend
             }
         }
         if ($errors !== []) {
-            throw new \RuntimeException(
-                'MultiBackend: ' . count($errors) . ' child backend(s) failed. First: ' . $errors[0]->getMessage(),
-                previous: $errors[0]
-            );
+            throw new MultiBackendException($errors);
+        }
+    }
+
+    /**
+     * Fan out an idempotent operation (remove/clear) to all children,
+     * silently swallowing all errors. Use for operations where partial
+     * failure is acceptable (idempotent cleanup).
+     *
+     * @param callable(Backend): void $op
+     */
+    private function safeFanout(callable $op): void
+    {
+        foreach ($this->children as $b) {
+            try {
+                $op($b);
+            } catch (\Throwable) {
+                // Silently ignore: remove/clear are idempotent.
+            }
         }
     }
 }
