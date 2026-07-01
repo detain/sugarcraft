@@ -54,6 +54,12 @@ use SugarCraft\Reel\Subtitle\WebVtt;
  */
 final class Player implements Model
 {
+    /** Minimum and maximum terminal column/row bounds for resize clamping. */
+    private const MIN_COLS = 10;
+    private const MAX_COLS = 200;
+    private const MIN_ROWS = 5;
+    private const MAX_ROWS = 80;
+
     /**
      * @param Decoder                      $decoder      Frame source iterator
      * @param Mode                         $mode         Rendering mode
@@ -360,8 +366,8 @@ final class Player implements Model
      */
     private function updateResize(int $cols, int $rows): array
     {
-        $cols = max(10, min($cols, 200));
-        $rows = max(5, min($rows, 80));
+        $cols = max(self::MIN_COLS, min($cols, self::MAX_COLS));
+        $rows = max(self::MIN_ROWS, min($rows, self::MAX_ROWS));
 
         if ($cols === $this->cellsW && $rows === $this->cellsH) {
             return [$this, null]; // no-op when unchanged
