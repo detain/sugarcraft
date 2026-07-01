@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Decode;
 
+use SugarCraft\Reel\Render\Color;
+
 /**
  * A readonly value object holding one decoded video frame.
  *
@@ -75,7 +77,7 @@ final readonly class RgbFrame
                     $g = ord($this->bytes[$offset++]);
                     $b = ord($this->bytes[$offset++]);
                 }
-                \imagesetpixel($img, $x, $y, ($r << 16) | ($g << 8) | $b);
+                \imagesetpixel($img, $x, $y, Color::pack($r, $g, $b));
             }
         }
 

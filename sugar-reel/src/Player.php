@@ -20,6 +20,7 @@ use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Tests\FakeDecoder;
+use SugarCraft\Reel\Render\Color;
 use SugarCraft\Reel\Render\FrameRenderer;
 use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
@@ -257,7 +258,7 @@ final class Player implements Model
         if ($this->paused) {
             return null;
         }
-        return Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
+        return Cmd::tick(1.0 / $this->fps, static fn(): Msg => TickMsg::instance());
     }
 
     /**
@@ -346,7 +347,7 @@ final class Player implements Model
 
         $cmd = $nextPlayer->paused
             ? null
-            : Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
+            : Cmd::tick(1.0 / $this->fps, static fn(): Msg => TickMsg::instance());
 
         return [$nextPlayer, $cmd];
     }
@@ -380,7 +381,7 @@ final class Player implements Model
 
         $cmd = $nextPlayer->paused
             ? null
-            : Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
+            : Cmd::tick(1.0 / $this->fps, static fn(): Msg => TickMsg::instance());
 
         return [$nextPlayer, $cmd];
     }
@@ -399,7 +400,7 @@ final class Player implements Model
      */
     private function onReachedEnd(?RgbFrame $nextFrame, int $nextIndex, float $newVideoTime, float $now): array
     {
-        $tick = Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
+        $tick = Cmd::tick(1.0 / $this->fps, static fn(): Msg => TickMsg::instance());
 
         if (!$this->loop) {
             // End of stream, no loop: stop audio and freeze on the last frame.
@@ -487,7 +488,7 @@ final class Player implements Model
             $nextPlayer = $this->mutate($changes);
             $cmd = $nextPlayer->paused
                 ? null
-                : Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
+                : Cmd::tick(1.0 / $this->fps, static fn(): Msg => TickMsg::instance());
             return [$nextPlayer, $cmd];
         }
 
@@ -650,7 +651,7 @@ final class Player implements Model
 
         // Use cell dimensions from the frame's native size.
         // For HalfBlock, h is doubled (2 rows per cell).
-        $cellDims = $this->detectCellDimensions($mode);
+        $cellDims = $this->detectCellDimensions();
         $cellW = $cellDims['w'];
         $cellH = $cellDims['h'];
 
@@ -680,11 +681,11 @@ final class Player implements Model
                     // Source pixel row for lower half.
                     $lowerY = $cy * 2 + 1;
 
-                    $upperRgb = $this->pixelRgb($bytes, $w, $byteLen, $cx * $cellW, $upperY);
-                    $lowerRgb = $this->pixelRgb($bytes, $w, $byteLen, $cx * $cellW, $lowerY);
+                    $upperRgb = self::pixelRgb($bytes, $w, $byteLen, $cx * $cellW, $upperY);
+                    $lowerRgb = self::pixelRgb($bytes, $w, $byteLen, $cx * $cellW, $lowerY);
 
-                    $fg = $this->rgbToStyleColor($upperRgb[0], $upperRgb[1], $upperRgb[2], $mode);
-                    $bg = $this->rgbToStyleColor($lowerRgb[0], $lowerRgb[1], $lowerRgb[2], $mode);
+                    $fg = self::rgbToStyleColor($upperRgb[0], $upperRgb[1], $upperRgb[2], $mode);
+                    $bg = self::rgbToStyleColor($lowerRgb[0], $lowerRgb[1], $lowerRgb[2], $mode);
 
                     $style = new Style($fg, $bg);
 
@@ -702,10 +703,10 @@ final class Player implements Model
                     $x0 = $cx * 2;
                     $y0 = $cy * 2;
                     $quads = [
-                        $this->pixelRgb($bytes, $w, $byteLen, $x0,     $y0),     // UL
-                        $this->pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0),     // UR
-                        $this->pixelRgb($bytes, $w, $byteLen, $x0,     $y0 + 1), // LL
-                        $this->pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0 + 1), // LR
+                        self::pixelRgb($bytes, $w, $byteLen, $x0,     $y0),     // UL
+                        self::pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0),     // UR
+                        self::pixelRgb($bytes, $w, $byteLen, $x0,     $y0 + 1), // LL
+                        self::pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0 + 1), // LR
                     ];
                     [$glyph, $fgInt, $bgInt] = self::quarterCell($quads);
                     $cell = Cell::new($glyph, new Style($fgInt, $bgInt), null, 1);
@@ -719,13 +720,13 @@ final class Player implements Model
                     $px = $cx * $cellW;
                     $py = $cy * $cellH;
 
-                    $rgb = $this->pixelRgb($bytes, $w, $byteLen, $px, $py);
+                    $rgb = self::pixelRgb($bytes, $w, $byteLen, $px, $py);
                     [$r, $g, $b] = $rgb;
 
                     $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
                     $ch = LumaRamp::char((float)$luma, $this->ramp);
 
-                    $fg = $this->rgbToStyleColor($r, $g, $b, $mode);
+                    $fg = self::rgbToStyleColor($r, $g, $b, $mode);
                     $style = $fg !== null ? new Style($fg) : null;
 
                     $cell = Cell::new($ch, $style, null, 1);
@@ -761,8 +762,8 @@ final class Player implements Model
     {
         $dist = static fn (array $a, array $b): int =>
             ($a[0] - $b[0]) ** 2 + ($a[1] - $b[1]) ** 2 + ($a[2] - $b[2]) ** 2;
-        $luma = static fn (array $c): int => (($c[0] * 77) + ($c[1] * 150) + ($c[2] * 29)) >> 8;
-        $pack = static fn (array $c): int => (($c[0] & 0xFF) << 16) | (($c[1] & 0xFF) << 8) | ($c[2] & 0xFF);
+        $luma = static fn (array $c): int => LumaRamp::compute($c[0], $c[1], $c[2]);
+        $pack = static fn (array $c): int => Color::pack($c[0], $c[1], $c[2]);
 
         $maxD = -1;
         $a = 0;
@@ -817,7 +818,7 @@ final class Player implements Model
      *
      * @return array{int, int, int} [r, g, b]
      */
-    private function pixelRgb(string $bytes, int $w, int $byteLen, int $px, int $py): array
+    private static function pixelRgb(string $bytes, int $w, int $byteLen, int $px, int $py): array
     {
         $idx = ($py * $w + $px) * 3;
         if ($idx + 2 >= $byteLen) {
@@ -835,7 +836,7 @@ final class Player implements Model
      *
      * @return int|null 0xRRGGBB color for TrueColor/HalfBlock, null for Ascii
      */
-    private function rgbToStyleColor(int $r, int $g, int $b, Mode $mode): ?int
+    private static function rgbToStyleColor(int $r, int $g, int $b, Mode $mode): ?int
     {
         if ($mode === Mode::Ascii) {
             return null;
@@ -844,13 +845,13 @@ final class Player implements Model
     }
 
     /**
-     * Detect cell dimensions for a frame given the rendering mode.
+     * Detect cell dimensions for a frame given the current rendering mode.
      *
      * @return array{w: int, h: int}
      */
-    private function detectCellDimensions(Mode $mode): array
+    private function detectCellDimensions(): array
     {
-        return ['w' => $mode->colsPerCell(), 'h' => $mode->rowsPerCell()];
+        return ['w' => $this->mode->colsPerCell(), 'h' => $this->mode->rowsPerCell()];
     }
 
     /**
@@ -886,7 +887,7 @@ final class Player implements Model
     private function seekTickCmd(self $nextPlayer): ?\Closure
     {
         return ($this->ended && !$nextPlayer->paused)
-            ? Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg())
+            ? Cmd::tick(1.0 / $this->fps, static fn(): Msg => TickMsg::instance())
             : null;
     }
 
