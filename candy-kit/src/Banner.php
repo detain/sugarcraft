@@ -15,6 +15,8 @@ use SugarCraft\Sprinkles\Style;
  */
 final class Banner
 {
+    private static ?Style $titleStyleCache = null;
+
     public static function title(string $title, string $subtitle = '', ?Theme $theme = null, ?Border $border = null): string
     {
         $theme  ??= Theme::ansi();
@@ -25,9 +27,16 @@ final class Banner
             $body .= "\n" . $theme->muted->render($subtitle);
         }
 
-        return Style::new()
-            ->border($border)
-            ->padding(0, 2)
-            ->render($body);
+        // Only use the cache when using default rounded border (the common case).
+        // Custom borders always get a fresh style.
+        if ($border instanceof Border\Rounded) {
+            if (self::$titleStyleCache !== null) {
+                return self::$titleStyleCache->render($body);
+            }
+            self::$titleStyleCache = Style::new()->border($border)->padding(0, 2);
+            return self::$titleStyleCache->render($body);
+        }
+
+        return Style::new()->border($border)->padding(0, 2)->render($body);
     }
 }
