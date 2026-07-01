@@ -100,9 +100,12 @@ final class TapeToGif
         $output = $outputPath ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
         $outputDir = dirname($output);
 
+        // Snapshot captureCursor before iteration to avoid mutation during iteration.
+        $captureCursor = $frameStream->captureCursor;
+
         try {
             foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps) as $index => $frameInfo) {
-                $renderCursor = $frameStream->captureCursor;
+                $renderCursor = $captureCursor;
                 $image = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
 
                 $framePath = $tempDir . '/frame_' . sprintf('%05d', $index) . '.png';
