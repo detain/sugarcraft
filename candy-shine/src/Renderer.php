@@ -603,11 +603,11 @@ final class Renderer
 
     private function renderChildren(Node $parent): string
     {
-        $out = '';
+        $parts = [];
         foreach ($parent->children() as $child) {
-            $out .= $this->renderNode($child);
+            $parts[] = $this->renderNode($child);
         }
-        return $out;
+        return implode('', $parts);
     }
 
     private function renderFencedCode(FencedCode $node): string
@@ -769,7 +769,7 @@ final class Renderer
             $unorderedGlyph = $this->theme->unorderedListMarkerGlyph;
             $levelIndent = max(0, $this->theme->listLevelIndent);
 
-            $out = '';
+            $result = [];
             $i   = $start;
             foreach ($list->children() as $item) {
                 $bullet = $ordered ? sprintf($orderedFmt, $i) : $unorderedGlyph;
@@ -790,14 +790,14 @@ final class Renderer
                 // CommonMark softbreaks leave trailing whitespace on the
                 // preceding Text node; rtrim every emitted line so item
                 // bodies don't accumulate stray spaces.
-                $out .= $marker->render($bullet) . ' ' . rtrim($first) . "\n";
+                $result[] = $marker->render($bullet) . ' ' . rtrim($first);
                 foreach ($lines as $line) {
                     $line = rtrim($line);
-                    $out .= ($line === '' ? '' : $indent . $line) . "\n";
+                    $result[] = ($line === '' ? '' : $indent . $line);
                 }
                 $i++;
             }
-            return $out . "\n";
+            return implode("\n", $result) . "\n";
         } finally {
             $this->blockStack->pop();
         }
