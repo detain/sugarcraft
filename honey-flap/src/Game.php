@@ -270,7 +270,7 @@ final class Game implements Model
             // Pipe moved from x+1 to x this tick (tick decrements by 1).
             // It crossed BIRD_COL if (x+1) > BIRD_COL-1 && x <= BIRD_COL-1.
             // Since x == BIRD_COL-1 after the tick means it just arrived.
-            if (($p->x + 1) > self::BIRD_COL - 1 && $p->x <= self::BIRD_COL - 1) {
+            if (($p->x + 1) > self::BIRD_COL && $p->x <= self::BIRD_COL - 1) {
                 $score++;
             }
         }
