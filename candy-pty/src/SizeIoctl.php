@@ -166,10 +166,30 @@ final class SizeIoctl
      * Uses `stty -f /dev/fd/<fd> rows <rows> cols <cols>` per the
      * macOS convention (note `-f`, not Linux's `-F`).
      *
+     * Multiple rapid resizes (e.g. from a fast SIGWINCH forwarding loop)
+     * are rate-limited: if the same (fd, rows, cols) triple was set
+     * within the last 20 ms, the stty subprocess is skipped. This
+     * prevents a burst of resize events from spawning a dozen stty
+     * processes that mostly race each other.
+     *
      * @see SttyTermios::runStty() for the same pattern
      */
     private static function sttySetSize(int $fd, int $rows, int $cols): int
     {
+        // Rate-limit: skip redundant stty calls within 20 ms window.
+        // Uses a static cache per (fd, rows, cols) triple.
+        static $lastCall = null;
+        $now = \hrtime(true);
+        if ($lastCall !== null
+            && $lastCall['fd'] === $fd
+            && $lastCall['rows'] === $rows
+            && $lastCall['cols'] === $cols
+            && ($now - $lastCall['when']) < 20_000_000  // 20 ms in nanoseconds
+        ) {
+            return 0;  // skip — recent identical call already applied
+        }
+        $lastCall = ['fd' => $fd, 'rows' => $rows, 'cols' => $cols, 'when' => $now];
+
         $cmd = ['stty', '-f', '/dev/fd/' . $fd, 'rows', (string) $rows, 'cols', (string) $cols];
         $desc = [
             0 => ['pipe', 'r'],

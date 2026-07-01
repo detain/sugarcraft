@@ -407,6 +407,13 @@ candy-pty builds on two ports for input/output escape-sequence handling:
 ## Known limitations
 
 - **Linux + macOS only.** Windows ConPTY is a separate port.
+- **ext-ffi is required but disabled by default.** `ext-ffi` is loaded eagerly
+  because `FFI::cdef()` must resolve symbols at script startup. Many Linux
+  distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
+  measure) which causes candy-pty to throw `PtyException: Failed to load libc`.
+  To fix: edit your `php.ini` and set `ffi.enable=1` (or `ffi.enable=peer` for
+  stricter CSP), then restart your web server or PHP-FPM process. In CLI context
+  you can also set it inline: `php -d ffi.enable=1 your-script.php`.
 
 ## License
 

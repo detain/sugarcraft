@@ -53,9 +53,13 @@ final class ControllingTerminal
             ? self::TIOCSCTTY_DARWIN
             : self::TIOCSCTTY_LINUX;
 
-        // Third arg is read by the kernel as unsigned long; passing
-        // PHP null renders as 0 which means "don't steal an existing
-        // ctty from another session".  See [gotcha:ioctl-third-arg-ulong-not-pointer].
+        // Third arg is read by the kernel as unsigned long — NOT as a
+        // dereferenced pointer. Passing PHP null through FFI void *
+        // renders as zero on the wire, which is EXACTLY what we want:
+        // "do not steal an existing controlling terminal from another
+        // session". Allocating an int and passing FFI::addr($int) with
+        // $int=0 would pass a pointer-to-zero, which the kernel would
+        // misinterpret. See [gotcha:ioctl-third-arg-ulong-not-pointer].
         if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
             throw new PtyException(
                 "ControllingTerminal::claim ioctl({$fd}, TIOCSCTTY, 0) failed",

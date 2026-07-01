@@ -25,7 +25,25 @@ final class TermiosFactory
 
     private static bool $loggedFallback = false;
 
+    /** `O_RDWR` flag — value is identical on Linux and macOS. */
+    public const O_RDWR = 0x0002;
+
     private function __construct() {}
+
+    /**
+     * Platform-specific `O_NOCTTY` flag for `posix_openpt()` / `open()`.
+     *
+     * Linux: 0o400 (octal), macOS: 0x20000 (hex).
+     * This flag prevents the PTY from becoming the process's controlling
+     * terminal when `setsid()` + `TIOCSCTTY` are called explicitly via
+     * `ControllingTerminal::claim()`.
+     *
+     * @see ControllingTerminal::claim()
+     */
+    public static function oNoCtty(): int
+    {
+        return \PHP_OS_FAMILY === 'Darwin' ? 0x20000 : 0o400;
+    }
 
     /**
      * Open a Termios for the given fd.
