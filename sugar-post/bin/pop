@@ -125,7 +125,7 @@ function parseArgs(array $argv): array
 
 function buildEmail(array $opts, string $stdinBody): Email
 {
-    $from = $opts['from'] ?? \getenv('POP_FROM') ?: 'unknown@localhost';
+    $from = $opts['from'] ?? ($_ENV['POP_FROM'] ?? \getenv('POP_FROM', true) ?: 'unknown@localhost');
     $to   = $opts['to'] ?? [];
 
     if ($to === []) {
@@ -133,7 +133,7 @@ function buildEmail(array $opts, string $stdinBody): Email
     }
 
     $body = $stdinBody !== '' ? $stdinBody : ($opts['body'] ?? null);
-    $signature = \getenv('POP_SIGNATURE') ?: null;
+    $signature = $_ENV['POP_SIGNATURE'] ?? \getenv('POP_SIGNATURE', true);
 
     $email = new Email(
         from:    [$from],
@@ -162,17 +162,17 @@ function buildEmail(array $opts, string $stdinBody): Email
 
 function buildTransport(): Transport
 {
-    if (($apiKey = \getenv('RESEND_API_KEY')) !== false && $apiKey !== '') {
+    if (($apiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true)) !== '' && $apiKey !== false) {
         return new ResendTransport($apiKey);
     }
 
-    $host = \getenv('POP_SMTP_HOST') ?: '';
+    $host = $_ENV['POP_SMTP_HOST'] ?? \getenv('POP_SMTP_HOST', true) ?: '';
     if ($host !== '') {
         return new SmtpTransport(
             host:     $host,
-            port:     (int) (\getenv('POP_SMTP_PORT') ?: 587),
-            username: \getenv('POP_SMTP_USERNAME') ?: '',
-            password: \getenv('POP_SMTP_PASSWORD') ?: '',
+            port:     (int) ($_ENV['POP_SMTP_PORT'] ?? \getenv('POP_SMTP_PORT', true) ?: 587),
+            username: $_ENV['POP_SMTP_USERNAME'] ?? \getenv('POP_SMTP_USERNAME', true) ?: '',
+            password: $_ENV['POP_SMTP_PASSWORD'] ?? \getenv('POP_SMTP_PASSWORD', true) ?: '',
         );
     }
 

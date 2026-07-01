@@ -16,8 +16,14 @@ final class ResendTransport implements Transport
 {
     private string $apiKey;
 
-    public function __construct(string $apiKey)
+    /**
+     * @param string $apiKey Resend API key. If empty, reads from RESEND_API_KEY env var.
+     */
+    public function __construct(string $apiKey = '')
     {
+        if ($apiKey === '') {
+            $apiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true) ?: '';
+        }
         $this->apiKey = $apiKey;
     }
 

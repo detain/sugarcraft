@@ -234,6 +234,27 @@ final class SmtpTransport implements Transport
         $lines = [];
 
         // Headers
+        $lines = \array_merge($lines, $this->buildHeaders($email, $boundary));
+
+        // Body
+        $lines = \array_merge($lines, $this->buildBody($email));
+
+        // Attachments
+        $lines = \array_merge($lines, $this->buildAttachments($email->attachments, $boundary));
+
+        $lines[] = '--' . $boundary . '--';
+
+        return \implode("\r\n", $lines);
+    }
+
+    /**
+     * Build MIME headers for the email.
+     *
+     * @return list<string>
+     */
+    private function buildHeaders(Email $email, string $boundary): array
+    {
+        $lines = [];
         $lines[] = "From: {$this->addrListHeader($email->from)}";
         $lines[] = "To: {$this->addrListHeader($email->to)}";
         if ($email->cc !== []) {
@@ -244,17 +265,24 @@ final class SmtpTransport implements Transport
         }
         $lines[] = "MIME-Version: 1.0";
         $lines[] = "Content-Type: multipart/mixed; boundary=\"{$boundary}\"";
-
         if ($email->replyTo !== null) {
             $lines[] = "Reply-To: {$this->addrListHeader([$email->replyTo])}";
         }
+        return $lines;
+    }
 
+    /**
+     * Build MIME body parts (text and/or HTML).
+     *
+     * @return list<string>
+     */
+    private function buildBody(Email $email): array
+    {
+        $lines = [];
         $lines[] = '';
-        $lines[] = '--' . $boundary;
+        $lines[] = '--' . \bin2hex(\random_bytes(16));
 
-        // Body (either text or multipart/alternative)
         $bodyBoundary = \bin2hex(\random_bytes(16));
-
         if ($email->htmlBody !== null) {
             $lines[] = "Content-Type: multipart/alternative; boundary=\"{$bodyBoundary}\"";
             $lines[] = '';
@@ -283,8 +311,19 @@ final class SmtpTransport implements Transport
             $lines[] = '';
         }
 
-        // Attachments
-        foreach ($email->attachments as $att) {
+        return $lines;
+    }
+
+    /**
+     * Build MIME attachment parts.
+     *
+     * @param list<Attachment> $attachments
+     * @return list<string>
+     */
+    private function buildAttachments(array $attachments, string $boundary): array
+    {
+        $lines = [];
+        foreach ($attachments as $att) {
             $content = $att->getContent();
             $encoded = \chunk_split(\base64_encode($content), 76, "\n");
 
@@ -309,10 +348,7 @@ final class SmtpTransport implements Transport
             $lines[] = $encoded;
             $lines[] = '';
         }
-
-        $lines[] = '--' . $boundary . '--';
-
-        return \implode("\r\n", $lines);
+        return $lines;
     }
 
     // -------------------------------------------------------------------------
@@ -357,7 +393,15 @@ final class SmtpTransport implements Transport
 
     private function hasExtension(string $name): bool
     {
-        return \str_contains($this->lastResponse, $name);
+        $lines = \explode("\n", $this->lastResponse);
+        foreach ($lines as $line) {
+            $line = \trim($line);
+            // Extension names appear at the start of lines (e.g., "250-SIZE" or "250 AUTH")
+            if (\str_starts_with($line, $name) || $line === $name) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function getHeloHost(): string
