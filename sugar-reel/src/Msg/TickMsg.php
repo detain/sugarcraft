@@ -18,4 +18,16 @@ use SugarCraft\Core\Msg;
  */
 final class TickMsg implements Msg
 {
+    /** Singleton instance to avoid allocation on every tick. */
+    private static ?TickMsg $instance = null;
+
+    /**
+     * Return the singleton TickMsg instance.
+     *
+     * All ticks use the same immutable instance since TickMsg carries no state.
+     */
+    public static function instance(): self
+    {
+        return self::$instance ??= new self();
+    }
 }
