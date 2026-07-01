@@ -16,6 +16,12 @@ use SugarCraft\Mouse\Sentinel;
  * via {@see Width::string()}.
  *
  * This class is stateless — create a fresh instance per scan pass.
+ *
+ * Design note — streaming/chunked parsing: for large terminals or
+ * streaming renderers, a ScanIterator (implementing IteratorAggregate)
+ * could yield zones incrementally as each chunk is scanned, avoiding
+ * a full in-memory parse of the entire buffer.  The current Scan class
+ * is suitable for single-shot scans; factor chunk support out if needed.
  */
 final class Scan
 {
@@ -157,6 +163,14 @@ final class Scan
 
     /**
      * Return the next grapheme cluster starting at byte offset $i.
+     *
+     * Edge case: grapheme_extract() can return an empty string '' when
+     * the offset $i lands mid-grapheme (e.g., in the middle of a combine
+     * sequence).  The fallback UTF-8 byte scan handles this by returning
+     * the next valid multi-byte sequence starting at $i.  This can produce
+     * a grapheme that is technically a continuation of a sequence started
+     * before $i, but in terminal output this is unlikely to cause issues
+     * since combining characters are normally printed after their base.
      */
     private static function nextGrapheme(string $s, int $i): string
     {
