@@ -163,6 +163,46 @@ The Git protocol supports:
 - `git-upload-pack` — clone and fetch (read access)
 - `git-receive-pack` — push (write access, requires collaborator permission)
 
+### Async daemon mode (ReactPHP, opt-in)
+
+The daemon is dual-mode. `serve()` runs the classic blocking
+`socket_select()` loop (the default shown above). `serveAsync()` is the
+opt-in [ReactPHP](https://reactphp.org/) path: connections are accepted
+and read through the event loop, so a host application can run the Git
+daemon alongside timers, HTTP servers, and other sockets on one loop.
+
+```php
+use React\EventLoop\Loop;
+use SugarCraft\Serve\Config;
+use SugarCraft\Serve\Git\GitDaemon;
+
+$daemon = new GitDaemon(Config::load('/var/lib/candy-serve/config.yaml'));
+$daemon->registerRepos($repos);
+
+// Returns a promise that resolves with exit code 0 on graceful stop.
+$promise = $daemon->serveAsync();           // global loop, or pass your own
+echo $daemon->listenAddress(), "\n";        // actual bound addr (port 0 = ephemeral)
+
+Loop::addTimer(3600, fn () => $daemon->shutdown());  // graceful stop from loop code
+Loop::run();
+```
+
+Both modes share the same protocol code; `shutdown()` (or a
+`SIGTERM`/`SIGINT`) tears down every loop registration — server stream,
+per-client streams, housekeeping timer — unsubscribes candy-async
+`Subscriptions`, closes connections, and removes the PID file. The
+per-request work (ref advertisement, `git pack-objects`, `git
+update-ref`) is the same synchronous code the blocking mode runs; it
+executes inside the readiness callback.
+
+LFS batches have the same split: `LFSHandler::handleBatch()` is the
+synchronous path, `handleBatchAsync()` resolves the identical response
+via the loop with at most `concurrentTransfers` objects in flight
+(bounded by `SugarCraft\Serve\Support\PromisePool`). Note that per-object
+storage inspection is still synchronous file I/O inside its loop tick —
+the async path bounds *scheduling*, it does not make `file_get_contents`
+asynchronous.
+
 ## OSC 52 Clipboard
 
 The TUI supports clipboard operations via OSC 52 (Operating System Command 52). This enables:

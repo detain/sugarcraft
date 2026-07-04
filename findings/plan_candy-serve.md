@@ -55,8 +55,8 @@ Fix all 28 findings in candy-serve library: 7 HIGH severity issues (shell inject
 
 ## Phase 6: MEDIUM Severity Async/ReactPHP [PENDING]
 
-- [ ] 6.1 **[MEDIUM] GitDaemon Could Use ReactPHP** — Refactor blocking `socket_select()` loop at `src/Git/GitDaemon.php` to use ReactPHP for better concurrency.
-- [ ] 6.2 **[MEDIUM] LFS Handler Should Use ReactPHP PromiseAll** — Use ReactPHP's `Deferred`/`Promise\all()` at `src/LFS/LFSHandler.php:128-145` for concurrent batch transfers.
+- [x] 6.1 **[MEDIUM] GitDaemon Could Use ReactPHP** — Refactor blocking `socket_select()` loop at `src/Git/GitDaemon.php` to use ReactPHP for better concurrency. ✅ 2026-07-04 — dual-mode: blocking `serve()` unchanged as default; opt-in `GitDaemon::serveAsync(?LoopInterface)` accepts/reads connections via the event loop, shares the protocol code (`dispatchClientRequest`), tears down all loop resources + Subscriptions on `shutdown()`.
+- [x] 6.2 **[MEDIUM] LFS Handler Should Use ReactPHP PromiseAll** — Use ReactPHP's `Deferred`/`Promise\all()` at `src/LFS/LFSHandler.php:128-145` for concurrent batch transfers. ✅ 2026-07-04 — `LFSHandler::handleBatchAsync()` via bounded `Support\PromisePool::map()` (cap = `concurrentTransfers`; bounded beats naive `Promise\all`); sequential `handleBatch()` kept as fallback; per-object errors isolated as batch entries.
 
 ## Phase 7: LOW Severity Issues [PENDING]
 

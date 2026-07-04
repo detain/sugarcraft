@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Serve\LFS;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
+use SugarCraft\Serve\Support\PromisePool;
 use SugarCraft\Serve\{AccessControl, Repo, User};
+
+use function React\Promise\resolve;
 
 /**
  * Git LFS batch API handler.
@@ -120,6 +126,68 @@ final class LFSHandler
     }
 
     /**
+     * Handle an LFS batch request on a ReactPHP event loop with bounded
+     * concurrency — the opt-in async counterpart to {@see handleBatch()}
+     * (plan item 6.2, findings/plan_candy-serve.md). At most
+     * `$concurrentTransfers` objects are in flight at once (via
+     * {@see PromisePool}), and the resolved payload is byte-identical to
+     * what the sequential path returns, including per-object error
+     * entries (404 for missing objects). A storage-backend exception on
+     * one object never sinks the batch: it is captured as that object's
+     * `error` entry (code 500) and the remaining objects still resolve.
+     *
+     * What is and is not concurrent: per-object storage work
+     * (`exists()`/`size()`) is synchronous file I/O that executes inside
+     * its scheduled loop tick — the file I/O itself is NOT async. What
+     * the loop buys is scheduling: a large batch is spread across ticks
+     * in bounded waves instead of monopolising the caller until every
+     * object is inspected, and timers/sockets on the same loop keep
+     * firing between objects. A promise-returning storage backend could
+     * plug into the same pool for true I/O concurrency later.
+     *
+     * @param array $request Same shape as handleBatch()
+     * @param LoopInterface|null $loop Event loop (defaults to the global loop)
+     * @return PromiseInterface<array> resolves with the handleBatch() response shape
+     */
+    public function handleBatchAsync(array $request, ?LoopInterface $loop = null): PromiseInterface
+    {
+        $ac = AccessControl::getInstance();
+
+        if (!$ac->canRead($this->user, $this->repo)) {
+            return resolve(['error' => ['code' => 403, 'message' => 'Access denied']]);
+        }
+
+        $operation = $request['operation'] ?? 'download';
+        $objects   = \array_values($request['objects'] ?? []);
+        $loop      ??= Loop::get();
+
+        return PromisePool::map(
+            $loop,
+            $objects,
+            function (array $obj) use ($operation): array {
+                $oid  = (string) ($obj['oid'] ?? '');
+                $size = (int) ($obj['size'] ?? 0);
+
+                try {
+                    return $this->handleObject($operation, $oid, $size);
+                } catch (\Throwable $e) {
+                    // Per-object failure isolation: report the error in the
+                    // batch response instead of rejecting the whole batch.
+                    return [
+                        'oid'   => $oid,
+                        'size'  => $size,
+                        'error' => ['code' => 500, 'message' => $e->getMessage()],
+                    ];
+                }
+            },
+            \max(1, $this->concurrentTransfers),
+        )->then(static fn (array $results): array => [
+            'transfer' => 'basic',
+            'objects'  => $results,
+        ]);
+    }
+
+    /**
      * Process multiple LFS objects with concurrency control.
      *
      * @param list<array{oid:string,size:int}> $objects
@@ -145,15 +213,15 @@ final class LFSHandler
     }
 
     /**
-     * Process a batch of objects in parallel using pthreads or sequential fallback.
+     * Process a batch of objects (sequential fallback path).
      *
      * @param list<array{oid:string,size:int}> $batch
      * @return list<array>
      */
     private function processBatch(string $operation, array $batch): array
     {
-        // For now, use sequential processing since pthreads requires extension
-        // In production, this could use ReactPHP promises or Swoole for true concurrency
+        // Synchronous fallback when no event loop is available/running.
+        // Loop-driven bounded-concurrency lives in handleBatchAsync().
         return $this->processObjectsSequentially($operation, $batch);
     }
 
