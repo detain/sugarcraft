@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Readline\Mode;
 
+use SugarCraft\Forms\Vim\TextObject;
+use SugarCraft\Forms\Vim\TextObjectScope;
 use SugarCraft\Forms\Vim\VimAction;
 use SugarCraft\Forms\Vim\VimKeyHandler;
+use SugarCraft\Forms\Vim\VimOperator;
 use SugarCraft\Forms\Vim\VimState;
 use SugarCraft\Readline\Key;
 use SugarCraft\Readline\TextPrompt;
@@ -15,7 +18,8 @@ use SugarCraft\Readline\TextPrompt;
  *
  * Submodes:
  * - insert: default; ESC enters normal mode; typing inserts characters via TextPrompt
- * - normal: h/l/0/$/b/w move cursor; i/a/A switch to insert mode; dd deletes line
+ * - normal: h/l/0/$/b/w move cursor; i/a/A switch to insert mode; dd deletes line;
+ *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via candy-forms TextObject
  * - visual: v from normal; movement extends selection (selection stored in prompt mode)
  *
  * Uses VimKeyHandler from candy-forms for key-to-action mapping.
@@ -34,6 +38,9 @@ final class ViMode implements ModeInterface
     /** Set to a motion character when waiting for motion key (e.g. 'd' + next key). */
     private ?string $pendingMotion = null;
 
+    /** Set when a pending operator was followed by i/a — waiting for the text-object target key. */
+    private ?TextObjectScope $pendingScope = null;
+
     public function __construct(
         private readonly TextPrompt $originalPrompt = new TextPrompt(''),
     ) {
@@ -49,7 +56,10 @@ final class ViMode implements ModeInterface
         // Always delegate Escape to normal mode switch. Standard vi pulls the
         // cursor back onto the last character when leaving insert mode at EOL.
         if ($key === Key::Escape) {
+            // Escape also cancels any half-typed operator sequence (d…, ci…).
             return $this->withViMode(self::VI_MODE_NORMAL)
+                ->withPendingMotion(null)
+                ->withPendingScope(null)
                 ->attachTo($this->clampToLastChar($prompt));
         }
 
@@ -201,6 +211,11 @@ final class ViMode implements ModeInterface
                 => $this->withViMode(self::VI_MODE_NORMAL)
                     ->withPendingMotion('y')->attachTo($prompt),
 
+            // Change (cc / c + text object) — pending motion
+            $action === VimAction::ChangeLine
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->withPendingMotion('c')->attachTo($prompt),
+
             default
                 => $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt),
         };
@@ -291,16 +306,32 @@ final class ViMode implements ModeInterface
     // -------------------------------------------------------------------------
 
     /**
-     * Resolve a pending motion (e.g. 'dd' = delete line).
+     * Resolve a pending motion (e.g. 'dd' = delete line, 'ci"' text object).
      */
     private function resolvePendingMotion(TextPrompt $prompt, string $key): TextPrompt
     {
+        // Operator + i/a already consumed — this key is the text-object target.
+        if ($this->pendingScope !== null) {
+            return $this->resolveTextObject($prompt, $key);
+        }
+
         $motion = $this->pendingMotion;
+
+        // i/a after an operator starts a text object (ci", da{, yiw ...).
+        $scope = TextObjectScope::fromKey($key);
+        if ($scope !== null && $motion !== null && VimOperator::fromKey($motion) !== null) {
+            return $this->withPendingScope($scope)->attachTo($prompt);
+        }
+
         $nextMode = self::VI_MODE_NORMAL;
 
         if ($motion === 'd' && $key === 'd') {
             // dd — delete entire line; stay in normal mode
             $prompt = $this->deleteLine($prompt);
+        } elseif ($motion === 'c' && $key === 'c') {
+            // cc — change entire line: clear it and enter insert mode
+            $prompt = $this->deleteLine($prompt);
+            $nextMode = self::VI_MODE_INSERT;
         } elseif ($motion === 'y' && $key === 'y') {
             // yy — yank line (stored in internal buffer, not yet exposed); stay in normal mode
         }
@@ -308,6 +339,75 @@ final class ViMode implements ModeInterface
         // $nextMode stays VI_MODE_NORMAL
 
         return $this->withViMode($nextMode)->withPendingMotion(null)->attachTo($prompt);
+    }
+
+    /**
+     * Resolve the final key of an operator + i/a + target sequence via
+     * candy-forms (VimKeyHandler::handleTextObject). Unresolvable objects
+     * (unknown target, unmatched delimiter, cursor outside every pair)
+     * cancel the sequence with no buffer change, like vim's beep.
+     */
+    private function resolveTextObject(TextPrompt $prompt, string $key): TextPrompt
+    {
+        $operator = VimOperator::fromKey($this->pendingMotion ?? '');
+        $scope = $this->pendingScope;
+        $cleared = $this->withPendingMotion(null)->withPendingScope(null);
+
+        if ($operator === null || $scope === null) {
+            return $cleared->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        [$action, $range] = VimKeyHandler::handleTextObject(
+            $operator,
+            $scope,
+            $key,
+            $prompt->value(),
+            $prompt->cursor(),
+        );
+
+        if ($range === null) {
+            return $cleared->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        return match ($action) {
+            // diw / di( / da" ... — remove the range, cursor rests at its start
+            VimAction::DeleteTextObject
+                => $cleared->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($this->clampToLastChar($this->deleteRange($prompt, $range))),
+
+            // ciw / ci" ... — remove the range and type in its place
+            VimAction::ChangeTextObject
+                => $cleared->withViMode(self::VI_MODE_INSERT)
+                    ->attachTo($this->deleteRange($prompt, $range)),
+
+            // yiw / ya( ... — buffer untouched; cursor moves to the object's
+            // start per vim. No register yet, matching existing yy behavior.
+            VimAction::YankTextObject
+                => $cleared->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($this->moveCursorTo($prompt, $range->start)),
+
+            default
+                => $cleared->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt),
+        };
+    }
+
+    /**
+     * Delete a resolved character range from the prompt buffer, leaving
+     * the cursor at the range start. Uses key replay (move + backspace),
+     * consistent with deleteLine()'s Home+CtrlK approach.
+     */
+    private function deleteRange(TextPrompt $prompt, TextObject $range): TextPrompt
+    {
+        $count = $range->end - $range->start;
+        if ($count <= 0) {
+            return $this->moveCursorTo($prompt, $range->start);
+        }
+
+        $prompt = $this->moveCursorTo($prompt, $range->end);
+        for ($i = 0; $i < $count; $i++) {
+            $prompt = $prompt->handleKeyDirect(Key::Backspace);
+        }
+        return $prompt;
     }
 
     // -------------------------------------------------------------------------
@@ -428,6 +528,16 @@ final class ViMode implements ModeInterface
         }
         $clone = clone $this;
         $clone->pendingMotion = $motion;
+        return $clone;
+    }
+
+    private function withPendingScope(?TextObjectScope $scope): self
+    {
+        if ($scope === $this->pendingScope) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->pendingScope = $scope;
         return $clone;
     }
 

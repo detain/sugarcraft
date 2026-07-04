@@ -279,10 +279,17 @@ Address all 16 findings from the sugar-readline audit covering bugs, edge cases,
 
 ---
 
-### 3.2 Finding 13 — No Vi Text Objects
+### 3.2 Finding 13 — No Vi Text Objects ✅ DONE 2026-07-04
 
 **Severity:** MEDIUM  
 **Location:** `src/Mode/ViMode.php`
+
+**Resolution (2026-07-04):** Implemented candy-forms-first: `TextObject` resolver +
+`VimOperator`/`TextObjectScope` enums + `VimAction::{ChangeLine,Change/Delete/YankTextObject}` +
+`VimKeyHandler::handleTextObject()` in candy-forms; ViMode consumes them through its
+pending-motion machinery (operator → i/a → target). `ci"`, `da{`, `yi(`, `diw`/`daw`,
+`cc` and friends all work; unmatched/outside-pair sequences no-op like vim's beep.
+90 new candy-forms tests + 21 new sugar-readline end-to-end tests.
 
 **What is expected:**
 - Text objects like `ci"` (change inside quotes), `da{` (delete around braces), `yi(` (yank inside parens)

@@ -165,9 +165,12 @@ final class VimKeyHandler
             // Delete (x deletes char, dd handled as pending motion)
             'x' => VimAction::DeleteChar,
 
-            // Pending motions (dd, yy) — handler sets a pending flag
-            'd' => VimAction::DeleteLine, // dd = delete line (consumer should detect double)
-            'y' => VimAction::YankLine,   // yy = yank line (consumer should detect double)
+            // Pending operators (dd/di(, yy/ya", cc/ciw) — consumer tracks the
+            // pending state and resolves the follow-up keys (double = line-wise,
+            // i/a + target = text object via handleTextObject()).
+            'd' => VimAction::DeleteLine,
+            'y' => VimAction::YankLine,
+            'c' => VimAction::ChangeLine,
 
             // Undo/redo
             'u' => ($features & self::FEAT_UNDO) ? VimAction::Undo : VimAction::NoOp,
@@ -235,6 +238,46 @@ final class VimKeyHandler
         }
 
         return VimAction::NoOp;
+    }
+
+    /**
+     * Resolve a completed operator + scope + target text-object sequence
+     * (e.g. c + i + `"` for `ci"`) against the buffer.
+     *
+     * Returns the action expressing the operator's intent together with
+     * the resolved range, or [NoOp, null] when no text object exists at
+     * the cursor (unmatched delimiter, cursor outside every pair, or an
+     * unknown target key) — vim beeps and does nothing in those cases.
+     *
+     * The consumer tracks the pending operator/scope keys (same pattern
+     * as dd/yy double-key detection) and calls this once the target key
+     * arrives. Mirrors vim text objects (:help text-objects).
+     *
+     * @param string $targetKey Delimiter key or `w` (see TextObject)
+     * @param string $buffer    Single-line UTF-8 buffer
+     * @param int    $cursor    Character index of the cursor
+     *
+     * @return array{0: VimAction, 1: ?TextObject}
+     */
+    public static function handleTextObject(
+        VimOperator $operator,
+        TextObjectScope $scope,
+        string $targetKey,
+        string $buffer,
+        int $cursor,
+    ): array {
+        $range = TextObject::resolve($buffer, $cursor, $scope, $targetKey);
+        if ($range === null) {
+            return [VimAction::NoOp, null];
+        }
+
+        $action = match ($operator) {
+            VimOperator::Change => VimAction::ChangeTextObject,
+            VimOperator::Delete => VimAction::DeleteTextObject,
+            VimOperator::Yank   => VimAction::YankTextObject,
+        };
+
+        return [$action, $range];
     }
 
     /**
