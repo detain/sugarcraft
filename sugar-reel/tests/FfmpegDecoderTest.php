@@ -9,18 +9,22 @@ use SugarCraft\Reel\Decode\FfmpegDecoder;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
+use SugarCraft\Reel\Tests\Concerns\HidesPathBinaries;
 
 /**
  * Unit tests for FfmpegDecoder.
  *
  * Since CI has no live ffmpeg, tests that require the binary are skipped.
- * We test the binary-absent path directly, and verify internal math
- * for chunk-framing without needing a real subprocess.
+ * The binary-absent path is exercised on every host by hiding PATH
+ * binaries, and internal chunk-framing math is verified without a real
+ * subprocess.
  *
  * @covers \SugarCraft\Reel\Decode\FfmpegDecoder
  */
 final class FfmpegDecoderTest extends TestCase
 {
+    use HidesPathBinaries;
+
     // -------------------------------------------------------------------------
     // Binary-absent path — what happens when ffmpeg is missing
     // -------------------------------------------------------------------------
@@ -30,14 +34,12 @@ final class FfmpegDecoderTest extends TestCase
      */
     public function testOpenThrowsWhenFfmpegAbsent(): void
     {
-        if (Probe::hasFFmpeg()) {
-            $this->markTestSkipped('ffmpeg is present on this host; binary-absent path not testable');
-        }
-
         $decoder = new FfmpegDecoder();
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('ffmpeg not found');
-        $decoder->open('/nonexistent/video.mp4', 80, 24, 30.0);
+        $this->withoutPathBinaries(
+            static fn () => $decoder->open('/nonexistent/video.mp4', 80, 24, 30.0),
+        );
     }
 
     // -------------------------------------------------------------------------

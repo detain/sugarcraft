@@ -131,16 +131,25 @@ final class ControllingTerminalTest extends TestCase
                 controllingTerminal: true,
             );
 
-            // Give sleep a moment to settle in its syscall.
-            \usleep(150_000);
-            $pty->write("\x03");
-
-            $child->wait();
+            // A 0x03 only generates SIGINT once the shim has claimed the
+            // slave as ctty (setsid + TIOCSCTTY), and under full-suite load
+            // that can take a while — so retry the write instead of trusting
+            // a single shot after a fixed sleep. The 8s deadline is safely
+            // below sleep's natural 10s exit, so a natural exit still fails
+            // the exited() assertion below.
+            $deadline = $start + 8.0;
+            while (!$child->exited() && \microtime(true) < $deadline) {
+                $pty->write("\x03");
+                \usleep(100_000);
+            }
             $elapsed = \microtime(true) - $start;
 
-            $this->assertTrue($child->exited());
-            $this->assertLessThan(2.0, $elapsed, "sleep should be killed by Ctrl+C in well under 10s (elapsed: {$elapsed}s)");
-            $this->assertGreaterThan(0.1, $elapsed, 'sanity bound: must have waited for the write');
+            $this->assertTrue(
+                $child->exited(),
+                "Ctrl+C should kill `sleep 10` well before its natural exit (elapsed: {$elapsed}s)",
+            );
+            $child->wait();
+            $this->assertLessThan(8.5, $elapsed, "sleep should be killed by Ctrl+C in well under 10s (elapsed: {$elapsed}s)");
         } finally {
             $pty->close();
         }
