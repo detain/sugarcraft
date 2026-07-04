@@ -275,7 +275,10 @@ final class InProcessTransport implements Transport, ChildSpawner
             );
 
             // Track the child PID so handleSignal() can forward signals.
-            $this->childPid = $child->pid;
+            // pid() is the Contract\Child accessor — a bare ->pid property
+            // read only works for implementations extending Pty\Child and
+            // warns (returning null) on any other Contract\Child.
+            $this->childPid = $child->pid();
 
             // SIGWINCH forwarding — when sshd resizes the supervisor's
             // PTY, the kernel sends SIGWINCH to us; dispatch a

@@ -85,4 +85,40 @@ final class ZoneTest extends TestCase
         $this->assertFalse((new Zone('x', 1, 1, 5, 5))->isZero());
         $this->assertFalse((new Zone('x', 0, 0, 0, 1))->isZero());
     }
+
+    public function testContainsInnerZoneReturnsTrue(): void
+    {
+        $outer = new Zone('outer', 1, 1, 10, 10);
+        $inner = new Zone('inner', 3, 3, 7, 7);
+        $this->assertTrue($outer->contains($inner));
+    }
+
+    public function testContainsOuterZoneReturnsFalse(): void
+    {
+        $outer = new Zone('outer', 1, 1, 10, 10);
+        $inner = new Zone('inner', 3, 3, 7, 7);
+        $this->assertFalse($inner->contains($outer));
+    }
+
+    public function testContainsOverlappingZoneReturnsFalse(): void
+    {
+        $a = new Zone('a', 1, 1, 5, 5);
+        $b = new Zone('b', 3, 3, 7, 7);
+        $this->assertFalse($a->contains($b));
+        $this->assertFalse($b->contains($a));
+    }
+
+    public function testContainsEqualZoneReturnsTrue(): void
+    {
+        $zone = new Zone('zone', 2, 2, 8, 8);
+        $this->assertTrue($zone->contains($zone));
+    }
+
+    public function testContainsAdjacentZoneReturnsFalse(): void
+    {
+        $a = new Zone('a', 1, 1, 5, 5);
+        $b = new Zone('b', 6, 1, 10, 5);
+        $this->assertFalse($a->contains($b));
+        $this->assertFalse($b->contains($a));
+    }
 }

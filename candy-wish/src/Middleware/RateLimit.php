@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Middleware;
 
 use SugarCraft\Wish\Context;
-use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
+use SugarCraft\Wish\StreamHelper;
 
 /**
  * Per-IP connection rate-limiter using a token-bucket persisted to
@@ -42,18 +42,7 @@ final class RateLimit implements Middleware
         private readonly float  $ratePerSec = 0.5,
         $stderr = null,
     ) {
-        if ($stderr === null) {
-            $stream = fopen('php://stderr', 'w');
-            if ($stream === false) {
-                throw new \RuntimeException(Lang::t('middleware.cannot_open_stderr'));
-            }
-            $this->stderr = $stream;
-            return;
-        }
-        if (!is_resource($stderr)) {
-            throw new \InvalidArgumentException(Lang::t('middleware.stderr_not_resource'));
-        }
-        $this->stderr = $stderr;
+        $this->stderr = StreamHelper::openOrValidate($stderr);
     }
 
     public function handle(Context $ctx, Session $session, callable $next)

@@ -58,4 +58,17 @@ final class Zone
             && $this->endCol === 0
             && $this->endRow === 0;
     }
+
+    /**
+     * True when $other is entirely contained within this zone.
+     * Uses closed interval semantics (boundaries are inclusive),
+     * matching {@see inBounds()}.
+     */
+    public function contains(Zone $other): bool
+    {
+        return $other->startCol >= $this->startCol
+            && $other->endCol <= $this->endCol
+            && $other->startRow >= $this->startRow
+            && $other->endRow <= $this->endRow;
+    }
 }
