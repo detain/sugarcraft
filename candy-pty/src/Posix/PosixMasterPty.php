@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Posix;
 
+use SugarCraft\Pty\Concerns\LibcAccess;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\PtyException;
@@ -14,6 +15,8 @@ use SugarCraft\Pty\PtyException;
  */
 final class PosixMasterPty implements MasterPty
 {
+    use LibcAccess;
+
     private bool $closed = false;
 
     /** @var resource|null */
@@ -46,7 +49,7 @@ final class PosixMasterPty implements MasterPty
     public function attachAnchorSlaveFd(int $fd): void
     {
         if ($this->anchorSlaveFd >= 0) {
-            @Libc::lib()->close($this->anchorSlaveFd);
+            @self::libc()->close($this->anchorSlaveFd);
         }
         $this->anchorSlaveFd = $fd;
     }
@@ -136,7 +139,7 @@ final class PosixMasterPty implements MasterPty
     {
         $this->assertOpen();
 
-        $libc = Libc::lib();
+        $libc = self::libc();
         $ws = \SugarCraft\Pty\SizeIoctl::pack($rows, $cols);
         $rc = \SugarCraft\Pty\SizeIoctl::setSizeViaLibc($libc, $this->fd, $ws);
         if ($rc !== 0) {
@@ -159,7 +162,7 @@ final class PosixMasterPty implements MasterPty
     {
         $this->assertOpen();
 
-        $libc = Libc::lib();
+        $libc = self::libc();
         $ws = \SugarCraft\Pty\SizeIoctl::emptyBuffer();
         $rc = \SugarCraft\Pty\SizeIoctl::getSizeViaLibc($libc, $this->fd, $ws);
         if ($rc !== 0) {
@@ -225,7 +228,7 @@ final class PosixMasterPty implements MasterPty
         // first would be fine on Linux, but macOS warns on the
         // anchored fd surviving past the master.
         if ($this->anchorSlaveFd >= 0) {
-            @Libc::lib()->close($this->anchorSlaveFd);
+            @self::libc()->close($this->anchorSlaveFd);
             $this->anchorSlaveFd = -1;
         }
 
@@ -252,9 +255,9 @@ final class PosixMasterPty implements MasterPty
         // recycled by an unrelated open() between our fopen() and
         // this close(). Duping first gives us a stable reference.
         if ($usedStream) {
-            Libc::lib()->dup($this->fd);
+            self::libc()->dup($this->fd);
         }
-        $rc = Libc::lib()->close($this->fd);
+        $rc = self::libc()->close($this->fd);
         // Surface only failures from the pure-libc path where rc != 0
         // means the master fd never closed.
         if ($rc !== 0 && !$usedStream) {

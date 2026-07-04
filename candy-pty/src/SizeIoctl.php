@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Pty\Concerns\LibcAccess;
+
 /**
  * Platform-aware `TIOCSWINSZ` / `TIOCGWINSZ` request constants and
  * a packer / unpacker for the kernel `winsize` struct.
@@ -28,6 +30,8 @@ namespace SugarCraft\Pty;
  */
 final class SizeIoctl
 {
+    use LibcAccess;
+
     /** Linux TIOCSWINSZ — set window size. */
     public const LINUX_TIOCSWINSZ = 0x5414;
 
@@ -73,7 +77,7 @@ final class SizeIoctl
             );
         }
 
-        $ws = Libc::lib()->new('unsigned short[' . self::WINSIZE_FIELDS . ']');
+        $ws = self::libc()->new('unsigned short[' . self::WINSIZE_FIELDS . ']');
         $ws[0] = $rows;
         $ws[1] = $cols;
         $ws[2] = $xpix;
@@ -87,7 +91,7 @@ final class SizeIoctl
      */
     public static function emptyBuffer(): \FFI\CData
     {
-        return Libc::lib()->new('unsigned short[' . self::WINSIZE_FIELDS . ']');
+        return self::libc()->new('unsigned short[' . self::WINSIZE_FIELDS . ']');
     }
 
     /**
@@ -119,7 +123,7 @@ final class SizeIoctl
             throw new \RuntimeException('Cannot query size of non-tty fd');
         }
 
-        $libc = Libc::lib();
+        $libc = self::libc();
         $ws = self::emptyBuffer();
         $rc = self::getSizeViaLibc($libc, $fd, $ws);
         if ($rc !== 0) {

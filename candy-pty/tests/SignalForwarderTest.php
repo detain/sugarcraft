@@ -275,4 +275,68 @@ final class SignalForwarderTest extends TestCase
             $pty->close();
         }
     }
+
+    private function requireSigchldLifecycle(): void
+    {
+        $this->requirePcntl();
+        if (!\defined('SIGCHLD')) {
+            $this->markTestSkipped('SIGCHLD is not defined on this host.');
+        }
+        if (!\function_exists('pcntl_async_signals') || !\function_exists('pcntl_signal_get_handler')) {
+            $this->markTestSkipped('pcntl_async_signals / pcntl_signal_get_handler required.');
+        }
+    }
+
+    public function testFullResetDetachesTrackedHandlersAndClearsAsyncState(): void
+    {
+        $this->requireSigchldLifecycle();
+
+        $this->assertTrue(SignalForwarder::attachSigchld(static fn () => null));
+        $this->assertContains(SIGCHLD, SignalForwarder::attachedSignals());
+        $this->assertTrue(SignalForwarder::asyncEnabled());
+
+        SignalForwarder::reset();
+
+        $this->assertSame([], SignalForwarder::attachedSignals());
+        $this->assertFalse(SignalForwarder::asyncEnabled());
+        // The disposition itself must be back to default, not just the
+        // bookkeeping — a long-lived process must not leak handlers
+        // into its next logical session.
+        $this->assertSame(\SIG_DFL, \pcntl_signal_get_handler(SIGCHLD));
+    }
+
+    public function testTargetedResetKeepsAsyncStateForRemainingHandlers(): void
+    {
+        $this->requireSigchldLifecycle();
+
+        try {
+            $this->assertTrue(SignalForwarder::attachSigchld(static fn () => null));
+            $this->assertTrue(SignalForwarder::asyncEnabled());
+
+            SignalForwarder::reset(SIGCHLD);
+
+            $this->assertNotContains(SIGCHLD, SignalForwarder::attachedSignals());
+            $this->assertSame(\SIG_DFL, \pcntl_signal_get_handler(SIGCHLD));
+            // Other handlers in the process may still rely on async
+            // dispatch — only the no-argument full reset may undo it.
+            $this->assertTrue(SignalForwarder::asyncEnabled());
+        } finally {
+            SignalForwarder::reset();
+        }
+    }
+
+    public function testAttachAfterFullResetReenablesAsyncDispatch(): void
+    {
+        $this->requireSigchldLifecycle();
+
+        try {
+            SignalForwarder::reset();
+            $this->assertFalse(SignalForwarder::asyncEnabled());
+
+            $this->assertTrue(SignalForwarder::attachSigchld(static fn () => null));
+            $this->assertTrue(SignalForwarder::asyncEnabled());
+        } finally {
+            SignalForwarder::reset();
+        }
+    }
 }

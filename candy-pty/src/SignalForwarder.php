@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Pty\Concerns\LibcAccess;
 use SugarCraft\Pty\Contract\MasterPty;
 
 /**
@@ -23,11 +24,35 @@ use SugarCraft\Pty\Contract\MasterPty;
  * handlers fire as soon as PHP gets control between opcodes. Callers
  * already running their own event loop with `pcntl_signal_dispatch()`
  * polling can pass `async: false` to keep dispatch sync.
+ *
+ * ## Lifecycle in long-lived processes
+ *
+ * POSIX signal dispositions are process-global, so this facade is
+ * deliberately static — an "instance" would only be a fiction over
+ * shared kernel state. The cost is that installed handlers and the
+ * async-dispatch memo survive for the whole process: PHP-FPM workers,
+ * ReactPHP daemons, and test suites that span many logical sessions
+ * would leak one session's handlers into the next. Call {@see reset()}
+ * with no arguments at session teardown to detach every handler this
+ * class installed and undo `pcntl_async_signals(true)` if this class
+ * enabled it.
  */
 final class SignalForwarder
 {
-    /** True once `pcntl_async_signals(true)` has been called. */
+    use LibcAccess;
+
+    /** True once THIS class called `pcntl_async_signals(true)`. */
     private static bool $asyncEnabled = false;
+
+    /**
+     * Signal numbers with a handler currently installed by this class,
+     * keyed by signo. Lets a no-argument {@see reset()} detach exactly
+     * what was attached without guessing at dispositions owned by
+     * other code in the process.
+     *
+     * @var array<int, true>
+     */
+    private static array $attached = [];
 
     /**
      * Variant of {@see attachSigwinch()} that targets a raw file
@@ -58,7 +83,7 @@ final class SignalForwarder
                 $cols = (int) $size['cols'];
                 $rows = (int) $size['rows'];
                 $ws = \SugarCraft\Pty\SizeIoctl::pack($rows, $cols);
-                $rc = \SugarCraft\Pty\SizeIoctl::setSizeViaLibc(\SugarCraft\Pty\Libc::lib(), $fd, $ws);
+                $rc = \SugarCraft\Pty\SizeIoctl::setSizeViaLibc(self::libc(), $fd, $ws);
                 if ($rc === 0 && $onResize !== null) {
                     $onResize($cols, $rows);
                 }
@@ -70,6 +95,7 @@ final class SignalForwarder
         if (!@\pcntl_signal(SIGWINCH, $handler)) {
             return false;
         }
+        self::$attached[SIGWINCH] = true;
         self::ensureAsync($async);
         return true;
     }
@@ -110,6 +136,7 @@ final class SignalForwarder
         if (!@\pcntl_signal(SIGWINCH, $handler)) {
             return false;
         }
+        self::$attached[SIGWINCH] = true;
         self::ensureAsync($async);
         return true;
     }
@@ -138,6 +165,7 @@ final class SignalForwarder
         if (!@\pcntl_signal(SIGCHLD, $handler)) {
             return false;
         }
+        self::$attached[SIGCHLD] = true;
         self::ensureAsync($async);
         return true;
     }
@@ -154,17 +182,57 @@ final class SignalForwarder
     }
 
     /**
-     * Restore the default disposition for one or more signals.
-     * Useful in test teardown to avoid handler bleed between tests.
+     * Restore the default disposition for one or more signals — or,
+     * called with NO arguments, perform a full lifecycle reset: detach
+     * every handler this class installed and clear all static state.
+     *
+     * The full reset also flips `pcntl_async_signals(false)`, but only
+     * when this class was the one to enable async dispatch — turning
+     * it off unconditionally could break handlers installed by other
+     * libraries in the same process. Targeted resets never touch the
+     * async flag: other handlers may still rely on it.
+     *
+     * Long-lived processes (PHP-FPM workers, ReactPHP daemons, test
+     * suites) should call `reset()` between logical sessions so one
+     * session's handlers and async mode don't leak into the next.
      */
     public static function reset(int ...$signals): void
     {
         if (!self::pcntlReady()) {
             return;
         }
+
+        if ($signals === []) {
+            $signals = \array_keys(self::$attached);
+            if (self::$asyncEnabled && \function_exists('pcntl_async_signals')) {
+                \pcntl_async_signals(false);
+            }
+            self::$asyncEnabled = false;
+        }
+
         foreach ($signals as $signo) {
             @\pcntl_signal($signo, \SIG_DFL);
+            unset(self::$attached[$signo]);
         }
+    }
+
+    /**
+     * Signal numbers with a handler currently installed by this class.
+     * Diagnostic companion to {@see reset()}.
+     *
+     * @return list<int>
+     */
+    public static function attachedSignals(): array
+    {
+        return \array_keys(self::$attached);
+    }
+
+    /**
+     * True while this class has `pcntl_async_signals(true)` in effect.
+     */
+    public static function asyncEnabled(): bool
+    {
+        return self::$asyncEnabled;
     }
 
     /**

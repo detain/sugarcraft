@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'open.posix_openpt_failed' => 'posix_openpt() failed (rc={rc}); /dev/ptmx may be unavailable or restricted',
+    'open.posix_openpt_failed' => 'posix_openpt() failed (rc={rc}, errno={errno}); /dev/ptmx may be unavailable or restricted — see README "Known limitations"',
     'open.grantpt_failed'      => 'grantpt() failed on master_fd={fd}',
     'open.unlockpt_failed'     => 'unlockpt() failed on master_fd={fd}',
     'open.ptsname_failed'      => 'ptsname_r() failed on master_fd={fd}',

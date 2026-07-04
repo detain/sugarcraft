@@ -25,6 +25,8 @@ namespace SugarCraft\Pty\Posix;
  */
 trait ChildPollTrait
 {
+    use \SugarCraft\Pty\Concerns\LibcAccess;
+
     /** @var resource|null */
     private $process;
 
@@ -53,7 +55,7 @@ trait ChildPollTrait
         static $libc = null;
         if ($libc === null) {
             try {
-                $libc = \SugarCraft\Pty\Libc::lib();
+                $libc = self::libc();
             } catch (\Throwable) {
                 return null;
             }
