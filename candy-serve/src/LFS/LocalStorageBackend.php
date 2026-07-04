@@ -59,6 +59,28 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
     }
 
     /**
+     * Read an object fully into memory and close the handle.
+     *
+     * Convenience over {@see read()}, which returns an open handle the
+     * caller must close.
+     *
+     * @throws \RuntimeException if the object is missing or unreadable
+     */
+    public function readAll(string $oid): string
+    {
+        $handle = $this->read($oid);
+        try {
+            $data = \stream_get_contents($handle);
+        } finally {
+            \fclose($handle);
+        }
+        if ($data === false) {
+            throw new \RuntimeException("Cannot read LFS object {$oid}");
+        }
+        return $data;
+    }
+
+    /**
      * @param resource $stream
      */
     public function write(string $oid, $stream): void

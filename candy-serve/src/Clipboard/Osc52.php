@@ -33,6 +33,9 @@ final class Osc52
     /** Secondary selection. */
     public const SELECTION_SECONDARY = 's';
 
+    /** Cap on buffered events — a client that never drains pendingEvents() must not grow memory unbounded. */
+    private const MAX_EVENTS = 1000;
+
     /** Valid selection names. */
     private const VALID_SELECTIONS = [
         self::SELECTION_CLIPBOARD,
@@ -79,7 +82,7 @@ final class Osc52
             $event = ['kind' => 'write', 'selection' => $selection, 'payload' => $payload];
         }
 
-        $this->events[] = $event;
+        $this->recordEvent($event);
         return $event;
     }
 
@@ -98,7 +101,7 @@ final class Osc52
         $this->clipboards[$selection] = $data;
         $event = ['kind' => 'write', 'selection' => $selection, 'payload' => $data];
 
-        $this->events[] = $event;
+        $this->recordEvent($event);
         $this->notifyListeners($event);
     }
 
@@ -131,7 +134,7 @@ final class Osc52
         }
 
         unset($this->clipboards[$selection]);
-        $this->events[] = ['kind' => 'clear', 'selection' => $selection];
+        $this->recordEvent(['kind' => 'clear', 'selection' => $selection]);
         $this->notifyListeners(['kind' => 'clear', 'selection' => $selection]);
     }
 
@@ -184,6 +187,19 @@ final class Osc52
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Buffer an event, evicting the oldest when over MAX_EVENTS.
+     *
+     * @param array{kind: string, selection: string, payload?: string} $event
+     */
+    private function recordEvent(array $event): void
+    {
+        $this->events[] = $event;
+        if (\count($this->events) > self::MAX_EVENTS) {
+            $this->events = \array_slice($this->events, -self::MAX_EVENTS);
+        }
+    }
 
     /**
      * Notify all listeners of a clipboard event.

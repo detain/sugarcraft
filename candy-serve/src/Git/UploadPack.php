@@ -153,6 +153,7 @@ final class UploadPack
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        /** @var resource|false $proc */
         $proc = \proc_open($cmd, $desc, $pipes);
         if ($proc === false) return;
 

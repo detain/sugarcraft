@@ -65,6 +65,38 @@ final class ServerTest extends TestCase
         @\rmdir($dir);
     }
 
+    /** Invoke the private readCapped() on an in-memory stream. */
+    private function readCapped(string $content, int $maxBytes): ?string
+    {
+        $stream = \fopen('php://memory', 'r+');
+        \fwrite($stream, $content);
+        \rewind($stream);
+
+        $method = new \ReflectionMethod($this->server, 'readCapped');
+        /** @var string|null $result */
+        $result = $method->invoke($this->server, $stream, $maxBytes);
+        \fclose($stream);
+
+        return $result;
+    }
+
+    // -------------------------------------------------------------------------
+    // readCapped tests (pack-buffer size cap)
+    // -------------------------------------------------------------------------
+
+    public function testReadCappedReturnsDataWithinCap(): void
+    {
+        $this->assertSame('hello', $this->readCapped('hello', 5));
+        $this->assertSame('hello', $this->readCapped('hello', 1024));
+        $this->assertSame('', $this->readCapped('', 1024));
+    }
+
+    public function testReadCappedReturnsNullWhenOverCap(): void
+    {
+        $this->assertNull($this->readCapped('hello!', 5));
+        $this->assertNull($this->readCapped(\str_repeat('x', 70000), 65536));
+    }
+
     // -------------------------------------------------------------------------
     // handleRequest tests
     // -------------------------------------------------------------------------
