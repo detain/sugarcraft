@@ -71,8 +71,8 @@ final class ReactMysqlConnectionTest extends TestCase
     }
 
     /**
-     * Pins the query-deadline API on both async wrappers: an optional trailing
-     * float defaulting to QueryTimeout::DEFAULT_SECONDS, so existing
+     * Pins the query-deadline API on both async wrappers: an optional float
+     * defaulting to QueryTimeout::DEFAULT_SECONDS, so existing
      * `new ReactMysqlConnection($dsn,$u,$p)` call sites get the protective
      * deadline without changes. Timeout semantics themselves are covered by
      * QueryTimeoutTest.
@@ -80,11 +80,121 @@ final class ReactMysqlConnectionTest extends TestCase
     public function testQueryTimeoutParameterDefaultsToTheSharedDeadline(): void
     {
         foreach ([ReactMysqlConnection::class, ReactPostgresConnection::class] as $class) {
-            $params = (new \ReflectionClass($class))->getConstructor()->getParameters();
-            $timeout = end($params);
+            $timeout = null;
+            foreach ((new \ReflectionClass($class))->getConstructor()->getParameters() as $param) {
+                if ($param->getName() === 'queryTimeout') {
+                    $timeout = $param;
+                }
+            }
 
-            $this->assertSame('queryTimeout', $timeout->getName(), $class);
+            $this->assertNotNull($timeout, $class);
             $this->assertSame(QueryTimeout::DEFAULT_SECONDS, $timeout->getDefaultValue(), $class);
         }
+    }
+
+    /**
+     * Pins the cancellation API (plan 5.1) on the AsyncConnection contract and
+     * both implementations: query() accepts an optional candy-async
+     * CancellationToken so callers can abort in-flight queries cooperatively.
+     */
+    public function testQueryAcceptsAnOptionalCancellationToken(): void
+    {
+        foreach ([
+            \SugarCraft\Query\Admin\AsyncConnection::class,
+            ReactMysqlConnection::class,
+            ReactPostgresConnection::class,
+        ] as $class) {
+            $params = (new \ReflectionMethod($class, 'query'))->getParameters();
+
+            $this->assertSame('cancellation', $params[1]->getName(), $class);
+            $this->assertSame(\SugarCraft\Async\CancellationToken::class, (string) $params[1]->getType()->getName(), $class);
+            $this->assertTrue($params[1]->allowsNull(), $class);
+            $this->assertNull($params[1]->getDefaultValue(), $class);
+        }
+    }
+
+    /**
+     * Server-side cancellation (plan 5.1): with the thread id known, the KILL
+     * path opens a SEPARATE short-lived connection (the main one is busy
+     * executing the very query being killed) and issues `KILL QUERY <id>`
+     * with the int-typed id interpolated (MySQL's KILL takes no placeholders).
+     */
+    public function testKillPathIssuesKillQueryOnASeparateConnection(): void
+    {
+        $spy = new class {
+            /** @var list<string> */
+            public array $issued = [];
+            public function query(string $sql): \React\Promise\PromiseInterface
+            {
+                $this->issued[] = $sql;
+                return \React\Promise\resolve(null);
+            }
+            public function quit(): \React\Promise\PromiseInterface
+            {
+                $this->issued[] = '(quit)';
+                return \React\Promise\resolve(null);
+            }
+            public function close(): void
+            {
+                $this->issued[] = '(close)';
+            }
+        };
+
+        $factoryCalls = 0;
+        $conn = $this->connectionWith(
+            threadId: 42,
+            killClientFactory: function (string $uri, $loop) use ($spy, &$factoryCalls) {
+                $factoryCalls++;
+                $this->assertStringStartsWith('mysql://', $uri, 'killer reuses the same connection URI');
+                return $spy;
+            },
+        );
+
+        $kill = new \ReflectionMethod($conn, 'killQueryOnServer');
+        $kill->invoke($conn);
+
+        $this->assertSame(1, $factoryCalls, 'exactly one side-channel connection');
+        $this->assertSame(['KILL QUERY 42', '(quit)'], $spy->issued);
+    }
+
+    /**
+     * Without a known thread id (CONNECTION_ID() not yet resolved, or its
+     * fetch failed), cancellation must degrade to client-side only: no
+     * side-channel connection is opened at all.
+     */
+    public function testKillPathIsANoOpWhenThreadIdIsUnknown(): void
+    {
+        $factoryCalls = 0;
+        $conn = $this->connectionWith(
+            threadId: null,
+            killClientFactory: function () use (&$factoryCalls) {
+                $factoryCalls++;
+                return null;
+            },
+        );
+
+        $kill = new \ReflectionMethod($conn, 'killQueryOnServer');
+        $kill->invoke($conn);
+
+        $this->assertSame(0, $factoryCalls, 'no KILL side-channel without a thread id');
+    }
+
+    /** Build a connection with a spy kill factory, no socket/loop activity. */
+    private function connectionWith(?int $threadId, callable $killClientFactory): ReactMysqlConnection
+    {
+        $ref = new \ReflectionClass(ReactMysqlConnection::class);
+        $conn = $ref->newInstanceWithoutConstructor();
+
+        $set = function (string $prop, mixed $value) use ($ref, $conn): void {
+            $p = $ref->getProperty($prop);
+            $p->setAccessible(true);
+            $p->setValue($conn, $value);
+        };
+        $set('uri', 'mysql://root:secret@db.example.com:3306/shop');
+        $set('loop', new \React\EventLoop\StreamSelectLoop());
+        $set('threadId', $threadId);
+        $set('killClientFactory', $killClientFactory);
+
+        return $conn;
     }
 }

@@ -21,8 +21,8 @@ final class ExplainViewTest extends TestCase
     public function testRunExecutesExplainQueryPlan(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-        $db->pdo->exec('CREATE INDEX idx_name ON users(name)');
+        $db->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+        $db->exec('CREATE INDEX idx_name ON users(name)');
 
         $view = ExplainView::run($db, 'SELECT * FROM users WHERE name = ?');
         $this->assertNotEmpty($view->rows);
@@ -31,8 +31,8 @@ final class ExplainViewTest extends TestCase
     public function testRowsContainDetailAndDepth(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE t (a INTEGER, b TEXT)');
-        $db->pdo->exec('CREATE INDEX idx_a ON t(a)');
+        $db->exec('CREATE TABLE t (a INTEGER, b TEXT)');
+        $db->exec('CREATE INDEX idx_a ON t(a)');
 
         $view = ExplainView::run($db, 'SELECT * FROM t WHERE a = 1');
         foreach ($view->rows as $row) {
@@ -46,8 +46,8 @@ final class ExplainViewTest extends TestCase
     public function testTagIsClassifiedCorrectly(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE t (a INTEGER PRIMARY KEY, b TEXT)');
-        $db->pdo->exec('CREATE INDEX idx_b ON t(b)');
+        $db->exec('CREATE TABLE t (a INTEGER PRIMARY KEY, b TEXT)');
+        $db->exec('CREATE INDEX idx_b ON t(b)');
 
         $view = ExplainView::run($db, 'SELECT * FROM t WHERE b = ?');
 
@@ -61,7 +61,7 @@ final class ExplainViewTest extends TestCase
     public function testRenderReturnsNonEmptyString(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY)');
+        $db->exec('CREATE TABLE users (id INTEGER PRIMARY KEY)');
         $view = ExplainView::run($db, 'SELECT * FROM users');
         $out = $view->render();
         $this->assertNotEmpty($out);
@@ -71,7 +71,7 @@ final class ExplainViewTest extends TestCase
     public function testToArrayReturnsStructuredData(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE t (x INTEGER)');
+        $db->exec('CREATE TABLE t (x INTEGER)');
         $view = ExplainView::run($db, 'SELECT * FROM t');
 
         $arr = $view->toArray();

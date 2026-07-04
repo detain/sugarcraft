@@ -21,7 +21,7 @@ use SugarCraft\Query\Db\PreparedStatementInterface;
  * Every non-query method delegates to the real connection (these are metadata
  * accessors used outside the render hot-path).
  */
-final class CachedConnection implements DatabaseInterface
+final class AsyncCachedConnection implements DatabaseInterface
 {
     public function __construct(
         private readonly DatabaseInterface $inner,

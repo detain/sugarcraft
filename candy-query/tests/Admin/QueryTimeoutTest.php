@@ -55,6 +55,51 @@ final class QueryTimeoutTest extends TestCase
         $deferred->resolve([]);
     }
 
+    /**
+     * Timeout → cancellation wiring (plan 5.1): when the deadline fires, the
+     * onTimeout hook must run so the connection can KILL the query server-side
+     * — a timed-out query must not keep burning the server. The timeout
+     * rejection itself must still reach the caller even if the hook throws.
+     */
+    public function testDeadlineFiresTheOnTimeoutHookAndStillRejects(): void
+    {
+        $never = new Promise(static function (): void {}, static function (): void {});
+
+        $kills = 0;
+        $error = null;
+        QueryTimeout::wrap($never, 0.05, Loop::get(), static function () use (&$kills): void {
+            $kills++;
+            throw new \LogicException('kill failed — must not mask the timeout');
+        })->then(
+            null,
+            static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            },
+        );
+
+        Loop::run();
+
+        $this->assertSame(1, $kills, 'onTimeout hook fires exactly once on deadline');
+        $this->assertInstanceOf(\RuntimeException::class, $error);
+        $this->assertStringContainsString('Async query timed out after', $error->getMessage());
+    }
+
+    public function testOnTimeoutHookDoesNotFireWhenThePromiseSettlesInTime(): void
+    {
+        $kills = 0;
+        $rows = null;
+        QueryTimeout::wrap(resolve([['ok' => 1]]), 30.0, Loop::get(), static function () use (&$kills): void {
+            $kills++;
+        })->then(static function (array $value) use (&$rows): void {
+            $rows = $value;
+        });
+
+        Loop::run();
+
+        $this->assertSame([['ok' => 1]], $rows);
+        $this->assertSame(0, $kills, 'a query that finished in time must never be killed');
+    }
+
     public function testPromiseSettlingBeforeTheDeadlinePassesItsValueThrough(): void
     {
         $rows = null;

@@ -8,6 +8,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Query\App;
+use SugarCraft\Query\App\BrowseState;
+use SugarCraft\Query\App\ConnectionState;
 use SugarCraft\Query\Core\Msg\TableRowsLoadedMsg;
 use SugarCraft\Query\Database;
 use SugarCraft\Query\Db\Flavor;
@@ -21,33 +23,33 @@ final class AppTest extends TestCase
     private function db(): Database
     {
         $db = new Database(new \PDO('sqlite::memory:'));
-        $db->pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-        $db->pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT)');
-        $db->pdo->exec("INSERT INTO users (name) VALUES ('alice'), ('bob'), ('carol')");
-        $db->pdo->exec("INSERT INTO posts (title) VALUES ('hello'), ('world')");
+        $db->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+        $db->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT)');
+        $db->exec("INSERT INTO users (name) VALUES ('alice'), ('bob'), ('carol')");
+        $db->exec("INSERT INTO posts (title) VALUES ('hello'), ('world')");
         return $db;
     }
 
     public function testStartListsTablesAndLoadsFirst(): void
     {
         $a = App::start($this->db());
-        $this->assertSame(['posts', 'users'], $a->tables);
-        $this->assertSame('posts', $a->selectedTable);
-        $this->assertCount(2, $a->rows);
+        $this->assertSame(['posts', 'users'], $a->browse->tables);
+        $this->assertSame('posts', $a->browse->selectedTable);
+        $this->assertCount(2, $a->browse->rows);
     }
 
     public function testTabCyclesPanes(): void
     {
         $a = App::start($this->db());
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        $this->assertSame(Pane::Rows, $a->pane);
+        $this->assertSame(Pane::Rows, $a->ui->pane);
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        $this->assertSame(Pane::Query, $a->pane);
+        $this->assertSame(Pane::Query, $a->ui->pane);
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         // Tab cycles through Admin as well: Tables → Rows → Query → Admin → Tables
-        $this->assertSame(Pane::Admin, $a->pane);
+        $this->assertSame(Pane::Admin, $a->ui->pane);
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        $this->assertSame(Pane::Tables, $a->pane);
+        $this->assertSame(Pane::Tables, $a->ui->pane);
     }
 
     /**
@@ -64,16 +66,16 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        $this->assertSame(Pane::Admin, $a->pane);
+        $this->assertSame(Pane::Admin, $a->ui->pane);
 
         // Sidebar display order (Management, then Performance):
         // 1=ProcessList, 2=Variables, 3=Status, 4=Debug,
         // 5=QueryStats, 6=Dashboard, 7=TableStats, 8=PerfSchema
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, '7'));
-        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::TableStats, $a->adminPane);
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::TableStats, $a->admin->pane);
 
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, '8'));
-        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::PerfSchema, $a->adminPane);
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::PerfSchema, $a->admin->pane);
     }
 
     /**
@@ -118,13 +120,13 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        $this->assertSame(\SugarCraft\Query\Pane::Admin, $a->pane);
+        $this->assertSame(\SugarCraft\Query\Pane::Admin, $a->ui->pane);
 
         // Switch to DashboardPage (pane 6 — sidebar display order is
         // Management: ProcessList,Variables,Status,Debug then Performance:
         // QueryStats,Dashboard,TableStats,PerfSchema).
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, '6'));
-        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->adminPane);
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->admin->pane);
 
         // 'a' is NOT an app-level key, so it reaches DashboardPage->update().
         // DashboardPage responds to 'a' by clearing alerts and returning a new page.
@@ -153,7 +155,7 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        $this->assertSame(\SugarCraft\Query\Pane::Admin, $a->pane);
+        $this->assertSame(\SugarCraft\Query\Pane::Admin, $a->ui->pane);
         // Trigger initial fetch and data arrival.
         [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminFetchStartedMsg());
         [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminDataLoadedMsg(
@@ -167,7 +169,7 @@ final class AppTest extends TestCase
         // Switch to DashboardPage (pane 6 in sidebar display order) and
         // toggle pause via the app-level 'p' handler.
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, '6'));
-        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->adminPane);
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->admin->pane);
         $pageBefore = $a->adminPage();
         $this->assertFalse($pageBefore->isPaused());
         // Press 'p' — app-level handler toggles pause and stores updated page.
@@ -210,33 +212,33 @@ final class AppTest extends TestCase
     {
         $a = App::start($this->db());
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
-        $this->assertSame(1, $a->tableCursor);
+        $this->assertSame(1, $a->browse->tableCursor);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'k'));
-        $this->assertSame(0, $a->tableCursor);
+        $this->assertSame(0, $a->browse->tableCursor);
     }
 
     public function testUpAtTopWrapsToBottom(): void
     {
         // db() has two tables; App::start lands on index 0.
         $a = App::start($this->db());
-        $this->assertSame(0, $a->tableCursor);
+        $this->assertSame(0, $a->browse->tableCursor);
 
         [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
 
-        $this->assertSame(1, $a->tableCursor, 'up at the top wraps to the last table');
-        $this->assertSame('users', $a->selectedTable);
+        $this->assertSame(1, $a->browse->tableCursor, 'up at the top wraps to the last table');
+        $this->assertSame('users', $a->browse->selectedTable);
     }
 
     public function testDownAtBottomWrapsToTop(): void
     {
         $a = App::start($this->db());
         [$a, ] = $a->update(new KeyMsg(KeyType::Down, '')); // to the last table
-        $this->assertSame(1, $a->tableCursor);
+        $this->assertSame(1, $a->browse->tableCursor);
 
         [$a, ] = $a->update(new KeyMsg(KeyType::Down, '')); // wraps back to the first
 
-        $this->assertSame(0, $a->tableCursor, 'down at the bottom wraps to the first table');
-        $this->assertSame('posts', $a->selectedTable);
+        $this->assertSame(0, $a->browse->tableCursor, 'down at the bottom wraps to the first table');
+        $this->assertSame('posts', $a->browse->selectedTable);
     }
 
     public function testEnterLoadsSelectedTable(): void
@@ -244,8 +246,8 @@ final class AppTest extends TestCase
         $a = App::start($this->db());
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertSame('users', $a->selectedTable);
-        $this->assertCount(3, $a->rows);
+        $this->assertSame('users', $a->browse->selectedTable);
+        $this->assertCount(3, $a->browse->rows);
     }
 
     /**
@@ -257,24 +259,24 @@ final class AppTest extends TestCase
     {
         $a = App::start($this->db());
         // App::start loads the first table ('posts', 2 rows).
-        $this->assertSame('posts', $a->selectedTable);
-        $this->assertCount(2, $a->rows);
+        $this->assertSame('posts', $a->browse->selectedTable);
+        $this->assertCount(2, $a->browse->rows);
 
         // Move the cursor down to 'users' — rows should update to 'users' table.
         [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
-        $this->assertSame(1, $a->tableCursor);
-        $this->assertSame('users', $a->selectedTable, 'cursor move must load the highlighted table');
-        $this->assertCount(3, $a->rows, 'cursor move must load rows for highlighted table');
+        $this->assertSame(1, $a->browse->tableCursor);
+        $this->assertSame('users', $a->browse->selectedTable, 'cursor move must load the highlighted table');
+        $this->assertCount(3, $a->browse->rows, 'cursor move must load rows for highlighted table');
 
         // Move back up to 'posts' — rows should update back.
         [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame(0, $a->tableCursor);
-        $this->assertSame('posts', $a->selectedTable);
-        $this->assertCount(2, $a->rows);
+        $this->assertSame(0, $a->browse->tableCursor);
+        $this->assertSame('posts', $a->browse->selectedTable);
+        $this->assertCount(2, $a->browse->rows);
 
         // Enter also loads (confirming it still works).
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertSame('posts', $a->selectedTable);
+        $this->assertSame('posts', $a->browse->selectedTable);
     }
 
     /**
@@ -340,9 +342,9 @@ final class AppTest extends TestCase
         // Ctrl+r runs.
         $msg = new KeyMsg(KeyType::Char, 'r', ctrl: true);
         [$a, ] = $a->update($msg);
-        $this->assertNull($a->error);
-        $this->assertCount(3, $a->rows);
-        $this->assertSame('alice', $a->rows[0]['name']);
+        $this->assertNull($a->ui->error);
+        $this->assertCount(3, $a->browse->rows);
+        $this->assertSame('alice', $a->browse->rows[0]['name']);
     }
 
     public function testInvalidQueryStashesErrorWithoutThrowing(): void
@@ -354,7 +356,7 @@ final class AppTest extends TestCase
             [$a, ] = $a->update(new KeyMsg(KeyType::Char, $c));
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        $this->assertNotNull($a->error);
+        $this->assertNotNull($a->ui->error);
     }
 
     public function testBackspaceDropsLastChar(): void
@@ -381,7 +383,7 @@ final class AppTest extends TestCase
                 : new KeyMsg(KeyType::Char, $c));
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        $this->assertSame(['SELECT 1'], $a->queryHistory);
+        $this->assertSame(['SELECT 1'], $a->query->history);
         // Editor is reset after a successful run.
         $this->assertSame('', $a->editor()->value());
         // Type and run second query — newest lands at the front.
@@ -391,7 +393,7 @@ final class AppTest extends TestCase
                 : new KeyMsg(KeyType::Char, $c));
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        $this->assertSame(['SELECT 2', 'SELECT 1'], $a->queryHistory);
+        $this->assertSame(['SELECT 2', 'SELECT 1'], $a->query->history);
     }
 
     public function testRunQueryPopulatesResultTable(): void
@@ -405,9 +407,9 @@ final class AppTest extends TestCase
                 : new KeyMsg(KeyType::Char, $c));
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        $this->assertNull($a->error);
-        $this->assertNotNull($a->resultTable);
-        $this->assertStringContainsString('alice', $a->resultTable->render());
+        $this->assertNull($a->ui->error);
+        $this->assertNotNull($a->browse->resultTable);
+        $this->assertStringContainsString('alice', $a->browse->resultTable->render());
     }
 
     public function testLoadTableClearsResultTable(): void
@@ -421,13 +423,13 @@ final class AppTest extends TestCase
                 : new KeyMsg(KeyType::Char, $c));
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        $this->assertNotNull($a->resultTable);
+        $this->assertNotNull($a->browse->resultTable);
         // Cycle Query → Admin → Tables, then Enter loads a table, which drops
         // the query result viewer back to the sugar-table browse grid.
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → admin
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → tables
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, '')); // load selected table
-        $this->assertNull($a->resultTable);
+        $this->assertNull($a->browse->resultTable);
     }
 
     public function testEnterInsertsNewlineInEditor(): void
@@ -455,7 +457,7 @@ final class AppTest extends TestCase
         }
         // Ctrl+F to favorite
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f', ctrl: true));
-        $this->assertContains('SELECT 42', $a->queryFavorites);
+        $this->assertContains('SELECT 42', $a->query->favorites);
     }
 
     public function testCtrlShiftFUnfavoritesQuery(): void
@@ -471,10 +473,10 @@ final class AppTest extends TestCase
         }
         // Ctrl+F to favorite
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f', ctrl: true));
-        $this->assertContains('SELECT 42', $a->queryFavorites);
+        $this->assertContains('SELECT 42', $a->query->favorites);
         // Ctrl+Shift+F to unfavorite
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f', ctrl: true, shift: true));
-        $this->assertNotContains('SELECT 42', $a->queryFavorites);
+        $this->assertNotContains('SELECT 42', $a->query->favorites);
     }
 
     public function testHistoryNotDuplicatedOnMultipleRuns(): void
@@ -492,8 +494,8 @@ final class AppTest extends TestCase
         // Modify and run again (add nothing - just run same)
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
         // Should only have one entry
-        $this->assertCount(1, $a->queryHistory);
-        $this->assertSame('SELECT 1', $a->queryHistory[0]);
+        $this->assertCount(1, $a->query->history);
+        $this->assertSame('SELECT 1', $a->query->history[0]);
     }
 
     /**
@@ -506,76 +508,62 @@ final class AppTest extends TestCase
     public function testMysqlCursorDownLoadsRowsAsynchronously(): void
     {
         $app = new App(
-            db: new FakeDatabase(),
-            flavor: Flavor::MySQL,
-            tables: ['posts', 'users'],
-            selectedTable: 'posts',
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()->withTables(['posts', 'users'])->withSelectedTable('posts'),
         );
         [$next, $cmd] = $app->update(new KeyMsg(KeyType::Down, ''));
 
-        $this->assertSame(1, $next->tableCursor);
-        $this->assertSame('users', $next->selectedTable, 'title follows the cursor immediately');
-        $this->assertTrue($next->rowsLoading, 'rows marked loading while the fetch is in flight');
-        $this->assertSame([], $next->rows, 'no stale rows shown during load');
+        $this->assertSame(1, $next->browse->tableCursor);
+        $this->assertSame('users', $next->browse->selectedTable, 'title follows the cursor immediately');
+        $this->assertTrue($next->browse->rowsLoading, 'rows marked loading while the fetch is in flight');
+        $this->assertSame([], $next->browse->rows, 'no stale rows shown during load');
         $this->assertNotNull($cmd, 'MySQL browse returns an async Cmd, not a blocking fetch');
     }
 
     public function testTableRowsLoadedMsgPopulatesRowsAndClearsLoading(): void
     {
         $app = new App(
-            db: new FakeDatabase(),
-            flavor: Flavor::MySQL,
-            tables: ['posts', 'users'],
-            selectedTable: 'users',
-            rowsLoading: true,
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()->withTables(['posts', 'users'])->withSelectedTable('users')->withRowsLoading(true),
         );
         [$next, $cmd] = $app->update(new TableRowsLoadedMsg('users', [['id' => 1], ['id' => 2]]));
 
         $this->assertNull($cmd);
-        $this->assertFalse($next->rowsLoading);
-        $this->assertCount(2, $next->rows);
-        $this->assertSame('2 rows', $next->status);
+        $this->assertFalse($next->browse->rowsLoading);
+        $this->assertCount(2, $next->browse->rows);
+        $this->assertSame('2 rows', $next->ui->status);
     }
 
     public function testStaleTableRowsResultForOtherTableIsIgnored(): void
     {
         $app = new App(
-            db: new FakeDatabase(),
-            flavor: Flavor::MySQL,
-            tables: ['posts', 'users'],
-            selectedTable: 'users',
-            rowsLoading: true,
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()->withTables(['posts', 'users'])->withSelectedTable('users')->withRowsLoading(true),
         );
         // A result for 'posts' arrives after the user already moved on to 'users'.
         [$next, ] = $app->update(new TableRowsLoadedMsg('posts', [['id' => 99]]));
 
-        $this->assertSame([], $next->rows, 'stale result for a different table is dropped');
-        $this->assertTrue($next->rowsLoading, 'the in-flight load keeps its spinner');
+        $this->assertSame([], $next->browse->rows, 'stale result for a different table is dropped');
+        $this->assertTrue($next->browse->rowsLoading, 'the in-flight load keeps its spinner');
     }
 
     public function testTableRowsLoadedMsgErrorStashesError(): void
     {
         $app = new App(
-            db: new FakeDatabase(),
-            flavor: Flavor::MySQL,
-            tables: ['users'],
-            selectedTable: 'users',
-            rowsLoading: true,
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()->withTables(['users'])->withSelectedTable('users')->withRowsLoading(true),
         );
         [$next, ] = $app->update(new TableRowsLoadedMsg('users', [], 'Table dropped'));
 
-        $this->assertFalse($next->rowsLoading);
-        $this->assertSame('Table dropped', $next->error);
+        $this->assertFalse($next->browse->rowsLoading);
+        $this->assertSame('Table dropped', $next->ui->error);
     }
 
     public function testRowsPaneShowsLoadingIndicatorWhileFetching(): void
     {
         $app = new App(
-            db: new FakeDatabase(),
-            flavor: Flavor::MySQL,
-            tables: ['users'],
-            selectedTable: 'users',
-            rowsLoading: true,
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()->withTables(['users'])->withSelectedTable('users')->withRowsLoading(true),
         );
         $this->assertStringContainsString('loading', $app->view());
     }

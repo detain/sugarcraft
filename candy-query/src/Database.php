@@ -46,21 +46,16 @@ final class Database implements DatabaseInterface
     }
 
     /**
-     * @deprecated Use SqliteDatabase directly for PDO access
+     * The PDO handle is deliberately private: exposing it publicly invited
+     * callers to bypass the DatabaseInterface contract (and `public readonly`
+     * on a mutable PDO only pretended to be immutable). Use the interface
+     * methods — query()/exec()/prepare()/quote()/lastInsertId() cover every
+     * former direct-PDO use in the repo.
      */
-    public function __construct(public readonly \PDO $pdo)
+    public function __construct(private readonly \PDO $pdo)
     {
         // For backwards compatibility - store pdo but also create delegate
         $this->delegate = new SqliteDatabase($this->pdo, ':memory:');
-    }
-
-    /**
-     * Re-initialize the delegate with a specific path.
-     * Used by open() to properly set the path in the delegate.
-     */
-    private function setDelegatePath(string $path): void
-    {
-        $this->delegate = SqliteDatabase::open($path);
     }
 
     /**

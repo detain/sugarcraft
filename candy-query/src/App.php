@@ -16,7 +16,7 @@ use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminQueryCache;
 use SugarCraft\Query\Admin\CacheTtl;
-use SugarCraft\Query\Admin\CachingServerContext;
+use SugarCraft\Query\Admin\AsyncCachingServerContext;
 use SugarCraft\Query\Admin\EmptyServerContext;
 use SugarCraft\Query\Admin\Connections\ConnectionsPage;
 use SugarCraft\Query\Admin\Dashboard\DashboardPage;
@@ -40,7 +40,12 @@ use SugarCraft\Query\Admin\Variables\VariablesPage;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Db\PreviewQuery;
+use SugarCraft\Query\App\AdminState;
 use SugarCraft\Query\App\AppBuilder;
+use SugarCraft\Query\App\BrowseState;
+use SugarCraft\Query\App\ConnectionState;
+use SugarCraft\Query\App\QueryState;
+use SugarCraft\Query\App\UiState;
 use SugarCraft\Query\Admin\History\HistoryRecorder;
 use SugarCraft\Query\Admin\QueryLogger;
 use SugarCraft\Query\Admin\StatusSnapshot;
@@ -66,47 +71,24 @@ use SugarCraft\Query\Core\Msg\TableRowsLoadedMsg;
  *   - The Query pane is backed by a candy-forms {@see TextArea} — it owns
  *     the cursor, UTF-8 editing, and Up/Down line movement.
  *   - Ctrl+R / Ctrl+E run the query; Ctrl+F favorites it; Ctrl+Shift+F
- *     unfavorites. Executed queries are recorded in {@see $queryHistory}.
+ *     unfavorites. Executed queries are recorded in {@see QueryState::$history}.
+ *
+ * Model state is grouped into cohesive value objects (plan 3.3) instead of a
+ * ~29-parameter constructor: {@see ConnectionState} (db/flavor/context),
+ * {@see BrowseState} (tables + row preview), {@see QueryState} (editor +
+ * history), {@see UiState} (focus + status line), {@see AdminState}
+ * (admin pane, caches, polling bookkeeping).
  */
 final class App implements Model
 {
     use Mutable;
 
-    /**
-     * @param list<string> $tables
-     * @param list<array<string,mixed>> $rows
-     * @param list<string> $queryHistory Recently executed queries (newest first)
-     * @param list<string> $queryFavorites Saved/favorited queries
-     * @param TextArea|null $queryEditor Multi-line SQL editor widget (candy-forms);
-     *        null until the Query pane is first focused (see {@see editor()}).
-     */
     public function __construct(
-        public readonly DatabaseInterface $db,
-        public readonly Flavor $flavor = Flavor::Sqlite,
-        public readonly array $tables = [],
-        public readonly int $tableCursor = 0,
-        public readonly ?string $selectedTable = null,
-        public readonly array $rows = [],
-        public readonly int $rowCursor = 0,
-        public readonly ?ResultTable $resultTable = null,
-        public readonly ?TextArea $queryEditor = null,
-        public readonly Pane $pane = Pane::Tables,
-        public readonly ?string $error = null,
-        public readonly ?string $status = null,
-        public readonly array $queryHistory = [],
-        public readonly array $queryFavorites = [],
-        public readonly AdminPane $adminPane = AdminPane::ProcessList,
-        public readonly int $adminCursor = 0,
-        public readonly bool $paused = false,
-        public readonly ?ServerContextInterface $serverContext = null,
-        public readonly ?PageBase $adminPage = null,
-        public readonly ?array $adminCachedStatusVars = null,
-        public readonly ?array $adminCachedServerVars = null,
-        public readonly float $adminCacheTs = 0.0,
-        public readonly bool $adminLoading = false,
-        public readonly ?HistoryRecorder $historyRecorder = null,
-        public readonly bool $rowsLoading = false,
-        public readonly float $lastAdminFetchAt = 0.0,
+        public readonly ConnectionState $connection,
+        public readonly BrowseState $browse = new BrowseState(),
+        public readonly QueryState $query = new QueryState(),
+        public readonly UiState $ui = new UiState(),
+        public readonly AdminState $admin = new AdminState(),
     ) {}
 
     /**
@@ -115,7 +97,10 @@ final class App implements Model
     public static function start(DatabaseInterface $db, Flavor $flavor = Flavor::Sqlite): self
     {
         $tables = $db->tables();
-        $a = new self(db: $db, flavor: $flavor, tables: $tables, adminPane: AdminPane::ProcessList, adminCursor: 0, paused: false);
+        $a = new self(
+            ConnectionState::new($db, $flavor),
+            BrowseState::new()->withTables($tables),
+        );
         if ($tables !== []) {
             $a = $a->loadTable($tables[0]);
         }
@@ -147,10 +132,9 @@ final class App implements Model
             return [$this, null];
         }
         if ($msg instanceof AdminFetchStartedMsg) {
-            if (!$this->adminLoading) {
+            if (!$this->admin->loading) {
                 return [$this->mutate([
-                    'adminLoading' => true,
-                    'lastAdminFetchAt' => microtime(true),
+                    'admin' => $this->admin->withLoading(true)->withLastFetchAt(microtime(true)),
                 ]), null];
             }
             return [$this, null];
@@ -159,9 +143,9 @@ final class App implements Model
             // After status/server vars are cached, trigger report reload for
             // ReportsPage so its async query is queued for the next tick.
             $newApp = $this->withAdminCachedData($msg->statusVars, $msg->serverVars, $msg->fetchedAt);
-            // adminPage may be null if msg arrives before first render (e.g. tests).
-            if ($this->adminPage !== null) {
-                [$newPage,] = $this->adminPage->update(new ReloadReportMsg());
+            // admin page may be null if msg arrives before first render (e.g. tests).
+            if ($this->admin->page !== null) {
+                [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
                 $newApp = $newApp->withAdminPage($newPage);
             }
             return [$newApp, null];
@@ -178,32 +162,32 @@ final class App implements Model
             return [$this, null];
         }
         if ($msg->type === KeyType::Escape
-            || ($msg->type === KeyType::Char && $msg->rune === 'q' && $this->pane !== Pane::Query)
+            || ($msg->type === KeyType::Char && $msg->rune === 'q' && $this->ui->pane !== Pane::Query)
             || ($msg->ctrl && $msg->rune === 'c')) {
             return [$this, Cmd::quit()];
         }
         if ($msg->type === KeyType::Tab) {
-            $nextPane = $this->pane->next();
+            $nextPane = $this->ui->pane->next();
             if ($nextPane === Pane::Admin) {
                 // First time entering admin - set loading immediately and trigger fetch
                 return [
                     $this->withPane($nextPane)->withAdminLoading(true),
-                    Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder)),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder)),
                 ];
             }
             return [$this->withPane($nextPane), null];
         }
-        if ($this->pane === Pane::Query) {
+        if ($this->ui->pane === Pane::Query) {
             if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
                 || ($msg->type === KeyType::Enter && $msg->ctrl)) {
                 return $this->beginRunQuery();
             }
             return [$this->editQuery($msg), null];
         }
-        if ($this->pane === Pane::Tables) {
+        if ($this->ui->pane === Pane::Tables) {
             return $this->handleTablesKey($msg);
         }
-        if ($this->pane === Pane::Admin) {
+        if ($this->ui->pane === Pane::Admin) {
             return $this->handleAdminKey($msg);
         }
         return [$this->handleRowsKey($msg), null];
@@ -227,19 +211,19 @@ final class App implements Model
     {
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            $newApp = $this->withTableCursor($this->tableCursor - 1);
-            $name = $newApp->tables[$newApp->tableCursor] ?? null;
+            $newApp = $this->withTableCursor($this->browse->tableCursor - 1);
+            $name = $newApp->browse->tables[$newApp->browse->tableCursor] ?? null;
             return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            $newApp = $this->withTableCursor($this->tableCursor + 1);
-            $name = $newApp->tables[$newApp->tableCursor] ?? null;
+            $newApp = $this->withTableCursor($this->browse->tableCursor + 1);
+            $name = $newApp->browse->tables[$newApp->browse->tableCursor] ?? null;
             return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
         }
         if ($msg->type === KeyType::Enter
             || $msg->type === KeyType::Space) {
-            $name = $this->tables[$this->tableCursor] ?? null;
+            $name = $this->browse->tables[$this->browse->tableCursor] ?? null;
             return $name === null ? [$this, null] : $this->beginLoadTable($name);
         }
         return [$this, null];
@@ -249,23 +233,31 @@ final class App implements Model
     {
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            return $this->mutate(['rowCursor' => max(0, $this->rowCursor - 1)]);
+            return $this->mutate([
+                'browse' => $this->browse->withRowCursor(max(0, $this->browse->rowCursor - 1)),
+            ]);
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
             return $this->mutate([
-                'rowCursor' => min(max(0, count($this->rows) - 1), $this->rowCursor + 1),
+                'browse' => $this->browse->withRowCursor(
+                    min(max(0, count($this->browse->rows) - 1), $this->browse->rowCursor + 1),
+                ),
             ]);
         }
         // For wide query results, h/l + ←/→ scroll the ResultTable's columns.
-        if ($this->resultTable !== null) {
+        if ($this->browse->resultTable !== null) {
             if ($msg->type === KeyType::Left
                 || ($msg->type === KeyType::Char && $msg->rune === 'h')) {
-                return $this->mutate(['resultTable' => $this->resultTable->scrollLeft()]);
+                return $this->mutate([
+                    'browse' => $this->browse->withResultTable($this->browse->resultTable->scrollLeft()),
+                ]);
             }
             if ($msg->type === KeyType::Right
                 || ($msg->type === KeyType::Char && $msg->rune === 'l')) {
-                return $this->mutate(['resultTable' => $this->resultTable->scrollRight()]);
+                return $this->mutate([
+                    'browse' => $this->browse->withResultTable($this->browse->resultTable->scrollRight()),
+                ]);
             }
         }
         return $this;
@@ -295,9 +287,9 @@ final class App implements Model
         // ignores digits with no matching pane.
         if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '9') {
             $index = (int) $msg->rune - 1;
-            if (isset($allPanes[$index]) && $allPanes[$index] !== $this->adminPane) {
+            if (isset($allPanes[$index]) && $allPanes[$index] !== $this->admin->pane) {
                 $newApp = $this->withAdminCursor($index)->withAdminPane($allPanes[$index])->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder))];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
             }
             if (isset($allPanes[$index])) {
                 return [$this->withAdminCursor($index), null];
@@ -309,26 +301,26 @@ final class App implements Model
         }
         // j/k or arrows navigate within admin sidebar (with wrap-around)
         if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            $newCursor = ($this->adminCursor + 1) % $count;
+            $newCursor = ($this->admin->cursor + 1) % $count;
             $newPane = $allPanes[$newCursor];
-            if ($newPane !== $this->adminPane) {
+            if ($newPane !== $this->admin->pane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder))];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
         if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            $newCursor = ($this->adminCursor - 1 + $count) % $count;
+            $newCursor = ($this->admin->cursor - 1 + $count) % $count;
             $newPane = $allPanes[$newCursor];
-            if ($newPane !== $this->adminPane) {
+            if ($newPane !== $this->admin->pane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder))];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->admin->historyRecorder))];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
         // [p] pause/resume polling (sync with DashboardPage if present)
         if ($msg->type === KeyType::Char && $msg->rune === 'p') {
-            $newPaused = !$this->paused;
+            $newPaused = !$this->admin->paused;
             $page = $this->adminPage();
             if ($page instanceof \SugarCraft\Query\Admin\Dashboard\DashboardPage) {
                 $page = $page->withPaused($newPaused);
@@ -371,7 +363,7 @@ final class App implements Model
         // Everything else drives the editor: chars, backspace, space,
         // Enter→newline, and Up/Down move the cursor between lines.
         [$editor, ] = $this->editor()->update($msg);
-        return $this->mutate(['queryEditor' => $editor]);
+        return $this->mutate(['query' => $this->query->withEditor($editor)]);
     }
 
     private function runQuery(): self
@@ -382,37 +374,34 @@ final class App implements Model
             return $this;
         }
         // Record in history (front = newest), de-duping consecutive repeats.
-        $history = $this->queryHistory;
+        $history = $this->query->history;
         if (($history[0] ?? '') !== $trimmed) {
             array_unshift($history, $trimmed);
         }
         try {
-            $rows = $this->db->query($sql);
+            $rows = $this->connection->db->query($sql);
             // Guard against null (e.g., connection lost after handled reconnect).
             if ($rows === null) {
                 return $this->mutate([
-                    'error' => 'connection lost; retry',
-                    'status' => null,
-                    'queryHistory' => $history,
+                    'query' => $this->query->withHistory($history),
+                    'ui' => $this->ui->withError('connection lost; retry')->withStatus(null),
                 ]);
             }
             return $this->mutate([
-                'selectedTable' => '(query)',
-                'rows' => $rows,
-                'rowCursor' => 0,
-                // Query results render through ResultTable (horizontal scroll,
-                // JSON pretty, styled NULL). Cleared again on table browse.
-                'resultTable' => ResultTable::fromRows($rows),
-                'queryEditor' => $this->editor()->reset(),
-                'error' => null,
-                'status' => count($rows) . ' rows',
-                'queryHistory' => $history,
+                'browse' => $this->browse
+                    ->withSelectedTable('(query)')
+                    ->withRows($rows)
+                    ->withRowCursor(0)
+                    // Query results render through ResultTable (horizontal scroll,
+                    // JSON pretty, styled NULL). Cleared again on table browse.
+                    ->withResultTable(ResultTable::fromRows($rows)),
+                'query' => $this->query->withEditor($this->editor()->reset())->withHistory($history),
+                'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
             ]);
         } catch (\PDOException $e) {
             return $this->mutate([
-                'error' => $e->getMessage(),
-                'status' => null,
-                'queryHistory' => $history,
+                'query' => $this->query->withHistory($history),
+                'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
             ]);
         }
     }
@@ -437,7 +426,7 @@ final class App implements Model
         }
 
         // Record in history immediately (front = newest), de-duping consecutive repeats.
-        $history = $this->queryHistory;
+        $history = $this->query->history;
         if (($history[0] ?? '') !== $trimmed) {
             array_unshift($history, $trimmed);
         }
@@ -449,10 +438,10 @@ final class App implements Model
             // runQuery() handles null-safety and error state internally.
             $updated = $this->runQuery();
             // Preserve the history that was built above (runQuery uses its own
-            // history derivation, so we fold our提前-derived one in).
+            // history derivation, so we fold our pre-derived one in).
             if ($updated === $this) {
                 // Empty query — runQuery returned unchanged; restore history.
-                return [$this->mutate(['queryHistory' => $history]), null];
+                return [$this->mutate(['query' => $this->query->withHistory($history)]), null];
             }
             // runQuery already built the correct state including history.
             return [$updated, null];
@@ -460,14 +449,14 @@ final class App implements Model
 
         // Async flavor (MySQL/Postgres): mark loading and dispatch promise.
         $loading = $this->mutate([
-            'selectedTable' => '(query)',
-            'rows' => [],
-            'rowCursor' => 0,
-            'resultTable' => null,
-            'rowsLoading' => false,
-            'error' => null,
-            'status' => 'running query…',
-            'queryHistory' => $history,
+            'browse' => $this->browse
+                ->withSelectedTable('(query)')
+                ->withRows([])
+                ->withRowCursor(0)
+                ->withResultTable(null)
+                ->withRowsLoading(false),
+            'query' => $this->query->withHistory($history),
+            'ui' => $this->ui->withError(null)->withStatus('running query…'),
         ]);
         return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed))];
     }
@@ -484,7 +473,7 @@ final class App implements Model
     private function createQueryPromise(string $sql): \React\Promise\PromiseInterface
     {
         try {
-            $context = $this->serverContext ?? $this->createContext();
+            $context = $this->connection->serverContext ?? $this->createContext();
         } catch (\Throwable $e) {
             return \React\Promise\resolve(new QueryRowsLoadedMsg($sql, [], $e->getMessage()));
         }
@@ -527,23 +516,21 @@ final class App implements Model
     private function applyQueryRows(QueryRowsLoadedMsg $msg): self
     {
         // Stale result: another query was issued after this one was dispatched.
-        if (($this->queryHistory[0] ?? '') !== $msg->sql) {
+        if (($this->query->history[0] ?? '') !== $msg->sql) {
             return $this;
         }
         if ($msg->error !== null) {
             return $this->mutate([
-                'rows' => [],
-                'resultTable' => null,
-                'error' => $msg->error,
-                'status' => null,
+                'browse' => $this->browse->withRows([])->withResultTable(null),
+                'ui' => $this->ui->withError($msg->error)->withStatus(null),
             ]);
         }
         return $this->mutate([
-            'rows' => $msg->rows,
-            'rowCursor' => 0,
-            'resultTable' => ResultTable::fromRows($msg->rows),
-            'error' => null,
-            'status' => count($msg->rows) . ' rows',
+            'browse' => $this->browse
+                ->withRows($msg->rows)
+                ->withRowCursor(0)
+                ->withResultTable(ResultTable::fromRows($msg->rows)),
+            'ui' => $this->ui->withError(null)->withStatus(count($msg->rows) . ' rows'),
         ]);
     }
 
@@ -565,14 +552,14 @@ final class App implements Model
             return [$this->loadTable($name), null];
         }
         $loading = $this->mutate([
-            'tableCursor' => array_search($name, $this->tables, true) ?: 0,
-            'selectedTable' => $name,
-            'rows' => [],
-            'rowCursor' => 0,
-            'resultTable' => null,
-            'rowsLoading' => true,
-            'error' => null,
-            'status' => 'loading…',
+            'browse' => $this->browse
+                ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
+                ->withSelectedTable($name)
+                ->withRows([])
+                ->withRowCursor(0)
+                ->withResultTable(null)
+                ->withRowsLoading(true),
+            'ui' => $this->ui->withError(null)->withStatus('loading…'),
         ]);
         return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name))];
     }
@@ -583,7 +570,7 @@ final class App implements Model
      */
     private function isAsyncFlavor(): bool
     {
-        return match ($this->flavor) {
+        return match ($this->connection->flavor) {
             Flavor::MySQL, Flavor::MariaDB, Flavor::Percona, Flavor::Postgres => true,
             Flavor::Sqlite => false,
         };
@@ -596,24 +583,22 @@ final class App implements Model
      */
     private function applyLoadedRows(TableRowsLoadedMsg $msg): self
     {
-        if ($msg->table !== $this->selectedTable) {
+        if ($msg->table !== $this->browse->selectedTable) {
             return $this;
         }
         if ($msg->error !== null) {
             return $this->mutate([
-                'rows' => [],
-                'rowsLoading' => false,
-                'error' => $msg->error,
-                'status' => null,
+                'browse' => $this->browse->withRows([])->withRowsLoading(false),
+                'ui' => $this->ui->withError($msg->error)->withStatus(null),
             ]);
         }
         return $this->mutate([
-            'rows' => $msg->rows,
-            'rowCursor' => 0,
-            'resultTable' => null,
-            'rowsLoading' => false,
-            'error' => null,
-            'status' => count($msg->rows) . ' rows',
+            'browse' => $this->browse
+                ->withRows($msg->rows)
+                ->withRowCursor(0)
+                ->withResultTable(null)
+                ->withRowsLoading(false),
+            'ui' => $this->ui->withError(null)->withStatus(count($msg->rows) . ' rows'),
         ]);
     }
 
@@ -626,7 +611,7 @@ final class App implements Model
     private function createRowsPromise(string $name): \React\Promise\PromiseInterface
     {
         try {
-            $context = $this->serverContext ?? $this->createContext();
+            $context = $this->connection->serverContext ?? $this->createContext();
         } catch (\Throwable $e) {
             return \React\Promise\resolve(new TableRowsLoadedMsg($name, [], $e->getMessage()));
         }
@@ -640,7 +625,7 @@ final class App implements Model
         $username = $context->connection()->username();
         $password = $context->password();
         $isPostgres = $context instanceof PostgresServerContext;
-        $flavor = $isPostgres ? Flavor::Postgres : $this->flavor;
+        $flavor = $isPostgres ? Flavor::Postgres : $this->connection->flavor;
 
         $cache = AdminQueryCache::instance();
         $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
@@ -672,64 +657,66 @@ final class App implements Model
     {
         try {
             $columns = PreviewQuery::classify(
-                $this->flavor,
-                $this->db->query(PreviewQuery::columnsSql($this->flavor, $name)) ?? [],
+                $this->connection->flavor,
+                $this->connection->db->query(PreviewQuery::columnsSql($this->connection->flavor, $name)) ?? [],
             );
-            $rows = $this->db->query(PreviewQuery::build($this->flavor, $name, $columns)) ?? [];
+            $rows = $this->connection->db->query(PreviewQuery::build($this->connection->flavor, $name, $columns)) ?? [];
             return $this->mutate([
-                'tableCursor' => array_search($name, $this->tables, true) ?: 0,
-                'selectedTable' => $name,
-                'rows' => $rows,
-                'rowCursor' => 0,
-                // Browsing a table → the sugar-table grid, not the query viewer.
-                'resultTable' => null,
-                'rowsLoading' => false,
-                'error' => null,
-                'status' => count($rows) . ' rows',
+                'browse' => $this->browse
+                    ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
+                    ->withSelectedTable($name)
+                    ->withRows($rows)
+                    ->withRowCursor(0)
+                    // Browsing a table → the sugar-table grid, not the query viewer.
+                    ->withResultTable(null)
+                    ->withRowsLoading(false),
+                'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
             ]);
         } catch (\PDOException $e) {
             return $this->mutate([
-                'error' => $e->getMessage(),
-                'status' => null,
-                'rowsLoading' => false,
+                'browse' => $this->browse->withRowsLoading(false),
+                'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
             ]);
         }
     }
 
     private function withTableCursor(int $i): self
     {
-        $size = count($this->tables);
+        $size = count($this->browse->tables);
         if ($size === 0) {
             return $this;
         }
         // Wrap around: moving up past the top lands on the bottom of the list,
         // and moving down past the bottom lands back on the top. The extra
         // "+ $size" keeps the result non-negative for the up direction (-1).
-        return $this->mutate(['tableCursor' => (($i % $size) + $size) % $size]);
+        return $this->mutate([
+            'browse' => $this->browse->withTableCursor((($i % $size) + $size) % $size),
+        ]);
     }
 
     private function withAdminPane(AdminPane $adminPane): self
     {
-        // adminPage reset to null forces lazy recreation against the new pane.
-        return $this->mutate(['adminPane' => $adminPane, 'adminPage' => null]);
+        // AdminState::withPane resets the page to null, forcing lazy
+        // recreation against the new pane.
+        return $this->mutate(['admin' => $this->admin->withPane($adminPane)]);
     }
 
     private function withAdminCursor(int $adminCursor): self
     {
         $allPanes = AdminPane::orderedCases();
         return $this->mutate([
-            'adminCursor' => max(0, min($adminCursor, count($allPanes) - 1)),
+            'admin' => $this->admin->withCursor(max(0, min($adminCursor, count($allPanes) - 1))),
         ]);
     }
 
     private function withPaused(bool $paused): self
     {
-        return $this->mutate(['paused' => $paused]);
+        return $this->mutate(['admin' => $this->admin->withPaused($paused)]);
     }
 
     private function withAdminPage(PageBase $newPage): self
     {
-        return $this->mutate(['adminPage' => $newPage]);
+        return $this->mutate(['admin' => $this->admin->withPage($newPage)]);
     }
 
     /**
@@ -737,15 +724,16 @@ final class App implements Model
      *
      * Uses ServerContext (MySQL) or PostgresServerContext (PostgreSQL) to
      * instantiate the appropriate PageBase subclass. Cache is invalidated
-     * when adminPane changes (via withAdminPane resetting adminPage to null).
+     * when the admin pane changes (via AdminState::withPane resetting the
+     * page to null).
      */
     public function adminPage(): PageBase
     {
-        if ($this->adminPage !== null) {
-            return $this->adminPage;
+        if ($this->admin->page !== null) {
+            return $this->admin->page;
         }
 
-        $context = $this->serverContext ?? $this->createContext();
+        $context = $this->connection->serverContext ?? $this->createContext();
 
         if ($context === null) {
             // Unsupported flavor (e.g., SQLite) - use empty context to avoid render errors
@@ -753,14 +741,14 @@ final class App implements Model
         }
 
         // Build context with cached data if available
-        $context = new CachingServerContext(
+        $context = new AsyncCachingServerContext(
             $context,
-            $this->adminCachedStatusVars,
-            $this->adminCachedServerVars,
-            $this->adminLoading,
+            $this->admin->cachedStatusVars,
+            $this->admin->cachedServerVars,
+            $this->admin->loading,
         );
 
-        return match ($this->adminPane) {
+        return match ($this->admin->pane) {
             AdminPane::ProcessList => ConnectionsPage::new($context),
             AdminPane::Dashboard => new DashboardPage($context),
             AdminPane::Variables => self::buildVariablesPage($context),
@@ -777,8 +765,8 @@ final class App implements Model
      */
     private function createContext(): ?ServerContextInterface
     {
-        return match ($this->flavor) {
-            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => new ServerContext($this->db, $this->flavor),
+        return match ($this->connection->flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => new ServerContext($this->connection->db, $this->connection->flavor),
             Flavor::Postgres => $this->createPostgresContext(),
             default => null,
         };
@@ -789,8 +777,8 @@ final class App implements Model
      */
     private function createPostgresContext(): ServerContextInterface
     {
-        $provider = PostgresAdminProvider::new($this->db);
-        return PostgresServerContext::new($this->db, $provider);
+        $provider = PostgresAdminProvider::new($this->connection->db);
+        return PostgresServerContext::new($this->connection->db, $provider);
     }
 
     /**
@@ -834,7 +822,10 @@ final class App implements Model
         // The editor is focused only while the Query pane is active, so its
         // cursor renders only there (matching the old per-pane cursor mark).
         $editor = $p === Pane::Query ? $this->editor()->focus()[0] : $this->editor()->blur();
-        return $this->mutate(['pane' => $p, 'queryEditor' => $editor]);
+        return $this->mutate([
+            'ui' => $this->ui->withPane($p),
+            'query' => $this->query->withEditor($editor),
+        ]);
     }
 
     /**
@@ -844,7 +835,7 @@ final class App implements Model
      */
     public function editor(): TextArea
     {
-        return $this->queryEditor ?? self::newEditor();
+        return $this->query->editor ?? self::newEditor();
     }
 
     private static function newEditor(): TextArea
@@ -856,27 +847,27 @@ final class App implements Model
     {
         $trimmed = trim($this->editor()->value());
         // No-op on an empty editor or an already-saved query.
-        if ($trimmed === '' || in_array($trimmed, $this->queryFavorites, true)) {
+        if ($trimmed === '' || in_array($trimmed, $this->query->favorites, true)) {
             return $this;
         }
-        $favorites = $this->queryFavorites;
+        $favorites = $this->query->favorites;
         array_unshift($favorites, $trimmed);
-        return $this->mutate(['queryFavorites' => $favorites]);
+        return $this->mutate(['query' => $this->query->withFavorites($favorites)]);
     }
 
     private function unfavoriteQuery(): self
     {
         $trimmed = trim($this->editor()->value());
         $favorites = array_values(array_filter(
-            $this->queryFavorites,
+            $this->query->favorites,
             fn(string $f) => $f !== $trimmed
         ));
-        return $this->mutate(['queryFavorites' => $favorites]);
+        return $this->mutate(['query' => $this->query->withFavorites($favorites)]);
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
-        if ($this->pane !== Pane::Admin) {
+        if ($this->ui->pane !== Pane::Admin) {
             return null;
         }
 
@@ -886,11 +877,11 @@ final class App implements Model
         // cooldown flag. The tick at 1s continues firing so the page-driven
         // query queue (AdminQueryCache) is drained promptly even when the
         // status fetch is throttled. The throttle timestamp is stored in the
-        // model state ($lastAdminFetchAt) rather than a function-static, so
-        // each App instance has independent throttle state and the timestamp
+        // model state (AdminState::$lastFetchAt) rather than a function-static,
+        // so each App instance has independent throttle state and the timestamp
         // survives across poll cycles.
         $now = microtime(true);
-        $elapsed = $now - $this->lastAdminFetchAt;
+        $elapsed = $now - $this->admin->lastFetchAt;
 
         if ($elapsed < CacheTtl::STATUS) {
             // In cooldown — still fire the tick (for queue draining) but skip the fetch.
@@ -902,7 +893,7 @@ final class App implements Model
         return (new Subscriptions())->withTick('admin-fetch', 1.0, function (): \SugarCraft\Core\Msg {
             return Cmd::batch(
                 fn (): Msg => new AdminFetchStartedMsg(),
-                Cmd::promise(fn () => $this->createAdminFetchPromise($this->historyRecorder)),
+                Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder)),
             )();
         });
     }
@@ -912,7 +903,7 @@ final class App implements Model
         // Wrap entire async flow in try-catch to ensure we ALWAYS return a promise.
         // This prevents synchronous exceptions from causing unhandled promise rejections.
         try {
-            $context = $this->serverContext ?? $this->createContext();
+            $context = $this->connection->serverContext ?? $this->createContext();
         } catch (\Throwable $e) {
             // Any exception during context creation (not just RuntimeException)
             $msg = $e->getMessage();
@@ -1059,7 +1050,7 @@ final class App implements Model
             }
 
             // Store status and server variables in the shared cache so
-            // CachingServerContext can read them even before the App model
+            // AsyncCachingServerContext can read them even before the App model
             // is updated with the result.
             if (isset($results['status'])) {
                 $cache->store('status', $results['status']);
@@ -1090,26 +1081,24 @@ final class App implements Model
     private function withAdminCachedData(array $statusVars, array $serverVars, float $ts): self
     {
         return $this->mutate([
-            'adminCachedStatusVars' => $statusVars,
-            'adminCachedServerVars' => $serverVars,
-            'adminCacheTs' => $ts,
-            'adminLoading' => false,
+            'admin' => $this->admin->withCachedData($statusVars, $serverVars, $ts),
         ]);
     }
 
     /**
      * Mark admin data fetch as loading or complete.
      *
-     * Unlike the old behaviour (which nulled adminPage on every tick), this
-     * preserves the existing page instance so that in-memory state — active
-     * tab, cursor position, pending edits — survives a poll-tick refresh.
-     * The page reads fresh data from the shared AdminQueryCache on the next
-     * render. Only withAdminPane() resets adminPage when the pane changes.
+     * Unlike the old behaviour (which nulled the admin page on every tick),
+     * this preserves the existing page instance so that in-memory state —
+     * active tab, cursor position, pending edits — survives a poll-tick
+     * refresh. The page reads fresh data from the shared AdminQueryCache on
+     * the next render. Only AdminState::withPane() resets the page when the
+     * pane changes.
      *
-     * @see withAdminPane() resets adminPage when the active pane changes.
+     * @see AdminState::withPane() resets the page when the active pane changes.
      */
     private function withAdminLoading(bool $loading): self
     {
-        return $this->mutate(['adminLoading' => $loading]);
+        return $this->mutate(['admin' => $this->admin->withLoading($loading)]);
     }
 }

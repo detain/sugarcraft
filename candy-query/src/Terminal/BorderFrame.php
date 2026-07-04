@@ -66,10 +66,10 @@ final class BorderFrame
         $parts[] = $titleStyle->render('SugarSQL');
 
         // Table count.
-        $parts[] = 'Tables: ' . count($a->tables);
+        $parts[] = 'Tables: ' . count($a->browse->tables);
 
         // Connection info (dsn) — only if non-empty.
-        $dsn = $a->db->dsn();
+        $dsn = $a->connection->db->dsn();
         if ($dsn !== '') {
             $parts[] = $infoStyle->render($dsn);
         }
@@ -90,26 +90,26 @@ final class BorderFrame
     {
         $segments = ['Tab:cycle', '↑↓:navigate'];
 
-        if ($a->pane === Pane::Tables || $a->pane === Pane::Rows) {
+        if ($a->ui->pane === Pane::Tables || $a->ui->pane === Pane::Rows) {
             $segments[] = 'Enter:load';
         }
-        if ($a->pane === Pane::Query) {
+        if ($a->ui->pane === Pane::Query) {
             $segments[] = 'Ctrl+R:run';
         }
-        if ($a->pane === Pane::Admin) {
+        if ($a->ui->pane === Pane::Admin) {
             // Derive the digit range from the pane list so it never drifts when
             // panes are added/removed (the audit caught a stale hardcoded "1-6"
             // after the pane count grew to 8 — orderedCases() is the source of truth).
             $segments[] = '1-' . count(AdminPane::orderedCases()) . ':select';
             $segments[] = 'j/k:nav';
-            $segments[] = '[admin:' . $a->adminPane->value . ']';
+            $segments[] = '[admin:' . $a->admin->pane->value . ']';
         }
         $segments[] = 'q:quit';
 
         $status = implode('  ', $segments);
 
         // Show PAUSED indicator when the admin dashboard is paused.
-        if ($a->pane === Pane::Admin && $a->paused) {
+        if ($a->ui->pane === Pane::Admin && $a->admin->paused) {
             $status .= '  ' . Style::new()->bold()->foreground(Color::ansi(6))->render('[PAUSED]');
         }
 
@@ -121,13 +121,13 @@ final class BorderFrame
      */
     private static function serverVersion(App $a): string
     {
-        if ($a->serverContext !== null) {
-            return $a->serverContext->versionString();
+        if ($a->connection->serverContext !== null) {
+            return $a->connection->serverContext->versionString();
         }
 
         // Fallback: show flavor for non-SQLite databases.
-        if ($a->flavor !== Flavor::Sqlite) {
-            return $a->flavor->value;
+        if ($a->connection->flavor !== Flavor::Sqlite) {
+            return $a->connection->flavor->value;
         }
 
         return '';

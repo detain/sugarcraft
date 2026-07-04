@@ -37,23 +37,39 @@ final class QueryTimeout
     /**
      * Apply a deadline to a query promise.
      *
+     * promise-timer's timeout() cancel()s the underlying promise when the
+     * deadline fires; for drivers whose promise cancellation is a client-side
+     * no-op (react/mysql), pass `$onTimeout` to abort the query server-side
+     * too — otherwise a timed-out query keeps burning the server long after
+     * the caller has given up on it (see plan 5.1).
+     *
      * @template T
      * @param PromiseInterface<T> $promise The in-flight query
      * @param float $seconds Deadline; <= 0 disables the timeout entirely
      * @param LoopInterface|null $loop Loop the timer runs on (default: global loop)
+     * @param callable(): void|null $onTimeout Server-side abort hook, fired once when the deadline hits;
+     *                                         errors are swallowed so a failed kill can't mask the timeout
      * @return PromiseInterface<T>
      */
-    public static function wrap(PromiseInterface $promise, float $seconds, ?LoopInterface $loop = null): PromiseInterface
+    public static function wrap(PromiseInterface $promise, float $seconds, ?LoopInterface $loop = null, ?callable $onTimeout = null): PromiseInterface
     {
         if ($seconds <= 0.0) {
             return $promise;
         }
 
         return timeout($promise, $seconds, $loop)->otherwise(
-            static function (\Throwable $e) use ($seconds): never {
+            static function (\Throwable $e) use ($seconds, $onTimeout): never {
                 // Re-throw with a message the result panes can show verbatim;
                 // promise-timer's own message doesn't say what timed out.
                 if ($e instanceof TimeoutException) {
+                    if ($onTimeout !== null) {
+                        try {
+                            $onTimeout();
+                        } catch (\Throwable) {
+                            // The timeout rejection below is the caller-facing
+                            // truth; a failed server-side kill must not replace it.
+                        }
+                    }
                     throw new \RuntimeException(
                         sprintf('Async query timed out after %.1fs', $seconds),
                         0,

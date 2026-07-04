@@ -18,8 +18,8 @@ final class RendererTest extends TestCase
     private function db(): Database
     {
         $db = new Database(new \PDO('sqlite::memory:'));
-        $db->pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-        $db->pdo->exec("INSERT INTO users VALUES (1, 'alice'), (2, 'bob')");
+        $db->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+        $db->exec("INSERT INTO users VALUES (1, 'alice'), (2, 'bob')");
         return $db;
     }
 
@@ -66,8 +66,8 @@ final class RendererTest extends TestCase
     private function binaryDb(): Database
     {
         $db = new Database(new \PDO('sqlite::memory:'));
-        $db->pdo->exec('CREATE TABLE locs (id INTEGER PRIMARY KEY, name TEXT, coords BLOB)');
-        $stmt = $db->pdo->prepare('INSERT INTO locs (id, name, coords) VALUES (1, ?, ?)');
+        $db->exec('CREATE TABLE locs (id INTEGER PRIMARY KEY, name TEXT, coords BLOB)');
+        $stmt = $db->prepare('INSERT INTO locs (id, name, coords) VALUES (1, ?, ?)');
         $stmt->execute(['TEB1', "\x00\x00\x01\x1b[31m}\xcd\x91dD@\x07R"]);
         return $db;
     }
@@ -123,8 +123,8 @@ final class RendererTest extends TestCase
     private function wideDb(): Database
     {
         $db = new Database(new \PDO('sqlite::memory:'));
-        $db->pdo->exec('CREATE TABLE big (id INTEGER PRIMARY KEY, note TEXT, email TEXT)');
-        $stmt = $db->pdo->prepare('INSERT INTO big (id, note, email) VALUES (?, ?, ?)');
+        $db->exec('CREATE TABLE big (id INTEGER PRIMARY KEY, note TEXT, email TEXT)');
+        $stmt = $db->prepare('INSERT INTO big (id, note, email) VALUES (?, ?, ?)');
         for ($i = 0; $i < 40; $i++) {
             $stmt->execute([
                 $i + 1,
@@ -134,7 +134,7 @@ final class RendererTest extends TestCase
         }
         // Pad the table list so it scrolls.
         for ($i = 0; $i < 60; $i++) {
-            $db->pdo->exec("CREATE TABLE extra_table_number_{$i} (id INTEGER)");
+            $db->exec("CREATE TABLE extra_table_number_{$i} (id INTEGER)");
         }
         return $db;
     }

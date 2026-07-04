@@ -124,7 +124,7 @@ final class ReportsPage extends PageBase
      * Validate that the report catalog can be loaded.
      *
      * All DB-dependent setup (sys schema availability, report execution) is
-     * deferred to the async flow via CachedConnection/AdminQueryCache.
+     * deferred to the async flow via AsyncCachedConnection/AdminQueryCache.
      * This allows validate() to return immediately without blocking on
      * network I/O, while the loading screen is shown until data arrives.
      */
@@ -138,7 +138,7 @@ final class ReportsPage extends PageBase
             $this->catalog->load();
 
             // Availability and runner are created but NOT queried here.
-            // Queries are routed through CachedConnection and are drained
+            // Queries are routed through AsyncCachedConnection and are drained
             // by App::createAdminFetchPromise() on the next tick.
             $this->availability = AvailabilityChecker::new($this->db);
             $this->runner = ReportRunner::new($this->db, $this->catalog, $this->availability);
@@ -147,7 +147,7 @@ final class ReportsPage extends PageBase
             $this->reportsByCategory = $this->catalog->groupedByCategory();
 
             // Default selection from catalog (availability filtering happens
-            // in loadCurrentReport via CachedConnection async query).
+            // in loadCurrentReport via AsyncCachedConnection async query).
             if ($this->selectedCategory === null && !empty($this->categories)) {
                 $this->selectedCategory = $this->categories[0];
             }
@@ -160,7 +160,7 @@ final class ReportsPage extends PageBase
             }
 
             // loadCurrentReport() is NOT called here — it queues queries via
-            // CachedConnection which are drained by the admin fetch tick.
+            // AsyncCachedConnection which are drained by the admin fetch tick.
             // The page will show a loading state until the async query completes.
 
             return true;
@@ -204,7 +204,7 @@ final class ReportsPage extends PageBase
     {
         if ($msg instanceof ReloadReportMsg) {
             // Triggered by App after AdminDataLoadedMsg. Queue the report
-            // query via CachedConnection for the next tick to process.
+            // query via AsyncCachedConnection for the next tick to process.
             $this->loadCurrentReport();
             return [$this, null];
         }

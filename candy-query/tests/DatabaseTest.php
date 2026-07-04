@@ -30,9 +30,9 @@ final class DatabaseTest extends TestCase
     public function testTablesListsUserTablesAndViews(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-        $db->pdo->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT)');
-        $db->pdo->exec('CREATE VIEW recent_posts AS SELECT * FROM posts');
+        $db->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+        $db->exec('CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT)');
+        $db->exec('CREATE VIEW recent_posts AS SELECT * FROM posts');
         $tables = $db->tables();
         $this->assertSame(['posts', 'recent_posts', 'users'], $tables);
     }
@@ -40,10 +40,10 @@ final class DatabaseTest extends TestCase
     public function testTablesExcludesSqliteSystemTables(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE foo (a TEXT)');
+        $db->exec('CREATE TABLE foo (a TEXT)');
         // sqlite_sequence is auto-created when using AUTOINCREMENT;
         // sqlite_master is implicit. Make sure it's filtered out.
-        $db->pdo->exec('CREATE TABLE bar (id INTEGER PRIMARY KEY AUTOINCREMENT)');
+        $db->exec('CREATE TABLE bar (id INTEGER PRIMARY KEY AUTOINCREMENT)');
         $tables = $db->tables();
         foreach ($tables as $t) {
             $this->assertStringStartsNotWith('sqlite_', $t);
@@ -59,8 +59,8 @@ final class DatabaseTest extends TestCase
     public function testRowsReturnsAssocArrays(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-        $db->pdo->exec("INSERT INTO users VALUES (1, 'alice'), (2, 'bob')");
+        $db->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+        $db->exec("INSERT INTO users VALUES (1, 'alice'), (2, 'bob')");
         $rows = $db->rows('users');
         $this->assertCount(2, $rows);
         $this->assertSame('alice', $rows[0]['name']);
@@ -70,9 +70,9 @@ final class DatabaseTest extends TestCase
     public function testRowsRespectsLimit(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE n (v INTEGER)');
+        $db->exec('CREATE TABLE n (v INTEGER)');
         for ($i = 0; $i < 50; $i++) {
-            $db->pdo->exec("INSERT INTO n VALUES ($i)");
+            $db->exec("INSERT INTO n VALUES ($i)");
         }
         $rows = $db->rows('n', limit: 5);
         $this->assertCount(5, $rows);
@@ -81,8 +81,8 @@ final class DatabaseTest extends TestCase
     public function testRowsEscapesQuotedTableName(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE "tbl with spaces" (a TEXT)');
-        $db->pdo->exec('INSERT INTO "tbl with spaces" VALUES (\'hi\')');
+        $db->exec('CREATE TABLE "tbl with spaces" (a TEXT)');
+        $db->exec('INSERT INTO "tbl with spaces" VALUES (\'hi\')');
         $rows = $db->rows('tbl with spaces');
         $this->assertCount(1, $rows);
         $this->assertSame('hi', $rows[0]['a']);
@@ -91,8 +91,8 @@ final class DatabaseTest extends TestCase
     public function testQueryReturnsSelectResults(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE n (v INTEGER)');
-        $db->pdo->exec('INSERT INTO n VALUES (1), (2), (3)');
+        $db->exec('CREATE TABLE n (v INTEGER)');
+        $db->exec('INSERT INTO n VALUES (1), (2), (3)');
         $rows = $db->query('SELECT v FROM n ORDER BY v DESC');
         $this->assertSame([['v' => 3], ['v' => 2], ['v' => 1]], $rows);
     }
@@ -100,7 +100,7 @@ final class DatabaseTest extends TestCase
     public function testQueryReturnsAffectedRowsForNonSelect(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE t (id INTEGER PRIMARY KEY)');
+        $db->exec('CREATE TABLE t (id INTEGER PRIMARY KEY)');
         $rows = $db->query('INSERT INTO t VALUES (1), (2), (3)');
         $this->assertSame([['affected' => 3]], $rows);
     }
@@ -115,7 +115,7 @@ final class DatabaseTest extends TestCase
     public function testImportCsvInsertsRows(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)');
+        $db->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)');
 
         $csvPath = tempnam(sys_get_temp_dir(), 'csv');
         file_put_contents($csvPath, "id,name,email\n1,alice,alice@example.com\n2,bob,bob@example.com\n");
@@ -141,8 +141,8 @@ final class DatabaseTest extends TestCase
     public function testExportCsvWritesHeadersAndRows(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, price REAL)');
-        $db->pdo->exec("INSERT INTO products VALUES (1, 'Widget', 19.99), (2, 'Gadget', 29.99)");
+        $db->exec('CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, price REAL)');
+        $db->exec("INSERT INTO products VALUES (1, 'Widget', 19.99), (2, 'Gadget', 29.99)");
 
         $csvPath = tempnam(sys_get_temp_dir(), 'csv');
         $db->exportCsv($csvPath, 'products');
@@ -174,8 +174,8 @@ final class DatabaseTest extends TestCase
     public function testExportSqlCreatesDumpFile(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE items (id INTEGER PRIMARY KEY, description TEXT)');
-        $db->pdo->exec("INSERT INTO items VALUES (1, 'First item'), (2, 'Second item')");
+        $db->exec('CREATE TABLE items (id INTEGER PRIMARY KEY, description TEXT)');
+        $db->exec("INSERT INTO items VALUES (1, 'First item'), (2, 'Second item')");
 
         $sqlPath = tempnam(sys_get_temp_dir(), 'sql');
         $db->exportSql($sqlPath);
@@ -192,10 +192,10 @@ final class DatabaseTest extends TestCase
     public function testExportSqlHandlesMultipleTables(): void
     {
         $db = $this->memoryDb();
-        $db->pdo->exec('CREATE TABLE t1 (id INTEGER PRIMARY KEY, data TEXT)');
-        $db->pdo->exec("INSERT INTO t1 VALUES (1, 'data1')");
-        $db->pdo->exec('CREATE TABLE t2 (id INTEGER PRIMARY KEY, info TEXT)');
-        $db->pdo->exec("INSERT INTO t2 VALUES (2, 'info2')");
+        $db->exec('CREATE TABLE t1 (id INTEGER PRIMARY KEY, data TEXT)');
+        $db->exec("INSERT INTO t1 VALUES (1, 'data1')");
+        $db->exec('CREATE TABLE t2 (id INTEGER PRIMARY KEY, info TEXT)');
+        $db->exec("INSERT INTO t2 VALUES (2, 'info2')");
 
         $sqlPath = tempnam(sys_get_temp_dir(), 'sql');
         $db->exportSql($sqlPath);
@@ -208,5 +208,28 @@ final class DatabaseTest extends TestCase
         $this->assertStringContainsString('info2', $content);
 
         unlink($sqlPath);
+    }
+
+    /**
+     * Regression (plan 3.1): the PDO handle must not leak through a public
+     * property — `public readonly` on a mutable PDO only pretended to be
+     * immutable and let callers bypass the DatabaseInterface contract.
+     * All former direct-PDO uses are covered by exec()/prepare()/query().
+     */
+    public function testPdoHandleIsNotPubliclyAccessible(): void
+    {
+        $prop = new \ReflectionProperty(Database::class, 'pdo');
+        $this->assertTrue($prop->isPrivate(), 'PDO handle must be private');
+        $this->assertFalse((new \ReflectionClass(Database::class))->hasMethod('pdo'), 'no pdo() escape hatch either');
+    }
+
+    public function testPreparedStatementCoversFormerDirectPdoUse(): void
+    {
+        $db = $this->memoryDb();
+        $db->exec('CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)');
+        $stmt = $db->prepare('INSERT INTO t (id, v) VALUES (?, ?)');
+        $this->assertNotNull($stmt);
+        $this->assertTrue($stmt->execute([1, 'via interface']));
+        $this->assertSame([['id' => 1, 'v' => 'via interface']], $db->query('SELECT * FROM t'));
     }
 }
