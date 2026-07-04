@@ -114,6 +114,34 @@ final class ConfigTest extends TestCase
         $this->assertSame(':23233', $c->statsListenAddr);
     }
 
+    public function testFromDefaultsMaxPackBytesIsNull(): void
+    {
+        $c = Config::fromDefaults();
+
+        $this->assertNull($c->maxPackBytes);
+    }
+
+    public function testLoadParsesMaxPackBytes(): void
+    {
+        // The minimal YAML parser only supports nesting via inline maps
+        $configPath = $this->tmpDir . '/pack.yaml';
+        file_put_contents($configPath, "name: PackTest\nhttp: { max_pack_bytes: 1048576 }\n");
+
+        $c = Config::load($configPath);
+
+        $this->assertSame(1048576, $c->maxPackBytes);
+    }
+
+    public function testLoadWithoutMaxPackBytesIsNull(): void
+    {
+        $configPath = $this->tmpDir . '/nopack.yaml';
+        file_put_contents($configPath, "name: NoPackTest\nhttp: { listen_addr: :8080 }\n");
+
+        $c = Config::load($configPath);
+
+        $this->assertNull($c->maxPackBytes);
+    }
+
     // -------------------------------------------------------------------------
     // load tests
     // -------------------------------------------------------------------------

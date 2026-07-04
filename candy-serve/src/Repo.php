@@ -147,6 +147,10 @@ final class Repo
             if ($rc !== 0) {
                 throw new \RuntimeException(Lang::t('repo.git_init_failed', ['output' => \implode("\n", $out)]));
             }
+
+            // Group-writable objects so pushes work when server workers run
+            // under different users sharing a group (soft-serve parity).
+            \exec("git -C {$path} config core.sharedRepository umask 2>&1", $out, $rc);
         }
 
         // Set description
@@ -157,8 +161,12 @@ final class Repo
 
         // Set hooks dir (shared)
         $hooksSrc = $this->path . '/hooks';
-        if (\is_link($hooksSrc) || !\file_exists($hooksSrc)) {
-            @\symlink('/usr/share/git-core/templates/hooks', $hooksSrc);
+        if (!\file_exists($hooksSrc) && !\is_link($hooksSrc)) {
+            // A missing hooks dir is survivable (git falls back to no hooks),
+            // but hiding the failure makes "why don't my hooks run?" undebuggable.
+            if (!@\symlink('/usr/share/git-core/templates/hooks', $hooksSrc)) {
+                \error_log("candy-serve: failed to symlink shared hooks into {$hooksSrc}");
+            }
         }
 
         return $this;
@@ -221,7 +229,8 @@ final class Repo
         foreach ($out as $line) {
             $line = \trim($line);
             if ($line === '') continue;
-            $parts = \preg_split('/\s+/', $line, 2);
+            // for-each-ref's format string guarantees exactly one separating space
+            $parts = \explode(' ', $line, 2);
             if (\count($parts) === 2) {
                 $result[$parts[1]] = $parts[0];
             }

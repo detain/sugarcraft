@@ -247,6 +247,7 @@ final class Server
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        /** @var resource|false $proc */
         $proc = \proc_open($cmd, $desc, $pipes);
         if ($proc === false) {
             return $this->errorResponse(500, 'Failed to start upload-pack');
@@ -257,22 +258,14 @@ final class Server
         \fclose($pipes[0]);
 
         // Read response into buffer (with size cap)
-        $maxBytes = 268435456; // 256 MiB
-        $packData = '';
-        while (!\feof($pipes[1])) {
-            $chunk = \fread($pipes[1], 65536);
-            if ($chunk === false) break;
-            $packData .= $chunk;
-            if (\strlen($packData) > $maxBytes) {
-                \fclose($pipes[1]);
-                \fclose($pipes[2]);
-                \proc_close($proc);
-                return $this->errorResponse(413, 'Packfile too large');
-            }
-        }
+        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+        $packData = $this->readCapped($pipes[1], $maxBytes);
         \fclose($pipes[1]);
         \fclose($pipes[2]);
         \proc_close($proc);
+        if ($packData === null) {
+            return $this->errorResponse(413, 'Packfile too large');
+        }
 
         $this->body = $packData;
         return $this->finalizeResponse();
@@ -313,6 +306,7 @@ final class Server
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        /** @var resource|false $proc */
         $proc = \proc_open($cmd, $desc, $pipes);
         if ($proc === false) {
             return $this->errorResponse(500, 'Failed to start receive-pack');
@@ -324,21 +318,13 @@ final class Server
 
         // Read response (with memory cap to prevent OOM on large packfiles)
         $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-        $packData = '';
-        while (!\feof($pipes[1])) {
-            $chunk = \fread($pipes[1], 65536);
-            if ($chunk === false) break;
-            $packData .= $chunk;
-            if (\strlen($packData) > $maxBytes) {
-                \fclose($pipes[1]);
-                \fclose($pipes[2]);
-                \proc_close($proc);
-                return $this->errorResponse(413, 'Packfile too large');
-            }
-        }
+        $packData = $this->readCapped($pipes[1], $maxBytes);
         \fclose($pipes[1]);
         \fclose($pipes[2]);
         \proc_close($proc);
+        if ($packData === null) {
+            return $this->errorResponse(413, 'Packfile too large');
+        }
 
         $this->body = $packData;
         return $this->finalizeResponse();
@@ -420,6 +406,7 @@ final class Server
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        /** @var resource|false $proc */
         $proc = \proc_open($cmd, $desc, $pipes);
         if ($proc === false) {
             return '';
@@ -433,23 +420,34 @@ final class Server
 
         // TODO: stream via chunked callback for true streaming; cap buffered size for now
         $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-        $packData = '';
-        while (!\feof($pipes[1])) {
-            $chunk = \fread($pipes[1], 65536);
-            if ($chunk === false) break;
-            $packData .= $chunk;
-            if (\strlen($packData) > $maxBytes) {
-                \fclose($pipes[1]);
-                \fclose($pipes[2]);
-                \proc_close($proc);
-                throw new \RuntimeException('Packfile exceeds maximum size limit');
-            }
-        }
+        $packData = $this->readCapped($pipes[1], $maxBytes);
 
         \fclose($pipes[1]);
         \fclose($pipes[2]);
         \proc_close($proc);
+        if ($packData === null) {
+            throw new \RuntimeException('Packfile exceeds maximum size limit');
+        }
         return $packData;
+    }
+
+    /**
+     * Drain a pipe into memory, enforcing a byte cap.
+     *
+     * stream_get_contents() copies in C rather than PHP-level 64 KiB
+     * concatenations; reading maxlength+1 lets a single call both fetch the
+     * data and detect the overflow.
+     *
+     * @param resource $pipe
+     * @return string|null  null when the stream exceeds $maxBytes
+     */
+    private function readCapped($pipe, int $maxBytes): ?string
+    {
+        $data = \stream_get_contents($pipe, $maxBytes + 1);
+        if ($data === false) {
+            return '';
+        }
+        return \strlen($data) > $maxBytes ? null : $data;
     }
 
     /**

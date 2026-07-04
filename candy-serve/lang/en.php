@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 return [
     'user.invalid_ssh_key'     => 'Invalid SSH public key format',
+    'user.ssh_key_too_short'   => 'SSH public key blob too short for {type}: {len} < {min} base64 chars',
     'repo.create_dir_failed'   => 'Failed to create repo directory: {path}',
     'repo.git_init_failed'     => 'git init failed: {output}',
     'config.not_found'         => 'Config file not found: {path}',

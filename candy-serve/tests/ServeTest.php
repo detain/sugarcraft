@@ -61,6 +61,28 @@ final class ServeTest extends TestCase
         User::new('dave')->addAuthorizedKey('not-a-valid-ssh-key');
     }
 
+    public function testUserAddShortEd25519BlobThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('too short');
+        // 67 chars: one short of the exact ed25519 wire-blob length (68)
+        User::new('dave')->addAuthorizedKey('ssh-ed25519 ' . \str_repeat('A', 67) . ' dave@host');
+    }
+
+    public function testUserAddShortRsaBlobThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('too short');
+        User::new('dave')->addAuthorizedKey('ssh-rsa ' . \str_repeat('A', 100) . ' dave@host');
+    }
+
+    public function testUserAddShortEcdsaBlobThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('too short');
+        User::new('dave')->addAuthorizedKey('ecdsa-sha2-nistp256 ' . \str_repeat('A', 40) . ' dave@host');
+    }
+
     public function testUserVerifyPublicKey(): void
     {
         $key = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk carol@host';

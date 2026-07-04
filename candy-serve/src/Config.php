@@ -38,6 +38,9 @@ final class Config
     public readonly string $tlsKeyPath;
     public readonly string $tlsCertPath;
 
+    /** Max buffered packfile size in bytes (null = server default). */
+    public readonly ?int $maxPackBytes;
+
     /** Database. */
     public readonly string $dbDriver;
     public readonly string $dbDataSource;
@@ -154,6 +157,7 @@ final class Config
         $this->httpPublicUrl  = $http['public_url'] ?? 'http://localhost:23232';
         $this->tlsKeyPath     = $this->resolvePath($http['tls_key_path'] ?? '', $dataPath);
         $this->tlsCertPath    = $this->resolvePath($http['tls_cert_path'] ?? '', $dataPath);
+        $this->maxPackBytes   = isset($http['max_pack_bytes']) ? (int) $http['max_pack_bytes'] : null;
 
         $db = $data['db'] ?? [];
         $this->dbDriver     = $db['driver'] ?? 'sqlite';

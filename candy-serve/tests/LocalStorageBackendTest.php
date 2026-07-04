@@ -116,6 +116,29 @@ final class LocalStorageBackendTest extends TestCase
         fclose($resource);
     }
 
+    public function testReadAllReturnsFullContent(): void
+    {
+        $backend = new LocalStorageBackend($this->tmpDir);
+        $oid = 'readall-test-oid1234';
+
+        $content = 'Read All Content';
+        $stream = fopen('data://text/plain;base64,' . base64_encode($content), 'r');
+        $backend->write($oid, $stream);
+        fclose($stream);
+
+        $this->assertSame($content, $backend->readAll($oid));
+    }
+
+    public function testReadAllThrowsExceptionForNonexistentObject(): void
+    {
+        $backend = new LocalStorageBackend($this->tmpDir);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('not found');
+
+        $backend->readAll('nonexistent-oid-readall');
+    }
+
     public function testWriteCreatesNestedDirectories(): void
     {
         $backend = new LocalStorageBackend($this->tmpDir);

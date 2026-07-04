@@ -298,4 +298,22 @@ final class Osc52Test extends TestCase
         $this->assertContains('s', $selections);
         $this->assertCount(3, $selections);
     }
+
+    // -------------------------------------------------------------------------
+    // Event buffer cap tests
+    // -------------------------------------------------------------------------
+
+    public function testEventBufferIsCappedAndEvictsOldest(): void
+    {
+        // 1050 events with a 1000-event cap: the first 50 must be evicted
+        for ($i = 0; $i < 1050; $i++) {
+            $this->clipboard->parse("c;{$i}");
+        }
+
+        $events = $this->clipboard->pendingEvents();
+
+        $this->assertCount(1000, $events);
+        $this->assertSame('50', $events[0]['payload']);
+        $this->assertSame('1049', $events[999]['payload']);
+    }
 }

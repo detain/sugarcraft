@@ -73,9 +73,12 @@ final class SSHServer
      * @param resource $stream  Raw SSH stream
      * @param string $username  SSH username
      * @param string $command   The forced command (e.g. "git-upload-pack /repo-name")
+     * @param string|null $publicKey  The public key presented during the SSH
+     *                                handshake (authorized_keys format), when
+     *                                the transport can supply it
      * @return int  Exit code (0 = ok)
      */
-    public function handleConnection($stream, string $username, string $command): int
+    public function handleConnection($stream, string $username, string $command, ?string $publicKey = null): int
     {
         // Find user
         $user = $this->users[$username] ?? null;
@@ -86,7 +89,7 @@ final class SSHServer
         }
 
         // Handle public key auth
-        if (!$this->authenticate($stream, $user)) {
+        if (!$this->authenticate($stream, $user, $publicKey)) {
             \fwrite(\STDERR, "Authentication failed for {$username}\n");
             return 1;
         }
@@ -144,23 +147,24 @@ final class SSHServer
      *
      * @param resource $stream  SSH stream
      * @param User|null $user   The user to verify against (null = anonymous)
+     * @param string|null $presentedKey  Peer public key from the handshake, if available
      */
-    private function authenticate($stream, ?User $user): bool
+    private function authenticate($stream, ?User $user, ?string $presentedKey = null): bool
     {
-        if (!\extension_loaded('ssh2')) {
-            // Without ssh2, trust the connection if user exists
-            return $user !== null;
-        }
-
-        // Get the peer public key from the SSH handshake
-        // In practice, libssh2 has already validated the key during auth
-        // Here we just confirm the user is found
         if ($user === null) {
             // Anonymous access — allowed only if server permits it
             $ac = AccessControl::getInstance();
-            return $ac->allowAnonymousRead();
+            return \extension_loaded('ssh2') && $ac->allowAnonymousRead();
         }
 
+        // When the transport hands us the peer's key, a known username alone
+        // is not proof of identity — it must match the user's authorized_keys.
+        if ($presentedKey !== null && $presentedKey !== '') {
+            return $user->verifyPublicKey($presentedKey);
+        }
+
+        // No key material available: trust the transport (e.g. sshd
+        // ForceCommand where libssh2 already verified the key) as before.
         return true;
     }
 

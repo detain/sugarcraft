@@ -105,6 +105,35 @@ final class SSHServerTest extends TestCase
         $this->assertSame(1, $result);
     }
 
+    public function testHandleConnectionRejectsWrongPresentedKey(): void
+    {
+        $authorized = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
+        $wrong      = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk mallory@host';
+
+        $user = User::new('alice')->withAdmin(true)->addAuthorizedKey($authorized);
+        $this->server->registerUser($user);
+
+        $stream = \fopen('php://memory', 'r+');
+        // Admin push would succeed (see testCommandRegexParsesReceivePack), so a
+        // failure here can only come from key verification.
+        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /key-check-repo', $wrong);
+        $this->assertSame(1, $result);
+        $this->assertNull($this->server->authenticatedUser());
+    }
+
+    public function testHandleConnectionAcceptsMatchingPresentedKey(): void
+    {
+        $authorized = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
+
+        $user = User::new('alice')->withAdmin(true)->addAuthorizedKey($authorized);
+        $this->server->registerUser($user);
+
+        $stream = \fopen('php://memory', 'r+');
+        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /key-check-repo', $authorized);
+        $this->assertSame(0, $result);
+        $this->assertSame('alice', $this->server->authenticatedUser()?->username);
+    }
+
     // -------------------------------------------------------------------------
     // Command parsing tests
     // -------------------------------------------------------------------------

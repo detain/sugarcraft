@@ -79,8 +79,27 @@ final class User
         if ($key === '') return $this;
 
         // Validate format: type base64data [comment]
-        if (!\preg_match('/^((?:ssh|ecdsa|sk)-[A-Za-z0-9@.-]+)\s+([A-Za-z0-9+\/=]+)(\s+.+)?$/', $key)) {
+        if (!\preg_match('/^((?:ssh|ecdsa|sk)-[A-Za-z0-9@.-]+)\s+([A-Za-z0-9+\/=]+)(\s+.+)?$/', $key, $m)) {
             throw new \InvalidArgumentException(Lang::t('user.invalid_ssh_key'));
+        }
+
+        // A well-formed-looking but truncated blob cannot be a real key; the
+        // minimums are the base64 length of the smallest valid wire blob per
+        // key type (ed25519 blob is exactly 51 bytes → 68 base64 chars).
+        $type = $m[1];
+        $blob = $m[2];
+        $minBlobLen = match (true) {
+            \str_contains($type, 'ed25519') => 68,
+            \str_contains($type, 'rsa')     => 256,
+            \str_contains($type, 'ecdsa')   => 100,
+            default                          => 64,
+        };
+        if (\strlen($blob) < $minBlobLen) {
+            throw new \InvalidArgumentException(Lang::t('user.ssh_key_too_short', [
+                'type' => $type,
+                'len'  => (string) \strlen($blob),
+                'min'  => (string) $minBlobLen,
+            ]));
         }
 
         $keys = $this->authorizedKeys === '' ? [] : \explode("\n", \rtrim($this->authorizedKeys, "\n"));

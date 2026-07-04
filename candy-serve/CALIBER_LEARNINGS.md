@@ -28,3 +28,13 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 ### 2026-06-01 — CancellationToken for best-effort I/O cancellation
 Pattern: Use CancellationToken for best-effort I/O cancellation; true preemption requires async rewrite.
 Source: step-35 ai/async-adopters
+
+## Future work (deferred pre-1.0)
+
+- **6.1** ReactPHP-based GitDaemon accept loop (replace blocking `socket_select()` loop).
+- **6.2** Concurrent LFS batch object handling via `Promise\all`.
+- **7.5** Mirror-pull background jobs (honor `jobs.mirror_pull` schedule).
+- **7.6** Stats collection server on `stats.listen_addr`.
+- **7.7** Swap the minimal built-in YAML parser for `symfony/yaml`.
+- **7.8** Introduce a `Visibility` enum (public/private/collaborator-only) replacing the paired bools on `Repo`.
+- **7.9** LFS HTTP object routes (upload/download/verify endpoints on the smart-HTTP server).

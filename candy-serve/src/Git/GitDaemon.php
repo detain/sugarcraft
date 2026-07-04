@@ -425,6 +425,7 @@ final class GitDaemon
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
+        /** @var resource|false $proc */
         $proc = \proc_open($cmd, $desc, $pipes);
         if ($proc === false) return;
 
@@ -509,7 +510,12 @@ final class GitDaemon
             }
 
             if ($rc !== 0) {
-                $this->writePacket($socket, "ng {$cmd['ref']}: pre-receive hook declined");
+                // Surface git's own diagnostic (mirrors ReceivePack::processPush)
+                // so the client isn't left with only a generic decline. pkt-lines
+                // are single-line, so collapse whitespace/control chars.
+                $reason = \trim((string) \preg_replace('/[\x00-\x1f\s]+/', ' ', \implode(' ', $out)));
+                $suffix = $reason === '' ? 'pre-receive hook declined' : "pre-receive hook declined: {$reason}";
+                $this->writePacket($socket, "ng {$cmd['ref']}: {$suffix}");
                 return;
             }
 
