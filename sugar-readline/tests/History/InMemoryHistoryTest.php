@@ -138,4 +138,74 @@ final class InMemoryHistoryTest extends TestCase
         // Next getNext should return null (live buffer)
         $this->assertNull($h->getNext());
     }
+
+    // =========================================================================
+    // search() — incremental history search backend
+    // =========================================================================
+
+    private function searchable(): InMemoryHistory
+    {
+        $h = new InMemoryHistory();
+        $h->push('git log');    // index 2 (oldest)
+        $h->push('ls -la');     // index 1
+        $h->push('git status'); // index 0 (newest)
+        return $h;
+    }
+
+    public function testSearchFindsNewestMatchFirst(): void
+    {
+        $match = $this->searchable()->search('git', 0, 1);
+
+        $this->assertSame(['index' => 0, 'entry' => 'git status'], $match);
+    }
+
+    public function testSearchTowardOlderFromOffset(): void
+    {
+        $match = $this->searchable()->search('git', 1, 1);
+
+        $this->assertSame(['index' => 2, 'entry' => 'git log'], $match);
+    }
+
+    public function testSearchTowardNewer(): void
+    {
+        $match = $this->searchable()->search('git', 1, -1);
+
+        $this->assertSame(['index' => 0, 'entry' => 'git status'], $match);
+    }
+
+    public function testSearchEmptyQueryMatchesAnyEntry(): void
+    {
+        $match = $this->searchable()->search('', 0, 1);
+
+        $this->assertSame(['index' => 0, 'entry' => 'git status'], $match);
+    }
+
+    public function testSearchNoMatchReturnsNull(): void
+    {
+        $this->assertNull($this->searchable()->search('docker', 0, 1));
+    }
+
+    public function testSearchFromIndexOutOfRangeReturnsNull(): void
+    {
+        // Past the oldest entry: the scan direction is exhausted, no rematch.
+        $this->assertNull($this->searchable()->search('git', 3, 1));
+        // Before the newest entry going newer.
+        $this->assertNull($this->searchable()->search('git', -1, -1));
+    }
+
+    public function testSearchOnEmptyHistoryReturnsNull(): void
+    {
+        $this->assertNull((new InMemoryHistory())->search('', 0, 1));
+    }
+
+    public function testSearchDoesNotDisturbNavigationPosition(): void
+    {
+        $h = $this->searchable();
+        $h->getPrevious(); // position = 0 ('git status')
+
+        $h->search('git', 1, 1);
+
+        // Navigation continues from where it was, unaffected by the search.
+        $this->assertSame('ls -la', $h->getPrevious());
+    }
 }

@@ -66,13 +66,13 @@ final class ViModeTest extends TestCase
         $vi = new ViMode();
         $prompt = $prompt->withMode($vi);
 
-        // ESC → normal mode
+        // ESC → normal mode (cursor pulled back onto 'c', vi semantics)
         $prompt = $prompt->handleKey(Key::Escape);
-        $this->assertSame(3, $prompt->cursor());
+        $this->assertSame(2, $prompt->cursor());
 
         // 'h' → move left
         $prompt = $prompt->handleKey('h');
-        $this->assertSame(2, $prompt->cursor());
+        $this->assertSame(1, $prompt->cursor());
     }
 
     public function testNormalModeLKeyMovesCursorRight(): void
@@ -81,10 +81,11 @@ final class ViModeTest extends TestCase
         $vi = new ViMode();
         $prompt = $prompt->withMode($vi);
 
-        // ESC → normal
+        // ESC → normal (cursor pulled back onto 'c' at index 2)
         $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame(2, $prompt->cursor());
 
-        // 'l' → move right (should be at end, so no change)
+        // 'l' → move right
         $prompt = $prompt->handleKey('l');
         $this->assertSame(3, $prompt->cursor());
     }
@@ -101,16 +102,64 @@ final class ViModeTest extends TestCase
         $this->assertSame(0, $prompt->cursor());
     }
 
-    public function testNormalModeDollarGoesToLineEnd(): void
+    public function testNormalModeDollarLandsOnLastChar(): void
     {
         $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b')->handleChar('c');
         $vi = new ViMode();
         $prompt = $prompt->withMode($vi);
 
-        // ESC → normal, then '$' → line end
+        // ESC → normal, '0' → start, then '$' must land ON 'c' (index 2),
+        // not past it — vi normal mode never rests after the last char.
+        $prompt = $prompt->handleKey(Key::Escape);
+        $prompt = $prompt->handleKey('0');
+        $prompt = $prompt->handleKey('$');
+        $this->assertSame(2, $prompt->cursor());
+    }
+
+    public function testEscapePullsCursorBackFromLineEnd(): void
+    {
+        // Type "abc" (cursor sits after 'c' at 3); Escape must land ON 'c'.
+        $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b')->handleChar('c');
+        $prompt = $prompt->withMode(new ViMode());
+
+        $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame(2, $prompt->cursor());
+    }
+
+    public function testEscapeSingleCharLandsOnIt(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('a')->withMode(new ViMode());
+
+        $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame(0, $prompt->cursor());
+    }
+
+    public function testEscapeEmptyBufferStaysAtZero(): void
+    {
+        $prompt = TextPrompt::new('> ')->withMode(new ViMode());
+
+        $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame(0, $prompt->cursor());
+        $this->assertSame('normal', $this->getViMode($prompt));
+    }
+
+    public function testEscapeMidBufferDoesNotMoveCursor(): void
+    {
+        // Cursor at 1 (between 'a' and 'b') — Escape must not pull back.
+        $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b')
+            ->handleKey(Key::Left)->withMode(new ViMode());
+
+        $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame(1, $prompt->cursor());
+    }
+
+    public function testDollarOnSingleCharBufferLandsAtZero(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('a')->withMode(new ViMode());
+
         $prompt = $prompt->handleKey(Key::Escape);
         $prompt = $prompt->handleKey('$');
-        $this->assertSame(3, $prompt->cursor());
+        $this->assertSame(0, $prompt->cursor());
     }
 
     // =========================================================================

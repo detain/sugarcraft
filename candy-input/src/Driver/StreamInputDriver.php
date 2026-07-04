@@ -43,6 +43,14 @@ final class StreamInputDriver implements InputDriver
 
         $chunk = $this->readNonBlocking();
         if ($chunk === '' || $chunk === false) {
+            // At EOF nothing more will ever arrive: drain any remainder the
+            // decoder is still holding (e.g. the "\r" that followed a
+            // bracketed-paste terminator) instead of returning null forever.
+            // A live stream keeps the remainder buffered awaiting more bytes.
+            if (feof($this->stream)) {
+                $this->eventBuffer = $this->decoder->decode('');
+                return array_shift($this->eventBuffer);
+            }
             return null;
         }
 

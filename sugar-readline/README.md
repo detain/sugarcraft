@@ -132,7 +132,55 @@ The `SugarCraft\Readline\Key` class exposes symbolic constants for every support
 - `Key::Tab` — auto-complete or toggle confirmation value
 - `Key::Backspace` / `Key::Delete` — delete characters
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line
+- `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search
 - `Key::Escape` / `Key::CtrlC` — abort
+
+## Editing modes (Vi vs Emacs)
+
+`TextPrompt` uses a dual-engine architecture. The prompt itself owns the
+buffer, cursor, history, and rendering; an optional **mode** object attached
+via `withMode()` owns the key-to-operation mapping:
+
+```php
+use SugarCraft\Readline\Mode\EmacsMode;
+use SugarCraft\Readline\Mode\ViMode;
+
+$prompt = TextPrompt::new('> ')->withMode(new EmacsMode()); // readline bindings
+$prompt = TextPrompt::new('> ')->withMode(new ViMode());    // modal vi bindings
+```
+
+Every key fed to `TextPrompt::handleKey()` is delegated to the attached
+`Mode\ModeInterface` implementation. The mode translates the key into prompt
+operations by calling back into `handleKeyDirect()` (the mode-bypassing
+entry point — using `handleKey()` would recurse), then re-attaches itself so
+its own state survives the prompt's immutable cloning.
+
+- **`EmacsMode`** implements the classic readline chords — Ctrl+A/E (line
+  start/end), Ctrl+B/F (char motion), Alt+B/F/D (word motion/delete),
+  Ctrl+W, Ctrl+T (transpose), Ctrl+P/N (history), Ctrl+R/Ctrl+S
+  (incremental search). Its only internal state is the Escape/Alt prefix
+  flag.
+- **`ViMode`** is a modal state machine (insert → Escape → normal → `v` →
+  visual, plus pending motions like `dd`/`yy`). It does not hardcode vi
+  bindings: normal/visual keys are mapped through candy-forms'
+  `VimKeyHandler`, which returns a `VimAction` enum case that ViMode then
+  executes as TextPrompt operations. New vi bindings therefore belong in
+  candy-forms (`VimAction` + `VimKeyHandler`), not in ViMode's branching.
+  In normal mode the cursor rests ON the last character (vi semantics), so
+  `$` and Escape-at-end land on — not after — the final char.
+
+With no mode attached, `TextPrompt` falls back to its built-in default
+bindings (arrows, Home/End, Ctrl+U/K/W, Ctrl+R/S, Tab completion).
+
+### Incremental history search
+
+With a history attached (`withHistory()`), Ctrl+R enters reverse
+incremental search and Ctrl+S forward search, in any mode. Typed characters
+refine the query, repeated Ctrl+R/Ctrl+S steps through older/newer matches,
+Enter accepts the match into the buffer (without submitting), and
+Escape/Ctrl+G cancels back to the original line. The prompt renders a
+``(reverse-i-search)`query': match`` indicator, switching to ``(failed
+reverse-i-search)`` when nothing matches (including empty history).
 
 ## Submit / Abort Semantics
 

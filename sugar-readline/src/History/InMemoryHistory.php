@@ -86,6 +86,20 @@ class InMemoryHistory implements HistoryInterface
         return $this->history[$this->position];
     }
 
+    public function search(string $query, int $fromIndex, int $direction): ?array
+    {
+        $count = \count($this->history);
+        $step = $direction >= 0 ? 1 : -1;
+        // No clamping: a $fromIndex already outside the list means the scan
+        // direction is exhausted, and the caller must see null (not a rematch).
+        for ($i = $fromIndex; $i >= 0 && $i < $count; $i += $step) {
+            if ($query === '' || str_contains($this->history[$i], $query)) {
+                return ['index' => $i, 'entry' => $this->history[$i]];
+            }
+        }
+        return null;
+    }
+
     public function reset(): void
     {
         $this->position = -1;
