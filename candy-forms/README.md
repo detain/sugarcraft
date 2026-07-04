@@ -101,6 +101,12 @@ candy-forms is built on five shared packages:
   (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`: CursorLeft,
   CursorRight, DeleteChar, YankLine, …). sugar-prompt, sugar-bits, and
   sugar-readline delegate to it — new bindings benefit all 4 libs at once.
+  Text objects (`ci"`, `da{`, `yiw`, …) resolve through
+  `VimKeyHandler::handleTextObject()`: `VimOperator` (c/d/y) +
+  `TextObjectScope` (i/a) + a target key feed `TextObject::resolve()`,
+  which returns the `[start, end)` character range on the buffer —
+  innermost bracket pair wins, quotes pair left-to-right, unmatched
+  delimiters return null (vim's beep).
 
 The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07 back-compat shim)
 remains as a deprecated alias — it delegates to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`

@@ -47,6 +47,18 @@ enum VimAction: string
     /** Yank (copy) the entire line (vim yy). */
     case YankLine = 'yank-line';
 
+    /** Change the entire line (vim cc) — the 'c' operator pending a target. */
+    case ChangeLine = 'change-line';
+
+    /** Delete a resolved text object (vim di"/da{/diw...). */
+    case DeleteTextObject = 'delete-text-object';
+
+    /** Change a resolved text object: delete it, then enter insert mode (vim ci"/ca(/ciw...). */
+    case ChangeTextObject = 'change-text-object';
+
+    /** Yank a resolved text object (vim yi'/ya]/yaw...). */
+    case YankTextObject = 'yank-text-object';
+
     /** Paste the most recently yanked text after cursor (vim p). */
     case Paste = 'paste';
 

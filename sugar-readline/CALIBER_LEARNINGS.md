@@ -40,8 +40,8 @@ EmacsMode Ctrl+R/Ctrl+S start the shared TextPrompt search machine in reverse/fo
 
 ## Future work (deferred pre-1.0)
 
-### Vi text objects (Finding 13)
-Text objects like `ci"` / `da{` / `yi(` are deliberately deferred pre-1.0: they require new VimAction enum cases + VimKeyHandler support in candy-forms FIRST, per CALIBER_LEARNINGS 2026-05-31: "Do NOT add new vim keybindings to per-lib branching logic. Always add new bindings to VimAction enum + VimKeyHandler." Once candy-forms grows Inner/Around text-object actions, ViMode only needs to consume them via `consumeAction()`.
+### ~~Vi text objects (Finding 13)~~ — DONE 2026-07-04
+Implemented candy-forms-first, per CALIBER_LEARNINGS 2026-05-31 ("Always add new bindings to VimAction enum + VimKeyHandler"): candy-forms grew `TextObject` (pure resolver: buffer + cursor + `TextObjectScope::Inner/Around` + target key → `?[start,end)` in mb character indices), `VimOperator` (c/d/y), new `VimAction` cases (`ChangeLine`, `Change/Delete/YankTextObject`) and `VimKeyHandler::handleTextObject()`. ViMode consumes them via its existing pending-motion machinery extended with a `pendingScope` stage (operator → i/a → target), executing ranges through key replay (`moveCursorTo` + Backspace), consistent with `deleteLine()`. `cc` (change line) came along for free. Documented simplifications: `a"` takes no trailing whitespace, no `quoteescape`, no yank register (matches `yy`).
 
 ### Integration with Terminfo (Finding 16)
 Using terminfo for terminal capability queries would require FFI bindings to the curses terminfo database. This is a significant integration effort.
