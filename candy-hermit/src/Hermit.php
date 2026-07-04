@@ -866,36 +866,31 @@ final class Hermit
     /**
      * Replace a segment of a line with overlay characters.
      *
-     * Uses grapheme-aware functions (\grapheme_substr, \grapheme_strlen) to
-     * correctly handle CJK characters, emoji with ZWJ, and other complex runes
-     * that occupy a single visible cell but multiple bytes. For pure ASCII
-     * input this is equivalent to byte-level replacement but preserves
-     * visual integrity for international text.
+     * Slices by visible CELL columns via Width::truncateAnsi()/dropAnsi(),
+     * never by grapheme count: the overlay carries ANSI styling whose escape
+     * bytes are not columns, and grapheme cluster counts for emoji-with-
+     * modifier differ between PHP 8.3 and 8.4 ICU behaviour — grapheme_substr
+     * on a styled string cut INSIDE the SGR sequence on 8.4.
      */
     private function replaceSegment(string $line, int $x, int $width, string $replacement): string
     {
-        $lineLen = \grapheme_strlen($line);
-
-        if ($lineLen === 0) {
+        if ($line === '') {
             return $replacement;
         }
 
-        $prefix = $x > 0 ? (\grapheme_substr($line, 0, $x) ?: '') : '';
-        $suffixStart = $x + $width;
-        $suffix = $suffixStart < $lineLen ? (\grapheme_substr($line, $suffixStart) ?: '') : '';
+        $prefix = $x > 0 ? Width::truncateAnsi($line, $x) : '';
+        $suffix = Width::dropAnsi($line, $x + $width);
 
-        $repLen = \grapheme_strlen($replacement);
-        $replacementPart = \grapheme_substr($replacement, 0, $width) ?: '';
-
-        if (\grapheme_strlen($replacementPart) < $width) {
-            $replacementPart .= \str_repeat(' ', $width - \grapheme_strlen($replacementPart));
+        // The overlay is already truncated + padded to $width columns by the
+        // caller; clamp defensively so a mis-sized replacement can't shift
+        // the suffix out of column alignment.
+        $visible = Width::string($replacement);
+        if ($visible > $width) {
+            $replacement = Width::truncateAnsi($replacement, $width);
+        } elseif ($visible < $width) {
+            $replacement .= \str_repeat(' ', $width - $visible);
         }
 
-        if ($suffixStart >= $lineLen && $repLen > $width) {
-            $remainingChars = $repLen - $width;
-            $suffix = \grapheme_substr($replacement, $width, $remainingChars) ?: '';
-        }
-
-        return $prefix . $replacementPart . $suffix;
+        return $prefix . $replacement . $suffix;
     }
 }

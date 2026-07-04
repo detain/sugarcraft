@@ -8,7 +8,11 @@ use SugarCraft\Hermit\{FilteredItem, Hermit, Item, Model};
 use PHPUnit\Framework\TestCase;
 
 /**
- * @covers \SugarCraft\Hermit\Model
+ * Model is an interface, which the covers annotation cannot target
+ * (PHPUnit warns under a coverage run) — so point it at the concrete
+ * class the tests drive instead.
+ *
+ * @covers \SugarCraft\Hermit\Hermit
  */
 final class ModelTest extends TestCase
 {
