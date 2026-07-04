@@ -369,3 +369,21 @@ The following classes were deleted as part of the orphan/dead-code cleanup:
 **`ResultTable` adapter** (DEFERRED to STEP 8.1) — `ResultTable` may eventually need an adapter to bridge it to the admin result set rendering path. Deferred to STEP 8.1 to avoid expanding scope.
 
 Source: step 7.3 ai/candy-query-docs-7.3
+
+## Future work (deferred pre-1.0)
+
+Audit items from `findings/plan_candy-query.md` deliberately deferred — do not
+"fix" these opportunistically; each is a scoped decision:
+
+- **Plan 3.1 — public PDO on deprecated `Database`** — removing
+  `public readonly \PDO $pdo` is a breaking API change on a class kept only
+  for BC; drop it together with the class itself at 1.0.
+- **Plan 3.3 — `App` constructor value-objects** — grouping the 29 constructor
+  params into `AdminState`/`TableBrowseState` etc. is a large refactor touching
+  `mutate()` call sites across the whole model; schedule as its own PR.
+- **Plan 3.4 — `Async*` renames** (`CachedConnection` → `AsyncCachedConnection`,
+  `CachingServerContext` → `AsyncCachingServerContext`) — cosmetic churn across
+  many call sites for a naming-clarity win; revisit alongside 3.3.
+- **Plan 5.1 — async query cancellation** — an in-flight async query cannot be
+  aborted; needs a `KILL QUERY` side-channel connection (the timeout added by
+  `QueryTimeout` rejects the promise but the server keeps executing).

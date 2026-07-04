@@ -55,4 +55,24 @@ final class CachingServerContextTest extends TestCase
         $this->assertSame(['max_connections' => '500'], $ctx->serverVariables());
         $this->assertSame(['Uptime' => '42'], $ctx->statusVariables());
     }
+
+    public function testInjectedCacheServesVariablesWithoutTouchingTheGlobal(): void
+    {
+        $inner = $this->createMock(ServerContextInterface::class);
+        $inner->expects($this->never())->method('serverVariables');
+        $inner->expects($this->never())->method('statusVariables');
+
+        // getStatusVariables()/getServerVariables() read the fixed keys the
+        // admin tick stores under.
+        $cache = new AdminQueryCache();
+        $cache->store('status', ['Threads_connected' => '7']);
+        $cache->store('server', ['max_connections' => '151']);
+
+        $ctx = new CachingServerContext($inner, cache: $cache);
+
+        $this->assertSame(['Threads_connected' => '7'], $ctx->statusVariables());
+        $this->assertSame(['max_connections' => '151'], $ctx->serverVariables());
+        // The process-global stayed cold — proof the injected cache was used.
+        $this->assertNull(AdminQueryCache::instance()->getStatusVariables());
+    }
 }

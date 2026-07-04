@@ -673,6 +673,26 @@ $errorRate = $q->errorRate(from: new DateTimeImmutable('-1 hour'), to: new DateT
 $store->prune(before: new DateTimeImmutable('-30 days'));
 ```
 
+## Known limitations
+
+Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
+
+- **No connection pooling.** One async connection per flavor+DSN+user is
+  cached and reused (`AdminQueryCache::connection()`); concurrent admin
+  queries are serialized onto that single connection rather than spread
+  across a pool.
+- **No transaction support on async connections.** `ReactMysqlConnection` /
+  `ReactPostgresConnection` execute single statements only —
+  `BEGIN`/`COMMIT` spanning multiple `query()` calls is not coordinated, and
+  the synchronous PDO path does not expose a transaction API either.
+- **No prepared-statement cache.** Every query is sent as raw SQL text;
+  repeated statements are re-parsed by the server each time.
+- **Async cancellation not yet implemented.** An in-flight async query cannot
+  be aborted from the UI. Queries are bounded by a configurable per-query
+  timeout (default 30s, see `QueryTimeout`), which rejects the promise and
+  ignores a late result — but the server keeps executing the statement; a
+  `KILL QUERY` side-channel is future work.
+
 The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots into the existing polling loop without coupling to the UI. The `SqliteHistoryStore` uses WAL mode for safe concurrent reads during writes.
 
 ## Demos

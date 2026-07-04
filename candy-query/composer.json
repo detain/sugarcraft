@@ -42,6 +42,7 @@
         "sugarcraft/sugar-table": "dev-master",
         "sugarcraft/sugar-toast": "dev-master",
         "react/mysql": "0.7.x-dev",
+        "react/promise-timer": "^1.9",
         "voryx/pgasync": "^2.2",
         "ext-pdo_sqlite": "*",
         "ext-pdo_mysql": "*",

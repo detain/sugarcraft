@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Query\Admin\QueryTimeout;
 use SugarCraft\Query\Admin\ReactMysqlConnection;
+use SugarCraft\Query\Admin\ReactPostgresConnection;
 
 /**
  * Guards the PDO-DSN → react/mysql-URI translation.
@@ -66,5 +68,23 @@ final class ReactMysqlConnectionTest extends TestCase
         $this->assertSame('user@corp', rawurldecode($parts['user'] ?? ''));
         $this->assertSame('p@ss:w/rd', rawurldecode($parts['pass'] ?? ''));
         $this->assertSame('my db', rawurldecode(ltrim($parts['path'] ?? '', '/')));
+    }
+
+    /**
+     * Pins the query-deadline API on both async wrappers: an optional trailing
+     * float defaulting to QueryTimeout::DEFAULT_SECONDS, so existing
+     * `new ReactMysqlConnection($dsn,$u,$p)` call sites get the protective
+     * deadline without changes. Timeout semantics themselves are covered by
+     * QueryTimeoutTest.
+     */
+    public function testQueryTimeoutParameterDefaultsToTheSharedDeadline(): void
+    {
+        foreach ([ReactMysqlConnection::class, ReactPostgresConnection::class] as $class) {
+            $params = (new \ReflectionClass($class))->getConstructor()->getParameters();
+            $timeout = end($params);
+
+            $this->assertSame('queryTimeout', $timeout->getName(), $class);
+            $this->assertSame(QueryTimeout::DEFAULT_SECONDS, $timeout->getDefaultValue(), $class);
+        }
     }
 }

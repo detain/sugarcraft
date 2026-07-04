@@ -17,13 +17,14 @@ final class CachingServerContext implements ServerContextInterface
         private ?array $cachedStatusVars = null,
         private ?array $cachedServerVars = null,
         private bool $isLoading = false,
+        private ?AdminQueryCache $cache = null,
     ) {}
 
     public function connection(): \SugarCraft\Query\Db\DatabaseInterface
     {
         // Route admin-page queries through the async cache so a slow sys query
         // never blocks the event loop during view(). See AdminQueryCache.
-        return new CachedConnection($this->inner->connection());
+        return new CachedConnection($this->inner->connection(), $this->cache);
     }
 
     /** @return array<string, string> */
@@ -39,7 +40,7 @@ final class CachingServerContext implements ServerContextInterface
         // VARIABLES against a remote server can take seconds (it froze the whole
         // UI). The data arrives shortly via the async admin tick, which fetches
         // and caches it; until then the page shows its loading/empty state.
-        return AdminQueryCache::instance()->getServerVariables() ?? [];
+        return $this->cache()->getServerVariables() ?? [];
     }
 
     /** @return array<string, string> */
@@ -51,7 +52,16 @@ final class CachingServerContext implements ServerContextInterface
         }
         // Cold miss → [] (never a synchronous query on the render path; see
         // serverVariables() above). The async admin tick fills the cache.
-        return AdminQueryCache::instance()->getStatusVariables() ?? [];
+        return $this->cache()->getStatusVariables() ?? [];
+    }
+
+    /**
+     * Resolved lazily (not in the constructor) so the process-global default
+     * stays live across AdminQueryCache::reset() in tests.
+     */
+    private function cache(): AdminQueryCache
+    {
+        return $this->cache ?? AdminQueryCache::instance();
     }
 
     public function statusVariablesTs(): float

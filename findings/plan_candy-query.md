@@ -1,7 +1,7 @@
 ---
-status: not-started
+status: complete-except-1.8 (voryx/pgasync replacement — out of scope this pass)
 phase: 1
-updated: 2026-06-30
+updated: 2026-07-04
 ---
 
 # Implementation Plan: candy-query Code Review Findings
@@ -21,7 +21,7 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 1: Critical SQL Injection Fixes [PENDING]
 
-- [ ] **1.1 Fix MysqlDatabase::rows() identifier quoting** ← CURRENT
+- [x] **1.1 Fix MysqlDatabase::rows() identifier quoting** (done on master — Identifier::quote)
   - File: `src/Db/MysqlDatabase.php:100-107`
   - Replace `str_replace('`', '``', $table)` with `Identifier::quote(Flavor::MySQL, $table)`
   - Severity: CRITICAL
@@ -29,38 +29,38 @@ Address all critical, high, medium, and low severity findings from candy-query c
   - Why: Prevents SQL injection through crafted table names
   - Verification: `vendor/bin/phpunit` passes for candy-query, new test for backtick in table name
 
-- [ ] 1.2 Fix PostgresDatabase::rows() identifier quoting
+- [x] 1.2 Fix PostgresDatabase::rows() identifier quoting — **done on master**
   - File: `src/Db/PostgresDatabase.php:83-86`
   - Replace `str_replace('"', '""', $table)` with `Identifier::quote(Flavor::Postgres, $table)`
   - Severity: CRITICAL
   - What: Same str_replace anti-pattern for PostgreSQL identifiers
   - Why: PostgreSQL identifiers can contain Unicode, spaces, and special characters
 
-- [ ] 1.3 Fix SqliteDatabase::rows() identifier quoting
+- [x] 1.3 Fix SqliteDatabase::rows() identifier quoting — **done on master**
   - File: `src/Db/SqliteDatabase.php:60`
   - Replace `str_replace('"', '""', $table)` with `Identifier::quote(Flavor::Sqlite, $table)`
   - Severity: CRITICAL
   - What: Same str_replace anti-pattern for SQLite
   - Why: Consistency with the dedicated Identifier class
 
-- [ ] 1.4 Fix MysqlSchemaProvider::columns() identifier quoting
+- [x] 1.4 Fix MysqlSchemaProvider::columns() identifier quoting — **done on master**
   - File: `src/Schema/MysqlSchemaProvider.php:53`
   - Replace `$this->db->quote($table)` with `Identifier::quote($this->flavor, $table)`
   - Severity: CRITICAL
   - What: Uses `$this->db->quote()` which quotes string VALUES, not identifiers
   - Why: Semantically wrong - value quoting for identifiers could fail with special characters
 
-- [ ] 1.5 Fix MysqlSchemaProvider::indexes() identifier quoting
+- [x] 1.5 Fix MysqlSchemaProvider::indexes() identifier quoting — **done on master**
   - File: `src/Schema/MysqlSchemaProvider.php:80`
   - Replace `$this->db->quote($table)` with `Identifier::quote($this->flavor, $table)`
   - Severity: CRITICAL
 
-- [ ] 1.6 Fix MysqlSchemaProvider::foreignKeys() identifier quoting
+- [x] 1.6 Fix MysqlSchemaProvider::foreignKeys() identifier quoting — **done on master**
   - File: `src/Schema/MysqlSchemaProvider.php:115`
   - Replace `$this->db->quote($table)` with `Identifier::quote($this->flavor, $table)`
   - Severity: CRITICAL
 
-- [ ] 1.7 Fix PreviewQuery::columnsSql() PostgreSQL identifier quoting
+- [x] 1.7 Fix PreviewQuery::columnsSql() PostgreSQL identifier quoting — **done on master**
   - File: `src/Db/PreviewQuery.php:65-72`
   - Replace `str_replace("'", "''", $table)` with `Identifier::quote(Flavor::Postgres, $table)`
   - Severity: CRITICAL
@@ -77,28 +77,28 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 2: High Severity Issues [PENDING]
 
-- [ ] 2.1 Replace string matching with error codes in isIgnorableError()
+- [x] 2.1 Replace string matching with error codes in isIgnorableError() — **done on master — IGNORABLE_ERROR_CODES**
   - File: `src/Admin/ServerContext.php:269-282`
   - Use error codes (1142, 1146, 1227, 2002, 2003, 2013) instead of locale-dependent message strings
   - Severity: HIGH
   - What: `str_contains()` checks against English substrings fail on non-English MySQL servers
   - Why: MySQL error messages are returned in the server's locale
 
-- [ ] 2.2 Make AdminQueryCache injectable
+- [x] 2.2 Make AdminQueryCache injectable — **done 2026-07-04 — public ctor + injectable in CachedConnection/CachingServerContext/ReconnectManager**
   - File: `src/Admin/AdminQueryCache.php:30`
   - Pass AdminQueryCache as constructor dependency; keep static instance() for convenience
   - Severity: HIGH
   - What: Static singleton makes testing difficult and prevents multi-instance coexistence
   - Why: Enables proper dependency injection and testability
 
-- [ ] 2.3 Add atomic operations for lastUptime race condition
+- [x] 2.3 Add atomic operations for lastUptime race condition — **done 2026-07-04 — snapshot-local read/compare/write in detectReset()**
   - File: `src/Admin/ServerContext.php:252-264`
   - Use PHP 8.1+ Atomic class or mutex for concurrent access protection
   - Severity: HIGH
   - What: `statusVariables()` can be called concurrently, leading to incorrect reset detection
   - Why: One fetch might update lastUptime after another has read it but before it writes
 
-- [ ] 2.4 Add invalidateConnection() to AdminQueryCache
+- [x] 2.4 Add invalidateConnection() to AdminQueryCache — **done 2026-07-04 — invoked from ReconnectManager::attemptReconnect (Db layer must not import Admin, see LayeringTest)**
   - File: `src/Admin/AdminQueryCache.php:121-129`
   - Clear cached ReactMysqlConnection after MysqlDatabase::reconnect()
   - Severity: HIGH
@@ -107,35 +107,35 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 3: Medium Severity Issues [PENDING]
 
-- [ ] 3.1 Remove public PDO from deprecated Database class
+- [ ] 3.1 Remove public PDO from deprecated Database class — **DEFERRED pre-1.0 — breaking API change; see candy-query/CALIBER_LEARNINGS.md**
   - File: `src/Database.php:51`
   - Remove `public readonly \PDO $pdo` property; use interface access only
   - Severity: MEDIUM
   - What: public readonly on mutable PDO provides false sense of immutability
   - Why: Violates encapsulation
 
-- [ ] 3.2 Extract shared cache TTL constant
+- [x] 3.2 Extract shared cache TTL constant — **done 2026-07-04 — src/Admin/CacheTtl.php (STATUS/SERVER)**
   - File: `src/Admin/ServerContext.php:22-23` and `src/Admin/AdminQueryCache.php:28`
   - Define `DEFAULT_CACHE_TTL = 3.0` and use consistently
   - Severity: MEDIUM
   - What: Magic numbers 3.0 and 30.0 duplicated across files with different names
   - Why: Confusing redundancy
 
-- [ ] 3.3 Group App constructor parameters into value objects
+- [ ] 3.3 Group App constructor parameters into value objects — **DEFERRED pre-1.0 — large refactor; see candy-query/CALIBER_LEARNINGS.md**
   - File: `src/App.php:82-109`
   - Reduce 29 parameters to ~10-15 by grouping into AdminState, TableBrowseState, etc.
   - Severity: MEDIUM
   - What: Constructor with 29 parameters is unwieldy and difficult to test
   - Why: Improves maintainability and testability
 
-- [ ] 3.4 Clarify caching wrapper naming
+- [ ] 3.4 Clarify caching wrapper naming — **DEFERRED pre-1.0 — cosmetic churn; see candy-query/CALIBER_LEARNINGS.md**
   - Files: `src/Admin/CachedConnection.php` vs `src/Admin/CachingServerContext.php`
   - Rename to AsyncCachedConnection and AsyncCachingServerContext
   - Severity: MEDIUM
   - What: Inconsistent naming makes codebase harder to navigate
   - Why: Clarifies that these are tied to async fetch path
 
-- [ ] 3.5 Extract shared DsnParser utility
+- [x] 3.5 Extract shared DsnParser utility — **done on master — src/Admin/DsnParser.php**
   - Files: `src/Admin/ReactMysqlConnection.php:86-97` vs `src/Admin/ReactPostgresConnection.php:78-84`
   - Consolidate extractDsnValue() into shared DsnParser class
   - Severity: MEDIUM
@@ -144,21 +144,21 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 4: Low Severity Issues [PENDING]
 
-- [ ] 4.1 Have PreviewQuery::quoteIdent() delegate to Identifier::quote()
+- [x] 4.1 Have PreviewQuery::quoteIdent() delegate to Identifier::quote() — **done 2026-07-04 — quoteIdent removed**
   - File: `src/Db/PreviewQuery.php:138-141`
   - Remove duplicate escaping logic; delegate to Identifier::quote()
   - Severity: LOW
   - What: quoteIdent() duplicates Identifier::quote() functionality
   - Why: DRY principle
 
-- [ ] 4.2 Extract magic number 3.0 in App::subscriptions() to constant
+- [x] 4.2 Extract magic number 3.0 in App::subscriptions() to constant — **done 2026-07-04 — CacheTtl::STATUS**
   - File: `src/App.php:892`
   - Extract throttle delay 3.0 to named constant referencing STATUS_CACHE_TTL
   - Severity: LOW
   - What: Same magic number used in multiple places with different meanings
   - Why: Code clarity
 
-- [ ] 4.3 Pin react/mysql to stable release compatible with PHP 8.3
+- [x] 4.3 Pin react/mysql to stable release compatible with PHP 8.3 — **WONTFIX 2026-07-04 — no tagged 0.7.x exists on Packagist (latest v0.6.0 lacks the MysqlClient API in use)**
   - File: `composer.json:44`
   - Replace `react/mysql: 0.7.x-dev` with stable release
   - Severity: LOW
@@ -167,21 +167,21 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 5: Missing Features [PENDING]
 
-- [ ] 5.1 Add query cancellation mechanism
+- [ ] 5.1 Add query cancellation mechanism — **DEFERRED pre-1.0 — needs KILL QUERY side-channel; see candy-query/CALIBER_LEARNINGS.md**
   - Files: `src/Admin/ReactMysqlConnection.php`, `src/Admin/ReactPostgresConnection.php`
   - Implement CancellablePromiseInterface for async queries
   - Severity: LOW
   - What: No mechanism to cancel in-flight async queries
   - Why: Long-running queries waste bandwidth and CPU
 
-- [ ] 5.2 Add query timeout for async queries
+- [x] 5.2 Add query timeout for async queries — **done 2026-07-04 — QueryTimeout::wrap via react/promise-timer, configurable ctor param, 30s default, <=0 disables**
   - Files: `src/Admin/ReactMysqlConnection.php`, `src/Admin/ReactPostgresConnection.php`
   - Configure timeout on MysqlClient::query() or use TimeoutPromise
   - Severity: LOW
   - What: No timeout for async queries - network partition causes indefinite hang
   - Why: Prevent infinite waits
 
-- [ ] 5.3 Document known limitations
+- [x] 5.3 Document known limitations — **done 2026-07-04 — README "Known limitations"**
   - No connection pooling, no transaction support, no prepared statement caching
   - Severity: LOW
   - What: Document these as known limitations in README
@@ -189,7 +189,7 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 6: Duplicated Logic Refactoring [PENDING]
 
-- [ ] 6.1 Consolidate error message matching to error codes only
+- [x] 6.1 Consolidate error message matching to error codes only — **done-with-rationale 2026-07-04 — codes are primary; str_contains kept as documented supplementary fallback for drivers/proxies that drop codes**
   - Files: `src/Admin/Connections/ConnectionActions.php:154-176`
   - Replace string matching in isAclError(), isConnectionError(), isUnknownThreadError()
   - Severity: MEDIUM

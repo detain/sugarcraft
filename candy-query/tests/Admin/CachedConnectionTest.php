@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Query\Admin\AdminQueryCache;
 use SugarCraft\Query\Admin\CachedConnection;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\PreparedStatementInterface;
@@ -44,5 +45,36 @@ final class CachedConnectionTest extends TestCase
 
         $this->assertSame('MySQL version 8.0.36', $conn->serverVersion());
         $this->assertSame('mysql', $conn->driverName());
+    }
+
+    public function testInjectedCacheServesQueriesWithoutTouchingTheGlobal(): void
+    {
+        AdminQueryCache::reset();
+        try {
+            $cache = new AdminQueryCache();
+            $cache->store('SELECT 1', [['ok' => '1']]);
+            $conn = new CachedConnection(new FakeDatabase(), $cache);
+
+            $this->assertSame([['ok' => '1']], $conn->query('SELECT 1'));
+
+            // A miss must queue on the injected cache, not the process-global.
+            $conn->query('SELECT 2');
+            $this->assertTrue($cache->hasPending());
+            $this->assertFalse(AdminQueryCache::instance()->hasPending());
+        } finally {
+            AdminQueryCache::reset();
+        }
+    }
+
+    public function testDefaultsToTheSharedCacheWhenNoneInjected(): void
+    {
+        AdminQueryCache::reset();
+        try {
+            AdminQueryCache::instance()->store('SELECT 1', [['shared' => 'y']]);
+
+            $this->assertSame([['shared' => 'y']], (new CachedConnection(new FakeDatabase()))->query('SELECT 1'));
+        } finally {
+            AdminQueryCache::reset();
+        }
     }
 }

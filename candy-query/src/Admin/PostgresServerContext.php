@@ -22,8 +22,8 @@ use SugarCraft\Query\Db\Version;
  */
 final class PostgresServerContext implements ServerContextInterface
 {
-    private const STATUS_CACHE_TTL = 3.0;
-    private const SERVER_CACHE_TTL = 30.0;
+    private const STATUS_CACHE_TTL = CacheTtl::STATUS;
+    private const SERVER_CACHE_TTL = CacheTtl::SERVER;
 
     /** @var array<string, string>|null */
     private ?array $serverVariablesCache = null;

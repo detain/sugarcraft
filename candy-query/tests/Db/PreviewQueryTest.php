@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\Identifier;
 use SugarCraft\Query\Db\PreviewQuery;
 use SugarCraft\Query\Db\SqliteDatabase;
 
@@ -88,6 +89,33 @@ final class PreviewQueryTest extends TestCase
         $cols = PreviewQuery::classify(Flavor::MySQL, [['COLUMN_NAME' => 'we`ird', 'DATA_TYPE' => 'int']]);
         $this->assertStringContainsString('`we``ird`', PreviewQuery::build(Flavor::MySQL, 'ta`ble', $cols));
         $this->assertStringContainsString('`ta``ble`', PreviewQuery::build(Flavor::MySQL, 'ta`ble', $cols));
+    }
+
+    /**
+     * build() must produce exactly what the flavor-aware Identifier::quote()
+     * produces for every flavor — it used to hand-roll its own str_replace
+     * quoting, which could drift from the central (tested) implementation.
+     */
+    public function testBuildQuotingDelegatesToIdentifierForEveryFlavor(): void
+    {
+        foreach (Flavor::cases() as $flavor) {
+            $sql = PreviewQuery::build($flavor, 'ta"b`le', []);
+
+            $this->assertSame(
+                sprintf('SELECT * FROM %s LIMIT 100', Identifier::quote($flavor, 'ta"b`le')),
+                $sql,
+                $flavor->name,
+            );
+        }
+    }
+
+    public function testPostgresIdentifierQuotingDoublesEmbeddedDoubleQuotes(): void
+    {
+        $cols = PreviewQuery::classify(Flavor::Postgres, [['column_name' => 'we"ird', 'data_type' => 'integer']]);
+        $sql = PreviewQuery::build(Flavor::Postgres, 'ta"ble', $cols);
+
+        $this->assertStringContainsString('"we""ird"', $sql);
+        $this->assertStringContainsString('FROM "ta""ble"', $sql);
     }
 
     public function testLimitIsClampedToAtLeastOne(): void

@@ -15,6 +15,7 @@ use SugarCraft\Core\Subscriptions;
 use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminQueryCache;
+use SugarCraft\Query\Admin\CacheTtl;
 use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\EmptyServerContext;
 use SugarCraft\Query\Admin\Connections\ConnectionsPage;
@@ -879,17 +880,19 @@ final class App implements Model
             return null;
         }
 
-        // Throttle: the admin fetch runs at most once every 3 seconds.
-        // We call createAdminFetchPromise() directly and manage a cooldown flag.
-        // The tick at 1s continues firing so the page-driven query queue
-        // (AdminQueryCache) is drained promptly even when the status fetch is throttled.
-        // The throttle timestamp is stored in the model state ($lastAdminFetchAt)
-        // rather than a function-static, so each App instance has independent throttle
-        // state and the timestamp survives across poll cycles.
+        // Throttle: the admin fetch runs at most once per status-cache window
+        // (CacheTtl::STATUS) — fetching faster would only refill a still-fresh
+        // cache. We call createAdminFetchPromise() directly and manage a
+        // cooldown flag. The tick at 1s continues firing so the page-driven
+        // query queue (AdminQueryCache) is drained promptly even when the
+        // status fetch is throttled. The throttle timestamp is stored in the
+        // model state ($lastAdminFetchAt) rather than a function-static, so
+        // each App instance has independent throttle state and the timestamp
+        // survives across poll cycles.
         $now = microtime(true);
         $elapsed = $now - $this->lastAdminFetchAt;
 
-        if ($elapsed < 3.0) {
+        if ($elapsed < CacheTtl::STATUS) {
             // In cooldown — still fire the tick (for queue draining) but skip the fetch.
             return (new Subscriptions())->withTick('admin-fetch', 1.0, function (): \SugarCraft\Core\Msg {
                 return Cmd::none();

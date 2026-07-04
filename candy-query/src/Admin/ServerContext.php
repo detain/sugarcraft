@@ -19,8 +19,8 @@ use SugarCraft\Query\Db\Version;
  */
 final class ServerContext implements ServerContextInterface
 {
-    private const STATUS_CACHE_TTL = 3.0;
-    private const SERVER_CACHE_TTL = 30.0;
+    private const STATUS_CACHE_TTL = CacheTtl::STATUS;
+    private const SERVER_CACHE_TTL = CacheTtl::SERVER;
 
     private ?array $serverVariablesCache = null;
     private ?float $serverVariablesTsCache = null;
@@ -256,8 +256,16 @@ final class ServerContext implements ServerContextInterface
             return;
         }
 
+        // Snapshot semantics: one read of $lastUptime into a local, compare
+        // against it, then one write. PHP is single-threaded per request, but
+        // this runs amid interleaved ReactPHP callbacks — an interleaved
+        // read/compare/write on the property itself would let another callback
+        // update lastUptime between our read and our write, masking (or
+        // fabricating) a restart. The local pins the value this comparison is
+        // based on, so the compare and the state transition stay consistent.
+        $previousUptime = $this->lastUptime;
         $currentUptime = (int) $uptime;
-        if ($this->lastUptime !== null && $currentUptime < $this->lastUptime) {
+        if ($previousUptime !== null && $currentUptime < $previousUptime) {
             $this->wasResetCache = true;
         }
         $this->lastUptime = $currentUptime;

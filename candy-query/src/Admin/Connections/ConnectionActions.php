@@ -154,6 +154,11 @@ final class ConnectionActions
     private function isAclError(\PDOException $e): bool
     {
         $code = (string) $e->getCode();
+        // Error codes are the primary, locale-independent check. The message
+        // match below is a deliberate supplementary fallback for drivers and
+        // proxies (e.g. ProxySQL, connection poolers) that surface a generic
+        // code — it can only WIDEN detection when the code is absent, never
+        // override a code match.
         return \in_array($code, ['1142', '1146', '1227', '42000'], true)
             || (str_contains(strtolower($e->getMessage()), 'denied')
                 && str_contains(strtolower($e->getMessage()), 'performance_schema'));
@@ -162,6 +167,10 @@ final class ConnectionActions
     private function isConnectionError(\PDOException $e): bool
     {
         $code = (string) $e->getCode();
+        // Codes first; the substring checks are a supplementary fallback for
+        // drivers/proxies that don't propagate MySQL client error codes (PDO
+        // sometimes reports SQLSTATE HY000/0 for transport failures). They
+        // only widen detection when the code is missing.
         return \in_array($code, ['2002', '2003', '2013', '08000', '08006'], true)
             || str_contains(strtolower($e->getMessage()), 'lost connection')
             || str_contains(strtolower($e->getMessage()), 'connection refused')
@@ -171,6 +180,10 @@ final class ConnectionActions
     private function isUnknownThreadError(\PDOException $e): bool
     {
         $code = (string) $e->getCode();
+        // 1094 is authoritative; the message fallback covers drivers/proxies
+        // that rewrap KILL errors under a generic SQLSTATE (45000) without
+        // preserving the MySQL code. Supplementary only — widens detection
+        // when codes are absent.
         return $code === '1094' || $code === '45000'
             || str_contains(strtolower($e->getMessage()), 'unknown thread');
     }

@@ -114,11 +114,7 @@ final class PreviewQuery
     public static function build(Flavor $flavor, string $table, array $columns, int $limit = self::DEFAULT_LIMIT): string
     {
         $limit = max(1, $limit);
-        $quote = match ($flavor) {
-            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => '`',
-            default => '"',
-        };
-        $tbl = self::quoteIdent($table, $quote);
+        $tbl = Identifier::quote($flavor, $table);
 
         if ($columns === []) {
             return sprintf('SELECT * FROM %s LIMIT %d', $tbl, $limit);
@@ -126,18 +122,13 @@ final class PreviewQuery
 
         $select = [];
         foreach ($columns as $col) {
-            $id = self::quoteIdent($col['name'], $quote);
+            $id = Identifier::quote($flavor, $col['name']);
             $select[] = $col['elide']
                 ? self::placeholder($flavor, $col['type'], $id)
                 : $id;
         }
 
         return sprintf('SELECT %s FROM %s LIMIT %d', implode(', ', $select), $tbl, $limit);
-    }
-
-    private static function quoteIdent(string $ident, string $quote): string
-    {
-        return $quote . str_replace($quote, $quote . $quote, $ident) . $quote;
     }
 
     private static function isElided(Flavor $flavor, string $type): bool
