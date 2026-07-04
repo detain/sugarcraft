@@ -165,7 +165,9 @@ final class TableCommand extends Command
             return $rows;
         }
 
-        $stream = fopen('php://memory', 'r+');
+        // php://temp spills to disk past 8 MiB so a huge piped CSV cannot
+        // exhaust RAM the way php://memory would.
+        $stream = fopen('php://temp/maxmemory:8388608', 'r+');
         if ($stream === false) {
             return [];
         }

@@ -44,6 +44,7 @@ final class FilterCommand extends Command
             ->addOption('fuzzy', null, InputOption::VALUE_NONE, 'Fuzzy match using Smith-Waterman scoring with highlight indices.')
             ->addOption('no-fuzzy', null, InputOption::VALUE_NONE, 'Disable fuzzy matching (default — gum compat).')
             ->addOption('width', null, InputOption::VALUE_REQUIRED, 'Cap rendered width in cells (0 = auto).', 0)
+            ->addOption('print-query', null, InputOption::VALUE_NONE, 'Print the final filter text on its own line before the result (gum compat).')
             ->addOption('show-help', null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
@@ -84,11 +85,33 @@ final class FilterCommand extends Command
         /** @var FilterModel $final */
         $final = $program->run();
 
+        return self::renderResult(
+            $final,
+            $output,
+            (string) $input->getOption('output-delimiter'),
+            (bool) $input->getOption('print-query'),
+        );
+    }
+
+    /**
+     * Map the finished model to process output + exit code. Static and
+     * separate from execute() so the contract is unit-testable without the
+     * live TTY that Program::run() needs.
+     */
+    public static function renderResult(
+        FilterModel $final,
+        OutputInterface $output,
+        string $delim,
+        bool $printQuery,
+    ): int {
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }
+        if ($printQuery) {
+            $output->writeln($final->list->filterValue());
+        }
         if ($final->isMulti()) {
-            $output->writeln(implode((string) $input->getOption('output-delimiter'), $final->selectedAll()));
+            $output->writeln(implode($delim, $final->selectedAll()));
         } else {
             $output->writeln((string) $final->selected());
         }

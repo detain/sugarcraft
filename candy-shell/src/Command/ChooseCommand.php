@@ -37,6 +37,7 @@ final class ChooseCommand extends Command
             ->addOption('cursor-prefix', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor.', null)
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
             ->addOption('show-help', null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
+            ->addOption('no-selected', null, InputOption::VALUE_REQUIRED, 'Message printed (with a non-zero exit) when the user exits without a selection.', null)
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
@@ -83,7 +84,30 @@ final class ChooseCommand extends Command
         /** @var ChooseModel $final */
         $final = $program->run();
 
-        if ($final->isAborted() || !$final->isSubmitted()) {
+        $noSelected = $input->getOption('no-selected');
+
+        return self::renderResult($final, $output, $delim, is_string($noSelected) ? $noSelected : null);
+    }
+
+    /**
+     * Map the finished model to process output + exit code. Static and
+     * separate from execute() so the contract is unit-testable without the
+     * live TTY that Program::run() needs.
+     */
+    public static function renderResult(
+        ChooseModel $final,
+        OutputInterface $output,
+        string $delim,
+        ?string $noSelectedMessage,
+    ): int {
+        $empty = $final->isMulti() ? $final->selectedAll() === [] : $final->selected() === null;
+        // Without --no-selected an empty-but-submitted selection keeps the
+        // historical behavior (blank line, exit 0) so existing pipelines
+        // don't suddenly start failing.
+        if ($final->isAborted() || !$final->isSubmitted() || ($noSelectedMessage !== null && $empty)) {
+            if ($noSelectedMessage !== null) {
+                $output->writeln($noSelectedMessage);
+            }
             return Command::FAILURE;
         }
         if ($final->isMulti()) {

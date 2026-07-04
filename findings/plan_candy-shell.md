@@ -118,7 +118,7 @@ The `filtering` flag gates access to updateFilter() at line 96. Space routing ap
 
 ---
 
-### 2.2 [ ] MEDIUM: Incomplete Hex Color Validation — `src/Style/StyleBuilder.php:166-168`
+### 2.2 [x] ✅ MEDIUM: Incomplete Hex Color Validation — `src/Style/StyleBuilder.php:166-168`
 
 **What is expected:**
 Create a dedicated `parseHexColor()` method that:
@@ -137,9 +137,9 @@ Inputs like `#1`, `#12`, `#1234`, `#12345` fall through and get generic "unrecog
 **Severity:** MEDIUM
 
 **Conditions for success:**
-- [ ] New `parseHexColor()` method handles 3-digit expansion
-- [ ] Clear error message indicates digit count requirement
-- [ ] Test cases: `#abc` → `#aabbcc`, `#1` throws specific error
+- [x] New `parseHexColor()` method handles 3-digit expansion
+- [x] Clear error message indicates digit count requirement
+- [x] Test cases: `#abc` → `#aabbcc`, `#1` throws specific error
 
 **Related code locations:**
 - `src/Style/StyleBuilder.php:150-170` — `parseColorWithProfile()` method
@@ -147,7 +147,7 @@ Inputs like `#1`, `#12`, `#1234`, `#12345` fall through and get generic "unrecog
 
 ---
 
-### 2.3 [ ] MEDIUM: `$this->closed` Not Set in `terminate()` — `src/Process/RealProcess.php:63-71`
+### 2.3 [x] ✅ MEDIUM: `$this->closed` Not Set in `terminate()` — `src/Process/RealProcess.php:63-71`
 
 **What is expected:**
 Add `$this->closed = true;` inside the `terminate()` method after killing the process.
@@ -158,8 +158,8 @@ After `terminate()` is called, subsequent `close()` calls would invoke `wait()` 
 **Severity:** MEDIUM
 
 **Conditions for success:**
-- [ ] `terminate()` sets `$this->closed = true`
-- [ ] Test: call terminate() then close() — should not call wait() twice
+- [x] `terminate()` sets `$this->closed = true`
+- [x] Test: call terminate() then close() — should not call wait() twice
 
 **Related code locations:**
 - `src/Process/RealProcess.php:63-71` — terminate() method
@@ -168,7 +168,7 @@ After `terminate()` is called, subsequent `close()` calls would invoke `wait()` 
 
 ## Phase 3: Performance [PENDING]
 
-### 3.1 [ ] MEDIUM: O(n·m) Fuzzy Recomputation on Every Keystroke — `src/Model/FilterModel.php:161-178`
+### 3.1 [x] ✅ MEDIUM: O(n·m) Fuzzy Recomputation on Every Keystroke — `src/Model/FilterModel.php:161-178`
 
 **What is expected:**
 Add caching to `computeFuzzyResults()` — early return if `$filterText` is unchanged from last computation. Store cache key as `$filterText` and results as `$fuzzyResultsCache`.
@@ -179,10 +179,10 @@ Add caching to `computeFuzzyResults()` — early return if `$filterText` is unch
 **Severity:** MEDIUM
 
 **Conditions for success:**
-- [ ] Fuzzy results cached by filter text
-- [ ] Early return if filter text unchanged
-- [ ] Cache invalidated when items change
-- [ ] Performance test: filter text "abc" typed twice only computes once
+- [x] Fuzzy results cached by filter text
+- [x] Early return if filter text unchanged
+- [x] Cache invalidated when items change
+- [x] Performance test: filter text "abc" typed twice only computes once
 
 **Related code locations:**
 - `src/Model/FilterModel.php:99-113` — constructor with matcher
@@ -191,7 +191,7 @@ Add caching to `computeFuzzyResults()` — early return if `$filterText` is unch
 
 ---
 
-### 3.2 [ ] MEDIUM: php://Memory Without Size Limit — `src/Command/TableCommand.php:168`
+### 3.2 [x] ✅ MEDIUM: php://Memory Without Size Limit — `src/Command/TableCommand.php:168`
 
 **What is expected:**
 Replace `fopen('php://memory', 'r+')` with `fopen('php://temp/maxmemory=8192', 'r+')` to set an 8MB limit before spilling to disk.
@@ -202,9 +202,9 @@ For large CSV data, php://memory could exhaust RAM. php://temp with maxmemory se
 **Severity:** MEDIUM
 
 **Conditions for success:**
-- [ ] Large CSV input (>8MB) doesn't exhaust memory
-- [ ] Existing CSV parsing tests still pass
-- [ ] Test with large dataset
+- [x] Large CSV input (>8MB) doesn't exhaust memory
+- [x] Existing CSV parsing tests still pass
+- [x] Test with large dataset
 
 **Related code locations:**
 - `src/Command/TableCommand.php:168` — memory stream creation
@@ -236,7 +236,7 @@ When `withTheme()` is called, `tileCache` points to the same array as the origin
 
 ## Phase 5: Missing Features [PENDING]
 
-### 5.1 [ ] MEDIUM: Missing `--no-selected` Option — `src/Command/ChooseCommand.php`
+### 5.1 [x] ✅ MEDIUM: Missing `--no-selected` Option — `src/Command/ChooseCommand.php`
 
 **What is expected:**
 Add `--no-selected` option that prints a specified message when no items are selected and exits with code different from success.
@@ -247,9 +247,9 @@ Gum's choose has `--no-selected` which prints message when no items selected. Th
 **Severity:** MEDIUM
 
 **Conditions for success:**
-- [ ] `--no-selected="message"` option added to configure()
-- [ ] When no selection made and --no-selected is set, output message and fail
-- [ ] Test: --no-selected outputs message when no selection
+- [x] `--no-selected="message"` option added to configure()
+- [x] When no selection made and --no-selected is set, output message and fail
+- [x] Test: --no-selected outputs message when no selection
 
 **Related code locations:**
 - `src/Command/ChooseCommand.php:24-41` — configure() method
@@ -257,7 +257,7 @@ Gum's choose has `--no-selected` which prints message when no items selected. Th
 
 ---
 
-### 5.2 [ ] MEDIUM: Missing `--print-query` Option — `src/Command/FilterCommand.php`
+### 5.2 [x] ✅ MEDIUM: Missing `--print-query` Option — `src/Command/FilterCommand.php`
 
 **What is expected:**
 Add `--print-query` option that outputs the current filter text to stdout (mirrors Gum's filter --print-query).
@@ -268,9 +268,9 @@ Gum's filter has `--print-query` which outputs current filter text. Needed for p
 **Severity:** MEDIUM
 
 **Conditions for success:**
-- [ ] `--print-query` option added to configure()
-- [ ] When --print-query is set, print filter text before exiting
-- [ ] Test: --print-query outputs the typed filter text
+- [x] `--print-query` option added to configure()
+- [x] When --print-query is set, print filter text before exiting
+- [x] Test: --print-query outputs the typed filter text
 
 **Related code locations:**
 - `src/Command/FilterCommand.php:27-49` — configure() method
@@ -278,7 +278,7 @@ Gum's filter has `--print-query` which outputs current filter text. Needed for p
 
 ---
 
-### 5.3 [ ] MEDIUM: Fuzzy Match Highlighting Not Rendered — `src/Model/FilterModel.php`
+### 5.3 [x] ✅ MEDIUM: Fuzzy Match Highlighting Not Rendered — `src/Model/FilterModel.php`
 
 **What is expected:**
 Use `highlightIndices()` result in `view()` to render highlighted characters in the selected item. The highlighted characters should be visually distinct (e.g., bold or underlined).
@@ -289,9 +289,9 @@ Use `highlightIndices()` result in `view()` to render highlighted characters in 
 **Severity:** MEDIUM
 
 **Conditions for success:**
-- [ ] view() renders highlighted characters when fuzzy matching
-- [ ] Test: fuzzy search "bna" shows "b**an**ana" with match highlighted
-- [ ] Non-fuzzy mode not affected
+- [x] view() renders highlighted characters when fuzzy matching
+- [x] Test: fuzzy search "bna" shows "b**an**ana" with match highlighted
+- [x] Non-fuzzy mode not affected
 
 **Related code locations:**
 - `src/Model/FilterModel.php:214-223` — view() method

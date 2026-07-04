@@ -12,6 +12,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 
@@ -25,7 +27,7 @@ use SugarCraft\Fuzzy\MatchResult;
  */
 final class FilterModel implements Model
 {
-    private SmithWatermanMatcher $matcher;
+    private FuzzyMatcher $matcher;
 
     /**
      * @param list<string> $options
@@ -43,6 +45,7 @@ final class FilterModel implements Model
         ?string $cursorPrefix = null,
         ?string $unselectedPrefix = null,
         bool $fuzzy = false,
+        ?FuzzyMatcher $matcher = null,
     ): self {
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
         $list  = ItemList::new($items, 60, max(1, $height))->withShowDescription(false);
@@ -88,10 +91,14 @@ final class FilterModel implements Model
             fuzzy: $fuzzy,
             allItems: $items,
             fuzzyResults: [],
+            matcher: $matcher,
         );
-        $self->matcher = new SmithWatermanMatcher();
         if ($fuzzy && $value !== '') {
-            $self = $self->recomputeFuzzy($self, $list->filterValue());
+            $filterText = $list->filterValue();
+            $self = $self->copy(
+                fuzzyResults:   $self->computeFuzzyResults($filterText),
+                lastFilterText: $filterText,
+            );
         }
         return $self;
     }
@@ -108,8 +115,13 @@ final class FilterModel implements Model
         public readonly bool $fuzzy    = false,
         public readonly array $allItems = [],
         public readonly array $fuzzyResults = [],
+        // Cache key for $fuzzyResults: the filter text they were computed
+        // for. $allItems is fixed at construction, so text is the only
+        // input that can invalidate the cache.
+        public readonly string $lastFilterText = '',
+        ?FuzzyMatcher $matcher = null,
     ) {
-        $this->matcher = new SmithWatermanMatcher();
+        $this->matcher = $matcher ?? new SmithWatermanMatcher();
     }
 
     public function init(): ?\Closure
@@ -146,13 +158,15 @@ final class FilterModel implements Model
 
         $filterText = $next->filterValue();
         if ($this->fuzzy && $filterText !== '') {
-            $newResults = $this->computeFuzzyResults($filterText);
-            return [$this->copy(list: $next, fuzzyResults: $newResults), $cmd];
-        } elseif (!$this->fuzzy || $filterText === '') {
-            return [$this->copy(list: $next, fuzzyResults: []), $cmd];
+            // Cursor-only keys (arrows, Tab, …) leave the filter text
+            // unchanged — reuse the cached results instead of re-running
+            // O(n·m) Smith-Waterman scoring on every keystroke.
+            $newResults = $filterText === $this->lastFilterText
+                ? $this->fuzzyResults
+                : $this->computeFuzzyResults($filterText);
+            return [$this->copy(list: $next, fuzzyResults: $newResults, lastFilterText: $filterText), $cmd];
         }
-
-        return [$this->copy(list: $next, fuzzyResults: $this->fuzzyResults), $cmd];
+        return [$this->copy(list: $next, fuzzyResults: [], lastFilterText: ''), $cmd];
     }
 
     /**
@@ -177,25 +191,6 @@ final class FilterModel implements Model
         return $indices;
     }
 
-    private function recomputeFuzzy(self $self, string $filterText): self
-    {
-        $candidates = array_map(static fn(Item $i) => $i->filterValue(), $self->allItems);
-        $matches = $self->matcher->matchAll($filterText, $candidates);
-
-        $indices = [];
-        foreach ($matches as $match) {
-            $haystack = $match->haystack;
-            foreach ($self->allItems as $idx => $item) {
-                if ($item->filterValue() === $haystack) {
-                    $indices[$idx] = $match;
-                    break;
-                }
-            }
-        }
-
-        return $self->copy(fuzzyResults: $indices);
-    }
-
     /** @return list<Item> */
     public function fuzzyVisibleItems(): array
     {
@@ -213,13 +208,81 @@ final class FilterModel implements Model
 
     public function view(): string
     {
-        $body = $this->list->view();
+        // In fuzzy mode the inner ItemList's substring filter does not know
+        // about the scored match set, so render the fuzzy list ourselves —
+        // mirroring ItemList::view()'s layout — with matched characters
+        // emphasised via their highlight indices.
+        $body = $this->fuzzy && $this->list->filterValue() !== '' && $this->fuzzyResults !== []
+            ? $this->fuzzyView()
+            : $this->list->view();
         if ($this->multi) {
             $count = count(array_filter($this->checked));
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
             $body .= "\n[" . $count . $cap . " selected]";
         }
         return $body;
+    }
+
+    /**
+     * Fuzzy-mode list body: same shape as {@see ItemList::view()} (title,
+     * `/filter` line, windowed items, REVERSE video on the cursor row) but
+     * sourced from the scored match set, with each matched character
+     * rendered bold so the user can see WHY an item survived the filter.
+     */
+    private function fuzzyView(): string
+    {
+        $lines = [];
+        if ($this->list->title !== '') {
+            $lines[] = $this->list->title;
+        }
+        $lines[] = '/' . $this->list->filterText;
+
+        $visible = $this->fuzzyVisibleItems();
+        // fuzzyVisibleItems() orders by ascending original index; walk the
+        // match set the same way so indices stay aligned with the items.
+        $originalIndices = array_keys($this->fuzzyResults);
+        sort($originalIndices, SORT_NUMERIC);
+
+        $cursor = min($this->list->index(), count($visible) - 1);
+        $top    = max(0, $this->list->offset);
+        foreach (array_slice($visible, $top, $this->list->height, true) as $idx => $item) {
+            $highlighted = self::emphasize(
+                $item->title(),
+                $this->fuzzyResults[$originalIndices[$idx]]->indices(),
+            );
+            $lines[] = $idx === $cursor
+                ? $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $highlighted . Ansi::reset()
+                : $this->list->unselectedPrefix . $highlighted;
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Wrap runs of matched characters in bold. SGR 22 (normal intensity)
+     * closes each run instead of a full reset so the REVERSE video on the
+     * cursor row survives.
+     *
+     * @param list<int> $indices 0-based character indices to emphasise
+     */
+    private static function emphasize(string $title, array $indices): string
+    {
+        if ($indices === []) {
+            return $title;
+        }
+        $set  = array_flip($indices);
+        $out  = '';
+        $bold = false;
+        foreach (mb_str_split($title) as $i => $ch) {
+            $match = isset($set[$i]);
+            if ($match && !$bold) {
+                $out .= Ansi::sgr(Ansi::BOLD);
+            } elseif (!$match && $bold) {
+                $out .= Ansi::sgr(22);
+            }
+            $bold = $match;
+            $out .= $ch;
+        }
+        return $bold ? $out . Ansi::sgr(22) : $out;
     }
 
     public function selected(): ?string
@@ -249,8 +312,11 @@ final class FilterModel implements Model
         }
         $items = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->items;
         $out = [];
-        ksort($this->checked, SORT_NUMERIC);
-        foreach ($this->checked as $idx => $on) {
+        // ksort() takes its array by reference, which fatals on a readonly
+        // property — sort a local copy instead.
+        $checked = $this->checked;
+        ksort($checked, SORT_NUMERIC);
+        foreach ($checked as $idx => $on) {
             if ($on && isset($items[$idx])) {
                 $out[] = $items[$idx]->title();
             }
@@ -325,18 +391,21 @@ final class FilterModel implements Model
         ?bool $aborted = null,
         ?array $checked = null,
         ?array $fuzzyResults = null,
+        ?string $lastFilterText = null,
     ): self {
         return new self(
-            list:          $list          ?? $this->list,
-            submitted:     $submitted     ?? $this->submitted,
-            aborted:       $aborted       ?? $this->aborted,
-            multi:         $this->multi,
-            limit:         $this->limit,
-            checked:       $checked       ?? $this->checked,
-            reverse:       $this->reverse,
-            fuzzy:         $this->fuzzy,
-            allItems:      $this->allItems,
-            fuzzyResults:  $fuzzyResults  ?? $this->fuzzyResults,
+            list:           $list           ?? $this->list,
+            submitted:      $submitted      ?? $this->submitted,
+            aborted:        $aborted        ?? $this->aborted,
+            multi:          $this->multi,
+            limit:          $this->limit,
+            checked:        $checked        ?? $this->checked,
+            reverse:        $this->reverse,
+            fuzzy:          $this->fuzzy,
+            allItems:       $this->allItems,
+            fuzzyResults:   $fuzzyResults   ?? $this->fuzzyResults,
+            lastFilterText: $lastFilterText ?? $this->lastFilterText,
+            matcher:        $this->matcher,
         );
     }
 

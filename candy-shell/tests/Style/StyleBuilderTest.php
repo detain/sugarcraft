@@ -139,4 +139,53 @@ final class StyleBuilderTest extends TestCase
         $out = $s->render('x');
         $this->assertCount(3, explode("\n", $out));
     }
+
+    public function testParseHexColorExpandsThreeDigitShorthand(): void
+    {
+        $this->assertEquals(
+            StyleBuilder::parseHexColor('#aabbcc'),
+            StyleBuilder::parseHexColor('#abc'),
+        );
+    }
+
+    public function testThreeDigitShorthandRendersSameBytesAsSixDigit(): void
+    {
+        $short = StyleBuilder::fromFlags(['foreground' => '#f80']);
+        $long  = StyleBuilder::fromFlags(['foreground' => '#ff8800']);
+        $this->assertSame($long->render('hi'), $short->render('hi'));
+    }
+
+    public function testBareThreeDigitHexStillAccepted(): void
+    {
+        $s = StyleBuilder::fromFlags(['foreground' => 'f80']);
+        $this->assertSame("\x1b[38;2;255;136;0mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testParseHexColorRejectsFourDigitsNamingValue(): void
+    {
+        try {
+            StyleBuilder::parseHexColor('#1234');
+            $this->fail('Expected InvalidArgumentException for 4-digit hex');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('#1234', $e->getMessage());
+            $this->assertStringContainsString('3 or 6', $e->getMessage());
+        }
+    }
+
+    /** Bare hex digits with a wrong count get the specific hex error too. */
+    public function testBareHexWithWrongDigitCountRejected(): void
+    {
+        try {
+            StyleBuilder::parseColor('abcde');
+            $this->fail('Expected InvalidArgumentException for 5-digit hex');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('abcde', $e->getMessage());
+        }
+    }
+
+    public function testParseHexColorRejectsNonHexDigits(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        StyleBuilder::parseHexColor('#zzz');
+    }
 }

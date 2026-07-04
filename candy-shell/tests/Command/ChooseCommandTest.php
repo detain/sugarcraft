@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Shell\Tests\Command;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Shell\Application;
+use SugarCraft\Shell\Command\ChooseCommand;
+use SugarCraft\Shell\Model\ChooseModel;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
@@ -53,6 +58,71 @@ final class ChooseCommandTest extends TestCase
         // With --select-if-one the short-circuit fires; cursor-prefix is accepted.
         $this->assertSame(0, $status);
         $this->assertSame('only-option', trim($tester->getDisplay()));
+    }
+
+    public function testNoSelectedOptionIsDeclared(): void
+    {
+        $app = new Application();
+        $command = $app->find('choose');
+        $this->assertTrue($command->getDefinition()->hasOption('no-selected'));
+    }
+
+    /**
+     * Interactive runs need a TTY, so the result contract is exercised via
+     * the extracted renderResult() with a model driven to the abort state.
+     */
+    public function testNoSelectedPrintsMessageAndFailsOnAbort(): void
+    {
+        $model = ChooseModel::fromOptions(['a', 'b']);
+        [$model, ] = $model->update(new KeyMsg(KeyType::Escape));
+        $this->assertTrue($model->isAborted());
+
+        $output = new BufferedOutput();
+        $status = ChooseCommand::renderResult($model, $output, "\n", 'nothing chosen');
+
+        $this->assertSame(1, $status);
+        $this->assertSame("nothing chosen\n", $output->fetch());
+    }
+
+    public function testNoSelectedPrintsMessageOnEmptyMultiSubmit(): void
+    {
+        // Multi mode, Enter with nothing ticked: submitted but empty.
+        $model = ChooseModel::fromOptions(['a', 'b'], limit: 2);
+        [$model, ] = $model->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($model->isSubmitted());
+        $this->assertSame([], $model->selectedAll());
+
+        $output = new BufferedOutput();
+        $status = ChooseCommand::renderResult($model, $output, "\n", 'nothing chosen');
+
+        $this->assertSame(1, $status);
+        $this->assertSame("nothing chosen\n", $output->fetch());
+    }
+
+    public function testEmptyMultiSubmitWithoutNoSelectedKeepsLegacySuccess(): void
+    {
+        $model = ChooseModel::fromOptions(['a', 'b'], limit: 2);
+        [$model, ] = $model->update(new KeyMsg(KeyType::Enter));
+
+        $output = new BufferedOutput();
+        $status = ChooseCommand::renderResult($model, $output, "\n", null);
+
+        // Without the flag, pipelines keep the historical blank-line + 0.
+        $this->assertSame(0, $status);
+        $this->assertSame("\n", $output->fetch());
+    }
+
+    public function testRenderResultPrintsSelectionOnSubmit(): void
+    {
+        $model = ChooseModel::fromOptions(['alpha', 'beta']);
+        [$model, ] = $model->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($model->isSubmitted());
+
+        $output = new BufferedOutput();
+        $status = ChooseCommand::renderResult($model, $output, "\n", 'nothing chosen');
+
+        $this->assertSame(0, $status);
+        $this->assertSame("alpha\n", $output->fetch());
     }
 
     /**

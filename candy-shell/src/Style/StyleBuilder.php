@@ -154,7 +154,7 @@ final class StyleBuilder
             throw new \InvalidArgumentException(Lang::t('style.empty_color'));
         }
         if ($v[0] === '#') {
-            return [Color::hex($v), ColorProfile::TrueColor];
+            return [self::parseHexColor($v), ColorProfile::TrueColor];
         }
         if (ctype_digit($v)) {
             $n = (int) $v;
@@ -163,10 +163,33 @@ final class StyleBuilder
             }
             return [Color::ansi256($n), ColorProfile::Ansi256];
         }
-        if (preg_match('/^[0-9a-fA-F]{6}$/', $v) === 1 || preg_match('/^[0-9a-fA-F]{3}$/', $v) === 1) {
-            return [Color::hex('#' . $v), ColorProfile::TrueColor];
+        // Bare hex digits (no '#') are also treated as hex colour input, so
+        // a wrong digit count gets the specific hex error, not the generic one.
+        if (ctype_xdigit($v)) {
+            return [self::parseHexColor('#' . $v), ColorProfile::TrueColor];
         }
         throw new \InvalidArgumentException(Lang::t('style.unrecognised_color', ['value' => $v]));
+    }
+
+    /**
+     * Parse a hex colour (`#ff8000`, `ff8000`, `#f80`, `f80`), expanding the
+     * 3-digit CSS shorthand to 6 digits. Any other digit count is rejected
+     * with a message naming the offending value — before this existed, inputs
+     * like `#1234` fell through to a generic "unrecognised color" error.
+     */
+    public static function parseHexColor(string $v): Color
+    {
+        $h = ltrim($v, '#');
+        $len = strlen($h);
+        if (($len !== 3 && $len !== 6) || !ctype_xdigit($h)) {
+            throw new \InvalidArgumentException(
+                Lang::t('style.hex_digit_count', ['value' => $v]),
+            );
+        }
+        if ($len === 3) {
+            $h = $h[0] . $h[0] . $h[1] . $h[1] . $h[2] . $h[2];
+        }
+        return Color::hex('#' . $h);
     }
 
     /**

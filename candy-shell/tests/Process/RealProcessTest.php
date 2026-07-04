@@ -129,4 +129,30 @@ final class RealProcessTest extends TestCase
         // terminate() should not crash and should allow close
         $proc->close();
     }
+
+    public function testTerminateIsIdempotentWhileRunning(): void
+    {
+        $proc = RealProcess::spawn(['/bin/sh', '-c', 'sleep 60']);
+        $this->assertNull($proc->exitCode());
+        $proc->terminate();
+        // A second terminate() must be a no-op (no re-signal of a PID that
+        // may already be dead), and close() must still reap exactly once
+        // without hanging.
+        $proc->terminate();
+        $code = $proc->close();
+        $this->assertSame($code, $proc->close());
+    }
+
+    public function testTerminateAfterNaturalExitIsNoOp(): void
+    {
+        $proc = RealProcess::spawn(['/bin/sh', '-c', 'exit 0']);
+        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
+            usleep(10_000);
+        }
+        $this->assertSame(0, $proc->exitCode());
+        // The child already exited on its own: terminate() must not signal
+        // the (possibly recycled) PID, and close() still reaps normally.
+        $proc->terminate();
+        $this->assertSame(0, $proc->close());
+    }
 }
