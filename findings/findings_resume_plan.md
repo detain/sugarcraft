@@ -1,6 +1,22 @@
 # Findings Resume Plan — Complete All Audit Findings
 
-## STATUS: IN PROGRESS — Phase 0/1
+## STATUS: COMPLETE (2026-07-04)
+
+All phases 0–6 are closed. Phase 0–5 items landed as the commit series
+through `b9c63b74`; the Phase 6 leftovers were re-verified against
+current source on 2026-07-04 and closed by: `a160cefd` (test
+skips/flake), `5f33c4b7` (candy-zone contains, candy-wish StreamHelper
++ pid()), `1920988f`/`09546125` (candy-serve auth verification,
+maxPackBytes, streaming, stray bare-repo artifacts), `7834370f`
+(candy-shell), `c21aa335` (sugar-table), `5649732f` (sugar-readline +
+candy-input paste-EOF hang), `1050caf5` (candy-query), `41b47d9a`
+(candy-pty). candy-sprinkles plan items were all verified
+misreferenced/N-A (see plan_candy-sprinkles.md annotations).
+Deliberate deferrals are recorded per-lib in CALIBER_LEARNINGS.md
+"Future work (deferred pre-1.0)" sections: candy-serve 6.1/6.2/7.5-7.9,
+candy-pty 8.1/8.3/8.4, candy-query 3.1/3.3/3.4/5.1 (+1.8/0.25
+react-pg WONTFIX, react/mysql stable pin WONTFIX — no 0.7 tag),
+sugar-readline 3.2 (vi text objects, needs candy-forms VimAction).
 ## ⚠️ CONCURRENCY RULES — READ BEFORE SPAWNING ANY AGENT
 
 These rules are **mandatory for every agent** in every batch. Violation = stop immediately and report.
@@ -1214,6 +1230,6 @@ When all phases are complete:
 
 ---
 
-*Last updated: 2026-06-30*
+*Last updated: 2026-07-04 — STATUS flipped to COMPLETE; see header for the closing commit map.*
 *Source: 57 plan files, ~500+ total items*
 *Concurrency: MAX 3 simultaneous agents, chained commit/push per agent*

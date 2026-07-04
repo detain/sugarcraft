@@ -14,25 +14,25 @@ Address findings in candy-sprinkles library, mapping each issue to actual file l
 | Border/BoxDrawing.php does not exist | Only Border.php and related exist | glob search |
 | Lipstick.php and Background.php do not exist | No such classes in entire monorepo | grep search |
 
-## Phase 1: Security Issues [PENDING]
+## Phase 1: Security Issues [CLOSED — all misreferenced]
 
-- [ ] 1.1 ANSI Parser SGR State Machine — Located in candy-freeze, not candy-sprinkles
+- [x] 1.1 ANSI Parser SGR State Machine — ⏭️ N/A (misreferenced; candy-freeze/src/AnsiParser.php already delegates to candy-ansi's Parser/SgrState — verified 2026-07-04, no fix outstanding)
 
-## Phase 2: Bugs [PENDING]
+## Phase 2: Bugs [CLOSED — all misreferenced]
 
-- [ ] 2.1 Width OOB Access — Located in candy-core/Util/Width.php
-- [ ] 2.2 Border Corner Off-by-One — File Border/BoxDrawing.php does not exist
-- [ ] 2.3 Spinner Animation Frames — Located in candy-forms, not candy-sprinkles
-- [ ] 2.4 ProgressBar ETA Division — File does not have ETA at claimed location
+- [x] 2.1 Width OOB Access — ⏭️ N/A (misreferenced; belongs to candy-core Util/Width, no OOB reproduced — verified 2026-07-04)
+- [x] 2.2 Border Corner Off-by-One — ⏭️ N/A (file never existed; only sugar-dash has a BoxDrawing.php — verified 2026-07-04)
+- [x] 2.3 Spinner Animation Frames — ⏭️ N/A (misreferenced; Spinner lives in candy-forms — verified 2026-07-04)
+- [x] 2.4 ProgressBar ETA Division — ⏭️ N/A (no ETA code exists in candy-sprinkles — verified 2026-07-04)
 
-## Phase 3: Performance [PENDING]
+## Phase 3: Performance [CLOSED — misreferenced]
 
-- [ ] 3.1 Lazy Init Performance — File src/Lipstick.php does not exist
+- [x] 3.1 Lazy Init Performance — ⏭️ N/A (Lipstick.php does not exist anywhere in the repo — verified 2026-07-04)
 
-## Phase 4: Missing Features [PENDING]
+## Phase 4: Missing Features [CLOSED]
 
-- [ ] 4.1 Missing StringHeight — May exist in candy-core/Width.php
-- [ ] 4.2 Missing Blur Effect — File src/Background.php does not exist
+- [x] 4.1 Missing StringHeight — ✅ already satisfied: Layout::height(string \$block) in candy-sprinkles/src/Layout.php:59 mirrors lipgloss.Height (verified 2026-07-04)
+- [x] 4.2 Missing Blur Effect — ⏭️ N/A (Background.php does not exist anywhere; blur is not a lipgloss feature — verified 2026-07-04)
 
 ## Phase 5: PHP 8.3+ Compatibility [COMPLETE]
 
