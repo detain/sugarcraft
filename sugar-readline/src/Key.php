@@ -27,11 +27,16 @@ final class Key
     public const Space     = 'space';
     public const Escape    = 'esc';
     public const CtrlC     = 'ctrl_c';
-    public const CtrlU     = 'ctrl_u';
+    public const CtrlG     = 'ctrl_g';
     public const CtrlK     = 'ctrl_k';
+    public const CtrlR     = 'ctrl_r';
+    public const CtrlS     = 'ctrl_s';
+    public const CtrlU     = 'ctrl_u';
     public const CtrlW     = 'ctrl_w';
     public const Undo      = 'undo';
     public const Redo      = 'redo';
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 }

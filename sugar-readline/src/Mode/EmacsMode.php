@@ -23,6 +23,8 @@ use SugarCraft\Readline\TextPrompt;
  * - Ctrl+L      → no-op (clear screen — TTY level)
  * - Ctrl+P     → history previous (Up arrow)
  * - Ctrl+N     → history next (Down arrow)
+ * - Ctrl+R     → reverse incremental history search
+ * - Ctrl+S     → forward incremental history search
  *
  * Alt-prefixed keys arrive as Escape prefix followed by the character.
  *
@@ -32,7 +34,8 @@ final class EmacsMode implements ModeInterface
 {
     public function __construct(
         private readonly TextPrompt $originalPrompt = new TextPrompt(''),
-    ) {}
+    ) {
+    }
 
     public function name(): string
     {
@@ -69,6 +72,16 @@ final class EmacsMode implements ModeInterface
         // Ctrl+N → history next (Down)
         if ($key === $this->ctrlChar('n')) {
             return $this->attachTo($prompt->handleKeyDirect(Key::Down));
+        }
+
+        // Ctrl+R / Ctrl+S → reverse / forward incremental history search.
+        // Once active, TextPrompt::handleKey() intercepts every key before
+        // delegating to this mode, so only search entry is handled here.
+        if ($key === $this->ctrlChar('r') || $key === Key::CtrlR) {
+            return $this->attachTo($prompt->startHistorySearch(TextPrompt::SEARCH_REVERSE));
+        }
+        if ($key === $this->ctrlChar('s') || $key === Key::CtrlS) {
+            return $this->attachTo($prompt->startHistorySearch(TextPrompt::SEARCH_FORWARD));
         }
 
         // Ctrl+W → delete word before cursor

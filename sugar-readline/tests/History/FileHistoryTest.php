@@ -122,4 +122,122 @@ final class FileHistoryTest extends TestCase
         $this->assertSame('world', $h->getPrevious());
         $this->assertSame('hello', $h->getPrevious());
     }
+
+    // =========================================================================
+    // Deferred writes — flush()
+    // =========================================================================
+
+    private function deferred(): FileHistory
+    {
+        return new FileHistory($this->historyFile, 0, '', true);
+    }
+
+    public function testDeferredPushDoesNotTouchDiskUntilFlush(): void
+    {
+        $h = $this->deferred();
+        $h->push('one');
+        $h->push('two');
+
+        // In-memory navigation sees the entries immediately...
+        $this->assertSame('two', $h->getPrevious());
+        // ...but nothing hits the file until flush().
+        $this->assertSame('', file_get_contents($this->historyFile));
+    }
+
+    public function testFlushPersistsQueuedEntriesInOrder(): void
+    {
+        $h = $this->deferred();
+        $h->push('one');
+        $h->push('two');
+        $h->flush();
+
+        $this->assertSame("one\ntwo\n", file_get_contents($this->historyFile));
+    }
+
+    public function testFlushIsIdempotent(): void
+    {
+        $h = $this->deferred();
+        $h->push('one');
+        $h->flush();
+        $h->flush(); // second flush has nothing pending — must not duplicate
+
+        $this->assertSame("one\n", file_get_contents($this->historyFile));
+    }
+
+    public function testDestructFlushesPendingEntries(): void
+    {
+        $h = $this->deferred();
+        $h->push('persisted');
+        unset($h);
+
+        $this->assertSame("persisted\n", file_get_contents($this->historyFile));
+    }
+
+    public function testDeferredEntriesVisibleToFreshInstanceAfterFlush(): void
+    {
+        $h = $this->deferred();
+        $h->push('alpha');
+        $h->push('beta');
+        $h->flush();
+
+        $fresh = new FileHistory($this->historyFile);
+        $this->assertSame('beta', $fresh->getPrevious());
+        $this->assertSame('alpha', $fresh->getPrevious());
+    }
+
+    public function testDeferredAppendsAfterExistingContent(): void
+    {
+        file_put_contents($this->historyFile, "old\n");
+
+        $h = $this->deferred();
+        $h->push('new');
+        $h->flush();
+
+        $this->assertSame("old\nnew\n", file_get_contents($this->historyFile));
+    }
+
+    public function testDeferredDedupsAgainstLoadedEntries(): void
+    {
+        file_put_contents($this->historyFile, "old\n");
+
+        $h = $this->deferred();
+        $h->push('old'); // already on disk (loaded into memory) — skipped
+        $h->flush();
+
+        $this->assertSame("old\n", file_get_contents($this->historyFile));
+    }
+
+    public function testDestroyedCloneDoesNotFlushOriginalsQueue(): void
+    {
+        // TextPrompt clones its history per operation; a dying clone must not
+        // write (and later duplicate) the original's queued entries.
+        $h = $this->deferred();
+        $h->push('queued');
+
+        $clone = clone $h;
+        unset($clone);
+        $this->assertSame('', file_get_contents($this->historyFile));
+
+        $h->flush();
+        $this->assertSame("queued\n", file_get_contents($this->historyFile));
+    }
+
+    public function testClearDropsPendingWrites(): void
+    {
+        $h = $this->deferred();
+        $h->push('doomed');
+        $h->clear();
+        $h->flush();
+
+        $this->assertSame('', file_get_contents($this->historyFile));
+        $this->assertNull($h->getPrevious());
+    }
+
+    public function testHistoryFileHasRestrictivePermissions(): void
+    {
+        $h = new FileHistory($this->historyFile);
+        $h->push('secret');
+
+        $this->assertSame(0600, fileperms($this->historyFile) & 0777);
+    }
 }

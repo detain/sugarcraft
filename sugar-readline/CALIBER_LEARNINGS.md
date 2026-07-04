@@ -29,17 +29,19 @@ Source: ai/sugar-readline-phase6
 
 ## Deferred Items (complex features)
 
-### Ctrl+R reverse history search (Finding 1)
-Requires a new state machine in TextPrompt to track search mode, query, and current match. The history stores (InMemoryHistory, FileHistory) only support sequential navigation via getPrevious()/getNext(); a search() method would need to be added to HistoryInterface. This is a significant feature requiring design work.
+### ~~Ctrl+R reverse history search (Finding 1)~~ — DONE 2026-07-04
+Implemented: `HistoryInterface::search()` (read-only, does not disturb navigation position) + a search state machine in TextPrompt (`startHistorySearch()`, intercepts keys in `handleKey()` BEFORE mode delegation so vi/emacs bindings can't hijack the search). Enter accepts the match without submitting; Escape/Ctrl+G cancels back to the pre-search line.
 
-### Vi cursor off-by-one at line end (Finding 2)
-Vi mode's `$` key currently moves cursor to position = length (past last char). For proper vi behavior, `$` should move to length-1 (on last char). This requires changes to ViMode keybindings and potentially the moveCursorTo() logic in TextPrompt.
+### ~~Vi cursor off-by-one at line end (Finding 2)~~ — DONE 2026-07-04
+`$` and Escape→normal now clamp via `ViMode::clampToLastChar()` (one `Key::Left` when cursor >= length on non-empty buffer). No TextPrompt change needed.
 
-### Emacs incremental search (Finding 12)
-Ctrl+S forward search and Ctrl+R backward search with incremental matching is a complex state machine. Would need to extend EmacsMode with search state similar to what Finding 1 requires for TextPrompt.
+### ~~Emacs incremental search (Finding 12)~~ — DONE 2026-07-04
+EmacsMode Ctrl+R/Ctrl+S start the shared TextPrompt search machine in reverse/forward direction; no search state lives in the mode itself.
+
+## Future work (deferred pre-1.0)
 
 ### Vi text objects (Finding 13)
-Text objects like ci" (change inside quotes) require VimAction enum additions in candy-forms per CALIBER_LEARNINGS 2026-05-31: "Do NOT add new vim keybindings to per-lib branching logic. Always add new bindings to VimAction enum + VimKeyHandler."
+Text objects like `ci"` / `da{` / `yi(` are deliberately deferred pre-1.0: they require new VimAction enum cases + VimKeyHandler support in candy-forms FIRST, per CALIBER_LEARNINGS 2026-05-31: "Do NOT add new vim keybindings to per-lib branching logic. Always add new bindings to VimAction enum + VimKeyHandler." Once candy-forms grows Inner/Around text-object actions, ViMode only needs to consume them via `consumeAction()`.
 
 ### Integration with Terminfo (Finding 16)
 Using terminfo for terminal capability queries would require FFI bindings to the curses terminfo database. This is a significant integration effort.

@@ -15,17 +15,32 @@ final class FileHistory extends InMemoryHistory
 {
     private string $filePath;
     private string $tempDir;
+    private bool $deferWrites;
+
+    /** @var list<string> Entries pushed but not yet persisted (deferred mode only). */
+    private array $pendingWrites = [];
 
     /**
      * @param string $filePath    Path to the history file.  Created automatically if absent.
      * @param int    $maxHistory  Maximum number of entries to retain. 0 = unlimited.
      * @param string $tempDir     Directory for temporary files during atomic writes.
+     * @param bool   $deferWrites When true, push() only queues the entry in memory;
+     *                            disk I/O happens in one batched atomic write on
+     *                            flush() (called automatically on destruct).
+     *                            Trade-off: submit/keystroke latency stays free of
+     *                            blocking file I/O, but queued entries are lost if
+     *                            the process dies before flush (e.g. SIGKILL).
      */
-    public function __construct(string $filePath, int $maxHistory = 0, string $tempDir = '')
-    {
+    public function __construct(
+        string $filePath,
+        int $maxHistory = 0,
+        string $tempDir = '',
+        bool $deferWrites = false,
+    ) {
         parent::__construct($maxHistory);
         $this->filePath = $filePath;
         $this->tempDir = $tempDir !== '' ? $tempDir : \dirname($filePath);
+        $this->deferWrites = $deferWrites;
         // Touch the file so it exists after construction and set restrictive perms.
         if (!file_exists($this->filePath)) {
             touch($this->filePath);
@@ -34,27 +49,81 @@ final class FileHistory extends InMemoryHistory
         $this->load();
     }
 
+    public function __destruct()
+    {
+        $this->flush();
+    }
+
+    public function __clone()
+    {
+        // Navigation clones (TextPrompt clones its history per operation) must
+        // not re-flush the original's queued writes when they are destroyed —
+        // only the caller-owned instance persists its own queue.
+        $this->pendingWrites = [];
+    }
+
     /**
      * Append $line to the history file and notify the parent to update its
      * in-memory state.  Uses atomic write (read existing + write temp + rename)
      * to prevent corruption on crash and ensures 0600 permissions.
+     *
+     * In deferred mode the entry is only queued; see flush().
      */
     public function push(string $line): void
     {
         if ($line === '') {
             return;
         }
-        // Skip duplicate of either the on-disk last line OR any in-memory
-        // entry (handles the case where the same line was added earlier in
-        // this session but isn't yet the "last" entry).
-        $lastOnDisk = $this->peekLastOnDisk();
-        if ($line === $lastOnDisk || $this->inMemoryContains($line)) {
+        // Skip any in-memory duplicate (handles the case where the same line
+        // was added earlier in this session but isn't the "last" entry).
+        if ($this->inMemoryContains($line)) {
             return;
         }
 
-        // Atomic write: read existing content, append new line to temp file,
-        // then rename to target. This prevents corruption if the process
-        // crashes during write and ensures no data loss.
+        if ($this->deferWrites) {
+            // Memory is a superset of what we loaded from disk, so the check
+            // above suffices — no per-push file I/O in deferred mode.
+            $this->pendingWrites[] = $line;
+            parent::push($line);
+            return;
+        }
+
+        // Sync path also guards against another process having appended the
+        // same line since we loaded.
+        if ($line === $this->peekLastOnDisk()) {
+            return;
+        }
+
+        $this->appendLinesAtomically([$line]);
+
+        parent::push($line);
+    }
+
+    /**
+     * Persist any queued entries in a single atomic write.
+     *
+     * No-op when nothing is pending, so calling it eagerly (e.g. after each
+     * submit, or from a shutdown handler) is cheap.
+     */
+    public function flush(): void
+    {
+        if ($this->pendingWrites === []) {
+            return;
+        }
+        $pending = $this->pendingWrites;
+        $this->pendingWrites = [];
+        $this->appendLinesAtomically($pending);
+    }
+
+    /**
+     * Atomic append: copy existing content plus $lines into a temp file, then
+     * rename over the target. Prevents corruption if the process crashes
+     * mid-write and keeps 0600 permissions.
+     *
+     * @param list<string> $lines
+     */
+    private function appendLinesAtomically(array $lines): void
+    {
         $tempFile = $this->tempDir . '/.history.tmp.' . getmypid();
         $fp = fopen($tempFile, 'w');
         if ($fp === false) {
@@ -72,14 +141,14 @@ final class FileHistory extends InMemoryHistory
                 }
             }
         }
-        fwrite($fp, $line . "\n");
+        foreach ($lines as $line) {
+            fwrite($fp, $line . "\n");
+        }
         fflush($fp);
         flock($fp, LOCK_UN);
         fclose($fp);
         rename($tempFile, $this->filePath);
         chmod($this->filePath, 0600);
-
-        parent::push($line);
     }
 
     /**
@@ -168,6 +237,8 @@ final class FileHistory extends InMemoryHistory
     public function clear(): void
     {
         parent::clear();
+        // Drop queued-but-unwritten entries too — they were cleared with the rest.
+        $this->pendingWrites = [];
         // Atomic write via temp file to prevent corruption on crash.
         $tempFile = $this->tempDir . '/.history.tmp.' . getmypid();
         file_put_contents($tempFile, '');

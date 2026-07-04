@@ -36,7 +36,8 @@ final class ViMode implements ModeInterface
 
     public function __construct(
         private readonly TextPrompt $originalPrompt = new TextPrompt(''),
-    ) {}
+    ) {
+    }
 
     public function name(): string
     {
@@ -45,9 +46,11 @@ final class ViMode implements ModeInterface
 
     public function handleKey(TextPrompt $prompt, string $key): TextPrompt
     {
-        // Always delegate Escape to normal mode switch
+        // Always delegate Escape to normal mode switch. Standard vi pulls the
+        // cursor back onto the last character when leaving insert mode at EOL.
         if ($key === Key::Escape) {
-            return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+            return $this->withViMode(self::VI_MODE_NORMAL)
+                ->attachTo($this->clampToLastChar($prompt));
         }
 
         return match ($this->viMode) {
@@ -177,7 +180,7 @@ final class ViMode implements ModeInterface
 
             $action === VimAction::CursorLineEnd
                 => $this->withViMode(self::VI_MODE_NORMAL)
-                    ->attachTo($prompt->handleKeyDirect(Key::End)),
+                    ->attachTo($this->clampToLastChar($prompt->handleKeyDirect(Key::End))),
 
             // History navigation
             $action === VimAction::HistoryUp
@@ -372,6 +375,20 @@ final class ViMode implements ModeInterface
         $count = abs($delta);
         foreach (range(1, $count) as $_) {
             $prompt = $prompt->handleKeyDirect($key);
+        }
+        return $prompt;
+    }
+
+    /**
+     * Vi normal mode rests the cursor ON the last character, never past it
+     * (unlike readline End, which sits after it). Pull back one column when
+     * the cursor overshoots a non-empty buffer.
+     */
+    private function clampToLastChar(TextPrompt $prompt): TextPrompt
+    {
+        $len = mb_strlen($prompt->value(), 'UTF-8');
+        if ($len > 0 && $prompt->cursor() >= $len) {
+            return $prompt->handleKeyDirect(Key::Left);
         }
         return $prompt;
     }

@@ -137,11 +137,32 @@ final class Readline
      * After each state change, if an output stream is provided and the prompt
      * exposes a view() method, writes a redraw sequence to the output.
      *
+     * While running, bracketed paste mode (DEC private mode 2004) is enabled
+     * on the output terminal so pastes arrive as a single PasteEvent instead
+     * of a keystroke storm; it is restored on every exit path. Only emitted
+     * when the output is a real TTY, so tests and piped output are unaffected.
+     *
      * @param object       $prompt  Object with handleKey(string): object method
      * @param resource|null $output Output stream for repainting (default: STDOUT)
      * @return object  The final prompt state after user submits or aborts
      */
     public function run(object $prompt, $output = null): object
+    {
+        $bracketedPaste = $this->enableBracketedPaste($output);
+        try {
+            return $this->runLoop($prompt, $output);
+        } finally {
+            if ($bracketedPaste) {
+                fwrite($output, "\x1b[?2004l");
+            }
+        }
+    }
+
+    /**
+     * @param object        $prompt
+     * @param resource|null $output
+     */
+    private function runLoop(object $prompt, $output): object
     {
         $driver = $this->input ?? new StreamInputDriver(fopen('php://stdin', 'r'));
 
@@ -187,9 +208,8 @@ final class Readline
                     ($this->pasteHandler)($event);
                 }
                 // Also feed pasted text into the prompt when it accepts characters
-                if (is_callable([$prompt, 'handleChar']) && ($event->text !== '' || $event->content !== '')) {
-                    $text = $event->text ?? $event->content ?? '';
-                    foreach (mb_str_split($text, 1, 'UTF-8') as $char) {
+                if (is_callable([$prompt, 'handleChar']) && $event->content !== '') {
+                    foreach (mb_str_split($event->content, 1, 'UTF-8') as $char) {
                         $next = $prompt->handleChar($char);
                         if (is_callable([$next, 'isSubmitted']) && $next->isSubmitted()) {
                             return $next;
@@ -206,6 +226,25 @@ final class Readline
 
             // Unknown event — ignore
         }
+    }
+
+    /**
+     * Emit `CSI ?2004h` (mirrors candy-core Ansi::bracketedPasteOn()) so the
+     * terminal wraps pastes in ESC[200~ / ESC[201~ markers that candy-input's
+     * decoder turns into PasteEvents.
+     *
+     * Guarded to real TTYs only: tests write to memory streams and pipes,
+     * which must not receive stray control sequences.
+     *
+     * @return bool True when the mode was enabled (caller must disable on exit).
+     */
+    private function enableBracketedPaste(mixed $output): bool
+    {
+        if (!\is_resource($output) || !stream_isatty($output)) {
+            return false;
+        }
+        fwrite($output, "\x1b[?2004h");
+        return true;
     }
 
     /**

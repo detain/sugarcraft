@@ -20,6 +20,12 @@ use SugarCraft\Readline\Mode\ModeInterface;
  */
 final class TextPrompt
 {
+    /** History search direction: toward older entries (readline Ctrl+R). */
+    public const SEARCH_REVERSE = 1;
+
+    /** History search direction: toward newer entries (readline Ctrl+S). */
+    public const SEARCH_FORWARD = -1;
+
     /** Text typed by the user. The label is rendered separately by {@see view()}. */
     private string $buffer = '';
 
@@ -78,7 +84,28 @@ final class TextPrompt
     /** Whether fish-style autosuggest from history is enabled. */
     private bool $autoSuggestEnabled = true;
 
-    public function __construct(private readonly string $label) {}
+    /** Whether incremental history search (Ctrl+R / Ctrl+S) is active. */
+    private bool $searching = false;
+
+    /** Query typed so far while incremental search is active. */
+    private string $searchQuery = '';
+
+    /** @var self::SEARCH_* Direction the active search scans in. */
+    private int $searchDirection = self::SEARCH_REVERSE;
+
+    /** History index of the current search match; -1 = no match yet. */
+    private int $searchIndex = -1;
+
+    /** True when the current query has no match (readline "failed" indicator). */
+    private bool $searchFailed = false;
+
+    /** Line + cursor captured when search began, restored on cancel. */
+    private ?string $bufferBeforeSearch = null;
+    private int $cursorBeforeSearch = 0;
+
+    public function __construct(private readonly string $label)
+    {
+    }
 
     public static function new(string $label): self
     {
@@ -185,6 +212,11 @@ final class TextPrompt
         if ($char === '' || self::charCount($char) !== 1) {
             return $this;
         }
+        // While searching, typed characters refine the query instead of the
+        // buffer, so this runs before the charLimit guard.
+        if ($this->searching) {
+            return $this->refineSearch($char);
+        }
         if ($this->charLimit > 0 && self::charCount($this->buffer) >= $this->charLimit) {
             return $this;
         }
@@ -213,6 +245,12 @@ final class TextPrompt
     {
         if ($this->submitted || $this->aborted) {
             return $this;
+        }
+
+        // Active incremental search owns every key — checked before mode
+        // delegation so vi/emacs bindings can't hijack search navigation.
+        if ($this->searching) {
+            return $this->handleSearchKey($key);
         }
 
         // Delegate to active key-binding mode if set
@@ -249,6 +287,8 @@ final class TextPrompt
             Key::CtrlK     => $this->deleteAllAfterCursor(),
             Key::Tab       => $this->applyCompletion(),
             Key::Enter     => $this->submit(),
+            Key::CtrlR, "\x12" => $this->startHistorySearch(self::SEARCH_REVERSE),
+            Key::CtrlS, "\x13" => $this->startHistorySearch(self::SEARCH_FORWARD),
             Key::Undo      => $this->undo(),
             Key::Redo      => $this->redo(),
             Key::Escape, Key::CtrlC => $this->abort(),
@@ -389,6 +429,164 @@ final class TextPrompt
     }
 
     // -------------------------------------------------------------------------
+    // Incremental history search (readline Ctrl+R / Ctrl+S)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Enter incremental history search mode.
+     *
+     * While active: typed characters refine the query, Ctrl+R/Ctrl+S step to
+     * the next match older/newer, Enter accepts the match into the buffer,
+     * and Escape/Ctrl+G cancels back to the pre-search line. With an empty
+     * history the mode still engages but renders a "failed" indicator, so the
+     * user gets feedback instead of a dead prompt.
+     *
+     * @param self::SEARCH_* $direction
+     */
+    public function startHistorySearch(int $direction = self::SEARCH_REVERSE): self
+    {
+        if ($this->submitted || $this->aborted || $this->history === null) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->searching = true;
+        $clone->searchDirection = $direction;
+        $clone->searchQuery = '';
+        $clone->searchIndex = -1;
+        $clone->bufferBeforeSearch = $clone->buffer;
+        $clone->cursorBeforeSearch = $clone->cursor;
+        // Empty history can never match anything: flag as failed immediately
+        // so view() shows "(failed …)" feedback rather than a broken state.
+        $clone->searchFailed = $clone->searchSource()->search('', 0, self::SEARCH_REVERSE) === null;
+        return $clone;
+    }
+
+    private function handleSearchKey(string $key): self
+    {
+        return match ($key) {
+            // Repeated Ctrl+R / Ctrl+S step past the current match.
+            Key::CtrlR, "\x12" => $this->stepSearch(self::SEARCH_REVERSE),
+            Key::CtrlS, "\x13" => $this->stepSearch(self::SEARCH_FORWARD),
+            Key::Enter         => $this->acceptSearch(),
+            Key::Escape, Key::CtrlG, "\x07", Key::CtrlC, "\x03"
+                               => $this->cancelSearch(),
+            Key::Backspace, "\x7f" => $this->eraseSearchChar(),
+            // Anything else is swallowed: search mode owns the keyboard until
+            // it is accepted or cancelled (matches readline-lite behavior).
+            default            => $this,
+        };
+    }
+
+    /** Append a typed character to the query and re-run the search. */
+    private function refineSearch(string $char): self
+    {
+        // Control bytes reaching handleChar() are search commands, not query text.
+        if (\ord($char[0]) < 32 || $char === "\x7f") {
+            return $this->handleSearchKey($char);
+        }
+        $clone = clone $this;
+        $clone->searchQuery .= $char;
+        // Re-anchor at the current match: readline keeps the same entry as
+        // long as it still matches the extended query.
+        $from = max(0, $clone->searchIndex);
+        return $clone->applySearchResult(
+            $clone->searchSource()->search($clone->searchQuery, $from, $clone->searchDirection)
+        );
+    }
+
+    /** Move to the next match in $direction, past the current one. */
+    private function stepSearch(int $direction): self
+    {
+        $clone = clone $this;
+        $clone->searchDirection = $direction;
+        // No match yet: start scanning from the newest entry rather than
+        // skipping past a match that does not exist.
+        $from = $clone->searchIndex === -1 ? 0 : $clone->searchIndex + $direction;
+        return $clone->applySearchResult(
+            $clone->searchSource()->search($clone->searchQuery, $from, $direction)
+        );
+    }
+
+    /** Remove the last query character and re-search from the newest entry. */
+    private function eraseSearchChar(): self
+    {
+        if ($this->searchQuery === '') {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->searchQuery = self::sliceChars(
+            $clone->searchQuery,
+            0,
+            self::charCount($clone->searchQuery) - 1
+        );
+        // A shorter query may match a newer entry, so restart from the top.
+        return $clone->applySearchResult(
+            $clone->searchSource()->search($clone->searchQuery, 0, self::SEARCH_REVERSE)
+        );
+    }
+
+    /**
+     * Exit search keeping the current match in the buffer.
+     *
+     * Deliberately does NOT auto-submit: the user reviews the recalled line
+     * and presses Enter again to submit, avoiding accidental execution.
+     */
+    private function acceptSearch(): self
+    {
+        $clone = clone $this;
+        if ($clone->searchIndex === -1) {
+            // Nothing ever matched — fall back to the pre-search line.
+            $clone->buffer = $clone->bufferBeforeSearch ?? '';
+            $clone->cursor = self::charCount($clone->buffer);
+        }
+        return $clone->clearSearchState();
+    }
+
+    /** Exit search restoring the exact pre-search line and cursor. */
+    private function cancelSearch(): self
+    {
+        $clone = clone $this;
+        $clone->buffer = $clone->bufferBeforeSearch ?? '';
+        $clone->cursor = min($clone->cursorBeforeSearch, self::charCount($clone->buffer));
+        return $clone->clearSearchState();
+    }
+
+    /** @param array{index: int, entry: string}|null $match */
+    private function applySearchResult(?array $match): self
+    {
+        if ($match === null) {
+            // Keep the last successful match visible; only flag the failure.
+            $this->searchFailed = true;
+            return $this;
+        }
+        $this->searchFailed = false;
+        $this->searchIndex = $match['index'];
+        $this->buffer = $match['entry'];
+        $this->cursor = self::charCount($match['entry']);
+        return $this;
+    }
+
+    private function clearSearchState(): self
+    {
+        $this->searching = false;
+        $this->searchQuery = '';
+        $this->searchIndex = -1;
+        $this->searchFailed = false;
+        $this->bufferBeforeSearch = null;
+        $this->cursorBeforeSearch = 0;
+        return $this;
+    }
+
+    /**
+     * History used for searching: the live (caller-owned) store, matching
+     * what autosuggest reads, so entries pushed after withHistory() are found.
+     */
+    private function searchSource(): HistoryInterface
+    {
+        return $this->historyOriginal ?? $this->history;
+    }
+
+    // -------------------------------------------------------------------------
     // Queries
     // -------------------------------------------------------------------------
 
@@ -399,11 +597,35 @@ final class TextPrompt
     }
 
     /** Cursor column inside {@see value()} (0..length). */
-    public function cursor(): int { return $this->cursor; }
+    public function cursor(): int
+    {
+        return $this->cursor;
+    }
 
-    public function isSubmitted(): bool { return $this->submitted; }
-    public function isAborted(): bool   { return $this->aborted; }
-    public function error(): string     { return $this->error; }
+    public function isSubmitted(): bool
+    {
+        return $this->submitted;
+    }
+    public function isAborted(): bool
+    {
+        return $this->aborted;
+    }
+    public function error(): string
+    {
+        return $this->error;
+    }
+
+    /** Whether incremental history search is active. */
+    public function isSearching(): bool
+    {
+        return $this->searching;
+    }
+
+    /** Query typed so far in the active incremental search ('' when inactive). */
+    public function searchQuery(): string
+    {
+        return $this->searchQuery;
+    }
 
     /** First completion that starts with the current input, or null. */
     public function suggestion(): ?string
@@ -425,6 +647,10 @@ final class TextPrompt
 
     public function view(): string
     {
+        if ($this->searching) {
+            return $this->searchView();
+        }
+
         $display = $this->hidden
             ? str_repeat($this->hideMask, self::charCount($this->buffer))
             : Ansi::sanitize($this->buffer);
@@ -478,6 +704,24 @@ final class TextPrompt
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Render the readline-style incremental-search line, e.g.
+     * `(reverse-i-search)`git': git status` with the cursor after the match.
+     */
+    private function searchView(): string
+    {
+        $direction = $this->searchDirection === self::SEARCH_REVERSE ? 'reverse-i-search' : 'i-search';
+        $indicator = ($this->searchFailed ? 'failed ' : '') . $direction;
+        $display = $this->hidden
+            ? str_repeat($this->hideMask, self::charCount($this->buffer))
+            : Ansi::sanitize($this->buffer);
+
+        return Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)
+            . '(' . $indicator . ')`' . Ansi::sanitize($this->searchQuery) . "': "
+            . $display
+            . Ansi::wrap(' ', $this->cursorStyle);
     }
 
     // -------------------------------------------------------------------------
