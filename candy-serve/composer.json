@@ -29,6 +29,7 @@
         "sugarcraft/candy-core": "dev-master",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
+        "symfony/yaml": "^6.4 || ^7.0",
         "ext-json": "*",
         "ext-openssl": "*",
         "ext-ssh2": "*"

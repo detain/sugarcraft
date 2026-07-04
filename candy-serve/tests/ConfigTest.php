@@ -123,7 +123,8 @@ final class ConfigTest extends TestCase
 
     public function testLoadParsesMaxPackBytes(): void
     {
-        // The minimal YAML parser only supports nesting via inline maps
+        // Inline maps were the only nesting the old hand-rolled parser
+        // supported; symfony/yaml (plan 7.7) still parses them fine.
         $configPath = $this->tmpDir . '/pack.yaml';
         file_put_contents($configPath, "name: PackTest\nhttp: { max_pack_bytes: 1048576 }\n");
 
@@ -134,12 +135,16 @@ final class ConfigTest extends TestCase
 
     public function testLoadWithoutMaxPackBytesIsNull(): void
     {
+        // Deliberate 7.7 adjustment: an unquoted `:8080` in a YAML flow
+        // map parses as int 8080 under symfony/yaml, so listen addrs
+        // must be quoted (the README always showed them quoted).
         $configPath = $this->tmpDir . '/nopack.yaml';
-        file_put_contents($configPath, "name: NoPackTest\nhttp: { listen_addr: :8080 }\n");
+        file_put_contents($configPath, "name: NoPackTest\nhttp: { listen_addr: \":8080\" }\n");
 
         $c = Config::load($configPath);
 
         $this->assertNull($c->maxPackBytes);
+        $this->assertSame(':8080', $c->httpListenAddr);
     }
 
     // -------------------------------------------------------------------------
@@ -179,8 +184,10 @@ YAML;
         $c = Config::load($configPath);
 
         $this->assertSame('CommentTest', $c->name);
-        // lfs nested parsing doesn't work with indentation - just verify it loaded
-        $this->assertNotNull($c->lfsEnabled);
+        // 7.7: the old parser silently ignored indented nested keys and
+        // this assertion could only check "it loaded"; with symfony/yaml
+        // the nested value actually applies.
+        $this->assertFalse($c->lfsEnabled);
     }
 
     public function testLoadWithInlineMap(): void
@@ -209,14 +216,93 @@ YAML;
 
     public function testParseYamlWithNestedStructure(): void
     {
-        // Config's YAML parser doesn't support nested indentation - only top-level keys
-        // This test verifies minimal parsing works
+        // Plan 7.7: block-style nested keys (the way the README always
+        // documented config files) now actually take effect. The old
+        // hand-rolled parser silently ignored every indented key.
         $configPath = $this->tmpDir . '/nested.yaml';
-        file_put_contents($configPath, "name: NestedTest\n");
+        $yaml = <<<YAML
+name: NestedTest
+ssh:
+  listen_addr: ":2222"
+  idle_timeout: 300
+git:
+  listen_addr: ":9419"
+  max_connections: 16
+http:
+  listen_addr: ":8080"
+  max_pack_bytes: 2097152
+db:
+  driver: "sqlite"
+  data_source: "nested.db"
+lfs:
+  enabled: false
+  ssh_enabled: true
+jobs:
+  mirror_pull: "@every 8h"
+stats:
+  listen_addr: ":9999"
+YAML;
+        file_put_contents($configPath, $yaml);
 
         $c = Config::load($configPath);
 
         $this->assertSame('NestedTest', $c->name);
+        $this->assertSame(':2222', $c->sshListenAddr);
+        $this->assertSame(300, $c->sshIdleTimeout);
+        $this->assertSame(':9419', $c->gitListenAddr);
+        $this->assertSame(16, $c->gitMaxConnections);
+        $this->assertSame(':8080', $c->httpListenAddr);
+        $this->assertSame(2097152, $c->maxPackBytes);
+        $this->assertStringContainsString('nested.db', $c->dbDataSource);
+        $this->assertFalse($c->lfsEnabled);
+        $this->assertTrue($c->lfsSshEnabled);
+        $this->assertSame('@every 8h', $c->mirrorPullSchedule);
+        $this->assertSame(':9999', $c->statsListenAddr);
+    }
+
+    public function testLoadThrowsForMalformedYaml(): void
+    {
+        $configPath = $this->tmpDir . '/broken.yaml';
+        // Unquoted @ starts a reserved indicator — a real YAML parse error.
+        file_put_contents($configPath, "jobs:\n  mirror_pull: @every 10m\n");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Invalid YAML config');
+
+        Config::load($configPath);
+    }
+
+    public function testLoadThrowsForNonMappingYaml(): void
+    {
+        $configPath = $this->tmpDir . '/scalar.yaml';
+        file_put_contents($configPath, "just a scalar\n");
+
+        $this->expectException(\RuntimeException::class);
+
+        Config::load($configPath);
+    }
+
+    public function testLoadEmptyFileFallsBackToDefaults(): void
+    {
+        $configPath = $this->tmpDir . '/empty-file.yaml';
+        file_put_contents($configPath, "");
+
+        $c = Config::load($configPath);
+
+        $this->assertSame('CandyServe', $c->name);
+        $this->assertSame(':23231', $c->sshListenAddr);
+    }
+
+    public function testLfsPathCreatesDirectory(): void
+    {
+        $configPath = $this->tmpDir . '/lfs-path.yaml';
+        file_put_contents($configPath, "name: LfsPathTest\n");
+
+        $c = Config::load($configPath);
+        $lfsPath = $c->lfsPath();
+
+        $this->assertStringContainsString('lfs', $lfsPath);
+        $this->assertDirectoryExists($lfsPath);
     }
 
     public function testParseYamlWithEmptyValues(): void
@@ -237,7 +323,7 @@ YAML;
 
     public function testParseYamlWithQuotedStrings(): void
     {
-        // Config's YAML parser doesn't support nested indentation
+
         $configPath = $this->tmpDir . '/quoted.yaml';
         file_put_contents($configPath, "name: \"Quoted Name\"\n");
 
@@ -248,7 +334,7 @@ YAML;
 
     public function testParseYamlWithBooleanValues(): void
     {
-        // Config's YAML parser doesn't support nested indentation
+
         $configPath = $this->tmpDir . '/booleans.yaml';
         file_put_contents($configPath, "name: BoolTest\n");
 
@@ -259,7 +345,7 @@ YAML;
 
     public function testParseYamlWithNumericValues(): void
     {
-        // Config's YAML parser doesn't support nested indentation
+
         $configPath = $this->tmpDir . '/numeric.yaml';
         file_put_contents($configPath, "name: NumericTest\n");
 

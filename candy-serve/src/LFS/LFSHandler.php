@@ -8,7 +8,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Serve\Support\PromisePool;
-use SugarCraft\Serve\{AccessControl, Repo, User};
+use SugarCraft\Serve\{AccessControl, Repo, Stats, User};
 
 use function React\Promise\resolve;
 
@@ -28,6 +28,7 @@ final class LFSHandler
     private ?LFSStorageBackendInterface $storageBackend;
     private string $lfsPath;
     private int $concurrentTransfers;
+    private ?Stats $stats;
 
     public const MEDIA_TYPE = 'application/vnd.git-lfs+json';
 
@@ -37,12 +38,14 @@ final class LFSHandler
         string $lfsPath,
         ?LFSStorageBackendInterface $storageBackend = null,
         int $concurrentTransfers = 4,
+        ?Stats $stats = null,
     ) {
         $this->repo = $repo;
         $this->user = $user;
         $this->lfsPath = $lfsPath;
         $this->storageBackend = $storageBackend ?? new LocalStorageBackend($lfsPath);
         $this->concurrentTransfers = $concurrentTransfers;
+        $this->stats = $stats;
     }
 
     /**
@@ -56,6 +59,7 @@ final class LFSHandler
             lfsPath: $this->lfsPath,
             storageBackend: $backend,
             concurrentTransfers: $this->concurrentTransfers,
+            stats: $this->stats,
         );
     }
 
@@ -70,6 +74,7 @@ final class LFSHandler
             lfsPath: $this->lfsPath,
             storageBackend: $this->storageBackend,
             concurrentTransfers: $count,
+            stats: $this->stats,
         );
     }
 
@@ -107,6 +112,8 @@ final class LFSHandler
      */
     public function handleBatch(array $request): array
     {
+        ($this->stats ?? Stats::getInstance())->recordLfsBatch();
+
         $ac = AccessControl::getInstance();
 
         if (!$ac->canRead($this->user, $this->repo)) {
@@ -151,6 +158,8 @@ final class LFSHandler
      */
     public function handleBatchAsync(array $request, ?LoopInterface $loop = null): PromiseInterface
     {
+        ($this->stats ?? Stats::getInstance())->recordLfsBatch();
+
         $ac = AccessControl::getInstance();
 
         if (!$ac->canRead($this->user, $this->repo)) {
@@ -270,7 +279,7 @@ final class LFSHandler
             ];
         }
 
-        // Upload operation - prepare upload endpoint
+        // Upload operation - prepare upload + post-upload verify endpoints
         return [
             'oid'   => $oid,
             'size'  => $size,
@@ -278,16 +287,23 @@ final class LFSHandler
                 'upload' => [
                     'href'   => $this->objectUrl($oid),
                 ],
+                'verify' => [
+                    'href'   => $this->objectUrl($oid) . '/verify',
+                ],
             ],
         ];
     }
 
     /**
      * Get the URL for an LFS object.
+     *
+     * Matches the routes the smart-HTTP server actually dispatches
+     * (plan item 7.9): `/{repo}/info/lfs/objects/{oid}` — previously
+     * this advertised a `/repos/…` prefix nothing served.
      */
     private function objectUrl(string $oid): string
     {
-        return '/repos/' . $this->repo->name . '/info/lfs/objects/' . $oid;
+        return '/' . $this->repo->name . '/info/lfs/objects/' . $oid;
     }
 
     /**

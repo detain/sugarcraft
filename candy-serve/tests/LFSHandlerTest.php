@@ -174,7 +174,11 @@ final class LFSHandlerTest extends TestCase
         $this->assertSame('upload-oid-12345', $result['objects'][0]['oid']);
         $this->assertArrayHasKey('actions', $result['objects'][0]);
         $this->assertArrayHasKey('upload', $result['objects'][0]['actions']);
-        $this->assertStringContainsString('/repos/test-repo/info/lfs/objects/upload-oid-12345', $result['objects'][0]['actions']['upload']['href']);
+        // Plan 7.9: hrefs now point at the routes the smart-HTTP server
+        // actually serves (/{repo}/info/lfs/objects/{oid}), not the old
+        // /repos/… prefix nothing dispatched.
+        $this->assertStringContainsString('/test-repo/info/lfs/objects/upload-oid-12345', $result['objects'][0]['actions']['upload']['href']);
+        $this->assertStringContainsString('/test-repo/info/lfs/objects/upload-oid-12345/verify', $result['objects'][0]['actions']['verify']['href']);
     }
 
     public function testHandleBatchWithMultipleObjects(): void

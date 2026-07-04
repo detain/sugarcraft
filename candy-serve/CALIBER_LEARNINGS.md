@@ -36,15 +36,19 @@ Anti-pattern: don't `socket_export_stream()` a `\Socket` just to register it wit
 ### 2026-07-04 — Bounded-concurrency LFS batches (honesty note)
 Pattern: `LFSHandler::handleBatchAsync()` schedules per-object work through `Support\PromisePool::map()` capped at `$concurrentTransfers`; `handleBatch()` stays the sequential fallback. Per-object storage I/O (`exists()`/`size()`) is synchronous inside its loop tick — the loop buys bounded SCHEDULING (batch spread across ticks, timers/sockets keep firing), not async file I/O. A promise-returning backend can plug into the same pool later. Per-object exceptions become `error: {code: 500}` entries instead of rejecting the batch; missing objects report 404 byte-identically to the sequential path.
 
+### 2026-07-04 — symfony/yaml migration gotchas (7.7)
+Pattern: real YAML parsing makes the README-style block-nested config keys WORK (the old hand-rolled parser silently ignored every indented key — a documented bug, tests carried "inline-map workaround" comments). Values starting with a reserved indicator must now be quoted: unquoted `:8080` in a flow map parses as int 8080, unquoted `@every 10m` is a hard ParseException. Config's constructor casts string fields `(string)` so YAML type-inference can't TypeError readonly props.
+Anti-pattern: don't assume old-parser quirks were features — verify each fixture against the real parser (`php -r` byte-check first) and adjust tests deliberately with a citation.
+
+### 2026-07-04 — Schedule format for jobs (7.5)
+Pattern: `jobs.mirror_pull` accepts the robfig/cron subset soft-serve actually uses: `@every <go-duration>` (`30s`/`10m`/`8h`/`1h30m`) + `@hourly`/`@daily`/`@midnight`/`@weekly`/`@monthly`/`@yearly` aliases, modelled as a plain interval (`Jobs\Schedule`). Full 5-field cron throws `InvalidArgumentException` — better than silently never firing.
+
 ## Implemented (was deferred pre-1.0)
 
 - **6.1** ✅ 2026-07-04 — ReactPHP accept loop for GitDaemon, dual-mode via `serveAsync()` (blocking `socket_select()` loop unchanged as default).
 - **6.2** ✅ 2026-07-04 — Concurrent LFS batch handling via `LFSHandler::handleBatchAsync()` + bounded `PromisePool` (bounded-concurrency beats naive `Promise\all`).
-
-## Future work (deferred pre-1.0)
-
-- **7.5** Mirror-pull background jobs (honor `jobs.mirror_pull` schedule).
-- **7.6** Stats collection server on `stats.listen_addr`.
-- **7.7** Swap the minimal built-in YAML parser for `symfony/yaml`.
-- **7.8** Introduce a `Visibility` enum (public/private/collaborator-only) replacing the paired bools on `Repo`.
-- **7.9** LFS HTTP object routes (upload/download/verify endpoints on the smart-HTTP server).
+- **7.5** ✅ 2026-07-04 — Mirror-pull background jobs: `Jobs\MirrorPuller` honors `jobs.mirror_pull` (`Jobs\Schedule`), pulls due mirrors (`Repo::withMirrorFrom()`/`isMirror()`) with `git -C <path> fetch --prune <url> '+refs/*:refs/*'` through an injectable exec seam; dual-mode — `attach($loop)` periodic timer for async hosts, `runOnce()` for blocking/cron. Failed pulls still stamp `lastPullAt` so a broken upstream can't hot-loop.
+- **7.6** ✅ 2026-07-04 — Stats collection server: `Stats` counter object (getInstance/setInstance like AccessControl, per-object `setStats()` on GitDaemon + HTTP Server, ctor param on LFSHandler) wired into git-daemon accepts/pack ops, HTTP requests/pack ops, and LFS batch/object transfers; `StatsServer` serves the JSON snapshot on `stats.listen_addr` — React-loop only, no blocking mode by design.
+- **7.7** ✅ 2026-07-04 — Replaced the hand-rolled YAML subset parser with `symfony/yaml` (^6.4||^7.0, Packagist dep — no path-repo needed). ParseException wrapped in RuntimeException (`config.parse_failed`).
+- **7.8** ✅ 2026-07-04 — `Visibility` enum (Public/CollaboratorOnly/Private) on `Repo` replacing the `isPublic`+`private` bool pair; BC kept: readonly `->isPublic` property + `isPrivate()`/`isVisiblePublic()` delegate to the enum, `withPublic()`/`withPrivate()` map onto it (private wins; `withPrivate(false)` on Private resolves CollaboratorOnly — conservative).
+- **7.9** ✅ 2026-07-04 — LFS HTTP object routes on the smart-HTTP server: batch (POST), download (GET), upload (PUT), verify (POST) under `/{repo}/info/lfs/objects/…`; `LFSHandler::objectUrl()` now advertises exactly these routes (was a dead `/repos/…` prefix). Enforced: 64-hex OID, `http.max_pack_bytes` cap (413), body-SHA-256 == OID (422), read auth for downloads / write auth for uploads+verify, 404 when `lfs.enabled` is false.

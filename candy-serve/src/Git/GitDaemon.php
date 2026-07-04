@@ -11,7 +11,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\Subscription;
 use SugarCraft\Async\Subscriptions;
-use SugarCraft\Serve\{AccessControl, Config, Repo, User};
+use SugarCraft\Serve\{AccessControl, Config, Repo, Stats, User};
 
 /**
  * Real daemon-mode Git daemon that binds to a port and handles
@@ -78,10 +78,24 @@ final class GitDaemon
     /** Whether the async transport is currently registered with a loop. */
     private bool $asyncActive = false;
 
+    /** Stats collector override (null = shared instance). */
+    private ?Stats $stats = null;
+
     public function __construct(Config $config)
     {
         $this->config = $config;
         $this->subscriptions = new Subscriptions();
+    }
+
+    /** Inject a stats collector (default: the shared {@see Stats} instance). */
+    public function setStats(Stats $stats): void
+    {
+        $this->stats = $stats;
+    }
+
+    private function stats(): Stats
+    {
+        return $this->stats ?? Stats::getInstance();
     }
 
     // -------------------------------------------------------------------------
@@ -309,6 +323,8 @@ final class GitDaemon
         // Set socket to non-blocking for timeout handling
         \socket_set_nonblock($client);
 
+        $this->stats()->recordConnection();
+
         $this->clients[] = [
             'socket' => $client,
             'connected_at' => \time(),
@@ -340,6 +356,8 @@ final class GitDaemon
             return;
         }
         \stream_set_blocking($client, false);
+
+        $this->stats()->recordConnection();
 
         $this->clients[] = [
             'socket' => $client,
@@ -566,6 +584,7 @@ final class GitDaemon
                     return;
                 }
 
+                $this->stats()->recordPackDownload();
                 $handler = new UploadPack($repo, $user);
             } else {
                 if (!$ac->canWrite($user, $repo)) {
@@ -579,6 +598,7 @@ final class GitDaemon
                     $repo->init();
                 }
 
+                $this->stats()->recordPackUpload();
                 $handler = new ReceivePack($repo, $user);
             }
 

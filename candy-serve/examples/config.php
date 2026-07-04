@@ -58,7 +58,7 @@ lfs:
   ssh_enabled: true
 YAML;
 
-\fiel_put_contents($tmpFile, $yaml);
+\file_put_contents($tmpFile, $yaml);
 
 try {
     $cfg = Config::load($tmpFile);
