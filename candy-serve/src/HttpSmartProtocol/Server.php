@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Serve\HttpSmartProtocol;
 
-use SugarCraft\Serve\{AccessControl, Config, Repo, User};
+use SugarCraft\Serve\{AccessControl, Config, Repo, Stats, User};
 use SugarCraft\Serve\Git\{UploadPack, ReceivePack};
+use SugarCraft\Serve\LFS\LFSHandler;
 
 /**
  * HTTP server that speaks the Git smart protocol.
@@ -52,9 +53,23 @@ final class Server
     /** Response body. */
     private string $body = '';
 
+    /** Stats collector override (null = shared instance). */
+    private ?Stats $stats = null;
+
     public function __construct(Config $config)
     {
         $this->config = $config;
+    }
+
+    /** Inject a stats collector (default: the shared {@see Stats} instance). */
+    public function setStats(Stats $stats): void
+    {
+        $this->stats = $stats;
+    }
+
+    private function stats(): Stats
+    {
+        return $this->stats ?? Stats::getInstance();
     }
 
     // -------------------------------------------------------------------------
@@ -113,6 +128,8 @@ final class Server
         $this->responseHeaders['Connection'] = 'close';
         $this->responseHeaders['Server'] = 'CandyServe/1.0';
 
+        $this->stats()->recordConnection();
+
         try {
             return $this->route($headers, $body);
         } catch (\Throwable $e) {
@@ -137,6 +154,9 @@ final class Server
         // - /{repo}.git/git-upload-pack  (POST)
         // - /{repo}.git/git-receive-pack (POST)
         // - /{repo}.git/info/refs?service=git-receive-pack
+        // - /{repo}.git/info/lfs/objects/batch          (POST, LFS batch API)
+        // - /{repo}.git/info/lfs/objects/{oid}          (GET download, PUT upload)
+        // - /{repo}.git/info/lfs/objects/{oid}/verify   (POST, post-upload check)
 
         if (\count($parts) < 2) {
             return $this->errorResponse(404, 'Not found');
@@ -148,6 +168,11 @@ final class Server
         // Handle info/refs request (advertisement)
         if ($actionPart === 'info' && isset($parts[2]) && $parts[2] === 'refs') {
             return $this->handleInfoRefs($headers);
+        }
+
+        // Handle Git LFS routes (batch API + object transfer)
+        if ($actionPart === 'info' && isset($parts[2]) && $parts[2] === 'lfs') {
+            return $this->handleLfs($parts, $headers, $body);
         }
 
         // Handle upload-pack request
@@ -267,6 +292,7 @@ final class Server
             return $this->errorResponse(413, 'Packfile too large');
         }
 
+        $this->stats()->recordPackDownload();
         $this->body = $packData;
         return $this->finalizeResponse();
     }
@@ -326,7 +352,201 @@ final class Server
             return $this->errorResponse(413, 'Packfile too large');
         }
 
+        $this->stats()->recordPackUpload();
         $this->body = $packData;
+        return $this->finalizeResponse();
+    }
+
+    // -------------------------------------------------------------------------
+    // Git LFS routes (plan item 7.9)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Dispatch /{repo}/info/lfs/objects/... requests.
+     *
+     * @param list<string> $parts Path segments
+     * @return array{status: int, headers: array<string, string>, body: string}
+     */
+    private function handleLfs(array $parts, array $headers, string $body): array
+    {
+        if (!$this->config->lfsEnabled) {
+            return $this->errorResponse(404, 'Git LFS is disabled');
+        }
+
+        $repoName = $this->extractRepoName();
+        $repo = $repoName !== null ? $this->findRepo($repoName) : null;
+        if ($repo === null) {
+            return $this->errorResponse(404, 'Repository not found');
+        }
+
+        if (($parts[3] ?? '') !== 'objects') {
+            return $this->errorResponse(404, 'Not found');
+        }
+
+        $user = $this->getUserFromHeaders($headers);
+        $handler = new LFSHandler($repo, $user, $this->config->lfsPath(), stats: $this->stats);
+
+        $target = $parts[4] ?? '';
+        if ($target === 'batch') {
+            return $this->handleLfsBatch($repo, $handler, $user, $body);
+        }
+
+        // Object routes: the OID is always the full lowercase SHA-256 hex.
+        if (\preg_match('/^[0-9a-f]{64}$/', $target) !== 1) {
+            return $this->errorResponse(400, 'Invalid LFS object ID');
+        }
+
+        if (($parts[5] ?? '') === 'verify') {
+            return $this->handleLfsVerify($repo, $handler, $user, $target, $body);
+        }
+        if (isset($parts[5])) {
+            return $this->errorResponse(404, 'Not found');
+        }
+
+        return match ($this->method) {
+            'GET' => $this->handleLfsDownload($repo, $handler, $user, $target),
+            'PUT' => $this->handleLfsUpload($repo, $handler, $user, $target, $body),
+            default => $this->errorResponse(405, 'Method not allowed'),
+        };
+    }
+
+    /**
+     * POST /{repo}/info/lfs/objects/batch — the LFS batch API.
+     *
+     * Auth mirrors the object routes: reads for `download` operations,
+     * writes for `upload` operations (the handler itself only checks
+     * read access; the write gate lives here at the HTTP boundary).
+     */
+    private function handleLfsBatch(Repo $repo, LFSHandler $handler, ?User $user, string $body): array
+    {
+        if ($this->method !== 'POST') {
+            return $this->errorResponse(405, 'Method not allowed');
+        }
+
+        $request = \json_decode($body, true);
+        if (!\is_array($request)) {
+            return $this->errorResponse(400, 'Invalid JSON body');
+        }
+
+        if (($request['operation'] ?? 'download') === 'upload'
+            && !AccessControl::getInstance()->canWrite($user, $repo)) {
+            return $this->errorResponse(403, 'Access denied');
+        }
+
+        $result = $handler->handleBatch($request);
+
+        if (isset($result['error']['code'])) {
+            return $this->errorResponse((int) $result['error']['code'], (string) $result['error']['message']);
+        }
+
+        $this->responseHeaders['Content-Type'] = LFSHandler::MEDIA_TYPE;
+        $this->responseHeaders['Cache-Control'] = 'no-cache';
+        $this->body = \json_encode($result, \JSON_UNESCAPED_SLASHES) ?: '{}';
+
+        return $this->finalizeResponse();
+    }
+
+    /**
+     * GET /{repo}/info/lfs/objects/{oid} — download an object.
+     *
+     * The handleRequest() contract returns the body as one string, so
+     * the object is buffered here; readAll() drains the backend stream
+     * in a single C-level copy rather than PHP-level chunk loops.
+     */
+    private function handleLfsDownload(Repo $repo, LFSHandler $handler, ?User $user, string $oid): array
+    {
+        if (!AccessControl::getInstance()->canRead($user, $repo)) {
+            return $this->errorResponse(403, 'Access denied');
+        }
+
+        $backend = $handler->storageBackend();
+        if (!$backend->exists($oid)) {
+            return $this->errorResponse(404, 'Object not found');
+        }
+
+        $this->stats()->recordLfsDownload();
+
+        $this->responseHeaders['Content-Type'] = 'application/octet-stream';
+        $this->body = $backend->readAll($oid);
+        $this->responseHeaders['Content-Length'] = (string) \strlen($this->body);
+
+        return $this->finalizeResponse();
+    }
+
+    /**
+     * PUT /{repo}/info/lfs/objects/{oid} — upload an object.
+     *
+     * Enforces the configured transfer cap (`http.max_pack_bytes`, the
+     * same knob that caps buffered packfiles) and verifies the body's
+     * SHA-256 matches the OID before anything touches storage.
+     */
+    private function handleLfsUpload(Repo $repo, LFSHandler $handler, ?User $user, string $oid, string $body): array
+    {
+        if (!AccessControl::getInstance()->canWrite($user, $repo)) {
+            return $this->errorResponse(403, 'Access denied');
+        }
+
+        $maxBytes = $this->config->maxPackBytes;
+        if ($maxBytes !== null && \strlen($body) > $maxBytes) {
+            return $this->errorResponse(413, 'Object too large');
+        }
+
+        if (\hash('sha256', $body) !== $oid) {
+            return $this->errorResponse(422, 'Object hash does not match OID');
+        }
+
+        $stream = \fopen('php://temp', 'r+');
+        if ($stream === false) {
+            return $this->errorResponse(500, 'Internal server error');
+        }
+        try {
+            \fwrite($stream, $body);
+            \rewind($stream);
+            $handler->storageBackend()->write($oid, $stream);
+        } finally {
+            \fclose($stream);
+        }
+
+        $this->stats()->recordLfsUpload();
+        $this->statusCode = 200;
+        $this->body = '';
+
+        return $this->finalizeResponse();
+    }
+
+    /**
+     * POST /{repo}/info/lfs/objects/{oid}/verify — post-upload check
+     * that the object landed intact (exists and has the size the client
+     * claims). Uses upload auth, matching the batch `verify` action.
+     */
+    private function handleLfsVerify(Repo $repo, LFSHandler $handler, ?User $user, string $oid, string $body): array
+    {
+        if ($this->method !== 'POST') {
+            return $this->errorResponse(405, 'Method not allowed');
+        }
+
+        if (!AccessControl::getInstance()->canWrite($user, $repo)) {
+            return $this->errorResponse(403, 'Access denied');
+        }
+
+        $request = \json_decode($body, true);
+        if (!\is_array($request)) {
+            return $this->errorResponse(400, 'Invalid JSON body');
+        }
+
+        $backend = $handler->storageBackend();
+        if (!$backend->exists($oid)) {
+            return $this->errorResponse(404, 'Object not found');
+        }
+
+        $expectedSize = (int) ($request['size'] ?? -1);
+        if ($expectedSize >= 0 && $backend->size($oid) !== $expectedSize) {
+            return $this->errorResponse(422, 'Object size does not match');
+        }
+
+        $this->responseHeaders['Content-Type'] = LFSHandler::MEDIA_TYPE;
+        $this->body = \json_encode(['oid' => $oid, 'size' => $backend->size($oid)], \JSON_UNESCAPED_SLASHES) ?: '{}';
+
         return $this->finalizeResponse();
     }
 

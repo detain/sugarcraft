@@ -21,7 +21,10 @@ final class Repo
     /** Human-readable description. */
     public readonly string $description;
 
-    /** Whether the repo is public (anyone can read). */
+    /** Repo visibility (public / collaborator-only / private) — plan item 7.8. */
+    public readonly Visibility $visibility;
+
+    /** BC accessor for the old boolean model: true iff visibility is Public. */
     public readonly bool $isPublic;
 
     /** Whether pushes are allowed without explicit write access. */
@@ -33,9 +36,6 @@ final class Repo
     /** Language for syntax highlighting (e.g. 'php', 'go'). */
     public readonly string $highlightLanguage;
 
-    /** Private: only collaborators can access. */
-    private bool $private;
-
     /** @var list<string> Usernames with read access */
     private array $collaborators = [];
 
@@ -46,8 +46,7 @@ final class Repo
         string $name,
         string $path,
         string $description = '',
-        bool $isPublic = true,
-        bool $private = false,
+        Visibility $visibility = Visibility::Public,
         bool $allowPush = false,
         ?string $mirrorFrom = null,
         string $highlightLanguage = '',
@@ -56,8 +55,8 @@ final class Repo
         $this->name                = $name;
         $this->path                = $path;
         $this->description         = $description;
-        $this->isPublic            = $isPublic;
-        $this->private             = $private;
+        $this->visibility          = $visibility;
+        $this->isPublic            = $visibility === Visibility::Public;
         $this->allowPush           = $allowPush;
         $this->mirrorFrom          = $mirrorFrom;
         $this->highlightLanguage   = $highlightLanguage;
@@ -75,32 +74,57 @@ final class Repo
 
     public function withDescription(string $d): self
     {
-        return new self($this->name, $this->path, $d, $this->isPublic, $this->private, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+        return new self($this->name, $this->path, $d, $this->visibility, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
     }
 
+    public function withVisibility(Visibility $v): self
+    {
+        return new self($this->name, $this->path, $this->description, $v, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+    }
+
+    /**
+     * BC setter for the old boolean model. `withPublic(false)` on a
+     * Private repo stays Private (the old code kept the private bit);
+     * on a Public repo it demotes to CollaboratorOnly.
+     */
     public function withPublic(bool $v = true): self
     {
-        return new self($this->name, $this->path, $this->description, $v, $this->private, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+        $visibility = match (true) {
+            $v => Visibility::Public,
+            $this->visibility === Visibility::Private => Visibility::Private,
+            default => Visibility::CollaboratorOnly,
+        };
+        return $this->withVisibility($visibility);
     }
 
+    /**
+     * BC setter for the old boolean model. `withPrivate(false)` on a
+     * Private repo resolves to CollaboratorOnly (the conservative
+     * reading — the old public bit is no longer tracked separately).
+     */
     public function withPrivate(bool $v = true): self
     {
-        return new self($this->name, $this->path, $this->description, $this->isPublic, $v, $this->allowPush, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+        $visibility = match (true) {
+            $v => Visibility::Private,
+            $this->visibility === Visibility::Private => Visibility::CollaboratorOnly,
+            default => $this->visibility,
+        };
+        return $this->withVisibility($visibility);
     }
 
     public function withAllowPush(bool $v = true): self
     {
-        return new self($this->name, $this->path, $this->description, $this->isPublic, $this->private, $v, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
+        return new self($this->name, $this->path, $this->description, $this->visibility, $v, $this->mirrorFrom, $this->highlightLanguage, $this->collaborators);
     }
 
     public function withMirrorFrom(?string $url): self
     {
-        return new self($this->name, $this->path, $this->description, $this->isPublic, $this->private, $this->allowPush, $url, $this->highlightLanguage, $this->collaborators);
+        return new self($this->name, $this->path, $this->description, $this->visibility, $this->allowPush, $url, $this->highlightLanguage, $this->collaborators);
     }
 
     public function withHighlightLanguage(string $lang): self
     {
-        return new self($this->name, $this->path, $this->description, $this->isPublic, $this->private, $this->allowPush, $this->mirrorFrom, $lang, $this->collaborators);
+        return new self($this->name, $this->path, $this->description, $this->visibility, $this->allowPush, $this->mirrorFrom, $lang, $this->collaborators);
     }
 
     public function addCollaborator(string $username): self
@@ -281,16 +305,22 @@ final class Repo
 
     public function isPrivate(): bool
     {
-        return $this->private;
+        return $this->visibility->isPrivate();
     }
 
     /**
-     * Whether this repo is publicly visible (explicitly public and not private).
-     * A repo that is not explicitly public is collaborator-only.
+     * Whether this repo is publicly visible. A repo that is not
+     * explicitly public is collaborator-only (or private).
      */
     public function isVisiblePublic(): bool
     {
-        return $this->isPublic && !$this->private;
+        return $this->visibility->isPublic();
+    }
+
+    /** Whether this repo mirrors an upstream remote (has a pull URL). */
+    public function isMirror(): bool
+    {
+        return $this->mirrorFrom !== null;
     }
 
     public function isCollaborator(string $username): bool

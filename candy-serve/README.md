@@ -28,11 +28,17 @@ CandyServe is a self-hostable Git server you run on a VPS or machine. Users auth
 candy-serve/
 ├── bin/soft-serve                Entry point (serve command)
 ├── src/
-│   ├── Config.php                YAML config loader
+│   ├── Config.php                YAML config loader (symfony/yaml)
 │   ├── Repo.php                  Bare Git repo (init, access, metadata)
+│   ├── Visibility.php            Repo visibility enum (public/collaborator-only/private)
 │   ├── User.php                  SSH public key auth + user model
 │   ├── AccessControl.php         Permissions (admin/read/write)
+│   ├── Stats.php                 Counters (connections, packs, LFS)
+│   ├── StatsServer.php           JSON stats endpoint on stats.listen_addr
 │   ├── Lang.php                 i18n strings
+│   ├── Jobs/
+│   │   ├── Schedule.php         "@every 10m"-style job schedules
+│   │   └── MirrorPuller.php     Mirror-pull background job
 │   ├── SSH/
 │   │   ├── SSHServer.php        libssh2-based SSH server
 │   │   ├── Auth.php             Public key authentication
@@ -76,12 +82,22 @@ git:
 http:
   listen_addr: ":23232"
   public_url: "http://localhost:23232"
+  max_pack_bytes: 268435456
 db:
   driver: "sqlite"
   data_source: "candy-serve.db"
 lfs:
   enabled: true
+jobs:
+  mirror_pull: "@every 10m"
+stats:
+  listen_addr: ":23233"
 ```
+
+Config files are parsed with [symfony/yaml](https://symfony.com/doc/current/components/yaml.html),
+so full YAML 1.2 (block nesting, flow maps, anchors, …) is supported.
+Quote values that start with a YAML reserved indicator — listen
+addresses like `":23232"` and schedules like `"@every 10m"`.
 
 ## Run
 
@@ -203,6 +219,86 @@ storage inspection is still synchronous file I/O inside its loop tick —
 the async path bounds *scheduling*, it does not make `file_get_contents`
 asynchronous.
 
+## Git LFS over HTTP
+
+The smart-HTTP server speaks the [Git LFS batch API](https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md)
+plus basic object transfer when `lfs.enabled` is true:
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/{repo}/info/lfs/objects/batch` | POST | Batch API — advertises download/upload/verify actions |
+| `/{repo}/info/lfs/objects/{oid}` | GET | Download an object |
+| `/{repo}/info/lfs/objects/{oid}` | PUT | Upload an object |
+| `/{repo}/info/lfs/objects/{oid}/verify` | POST | Post-upload existence + size check |
+
+Rules enforced at the HTTP boundary:
+
+- OIDs must be full lowercase SHA-256 hex (64 chars) — anything else is a 400.
+- Downloads (and `download` batches) require read access; uploads,
+  verifies, and `upload` batches require write access — the same auth
+  (Basic or `X-CandyServe-User`) as the pack endpoints.
+- Uploads are capped by `http.max_pack_bytes` (413 when exceeded) and the
+  body's SHA-256 must match the OID (422 on mismatch).
+
+Objects are stored via `LFS\LocalStorageBackend` under `<data_path>/lfs/`
+using the standard `aa/bb/oid` fan-out layout.
+
+## Mirrors
+
+A repo becomes a mirror by giving it an upstream pull URL:
+
+```php
+use SugarCraft\Serve\Jobs\MirrorPuller;
+use SugarCraft\Serve\Repo;
+
+$mirror = Repo::new('linux', '/var/lib/candy-serve/repositories/linux')
+    ->withMirrorFrom('https://github.com/torvalds/linux.git');
+
+$puller = new MirrorPuller($config);   // parses jobs.mirror_pull
+$puller->registerRepo($mirror);
+
+// Async daemon: pull due mirrors on the event loop every interval.
+$puller->attach($loop);
+
+// Blocking host / cron: pull due mirrors right now.
+$puller->runOnce();
+```
+
+Each due mirror is refreshed with
+`git -C <path> fetch --prune <url> '+refs/*:refs/*'` (the full-mirror
+refspec, so refs deleted upstream prune locally). The `jobs.mirror_pull`
+schedule accepts `@every <duration>` with Go-style durations (`30s`,
+`10m`, `8h`, `1h30m`) and the aliases `@hourly`, `@daily`, `@midnight`,
+`@weekly`, `@monthly`, `@yearly` — full cron expressions are not
+supported and throw. Failed pulls are logged and re-attempted on the
+next interval.
+
+## Stats endpoint
+
+When `stats.listen_addr` is configured, `StatsServer` serves the shared
+`Stats` counters as JSON:
+
+```php
+use SugarCraft\Serve\StatsServer;
+
+$stats = new StatsServer($config);   // reads stats.listen_addr
+$stats->start($loop);                // ReactPHP loop only
+```
+
+```console
+$ curl -s localhost:23233/stats
+{"uptime_seconds":42.1,"connections":7,"pack_uploads":1,"pack_downloads":4,
+ "lfs_batch_requests":2,"lfs_object_downloads":2,"lfs_object_uploads":1}
+```
+
+Counters are recorded by the Git daemon (both modes), the smart-HTTP
+server, and the LFS handler into the shared `Stats::getInstance()`
+(injectable per-object via `setStats()` for tests/hosts). The stats
+server itself runs only on a ReactPHP loop — there is deliberately no
+blocking mode, since a blocking stats listener would starve the servers
+it reports on; hosts running only the blocking `GitDaemon::serve()`
+loop simply don't get a stats endpoint.
+
 ## OSC 52 Clipboard
 
 The TUI supports clipboard operations via OSC 52 (Operating System Command 52). This enables:
@@ -216,9 +312,25 @@ Supported selections:
 
 ## Repo Permissions
 
-- **Public** — anyone can read, only collaborators can push
-- **Private** — only collaborators can read or push
-- **Collaborators** — added by admin via SSH public key
+Visibility is a single `SugarCraft\Serve\Visibility` enum on `Repo`
+(replacing the old paired `isPublic`/`private` booleans; the boolean
+accessors remain as BC delegates):
+
+- **`Visibility::Public`** — anyone can read; only collaborators can
+  push (or anyone, when `allowPush` is set)
+- **`Visibility::CollaboratorOnly`** — not readable anonymously; only
+  collaborators and admins
+- **`Visibility::Private`** — only collaborators and admins can read or
+  push
+
+```php
+$repo = Repo::new('secret', $path)->withVisibility(Visibility::Private);
+$repo->isPrivate();        // true
+$repo->isPublic;           // false (BC readonly property)
+$repo->isVisiblePublic();  // false
+```
+
+Collaborators are added by an admin via SSH public key.
 
 ## Shared foundations
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Serve;
 
 use SugarCraft\Serve\Lang;
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Server configuration loaded from config.yaml.
@@ -135,43 +137,46 @@ final class Config
 
     private function __construct(array $data, string $dataPath)
     {
-        $this->name = $data['name'] ?? 'CandyServe';
-        $this->logFormat = $data['log_format'] ?? 'text';
+        // YAML type-inference can yield ints/bools where a string is
+        // expected (e.g. an unquoted `:8080` in flow style parses as int
+        // 8080) — cast string fields defensively rather than TypeError.
+        $this->name = (string) ($data['name'] ?? 'CandyServe');
+        $this->logFormat = (string) ($data['log_format'] ?? 'text');
 
         $ssh = $data['ssh'] ?? [];
-        $this->sshListenAddr    = $ssh['listen_addr'] ?? ':23231';
-        $this->sshPublicUrl     = $ssh['public_url'] ?? "ssh://localhost:23231";
-        $this->sshKeyPath       = $this->resolvePath($ssh['key_path'] ?? 'ssh/soft_serve_host', $dataPath);
-        $this->sshClientKeyPath = $this->resolvePath($ssh['client_key_path'] ?? 'ssh/soft_serve_client', $dataPath);
+        $this->sshListenAddr    = (string) ($ssh['listen_addr'] ?? ':23231');
+        $this->sshPublicUrl     = (string) ($ssh['public_url'] ?? "ssh://localhost:23231");
+        $this->sshKeyPath       = $this->resolvePath((string) ($ssh['key_path'] ?? 'ssh/soft_serve_host'), $dataPath);
+        $this->sshClientKeyPath = $this->resolvePath((string) ($ssh['client_key_path'] ?? 'ssh/soft_serve_client'), $dataPath);
         $this->sshMaxTimeout    = (int) ($ssh['max_timeout'] ?? 0);
         $this->sshIdleTimeout   = (int) ($ssh['idle_timeout'] ?? 120);
 
         $git = $data['git'] ?? [];
-        $this->gitListenAddr     = $git['listen_addr'] ?? ':9418';
+        $this->gitListenAddr     = (string) ($git['listen_addr'] ?? ':9418');
         $this->gitMaxTimeout     = (int) ($git['max_timeout'] ?? 0);
         $this->gitIdleTimeout    = (int) ($git['idle_timeout'] ?? 3);
         $this->gitMaxConnections = (int) ($git['max_connections'] ?? 32);
 
         $http = $data['http'] ?? [];
-        $this->httpListenAddr = $http['listen_addr'] ?? ':23232';
-        $this->httpPublicUrl  = $http['public_url'] ?? 'http://localhost:23232';
-        $this->tlsKeyPath     = $this->resolvePath($http['tls_key_path'] ?? '', $dataPath);
-        $this->tlsCertPath    = $this->resolvePath($http['tls_cert_path'] ?? '', $dataPath);
+        $this->httpListenAddr = (string) ($http['listen_addr'] ?? ':23232');
+        $this->httpPublicUrl  = (string) ($http['public_url'] ?? 'http://localhost:23232');
+        $this->tlsKeyPath     = $this->resolvePath((string) ($http['tls_key_path'] ?? ''), $dataPath);
+        $this->tlsCertPath    = $this->resolvePath((string) ($http['tls_cert_path'] ?? ''), $dataPath);
         $this->maxPackBytes   = isset($http['max_pack_bytes']) ? (int) $http['max_pack_bytes'] : null;
 
         $db = $data['db'] ?? [];
-        $this->dbDriver     = $db['driver'] ?? 'sqlite';
-        $this->dbDataSource = $this->resolvePath($db['data_source'] ?? 'candy-serve.db', $dataPath);
+        $this->dbDriver     = (string) ($db['driver'] ?? 'sqlite');
+        $this->dbDataSource = $this->resolvePath((string) ($db['data_source'] ?? 'candy-serve.db'), $dataPath);
 
         $lfs = $data['lfs'] ?? [];
         $this->lfsEnabled   = (bool) ($lfs['enabled'] ?? true);
         $this->lfsSshEnabled = (bool) ($lfs['ssh_enabled'] ?? false);
 
         $jobs = $data['jobs'] ?? [];
-        $this->mirrorPullSchedule = $jobs['mirror_pull'] ?? '@every 10m';
+        $this->mirrorPullSchedule = (string) ($jobs['mirror_pull'] ?? '@every 10m');
 
         $stats = $data['stats'] ?? [];
-        $this->statsListenAddr = $stats['listen_addr'] ?? ':23233';
+        $this->statsListenAddr = (string) ($stats['listen_addr'] ?? ':23233');
 
         $this->dataPath = $dataPath;
     }
@@ -203,6 +208,16 @@ final class Config
         return $this->dbDataSource;
     }
 
+    /** Directory holding LFS objects (created on first use). */
+    public function lfsPath(): string
+    {
+        $p = $this->dataPath . '/lfs';
+        if (!\is_dir($p)) {
+            \mkdir($p, 0755, true);
+        }
+        return $p;
+    }
+
     private function resolvePath(string $path, string $dataPath): string
     {
         if ($path === '') return '';
@@ -211,89 +226,38 @@ final class Config
     }
 
     /**
-     * Minimal YAML parser for config files.
+     * Parse a YAML config document via symfony/yaml (plan item 7.7).
      *
-     * Supports: key: value, nested key: { nested: value }, lists.
+     * The previous hand-rolled parser silently IGNORED indented nested
+     * keys (only inline `key: { a: b }` maps nested); with a real YAML
+     * parser, block-style nesting now works, so config files written the
+     * way the README documents them finally take effect. YAML quirk to
+     * know: values starting with a reserved indicator (`:8080`,
+     * `@every 10m`) must be quoted.
      *
      * @return array<string, mixed>
      */
     private static function parseYaml(string $yaml): array
     {
-        $lines  = \explode("\n", $yaml);
-        $result = [];
-        $stack  = [&$result];
-        $indentStack = [-1];
-
-        foreach ($lines as $line) {
-            if (\preg_match('/^(\s*)#/', $line, $m) && \trim(\substr($line, \strlen($m[0]))) === '') {
-                continue;
-            }
-
-            $trimmed = \rtrim($line);
-            if ($trimmed === '' || \preg_match('/^\s+#/', $trimmed)) continue;
-
-            $indent = \strlen($line) - \strlen(\ltrim($line));
-
-            // Pop stack to correct depth
-            while ($indent <= \end($indentStack)) {
-                \array_pop($stack);
-                \array_pop($indentStack);
-            }
-
-            if (\preg_match('/^(\S+):\s*(.*)$/', $trimmed, $matches)) {
-                $key   = $matches[1];
-                $value = $matches[2];
-
-                $parent = &$stack[\count($stack) - 1];
-
-                if ($value === '') {
-                    // New block
-                    $parent[$key] = [];
-                    $stack[]      = &$parent[$key];
-                    $indentStack[] = $indent;
-                } elseif (\preg_match('/^\{(.*)\}$/', $value, $braceMatch)) {
-                    // Inline map: key: { inner: val }
-                    $parent[$key] = self::parseInlineMap($braceMatch[1]);
-                } elseif (\preg_match('/^\[(.*)\]$/', $value, $bracketMatch)) {
-                    // Inline list
-                    $parent[$key] = self::parseInlineList($bracketMatch[1]);
-                } else {
-                    $parent[$key] = self::unquote($value);
-                }
-            }
+        try {
+            $data = Yaml::parse($yaml);
+        } catch (ParseException $e) {
+            throw new \RuntimeException(
+                Lang::t('config.parse_failed', ['error' => $e->getMessage()]),
+                0,
+                $e,
+            );
         }
 
-        return $result;
-    }
-
-    /** @return array<string, mixed> */
-    private static function parseInlineMap(string $s): array
-    {
-        $result = [];
-        foreach (\preg_split('/,/', $s) as $pair) {
-            $pair = \trim($pair);
-            if (\preg_match('/^(\S+):\s*(.+)$/', $pair, $m)) {
-                $result[$m[1]] = self::unquote($m[2]);
-            }
+        if ($data === null) {
+            return [];
         }
-        return $result;
-    }
+        if (!\is_array($data)) {
+            throw new \RuntimeException(
+                Lang::t('config.parse_failed', ['error' => 'top-level YAML value must be a mapping']),
+            );
+        }
 
-    /** @return list<mixed> */
-    private static function parseInlineList(string $s): array
-    {
-        if ($s === '') return [];
-        return \array_map(self::unquote(...), \array_map('trim', \explode(',', $s)));
-    }
-
-    private static function unquote(string $s): mixed
-    {
-        $s = \trim($s);
-        if (\preg_match('/^"(.*)"$/', $s, $m)) return $m[1];
-        if (\preg_match("/^'(.*)'$/", $s, $m)) return $m[1];
-        if ($s === 'true')  return true;
-        if ($s === 'false') return false;
-        if (\is_numeric($s)) return \str_contains($s, '.') ? (float) $s : (int) $s;
-        return $s;
+        return $data;
     }
 }

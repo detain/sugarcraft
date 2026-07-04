@@ -64,11 +64,11 @@ Fix all 28 findings in candy-serve library: 7 HIGH severity issues (shell inject
 - [ ] 7.2 **[LOW] Osc52 Event Queue Unbounded Growth** — Add `const MAX_EVENTS = 1000` with oldest-event eviction at `src/Clipboard/Osc52.php:82,101`.
 - [ ] 7.3 **[LOW] Missing `maxPackBytes` Property in Config** — Add typed property to `src/Config.php` (same as 4.3, tracked separately for PHP 8.3/8.4 compat).
 - [ ] 7.4 **[LOW] Untyped `$proc` Variable** — Add type declarations for `proc_open()` return values across multiple files.
-- [ ] 7.5 **[LOW] Mirror/Pull Schedule Not Implemented** — Implement background job system for mirror pulls at `src/Config.php:167`.
-- [ ] 7.6 **[LOW] Stats Server Not Implemented** — Implement stats collection server at `src/Config.php:170`.
-- [ ] 7.7 **[LOW] Custom YAML Parser Very Limited** — Consider replacing `src/Config.php:216-262` with `symfony/yaml` for full YAML 1.2 support.
-- [ ] 7.8 **[LOW] Redundant Visibility State** — Replace two-boolean model at `src/Repo.php:25,37` with a `Visibility` enum (PUBLIC, PRIVATE, COLLABORATOR_ONLY).
-- [ ] 7.9 **[MEDIUM] No LFS Object HTTP Handlers** — Implement HTTP routes for LFS object download/upload at `src/LFS/LFSHandler.php:222-225`.
+- [x] 7.5 **[LOW] Mirror/Pull Schedule Not Implemented** — Implement background job system for mirror pulls at `src/Config.php:167`. ✅ 2026-07-04 — `Jobs\MirrorPuller` + `Jobs\Schedule` (`@every <go-duration>` + @aliases; cron throws); `git -C <path> fetch --prune <url> '+refs/*:refs/*'` via injectable exec seam; `attach($loop)` periodic timer for async hosts, `runOnce()` for blocking/cron.
+- [x] 7.6 **[LOW] Stats Server Not Implemented** — Implement stats collection server at `src/Config.php:170`. ✅ 2026-07-04 — `Stats` collector (shared instance + injectable) wired into GitDaemon/HTTP Server/LFSHandler; `StatsServer` serves JSON counters on `stats.listen_addr` (React loop only, documented).
+- [x] 7.7 **[LOW] Custom YAML Parser Very Limited** — Consider replacing `src/Config.php:216-262` with `symfony/yaml` for full YAML 1.2 support. ✅ 2026-07-04 — symfony/yaml ^6.4||^7.0; block-nested keys now actually apply (old parser silently ignored them); ParseException → RuntimeException; fixtures verified, reserved-indicator values must be quoted.
+- [x] 7.8 **[LOW] Redundant Visibility State** — Replace two-boolean model at `src/Repo.php:25,37` with a `Visibility` enum (PUBLIC, PRIVATE, COLLABORATOR_ONLY). ✅ 2026-07-04 — `SugarCraft\Serve\Visibility` (Public/CollaboratorOnly/Private); BC readonly `->isPublic` + `isPrivate()`/`isVisiblePublic()`/`withPublic()`/`withPrivate()` delegate to the enum.
+- [x] 7.9 **[MEDIUM] No LFS Object HTTP Handlers** — Implement HTTP routes for LFS object download/upload at `src/LFS/LFSHandler.php:222-225`. ✅ 2026-07-04 — batch/download/upload/verify routes on the smart-HTTP server under `/{repo}/info/lfs/objects/…`; 64-hex OID validation, `http.max_pack_bytes` cap, SHA-256 body verification, batch-consistent auth; `objectUrl()` now advertises the served routes.
 
 ## Phase 8: Testing & Verification [PENDING]
 

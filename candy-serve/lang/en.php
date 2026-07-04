@@ -15,6 +15,8 @@ return [
     'repo.git_init_failed'     => 'git init failed: {output}',
     'config.not_found'         => 'Config file not found: {path}',
     'config.read_failed'       => 'Failed to read config: {path}',
+    'config.parse_failed'      => 'Invalid YAML config: {error}',
+    'jobs.invalid_schedule'    => 'Invalid job schedule "{schedule}": {reason}',
     'ssh.user_cannot_create'   => 'User {viewer} cannot create repos',
 
     // bin/soft-serve — banner + status output
