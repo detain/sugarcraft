@@ -1,7 +1,7 @@
 ---
-status: not-started
+status: complete
 phase: 1
-updated: 2026-06-30
+updated: 2026-07-04
 ---
 
 # Implementation Plan: sugar-table Audit Fixes
@@ -84,7 +84,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `fillDataRowLines()` line 1609 also calls `isColumnVisible()` per-row
   - `isColumnVisible()` checks hidden array, frozen array, and computes scrollable start index — all constant for a given render pass
 
-### 2.2 [LOW] SelectNext/SelectPrevious Short-circuit at Boundaries
+### ✅ 2.2 [LOW] SelectNext/SelectPrevious Short-circuit at Boundaries
 - **Task**: Check if navigation would be a no-op before calling `filteredSortedRows()`
 - **What**: In `SelectNext()`, if `selectedIndex` is already at the last row, return `$this` without computing. In `SelectPrevious()`, if already at 0, return `$this`
 - **Why**: Avoid expensive `filteredSortedRows()` call when the operation would have no effect
@@ -112,7 +112,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `TotalRows()` (line 971-974) also calls `filteredSortedRows()` which returns cached result
   - The caching works correctly within a single fluent chain. Issue is when callers use both methods separately
 
-### 2.4 [LOW] widthSolveCache Bounded Growth
+### ✅ 2.4 [LOW] widthSolveCache Bounded Growth
 - **Task**: Add eviction policy to `$widthSolveCache`
 - **What**: Use a LRU (Least Recently Used) cache with a maximum size (e.g., 10 entries) for `$widthSolveCache`. When adding a new entry beyond the limit, evict the oldest.
 - **Why**: Unbounded cache growth could cause memory issues with long-running applications or many table width computations
@@ -130,7 +130,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 
 ## Phase 3: Code Quality & Documentation [PENDING]
 
-### 3.1 [LOW] Clarify styleFunc Signature in Docblock
+### ✅ 3.1 [LOW] Clarify styleFunc Signature in Docblock
 - **Task**: Update docblock for `$styleFunc` and `withStyleFunc()` to clarify "int col" means column index (not key)
 - **What**: Change `@param callable|null $fn (int $row, int $col, string $value): Style|string` to clarify col is the 0-based index, not the column key string
 - **Why**: Ambiguity could lead to misuse
@@ -160,7 +160,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `fillDataRowLines()` at line 1608-1611 has similar iteration
   - `calculateRowHeight()` at line 1550-1553 has similar iteration
 
-### 3.3 [LOW] parseAnsiToStyle / styleToAnsi Color Round-trip Consistency
+### ✅ 3.3 [LOW] parseAnsiToStyle / styleToAnsi Color Round-trip Consistency
 - **Task**: Audit color value consistency between parseAnsiToStyle and styleToAnsi
 - **What**: Standard colors (30-37, 40-47, 90-97, 100-107) in `parseAnsiToStyle()` use specific RGB values (e.g., case 31: `0xcc0000` for red). Verify that `styleToAnsi()` produces the inverse values correctly for these standard colors
 - **Why**: Round-trip (parse → style → parse) should preserve colors. Different values could cause subtle visual differences
@@ -192,7 +192,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - No existing `column($key)` method
   - Pattern common in collection APIs (e.g., ArrayObject::getIterator())
 
-### 4.2 [LOW] Add Column::withFlexWidth() Alias
+### ✅ 4.2 [LOW] Add Column::withFlexWidth() Alias
 - **Task**: Add `withFlexWidth(int $share): self` as an alias for `withFlexibleWidth()`
 - **What**: Alias method that calls through to `withFlexibleWidth()`
 - **Why**: Upstream bubble-table uses `WithFlexWidth()` — naming difference makes porting harder
@@ -204,7 +204,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `withFlexibleWidth()` at line 77-80 already exists
   - No `withFlexWidth()` alias exists
 
-### 4.3 [LOW] Add SelectedRow() Convenience Method
+### ✅ 4.3 [LOW] Add SelectedRow() Convenience Method
 - **Task**: Add `SelectedRow(): ?Row` method to Table
 - **What**: Return `$this->pagedRows()[$this->selectedIndex] ?? null`
 - **Why**: Reduces boilerplate from `$table->pagedRows()[$table->SelectedIndex()]` to `$table->SelectedRow()`
@@ -240,6 +240,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 ---
 
 ## Notes
+- 2026-07-04: Items 2.2, 2.4, 3.1, 3.3, 4.2, 4.3 closed (selection short-circuit, width-cache LRU, docblocks, color round-trip tests, withFlexWidth alias, SelectedRow). Remaining items were already implemented in source.
 - 2026-06-30: Plan created from audit findings in `findings/sugar-table.md`
 - Priority order per audit recommendations: validation fixes first (items 1.1, 1.2), then optimizations, then API ergonomics
 - Some items (styleFunc signature, color round-trip) may be documentation-only or low-risk changes

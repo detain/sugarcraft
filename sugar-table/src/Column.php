@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table;
 
-use SugarCraft\Core\Util\{Ansi, Width};
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A table column with key, title, width, and optional style.
@@ -77,6 +78,16 @@ final class Column
     public function withFlexibleWidth(int $share): self
     {
         return new self($this->key, $this->title, $this->width, $share, $this->maxWidth, $this->filterable, $this->alignLeft, $this->style, $this->columnWidth, $this->percentValue, $this->wrapMode);
+    }
+
+    /**
+     * Alias of withFlexibleWidth() under the upstream flex-width name, so
+     * ports from Go read 1:1. Mirrors Evertras/bubble-table.NewFlexColumn's
+     * flexFactor / the upstream FlexWidth naming.
+     */
+    public function withFlexWidth(int $share): self
+    {
+        return $this->withFlexibleWidth($share);
     }
 
     public function withMaxWidth(int $max): self
@@ -263,7 +274,9 @@ final class Column
 
     private function ansi(string $text, string $codes): string
     {
-        if ($codes === '') return $text;
+        if ($codes === '') {
+            return $text;
+        }
         return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
     }
 }
