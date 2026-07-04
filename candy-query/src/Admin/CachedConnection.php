@@ -25,6 +25,7 @@ final class CachedConnection implements DatabaseInterface
 {
     public function __construct(
         private readonly DatabaseInterface $inner,
+        private readonly ?AdminQueryCache $cache = null,
     ) {}
 
     /**
@@ -34,7 +35,16 @@ final class CachedConnection implements DatabaseInterface
      */
     public function query(string $sql): array
     {
-        return AdminQueryCache::instance()->lookup($sql) ?? [];
+        return $this->cache()->lookup($sql) ?? [];
+    }
+
+    /**
+     * Resolved lazily (not in the constructor) so the process-global default
+     * stays live across AdminQueryCache::reset() in tests.
+     */
+    private function cache(): AdminQueryCache
+    {
+        return $this->cache ?? AdminQueryCache::instance();
     }
 
     public function tables(): array

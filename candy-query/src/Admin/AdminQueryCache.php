@@ -19,13 +19,17 @@ namespace SugarCraft\Query\Admin;
  * live refresh (process list, replica status) without hammering the server:
  * a single in-flight fetch at a time is enforced by App's adminLoading gate.
  *
- * This is a deliberate process-global: App is rebuilt immutably on every
- * update(), so the live cache cannot live on the model. Call reset() in tests.
+ * The shared default is a deliberate process-global: App is rebuilt immutably
+ * on every update(), so the live cache cannot live on the model. Call reset()
+ * in tests. Instances are also directly constructible so collaborators
+ * (CachedConnection, CachingServerContext, ReconnectManager) can receive an
+ * isolated cache via injection — tests then don't have to touch global state,
+ * and multiple caches can coexist in one process.
  */
 final class AdminQueryCache
 {
     /** Seconds a cached result stays fresh before it is re-requested. */
-    private const TTL = 3.0;
+    private const TTL = CacheTtl::STATUS;
 
     private static ?self $instance = null;
 
@@ -126,6 +130,21 @@ final class AdminQueryCache
         }
 
         return $this->connection;
+    }
+
+    /**
+     * Drop the cached async connection so the next {@see connection()} call
+     * rebuilds it via its factory.
+     *
+     * Needed after a synchronous-side reconnect: the connection key encodes
+     * only flavor + DSN + user, which do not change across a server restart,
+     * so without an explicit invalidation the cache would keep handing out an
+     * async connection whose socket died with the old server process.
+     */
+    public function invalidateConnection(): void
+    {
+        $this->connection = null;
+        $this->connectionKey = '';
     }
 
     /**

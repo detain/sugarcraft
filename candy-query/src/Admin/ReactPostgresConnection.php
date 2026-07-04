@@ -27,15 +27,30 @@ use React\Promise\PromiseInterface;
 final class ReactPostgresConnection implements AsyncConnection
 {
     private Client $client;
+    private LoopInterface $loop;
 
-    public function __construct(string $dsn, string $username = '', string $password = '', ?LoopInterface $loop = null)
-    {
-        $loop = $loop ?? ReactLoop::get();
-        $this->client = new Client($this->dsnToParameters($dsn, $username, $password), $loop);
+    /**
+     * @param float $queryTimeout Per-query deadline in seconds; <= 0 disables
+     *                            it (see {@see QueryTimeout} for why a default
+     *                            deadline exists at all)
+     */
+    public function __construct(
+        string $dsn,
+        string $username = '',
+        string $password = '',
+        ?LoopInterface $loop = null,
+        private readonly float $queryTimeout = QueryTimeout::DEFAULT_SECONDS,
+    ) {
+        $this->loop = $loop ?? ReactLoop::get();
+        $this->client = new Client($this->dsnToParameters($dsn, $username, $password), $this->loop);
     }
 
     /**
      * Execute a query asynchronously.
+     *
+     * Rejects with a clear timeout error when the query outlives the
+     * configured deadline — otherwise a dropped route would leave the
+     * promise pending forever (see {@see QueryTimeout}).
      *
      * @param string $sql SQL query to execute
      * @return PromiseInterface<list<array<string,mixed>>> Rows as assoc arrays
@@ -44,7 +59,9 @@ final class ReactPostgresConnection implements AsyncConnection
     {
         // PgAsync emits each row as a separate Observable item; toArray() buffers
         // the full result set into one emission, toPromise() bridges to react/promise.
-        return $this->client->query($sql)->toArray()->toPromise();
+        $promise = $this->client->query($sql)->toArray()->toPromise();
+
+        return QueryTimeout::wrap($promise, $this->queryTimeout, $this->loop);
     }
 
     /**
