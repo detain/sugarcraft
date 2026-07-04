@@ -1,1 +1,11 @@
 composer.lock
+
+# Artifacts of a stray `git init --bare` (see Repo::init wrong-CWD bug, fixed 62419d7e)
+/HEAD
+/config
+/description
+/branches/
+/objects/
+/refs/
+/hooks/
+/info/
