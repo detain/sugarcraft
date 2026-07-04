@@ -6,8 +6,42 @@ namespace SugarCraft\Shell\Tests\Model;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Fuzzy\FuzzyMatcher;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Shell\Model\FilterModel;
 use PHPUnit\Framework\TestCase;
+
+/**
+ * Delegating stub that counts matchAll() invocations so tests can observe
+ * whether FilterModel's fuzzy-result cache short-circuits recomputation.
+ */
+final class CountingMatcher implements FuzzyMatcher
+{
+    public int $matchAllCalls = 0;
+    private SmithWatermanMatcher $inner;
+
+    public function __construct()
+    {
+        $this->inner = new SmithWatermanMatcher();
+    }
+
+    public function match(string $query, string $candidate): ?MatchResult
+    {
+        return $this->inner->match($query, $candidate);
+    }
+
+    public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
+    {
+        $this->matchAllCalls++;
+        return $this->inner->matchAll($query, $candidates, $limit, $minScore);
+    }
+
+    public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+    {
+        return $this->inner->matchAllGenerator($query, $candidates, $limit, $minScore);
+    }
+}
 
 final class FilterModelTest extends TestCase
 {
@@ -137,5 +171,85 @@ final class FilterModelTest extends TestCase
 
         // Should have fuzzy results for "ana" pre-filled
         $this->assertNotEmpty($m->fuzzyResults);
+    }
+
+    public function testFuzzyResultsCachedForCursorOnlyKeys(): void
+    {
+        $matcher = new CountingMatcher();
+        $m = FilterModel::fromOptions(
+            ['apple', 'banana', 'cherry', 'date'],
+            fuzzy: true,
+            matcher: $matcher,
+        );
+
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'a'));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertSame(2, $matcher->matchAllCalls);
+
+        // Cursor movement leaves the filter text unchanged — the cache must
+        // answer these updates without re-running the matcher.
+        [$m, ] = $m->update(new KeyMsg(KeyType::Down));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Up));
+        $this->assertSame(2, $matcher->matchAllCalls);
+
+        // A text change invalidates the cache and recomputes.
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame(3, $matcher->matchAllCalls);
+    }
+
+    public function testFuzzyCacheStillYieldsResultsAfterCursorMove(): void
+    {
+        $matcher = new CountingMatcher();
+        $m = FilterModel::fromOptions(['banana', 'cabana'], fuzzy: true, matcher: $matcher);
+
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'b'));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Down));
+
+        $this->assertNotEmpty($m->fuzzyResults);
+        $this->assertSame(1, $matcher->matchAllCalls);
+    }
+
+    public function testFuzzyViewEmphasisesMatchedCharacters(): void
+    {
+        $m = FilterModel::fromOptions(['banana', 'cherry'], fuzzy: true);
+        foreach (str_split('bna') as $c) {
+            [$m, ] = $m->update(new KeyMsg(KeyType::Char, $c));
+        }
+
+        $view = $m->view();
+        // Matched characters are wrapped in bold-on / normal-intensity SGR.
+        $this->assertStringContainsString("\x1b[1m", $view);
+        $this->assertStringContainsString("\x1b[22m", $view);
+        // The cursor row keeps REVERSE video, opening before the first
+        // matched (bold) character of "banana".
+        $this->assertStringContainsString("\x1b[7m\x1b[1mb", $view);
+        // Stripped of SGR, the matched item is intact.
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', $view);
+        $this->assertStringContainsString('banana', $plain);
+        $this->assertStringNotContainsString('cherry', $plain);
+    }
+
+    /**
+     * Regression: selectedAll() used to ksort() the readonly $checked
+     * property by reference, which fatals on PHP 8.1+ readonly props.
+     */
+    public function testMultiSelectedAllSortsWithoutMutatingReadonlyState(): void
+    {
+        $m = FilterModel::fromOptions(['apple', 'banana'], limit: 2);
+        [$m, ] = $m->update(new KeyMsg(KeyType::Tab));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertTrue($m->isSubmitted());
+        $this->assertSame(['apple'], $m->selectedAll());
+    }
+
+    public function testNonFuzzyViewHasNoBoldEmphasis(): void
+    {
+        $m = FilterModel::fromOptions(['banana', 'cherry'], fuzzy: false);
+        foreach (str_split('ban') as $c) {
+            [$m, ] = $m->update(new KeyMsg(KeyType::Char, $c));
+        }
+
+        $this->assertStringNotContainsString("\x1b[1m", $m->view());
     }
 }

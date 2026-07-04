@@ -157,8 +157,11 @@ final class ChooseModel implements Model
             }
             return $out;
         }
-        ksort($this->checked, SORT_NUMERIC);
-        foreach ($this->checked as $idx => $on) {
+        // ksort() takes its array by reference, which fatals on a readonly
+        // property — sort a local copy instead.
+        $checked = $this->checked;
+        ksort($checked, SORT_NUMERIC);
+        foreach ($checked as $idx => $on) {
             if ($on && isset($items[$idx])) {
                 $out[] = $items[$idx]->title();
             }

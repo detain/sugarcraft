@@ -20,6 +20,7 @@ use SugarCraft\Pty\Posix\PosixProcess;
 final class RealProcess implements Process
 {
     private bool $closed = false;
+    private bool $terminated = false;
     private ?int $cachedExit = null;
 
     public function __construct(
@@ -60,11 +61,21 @@ final class RealProcess implements Process
     public function stdoutBytes(): string         { return $this->inner->stdoutBytes(); }
     public function stderrBytes(): string         { return $this->inner->stderrBytes(); }
 
+    /**
+     * Signal the child with SIGTERM. Lifecycle split: terminate() only
+     * *signals*; close() is the sole *reaping* path (it wait()s, which
+     * collects the SIGTERM'd child, so close-after-terminate neither
+     * double-kills nor hangs). Idempotence guards: skip when the handle
+     * was already reaped ($closed), when a SIGTERM was already sent
+     * ($terminated), or when the child already exited on its own —
+     * signalling a dead PID risks hitting an unrelated recycled process.
+     */
     public function terminate(): void
     {
-        if ($this->closed || $this->cachedExit !== null) {
+        if ($this->closed || $this->terminated || $this->exitCode() !== null) {
             return;
         }
+        $this->terminated = true;
         if (\function_exists('posix_kill')) {
             $this->inner->kill(\defined('SIGTERM') ? \SIGTERM : 15);
         }

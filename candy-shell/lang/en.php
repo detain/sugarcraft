@@ -12,6 +12,7 @@ return [
     // Style/StyleBuilder.php
     'style.empty_color'       => 'empty color',
     'style.unrecognised_color' => 'unrecognised color: {value}',
+    'style.hex_digit_count'   => "hex color must have 3 or 6 hex digits (e.g. '#f80' or '#ff8800'); got '{value}'",
     'style.padding_token_int' => "padding/margin token must be an integer; got: '{token}'",
     'style.padding_count'     => 'padding/margin needs 1, 2, or 4 integers; got: {count}',
 
