@@ -1,5 +1,5 @@
 ---
-status: complete-except-1.8 (voryx/pgasync replacement — out of scope this pass)
+status: complete-except-1.8 (voryx/pgasync replacement — out of scope this pass); deferred items 3.1/3.3/3.4/5.1 implemented 2026-07-04
 phase: 1
 updated: 2026-07-04
 ---
@@ -107,7 +107,7 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 3: Medium Severity Issues [PENDING]
 
-- [ ] 3.1 Remove public PDO from deprecated Database class — **DEFERRED pre-1.0 — breaking API change; see candy-query/CALIBER_LEARNINGS.md**
+- [x] 3.1 Remove public PDO from deprecated Database class — **done 2026-07-04 — `$pdo` private, no `pdo()` escape hatch; former direct uses route via exec()/prepare()/query()**
   - File: `src/Database.php:51`
   - Remove `public readonly \PDO $pdo` property; use interface access only
   - Severity: MEDIUM
@@ -121,14 +121,14 @@ Address all critical, high, medium, and low severity findings from candy-query c
   - What: Magic numbers 3.0 and 30.0 duplicated across files with different names
   - Why: Confusing redundancy
 
-- [ ] 3.3 Group App constructor parameters into value objects — **DEFERRED pre-1.0 — large refactor; see candy-query/CALIBER_LEARNINGS.md**
+- [x] 3.3 Group App constructor parameters into value objects — **done 2026-07-04 — 5 groups in src/App/: ConnectionState, BrowseState, QueryState, UiState, AdminState; AppBuilder keeps flat with*() surface**
   - File: `src/App.php:82-109`
   - Reduce 29 parameters to ~10-15 by grouping into AdminState, TableBrowseState, etc.
   - Severity: MEDIUM
   - What: Constructor with 29 parameters is unwieldy and difficult to test
   - Why: Improves maintainability and testability
 
-- [ ] 3.4 Clarify caching wrapper naming — **DEFERRED pre-1.0 — cosmetic churn; see candy-query/CALIBER_LEARNINGS.md**
+- [x] 3.4 Clarify caching wrapper naming — **done 2026-07-04 — AsyncCachedConnection / AsyncCachingServerContext (clean rename, no BC aliases; no external consumers)**
   - Files: `src/Admin/CachedConnection.php` vs `src/Admin/CachingServerContext.php`
   - Rename to AsyncCachedConnection and AsyncCachingServerContext
   - Severity: MEDIUM
@@ -167,7 +167,7 @@ Address all critical, high, medium, and low severity findings from candy-query c
 
 ## Phase 5: Missing Features [PENDING]
 
-- [ ] 5.1 Add query cancellation mechanism — **DEFERRED pre-1.0 — needs KILL QUERY side-channel; see candy-query/CALIBER_LEARNINGS.md**
+- [x] 5.1 Add query cancellation mechanism — **done 2026-07-04 — AsyncConnection::query(sql, ?CancellationToken) + CancellableQuery; MySQL: KILL QUERY <CONNECTION_ID()> side-channel; Postgres: PgAsync protocol CancelRequest; QueryTimeout deadlines take the same server-side path**
   - Files: `src/Admin/ReactMysqlConnection.php`, `src/Admin/ReactPostgresConnection.php`
   - Implement CancellablePromiseInterface for async queries
   - Severity: LOW

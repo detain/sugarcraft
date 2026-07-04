@@ -139,7 +139,7 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `ReportsPage` | Performance Reports admin page: left category/report tree + right sortable/exportable grid. `validate()` only loads `Catalog` (file I/O) — no DB queries on the render path. Navigation methods `withSelectPrevCategory()` / `withSelectNextCategory()` / `withSelectPrevReport()` / `withSelectNextReport()` cycle through the catalog with wrap-around. `selectedColumnIndex` tracks the focused column for unit display targeting (future work). Footer shows keybindings `[j/k] nav rows  [h/l] category  [/] report  [c] unit toggle  [q] quit`. |
 | `ReportRunner` | Executes `SELECT * FROM sys.<view>` for report views. Uses prepared statements with backtick-quoted view names. `run()` applies time/byte unit formatting; `runRaw()` returns unformatted values. |
 | `AvailabilityChecker` | Checks which sys schema views are available via `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'`. Caches results in-memory. `discoverViews()` catches `\Throwable` (not just `\PDOException`) because React/cached connections can surface non-PDO errors. |
-| `ReloadReportMsg` | Message dispatched by `App` after `AdminDataLoadedMsg` to trigger async report loading. `ReportsPage::update()` handles this by calling `loadCurrentReport()` which queues the query via `CachedConnection` for the next admin tick. |
+| `ReloadReportMsg` | Message dispatched by `App` after `AdminDataLoadedMsg` to trigger async report loading. `ReportsPage::update()` handles this by calling `loadCurrentReport()` which queues the query via `AsyncCachedConnection` for the next admin tick. |
 | `Calc\InnoDBBufferPoolUsageBytes` | Computes buffer pool usage percentage using bytes-based formula: `(Innodb_buffer_pool_bytes_data / Innodb_page_size) / Innodb_buffer_pool_pages_total * 100` (Appendix A). This replaces the older `(total - free) / total` page-count approximation and correctly handles partially-filled pages. |
 | `Dashboard\TimeSeriesCell` | Renders a timeline sparkline using Streamline. For tuple-valued widgets (e.g. `MakeTuple` with SELECT/INSERT/UPDATE/DELETE rates), uses `max()` to show the dominant series rather than summing unrelated counters. Sliding window of `$windowSize` (default 160) data points with auto-scale "nice ceiling". |
 | `Dashboard\CounterCell` | Renders a K/M/G-scaled counter widget. Used for timeline companion counters and standalone rate widgets (SELECT/s, INSERT/s, etc.). Uses `array_sum()` for tuple-valued widgets since counters are additive by design. |
@@ -410,7 +410,7 @@ The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` s
 **Async flow:**
 1. `ReportsPage::validate()` — loads `Catalog` from `data/sys_reports.json` (file I/O, always sync, never blocks)
 2. After admin status/variables data lands, `App` sends `ReloadReportMsg` to `ReportsPage`
-3. `ReportsPage::update(ReloadReportMsg)` calls `loadCurrentReport()` — queries are issued through `AdminQueryCache` via `CachedConnection`, returning `null` immediately
+3. `ReportsPage::update(ReloadReportMsg)` calls `loadCurrentReport()` — queries are issued through `AdminQueryCache` via `AsyncCachedConnection`, returning `null` immediately
 4. `view()` sees `currentResult === null` and renders a loading spinner
 5. On the next admin tick the cached result is available and `view()` renders the report grid
 
@@ -687,11 +687,24 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   the synchronous PDO path does not expose a transaction API either.
 - **No prepared-statement cache.** Every query is sent as raw SQL text;
   repeated statements are re-parsed by the server each time.
-- **Async cancellation not yet implemented.** An in-flight async query cannot
-  be aborted from the UI. Queries are bounded by a configurable per-query
-  timeout (default 30s, see `QueryTimeout`), which rejects the promise and
-  ignores a late result — but the server keeps executing the statement; a
-  `KILL QUERY` side-channel is future work.
+- **Async cancellation is cooperative and driver-dependent.**
+  `AsyncConnection::query()` accepts an optional candy-async
+  `CancellationToken`; cancelling it (or hitting the configurable per-query
+  timeout, default 30s, see `QueryTimeout`) rejects the caller's promise
+  immediately and drops a late result. What actually stops **server-side**
+  differs per driver:
+  - *MySQL* (`ReactMysqlConnection`): the wrapper learns its connection's
+    thread id via `SELECT CONNECTION_ID()` (dispatched as the connection's
+    first command) and, on cancel or timeout, issues `KILL QUERY <id>` on a
+    separate short-lived connection. Until the thread id has resolved — or if
+    the `PROCESS`/owner privilege for `KILL` is missing — cancellation is
+    client-side only and the server finishes the statement.
+  - *PostgreSQL* (`ReactPostgresConnection`): cancellation disposes the
+    underlying PgAsync subscription, which sends a wire-protocol
+    `CancelRequest` (the `pg_cancel_backend()` equivalent) on a separate
+    socket. This is genuinely server-side for both explicit cancels and
+    timeouts, subject to the usual PostgreSQL caveat that a cancel request is
+    advisory — the backend interrupts the statement at its next safe point.
 
 The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots into the existing polling loop without coupling to the UI. The `SqliteHistoryStore` uses WAL mode for safe concurrent reads during writes.
 

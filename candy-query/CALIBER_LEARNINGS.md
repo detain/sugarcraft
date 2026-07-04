@@ -372,18 +372,79 @@ Source: step 7.3 ai/candy-query-docs-7.3
 
 ## Future work (deferred pre-1.0)
 
-Audit items from `findings/plan_candy-query.md` deliberately deferred — do not
-"fix" these opportunistically; each is a scoped decision:
+All four deferred items below were IMPLEMENTED 2026-07-04 (see the dated entry
+of the same day for the patterns):
 
-- **Plan 3.1 — public PDO on deprecated `Database`** — removing
-  `public readonly \PDO $pdo` is a breaking API change on a class kept only
-  for BC; drop it together with the class itself at 1.0.
-- **Plan 3.3 — `App` constructor value-objects** — grouping the 29 constructor
-  params into `AdminState`/`TableBrowseState` etc. is a large refactor touching
-  `mutate()` call sites across the whole model; schedule as its own PR.
-- **Plan 3.4 — `Async*` renames** (`CachedConnection` → `AsyncCachedConnection`,
-  `CachingServerContext` → `AsyncCachingServerContext`) — cosmetic churn across
-  many call sites for a naming-clarity win; revisit alongside 3.3.
-- **Plan 5.1 — async query cancellation** — an in-flight async query cannot be
-  aborted; needs a `KILL QUERY` side-channel connection (the timeout added by
-  `QueryTimeout` rejects the promise but the server keeps executing).
+- **Plan 3.1 — public PDO on deprecated `Database`** — ✅ implemented
+  2026-07-04: `$pdo` is now private with no `pdo()` escape hatch; every former
+  direct-PDO use routes through `exec()`/`prepare()`/`query()`.
+- **Plan 3.3 — `App` constructor value-objects** — ✅ implemented 2026-07-04:
+  five groups (`ConnectionState`/`BrowseState`/`QueryState`/`UiState`/`AdminState`)
+  in `src/App/`.
+- **Plan 3.4 — `Async*` renames** — ✅ implemented 2026-07-04: clean rename to
+  `AsyncCachedConnection` / `AsyncCachingServerContext`, no BC aliases (no
+  external consumers existed).
+- **Plan 5.1 — async query cancellation** — ✅ implemented 2026-07-04:
+  `AsyncConnection::query(string, ?CancellationToken)` + `CancellableQuery`
+  wrapper; MySQL kills via `KILL QUERY <CONNECTION_ID()>` side-channel,
+  Postgres via PgAsync's protocol CancelRequest; `QueryTimeout` deadlines take
+  the same server-side path.
+
+### 2026-07-04 — deferred-items pass: private PDO, App state groups, Async* renames, cooperative cancellation (plans 3.1/3.3/3.4/5.1)
+
+**Plan 3.3 — App state value objects.** `App`'s 26-parameter constructor is now
+`__construct(ConnectionState $connection, BrowseState $browse, QueryState $query, UiState $ui, AdminState $admin)`
+(only `connection` required; the rest default via new-in-initializers). Groups
+live in `src/App/`: `ConnectionState` (db/flavor/serverContext), `BrowseState`
+(tables/tableCursor/selectedTable/rows/rowCursor/resultTable/rowsLoading),
+`QueryState` (editor/history/favorites), `UiState` (pane/error/status),
+`AdminState` (pane/cursor/paused/page/cachedStatusVars/cachedServerVars/cacheTs/loading/lastFetchAt/historyRecorder).
+Each group is `final` + `Mutable` + promoted `public readonly` + `::new()` +
+per-field `with*()`. App's `mutate()` calls now update whole groups, e.g.
+`mutate(['browse' => $this->browse->withRows($rows)->withRowCursor(0)])`.
+External reads go through the groups (`$app->ui->pane`, `$app->browse->rows`,
+`$app->admin->pane`) — `Renderer`, `Terminal/BorderFrame`, and tests were
+updated. `AppBuilder` keeps its FLAT `with*()` surface and assembles the groups
+in `build()`, so builder call sites needed no changes. Key invariant preserved:
+`AdminState::withPane()` is the only transition that nulls `page` (admin page
+state survives poll-tick refreshes).
+
+**Plan 3.4 — renames.** `CachedConnection` → `AsyncCachedConnection`,
+`CachingServerContext` → `AsyncCachingServerContext` (git mv, all references
+updated, tests renamed too). No deprecated aliases: a repo-wide sweep found no
+consumers outside candy-query. Any doc/example referencing the old names is
+stale.
+
+**Plan 3.1 — Database PDO.** `Database::$pdo` is private. Tests that formerly
+did `$db->pdo->exec(...)` / `$db->pdo->prepare(...)` use `$db->exec()` /
+`$db->prepare()` (returns `PreparedStatementInterface`, whose `execute([...])`
+takes positional or named params like PDOStatement). No `pdo()` accessor was
+added — nothing needed it.
+
+**Plan 5.1 — cooperative cancellation.** New pieces:
+- `AsyncConnection::query(string $sql, ?SugarCraft\Async\CancellationToken $cancellation = null)`
+  — reuses candy-async's token (already a dep), no new primitive invented.
+- `CancellableQuery::wrap($promise, $token, $onServerCancel)` — client-side
+  rejection is IMMEDIATE (`QueryCancelledException`, no loop turn), late driver
+  results are dropped, the server-cancel hook fires exactly once and never for
+  already-settled queries. Cancelling the returned promise directly (what
+  promise-timer does) behaves identically to cancelling the token.
+- MySQL: react/mysql does NOT expose the connection thread id (Parser's
+  `$threadId` is internal), so `ReactMysqlConnection` dispatches
+  `SELECT CONNECTION_ID() AS id` as the connection's FIRST command — react/mysql
+  is strictly FIFO per connection, so the id resolves before any long user query
+  occupies the socket; fetching it lazily at cancel time would queue BEHIND the
+  query being cancelled. Kill = `KILL QUERY <int id>` on a separate short-lived
+  `MysqlClient` (injectable `$killClientFactory` ctor param for test spies).
+  Until the id is known, cancellation is client-side only — documented in README.
+- Postgres: promise-cancel → RxPHP `toPromise()` disposes the subscription →
+  PgAsync sends a wire-protocol CancelRequest (BackendKeyData) on a separate
+  socket. Genuine server-side cancel with zero extra code; timeouts had this
+  already (promise-timer cancels the underlying promise on deadline).
+- Timeout wiring: `QueryTimeout::wrap()` gained `?callable $onTimeout` — the
+  MySQL wrapper passes its KILL hook so a timed-out query stops burning the
+  server instead of just rejecting the promise.
+- react/promise v3 notes: a Deferred canceller that throws rejects the promise
+  with that exception; direct `->cancel()` on a promise always runs its
+  canceller regardless of `requiredCancelRequests` (only then()-children go
+  through the counter).

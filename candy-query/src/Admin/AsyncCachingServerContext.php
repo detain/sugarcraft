@@ -10,7 +10,7 @@ namespace SugarCraft\Query\Admin;
  * Used by the Admin pane to display previously-fetched data while a new async
  * fetch is in flight, avoiding a blank flash while polling.
  */
-final class CachingServerContext implements ServerContextInterface
+final class AsyncCachingServerContext implements ServerContextInterface
 {
     public function __construct(
         private ServerContextInterface $inner,
@@ -24,7 +24,7 @@ final class CachingServerContext implements ServerContextInterface
     {
         // Route admin-page queries through the async cache so a slow sys query
         // never blocks the event loop during view(). See AdminQueryCache.
-        return new CachedConnection($this->inner->connection(), $this->cache);
+        return new AsyncCachedConnection($this->inner->connection(), $this->cache);
     }
 
     /** @return array<string, string> */

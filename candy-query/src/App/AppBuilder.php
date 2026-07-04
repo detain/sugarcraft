@@ -169,22 +169,29 @@ final class AppBuilder
             $historyRecorder = new HistoryRecorder($store);
         }
 
+        // The builder keeps its flat with*() surface for callers; the App
+        // constructor itself takes cohesive state value objects (plan 3.3).
         return new \SugarCraft\Query\App(
-            $this->db,
-            $this->flavor,
-            $this->tables,
-            $this->tableCursor,
-            $this->selectedTable,
-            $this->rows,
-            $this->rowCursor,
-            $this->resultTable,
-            $this->queryEditor,
-            $this->pane,
-            $this->error,
-            $this->status,
-            $this->queryHistory,
-            $this->queryFavorites,
-            historyRecorder: $historyRecorder,
+            ConnectionState::new($this->db, $this->flavor),
+            new BrowseState(
+                tables: $this->tables,
+                tableCursor: $this->tableCursor,
+                selectedTable: $this->selectedTable,
+                rows: $this->rows,
+                rowCursor: $this->rowCursor,
+                resultTable: $this->resultTable,
+            ),
+            new QueryState(
+                editor: $this->queryEditor,
+                history: $this->queryHistory,
+                favorites: $this->queryFavorites,
+            ),
+            new UiState(
+                pane: $this->pane,
+                error: $this->error,
+                status: $this->status,
+            ),
+            new AdminState(historyRecorder: $historyRecorder),
         );
     }
 }

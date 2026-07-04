@@ -10,7 +10,7 @@ namespace SugarCraft\Query\Admin;
  *
  * Admin pages render synchronously in view(), but their data must come from
  * non-blocking queries so a slow `sys.*` report never freezes the event loop.
- * Providers read results from here (via {@see CachedConnection}); a cache miss
+ * Providers read results from here (via {@see AsyncCachedConnection}); a cache miss
  * is recorded as "pending" and returns null instead of blocking. App's admin
  * tick drains the pending set, runs those queries on the React event loop, and
  * stores the rows back — so the next render shows data without ever blocking.
@@ -22,7 +22,7 @@ namespace SugarCraft\Query\Admin;
  * The shared default is a deliberate process-global: App is rebuilt immutably
  * on every update(), so the live cache cannot live on the model. Call reset()
  * in tests. Instances are also directly constructible so collaborators
- * (CachedConnection, CachingServerContext, ReconnectManager) can receive an
+ * (AsyncCachedConnection, AsyncCachingServerContext, ReconnectManager) can receive an
  * isolated cache via injection — tests then don't have to touch global state,
  * and multiple caches can coexist in one process.
  */

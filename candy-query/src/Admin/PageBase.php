@@ -87,7 +87,7 @@ abstract class PageBase implements Model
     {
         // While the first async fetch is in flight and nothing is cached yet,
         // show a loading screen instead of failing validate() into "Error:".
-        if ($this->context instanceof CachingServerContext
+        if ($this->context instanceof AsyncCachingServerContext
             && $this->context->isLoading()
             && !$this->context->hasCachedData()) {
             return $this->loadingScreen();

@@ -127,7 +127,7 @@ final class ReportsPageTest extends TestCase
      * STEP 3.1 removed sync DB query from validate() — no more sysSchemaExists() call.
      * The page now shows async loading state (spinner + "Loading...") when currentResult
      * is null, rather than an immediate error screen. The actual DB query for reports
-     * is queued via CachedConnection and dispatched on ReloadReportMsg (after
+     * is queued via AsyncCachedConnection and dispatched on ReloadReportMsg (after
      * AdminDataLoadedMsg). This test verifies the NEW loading-state behavior.
      */
     public function testViewShowsLoadingStateWhenDbUnavailable(): void

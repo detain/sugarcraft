@@ -7,7 +7,7 @@ namespace SugarCraft\Query\Admin\Dashboard;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
-use SugarCraft\Query\Admin\CachingServerContext;
+use SugarCraft\Query\Admin\AsyncCachingServerContext;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\QueryLogger;
@@ -103,7 +103,7 @@ final class DashboardPage extends PageBase
     public function view(): string
     {
         // Show loading screen when fetch is in flight and no cached data available
-        if ($this->context instanceof CachingServerContext
+        if ($this->context instanceof AsyncCachingServerContext
             && $this->context->isLoading()
             && !$this->context->hasCachedData()) {
             return $this->renderLoadingScreen();

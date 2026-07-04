@@ -123,19 +123,19 @@ final class Renderer
         $cols = $size['cols'];
 
         // Admin pane uses a left sidebar layout instead of the 3-pane browser
-        if ($a->pane === Pane::Admin) {
+        if ($a->ui->pane === Pane::Admin) {
             $admin = self::adminPane($a, $cols);
             $query = self::queryPane($a, $cols);
             $paneCount = count(AdminPane::orderedCases());
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  quit");
             $status = '';
-            if ($a->error !== null) {
+            if ($a->ui->error !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                    ->render('error: ' . $a->error);
-            } elseif ($a->status !== null) {
+                    ->render('error: ' . $a->ui->error);
+            } elseif ($a->ui->status !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                    ->render($a->status);
+                    ->render($a->ui->status);
             }
             $content = $admin . "\n" . $query . "\n " . $help . $status;
             return BorderFrame::wrap($a, $content);
@@ -150,7 +150,7 @@ final class Renderer
         $query  = self::queryPane($a, $cols);
 
         // Help text differs per pane
-        if ($a->pane === Pane::Query) {
+        if ($a->ui->pane === Pane::Query) {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render('tab  switch pane  ·  ctrl+r  run  ·  ctrl+e  clear  ·  ctrl+h  history  ·  q  quit');
         } else {
@@ -159,12 +159,12 @@ final class Renderer
         }
 
         $status = '';
-        if ($a->error !== null) {
+        if ($a->ui->error !== null) {
             $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render('error: ' . $a->error);
-        } elseif ($a->status !== null) {
+                ->render('error: ' . $a->ui->error);
+        } elseif ($a->ui->status !== null) {
             $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render($a->status);
+                ->render($a->ui->status);
         }
 
         $content = $top . "\n" . $query . "\n " . $help . $status;
@@ -180,10 +180,10 @@ final class Renderer
         // the outer frame: each rendered pane is paneWidth + 4 (border+padding),
         // joined with a 2-space gap, all inside the outer frame's (cols-2)
         // content area → 2*(w+4) + 2 ≤ cols-2 ⇒ w ≤ floor(cols/2) - 6.
-        $maxTableLen = $a->tables !== [] ? max(array_map('strlen', $a->tables)) : 0;
+        $maxTableLen = $a->browse->tables !== [] ? max(array_map('strlen', $a->browse->tables)) : 0;
         $width = max(24, min($maxTableLen, (int) floor($terminalCols / 2) - 6));
 
-        if ($a->tables === []) {
+        if ($a->browse->tables === []) {
             $body = Style::new()->foreground(Color::hex('#7d6e98'))->render('(no tables)');
             return self::frame($a, Pane::Tables, ' tables ', $body, $width);
         }
@@ -203,9 +203,9 @@ final class Renderer
         // Pre-style each name (gold+bold for the loaded table, muted otherwise);
         // the cursor row is rendered reverse-video by the widget.
         $items = [];
-        foreach ($a->tables as $name) {
+        foreach ($a->browse->tables as $name) {
             $items[] = new StringItem(
-                $name === $a->selectedTable
+                $name === $a->browse->selectedTable
                     ? Style::new()->foreground(Color::hex('#fde68a'))->bold()->render($name)
                     : Style::new()->foreground(Color::hex('#c5b6dd'))->render($name)
             );
@@ -217,7 +217,7 @@ final class Renderer
             ->withShowFilter(false)
             ->withCursorPrefix('')
             ->withUnselectedPrefix('')
-            ->select($a->tableCursor);
+            ->select($a->browse->tableCursor);
 
         return self::frame($a, Pane::Tables, ' tables ', $list->view(), $width);
     }
@@ -229,9 +229,9 @@ final class Renderer
      */
     private static function rowsPane(App $a, int $available = 12, int $terminalCols = 80): string
     {
-        $title = ' rows ' . ($a->selectedTable ? "[{$a->selectedTable}] " : '');
+        $title = ' rows ' . ($a->browse->selectedTable ? "[{$a->browse->selectedTable}] " : '');
 
-        $cols = array_keys($a->rows[0] ?? []);
+        $cols = array_keys($a->browse->rows[0] ?? []);
         $numFields = count($cols);
 
         // Cap at floor(cols/2) - 6 (see tablesPane) so tables + rows fit the
@@ -239,10 +239,10 @@ final class Renderer
         $width = min($numFields * 14, (int) floor($terminalCols / 2) - 6);
         $width = max(60, $width);
 
-        if ($a->rows === []) {
+        if ($a->browse->rows === []) {
             // Distinguish "no rows here" from "the async browse fetch is still
             // in flight" so a remote table doesn't look empty while it loads.
-            $body = $a->rowsLoading
+            $body = $a->browse->rowsLoading
                 ? Style::new()->foreground(Color::hex('#fbbf24'))->render('loading…')
                 : Style::new()->foreground(Color::hex('#7d6e98'))->render('(empty)');
             return self::frame($a, Pane::Rows, $title, $body, $width);
@@ -251,8 +251,8 @@ final class Renderer
         // Executed-query results render through ResultTable (its horizontal-
         // scroll grid with JSON pretty-printing + a styled NULL token); regular
         // table browsing renders through sugar-table.
-        if ($a->resultTable !== null) {
-            $body = $a->resultTable->withVisibleWidth($width)->render();
+        if ($a->browse->resultTable !== null) {
+            $body = $a->browse->resultTable->withVisibleWidth($width)->render();
             return self::frame($a, Pane::Rows, $title, $body, $width);
         }
 
@@ -272,7 +272,7 @@ final class Renderer
         }
 
         $tableRows = [];
-        foreach ($a->rows as $row) {
+        foreach ($a->browse->rows as $row) {
             $data = [];
             foreach ($cols as $col) {
                 $data[(string) $col] = CellValue::display($row[$col] ?? null);
@@ -285,7 +285,7 @@ final class Renderer
             ->withSelectable()
             ->withZebra()
             ->withViewportHeight($maxRows)
-            ->withSelectedIndex($a->rowCursor);
+            ->withSelectedIndex($a->browse->rowCursor);
 
         return self::frame($a, Pane::Rows, $title, $table->View(), $width);
     }
@@ -332,7 +332,7 @@ final class Renderer
             }
 
             $digit = $index + 1;
-            $isActive = $a->adminPane === $pane;
+            $isActive = $a->admin->pane === $pane;
             $marker = $isActive ? '▶' : ' ';
             $color = $isActive ? Color::hex('#00ffaa') : Color::hex('#6a5898');
             $sidebarLines[] = Style::new()->foreground($color)
@@ -358,7 +358,7 @@ final class Renderer
 
         // Wrap the combined output in a single frame; the title rides in the border.
         $st = Style::new()->border(Border::rounded()->withTitle(' admin '))->padding(0, 1)->width($innerWidth);
-        $st = $a->pane === Pane::Admin
+        $st = $a->ui->pane === Pane::Admin
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
 
@@ -370,7 +370,7 @@ final class Renderer
         // The pane title rides in the rounded border itself (a first-class
         // Sprinkles\Border feature) instead of a hand-drawn bold line inside it.
         $st = Style::new()->border(Border::rounded()->withTitle($title))->padding(0, 1)->width($width);
-        $st = $a->pane === $p
+        $st = $a->ui->pane === $p
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
         return $st->render($body);

@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\Mysql\MysqlClient;
 use React\Mysql\MysqlResult;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\CancellationToken;
 
 /**
  * Async MySQL connection wrapper using react/mysql.
@@ -21,17 +22,40 @@ use React\Promise\PromiseInterface;
  * The MysqlClient is lazy: it opens the underlying socket on the first query
  * and resolves/rejects the per-query promise on the React loop.
  *
+ * Cancellation semantics (plan 5.1): react/mysql's query promise has no
+ * client-side cancellation and the driver does not expose the connection's
+ * thread id, so the wrapper fetches `SELECT CONNECTION_ID()` as the very
+ * first command on the connection (FIFO ordering guarantees it resolves
+ * before any long user query occupies the socket). Cancelling — via a
+ * {@see CancellationToken} or the {@see QueryTimeout} deadline — then issues
+ * `KILL QUERY <thread_id>` on a SEPARATE short-lived connection, stopping the
+ * statement server-side while the caller's promise rejects immediately. If
+ * the thread id is not (yet) known, cancellation is client-side only: the
+ * promise rejects but the server finishes the statement.
+ *
  * @see https://github.com/friends-of-reactphp/mysql
  */
 final class ReactMysqlConnection implements AsyncConnection
 {
     private MysqlClient $client;
     private LoopInterface $loop;
+    private string $uri;
+
+    /** Server thread id of $client's connection, once CONNECTION_ID() resolves. */
+    private ?int $threadId = null;
+    private bool $threadIdRequested = false;
+
+    /** @var callable(string, LoopInterface): MysqlClient */
+    private $killClientFactory;
 
     /**
      * @param float $queryTimeout Per-query deadline in seconds; <= 0 disables
      *                            it (see {@see QueryTimeout} for why a default
      *                            deadline exists at all)
+     * @param callable(string, LoopInterface): MysqlClient|null $killClientFactory
+     *                            Factory for the short-lived KILL side-channel
+     *                            connection; injectable so tests can spy on the
+     *                            KILL path without a live server
      */
     public function __construct(
         string $dsn,
@@ -39,9 +63,13 @@ final class ReactMysqlConnection implements AsyncConnection
         string $password,
         ?LoopInterface $loop = null,
         private readonly float $queryTimeout = QueryTimeout::DEFAULT_SECONDS,
+        ?callable $killClientFactory = null,
     ) {
         $this->loop = $loop ?? ReactLoop::get();
-        $this->client = new MysqlClient($this->dsnToUri($dsn, $username, $password), null, $this->loop);
+        $this->uri = $this->dsnToUri($dsn, $username, $password);
+        $this->client = new MysqlClient($this->uri, null, $this->loop);
+        $this->killClientFactory = $killClientFactory
+            ?? static fn (string $uri, LoopInterface $loop): MysqlClient => new MysqlClient($uri, null, $loop);
     }
 
     /**
@@ -49,18 +77,82 @@ final class ReactMysqlConnection implements AsyncConnection
      *
      * Rejects with a clear timeout error when the query outlives the
      * configured deadline — otherwise a dropped route would leave the
-     * promise pending forever (see {@see QueryTimeout}).
+     * promise pending forever (see {@see QueryTimeout}). Both the deadline
+     * and an explicit `$cancellation` route through the same server-side
+     * `KILL QUERY` path so an abandoned query stops burning the server.
      *
      * @param string $sql SQL query to execute
+     * @param CancellationToken|null $cancellation Optional cooperative-cancel handle
      * @return PromiseInterface<list<array<string,mixed>>> Rows as assoc arrays
      */
-    public function query(string $sql): PromiseInterface
+    public function query(string $sql, ?CancellationToken $cancellation = null): PromiseInterface
     {
+        $this->requestThreadId();
+
         $promise = $this->client->query($sql)->then(
             static fn(MysqlResult $result): array => $result->resultRows ?? [],
         );
 
-        return QueryTimeout::wrap($promise, $this->queryTimeout, $this->loop);
+        $timed = QueryTimeout::wrap($promise, $this->queryTimeout, $this->loop, function (): void {
+            $this->killQueryOnServer();
+        });
+
+        return CancellableQuery::wrap($timed, $cancellation, function (): void {
+            $this->killQueryOnServer();
+        });
+    }
+
+    /**
+     * Learn this connection's server thread id, once, ahead of time.
+     *
+     * Must be dispatched BEFORE user queries: react/mysql runs commands
+     * strictly FIFO on the single connection, so a lazy fetch at cancel time
+     * would queue behind the very statement being cancelled and never resolve
+     * until it finished — defeating the purpose.
+     */
+    private function requestThreadId(): void
+    {
+        if ($this->threadIdRequested) {
+            return;
+        }
+        $this->threadIdRequested = true;
+
+        $this->client->query('SELECT CONNECTION_ID() AS id')->then(
+            function (MysqlResult $result): void {
+                $id = $result->resultRows[0]['id'] ?? null;
+                if (is_numeric($id)) {
+                    $this->threadId = (int) $id;
+                }
+            },
+            static function (): void {
+                // Connect/permission failure — the user's own query will
+                // surface the real error; cancellation degrades to client-side.
+            },
+        );
+    }
+
+    /**
+     * Abort the currently executing statement server-side.
+     *
+     * Uses a separate short-lived connection because the main one is busy
+     * executing the very query being killed. `KILL QUERY` cancels the
+     * statement but keeps the target connection alive (unlike `KILL
+     * CONNECTION`). MySQL's KILL accepts no placeholders; the int-typed
+     * thread id makes direct interpolation injection-safe. Fire-and-forget:
+     * a failed kill (no privilege, id gone) is deliberately swallowed — the
+     * caller's promise has already rejected.
+     */
+    private function killQueryOnServer(): void
+    {
+        if ($this->threadId === null) {
+            return; // Thread id unknown — client-side cancellation only.
+        }
+
+        $killer = ($this->killClientFactory)($this->uri, $this->loop);
+        $killer->query('KILL QUERY ' . $this->threadId)->then(
+            static fn () => $killer->quit(),
+            static fn () => $killer->close(),
+        );
     }
 
     /**
