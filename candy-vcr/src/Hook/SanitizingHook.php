@@ -78,9 +78,8 @@ final class SanitizingHook implements Hook
     {
         foreach ($data as $key => $value) {
             if (is_string($value)) {
-                $result = preg_replace($pattern, $replacement, $value);
-                // preg_replace returns false on error (not null), so ?? doesn't catch it
-                $data[$key] = $result === false ? $value : $result;
+                // preg_replace returns NULL on error (bad pattern / backtrack limit).
+                $data[$key] = preg_replace($pattern, $replacement, $value) ?? $value;
             } elseif (is_array($value)) {
                 $data[$key] = $this->applyPattern($value, $pattern, $replacement);
             }

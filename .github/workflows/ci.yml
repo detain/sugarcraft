@@ -39,11 +39,11 @@ jobs:
   # unresolvable git ranges (shallow clones, first commit on branch) also
   # force-all from the workflow side.
   #
-  # Empty matrix arrays are intentional: GitHub spawns zero cells and emits zero
-  # check_runs — which avoids the Actions quirk where a job-level `if:` on a
-  # matrix job emits one "skipped" placeholder check_run per declared cell with
-  # the literal `${{ matrix.* }}` template text in its name (leaking into the
-  # Teams notification feed as e.g. "Coverage · ${{ matrix.lib }} Check skipped").
+  # Empty matrices are a hard error at job setup (the run goes red with zero
+  # failing check_runs), so every matrix job carries an
+  # `if: needs.build-matrix.outputs.<X>_count != '0'` guard. The guard skip may
+  # emit a placeholder check_run with the literal `${{ matrix.* }}` template
+  # text in its name — cosmetic noise, accepted over red docs-only pushes.
   build-matrix:
     runs-on: ubuntu-latest
     outputs:
@@ -52,6 +52,16 @@ jobs:
       phpstan_matrix: ${{ steps.compute.outputs.phpstan_matrix }}
       windows_matrix: ${{ steps.compute.outputs.windows_matrix }}
       macos_matrix: ${{ steps.compute.outputs.macos_matrix }}
+      # Cell counts — each matrix job gates on its count being non-zero.
+      # An empty matrix (even the `{include: []}` shape) is a hard error at
+      # job setup ("Matrix must define at least one vector"): the job emits
+      # no check_run but still marks the whole RUN failed, so docs-only and
+      # narrow pushes went red with every visible job green.
+      test_count: ${{ steps.compute.outputs.test_count }}
+      coverage_count: ${{ steps.compute.outputs.coverage_count }}
+      phpstan_count: ${{ steps.compute.outputs.phpstan_count }}
+      windows_count: ${{ steps.compute.outputs.windows_count }}
+      macos_count: ${{ steps.compute.outputs.macos_count }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -104,12 +114,21 @@ jobs:
             JSON=$(echo "$JSON" | jq '.coverage_libs = []')
           fi
 
+          # Cell count per matrix: `{php: [...], lib: [...]}` cross-product
+          # or the `{include: []}` empty shape.
+          COUNT='if has("lib") then ((.lib | length) * (.php | length)) else (.include | length) end'
+
           {
             echo "test_matrix=$(echo "$JSON" | jq -c '.test_matrix')"
             echo "coverage_libs=$(echo "$JSON" | jq -c '.coverage_libs')"
             echo "phpstan_matrix=$(echo "$JSON" | jq -c '.phpstan_matrix')"
             echo "windows_matrix=$(echo "$JSON" | jq -c '.windows_matrix')"
             echo "macos_matrix=$(echo "$JSON" | jq -c '.macos_matrix')"
+            echo "test_count=$(echo "$JSON" | jq -c ".test_matrix | $COUNT")"
+            echo "coverage_count=$(echo "$JSON" | jq -c '.coverage_libs | length')"
+            echo "phpstan_count=$(echo "$JSON" | jq -c ".phpstan_matrix | $COUNT")"
+            echo "windows_count=$(echo "$JSON" | jq -c ".windows_matrix | $COUNT")"
+            echo "macos_count=$(echo "$JSON" | jq -c ".macos_matrix | $COUNT")"
           } >> "$GITHUB_OUTPUT"
 
   # Verify every "@dev" intra-monorepo dependency has a path-repo entry
@@ -138,6 +157,11 @@ jobs:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
     needs: [build-matrix]
+    # Skip (not fail) when the change-set touches no libs — an empty matrix
+    # errors at job setup and flips the whole run red. The skip may emit one
+    # placeholder check_run with the unexpanded name template; cosmetic, and
+    # far better than a guaranteed-failed run on docs-only pushes.
+    if: needs.build-matrix.outputs.test_count != '0'
     # All pushes to the same branch share ONE concurrency group per matrix cell.
     # When a new commit arrives, any in-progress jobs from the previous commit
     # are cancelled immediately — no waiting for the old run to finish.
@@ -229,6 +253,8 @@ jobs:
     name: 'Windows · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: windows-latest
     needs: [build-matrix]
+    # See the `test` job: empty matrix = hard error, so skip instead.
+    if: needs.build-matrix.outputs.windows_count != '0'
     concurrency:
       group: ci-windows-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
       cancel-in-progress: true
@@ -292,6 +318,8 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     needs: [build-matrix]
+    # See the `test` job: empty matrix = hard error, so skip instead.
+    if: needs.build-matrix.outputs.macos_count != '0'
     concurrency:
       group: ci-macos-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
       cancel-in-progress: true
@@ -347,6 +375,8 @@ jobs:
     # parallel with `test` costs a few CI minutes when tests fail, but
     # eliminates the placeholder noise.
     needs: [build-matrix]
+    # See the `test` job: empty matrix = hard error, so skip instead.
+    if: needs.build-matrix.outputs.coverage_count != '0'
     concurrency:
       group: ci-coverage-${{ github.ref }}-${{ matrix.lib }}
       cancel-in-progress: true
@@ -459,6 +489,8 @@ jobs:
     # job above for why dropping `needs: [test]` is what actually eliminates
     # the unexpanded `${{ matrix.* }}` placeholder check_runs.
     needs: [build-matrix]
+    # See the `test` job: empty matrix = hard error, so skip instead.
+    if: needs.build-matrix.outputs.phpstan_count != '0'
     concurrency:
       group: ci-phpstan-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
       cancel-in-progress: true

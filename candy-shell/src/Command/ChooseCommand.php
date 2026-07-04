@@ -57,7 +57,7 @@ final class ChooseCommand extends Command
 
         // Auto-pick when exactly one option is supplied.
         if ($selectIfOne && count($options) === 1) {
-            $output->writeln($options[0]);
+            $output->write($options[0] . "\n");
             return Command::SUCCESS;
         }
 
@@ -106,14 +106,14 @@ final class ChooseCommand extends Command
         // don't suddenly start failing.
         if ($final->isAborted() || !$final->isSubmitted() || ($noSelectedMessage !== null && $empty)) {
             if ($noSelectedMessage !== null) {
-                $output->writeln($noSelectedMessage);
+                $output->write($noSelectedMessage . "\n");
             }
             return Command::FAILURE;
         }
         if ($final->isMulti()) {
-            $output->writeln(implode($delim, $final->selectedAll()));
+            $output->write(implode($delim, $final->selectedAll()) . "\n");
         } else {
-            $output->writeln((string) $final->selected());
+            $output->write((string) $final->selected() . "\n");
         }
         return Command::SUCCESS;
     }

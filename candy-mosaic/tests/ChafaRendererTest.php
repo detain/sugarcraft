@@ -110,12 +110,13 @@ final class ChafaRendererTest extends TestCase
 
         // Run availability check in isolated process to catch FD warnings
         $php = \PHP_BINARY;
+        // NB: `php -r` takes code WITHOUT an opening <?php tag — including
+        // one is a parse error (exit 255) that only surfaced on chafa-less CI.
         $code = \sprintf(
-            '<?php require %s; use %s; %s::reset(); $r = %s::available(); exit($r === false ? 0 : 1);',
+            'require %s; %s::reset(); $r = %s::available(); exit($r === false ? 0 : 1);',
             \var_export(__DIR__ . '/../vendor/autoload.php', true),
-            ChafaRenderer::class,
-            ChafaRenderer::class,
-            ChafaRenderer::class,
+            '\\' . ChafaRenderer::class,
+            '\\' . ChafaRenderer::class,
         );
 
         $proc = \proc_open(

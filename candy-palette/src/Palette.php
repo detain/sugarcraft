@@ -199,8 +199,8 @@ final class Palette
         }
 
         // 2. FORCE_COLOR: SugarCraft extension (level-based) — not in DetectionChain
-        $force = isset($env['FORCE_COLOR']) ? $env['FORCE_COLOR'] : (isset($_ENV['FORCE_COLOR']) ? $_ENV['FORCE_COLOR'] : \getenv('FORCE_COLOR'));
-        if ($force !== null && $force !== '' && $force !== false) {
+        $force = $env['FORCE_COLOR'] ?? $_ENV['FORCE_COLOR'] ?? \getenv('FORCE_COLOR');
+        if (\is_string($force) && $force !== '') {
             $level = \intval($force);
             return match (true) {
                 $level >= 3 => Profile::TrueColor,
@@ -232,13 +232,14 @@ final class Palette
             return Profile::TrueColor;
         }
 
-        // 13. TTY detection — Palette-specific (Probe and TerminalProbe don't check TTY)
+        // 13. TTY detection — Palette-specific (Probe and TerminalProbe don't
+        // check TTY). Only applies when the caller hands us a stream: with
+        // $stream === null detection is env-only, mirroring upstream
+        // colorprofile.Detect which checks isatty on the *passed* writer.
+        // (The old posix_isatty(STDOUT) fallback made env-only detection
+        // return NoTTY under any piped/CI stdout, regardless of $env.)
         if ($stream !== null && \function_exists('stream_isatty')) {
             if (!@\stream_isatty($stream)) {
-                return Profile::NoTTY;
-            }
-        } elseif (\function_exists('posix_isatty')) {
-            if (!@posix_isatty(\STDOUT)) {
                 return Profile::NoTTY;
             }
         }

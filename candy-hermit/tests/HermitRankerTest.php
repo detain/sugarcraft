@@ -58,6 +58,11 @@ final class HermitRankerTest extends TestCase
 
                 return $results;
             }
+
+            public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+            {
+                yield from $this->matchAll($query, $candidates, $limit, $minScore);
+            }
         };
     }
 
@@ -83,6 +88,11 @@ final class HermitRankerTest extends TestCase
                 }
 
                 return $results;
+            }
+
+            public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+            {
+                yield from $this->matchAll($query, $candidates, $limit, $minScore);
             }
         };
     }
@@ -255,6 +265,11 @@ final class HermitRankerTest extends TestCase
                 // Simulate the formatted string not matching: matchAll returns empty
                 // so the item appears in the list but without highlight
                 return [];
+            }
+
+            public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
+            {
+                yield from $this->matchAll($query, $candidates, $limit, $minScore);
             }
         };
 

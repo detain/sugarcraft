@@ -277,8 +277,11 @@ final class DefaultChannelHandlerTest extends TestCase
         // and varies by environment. Verify only that it's not the malicious
         // client-supplied value and contains expected safe directories.
         $this->assertNotSame('/usr/custom/bin', $capturedEnv['PATH']);
-        // Verify standard system directories are present (varies by environment)
-        $this->assertStringContainsString('/usr/bin:/sbin:/bin', $capturedEnv['PATH']);
+        // The floor PATH mirrors buildEnv()'s own derivation exactly — the
+        // host PATH varies wildly across CI runners (macOS hostedtoolcache
+        // PATHs don't contain the Linux '/usr/bin:/sbin:/bin' run), so
+        // asserting any fixed substring is environment-dependent.
+        $this->assertSame(getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin', $capturedEnv['PATH']);
     }
 
     public function testBuildEnvPassesAllowlistedVars(): void

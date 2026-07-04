@@ -127,17 +127,14 @@ trait RequiresWorkingPty
                 'reason' => 'pty probe threw: ' . $e->getMessage() . ' (' . \trim($errText) . ')',
             ];
         } finally {
-            if (\is_resource($devNullIn)) {
-                \fclose($devNullIn);
-            }
-            if (\is_resource($stdout)) {
-                \fclose($stdout);
-            }
+            // RecordCommand never closes the streams it is handed, so all
+            // three are unconditionally open here (an is_resource() guard
+            // would be always-true — flagged by PHPStan).
+            \fclose($devNullIn);
+            \fclose($stdout);
             \rewind($stderr);
             $errText = (string) \stream_get_contents($stderr);
-            if (\is_resource($stderr)) {
-                \fclose($stderr);
-            }
+            \fclose($stderr);
             // Make sure cassette is cleaned up even if assertions later
             // skip the test.
             if (\file_exists($cassette)) {

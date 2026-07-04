@@ -355,8 +355,8 @@ final class GameTest extends TestCase
         // Press 'c' to chord at cursor (1,1).
         [$g, ] = $game->update(self::key(KeyType::Char, 'c'));
         $this->assertTrue($g->board->cell(1, 2)->revealed, 'Chord must reveal the unflagged neighbour');
-        // The flagged mine (0,1) must stay unrevealed.
-        $this->assertFalse($g->board->cell(0, 1)->revealed);
+        // The flagged mine — rows[0][1], i.e. cell(x=1, y=0) — must stay unrevealed.
+        $this->assertFalse($g->board->cell(1, 0)->revealed);
     }
 
     // ─── Mouse click helpers ────────────────────────────────────────────────
@@ -442,8 +442,8 @@ final class GameTest extends TestCase
 
         $this->assertTrue($next->board->cell(1, 2)->revealed,
             'Middle-click chord must reveal the unflagged neighbour (1,2)');
-        // The flagged mine stays unrevealed.
-        $this->assertFalse($next->board->cell(0, 1)->revealed);
+        // The flagged mine — rows[0][1], i.e. cell(x=1, y=0) — stays unrevealed.
+        $this->assertFalse($next->board->cell(1, 0)->revealed);
     }
 
     // ─── Click outside board no-ops ────────────────────────────────────────

@@ -18,8 +18,8 @@ namespace SugarCraft\Palette;
  *  1. CLICOLOR_FORCE=1       → truecolor  (overrides everything)
  *  2. NO_COLOR (any value)   → none
  *  3. CLICOLOR=0             → none
- *  4. TERM=dumb              → none
- *  5. COLORTERM=24bit|truecolor|yes → truecolor
+ *  4. COLORTERM=24bit|truecolor|yes → truecolor
+ *  5. TERM=dumb              → none
  *  6. WT_SESSION (set)       → truecolor  (Windows Terminal)
  *  7. GOOGLE_CLOUD_SHELL=true → truecolor
  *  8. TMUX||STY + base TERM screen/tmux → ansi256
@@ -78,18 +78,20 @@ final class DetectionChain
             return new self(self::LEVEL_NONE, 'env:CLICOLOR=0', $term);
         }
 
-        // 4. TERM=dumb → none
-        if ($term === 'dumb') {
-            return new self(self::LEVEL_NONE, 'env:TERM=dumb', $term);
-        }
-
-        // 5. COLORTERM=24bit|truecolor|yes → truecolor
+        // 4. COLORTERM=24bit|truecolor|yes → truecolor. Checked BEFORE
+        // TERM=dumb: an explicit truecolor declaration outranks a dumb TERM
+        // (matches Palette's documented precedence, steps 5 vs 7).
         $colorterm = $env['COLORTERM'] ?? null;
         if ($colorterm !== null) {
             $ctLower = strtolower($colorterm);
             if ($ctLower === '24bit' || $ctLower === 'truecolor' || $ctLower === 'yes') {
                 return new self(self::LEVEL_TRUECOLOR, 'env:COLORTERM=' . $colorterm, $term);
             }
+        }
+
+        // 5. TERM=dumb → none
+        if ($term === 'dumb') {
+            return new self(self::LEVEL_NONE, 'env:TERM=dumb', $term);
         }
 
         // 6. WT_SESSION (set) → truecolor (Windows Terminal)

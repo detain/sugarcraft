@@ -91,6 +91,20 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../sugar-dash",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "require-dev": {

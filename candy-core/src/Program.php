@@ -132,6 +132,20 @@ final class Program
     }
 
     /**
+     * Forward a lifecycle event to the attached logger, if any.
+     *
+     * The logger contract is duck-typed PSR-3 (an object exposing
+     * info()/error()/warning()...); anything without the method is
+     * silently skipped so a partial logger cannot crash the loop.
+     */
+    private function log(string $level, string $message): void
+    {
+        if ($this->logger !== null && \method_exists($this->logger, $level)) {
+            $this->logger->{$level}($message);
+        }
+    }
+
+    /**
      * Attach a logger to receive program lifecycle events.
      * Returns a cloned program with the logger stored.
      *
@@ -182,6 +196,7 @@ final class Program
      */
     public function run(): Model
     {
+        $this->log('info', 'program starting');
         $this->running = true;
         $this->setupTerminal();
         $this->installSignalHandlers();
@@ -493,6 +508,7 @@ final class Program
             // crucial for replay parity, since a fresh Program emits
             // those same bytes on its way out.
             $this->recorder?->recordQuit();
+            $this->log('info', 'quit requested');
             $this->running = false;
             $this->loop->stop();
             return;
@@ -510,6 +526,7 @@ final class Program
             })->otherwise(function (\Throwable $e): void {
                 // Surface the async failure as an ExceptionMsg (models can react /
                 // quit) and run the user-configured exception handler.
+                $this->log('error', 'async command failed: ' . $e->getMessage());
                 $this->dispatch(new ExceptionMsg($e));
                 // The handler may rethrow — the DEFAULT one does (fail-fast). But
                 // we're inside a promise callback, so a rethrow can't crash the

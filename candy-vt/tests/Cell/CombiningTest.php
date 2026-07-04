@@ -69,48 +69,42 @@ final class CombiningTest extends TestCase
         $this->assertSame('', $cont->combining);
     }
 
-    // ─── isCombiningChar helper ────────────────────────────────────────────────
+    // ─── combining-mark classification (via the public printChar path; the
+    // old private isCombiningChar helper was replaced by Width::string()) ─────
 
     public function testCombiningAcuteIsDetected(): void
     {
         $h = $this->makeHandler();
-        $ref = new \ReflectionClass($h);
-        $meth = $ref->getMethod('isCombiningChar');
-        $meth->setAccessible(true);
-        // U+0301 COMBINING ACUTE ACCENT
-        $this->assertTrue($meth->invoke($h, "\xcc\x81"));
+        $h->printChar('e');
+        $h->printChar("\xcc\x81"); // U+0301 COMBINING ACUTE ACCENT
+        $this->assertSame("\xcc\x81", $h->buffer->cell(0, 0)->combining);
     }
 
     public function testCombiningGraveIsDetected(): void
     {
         $h = $this->makeHandler();
-        $ref = new \ReflectionClass($h);
-        $meth = $ref->getMethod('isCombiningChar');
-        $meth->setAccessible(true);
-        // U+0300 COMBINING GRAVE ACCENT
-        $this->assertTrue($meth->invoke($h, "\xcc\x80"));
+        $h->printChar('e');
+        $h->printChar("\xcc\x80"); // U+0300 COMBINING GRAVE ACCENT
+        $this->assertSame("\xcc\x80", $h->buffer->cell(0, 0)->combining);
     }
 
     public function testAsciiLetterIsNotCombining(): void
     {
         $h = $this->makeHandler();
-        $ref = new \ReflectionClass($h);
-        $meth = $ref->getMethod('isCombiningChar');
-        $meth->setAccessible(true);
-        $this->assertFalse($meth->invoke($h, 'A'));
-        $this->assertFalse($meth->invoke($h, 'z'));
+        $h->printChar('A');
+        $h->printChar('z');
+        // 'z' occupies its own cell instead of attaching to 'A'.
+        $this->assertSame('', $h->buffer->cell(0, 0)->combining);
+        $this->assertSame('z', $h->buffer->cell(0, 1)->grapheme);
     }
 
     public function testOtherUnicodeIsNotCombining(): void
     {
         $h = $this->makeHandler();
-        $ref = new \ReflectionClass($h);
-        $meth = $ref->getMethod('isCombiningChar');
-        $meth->setAccessible(true);
-        // CJK extension
-        $this->assertFalse($meth->invoke($h, "\xe4\xb8\xad")); // U+4E2D
-        // Emoji
-        $this->assertFalse($meth->invoke($h, "\xf0\x9f\x98\x80")); // U+1F600
+        $h->printChar('A');
+        $h->printChar("\xe4\xb8\xad"); // U+4E2D (CJK, wide — not combining)
+        $this->assertSame('', $h->buffer->cell(0, 0)->combining);
+        $this->assertSame("\xe4\xb8\xad", $h->buffer->cell(0, 1)->grapheme);
     }
 
     // ─── attachCombiningChar ───────────────────────────────────────────────────

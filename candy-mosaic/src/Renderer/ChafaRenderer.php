@@ -60,8 +60,10 @@ final class ChafaRenderer implements Renderer
         );
         if (!is_resource($proc)) {
             // proc_open() may have created pipes before failing — close them
-            // to avoid file descriptor leaks in long-running processes.
-            foreach ($pipes as $pipe) {
+            // to avoid file descriptor leaks in long-running processes. When
+            // the binary is missing entirely $pipes stays null (foreach on
+            // null raises a warning, which failOnWarning turns fatal).
+            foreach ($pipes ?? [] as $pipe) {
                 if (is_resource($pipe)) {
                     fclose($pipe);
                 }

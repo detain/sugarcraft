@@ -13,56 +13,6 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
 use SugarCraft\Core\WorkerPool;
 use SugarCraft\Core\WorkerState;
 
-function worker_task_add(int $a, int $b): int
-{
-    return $a + $b;
-}
-
-function worker_task_return_string(): string
-{
-    return 'hello worker';
-}
-
-function worker_task_throw(): void
-{
-    throw new \RuntimeException('task error in worker');
-}
-
-function worker_task_double(int $x): int
-{
-    return $x * 2;
-}
-
-function worker_task_add_seven_three(): int
-{
-    return 7 + 3;
-}
-
-function worker_task_value_1(): int
-{
-    return 1 * 2;
-}
-function worker_task_value_2(): int
-{
-    return 2 * 2;
-}
-function worker_task_value_3(): int
-{
-    return 3 * 2;
-}
-function worker_task_value_4(): int
-{
-    return 4 * 2;
-}
-function worker_task_value_5(): int
-{
-    return 5 * 2;
-}
-function worker_task_value_6(): int
-{
-    return 6 * 2;
-}
-
 final class WorkerPoolTest extends TestCase
 {
     private StreamSelectLoop $loop;
@@ -92,7 +42,7 @@ final class WorkerPoolTest extends TestCase
     public function testPoolDispatchReturnsPromise(): void
     {
         $pool = new WorkerPool($this->loop, 2);
-        $promise = $pool->dispatch('1 + 1');
+        $promise = $pool->dispatch('pi');
         $this->assertInstanceOf(\React\Promise\PromiseInterface::class, $promise);
         $pool->stop();
     }
@@ -101,18 +51,29 @@ final class WorkerPoolTest extends TestCase
     {
         $pool = new WorkerPool($this->loop, 2);
 
-        $promise = $pool->dispatch('"hello worker"');
+        // String tasks must name a function callable inside the worker
+        // subprocess (the pool refuses to eval arbitrary code, and functions
+        // defined in this test file don't exist in the child).
+        $promise = $pool->dispatch('php_sapi_name');
 
         $resolved = null;
         $promise->then(function (WorkerResultMsg $msg) use (&$resolved): void {
             $resolved = $msg;
             $this->loop->stop();
+        })->catch(function (\Throwable $e): void {
+            $this->loop->stop();
+            $this->fail('dispatch rejected: ' . $e->getMessage());
+        });
+
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('Test timed out waiting for worker result');
         });
 
         $this->spinLoop();
 
         $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
-        $this->assertSame('hello worker', $resolved->result);
+        $this->assertSame('cli', $resolved->result);
         $this->assertNull($resolved->error);
         $pool->stop();
     }
@@ -121,7 +82,9 @@ final class WorkerPoolTest extends TestCase
     {
         $pool = new WorkerPool($this->loop, 2);
 
-        $promise = $pool->dispatch('(function() { throw new RuntimeException("task error in worker"); })()');
+        // An unknown function name makes the worker subprocess throw; the
+        // RuntimeException must round-trip back over the pipe.
+        $promise = $pool->dispatch('sugarcraft_test_no_such_function');
 
         $resolved = null;
         $promise->then(function (WorkerResultMsg $msg) use (&$resolved): void {
@@ -137,7 +100,7 @@ final class WorkerPoolTest extends TestCase
         $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
         $this->assertNull($resolved->result);
         $this->assertInstanceOf(\RuntimeException::class, $resolved->error);
-        $this->assertSame('task error in worker', $resolved->error->getMessage());
+        $this->assertStringContainsString('Unknown worker function', $resolved->error->getMessage());
         $pool->stop();
     }
 
@@ -163,15 +126,15 @@ final class WorkerPoolTest extends TestCase
     {
         $pool = new WorkerPool($this->loop, 2);
 
-        $codes = ['(1) * 2', '(2) * 2', '(3) * 2', '(4) * 2', '(5) * 2', '(6) * 2'];
-
+        // Six jobs against two workers: every result is a worker PID, so the
+        // distinct-PID count proves the concurrency bound.
         $promises = [];
-        foreach ($codes as $code) {
-            $promises[] = $pool->dispatch($code);
+        for ($i = 0; $i < 6; $i++) {
+            $promises[] = $pool->dispatch('getmypid');
         }
 
         $results = [];
-        $expectedCount = count($codes);
+        $expectedCount = count($promises);
         foreach ($promises as $promise) {
             $promise->then(function (WorkerResultMsg $msg) use (&$results, $expectedCount): void {
                 $results[] = $msg->result;
@@ -188,15 +151,18 @@ final class WorkerPoolTest extends TestCase
         $this->spinLoop();
 
         $this->assertCount(6, $results);
-        sort($results);
-        $this->assertSame([2, 4, 6, 8, 10, 12], $results);
+        foreach ($results as $pid) {
+            $this->assertIsInt($pid);
+            $this->assertGreaterThan(0, $pid);
+        }
+        $this->assertLessThanOrEqual(2, count(array_unique($results)), 'no more than 2 worker processes may exist');
         $pool->stop();
     }
 
     public function testWorkerCmdRunReturnsClosure(): void
     {
         $pool = new WorkerPool($this->loop, 2);
-        $cmd = WorkerCmd::run($pool, '1 + 1');
+        $cmd = WorkerCmd::run($pool, 'pi');
         $this->assertInstanceOf(\Closure::class, $cmd);
         $pool->stop();
     }
@@ -204,7 +170,7 @@ final class WorkerPoolTest extends TestCase
     public function testWorkerCmdRunReturnsAsyncCmdWhenExecuted(): void
     {
         $pool = new WorkerPool($this->loop, 2);
-        $cmd = WorkerCmd::run($pool, '1 + 1');
+        $cmd = WorkerCmd::run($pool, 'pi');
         $result = $cmd();
         $this->assertInstanceOf(AsyncCmd::class, $result);
         $pool->stop();
@@ -213,7 +179,7 @@ final class WorkerPoolTest extends TestCase
     public function testWorkerCmdReturnsResultViaMsg(): void
     {
         $pool = new WorkerPool($this->loop, 2);
-        $asyncCmd = WorkerCmd::run($pool, '7 + 3')();
+        $asyncCmd = WorkerCmd::run($pool, 'php_sapi_name')();
 
         $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
 
@@ -231,7 +197,7 @@ final class WorkerPoolTest extends TestCase
         $this->spinLoop();
 
         $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
-        $this->assertSame(10, $resolved->result);
+        $this->assertSame('cli', $resolved->result);
         $pool->stop();
     }
 

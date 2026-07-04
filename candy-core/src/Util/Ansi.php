@@ -678,13 +678,15 @@ final class Ansi
                 }
                 continue;
             }
-            // Not [, not ], not empty — lone ESC (e.g. stray 0x1b).
-            // Only skip the ESC itself; the following byte is processed
-            // normally so we don't accidentally eat valid UTF-8 continuation
-            // bytes that happen to land after an ESC (see issue: bytes like
-            // \x1b followed by a continuation byte 0x80-0xbf were being
-            // skipped as a pair, corrupting multi-byte characters).
-            $i++;
+            // Not [, not ] — if the next byte is an ECMA-48 Fe final
+            // (0x40-0x5f: the C1-equivalent commands, e.g. ESC M
+            // reverse-index, ESC D index, ESC E next-line), the pair is a
+            // two-byte escape: consume both. Anything else (lowercase text
+            // after a stray ESC, control bytes, or a UTF-8 continuation
+            // byte 0x80-0xbf) is treated as a LONE ESC — skip only the ESC
+            // so ordinary following text and multi-byte characters survive.
+            $b = $next === '' ? -1 : ord($next);
+            $i += ($b >= 0x40 && $b <= 0x5f) ? 2 : 1;
             continue;
         }
         return $out;
