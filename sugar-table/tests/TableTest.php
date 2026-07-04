@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Table\Tests;
 
 use SugarCraft\Buffer\Style;
-use SugarCraft\Table\{Column, Row, RowData, StyledCell, Table};
+use SugarCraft\Table\Column;
+use SugarCraft\Table\Row;
+use SugarCraft\Table\RowData;
+use SugarCraft\Table\StyledCell;
+use SugarCraft\Table\Table;
 use PHPUnit\Framework\TestCase;
 
 final class TableTest extends TestCase
@@ -13,9 +17,9 @@ final class TableTest extends TestCase
     private function makeTable(): Table
     {
         return Table::fromColumns([
-            Column::new('id',   'ID',     5),
-            Column::new('name', 'Name',  20),
-            Column::new('city', 'City',  15),
+            Column::new('id', 'ID', 5),
+            Column::new('name', 'Name', 20),
+            Column::new('city', 'City', 15),
         ])->withRows([
             Row::new(RowData::from(['id' => '1', 'name' => 'Alice',   'city' => 'NYC'])),
             Row::new(RowData::from(['id' => '2', 'name' => 'Bob',     'city' => 'LA'])),
@@ -41,7 +45,7 @@ final class TableTest extends TestCase
     {
         $t = $this->makeTable()->SortBy('name', ascending: true);
         $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
-        $this->assertSame('Bob',   $t->pagedRows()[1]->data->get('name'));
+        $this->assertSame('Bob', $t->pagedRows()[1]->data->get('name'));
     }
 
     public function testSortByDescending(): void
@@ -139,7 +143,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(0, 49)
                 )
             )
@@ -155,7 +159,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 30)
                 )
             )
@@ -290,7 +294,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => '1'])),
                 Row::new(RowData::from(['id' => '2'])),
             ])
-            ->withStyleFunc(fn(int $row) => $row === 0 ? '1;31' : '');
+            ->withStyleFunc(fn (int $row) => $row === 0 ? '1;31' : '');
 
         $view = $t->View();
         $this->assertIsString($view);
@@ -305,7 +309,7 @@ final class TableTest extends TestCase
             ->withRows([
                 Row::new(RowData::from(['id' => 'X'])),
             ])
-            ->withStyleFunc(fn(int $row) => $redStyle);
+            ->withStyleFunc(fn (int $row) => $redStyle);
 
         $view = $t->View();
         $this->assertIsString($view);
@@ -413,7 +417,7 @@ final class TableTest extends TestCase
                 Row::new(RowData::from(['id' => 'A'])),
                 Row::new(RowData::from(['id' => 'B'])),
             ])
-            ->withStyleFunc(fn(int $row) => $row === 0 ? $redStyle : Style::new());
+            ->withStyleFunc(fn (int $row) => $row === 0 ? $redStyle : Style::new());
 
         $view = $t->View();
         $this->assertIsString($view);
@@ -425,7 +429,7 @@ final class TableTest extends TestCase
         $styled = Style::new(0x00ff00, 0x0000aa, Style::ATTR_BOLD | Style::ATTR_UNDERLINE);
         $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
-            ->withStyleFunc(fn() => $styled);
+            ->withStyleFunc(fn () => $styled);
 
         $view = $t->View();
         $this->assertIsString($view);
@@ -489,7 +493,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 30)
                 )
             )
@@ -504,7 +508,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 30)
                 )
             )
@@ -681,7 +685,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 30)
                 )
             )
@@ -703,7 +707,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 100)
                 )
             )
@@ -718,7 +722,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 100)
                 )
             )
@@ -734,7 +738,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 100)
                 )
             )
@@ -761,7 +765,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 10)
                 )
             )
@@ -799,7 +803,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 50)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 100)
                 )
             )
@@ -817,7 +821,7 @@ final class TableTest extends TestCase
         $t = Table::fromColumns([Column::new('n', 'N', 30)])
             ->withRows(
                 \array_map(
-                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    fn ($i) => Row::new(RowData::from(['n' => (string) $i])),
                     \range(1, 25)
                 )
             )
@@ -895,5 +899,132 @@ final class TableTest extends TestCase
     {
         $t = $this->makeTable()->Filter('name', 'ali');
         $this->assertSame(1, $t->TotalRows());
+    }
+
+    // -------------------------------------------------------------------------
+    // Navigation boundary short-circuit
+    // -------------------------------------------------------------------------
+
+    public function testSelectNextAtLastRowReturnsSameInstance(): void
+    {
+        $t = $this->makeTable()->SelectNext()->SelectNext(); // on 'Carol' (last)
+        $this->assertSame($t, $t->SelectNext());
+    }
+
+    public function testSelectPreviousAtFirstRowReturnsSameInstance(): void
+    {
+        $t = $this->makeTable(); // selectedIndex 0
+        $this->assertSame($t, $t->SelectPrevious());
+    }
+
+    public function testSelectNextOnEmptyTableReturnsSameInstance(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)]);
+        $this->assertSame($t, $t->SelectNext());
+    }
+
+    public function testSelectNextMidTableReturnsNewInstance(): void
+    {
+        $t = $this->makeTable();
+        $next = $t->SelectNext();
+        $this->assertNotSame($t, $next);
+        $this->assertSame(0, $t->SelectedIndex());
+        $this->assertSame(1, $next->SelectedIndex());
+    }
+
+    public function testSelectPreviousMidTableReturnsNewInstance(): void
+    {
+        $t = $this->makeTable()->SelectNext();
+        $prev = $t->SelectPrevious();
+        $this->assertNotSame($t, $prev);
+        $this->assertSame(0, $prev->SelectedIndex());
+    }
+
+    // -------------------------------------------------------------------------
+    // widthSolveCache LRU bound
+    // -------------------------------------------------------------------------
+
+    /** @return array<int, array<int, int>> */
+    private function widthSolveCacheOf(Table $t): array
+    {
+        $prop = new \ReflectionProperty(Table::class, 'widthSolveCache');
+        return $prop->getValue($t);
+    }
+
+    public function testWidthSolveCacheStaysBounded(): void
+    {
+        $t = $this->makeTable();
+        for ($w = 40; $w < 60; $w++) {
+            $t->computeColumnWidths($w);
+        }
+        $this->assertLessThanOrEqual(8, \count($this->widthSolveCacheOf($t)));
+    }
+
+    public function testWidthSolveCacheEvictsOldestFirst(): void
+    {
+        $t = $this->makeTable();
+        for ($w = 40; $w < 49; $w++) { // 9 distinct widths, cap is 8
+            $t->computeColumnWidths($w);
+        }
+        $cache = $this->widthSolveCacheOf($t);
+        $this->assertArrayNotHasKey(40, $cache); // first-in evicted
+        $this->assertArrayHasKey(48, $cache);
+    }
+
+    public function testWidthSolveCacheHitRefreshesRecency(): void
+    {
+        $t = $this->makeTable();
+        for ($w = 40; $w < 48; $w++) { // fill to cap; 40 is oldest
+            $t->computeColumnWidths($w);
+        }
+        $t->computeColumnWidths(40);   // touch 40 → now most recent
+        $t->computeColumnWidths(100);  // evicts 41, not 40
+        $cache = $this->widthSolveCacheOf($t);
+        $this->assertArrayHasKey(40, $cache);
+        $this->assertArrayNotHasKey(41, $cache);
+    }
+
+    public function testWidthSolveCacheHitReturnsSameWidths(): void
+    {
+        $t = $this->makeTable();
+        $first = $t->computeColumnWidths(42);
+        $this->assertSame($first, $t->computeColumnWidths(42));
+    }
+
+    // -------------------------------------------------------------------------
+    // SelectedRow() convenience accessor
+    // -------------------------------------------------------------------------
+
+    public function testSelectedRowReturnsCurrentRow(): void
+    {
+        $t = $this->makeTable()->SelectNext();
+        $this->assertSame('Bob', $t->SelectedRow()?->data->get('name'));
+        $this->assertSame($t->CurrentRow(), $t->SelectedRow());
+    }
+
+    public function testSelectedRowOnEmptyTableReturnsNull(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)]);
+        $this->assertNull($t->SelectedRow());
+    }
+
+    public function testSelectedRowRespectsFilterAndPaging(): void
+    {
+        $rows = [];
+        foreach (['ant', 'bee', 'cat', 'cow', 'dog', 'doe'] as $i => $name) {
+            $rows[] = Row::new(RowData::from(['id' => (string) $i, 'name' => $name]));
+        }
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 4),
+            Column::new('name', 'Name', 10)->withFilterable(),
+        ])->withRows($rows)->Filter('name', 'o')->withPageSize(2);
+
+        // Filter 'o' keeps cow, dog, doe; page size 2 → page 1 holds only 'doe'
+        $t = $t->SelectPage(1);
+        $this->assertSame('doe', $t->SelectedRow()?->data->get('name'));
+
+        // Selection index past the short page falls off → null, like CurrentRow()
+        // (withSelectedIndex AFTER SelectPage — SelectPage resets the index to 0)
+        $this->assertNull($t->withSelectedIndex(1)->SelectedRow());
     }
 }

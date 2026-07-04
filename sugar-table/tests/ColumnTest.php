@@ -35,6 +35,14 @@ final class ColumnTest extends TestCase
         $this->assertSame(20, $col2->width);
     }
 
+    public function testWithFlexWidthAliasMatchesWithFlexibleWidth(): void
+    {
+        $col = Column::new('name', 'Name', 20);
+        $this->assertEquals($col->withFlexibleWidth(2), $col->withFlexWidth(2));
+        $this->assertSame(2, $col->withFlexWidth(2)->flexibleWidth);
+        $this->assertSame(0, $col->flexibleWidth); // original untouched
+    }
+
     public function testWithMaxWidth(): void
     {
         $col = Column::new('desc', 'Description', 50);
@@ -148,7 +156,7 @@ final class ColumnTest extends TestCase
     public function testRenderCellWithObjectHavingToString(): void
     {
         $col = Column::new('obj', 'Obj', 10);
-        $obj = new class {
+        $obj = new class () {
             public function __toString(): string
             {
                 return 'TestObject';

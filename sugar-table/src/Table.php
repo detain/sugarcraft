@@ -15,8 +15,11 @@ namespace SugarCraft\Table;
  *
  * @see https://github.com/Evertras/bubble-table
  */
-use SugarCraft\Buffer\{Buffer, Cell, Style};
-use SugarCraft\Core\Util\{Ansi, Width};
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Style;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Table\Lang;
 
@@ -93,6 +96,8 @@ final class Table
     private string $zebraStyleOdd  = '';
 
     // Per-cell style callback: (int $row, int $col, string $value): Style|string
+    // $col is the 0-based column INDEX into Columns() — not the column key
+    // string. Hidden columns keep their index (they are skipped, not renumbered).
     /** @var callable|null */
     private $styleFunc = null;
 
@@ -130,8 +135,18 @@ final class Table
     /** Cached result of filteredSortedRows(). Cleared on any filter/sort/row change. @var list<Row>|null */
     private ?array $filteredSortedCache = null;
 
-    /** Cache for computeColumnWidths() results, keyed by tableWidth. @var array<int, array<int, int>> */
+    /**
+     * Cache for computeColumnWidths() results, keyed by tableWidth. Kept as a
+     * small LRU (see WIDTH_SOLVE_CACHE_MAX) so a long-lived table fed many
+     * distinct widths — e.g. continuous terminal resizing — cannot grow it
+     * without bound.
+     *
+     * @var array<int, array<int, int>>
+     */
     private array $widthSolveCache = [];
+
+    /** Max widthSolveCache entries; real UIs bounce between only a few widths. */
+    private const WIDTH_SOLVE_CACHE_MAX = 8;
 
     /** Inner cell padding (characters on each side). Default 0 (flush). */
     private int $cellPadding = 0;
@@ -385,10 +400,14 @@ final class Table
      * - A Style object (new API)
      * - An ANSI SGR string like "1;31" for back-compat
      *
+     * $col is the 0-based column INDEX into Columns(), not the column key
+     * string — match against a key via Columns()[$col]->key. Hidden columns
+     * keep their index; the callback simply never fires for them.
+     *
      * When not set, existing baseStyle/column style/row style/cell style
      * precedence is used as before.
      *
-     * @param callable|null $fn (int $row, int $col, string $value): Style|string
+     * @param callable|null $fn (int $row, int $col, string $value): Style|string — $col is the 0-based column index, not the key
      */
     public function withStyleFunc(?callable $fn): self
     {
@@ -576,7 +595,16 @@ final class Table
     public function SelectNext(): self
     {
         $view = $this->filteredSortedRows();
-        if ($view === []) return $this;
+        if ($view === []) {
+            return $this;
+        }
+
+        // Exactly on the last row is a no-op — return $this like the other
+        // no-op withers. (An out-of-range index still takes the clamp path so
+        // stale selections keep snapping back to the last row.)
+        if ($this->selectedIndex === \count($view) - 1) {
+            return $this;
+        }
 
         $clone = clone $this;
         $clone->selectedIndex = \min(\count($view) - 1, $clone->selectedIndex + 1);
@@ -585,6 +613,12 @@ final class Table
 
     public function SelectPrevious(): self
     {
+        // Already at the top: skip the clone AND the filtered/sorted view —
+        // no state can change, so the expensive computation is pure waste.
+        if ($this->selectedIndex === 0) {
+            return $this;
+        }
+
         $clone = clone $this;
         $clone->selectedIndex = \max(0, $clone->selectedIndex - 1);
         return $clone;
@@ -733,7 +767,10 @@ final class Table
         } else {
             $idx = null;
             foreach ($clone->sortColumns as $i => $s) {
-                if ($s['key'] === $colKey) { $idx = $i; break; }
+                if ($s['key'] === $colKey) {
+                    $idx = $i;
+                    break;
+                }
             }
             if ($idx !== null) {
                 $cur = $clone->sortColumns[$idx];
@@ -897,7 +934,10 @@ final class Table
     // -------------------------------------------------------------------------
 
     /** @return list<Column> */
-    public function Columns(): array { return $this->columns; }
+    public function Columns(): array
+    {
+        return $this->columns;
+    }
 
     /**
      * Return the column with the given key, or null if not found.
@@ -915,7 +955,10 @@ final class Table
     }
 
     /** @return list<Row> */
-    public function Rows(): array { return $this->rows; }
+    public function Rows(): array
+    {
+        return $this->rows;
+    }
 
     /** @return list<Row> */
     public function filteredSortedRows(): array
@@ -941,7 +984,9 @@ final class Table
                         }
                         $val = $row->data->get($key);
                         $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) ($val ?? '');
-                        if (\stripos($str, $text) === false) return false;
+                        if (\stripos($str, $text) === false) {
+                            return false;
+                        }
                     }
                     return true;
                 })
@@ -956,9 +1001,13 @@ final class Table
                 \array_filter($rows, function (Row $row) use ($searchLower, $filterable): bool {
                     foreach ($filterable as $key) {
                         $val = $row->data->get($key);
-                        if ($val === null) continue;
+                        if ($val === null) {
+                            continue;
+                        }
                         $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) $val;
-                        if (\stripos(\strtolower($str), $searchLower) !== false) return true;
+                        if (\stripos(\strtolower($str), $searchLower) !== false) {
+                            return true;
+                        }
                     }
                     return false;
                 })
@@ -1000,7 +1049,9 @@ final class Table
     public function pagedRows(): array
     {
         $rows = $this->filteredSortedRows();
-        if ($this->pageSize <= 0) return $rows;
+        if ($this->pageSize <= 0) {
+            return $rows;
+        }
 
         $offset = $this->page * $this->pageSize;
         return \array_slice($rows, $offset, $this->pageSize);
@@ -1017,6 +1068,16 @@ final class Table
         return $this->CurrentRow()?->data;
     }
 
+    /**
+     * The currently selected Row from the paged view, or null when the page
+     * is empty. Naming alias of CurrentRow() that pairs with SelectedIndex().
+     * Mirrors Evertras/bubble-table.Model.HighlightedRow.
+     */
+    public function SelectedRow(): ?Row
+    {
+        return $this->CurrentRow();
+    }
+
     public function TotalRows(): int
     {
         return \count($this->filteredSortedRows());
@@ -1024,13 +1085,24 @@ final class Table
 
     public function TotalPages(): int
     {
-        if ($this->pageSize <= 0) return 1;
+        if ($this->pageSize <= 0) {
+            return 1;
+        }
         return \max(1, (int) \ceil($this->TotalRows() / $this->pageSize));
     }
 
-    public function SelectedIndex(): int  { return $this->selectedIndex; }
-    public function CurrentPage(): int     { return $this->page; }
-    public function PageSize(): int        { return $this->pageSize; }
+    public function SelectedIndex(): int
+    {
+        return $this->selectedIndex;
+    }
+    public function CurrentPage(): int
+    {
+        return $this->page;
+    }
+    public function PageSize(): int
+    {
+        return $this->pageSize;
+    }
 
     public function PageFooter(): string
     {
@@ -1076,7 +1148,20 @@ final class Table
      */
     public function computeColumnWidths(int $tableWidth): array
     {
-        return $this->widthSolveCache[$tableWidth] ??= $this->doComputeColumnWidths($tableWidth);
+        if (isset($this->widthSolveCache[$tableWidth])) {
+            // LRU touch: re-append so widths in active use never get evicted
+            // (PHP arrays preserve insertion order, so position = recency).
+            $widths = $this->widthSolveCache[$tableWidth];
+            unset($this->widthSolveCache[$tableWidth]);
+            $this->widthSolveCache[$tableWidth] = $widths;
+            return $widths;
+        }
+
+        if (\count($this->widthSolveCache) >= self::WIDTH_SOLVE_CACHE_MAX) {
+            unset($this->widthSolveCache[\array_key_first($this->widthSolveCache)]);
+        }
+
+        return $this->widthSolveCache[$tableWidth] = $this->doComputeColumnWidths($tableWidth);
     }
 
     /**
@@ -1200,7 +1285,9 @@ final class Table
 
     public function View(): string
     {
-        if ($this->columns === []) return '';
+        if ($this->columns === []) {
+            return '';
+        }
 
         $buffer = $this->renderToBuffer();
         return $buffer->toAnsi();
@@ -1522,9 +1609,13 @@ final class Table
         }
         if ($this->zebraEnabled) {
             $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
-            if ($zebra !== '') $rowStyle = $zebra;
+            if ($zebra !== '') {
+                $rowStyle = $zebra;
+            }
         }
-        if ($isSelected) $rowStyle = '7'; // reverse
+        if ($isSelected) {
+            $rowStyle = '7';
+        } // reverse
 
         $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
@@ -1548,9 +1639,15 @@ final class Table
 
             // Determine cell-level style precedence: base < column < row < cell < selection
             $cellStyle = $this->baseStyle;
-            if ($column->style !== '') $cellStyle = $column->style;
-            if ($rowStyle !== '') $cellStyle = $rowStyle;
-            if ($val instanceof StyledCell && $val->style !== '') $cellStyle = $val->style;
+            if ($column->style !== '') {
+                $cellStyle = $column->style;
+            }
+            if ($rowStyle !== '') {
+                $cellStyle = $rowStyle;
+            }
+            if ($val instanceof StyledCell && $val->style !== '') {
+                $cellStyle = $val->style;
+            }
 
             // styleFunc callback
             $cellStr = '';
@@ -1669,9 +1766,13 @@ final class Table
         }
         if ($this->zebraEnabled) {
             $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
-            if ($zebra !== '') $rowStyle = $zebra;
+            if ($zebra !== '') {
+                $rowStyle = $zebra;
+            }
         }
-        if ($isSelected) $rowStyle = '7'; // reverse
+        if ($isSelected) {
+            $rowStyle = '7';
+        } // reverse
 
         $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
@@ -1694,9 +1795,15 @@ final class Table
 
             // Determine cell-level style precedence: base < column < row < cell < selection
             $cellStyle = $this->baseStyle;
-            if ($column->style !== '') $cellStyle = $column->style;
-            if ($rowStyle !== '') $cellStyle = $rowStyle;
-            if ($val instanceof StyledCell && $val->style !== '') $cellStyle = $val->style;
+            if ($column->style !== '') {
+                $cellStyle = $column->style;
+            }
+            if ($rowStyle !== '') {
+                $cellStyle = $rowStyle;
+            }
+            if ($val instanceof StyledCell && $val->style !== '') {
+                $cellStyle = $val->style;
+            }
 
             $cellStr = '';
             if ($val instanceof StyledCell) {
@@ -1764,14 +1871,14 @@ final class Table
                 $buffer = $this->fillCellContent($buffer, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
                 $col += $colWidth;
 
-            // Column separator - only drawn between actual visible columns.
-            // A separator is needed after ci if:
-            // - ci is frozen (always marks boundary even when next is hidden), OR
-            // - ci is visible AND the next column (ci+1) is also visible
-            if ($ci < \count($this->columns) - 1) {
-                $ciFrozen = \in_array($ci, $this->frozenCols, true);
-                $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
-                if ($ciFrozen || $nextVisible) {
+                // Column separator - only drawn between actual visible columns.
+                // A separator is needed after ci if:
+                // - ci is frozen (always marks boundary even when next is hidden), OR
+                // - ci is visible AND the next column (ci+1) is also visible
+                if ($ci < \count($this->columns) - 1) {
+                    $ciFrozen = \in_array($ci, $this->frozenCols, true);
+                    $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
+                    if ($ciFrozen || $nextVisible) {
                         [$buffer, $col] = $this->writeColumnSeparator($buffer, $bufferRow, $col, $style, $sepStyle);
                     }
                 }
@@ -1938,14 +2045,30 @@ final class Table
         }
 
         $attrs = $style->attrs();
-        if ($attrs & Style::ATTR_BOLD)       { $codes[] = '1'; }
-        if ($attrs & Style::ATTR_FAINT)     { $codes[] = '2'; }
-        if ($attrs & Style::ATTR_ITALIC)    { $codes[] = '3'; }
-        if ($attrs & Style::ATTR_UNDERLINE) { $codes[] = '4'; }
-        if ($attrs & Style::ATTR_BLINK)     { $codes[] = '5'; }
-        if ($attrs & Style::ATTR_REVERSE)  { $codes[] = '7'; }
-        if ($attrs & Style::ATTR_STRIKE)   { $codes[] = '9'; }
-        if ($attrs & Style::ATTR_OVERLINE)  { $codes[] = '53'; }
+        if ($attrs & Style::ATTR_BOLD) {
+            $codes[] = '1';
+        }
+        if ($attrs & Style::ATTR_FAINT) {
+            $codes[] = '2';
+        }
+        if ($attrs & Style::ATTR_ITALIC) {
+            $codes[] = '3';
+        }
+        if ($attrs & Style::ATTR_UNDERLINE) {
+            $codes[] = '4';
+        }
+        if ($attrs & Style::ATTR_BLINK) {
+            $codes[] = '5';
+        }
+        if ($attrs & Style::ATTR_REVERSE) {
+            $codes[] = '7';
+        }
+        if ($attrs & Style::ATTR_STRIKE) {
+            $codes[] = '9';
+        }
+        if ($attrs & Style::ATTR_OVERLINE) {
+            $codes[] = '53';
+        }
 
         return \implode(';', $codes);
     }
@@ -2177,20 +2300,38 @@ final class Table
 
     private function isZeroWidth(int $cp): bool
     {
-        if ($cp < 0x20) return true;
-        if ($cp >= 0x7f && $cp < 0xa0) return true;
-        if ($cp === 0x200b || $cp === 0x200c || $cp === 0x200d || $cp === 0xfeff) return true;
-        if ($cp >= 0x0300 && $cp <= 0x036f) return true;
-        if ($cp >= 0x1dc0 && $cp <= 0x1dff) return true;
-        if ($cp >= 0x20d0 && $cp <= 0x20ff) return true;
-        if ($cp >= 0xfe00 && $cp <= 0xfe0f) return true;
-        if ($cp >= 0xfe20 && $cp <= 0xfe2f) return true;
+        if ($cp < 0x20) {
+            return true;
+        }
+        if ($cp >= 0x7f && $cp < 0xa0) {
+            return true;
+        }
+        if ($cp === 0x200b || $cp === 0x200c || $cp === 0x200d || $cp === 0xfeff) {
+            return true;
+        }
+        if ($cp >= 0x0300 && $cp <= 0x036f) {
+            return true;
+        }
+        if ($cp >= 0x1dc0 && $cp <= 0x1dff) {
+            return true;
+        }
+        if ($cp >= 0x20d0 && $cp <= 0x20ff) {
+            return true;
+        }
+        if ($cp >= 0xfe00 && $cp <= 0xfe0f) {
+            return true;
+        }
+        if ($cp >= 0xfe20 && $cp <= 0xfe2f) {
+            return true;
+        }
         return false;
     }
 
     private function isWide(int $cp): bool
     {
-        if ($cp < 0x1100) return false;
+        if ($cp < 0x1100) {
+            return false;
+        }
         return ($cp <= 0x115f)
             || ($cp >= 0x2e80 && $cp <= 0x303e)
             || ($cp >= 0x3041 && $cp <= 0x33ff)
@@ -2294,5 +2435,4 @@ final class Table
 
         return $computedTotal;
     }
-
 }
