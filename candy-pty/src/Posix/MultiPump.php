@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Posix;
 
+use React\EventLoop\LoopInterface;
+use React\Promise\PromiseInterface;
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\PumpOptions;
@@ -110,6 +112,61 @@ final class MultiPump
             $this->tick();
         }
 
+        return $this->exitMap();
+    }
+
+    /**
+     * Non-blocking variant of {@see run()}: drives every registered
+     * session through the React event loop (one {@see ReactPump} per
+     * session, master → stdoutSink, no stdin — same output-only model
+     * as the sync multiplexer) and returns a promise that resolves with
+     * the same session-id → exit-code map once every child has exited /
+     * every master has EOF'd.
+     *
+     * Sessions are marked done as their pumps resolve, so `allDone()` /
+     * `has()` bookkeeping stays consistent with the sync path. Sessions
+     * already done when runAsync() is called are skipped (their exit
+     * codes still appear in the resolved map).
+     *
+     * Implements plan item 8.4 (findings/plan_candy-pty.md).
+     *
+     * @param LoopInterface|null $loop defaults to the global Loop::get()
+     * @return PromiseInterface<array<int, int|null>>
+     */
+    public function runAsync(?LoopInterface $loop = null): PromiseInterface
+    {
+        // $loop stays null unless the caller injected one — ReactPump
+        // resolves Loop::get() lazily in start(), so an all-done/empty
+        // multiplexer never instantiates the global loop.
+        $promises = [];
+        foreach ($this->sessions as $session) {
+            if ($session->isDone()) {
+                continue;
+            }
+            $pump = new ReactPump($loop);
+            $promises[] = $pump
+                ->start(
+                    $session->master,
+                    stdoutStream: $session->stdoutSink,
+                    child: $session->child,
+                    opts: $session->opts,
+                )
+                ->then(static function (int $exit) use ($session): int {
+                    $session->markDone();
+                    return $exit;
+                });
+        }
+
+        if ($promises === []) {
+            return \React\Promise\resolve($this->exitMap());
+        }
+
+        return \React\Promise\all($promises)->then(fn (): array => $this->exitMap());
+    }
+
+    /** @return array<int, int|null> session-id → exit code (null when no child / not captured) */
+    private function exitMap(): array
+    {
         $exits = [];
         foreach ($this->sessions as $id => $session) {
             $exits[$id] = $session->child?->exitCode();

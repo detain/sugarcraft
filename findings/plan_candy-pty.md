@@ -710,9 +710,11 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ---
 
-## Phase 8: Async Pattern Improvements [PENDING]
+## Phase 8: Async Pattern Improvements [✅ DONE 2026-07-04]
 
-### 8.1 PosixPump Uses Blocking stream_select Loop [PENDING] ← CURRENT
+### 8.1 PosixPump Uses Blocking stream_select Loop [✅ DONE 2026-07-04]
+
+> **Done 2026-07-04** — added `src/Posix/ReactPump.php` (house `React*` adapter naming, cf. candy-input `ReactInputDriver`). Registers the PTY master (and optional host stdin) via `Loop::addReadStream()`; `start()` mirrors `PosixPump::run()`'s parameter order and exit-code contract (exit code / 0 no-child / -1 still-running), returns a cancellable promise; `stop()` removes every read/write stream + timer (leak-free, asserted by loop-exit timing in tests). Back-pressure via `addWriteStream` for short writes; onIdle/keepalive/onSigwinch/recorder semantics preserved on a poll tick at the `selectTimeoutUs` cadence. `Loop::get()` resolved lazily in `start()` (ExtUvLoop stale-clock gotcha — see candy-pty CALIBER_LEARNINGS). Blocking `PosixPump` untouched. Tests: `tests/Posix/ReactPumpTest.php` (7).
 
 **What is expected:** Implement a ReactPHP-compatible version using `react/stream` interfaces and `Loop::addReadStream()`. This allows the pump to integrate with ReactPHP's event loop rather than blocking it.
 
@@ -741,7 +743,9 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ---
 
-### 8.3 PosixChild::wait() Blocks the Event Loop [PENDING]
+### 8.3 PosixChild::wait() Blocks the Event Loop [✅ DONE 2026-07-04]
+
+> **Done 2026-07-04** — `ChildPollTrait::waitAsync(?LoopInterface, float $pollIntervalSec = 0.015): PromiseInterface` (so both `Child` and `PosixChild` gain it). Periodic-timer poll of the non-blocking `exited()` probe (FFI `waitpid(WNOHANG)` fast path); SIGCHLD deliberately not used (process-global disposition conflicts with user code / SignalForwarder; ext-pcntl not guaranteed). Already-exited fast path resolves synchronously without instantiating the loop. Cancellation cancels that call's poll timer only and rejects with `\RuntimeException`; concurrent calls each own a timer and all resolve. NOT added to the `Contract\Child` interface — an interface addition breaks external implementers; deferred to a major. Tests: `tests/Posix/ChildWaitAsyncTest.php` (7, PTY-free — plain proc_open children).
 
 **What is expected:** Add an async variant `waitAsync()` that returns a ReactPHP promise, allowing the event loop to continue during subprocess wait.
 
@@ -755,7 +759,9 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ---
 
-### 8.4 MultiPump::run() Blocks with No Async Variant [PENDING]
+### 8.4 MultiPump::run() Blocks with No Async Variant [✅ DONE 2026-07-04]
+
+> **Done 2026-07-04** — `MultiPump::runAsync(?LoopInterface): PromiseInterface` resolving with the same session-id → exit-code map as `run()`. Reuses 8.1 internally: one output-only `ReactPump` per live session (master → stdoutSink, no stdin — same demux model as the sync multiplexer), combined via `React\Promise\all`; sessions `markDone()` as their pumps resolve so `allDone()`/`has()` bookkeeping stays consistent. Empty/all-done multiplexer resolves synchronously with the exit map without touching the loop. `run()` refactored onto a shared private `exitMap()` (behaviour identical). Tests: `tests/Posix/MultiPumpRunAsyncTest.php` (3).
 
 **What is expected:** Add `runAsync()` method or a ReactPHP-compatible variant that returns a promise resolving to the exit code map.
 
