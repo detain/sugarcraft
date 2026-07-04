@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Middleware\Auth;
 
 use SugarCraft\Wish\Context;
-use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
+use SugarCraft\Wish\StreamHelper;
 
 /**
  * X.509 certificate authentication gate.
@@ -43,18 +43,7 @@ final class CertificateAuth implements Middleware
     {
         $this->validate = $validate;
         $this->required = $required;
-        if ($stderr === null) {
-            $stream = fopen('php://stderr', 'w');
-            if ($stream === false) {
-                throw new \RuntimeException(Lang::t('middleware.cannot_open_stderr'));
-            }
-            $this->stderr = $stream;
-            return;
-        }
-        if (!is_resource($stderr)) {
-            throw new \InvalidArgumentException(Lang::t('middleware.stderr_not_resource'));
-        }
-        $this->stderr = $stderr;
+        $this->stderr   = StreamHelper::openOrValidate($stderr);
     }
 
     public function handle(Context $ctx, Session $session, callable $next)
