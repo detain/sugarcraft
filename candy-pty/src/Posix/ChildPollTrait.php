@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Posix;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+
 /**
  * Package-private trait shared by {@see \SugarCraft\Pty\Child} and any other
  * candy-pty handle that owns a `proc_open()` resource and needs to expose the
@@ -184,6 +190,77 @@ trait ChildPollTrait
         // $this->exitCode stays null. Match PHP's convention: -1 means
         // "process is gone but the exit code could not be captured".
         return $this->exitCode ?? -1;
+    }
+
+    /**
+     * Async variant of {@see wait()}: returns a ReactPHP promise that
+     * resolves with the child's exit code without ever blocking the
+     * event loop.
+     *
+     * Implementation is a periodic-timer poll of the non-blocking
+     * {@see exited()} probe (which itself fast-paths through the FFI
+     * `waitpid(WNOHANG)` in {@see tryWaitpid()}). A SIGCHLD handler is
+     * deliberately NOT used: POSIX signal dispositions are process-global,
+     * so installing one would silently conflict with user code and with
+     * candy-pty's own SignalForwarder, and ext-pcntl (plus a loop backend
+     * that tolerates foreign `pcntl_signal` calls) is not guaranteed.
+     * A 15 ms default poll keeps exit-detection latency comparable to the
+     * sync `wait()` fallback loop while costing effectively zero CPU.
+     *
+     * Multiple concurrent waitAsync() calls each get their own timer and
+     * all resolve independently — the exit code is cached on first capture
+     * so later resolutions are pure reads.
+     *
+     * Cancelling the returned promise cancels the poll timer for THAT
+     * call only (other pending waitAsync() promises keep polling) and
+     * rejects with a \RuntimeException. The child itself is not signalled.
+     *
+     * Implements plan item 8.3 (findings/plan_candy-pty.md).
+     *
+     * @param LoopInterface|null $loop            defaults to the global Loop::get()
+     * @param float              $pollIntervalSec exit-probe cadence in seconds
+     * @return PromiseInterface<int> resolves with the exit code ({@see wait()} semantics,
+     *                               including -1 when the code could not be captured)
+     */
+    public function waitAsync(?LoopInterface $loop = null, float $pollIntervalSec = 0.015): PromiseInterface
+    {
+        if ($pollIntervalSec <= 0.0) {
+            throw new \InvalidArgumentException("pollIntervalSec must be > 0; got {$pollIntervalSec}");
+        }
+
+        if ($this->exited()) {
+            return \React\Promise\resolve($this->wait());
+        }
+
+        // Resolve the loop only when a timer is actually needed — the
+        // already-exited fast path must not instantiate the global loop.
+        $loop ??= Loop::get();
+
+        /** @var TimerInterface|null $timer */
+        $timer = null;
+        $deferred = new Deferred(function (callable $resolve, callable $reject) use (&$timer, $loop): void {
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                $timer = null;
+            }
+            $reject(new \RuntimeException('waitAsync() cancelled before the child exited'));
+        });
+
+        $timer = $loop->addPeriodicTimer($pollIntervalSec, function () use (&$timer, $loop, $deferred): void {
+            if (!$this->exited()) {
+                return;
+            }
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                $timer = null;
+            }
+            // exited() === true guarantees wait() returns without blocking:
+            // the exit status is already captured (or the process handle is
+            // gone), so this is reaping + cache-read only.
+            $deferred->resolve($this->wait());
+        });
+
+        return $deferred->promise();
     }
 
     /**

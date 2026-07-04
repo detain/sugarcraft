@@ -208,6 +208,66 @@ See [`examples/multi-pump.php`](examples/multi-pump.php) for the full
 interactive demo — two shells teed to stdout with per-session prefixes,
 quit on Ctrl-C.
 
+## Async (ReactPHP)
+
+Every blocking primitive has an event-loop counterpart, so a ReactPHP
+application can drive PTY sessions without stalling its loop
+(plan items 8.1 / 8.3 / 8.4):
+
+- **`ReactPump`** — the async `PosixPump`. Registers the PTY master
+  (and optional host stdin) with the loop via `addReadStream()`;
+  returns a promise that resolves with the sync pump's exit-code
+  contract (exit code / `0` no-child / `-1` still-running-at-teardown).
+- **`PosixChild::waitAsync()`** — promise-returning `wait()`. Periodic
+  non-blocking `exited()` poll (FFI `waitpid(WNOHANG)` fast path);
+  cancelling the promise cancels its poll timer only.
+- **`MultiPump::runAsync()`** — promise-returning `run()`. One
+  `ReactPump` per session; resolves with the session-id → exit-code map
+  once every child exits / every master EOFs.
+
+```php
+use React\EventLoop\Loop;
+use SugarCraft\Pty\Posix\ReactPump;
+use SugarCraft\Pty\PtySystemFactory;
+use SugarCraft\Pty\PumpOptions;
+
+$pair  = PtySystemFactory::default()->open(80, 24);
+$child = $pair->slave()->spawn(['/usr/bin/top'], ['TERM' => 'xterm-256color'], 80, 24);
+
+$pump = new ReactPump();                     // Loop::get() by default; injectable
+$pump->start(
+    $pair->master(),
+    stdinStream:  STDIN,                     // optional — forwarded to the child
+    stdoutStream: STDOUT,                    // optional — receives child output
+    child: $child,
+    opts:  new PumpOptions(),
+    onData: fn (string $bytes) => null,      // optional tap on every output chunk
+)->then(function (int $exit) use ($pair): void {
+    echo "child exited: {$exit}\n";
+    $pair->master()->close();
+});
+
+// Meanwhile the loop stays free for timers, sockets, other sessions…
+$child->waitAsync()->then(fn (int $code) => error_log("reaped: {$code}"));
+
+Loop::run();
+```
+
+`ReactPump::stop()` detaches every loop registration (read/write
+streams + timers) and resolves the pending promise — nothing leaks
+into the loop. All loop-accepting APIs take an optional
+`LoopInterface` so tests and multi-loop apps can inject their own.
+
+Child-exit detection polls `exited()` on a timer (at the
+`selectTimeoutUs` cadence for the pump, 15 ms default for
+`waitAsync()`) instead of trapping `SIGCHLD`: signal dispositions are
+process-global, so a handler would conflict with user code and with
+`SignalForwarder`, and `ext-pcntl` is not guaranteed to be loaded.
+
+The blocking APIs (`PosixPump::run()`, `Child::wait()`,
+`MultiPump::run()`) are unchanged — the async layer is purely
+additive.
+
 ## Pump callbacks
 
 `PumpOptions` exposes four optional callbacks covering the pump loop
