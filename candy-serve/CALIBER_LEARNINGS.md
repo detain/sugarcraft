@@ -29,10 +29,20 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 Pattern: Use CancellationToken for best-effort I/O cancellation; true preemption requires async rewrite.
 Source: step-35 ai/async-adopters
 
+### 2026-07-04 — Dual-mode transports: sync default, React opt-in
+Pattern: `GitDaemon::serve()` keeps the blocking `socket_select()` loop as the default; `serveAsync(?LoopInterface)` is the opt-in React path (mirrors candy-pty ReactPump / candy-wish dual-mode). Sync clients are ext-sockets `\Socket` objects, async clients are stream resources from `stream_socket_server()`/`stream_socket_accept()` — protocol code stays single-copy by writing through a transport-agnostic `writeRaw()`. Async read callbacks must capture the client STREAM (not the array index): `closeClient()` splices + reindexes `$clients`.
+Anti-pattern: don't `socket_export_stream()` a `\Socket` just to register it with the loop — mixing socket_* reads with a stream wrapper over the same fd risks buffered-data loss; bind a separate stream server for async mode instead.
+
+### 2026-07-04 — Bounded-concurrency LFS batches (honesty note)
+Pattern: `LFSHandler::handleBatchAsync()` schedules per-object work through `Support\PromisePool::map()` capped at `$concurrentTransfers`; `handleBatch()` stays the sequential fallback. Per-object storage I/O (`exists()`/`size()`) is synchronous inside its loop tick — the loop buys bounded SCHEDULING (batch spread across ticks, timers/sockets keep firing), not async file I/O. A promise-returning backend can plug into the same pool later. Per-object exceptions become `error: {code: 500}` entries instead of rejecting the batch; missing objects report 404 byte-identically to the sequential path.
+
+## Implemented (was deferred pre-1.0)
+
+- **6.1** ✅ 2026-07-04 — ReactPHP accept loop for GitDaemon, dual-mode via `serveAsync()` (blocking `socket_select()` loop unchanged as default).
+- **6.2** ✅ 2026-07-04 — Concurrent LFS batch handling via `LFSHandler::handleBatchAsync()` + bounded `PromisePool` (bounded-concurrency beats naive `Promise\all`).
+
 ## Future work (deferred pre-1.0)
 
-- **6.1** ReactPHP-based GitDaemon accept loop (replace blocking `socket_select()` loop).
-- **6.2** Concurrent LFS batch object handling via `Promise\all`.
 - **7.5** Mirror-pull background jobs (honor `jobs.mirror_pull` schedule).
 - **7.6** Stats collection server on `stats.listen_addr`.
 - **7.7** Swap the minimal built-in YAML parser for `symfony/yaml`.

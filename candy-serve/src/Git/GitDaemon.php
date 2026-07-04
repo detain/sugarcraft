@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Serve\Git;
 
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Async\Subscription;
 use SugarCraft\Async\Subscriptions;
 use SugarCraft\Serve\{AccessControl, Config, Repo, User};
@@ -12,6 +17,14 @@ use SugarCraft\Serve\{AccessControl, Config, Repo, User};
  * Real daemon-mode Git daemon that binds to a port and handles
  * multiple concurrent connections using the git-upload-pack
  * and git-receive-pack protocols.
+ *
+ * Dual-mode: {@see serve()} runs the original blocking
+ * `socket_select()` loop (the default); {@see serveAsync()} is the
+ * opt-in ReactPHP path that accepts and reads connections through the
+ * event loop so a host application can multiplex the daemon with
+ * timers, other sockets, and loop work (plan item 6.1,
+ * findings/plan_candy-serve.md). Both modes share the same protocol
+ * code — only the transport/readiness layer differs.
  *
  * Port of charmbracelet/soft-serve GitDaemon.
  *
@@ -44,6 +57,26 @@ final class GitDaemon
 
     /** Subscriptions for graceful shutdown */
     private Subscriptions $subscriptions;
+
+    /** Event loop driving the opt-in async mode (null in sync mode). */
+    private ?LoopInterface $loop = null;
+
+    /**
+     * Listening stream for async mode. Async uses `stream_socket_server`
+     * (not ext-sockets) because React loops multiplex stream resources.
+     *
+     * @var resource|null
+     */
+    private $serverStream = null;
+
+    /** Housekeeping timer (idle timeouts + signal-flag polling) in async mode. */
+    private ?TimerInterface $asyncTimer = null;
+
+    /** Resolves the serveAsync() promise when the daemon stops. */
+    private ?Deferred $asyncDeferred = null;
+
+    /** Whether the async transport is currently registered with a loop. */
+    private bool $asyncActive = false;
 
     public function __construct(Config $config)
     {
@@ -140,11 +173,101 @@ final class GitDaemon
     }
 
     /**
-     * Request graceful shutdown.
+     * Start the daemon in async (event-loop) mode — the opt-in
+     * counterpart to the blocking {@see serve()}. Connections are
+     * accepted via `Loop::addReadStream()` on the listening socket and
+     * each client stream is registered with the loop, so request
+     * handling never blocks the loop waiting for readability. The
+     * per-request protocol work (ref advertisement, pack generation via
+     * `git pack-objects`, `git update-ref`) is the same synchronous code
+     * the blocking mode runs — it executes inside the readiness callback.
+     *
+     * Naming/shape mirrors candy-pty's ReactPump: lazily resolves the
+     * global loop, returns a promise that settles on stop, and funnels
+     * every exit path through one teardown so no read stream or timer
+     * can leak into the loop.
+     *
+     * @param LoopInterface|null $loop    Event loop (defaults to the global loop)
+     * @param string             $pidFile Optional PID file path for process tracking
+     * @return PromiseInterface<int> resolves with exit code 0 on graceful stop;
+     *                               cancelling the promise behaves like shutdown().
+     * @throws \RuntimeException if already running or the socket cannot be bound
+     */
+    public function serveAsync(?LoopInterface $loop = null, string $pidFile = ''): PromiseInterface
+    {
+        if ($this->running) {
+            throw new \RuntimeException('GitDaemon is already running; call shutdown() first.');
+        }
+
+        $this->loop = $loop ?? Loop::get();
+        $this->pidFile = $pidFile;
+        $this->shutdownRequested = false;
+
+        [$host, $port] = $this->listenHostPort();
+        $errno = 0;
+        $errstr = '';
+        $stream = @\stream_socket_server("tcp://{$host}:{$port}", $errno, $errstr);
+        if ($stream === false) {
+            $this->loop = null;
+            throw new \RuntimeException(
+                "Failed to create server socket on {$this->config->gitListenAddr}: {$errstr}"
+            );
+        }
+        \stream_set_blocking($stream, false);
+
+        $this->serverStream = $stream;
+        $this->running = true;
+        $this->asyncActive = true;
+
+        if ($this->pidFile !== '') {
+            $this->writePidFile();
+        }
+
+        $this->registerSignalHandlers();
+
+        $this->loop->addReadStream($stream, fn () => $this->acceptAsyncConnection());
+
+        // Housekeeping at the sync loop's socket_select timeout cadence:
+        // idle-timeout sweep + shutdown-flag poll (signal handlers only
+        // set the flag; the tick turns it into a teardown).
+        $this->asyncTimer = $this->loop->addPeriodicTimer(1.0, fn () => $this->onAsyncTick());
+
+        \fwrite(\STDERR, "Git daemon (async) listening on {$this->listenAddress()}\n");
+
+        $this->asyncDeferred = new Deferred(function (): void {
+            // Promise cancellation == graceful stop, same as shutdown().
+            $this->stopAsync();
+        });
+
+        return $this->asyncDeferred->promise();
+    }
+
+    /**
+     * Request graceful shutdown. In sync mode the main loop observes the
+     * flag on its next select timeout; in async mode teardown is
+     * scheduled on the loop immediately.
      */
     public function shutdown(): void
     {
         $this->shutdownRequested = true;
+
+        if ($this->asyncActive && $this->loop !== null) {
+            $this->loop->futureTick(fn () => $this->stopAsync());
+        }
+    }
+
+    /**
+     * Actual bound address in async mode (useful when the configured
+     * port is 0 = ephemeral). Null when not listening asynchronously.
+     */
+    public function listenAddress(): ?string
+    {
+        if ($this->serverStream === null) {
+            return null;
+        }
+        $name = @\stream_socket_get_name($this->serverStream, false);
+
+        return $name === false ? null : $name;
     }
 
     // -------------------------------------------------------------------------
@@ -202,6 +325,161 @@ final class GitDaemon
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Async (event-loop) mode
+    // -------------------------------------------------------------------------
+
+    /**
+     * Accept a new connection in async mode and register its stream
+     * with the event loop for non-blocking reads.
+     */
+    private function acceptAsyncConnection(): void
+    {
+        $client = @\stream_socket_accept($this->serverStream, 0);
+        if ($client === false) {
+            return;
+        }
+        \stream_set_blocking($client, false);
+
+        $this->clients[] = [
+            'socket' => $client,
+            'connected_at' => \time(),
+            'last_activity' => \time(),
+            'buffer' => '',
+            'handled' => false,
+        ];
+
+        // The callback captures the stream (not the array index) because
+        // closeClient() splices the clients list and reindexes it.
+        $this->loop->addReadStream($client, fn () => $this->onAsyncClientReadable($client));
+
+        if (\count($this->clients) > $this->config->gitMaxConnections) {
+            $this->closeClient(0);
+        }
+    }
+
+    /**
+     * Read available bytes from an async client and dispatch once a
+     * complete request line has been buffered.
+     *
+     * @param resource $stream
+     */
+    private function onAsyncClientReadable($stream): void
+    {
+        $idx = $this->clientIndex($stream);
+        if ($idx === null) {
+            // Client already closed; drop the stale registration.
+            $this->loop->removeReadStream($stream);
+
+            return;
+        }
+
+        $data = @\fread($stream, 65536);
+        if ($data === false || ($data === '' && \feof($stream))) {
+            $this->closeClient($idx);
+
+            return;
+        }
+        if ($data === '') {
+            return;
+        }
+
+        $client = &$this->clients[$idx];
+        $client['buffer'] .= $data;
+        $client['last_activity'] = \time();
+        unset($client);
+
+        if (!$this->clients[$idx]['handled']) {
+            $this->dispatchClientRequest($idx);
+        }
+    }
+
+    /**
+     * Async housekeeping tick: turn a signal-set shutdown flag into a
+     * teardown and sweep idle connections (the async analogue of the
+     * sync loop's checkConnectionTimeouts()).
+     */
+    private function onAsyncTick(): void
+    {
+        if ($this->shutdownRequested) {
+            $this->stopAsync();
+
+            return;
+        }
+
+        $idleTimeout = $this->config->gitIdleTimeout;
+        if ($idleTimeout <= 0) {
+            return;
+        }
+
+        $now = \time();
+        for ($idx = \count($this->clients) - 1; $idx >= 0; $idx--) {
+            if (($now - $this->clients[$idx]['last_activity']) > $idleTimeout) {
+                $this->closeClient($idx);
+            }
+        }
+    }
+
+    /**
+     * Tear down the async transport: deregister every loop resource
+     * (server read stream, per-client read streams, housekeeping timer),
+     * unsubscribe graceful-shutdown subscriptions, and resolve the
+     * serveAsync() promise. Idempotent — all async exit paths funnel
+     * here so a stopped daemon can never leak a stream or timer.
+     */
+    private function stopAsync(): void
+    {
+        if (!$this->asyncActive) {
+            return;
+        }
+        $this->asyncActive = false;
+        $this->running = false;
+
+        if ($this->asyncTimer !== null) {
+            $this->loop->cancelTimer($this->asyncTimer);
+            $this->asyncTimer = null;
+        }
+
+        // Newest-first so array_splice() reindexing cannot skip entries.
+        for ($idx = \count($this->clients) - 1; $idx >= 0; $idx--) {
+            $this->closeClient($idx);
+        }
+
+        if ($this->serverStream !== null) {
+            $this->loop->removeReadStream($this->serverStream);
+            @\fclose($this->serverStream);
+            $this->serverStream = null;
+        }
+
+        // Graceful shutdown of background tasks — same Subscriptions
+        // mechanism the sync cleanup() uses.
+        $this->subscriptions->unsubscribe();
+
+        $this->removePidFile();
+
+        \fwrite(\STDERR, "Git daemon stopped\n");
+
+        $deferred = $this->asyncDeferred;
+        $this->asyncDeferred = null;
+        $deferred?->resolve(0);
+    }
+
+    /**
+     * Find the current index of a client by its stream/socket identity.
+     *
+     * @param resource|\Socket $socket
+     */
+    private function clientIndex($socket): ?int
+    {
+        foreach ($this->clients as $idx => $client) {
+            if ($client['socket'] === $socket) {
+                return $idx;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Check for idle timeouts and close stale connections.
      */
@@ -246,6 +524,20 @@ final class GitDaemon
 
         $client['buffer'] .= $data;
         $client['last_activity'] = \time();
+        unset($client);
+
+        $this->dispatchClientRequest($idx);
+    }
+
+    /**
+     * Dispatch a buffered client request once the request line is
+     * complete. Shared by the sync (socket_select) and async (event
+     * loop) transports — this is the single copy of the protocol
+     * front-end.
+     */
+    private function dispatchClientRequest(int $idx): void
+    {
+        $client = &$this->clients[$idx];
 
         // Check if we have a complete request
         // Git daemon protocol: first line is "git-upload-pack /repo\n" or "git-receive-pack /repo\n"
@@ -439,7 +731,7 @@ final class GitDaemon
         while (!\feof($pipes[1])) {
             $chunk = \fread($pipes[1], 65536);
             if ($chunk === false) break;
-            @\socket_write($socket, $chunk);
+            $this->writeRaw($socket, $chunk);
         }
 
         \fclose($pipes[1]);
@@ -558,28 +850,54 @@ final class GitDaemon
 
     /**
      * Write a pkt-line to socket.
+     *
+     * @param \Socket|resource $socket
      */
     private function writePacket($socket, string $data): void
     {
         if ($data === '') {
-            @\socket_write($socket, \pack('N', 0));
+            $this->writeRaw($socket, \pack('N', 0));
             return;
         }
 
         $len = \strlen($data) + 4;
         $packet = \pack('N', $len) . $data . "\n";
-        @\socket_write($socket, $packet);
+        $this->writeRaw($socket, $packet);
     }
 
     /**
-     * Close a client connection.
+     * Transport-agnostic raw write: sync clients are ext-sockets
+     * `\Socket` objects, async clients are stream resources.
+     *
+     * @param \Socket|resource $socket
+     */
+    private function writeRaw($socket, string $bytes): void
+    {
+        if ($socket instanceof \Socket) {
+            @\socket_write($socket, $bytes);
+        } else {
+            @\fwrite($socket, $bytes);
+        }
+    }
+
+    /**
+     * Close a client connection (either transport). Async clients also
+     * get their read stream deregistered from the loop.
      */
     private function closeClient(int $idx): void
     {
-        if (isset($this->clients[$idx])) {
-            @\socket_close($this->clients[$idx]['socket']);
-            \array_splice($this->clients, $idx, 1);
+        if (!isset($this->clients[$idx])) {
+            return;
         }
+
+        $socket = $this->clients[$idx]['socket'];
+        if ($socket instanceof \Socket) {
+            @\socket_close($socket);
+        } else {
+            $this->loop?->removeReadStream($socket);
+            @\fclose($socket);
+        }
+        \array_splice($this->clients, $idx, 1);
     }
 
     // -------------------------------------------------------------------------
@@ -601,10 +919,7 @@ final class GitDaemon
         // Allow port reuse
         \socket_set_option($socket, \SOL_SOCKET, \SO_REUSEADDR, 1);
 
-        $bindAddr = $this->config->gitListenAddr;
-        $parts = \explode(':', $bindAddr);
-        $host = $parts[0] ?: '0.0.0.0';
-        $port = isset($parts[1]) ? (int) $parts[1] : 9418;
+        [$host, $port] = $this->listenHostPort();
 
         if (!@\socket_bind($socket, $host, $port)) {
             \socket_close($socket);
@@ -620,6 +935,20 @@ final class GitDaemon
         \socket_set_option($socket, \SOL_SOCKET, \SO_RCVTIMEO, ['sec' => 1, 'usec' => 0]);
 
         return $socket;
+    }
+
+    /**
+     * Parse `git.listen_addr` (":9418" / "127.0.0.1:9418") into host + port.
+     *
+     * @return array{string, int}
+     */
+    private function listenHostPort(): array
+    {
+        $parts = \explode(':', $this->config->gitListenAddr);
+        $host = $parts[0] ?: '0.0.0.0';
+        $port = isset($parts[1]) ? (int) $parts[1] : 9418;
+
+        return [$host, $port];
     }
 
     /**

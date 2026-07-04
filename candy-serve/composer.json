@@ -27,6 +27,8 @@
         "php": "^8.3",
         "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-core": "dev-master",
+        "react/event-loop": "^1.6",
+        "react/promise": "^3.3",
         "ext-json": "*",
         "ext-openssl": "*",
         "ext-ssh2": "*"
