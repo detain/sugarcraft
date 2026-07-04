@@ -10,6 +10,7 @@ use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\FfmpegDecoder;
 use SugarCraft\Reel\Decode\GifDecoder;
 use SugarCraft\Reel\Source\Probe;
+use SugarCraft\Reel\Tests\Concerns\HidesPathBinaries;
 
 /**
  * Unit tests for DecoderFactory.
@@ -18,6 +19,8 @@ use SugarCraft\Reel\Source\Probe;
  */
 final class DecoderFactoryTest extends TestCase
 {
+    use HidesPathBinaries;
+
     // -------------------------------------------------------------------------
     // Extension-based decoder selection
     // -------------------------------------------------------------------------
@@ -145,10 +148,6 @@ final class DecoderFactoryTest extends TestCase
      */
     public function testCreateFallsBackToGifForUnknownExtension(): void
     {
-        if (Probe::hasFFmpeg()) {
-            $this->markTestSkipped('ffmpeg is present; this tests the no-ffmpeg fallback path');
-        }
-
         // Create a temp file with unknown extension but valid GIF content
         // so GifDecoder can actually open it after factory falls back.
         $tempFile = sys_get_temp_dir() . '/decoder-factory-test-' . uniqid('', true) . '.xyz';
@@ -159,8 +158,10 @@ final class DecoderFactoryTest extends TestCase
         imagedestroy($img);
 
         try {
-            // With ffmpeg absent, factory should fall back to GifDecoder
-            $decoder = DecoderFactory::create($tempFile, 1, 1, 10.0);
+            // With ffmpeg hidden from PATH, factory should fall back to GifDecoder
+            $decoder = $this->withoutPathBinaries(
+                static fn (): Decoder => DecoderFactory::create($tempFile, 1, 1, 10.0),
+            );
 
             $this->assertInstanceOf(GifDecoder::class, $decoder);
             $decoder->close();
@@ -173,8 +174,6 @@ final class DecoderFactoryTest extends TestCase
 
     /**
      * @testdox create() falls back to GifDecoder when ffmpeg is absent (even for .mp4)
-     *
-     * This uses FakeProbe from ProbeTest to simulate the binary-absent environment.
      */
     public function testCreateFallsBackToGifWhenFfmpegAbsent(): void
     {
@@ -187,13 +186,11 @@ final class DecoderFactoryTest extends TestCase
         imagedestroy($img);
 
         try {
-            // Probe::hasFFmpeg() returns false (no ffmpeg in CI)
-            // Factory should fall back to GifDecoder even for .mp4 extension
-            if (Probe::hasFFmpeg()) {
-                $this->markTestSkipped('ffmpeg is present; this tests the no-ffmpeg fallback path');
-            }
-
-            $decoder = DecoderFactory::create($tempFile, 1, 1, 10.0);
+            // With ffmpeg hidden from PATH, the factory must fall back to
+            // GifDecoder even for a .mp4 extension.
+            $decoder = $this->withoutPathBinaries(
+                static fn (): Decoder => DecoderFactory::create($tempFile, 1, 1, 10.0),
+            );
 
             $this->assertInstanceOf(GifDecoder::class, $decoder);
             $decoder->close();

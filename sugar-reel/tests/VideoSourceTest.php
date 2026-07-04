@@ -6,6 +6,7 @@ namespace SugarCraft\Reel\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Reel\Source\VideoSource;
+use SugarCraft\Reel\Tests\Concerns\HidesPathBinaries;
 
 /**
  * Unit tests for VideoSource value object.
@@ -16,6 +17,8 @@ use SugarCraft\Reel\Source\VideoSource;
  */
 final class VideoSourceTest extends TestCase
 {
+    use HidesPathBinaries;
+
     // -------------------------------------------------------------------------
     // fromFfprobeJson — positive cases
     // -------------------------------------------------------------------------
@@ -138,13 +141,11 @@ final class VideoSourceTest extends TestCase
      */
     public function testProbeReturnsDefaultOnMissingBinary(): void
     {
-        // Skip if ffprobe happens to be present — this test targets the absent path.
-        // Use shell_exec directly since we don't import Probe in this file.
-        if (@shell_exec('command -v ffprobe 2>/dev/null') !== null) {
-            $this->markTestSkipped('ffprobe is present on this host; cannot test missing-binary path');
-        }
-
-        $source = VideoSource::probe('/nonexistent.mp4');
+        // Hide ffprobe from PATH so the missing-binary default path runs
+        // even on hosts where the toolchain is installed.
+        $source = $this->withoutPathBinaries(
+            static fn (): VideoSource => VideoSource::probe('/nonexistent.mp4'),
+        );
 
         $this->assertSame('/nonexistent.mp4', $source->path);
         $this->assertSame(0, $source->width);

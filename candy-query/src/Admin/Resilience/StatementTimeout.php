@@ -19,10 +19,20 @@ final class StatementTimeout
     private bool $timeoutOccurred = false;
     private bool $pcntlAvailable;
 
+    /**
+     * @param int $timeoutSeconds Wall-clock budget per execute() call
+     * @param bool|null $pcntlAvailable Pass false to force the degraded
+     *                                  no-timeout path (null = auto-detect);
+     *                                  lets tests exercise graceful degradation
+     *                                  on hosts where pcntl is loaded. True
+     *                                  cannot force-enable on a pcntl-less host.
+     */
     public function __construct(
         private readonly int $timeoutSeconds = 30,
+        ?bool $pcntlAvailable = null,
     ) {
-        $this->pcntlAvailable = function_exists('pcntl_alarm')
+        $this->pcntlAvailable = ($pcntlAvailable ?? true)
+            && function_exists('pcntl_alarm')
             && function_exists('pcntl_signal')
             && function_exists('pcntl_async_signals');
 

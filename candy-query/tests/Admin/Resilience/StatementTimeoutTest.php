@@ -15,15 +15,13 @@ final class StatementTimeoutTest extends TestCase
 {
     public function testExecuteWithoutPcntlDegradesGracefully(): void
     {
-        // If pcntl is not available, execute should just run normally
-        if (function_exists('pcntl_alarm')) {
-            $this->markTestSkipped('pcntl_alarm is available, cannot test graceful degradation');
-        }
-
+        // Without pcntl, execute should just run normally (no alarm, no
+        // timeout). Forced via the constructor override so this path is
+        // exercised even on hosts where pcntl is loaded.
         $mockStmt = $this->createMock(\PDOStatement::class);
         $mockStmt->method('execute')->willReturn(true);
 
-        $timeout = new StatementTimeout(timeoutSeconds: 1);
+        $timeout = new StatementTimeout(timeoutSeconds: 1, pcntlAvailable: false);
         $result = $timeout->execute($mockStmt, []);
 
         $this->assertTrue($result);
