@@ -190,10 +190,12 @@ final class Game implements Model
      * Dispatch a mouse message into a board action (reveal / flag / chord).
      *
      * MouseMsg coordinates are 1-based absolute terminal positions.
-     * The interior scanner starts after the rounded border (1 col/row) and
-     * the padding(0,1) layer (1 extra col on each side), so:
-     *   interior_col = msg.x - 3  (1 border + 1 padding = 2, plus 1 for 1-based)
-     *   interior_row = msg.y - 2  (1 border, plus 1 for 1-based)
+     * The interior starts after the rounded border (1 col/row) and the
+     * padding(0,1) layer (1 extra col each side), so the first cell glyph
+     * sits at terminal (x=3, y=2). Scanner zones are ALSO 1-based (the
+     * first cell resolves at scanner (col=1, row=1)), hence:
+     *   scanner_col = msg.x - 2   (x=3 → col 1)
+     *   scanner_row = msg.y - 1   (y=2 → row 1)
      *
      * Ignores clicks outside the board and does nothing after game ends.
      */
@@ -206,9 +208,9 @@ final class Game implements Model
         if ($this->board->exploded || $this->board->isWon()) {
             return $this;
         }
-        // Convert absolute terminal coords → interior-relative cell coords.
-        $col = $msg->x - 3;
-        $row = $msg->y - 2;
+        // Convert absolute terminal coords → 1-based scanner coords.
+        $col = $msg->x - 2;
+        $row = $msg->y - 1;
         $cell = Renderer::resolveClick($this, $col, $row);
         if ($cell === null) {
             return $this;

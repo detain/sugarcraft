@@ -27,8 +27,28 @@ final class SolverFactoryTest extends TestCase
     public function testEnvCassowaryReturnsCassowarySolver(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
-        $solver = SolverFactory::default();
+
+        // The factory emits a one-time E_USER_WARNING for the cassowary
+        // opt-in. Capture it (so PHPUnit's failOnWarning doesn't fail the
+        // suite) and assert it actually fired. The once-per-process flag is
+        // reset first so this test is deterministic regardless of ordering.
+        $flag = new \ReflectionProperty(SolverFactory::class, 'cassowaryWarningEmitted');
+        $flag->setValue(null, false);
+
+        $warning = null;
+        set_error_handler(static function (int $errno, string $errstr) use (&$warning): bool {
+            $warning = $errstr;
+            return true;
+        }, E_USER_WARNING);
+        try {
+            $solver = SolverFactory::default();
+        } finally {
+            restore_error_handler();
+        }
+
         $this->assertInstanceOf(CassowarySolver::class, $solver);
+        $this->assertIsString($warning);
+        $this->assertStringContainsString('cassowary', strtolower($warning));
     }
 
     public function testEnvGreedyReturnsGreedySolver(): void

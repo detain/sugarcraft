@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "de8d9434ffcfa53f92ad5ba09e9d2798",
+    "content-hash": "20102283bc889f2a6eec957c99ece49a",
     "packages": [
         {
             "name": "react/event-loop",
@@ -154,16 +154,10 @@
         {
             "name": "sugarcraft/candy-ansi",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-ansi.git",
-                "reference": "d44eb9444acd73436783e78b6a7ca502b64d5aca"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-ansi/zipball/d44eb9444acd73436783e78b6a7ca502b64d5aca",
-                "reference": "d44eb9444acd73436783e78b6a7ca502b64d5aca",
-                "shasum": ""
+                "type": "path",
+                "url": "../candy-ansi",
+                "reference": "a6279580eb9abdfecfe3c64c629ee37ec16a3f98"
             },
             "require": {
                 "php": "^8.3"
@@ -171,14 +165,17 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Ansi\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Ansi\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -202,11 +199,14 @@
                 "vt500"
             ],
             "support": {
-                "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md",
                 "issues": "https://github.com/sugarcraft/candy-ansi/issues",
-                "source": "https://github.com/sugarcraft/candy-ansi"
+                "source": "https://github.com/sugarcraft/candy-ansi",
+                "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md"
             },
-            "time": "2026-05-31T00:53:12+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-core",
@@ -282,31 +282,29 @@
         {
             "name": "sugarcraft/candy-input",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-input.git",
-                "reference": "d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0",
-                "reference": "d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0",
-                "shasum": ""
+                "type": "path",
+                "url": "../candy-input",
+                "reference": "b1647ee3fef0810972e985fd65059f32418a2300"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Input\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Input\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -331,50 +329,51 @@
                 "tui"
             ],
             "support": {
-                "docs": "https://sugarcraft.github.io/lib/candy-input.html",
                 "issues": "https://github.com/sugarcraft/candy-input/issues",
-                "source": "https://github.com/sugarcraft/candy-input"
+                "source": "https://github.com/sugarcraft/candy-input",
+                "docs": "https://sugarcraft.github.io/lib/candy-input.html"
             },
-            "time": "2026-06-02T17:46:00+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-pty",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/27eb7e3e157b618c107e2bb36ff873467866ce4d",
-                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d",
-                "shasum": ""
+                "type": "path",
+                "url": "../candy-pty",
+                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
             },
             "require": {
                 "ext-ffi": "*",
                 "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-input": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "react/event-loop": "^1.6",
                 "sugarcraft/candy-vcr": "dev-master",
                 "sugarcraft/candy-vt": "dev-master"
             },
             "suggest": {
                 "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Pty\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -400,11 +399,14 @@
                 "xpty"
             ],
             "support": {
-                "docs": "https://sugarcraft.github.io/lib/candy-pty.html",
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
-                "source": "https://github.com/sugarcraft/candy-pty"
+                "source": "https://github.com/sugarcraft/candy-pty",
+                "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
             },
-            "time": "2026-06-01T13:14:26+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         }
     ],
     "packages-dev": [

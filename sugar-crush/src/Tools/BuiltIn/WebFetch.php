@@ -24,6 +24,7 @@ final readonly class WebFetch implements Tool
         '172.16.0.0/12',
         '192.168.0.0/16',
         '169.254.0.0/16',
+        '::1/128',
         'fc00::/7',
         'fe80::/10',
     ];
@@ -86,8 +87,7 @@ final readonly class WebFetch implements Tool
             );
         }
 
-        $ip = gethostbyname($host);
-        if ($ip !== $host && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+        if ($this->targetsBlockedAddress($host)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
                 content: 'Error: fetching from private/link-local addresses is not allowed',
@@ -151,8 +151,7 @@ final readonly class WebFetch implements Tool
                             isError: true,
                         );
                     }
-                    $newIp = gethostbyname($newHost);
-                    if ($newIp !== $newHost && filter_var($newIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                    if ($this->targetsBlockedAddress($newHost)) {
                         return new ToolResult(
                             toolCallId: $args['id'] ?? '',
                             content: 'Error: redirect to private/link-local address is not allowed',
@@ -173,6 +172,64 @@ final readonly class WebFetch implements Tool
             content: $content,
             isError: false,
         );
+    }
+
+    /**
+     * True when the host (literal IP or DNS name) resolves into a blocked
+     * private/link-local/loopback range.
+     *
+     * The pre-fix check only validated when `gethostbyname()` CHANGED the
+     * string, so literal-IP URLs (e.g. the cloud metadata endpoint
+     * `http://169.254.169.254/`) bypassed validation entirely — locally the
+     * connection just fails, but on cloud CI runners the metadata service
+     * answers and the fetch "succeeded".
+     */
+    private function targetsBlockedAddress(string $host): bool
+    {
+        // Bracketed IPv6 literal hosts: parse_url keeps the brackets.
+        $candidate = strtolower(trim($host, '[]'));
+
+        $ip = filter_var($candidate, FILTER_VALIDATE_IP) !== false
+            ? $candidate
+            : gethostbyname($candidate);
+
+        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            // Unresolvable hostname — let the fetch fail on its own.
+            return false;
+        }
+
+        foreach (self::BLOCKED_IP_RANGES as $cidr) {
+            if (self::ipInCidr($ip, $cidr)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function ipInCidr(string $ip, string $cidr): bool
+    {
+        [$subnet, $bits] = explode('/', $cidr, 2);
+        $ipBin = @inet_pton($ip);
+        $subnetBin = @inet_pton($subnet);
+        if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
+            return false; // address-family mismatch (v4 vs v6)
+        }
+
+        $bits = (int) $bits;
+        $fullBytes = intdiv($bits, 8);
+        $remainder = $bits % 8;
+
+        if ($fullBytes > 0 && substr($ipBin, 0, $fullBytes) !== substr($subnetBin, 0, $fullBytes)) {
+            return false;
+        }
+        if ($remainder === 0) {
+            return true;
+        }
+
+        $mask = ~(0xFF >> $remainder) & 0xFF;
+
+        return ((ord($ipBin[$fullBytes]) ^ ord($subnetBin[$fullBytes])) & $mask) === 0;
     }
 
     private function resolveRedirectUrl(string $originalUrl, array $headers): ?string

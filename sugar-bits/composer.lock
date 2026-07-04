@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a319e409eac5bb592b40149787710e24",
+    "content-hash": "2c1154381b9ebce75aedf9a66f68b09f",
     "packages": [
         {
             "name": "evenement/evenement",
@@ -414,7 +414,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-async",
-                "reference": "d59d32a5c563858d6b63684e2c5ea1f3c2235755"
+                "reference": "733cbca976b48de553dbdd48e93d5bff738d6571"
             },
             "require": {
                 "php": "^8.3",
@@ -598,7 +598,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-forms",
-                "reference": "67f038ee0957e9e05587674e99e90be3b8e67b9a"
+                "reference": "f5a3f4d597827d48aa9c6d61c9d1203b03523f50"
             },
             "require": {
                 "php": "^8.3",
@@ -715,7 +715,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "8a55425345b9474869314fcd24f1ad22f8b31aea"
+                "reference": "b1647ee3fef0810972e985fd65059f32418a2300"
             },
             "require": {
                 "php": "^8.3",
@@ -829,7 +829,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-mouse",
-                "reference": "c401e7e9cebed9e3177cc504c79576bea39789dd"
+                "reference": "c1cbe36293b71114bb8560d1ac60040afbc069a9"
             },
             "require": {
                 "php": "^8.3",
@@ -882,16 +882,10 @@
         {
             "name": "sugarcraft/candy-palette",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-palette.git",
-                "reference": "23f3341ff58acdfb17b1ed8e43b6523101c4c645"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-palette/zipball/23f3341ff58acdfb17b1ed8e43b6523101c4c645",
-                "reference": "23f3341ff58acdfb17b1ed8e43b6523101c4c645",
-                "shasum": ""
+                "type": "path",
+                "url": "../candy-palette",
+                "reference": "c616ce65cdccba485e93beb78f059cab622328d4"
             },
             "require": {
                 "php": "^8.3",
@@ -900,16 +894,21 @@
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
                 "phpunit/phpunit": "^10.5"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Palette\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Palette\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -935,46 +934,47 @@
                 "issues": "https://github.com/sugarcraft/candy-palette/issues",
                 "source": "https://github.com/sugarcraft/candy-palette"
             },
-            "time": "2026-07-01T13:39:36+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-pty",
             "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "e96805de6b914421a697d3cfe03d5f96c1fa3cb0"
-            },
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/e96805de6b914421a697d3cfe03d5f96c1fa3cb0",
-                "reference": "e96805de6b914421a697d3cfe03d5f96c1fa3cb0",
-                "shasum": ""
+                "type": "path",
+                "url": "../candy-pty",
+                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
             },
             "require": {
                 "ext-ffi": "*",
                 "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-input": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "react/event-loop": "^1.6",
                 "sugarcraft/candy-vcr": "dev-master",
                 "sugarcraft/candy-vt": "dev-master"
             },
             "suggest": {
                 "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Pty\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\Tests\\": "tests/"
+                }
+            },
             "license": [
                 "MIT"
             ],
@@ -1000,11 +1000,14 @@
                 "xpty"
             ],
             "support": {
-                "docs": "https://sugarcraft.github.io/lib/candy-pty.html",
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
-                "source": "https://github.com/sugarcraft/candy-pty"
+                "source": "https://github.com/sugarcraft/candy-pty",
+                "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
             },
-            "time": "2026-07-04T20:26:03+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-sprinkles",
@@ -1012,7 +1015,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-sprinkles",
-                "reference": "3e1418d7c50824d30bf3eec42a17c18b8043074d"
+                "reference": "a90aa45201d382535e3a246e2366b5f6490aa685"
             },
             "require": {
                 "php": "^8.3",
@@ -1075,7 +1078,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-zone",
-                "reference": "785928d57a2308a8e79ff883132ff719ec5afd38"
+                "reference": "36079e85311edf21bb0b26e803cf89780e87a5b3"
             },
             "require": {
                 "php": "^8.3",
@@ -1134,7 +1137,7 @@
             "dist": {
                 "type": "path",
                 "url": "../honey-bounce",
-                "reference": "78266d52a4c777e2306d6f15f820a861c8360440"
+                "reference": "dffd378129f02179e22d76a0bfab7e410d79b47d"
             },
             "require": {
                 "php": "^8.3",
@@ -2815,7 +2818,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-testing",
-                "reference": "6beb6d9938f3d9841c9415be7ab33c8f8c59342c"
+                "reference": "f8fc95d3723ed891cc62546abfdc25c33a0f9121"
             },
             "require": {
                 "php": "^8.3",

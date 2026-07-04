@@ -42,8 +42,7 @@ final class ProfileWriter
     /**
      * Create a new ProfileWriter wrapping $stream.
      *
-     * @param resource      $stream  The output stream to wrap (e.g. STDOUT, STDERR)
-     * @param array<string,string|null> $env     Environment map; defaults to $_ENV
+     * @param resource $stream The output stream to wrap (e.g. STDOUT, STDERR)
      */
     public function __construct($stream, Profile $profile)
     {
@@ -74,7 +73,7 @@ final class ProfileWriter
     /**
      * Manually change the target profile (e.g. force ASCII mode).
      *
-     * @return $this
+     * @return self A clone targeting $profile; the original is unchanged.
      */
     public function withProfile(Profile $profile): self
     {

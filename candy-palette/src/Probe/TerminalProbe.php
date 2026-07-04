@@ -78,7 +78,7 @@ class TerminalProbe
         if (!$interactive) {
             $this->interactive = false;
         } else {
-            $this->interactive = $interactive && $this->isInteractive();
+            $this->interactive = $this->isInteractive();
         }
 
         $caps = $this->checkEnvVars();

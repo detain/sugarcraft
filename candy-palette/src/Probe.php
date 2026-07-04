@@ -104,58 +104,6 @@ final class Probe
         return self::getEnv('TERM');
     }
 
-    private static function clicolor(): ?string
-    {
-        return self::getEnv('CLICOLOR');
-    }
-
-    private static function colorterm(): ?string
-    {
-        return self::getEnv('COLORTERM');
-    }
-
-    private static function wtSession(): ?string
-    {
-        return self::getEnv('WT_SESSION');
-    }
-
-    private static function googleCloudShell(): ?string
-    {
-        return self::getEnv('GOOGLE_CLOUD_SHELL');
-    }
-
-    private static function tmux(): ?string
-    {
-        return self::getEnv('TMUX');
-    }
-
-    private static function sty(): ?string
-    {
-        return self::getEnv('STY');
-    }
-
-    private static function termIsXterm(string $term): bool
-    {
-        return str_starts_with($term, 'xterm');
-    }
-
-    private static function termIsScreen(string $term): bool
-    {
-        return str_starts_with($term, 'screen');
-    }
-
-    private static function termIsTmux(string $term): bool
-    {
-        return str_starts_with($term, 'tmux');
-    }
-
-    private static function termIs256Color(string $term): bool
-    {
-        return str_contains($term, '-256color')
-            || $term === 'xterm-kitty'
-            || $term === 'xterm-ghostty';
-    }
-
     /**
      * Optional Phase 2: parse infocmp for Tc/RGB capabilities; upgrade Ansi → TrueColor.
      */

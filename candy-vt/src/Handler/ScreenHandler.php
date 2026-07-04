@@ -556,18 +556,6 @@ final class ScreenHandler implements Handler
     }
 
     /**
-     * Return true if $rune is a Unicode combining character (U+0300–U+036F
-     * combining diacritical marks).
-     *
-     * Mirrors charmbracelet/x/vt.isCombining.
-     */
-    private function isCombiningChar(string $rune): bool
-    {
-        $cp = mb_ord($rune, 'UTF-8');
-        return $cp !== false && $cp >= 0x0300 && $cp <= 0x036F;
-    }
-
-    /**
      * Append a combining character to the previous cell (column cur-1).
      * If the previous cell is out of bounds or is a continuation cell,
      * the combining mark is silently dropped.

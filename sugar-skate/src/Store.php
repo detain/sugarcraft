@@ -248,7 +248,9 @@ final class Store
      */
     public function setFile(string $key, string $filePath): Entry
     {
-        $bytes = \file_get_contents($filePath);
+        // @-suppressed: the false return is handled with a proper exception;
+        // the C-level warning would otherwise trip failOnWarning suites.
+        $bytes = @\file_get_contents($filePath);
         if ($bytes === false) {
             throw new \RuntimeException(Lang::t('store.cannot_read', ['path' => $filePath]));
         }
@@ -265,7 +267,8 @@ final class Store
             return false;
         }
         $bytes = $entry->rawValue();
-        return \file_put_contents($filePath, $bytes) !== false;
+        // @-suppressed: unwritable destination is reported via the bool return.
+        return @\file_put_contents($filePath, $bytes) !== false;
     }
 
     // -------------------------------------------------------------------------
@@ -311,6 +314,22 @@ final class Store
         return $this->defaultDb;
     }
 
+    /**
+     * Execute a callback inside an atomic transaction on a named database.
+     *
+     * All Store operations targeting `$dbName` (e.g. `set('k@mydb', ...)`)
+     * performed inside the callback share the same cached connection, so
+     * they participate in the transaction. On exception the transaction is
+     * rolled back and the exception propagates.
+     *
+     * @param callable(): mixed $fn
+     * @return mixed The callback's return value.
+     */
+    public function transaction(string $dbName, callable $fn): mixed
+    {
+        return $this->database($dbName)->transaction($fn);
+    }
+
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
@@ -328,9 +347,18 @@ final class Store
 
     /**
      * Path to a database file.
+     *
+     * The name is validated here — the single choke point every database
+     * access funnels through — so a crafted name ("..", "foo/bar",
+     * "example.com") can never traverse outside the data directory.
      */
     private function dbPath(string $name): string
     {
+        if ($name === '' || \preg_match('/^[A-Za-z0-9_-]+$/', $name) !== 1) {
+            throw new \InvalidArgumentException(
+                "Invalid database name '{$name}': only letters, digits, '-' and '_' are allowed."
+            );
+        }
         return $this->dataDir . '/' . $name . '.db';
     }
 
@@ -349,6 +377,14 @@ final class Store
 
         $dbName = \substr($key, $at + 1);
         $entryKey = \substr($key, 0, $at);
+
+        // Only ONE @ separator is meaningful; a leftover @ in the entry key
+        // ("a@b@c") is ambiguous and always a caller bug.
+        if (\strpos($entryKey, '@') !== false) {
+            throw new \InvalidArgumentException(
+                "Entry key '{$entryKey}' cannot contain @ (reserved as the database separator)."
+            );
+        }
 
         // "default@foo" means db=foo, key=default
         return [$dbName, $entryKey];

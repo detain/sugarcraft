@@ -18,7 +18,9 @@ final class GitGuardTest extends TestCase
     {
         $this->cwd = sys_get_temp_dir() . '/gitguard_' . uniqid();
         mkdir($this->cwd);
-        exec("git init {$this->cwd} 2>/dev/null");
+        // Hermetic: pin the initial branch (runners may default to main OR
+        // master) so branch-name-dependent tests are deterministic.
+        exec("git init -b main {$this->cwd} 2>/dev/null");
     }
 
     protected function tearDown(): void
@@ -91,7 +93,8 @@ final class GitGuardTest extends TestCase
 
     public function testMergeAcceptsNormalBranch(): void
     {
-        exec("git -C {$this->cwd} commit --allow-empty -m 'first' 2>/dev/null");
+        // Inline identity: CI runners have no global user.name/user.email.
+        exec("git -C {$this->cwd} -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first' 2>/dev/null");
         exec("git -C {$this->cwd} branch feature 2>/dev/null");
         exec("git -C {$this->cwd} checkout main 2>/dev/null");
         $git = new Git($this->cwd);

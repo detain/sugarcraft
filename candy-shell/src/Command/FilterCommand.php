@@ -56,7 +56,7 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
         if ($input->getOption('select-if-one') && count($lines) === 1) {
-            $output->writeln($lines[0]);
+            $output->write($lines[0] . "\n");
             return Command::SUCCESS;
         }
 
@@ -108,12 +108,12 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
         if ($printQuery) {
-            $output->writeln($final->list->filterValue());
+            $output->write($final->list->filterValue() . "\n");
         }
         if ($final->isMulti()) {
-            $output->writeln(implode($delim, $final->selectedAll()));
+            $output->write(implode($delim, $final->selectedAll()) . "\n");
         } else {
-            $output->writeln((string) $final->selected());
+            $output->write((string) $final->selected() . "\n");
         }
         return Command::SUCCESS;
     }

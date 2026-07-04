@@ -69,20 +69,19 @@
         },
         {
             "name": "nikic/php-parser",
-            "version": "v5.7.0",
+            "version": "v5.8.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nikic/PHP-Parser.git",
-                "reference": "dca41cd15c2ac9d055ad70dbfd011130757d1f82"
+                "reference": "044a6a392ff8ad0d61f14370a5fbbd0a0107152f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/dca41cd15c2ac9d055ad70dbfd011130757d1f82",
-                "reference": "dca41cd15c2ac9d055ad70dbfd011130757d1f82",
+                "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/044a6a392ff8ad0d61f14370a5fbbd0a0107152f",
+                "reference": "044a6a392ff8ad0d61f14370a5fbbd0a0107152f",
                 "shasum": ""
             },
             "require": {
-                "ext-ctype": "*",
                 "ext-json": "*",
                 "ext-tokenizer": "*",
                 "php": ">=7.4"
@@ -121,9 +120,9 @@
             ],
             "support": {
                 "issues": "https://github.com/nikic/PHP-Parser/issues",
-                "source": "https://github.com/nikic/PHP-Parser/tree/v5.7.0"
+                "source": "https://github.com/nikic/PHP-Parser/tree/v5.8.0"
             },
-            "time": "2025-12-06T11:56:16+00:00"
+            "time": "2026-07-04T14:30:18+00:00"
         },
         {
             "name": "phar-io/manifest",
@@ -1777,12 +1776,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-ansi.git",
-                "reference": "d44eb9444acd73436783e78b6a7ca502b64d5aca"
+                "reference": "e83648c33b6b1eb4f67ccb792cb88f088b8f4a50"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-ansi/zipball/d44eb9444acd73436783e78b6a7ca502b64d5aca",
-                "reference": "d44eb9444acd73436783e78b6a7ca502b64d5aca",
+                "url": "https://api.github.com/repos/sugarcraft/candy-ansi/zipball/e83648c33b6b1eb4f67ccb792cb88f088b8f4a50",
+                "reference": "e83648c33b6b1eb4f67ccb792cb88f088b8f4a50",
                 "shasum": ""
             },
             "require": {
@@ -1826,7 +1825,7 @@
                 "issues": "https://github.com/sugarcraft/candy-ansi/issues",
                 "source": "https://github.com/sugarcraft/candy-ansi"
             },
-            "time": "2026-05-31T00:53:12+00:00"
+            "time": "2026-07-01T08:18:28+00:00"
         },
         {
             "name": "sugarcraft/candy-async",
@@ -1834,18 +1833,19 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-async.git",
-                "reference": "ccb6c61622823ad8837ec3c878b0a0aacc7a50bc"
+                "reference": "15140bd09cee3cbc5c776e46aff3a5b41561dde2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-async/zipball/ccb6c61622823ad8837ec3c878b0a0aacc7a50bc",
-                "reference": "ccb6c61622823ad8837ec3c878b0a0aacc7a50bc",
+                "url": "https://api.github.com/repos/sugarcraft/candy-async/zipball/15140bd09cee3cbc5c776e46aff3a5b41561dde2",
+                "reference": "15140bd09cee3cbc5c776e46aff3a5b41561dde2",
                 "shasum": ""
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
-                "react/promise": "^3.3"
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -1883,7 +1883,7 @@
                 "issues": "https://github.com/sugarcraft/candy-async/issues",
                 "source": "https://github.com/sugarcraft/candy-async"
             },
-            "time": "2026-05-28T20:13:37+00:00"
+            "time": "2026-07-01T12:11:08+00:00"
         },
         {
             "name": "sugarcraft/candy-core",
@@ -1891,12 +1891,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-core.git",
-                "reference": "0a86aeb9f0d98a7ce384796df34107c7e47ab384"
+                "reference": "32d76cf7ba0f0c5ac76c2abd98c33ff9e34f54c2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-core/zipball/0a86aeb9f0d98a7ce384796df34107c7e47ab384",
-                "reference": "0a86aeb9f0d98a7ce384796df34107c7e47ab384",
+                "url": "https://api.github.com/repos/sugarcraft/candy-core/zipball/32d76cf7ba0f0c5ac76c2abd98c33ff9e34f54c2",
+                "reference": "32d76cf7ba0f0c5ac76c2abd98c33ff9e34f54c2",
                 "shasum": ""
             },
             "require": {
@@ -1949,7 +1949,7 @@
                 "issues": "https://github.com/sugarcraft/candy-core/issues",
                 "source": "https://github.com/sugarcraft/candy-core"
             },
-            "time": "2026-06-28T05:38:43+00:00"
+            "time": "2026-07-01T05:51:57+00:00"
         },
         {
             "name": "sugarcraft/candy-input",
@@ -1957,16 +1957,17 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-input.git",
-                "reference": "d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0"
+                "reference": "6070c10aab6f80a508bfe80c562c11d9eaaaa15c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0",
-                "reference": "d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0",
+                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/6070c10aab6f80a508bfe80c562c11d9eaaaa15c",
+                "reference": "6070c10aab6f80a508bfe80c562c11d9eaaaa15c",
                 "shasum": ""
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -2007,7 +2008,7 @@
                 "issues": "https://github.com/sugarcraft/candy-input/issues",
                 "source": "https://github.com/sugarcraft/candy-input"
             },
-            "time": "2026-06-02T17:46:00+00:00"
+            "time": "2026-07-04T19:57:23+00:00"
         },
         {
             "name": "sugarcraft/candy-pty",
@@ -2015,24 +2016,25 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d"
+                "reference": "4b39402997e84d9366c037584fcd86f38b1d5f30"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/27eb7e3e157b618c107e2bb36ff873467866ce4d",
-                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/4b39402997e84d9366c037584fcd86f38b1d5f30",
+                "reference": "4b39402997e84d9366c037584fcd86f38b1d5f30",
                 "shasum": ""
             },
             "require": {
                 "ext-ffi": "*",
                 "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-input": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "react/event-loop": "^1.6",
                 "sugarcraft/candy-vcr": "dev-master",
                 "sugarcraft/candy-vt": "dev-master"
             },
@@ -2076,7 +2078,7 @@
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
                 "source": "https://github.com/sugarcraft/candy-pty"
             },
-            "time": "2026-06-01T13:14:26+00:00"
+            "time": "2026-07-04T21:26:34+00:00"
         },
         {
             "name": "theseer/tokenizer",

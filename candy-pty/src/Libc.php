@@ -104,6 +104,11 @@ final class Libc
             ? "int   openpty(int *amaster, int *aslave, char *name, void *termp, void *winp);\n"
             : '';
 
+        // FFI::cdef() resolves every declared symbol eagerly, so declaring
+        // the wrong platform's errno accessor fails the WHOLE libc load
+        // ("Failed resolving C function '__errno_location'" on macOS).
+        $errnoFn = self::errnoSymbol();
+
         return <<<CPROTO
 int   setsid(void);
 int   posix_openpt(int flags);
@@ -123,9 +128,10 @@ int   ioctl(int fd, unsigned long request, void *arg);
    declaration — add a separate `int fcntl_lock(...)` cdef if needed. */
 int   fcntl(int fd, int cmd, int arg);
 
-/* errno is thread-local; __errno_location() is the POSIX interface
-   (glibc + musl on Linux, __error() on Darwin). Returns int*. */
-int * __errno_location(void);
+/* errno is thread-local; the accessor symbol is platform-specific:
+   __errno_location() on glibc/musl (Linux), __error() on Darwin.
+   Returns int*. */
+int * {$errnoFn}(void);
 
 /* termios — struct termios is treated as opaque (≥80 bytes) because
    layout differs across glibc/musl (60 bytes) and Darwin (72 bytes).
@@ -149,8 +155,19 @@ CPROTO;
      */
     public static function errno(): int
     {
-        $ptr = self::lib()->__errno_location();
+        $ptr = self::lib()->{self::errnoSymbol()}();
         return $ptr === null ? 0 : $ptr[0];
+    }
+
+    /**
+     * The platform's thread-local errno accessor symbol.
+     *
+     * glibc and musl both export `__errno_location`; Darwin's libSystem
+     * exports `__error` instead (same `int *` contract).
+     */
+    public static function errnoSymbol(): string
+    {
+        return \PHP_OS_FAMILY === 'Darwin' ? '__error' : '__errno_location';
     }
 
     /**

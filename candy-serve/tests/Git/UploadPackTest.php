@@ -51,11 +51,16 @@ final class UploadPackTest extends TestCase
     {
         $path = $this->tmpDir . '/test-repo.git';
         \mkdir($path, 0755, true);
-        \exec('git init --bare ' . \escapeshellarg($path) . ' 2>/dev/null');
+        $bare = \escapeshellarg($path);
+        \exec("git -c init.defaultBranch=master init --bare {$bare} 2>/dev/null");
 
+        // Hermetic fixture: CI runners have no global user.name/user.email
+        // and may default init.defaultBranch to main — pass both inline so
+        // the commit + push never depend on ambient git config.
         $workDir = $this->tmpDir . '/work';
         \mkdir($workDir, 0755, true);
-        \exec("git init {$workDir} 2>/dev/null && echo 'hello' > {$workDir}/file.txt && git -C {$workDir} add . && git -C {$workDir} commit -m 'initial' 2>/dev/null && git -C {$workDir} push {$path} master 2>/dev/null");
+        $work = \escapeshellarg($workDir);
+        \exec("git -c init.defaultBranch=master init {$work} 2>/dev/null && echo 'hello' > {$workDir}/file.txt && git -C {$work} add . && git -C {$work} -c user.email=test@example.com -c user.name=Test commit -m 'initial' 2>/dev/null && git -C {$work} push {$bare} master 2>/dev/null");
 
         return $path;
     }
