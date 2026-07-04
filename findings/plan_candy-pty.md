@@ -1,7 +1,7 @@
 ---
-status: not-started
+status: in-progress (6.1, 7.2, 7.3, 8.2 closed 2026-07-04)
 phase: 1
-updated: 2026-06-30
+updated: 2026-07-04
 ---
 
 # Implementation Plan: candy-pty Code Review Findings
@@ -599,7 +599,9 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ## Phase 6: Duplication Refactoring [PENDING]
 
-### 6.1 $libc = Libc::lib() Pattern Centralization [PENDING] ← CURRENT
+### 6.1 $libc = Libc::lib() Pattern Centralization [✅ DONE 2026-07-04]
+
+> **Done 2026-07-04** — `src/Concerns/LibcAccess.php` trait provides `protected static function libc(): \FFI`. Applied to `Pty`, `SizeIoctl`, `ControllingTerminal`, `SignalForwarder`, `PosixPtySystem`, `PosixMasterPty`, `PosixTermios`, and `ChildPollTrait` (which forwards it to `PosixChild`/`PosixProcess`). Pure refactor, zero behavior change; guarded by `tests/Concerns/LibcAccessTest.php` (structural trait-usage assertions + FFI-gated shared-handle identity check) and the full suite. `Libc::lib()` remains the canonical singleton; test files intentionally keep calling it directly.
 
 **What is expected:** Create a `LibcAccess` trait that provides `protected static function libc(): Libc` returning `Libc::lib()`. Apply this trait to all classes that use FFI calls.
 
@@ -647,7 +649,9 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ---
 
-### 7.2 /dev/ptmx Access Required [PENDING]
+### 7.2 /dev/ptmx Access Required [✅ DONE 2026-07-04]
+
+> **Done 2026-07-04** — runtime already threw `PtyException('open.posix_openpt_failed')`; closed on the docs + diagnostics side. README "Known limitations" gained a `/dev/ptmx` entry (containers/locked-down hosts, expected error incl. errno 2/13, remediation: mount devpts / chmod 666 /dev/ptmx / privileged as last resort). Exception message enriched with errno via new `Libc::errnoDetail()` (`"13 (Permission denied)"` — uses ext-posix strerror, no new FFI symbols) in both `PosixPtySystem::open()` and legacy `Pty::open()`; `lang/en.php` message now carries `{errno}`.
 
 **What is expected:** Add a graceful error message when `/dev/ptmx` is not accessible, explaining the issue and potential solutions (e.g., Docker with `--device-read-only`).
 
@@ -661,7 +665,9 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ---
 
-### 7.3 Darwin arm64 ioctl ABI Mismatch [PENDING]
+### 7.3 Darwin arm64 ioctl ABI Mismatch [✅ DONE 2026-07-04]
+
+> **Done 2026-07-04** — documented as a user-facing README "Known limitations" entry: Darwin arm64 `TIOCSWINSZ` fails through the fixed-arg FFI cdef (variadic ABI), resize falls back to an `stty -f /dev/fd/<fd>` subprocess per size change, rate-limited (identical resizes within 20 ms are skipped), reads via `TIOCGWINSZ` unaffected, goes away once macOS ships POSIX 2024 `tcsetwinsize`. Code-side comments at `src/SizeIoctl.php` already existed; no code change needed.
 
 **What is expected:** Document the Darwin arm64 `TIOCSWINSZ` ioctl fallback via stty subprocess as a known limitation in user-facing documentation.
 
@@ -719,7 +725,9 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 
 ---
 
-### 8.2 SignalForwarder Uses Static Callbacks [PENDING]
+### 8.2 SignalForwarder Uses Static Callbacks [✅ DONE 2026-07-04]
+
+> **Done 2026-07-04** — kept the static facade, added explicit lifecycle management instead of an instance refactor. Rationale: POSIX signal dispositions are process-global (one handler per signal per process), so an "instance" would be a fiction over shared kernel state, and all repo callers (candy-wish `InProcessTransport`, candy-hermit `Hermit`, candy-pty tests/examples) consume the static API. Changes: `private static array $attached` tracks signals this class installed; no-argument `reset()` now performs a full lifecycle reset (detaches every tracked handler to `SIG_DFL`, clears the memo, and flips `pcntl_async_signals(false)` — only when this class enabled it); targeted `reset(SIGWINCH)` keeps its BC behavior and never touches the async flag; new `attachedSignals()` / `asyncEnabled()` accessors; class docblock documents long-lived-process (PHP-FPM/daemon) guidance. Covered by 3 new pcntl-gated tests in `tests/SignalForwarderTest.php`; candy-wish suite re-run green (172 tests).
 
 **What is expected:** Refactor signal handlers to use instance callbacks rather than static callbacks. This allows multiple `SignalForwarder` instances to coexist independently.
 

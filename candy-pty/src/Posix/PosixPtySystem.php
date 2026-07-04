@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Posix;
 
+use SugarCraft\Pty\Concerns\LibcAccess;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\PtySystem;
 
@@ -13,6 +14,8 @@ use SugarCraft\Pty\Contract\PtySystem;
  */
 final class PosixPtySystem implements PtySystem
 {
+    use LibcAccess;
+
     /** `F_SETFD` — fcntl cmd to set the fd flags. Linux + macOS = 2. */
     private const F_SETFD = 2;
 
@@ -44,12 +47,15 @@ final class PosixPtySystem implements PtySystem
      */
     public function open(int $cols = 80, int $rows = 24): PtyPair
     {
-        $libc = \SugarCraft\Pty\Libc::lib();
+        $libc = self::libc();
 
         $masterFd = $this->openPtyMaster($libc);
         if ($masterFd < 0) {
             throw new \SugarCraft\Pty\PtyException(
-                \SugarCraft\Pty\Lang::t('open.posix_openpt_failed', ['rc' => $masterFd])
+                \SugarCraft\Pty\Lang::t('open.posix_openpt_failed', [
+                    'rc'    => $masterFd,
+                    'errno' => \SugarCraft\Pty\Libc::errnoDetail(),
+                ])
             );
         }
 

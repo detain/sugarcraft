@@ -153,6 +153,22 @@ CPROTO;
         return $ptr === null ? 0 : $ptr[0];
     }
 
+    /**
+     * Human-readable errno for error messages: `"13 (Permission denied)"`.
+     *
+     * Uses ext-posix's strerror when available (the FFI cdef stays
+     * minimal — no `strerror` symbol needed); falls back to the bare
+     * number otherwise. Read errno IMMEDIATELY after the failing FFI
+     * call — any intervening syscall may clobber it.
+     */
+    public static function errnoDetail(): string
+    {
+        $errno = self::errno();
+        return \function_exists('posix_strerror')
+            ? $errno . ' (' . \posix_strerror($errno) . ')'
+            : (string) $errno;
+    }
+
     /** EINTR is the errno value for "interrupted system call". */
     public const EINTR = 4;
 

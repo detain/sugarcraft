@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Pty\Concerns\LibcAccess;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Posix\PosixMasterPty;
 use SugarCraft\Pty\TermiosFactory;
@@ -27,6 +28,8 @@ use SugarCraft\Pty\TermiosFactory;
  */
 final class Pty implements MasterPty
 {
+    use LibcAccess;
+
     public const DEFAULT_COLS = 80;
     public const DEFAULT_ROWS = 24;
 
@@ -37,11 +40,14 @@ final class Pty implements MasterPty
 
     public static function open(): self
     {
-        $libc = Libc::lib();
+        $libc = self::libc();
 
         $masterFd = $libc->posix_openpt(TermiosFactory::O_RDWR | TermiosFactory::oNoCtty());
         if ($masterFd < 0) {
-            throw new PtyException(Lang::t('open.posix_openpt_failed', ['rc' => $masterFd]));
+            throw new PtyException(Lang::t('open.posix_openpt_failed', [
+                'rc'    => $masterFd,
+                'errno' => Libc::errnoDetail(),
+            ]));
         }
 
         if ($libc->grantpt($masterFd) !== 0) {

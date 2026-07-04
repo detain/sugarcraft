@@ -414,6 +414,28 @@ candy-pty builds on two ports for input/output escape-sequence handling:
   To fix: edit your `php.ini` and set `ffi.enable=1` (or `ffi.enable=peer` for
   stricter CSP), then restart your web server or PHP-FPM process. In CLI context
   you can also set it inline: `php -d ffi.enable=1 your-script.php`.
+- **`/dev/ptmx` access is required.** Every `PosixPtySystem::open()` asks the
+  kernel for a new PTY master via `posix_openpt()`, which needs a readable and
+  writable `/dev/ptmx` with a mounted `devpts` behind it. Minimal or locked-down
+  containers (scratch/distroless images, sandboxes with a read-only or masked
+  `/dev`, hosts where `/dev/ptmx` is `0600 root:root`) fail with
+  `PtyException: posix_openpt() failed (rc=-1, errno=...)` — typically
+  `2 (No such file or directory)` when the node is missing or `13 (Permission
+  denied)` when it is inaccessible. Remediation, in order of preference:
+  ensure `devpts` is mounted (`mount -t devpts devpts /dev/pts`; Docker and
+  Podman do this by default unless `/dev` is overridden), fix the node's
+  permissions (`chmod 666 /dev/ptmx` — the standard mode on Linux), or as a
+  last resort run the container privileged. The test suite skips PTY tests
+  automatically on such hosts rather than failing.
+- **Darwin arm64 resizes shell out to `stty`.** On macOS arm64 the real libc
+  `ioctl` is variadic — varargs go on the stack while our fixed-arg FFI cdef
+  puts the winsize pointer in a register — so `ioctl(TIOCSWINSZ)` fails and
+  `SizeIoctl` falls back to spawning `stty -f /dev/fd/<fd> rows R cols C` per
+  resize. The fallback is correct but costs a subprocess per size change;
+  identical resizes within a 20 ms window are rate-limited (skipped) so
+  SIGWINCH bursts don't fork a process each. Expect resize on Darwin arm64 to
+  be milliseconds, not microseconds — reads via `ioctl(TIOCGWINSZ)` are
+  unaffected. This goes away once macOS ships POSIX 2024 `tcsetwinsize`.
 
 ## License
 

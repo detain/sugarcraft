@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Posix;
 
+use SugarCraft\Pty\Concerns\LibcAccess;
 use SugarCraft\Pty\Contract\Termios;
-use SugarCraft\Pty\Libc;
 
 /**
  * FFI-based termios implementation using libc tcgetattr/tcsetattr/cfmakeraw.
@@ -19,6 +19,8 @@ use SugarCraft\Pty\Libc;
  */
 final class PosixTermios implements Termios
 {
+    use LibcAccess;
+
     /** Apply changes immediately. */
     public const TCSANOW = 0;
 
@@ -39,7 +41,7 @@ final class PosixTermios implements Termios
     public function __construct(int $fd)
     {
         $this->fd = $fd;
-        $this->libc = Libc::lib();
+        $this->libc = self::libc();
         $this->buf = $this->libc->new('char[' . self::BUFSIZE . ']');
     }
 

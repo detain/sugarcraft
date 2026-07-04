@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Pty\Concerns\LibcAccess;
+
 /**
  * Static utility for claiming a file descriptor as the calling
  * process's controlling terminal.
@@ -17,6 +19,8 @@ namespace SugarCraft\Pty;
  */
 final class ControllingTerminal
 {
+    use LibcAccess;
+
     /** Linux TIOCSCTTY request code (defined in sys/ioctl.h). */
     private const TIOCSCTTY_LINUX = 0x540E;
 
@@ -41,7 +45,7 @@ final class ControllingTerminal
             throw new PtyException('ControllingTerminal is POSIX-only.');
         }
 
-        $libc = Libc::lib();
+        $libc = self::libc();
 
         if ($libc->setsid() === -1) {
             throw new PtyException(
