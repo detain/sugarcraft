@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Mosaic\Tests;
+namespace SugarCraft\Mosaic\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mosaic\Dither;
