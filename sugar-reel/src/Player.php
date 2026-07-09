@@ -1101,6 +1101,28 @@ final class Player implements Model
     }
 
     /**
+     * Pause playback. Returns a new Player with paused=true.
+     */
+    public function pause(): self
+    {
+        $this->audioPlayer?->pause();
+        return $this->mutate(['paused' => true]);
+    }
+
+    /**
+     * Resume playback. Returns a new Player with paused=false and re-anchored
+     * clock so play-time accumulates correctly.
+     */
+    public function play(): self
+    {
+        $this->audioPlayer?->resume();
+        return $this->mutate([
+            'paused' => false,
+            'lastTickTime' => microtime(true),
+        ]);
+    }
+
+    /**
      * Attach a parsed subtitle track to the player.
      *
      * Returns a new Player (immutable) with the subtitle track set.
