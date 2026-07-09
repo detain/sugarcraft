@@ -663,6 +663,48 @@ final class FormTest extends TestCase
     }
 
     /**
+     * A submit blocked by validation on a MULTI-field form moves focus to the
+     * erroring field with a consistent focus state: the previously-focused
+     * (last) field is blurred and the target is focused, so exactly one field
+     * is focused and it is the one focusedIndex points at. Regression — a bare
+     * focusedIndex hop left the last field still rendering its cursor while the
+     * erroring field had none, and returned no cursor-blink Cmd.
+     */
+    public function testSubmitBlockedRefocusesErroringFieldWithConsistentState(): void
+    {
+        $form = Form::new(
+            Input::new('a')->withValue('ok'),
+            Input::new('b')->withValue('bad')->validation(
+                static fn (string $v): bool => ctype_digit($v),
+                'digits only',
+            ),
+            Input::new('c')->withValue('ok'),
+        );
+        // Advance to the last field so Enter there triggers the submit gate.
+        [$form, ] = $form->update(new KeyMsg(KeyType::Tab)); // -> b
+        [$form, ] = $form->update(new KeyMsg(KeyType::Tab)); // -> c (last)
+        $this->assertSame(2, $form->focusedIndex);
+
+        // Enter on the last field: field 'b' fails its validator, so the submit
+        // is blocked and focus moves back to 'b'.
+        [$form, $cmd] = $form->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertFalse($form->isSubmitted(), 'a field error blocks submission');
+        $this->assertSame(1, $form->focusedIndex, 'focus moves to the erroring field');
+
+        // Focus state is consistent: exactly one field is focused, and it is 'b'.
+        $focusedKeys = [];
+        foreach ($form->activeFields() as $field) {
+            if ($field->isFocused()) {
+                $focusedKeys[] = $field->key();
+            }
+        }
+        $this->assertSame(['b'], $focusedKeys, 'exactly one field is focused, and it is the erroring one');
+        $this->assertTrue($form->focusedField()->isFocused());
+        $this->assertNotNull($cmd, 'the refocused field returns its cursor-blink Cmd');
+    }
+
+    /**
      * A clean form (no validation errors) submits normally on Enter.
      */
     public function testSubmitSucceedsWhenClean(): void
