@@ -337,34 +337,7 @@ final class Form implements Model
                         $this->groupIndex + 1, +1,
                     ) === null;
                     if ($isLastGroup) {
-                        // Revalidate every field in the current group so that
-                        // untouched-but-required fields surface their errors.
-                        $currentFields = $this->fieldsByGroup[$this->groupIndex];
-                        $revalidated = [];
-                        $hasErrors = false;
-                        foreach ($currentFields as $f) {
-                            $rf = $f->revalidate();
-                            $revalidated[] = $rf;
-                            if ($rf->getError() !== null && $rf->getError() !== '') {
-                                $hasErrors = true;
-                            }
-                        }
-                        if ($hasErrors) {
-                            // Rebuild the form with revalidated fields and re-focus
-                            // the first erroring field in the current group.
-                            $newByGroup = $this->fieldsByGroup;
-                            $newByGroup[$this->groupIndex] = $revalidated;
-                            $firstErrorIdx = null;
-                            foreach ($revalidated as $idx => $rf) {
-                                if ($rf->getError() !== null && $rf->getError() !== '') {
-                                    $firstErrorIdx = $idx;
-                                    break;
-                                }
-                            }
-                            $focusedIdx = $firstErrorIdx ?? $this->focusedIndex;
-                            return [$this->mutate(fieldsByGroup: $newByGroup, focusedIndex: $focusedIdx), null];
-                        }
-                        return [$this->mutate(submitted: true), Cmd::quit()];
+                        return $this->submitOrGateLastGroup();
                     }
                     return $this->advanceGroup(+1);
                 }
@@ -373,6 +346,51 @@ final class Form implements Model
         }
 
         return $this->forward($msg);
+    }
+
+    /**
+     * Enter on the last field of the last visible group: revalidate the current
+     * group and either submit (every field clean) or keep the form open, moving
+     * focus to the first erroring field. Extracted from {@see update()} to keep
+     * the submit path flat.
+     *
+     * When a field errors we blur the field that was focused and focus() the
+     * target so the cursor — and its blink Cmd — follow the error rather than
+     * stranding on the last field, which never submitted. (A bare focusedIndex
+     * hop would leave the old field rendering its cursor and the new one with
+     * none.)
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function submitOrGateLastGroup(): array
+    {
+        // Revalidate every field in the current group so that untouched-but-
+        // required fields surface their errors, tracking the first that fails.
+        $revalidated = [];
+        $firstErrorIdx = null;
+        foreach ($this->fieldsByGroup[$this->groupIndex] as $i => $f) {
+            $rf = $f->revalidate();
+            $revalidated[$i] = $rf;
+            if ($firstErrorIdx === null && $rf->getError() !== null && $rf->getError() !== '') {
+                $firstErrorIdx = $i;
+            }
+        }
+        if ($firstErrorIdx === null) {
+            return [$this->mutate(submitted: true), Cmd::quit()];
+        }
+
+        $cmd = null;
+        if ($firstErrorIdx !== $this->focusedIndex) {
+            if (isset($revalidated[$this->focusedIndex])) {
+                $revalidated[$this->focusedIndex] = $revalidated[$this->focusedIndex]->blur();
+            }
+            [$focused, $cmd] = $revalidated[$firstErrorIdx]->focus();
+            $revalidated[$firstErrorIdx] = $focused;
+        }
+        $newByGroup = $this->fieldsByGroup;
+        $newByGroup[$this->groupIndex] = $revalidated;
+
+        return [$this->mutate(fieldsByGroup: $newByGroup, focusedIndex: $firstErrorIdx), $cmd];
     }
 
     /**
