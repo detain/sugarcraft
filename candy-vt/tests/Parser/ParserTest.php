@@ -360,6 +360,34 @@ final class ParserTest extends TestCase
         ], $h->log);
     }
 
+    /**
+     * Regression: an 8-bit C1 re-introducer (0x98/0x9E/0x9F) arriving mid-string
+     * must NOT discard the payload already collected before it. Per the anywhere
+     * transitions, 0x98→SosString / 0x9E→PmString / 0x9F→ApcString fire Action::Start
+     * while a SOS/PM/APC string is in flight; start() previously cleared
+     * $stringBuffer, silently dropping the leading bytes before dispatch() could
+     * deliver them. Mirrors candy-ansi's fix (CALIBER 2026-05-30 step-20).
+     */
+    public function testStringInterruptedByC1IntroducerStillDispatchesPayload(): void
+    {
+        // SOS "AB", then 8-bit SOS re-introducer 0x98, then "CD", ST 0x9C.
+        // The "AB" collected before 0x98 must survive: payload is "ABCD".
+        $h = $this->parse("\x1bXAB\x98CD\x9c");
+        $sos = $h->filter('sos');
+        $this->assertCount(1, $sos, 'exactly one SOS dispatch expected');
+        $this->assertSame('ABCD', $sos[0]['detail'], 'bytes collected before the C1 re-introducer must not be dropped');
+    }
+
+    public function testCrossKindC1IntroducerPreservesPayload(): void
+    {
+        // SOS "AB", then 8-bit PM re-introducer 0x9E switches kind, then "CD", ST 0x9C.
+        // The "AB" leads through into the PM payload rather than being discarded.
+        $h = $this->parse("\x1bXAB\x9eCD\x9c");
+        $pm = $h->filter('pm');
+        $this->assertCount(1, $pm, 'exactly one PM dispatch expected');
+        $this->assertSame('ABCD', $pm[0]['detail'], 'payload collected before the C1 re-introducer must survive');
+    }
+
     // ─── Cancellation ──────────────────────────────────────────────────────
 
     public function testCanCancelsCsi(): void
