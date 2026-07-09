@@ -588,6 +588,95 @@ final class Width
         return $prefix . $tail;
     }
 
+    /**
+     * Take the first `$take` visible cells from `$s` and return them
+     * (with all ANSI escape sequences that affect those cells preserved).
+     *
+     * Cell-aware counterpart to {@see dropAnsi()}: where `dropAnsi` returns
+     * "everything after the first N cells", `takeAnsi` returns "the first N cells".
+     * Both preserve the ANSI sequences so the result is self-contained.
+     *
+     * If `$take` lands inside a wide grapheme, that whole cluster is
+     * included so the result is not silently truncated mid-character.
+     */
+    public static function takeAnsi(string $s, int $take): string
+    {
+        if ($take <= 0) {
+            return '';
+        }
+        $len = strlen($s);
+        $out  = '';
+        $w    = 0;
+        $i    = 0;
+        $budgetReached = false;
+
+        while ($i < $len) {
+            $b = $s[$i];
+
+            // Pass-through: CSI sequences (ESC [ ... final).
+            if ($b === "\x1b" && ($s[$i + 1] ?? '') === '[') {
+                $j = $i + 2;
+                while ($j < $len) {
+                    $c = ord($s[$j]);
+                    $j++;
+                    if ($c >= 0x40 && $c <= 0x7e) {
+                        break;
+                    }
+                }
+                $seq = substr($s, $i, $j - $i);
+                $out .= $seq;
+                $i = $j;
+                continue;
+            }
+            // Pass-through: OSC sequences (ESC ] ... ST/BEL).
+            if ($b === "\x1b" && ($s[$i + 1] ?? '') === ']') {
+                $j = $i + 2;
+                while ($j < $len) {
+                    if ($s[$j] === "\x07") {
+                        $j++;
+                        break;
+                    }
+                    if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') {
+                        $j += 2;
+                        break;
+                    }
+                    $j++;
+                }
+                $seq = substr($s, $i, $j - $i);
+                $out .= $seq;
+                $i = $j;
+                continue;
+            }
+
+            // No more visible budget — keep scanning so trailing ANSI
+            // sequences (e.g. SGR resets) get harvested by the loop above,
+            // but skip visible characters silently.
+            if ($budgetReached) {
+                $cluster = self::nextCluster($s, $i);
+                $i += strlen($cluster);
+                continue;
+            }
+
+            $cluster = self::nextCluster($s, $i);
+            $gw = self::graphemeWidth($cluster);
+            if ($w + $gw > $take) {
+                // Wide cluster straddles the boundary — include it whole
+                // so we don't end mid-character.
+                $out .= $cluster;
+                $budgetReached = true;
+                $i += strlen($cluster);
+                continue;
+            }
+            $out .= $cluster;
+            $w += $gw;
+            $i += strlen($cluster);
+            if ($w >= $take) {
+                $budgetReached = true;
+            }
+        }
+        return $out;
+    }
+
     private static function nextCluster(string $s, int $i): string
     {
         if (function_exists('grapheme_extract')) {
