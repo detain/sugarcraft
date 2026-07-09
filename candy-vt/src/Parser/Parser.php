@@ -197,7 +197,12 @@ final class Parser
 
     private function start(int $byte, State $from): void
     {
-        $this->stringBuffer = '';
+        // Do NOT clear $stringBuffer here — that would discard the payload of an
+        // in-flight OSC/SOS/PM/APC sequence when an 8-bit C1 re-introducer
+        // (0x98/0x9E/0x9F/0x9D) restarts a string mid-collection, before
+        // dispatch() delivers it. The buffer is reset in clear() (the Clear entry
+        // action) and at the end of dispatch(), which is the correct place.
+        // Mirrors candy-ansi's fix (CALIBER 2026-05-30 step-20).
         // For DCS, the byte that triggers Start IS the final command.
         if ($from === State::DcsEntry || $from === State::DcsParam || $from === State::DcsIntermediate) {
             $this->cmd = ($this->cmd & ~0xFF) | $byte;

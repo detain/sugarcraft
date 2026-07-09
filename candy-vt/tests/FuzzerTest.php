@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vt\Parser\DebugHandler;
+use SugarCraft\Vt\Parser\Parser;
 use SugarCraft\Vt\Terminal\Terminal;
 
 /**
@@ -78,5 +80,22 @@ final class FuzzerTest extends TestCase
         }
         $term->flush();
         $this->assertTrue(true);
+    }
+
+    /**
+     * Byte-verbatim regression fixture: a SOS string interrupted by an 8-bit
+     * C1 re-introducer (0x98) must keep the bytes collected before it — the
+     * parser must not silently drop payload when start() fires mid-string.
+     * Guards the same defect as ParserTest but as a crash-and-survive fixture.
+     */
+    public function testC1ReintroducerDoesNotDropStringPayload(): void
+    {
+        $h = new DebugHandler();
+        $p = new Parser($h);
+        // ESC X "AB" 0x98 "CD" 0x9C  →  a single SOS dispatch carrying "ABCD".
+        $p->feed("\x1bXAB\x98CD\x9c");
+        $sos = $h->filter('sos');
+        $this->assertCount(1, $sos);
+        $this->assertSame('ABCD', $sos[0]['detail']);
     }
 }
