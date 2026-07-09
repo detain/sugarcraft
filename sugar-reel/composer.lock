@@ -414,7 +414,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-async",
-                "reference": "d59d32a5c563858d6b63684e2c5ea1f3c2235755"
+                "reference": "733cbca976b48de553dbdd48e93d5bff738d6571"
             },
             "require": {
                 "php": "^8.3",
@@ -662,7 +662,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "8a55425345b9474869314fcd24f1ad22f8b31aea"
+                "reference": "b1647ee3fef0810972e985fd65059f32418a2300"
             },
             "require": {
                 "php": "^8.3",
@@ -776,7 +776,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-mosaic",
-                "reference": "74f59bde8d6b71768989c3ad037bb9d87b9ac574"
+                "reference": "2484694adbeffd7380afddaf5234d5ed6e766aa0"
             },
             "require": {
                 "ext-gd": "*",
@@ -844,7 +844,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-palette",
-                "reference": "1766e5997cad7a3dd18a60cc22dbd81e89e19018"
+                "reference": "c616ce65cdccba485e93beb78f059cab622328d4"
             },
             "require": {
                 "php": "^8.3",
@@ -974,7 +974,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-sprinkles",
-                "reference": "3e1418d7c50824d30bf3eec42a17c18b8043074d"
+                "reference": "a90aa45201d382535e3a246e2366b5f6490aa685"
             },
             "require": {
                 "php": "^8.3",
@@ -1591,24 +1591,24 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "10.5.63",
+            "version": "10.5.64",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "33198268dad71e926626b618f3ec3966661e4d90"
+                "reference": "0e8c1d19cea35ad97d4887f363d07c78e30fbf06"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/33198268dad71e926626b618f3ec3966661e4d90",
-                "reference": "33198268dad71e926626b618f3ec3966661e4d90",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/0e8c1d19cea35ad97d4887f363d07c78e30fbf06",
+                "reference": "0e8c1d19cea35ad97d4887f363d07c78e30fbf06",
                 "shasum": ""
             },
             "require": {
                 "ext-dom": "*",
+                "ext-filter": "*",
                 "ext-json": "*",
                 "ext-libxml": "*",
                 "ext-mbstring": "*",
-                "ext-xml": "*",
                 "ext-xmlwriter": "*",
                 "myclabs/deep-copy": "^1.13.4",
                 "phar-io/manifest": "^2.0.4",
@@ -1672,31 +1672,15 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/10.5.63"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/10.5.64"
             },
             "funding": [
                 {
-                    "url": "https://phpunit.de/sponsors.html",
-                    "type": "custom"
-                },
-                {
-                    "url": "https://github.com/sebastianbergmann",
-                    "type": "github"
-                },
-                {
-                    "url": "https://liberapay.com/sebastianbergmann",
-                    "type": "liberapay"
-                },
-                {
-                    "url": "https://thanks.dev/u/gh/sebastianbergmann",
-                    "type": "thanks_dev"
-                },
-                {
-                    "url": "https://tidelift.com/funding/github/packagist/phpunit/phpunit",
-                    "type": "tidelift"
+                    "url": "https://phpunit.de/sponsoring.html",
+                    "type": "other"
                 }
             ],
-            "time": "2026-01-27T05:48:37+00:00"
+            "time": "2026-07-06T14:50:35+00:00"
         },
         {
             "name": "sebastian/cli-parser",
@@ -2657,7 +2641,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-testing",
-                "reference": "6beb6d9938f3d9841c9415be7ab33c8f8c59342c"
+                "reference": "f8fc95d3723ed891cc62546abfdc25c33a0f9121"
             },
             "require": {
                 "php": "^8.3",

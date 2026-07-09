@@ -62,16 +62,16 @@
         },
         {
             "name": "aws/aws-sdk-php",
-            "version": "3.386.1",
+            "version": "3.388.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/aws/aws-sdk-php.git",
-                "reference": "e36bc0e97e82d68acc92b9e06f5dc544913d819a"
+                "reference": "d48fe5eabeda0cf58025636f78ac8dcd8e60a724"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/e36bc0e97e82d68acc92b9e06f5dc544913d819a",
-                "reference": "e36bc0e97e82d68acc92b9e06f5dc544913d819a",
+                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/d48fe5eabeda0cf58025636f78ac8dcd8e60a724",
+                "reference": "d48fe5eabeda0cf58025636f78ac8dcd8e60a724",
                 "shasum": ""
             },
             "require": {
@@ -153,9 +153,9 @@
             "support": {
                 "forum": "https://github.com/aws/aws-sdk-php/discussions",
                 "issues": "https://github.com/aws/aws-sdk-php/issues",
-                "source": "https://github.com/aws/aws-sdk-php/tree/3.386.1"
+                "source": "https://github.com/aws/aws-sdk-php/tree/3.388.2"
             },
-            "time": "2026-06-23T01:24:07+00:00"
+            "time": "2026-07-08T23:12:50+00:00"
         },
         {
             "name": "brick/math",
@@ -774,16 +774,16 @@
         },
         {
             "name": "grpc/grpc",
-            "version": "1.81.0",
+            "version": "1.82.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/grpc/grpc-php.git",
-                "reference": "47046d6b2a6cc7e68806a287d6a1fee57e0c40da"
+                "reference": "be984cb608f21e96453b3cfe54c748cc7b192250"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/grpc/grpc-php/zipball/47046d6b2a6cc7e68806a287d6a1fee57e0c40da",
-                "reference": "47046d6b2a6cc7e68806a287d6a1fee57e0c40da",
+                "url": "https://api.github.com/repos/grpc/grpc-php/zipball/be984cb608f21e96453b3cfe54c748cc7b192250",
+                "reference": "be984cb608f21e96453b3cfe54c748cc7b192250",
                 "shasum": ""
             },
             "require": {
@@ -812,28 +812,28 @@
                 "rpc"
             ],
             "support": {
-                "source": "https://github.com/grpc/grpc-php/tree/v1.81.0"
+                "source": "https://github.com/grpc/grpc-php/tree/v1.82.0"
             },
-            "time": "2026-05-20T09:30:50+00:00"
+            "time": "2026-07-03T09:39:53+00:00"
         },
         {
             "name": "guzzlehttp/guzzle",
-            "version": "7.12.3",
+            "version": "7.14.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "9aa17bcdd777ee31df9fc83c337ca4ca2340def3"
+                "reference": "aef242412e13128b5049864867bb49fc37dd39de"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/9aa17bcdd777ee31df9fc83c337ca4ca2340def3",
-                "reference": "9aa17bcdd777ee31df9fc83c337ca4ca2340def3",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/aef242412e13128b5049864867bb49fc37dd39de",
+                "reference": "aef242412e13128b5049864867bb49fc37dd39de",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
-                "guzzlehttp/promises": "^2.5",
-                "guzzlehttp/psr7": "^2.12.3",
+                "guzzlehttp/promises": "^2.5.1",
+                "guzzlehttp/psr7": "^2.12.4",
                 "php": "^7.2.5 || ^8.0",
                 "psr/http-client": "^1.0",
                 "symfony/deprecation-contracts": "^2.5 || ^3.0",
@@ -845,8 +845,8 @@
             "require-dev": {
                 "bamarni/composer-bin-plugin": "^1.8.2",
                 "ext-curl": "*",
-                "guzzle/client-integration-tests": "3.0.2",
-                "guzzlehttp/test-server": "^0.5.1",
+                "guzzle/client-integration-tests": "3.0.3",
+                "guzzlehttp/test-server": "^0.6",
                 "php-http/message-factory": "^1.1",
                 "phpunit/phpunit": "^8.5.52 || ^9.6.34",
                 "psr/log": "^1.1 || ^2.0 || ^3.0"
@@ -926,7 +926,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/guzzle/issues",
-                "source": "https://github.com/guzzle/guzzle/tree/7.12.3"
+                "source": "https://github.com/guzzle/guzzle/tree/7.14.0"
             },
             "funding": [
                 {
@@ -942,20 +942,20 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-06-23T15:29:02+00:00"
+            "time": "2026-07-08T22:54:09+00:00"
         },
         {
             "name": "guzzlehttp/promises",
-            "version": "2.5.0",
+            "version": "2.5.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/promises.git",
-                "reference": "4360e982f87f5f258bf872d094647791db2f4c8e"
+                "reference": "9ad1e4fc607446a055b95870c7f668e93b5cff29"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/promises/zipball/4360e982f87f5f258bf872d094647791db2f4c8e",
-                "reference": "4360e982f87f5f258bf872d094647791db2f4c8e",
+                "url": "https://api.github.com/repos/guzzle/promises/zipball/9ad1e4fc607446a055b95870c7f668e93b5cff29",
+                "reference": "9ad1e4fc607446a055b95870c7f668e93b5cff29",
                 "shasum": ""
             },
             "require": {
@@ -1010,7 +1010,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/promises/issues",
-                "source": "https://github.com/guzzle/promises/tree/2.5.0"
+                "source": "https://github.com/guzzle/promises/tree/2.5.1"
             },
             "funding": [
                 {
@@ -1026,20 +1026,20 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-06-02T12:23:43+00:00"
+            "time": "2026-07-08T15:48:39+00:00"
         },
         {
             "name": "guzzlehttp/psr7",
-            "version": "2.12.3",
+            "version": "2.12.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/psr7.git",
-                "reference": "7ec62dc3f44aa218487dbed81a9bf9bc647be55d"
+                "reference": "51e27f9e2b332ab3e72f4520d5ff4f3c68c3577c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/psr7/zipball/7ec62dc3f44aa218487dbed81a9bf9bc647be55d",
-                "reference": "7ec62dc3f44aa218487dbed81a9bf9bc647be55d",
+                "url": "https://api.github.com/repos/guzzle/psr7/zipball/51e27f9e2b332ab3e72f4520d5ff4f3c68c3577c",
+                "reference": "51e27f9e2b332ab3e72f4520d5ff4f3c68c3577c",
                 "shasum": ""
             },
             "require": {
@@ -1129,7 +1129,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/psr7/issues",
-                "source": "https://github.com/guzzle/psr7/tree/2.12.3"
+                "source": "https://github.com/guzzle/psr7/tree/2.12.4"
             },
             "funding": [
                 {
@@ -1145,7 +1145,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-06-23T15:21:08+00:00"
+            "time": "2026-07-08T15:56:20+00:00"
         },
         {
             "name": "league/commonmark",
@@ -1338,16 +1338,16 @@
         },
         {
             "name": "mtdowling/jmespath.php",
-            "version": "2.9.1",
+            "version": "2.9.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/jmespath/jmespath.php.git",
-                "reference": "9c208ba27ae7d90853c288b3795d6702eb251d34"
+                "reference": "2157c5e50e813ec6a96c1eed3be7f64a20fb32a8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/jmespath/jmespath.php/zipball/9c208ba27ae7d90853c288b3795d6702eb251d34",
-                "reference": "9c208ba27ae7d90853c288b3795d6702eb251d34",
+                "url": "https://api.github.com/repos/jmespath/jmespath.php/zipball/2157c5e50e813ec6a96c1eed3be7f64a20fb32a8",
+                "reference": "2157c5e50e813ec6a96c1eed3be7f64a20fb32a8",
                 "shasum": ""
             },
             "require": {
@@ -1398,9 +1398,9 @@
             ],
             "support": {
                 "issues": "https://github.com/jmespath/jmespath.php/issues",
-                "source": "https://github.com/jmespath/jmespath.php/tree/2.9.1"
+                "source": "https://github.com/jmespath/jmespath.php/tree/2.9.2"
             },
-            "time": "2026-06-11T10:43:56+00:00"
+            "time": "2026-07-06T18:56:19+00:00"
         },
         {
             "name": "nette/schema",
@@ -2419,6 +2419,81 @@
             "time": "2022-11-30T15:59:55+00:00"
         },
         {
+            "name": "react/child-process",
+            "version": "v0.6.7",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/child-process.git",
+                "reference": "970f0e71945556422ee4570ccbabaedc3cf04ad3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/child-process/zipball/970f0e71945556422ee4570ccbabaedc3cf04ad3",
+                "reference": "970f0e71945556422ee4570ccbabaedc3cf04ad3",
+                "shasum": ""
+            },
+            "require": {
+                "evenement/evenement": "^3.0 || ^2.0 || ^1.0",
+                "php": ">=5.3.0",
+                "react/event-loop": "^1.2",
+                "react/stream": "^1.4"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.6 || ^5.7 || ^4.8.36",
+                "react/socket": "^1.16",
+                "sebastian/environment": "^5.0 || ^3.0 || ^2.0 || ^1.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\ChildProcess\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@clue.engineering",
+                    "homepage": "https://clue.engineering/"
+                },
+                {
+                    "name": "Cees-Jan Kiewiet",
+                    "email": "reactphp@ceesjankiewiet.nl",
+                    "homepage": "https://wyrihaximus.net/"
+                },
+                {
+                    "name": "Jan Sorgalla",
+                    "email": "jsorgalla@gmail.com",
+                    "homepage": "https://sorgalla.com/"
+                },
+                {
+                    "name": "Chris Boden",
+                    "email": "cboden@gmail.com",
+                    "homepage": "https://cboden.dev/"
+                }
+            ],
+            "description": "Event-driven library for executing child processes with ReactPHP.",
+            "keywords": [
+                "event-driven",
+                "process",
+                "reactphp"
+            ],
+            "support": {
+                "issues": "https://github.com/reactphp/child-process/issues",
+                "source": "https://github.com/reactphp/child-process/tree/v0.6.7"
+            },
+            "funding": [
+                {
+                    "url": "https://opencollective.com/reactphp",
+                    "type": "open_collective"
+                }
+            ],
+            "time": "2025-12-23T15:25:20+00:00"
+        },
+        {
             "name": "react/dns",
             "version": "v1.14.0",
             "source": {
@@ -3138,7 +3213,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-async",
-                "reference": "d59d32a5c563858d6b63684e2c5ea1f3c2235755"
+                "reference": "733cbca976b48de553dbdd48e93d5bff738d6571"
             },
             "require": {
                 "php": "^8.3",
@@ -3322,13 +3397,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-files",
-                "reference": "4de1a339ab7443e80450c91c7304b8b002c73270"
+                "reference": "e8577cd6928166fc30bce6925d1e5e8f1146598e"
             },
             "require": {
                 "php": ">=8.3",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-mosaic": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
@@ -3450,12 +3524,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-focus.git",
-                "reference": "c531aefc52b1dd9613e56a14bae2ff87104dc23a"
+                "reference": "43d2bfe8a51a57d98c006c668b96e0b6cf4220b7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-focus/zipball/c531aefc52b1dd9613e56a14bae2ff87104dc23a",
-                "reference": "c531aefc52b1dd9613e56a14bae2ff87104dc23a",
+                "url": "https://api.github.com/repos/sugarcraft/candy-focus/zipball/43d2bfe8a51a57d98c006c668b96e0b6cf4220b7",
+                "reference": "43d2bfe8a51a57d98c006c668b96e0b6cf4220b7",
                 "shasum": ""
             },
             "require": {
@@ -3501,7 +3575,7 @@
                 "source": "https://github.com/sugarcraft/candy-focus",
                 "docs": "https://sugarcraft.github.io/lib/candy-focus.html"
             },
-            "time": "2026-06-29T01:21:56+00:00"
+            "time": "2026-07-01T05:26:27+00:00"
         },
         {
             "name": "sugarcraft/candy-forms",
@@ -3509,7 +3583,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-forms",
-                "reference": "67f038ee0957e9e05587674e99e90be3b8e67b9a"
+                "reference": "f5a3f4d597827d48aa9c6d61c9d1203b03523f50"
             },
             "require": {
                 "php": "^8.3",
@@ -3570,15 +3644,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-freeze",
-                "reference": "54d217a7b701d0770659eb0d71ee784a9a8b1ee7"
+                "reference": "8fbe4bdf886631d6a5b90e64d53e69aac3b7f929"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-ansi": "dev-master",
-                "sugarcraft/candy-buffer": "dev-master",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-shine": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3693,7 +3764,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-hermit",
-                "reference": "926db38348f306638e7597f5eb5b33279573c377"
+                "reference": "eab8a43f7022805332c846d2ee0880ef829dbbb9"
             },
             "require": {
                 "php": "^8.3",
@@ -3752,12 +3823,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-input.git",
-                "reference": "de6207d88e03217a202fb8e5856a18e7adbed27a"
+                "reference": "cee8ab4b3ebad01abf2f8eff852d137283973075"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/de6207d88e03217a202fb8e5856a18e7adbed27a",
-                "reference": "de6207d88e03217a202fb8e5856a18e7adbed27a",
+                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/cee8ab4b3ebad01abf2f8eff852d137283973075",
+                "reference": "cee8ab4b3ebad01abf2f8eff852d137283973075",
                 "shasum": ""
             },
             "require": {
@@ -3803,7 +3874,7 @@
                 "issues": "https://github.com/sugarcraft/candy-input/issues",
                 "source": "https://github.com/sugarcraft/candy-input"
             },
-            "time": "2026-06-29T01:22:03+00:00"
+            "time": "2026-07-04T22:42:44+00:00"
         },
         {
             "name": "sugarcraft/candy-kit",
@@ -3811,7 +3882,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-kit",
-                "reference": "553815ef6062822c7634301d37183345d48436fc"
+                "reference": "fea899d3ef345eb3ec428fd5c86f884c7b4a3e3b"
             },
             "require": {
                 "php": "^8.3",
@@ -3926,7 +3997,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-lister",
-                "reference": "4ddddb48f7be54fd792925532aedeb299006c1b3"
+                "reference": "91f9330d866dba73341399cb0b5f8c733b871bbc"
             },
             "require": {
                 "php": "^8.3",
@@ -3982,7 +4053,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-log",
-                "reference": "cc20d35ff07be6dc036d18b6325858f7eaf89c97"
+                "reference": "1b2a44f0291294ed11db963ec347aa6b0e501334"
             },
             "require": {
                 "php": "^8.3",
@@ -4041,18 +4112,15 @@
             "dist": {
                 "type": "path",
                 "url": "candy-metrics",
-                "reference": "25cbe5c581d5233077fb57595d7f3a93c86e1f79"
+                "reference": "9457e086ca716c712c31a17e025523304ff82324"
             },
             "require": {
                 "php": ">=8.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.0",
+                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-wish": "dev-master"
             },
-            "suggest": {
-                "sugarcraft/candy-wish": "Required to use the SessionMetrics middleware."
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
             },
             "type": "library",
             "autoload": {
@@ -4105,7 +4173,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mines",
-                "reference": "277af4bb25d168c95a0482c33ba32d5bd9a953c4"
+                "reference": "cc6064b42cb1729fde5ae9db7d8a721fbf862b27"
             },
             "require": {
                 "php": ">=8.3",
@@ -4167,7 +4235,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mold",
-                "reference": "afd00c828db3f72f141373b431d81f3a84f58f07"
+                "reference": "ea09f8596a9ae5ab60d98cfabb04acac082382d9"
             },
             "require": {
                 "php": ">=8.3",
@@ -4229,7 +4297,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "74f59bde8d6b71768989c3ad037bb9d87b9ac574"
+                "reference": "2484694adbeffd7380afddaf5234d5ed6e766aa0"
             },
             "require": {
                 "ext-gd": "*",
@@ -4297,7 +4365,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mouse",
-                "reference": "1081d83104a52e05627071e169d79a87e29ccb9f"
+                "reference": "c1cbe36293b71114bb8560d1ac60040afbc069a9"
             },
             "require": {
                 "php": "^8.3",
@@ -4353,14 +4421,17 @@
             "dist": {
                 "type": "path",
                 "url": "candy-palette",
-                "reference": "46f37c05b634d3c8cc4dab4cd77a0efdb0dbf531"
+                "reference": "c616ce65cdccba485e93beb78f059cab622328d4"
             },
             "require": {
                 "php": "^8.3",
+                "react/child-process": "^0.6",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
                 "phpunit/phpunit": "^10.5"
             },
             "type": "library",
@@ -4410,18 +4481,19 @@
             "dist": {
                 "type": "path",
                 "url": "candy-pty",
-                "reference": "bfabf5f08539cf56e4abcffb0385fd3d80d6022f"
+                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
             },
             "require": {
                 "ext-ffi": "*",
                 "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-input": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
-                "react/event-loop": "^1.6",
                 "sugarcraft/candy-vcr": "dev-master",
                 "sugarcraft/candy-vt": "dev-master"
             },
@@ -4479,7 +4551,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-query",
-                "reference": "a8e65b21aac3b072bf447a09c4954f1569b1f0b3"
+                "reference": "0ab1c2f2cd25f26499220f7ea5ebab2b6d651285"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -4487,6 +4559,7 @@
                 "ext-pdo_sqlite": "*",
                 "php": ">=8.3",
                 "react/mysql": "0.7.x-dev",
+                "react/promise-timer": "^1.9",
                 "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-forms": "dev-master",
@@ -4554,15 +4627,18 @@
             "dist": {
                 "type": "path",
                 "url": "candy-serve",
-                "reference": "2489e354f6df6f51bbdb2ac07bae843575679400"
+                "reference": "1f46c6597e15247bc8812bbacd93d2a492ba2a8d"
             },
             "require": {
                 "ext-json": "*",
                 "ext-openssl": "*",
                 "ext-ssh2": "*",
                 "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
                 "sugarcraft/candy-async": "dev-master",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "symfony/yaml": "^6.4 || ^7.0"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -4695,7 +4771,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-shine",
-                "reference": "cc8e0f53cd64bf2e1b763ddd0573db2015e31f85"
+                "reference": "df9bfc4b048217a0baa3806777a2d0a8aea7910f"
             },
             "require": {
                 "league/commonmark": "^2.4",
@@ -4758,7 +4834,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-sprinkles",
-                "reference": "3e1418d7c50824d30bf3eec42a17c18b8043074d"
+                "reference": "a90aa45201d382535e3a246e2366b5f6490aa685"
             },
             "require": {
                 "php": "^8.3",
@@ -4821,7 +4897,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-testing",
-                "reference": "6beb6d9938f3d9841c9415be7ab33c8f8c59342c"
+                "reference": "f8fc95d3723ed891cc62546abfdc25c33a0f9121"
             },
             "require": {
                 "php": "^8.3",
@@ -4879,7 +4955,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-tetris",
-                "reference": "7a36c33daef104ceb6b9232326dcbd7a8b5089ba"
+                "reference": "79e69a12c5438d04a0ef3a43d2e958e96517d5bb"
             },
             "require": {
                 "php": ">=8.3",
@@ -4916,7 +4992,7 @@
                     "role": "Maintainer"
                 }
             ],
-            "description": "Tetris clone built on the SugarCraft stack — SugarCraft runtime, CandySprinkles styling, HoneyBounce-driven smooth piece previews. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
+            "description": "Tetris clone built on the SugarCraft stack — SugarCraft runtime, CandySprinkles styling. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
             "homepage": "https://github.com/sugarcraft/candy-tetris",
             "keywords": [
                 "demo",
@@ -4942,7 +5018,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "10d3841d04962a61cbdd9d05d3169b08c2849b1d"
+                "reference": "342800bd4869a0469b0813051d2cae45703b87b1"
             },
             "require": {
                 "php": "^8.3",
@@ -5017,7 +5093,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vt",
-                "reference": "0a0d1015cb9bcf0e52c97070e9627cbfc0a4b50d"
+                "reference": "2da6a13242ccf7fb6e23fb44f04adf4519f8e380"
             },
             "require": {
                 "php": "^8.3",
@@ -5144,7 +5220,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-zone",
-                "reference": "785928d57a2308a8e79ff883132ff719ec5afd38"
+                "reference": "36079e85311edf21bb0b26e803cf89780e87a5b3"
             },
             "require": {
                 "php": "^8.3",
@@ -5203,7 +5279,7 @@
             "dist": {
                 "type": "path",
                 "url": "honey-bounce",
-                "reference": "be1687cb57828165eb224d213f172f486dec346b"
+                "reference": "dffd378129f02179e22d76a0bfab7e410d79b47d"
             },
             "require": {
                 "php": "^8.3",
@@ -5264,7 +5340,7 @@
             "dist": {
                 "type": "path",
                 "url": "honey-flap",
-                "reference": "bebe2f2011d3bdf7e65f55854e2eea0eb34bac1e"
+                "reference": "70388187bba3563a79d65930a0e9b8ceb6d077a6"
             },
             "require": {
                 "php": ">=8.3",
@@ -5327,7 +5403,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-bits",
-                "reference": "9af187f314915e68b86c7786fa42ebf91962ab53"
+                "reference": "1b4b1037123f94cc1083bf18f346b98c6348ea75"
             },
             "require": {
                 "php": "^8.3",
@@ -5401,7 +5477,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-boxer",
-                "reference": "142e355cafce6d2904dd698fa0dc4a702c00eff8"
+                "reference": "89ad74867bc63f4e4b187067be5ffdf7aa470afa"
             },
             "require": {
                 "php": "^8.3",
@@ -5459,7 +5535,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-calendar",
-                "reference": "3da2919fe2f2e349f606e8b7a4614fbe16d39394"
+                "reference": "0104bbfd6eb50dd85674acc603f976a072942e3b"
             },
             "require": {
                 "php": "^8.3",
@@ -5516,7 +5592,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-charts",
-                "reference": "13a9f34cc4d46d32a8916678c6584353f777d18a"
+                "reference": "cede9848e5ce0dffd011790dc56a0892450108be"
             },
             "require": {
                 "php": "^8.3",
@@ -5526,6 +5602,7 @@
                 "sugarcraft/sugar-dash": "dev-master"
             },
             "require-dev": {
+                "phpstan/phpstan": "^2.2",
                 "phpunit/phpunit": "^10.5",
                 "sugarcraft/candy-testing": "dev-master"
             },
@@ -5584,7 +5661,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crumbs",
-                "reference": "4051eed608d279cdc78acca04432f76037fda38b"
+                "reference": "e817a6ecede8c303e7bf33d86f9d4745747e8006"
             },
             "require": {
                 "php": "^8.3",
@@ -5640,7 +5717,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "20861e27ba5843f769aeb1efee87bf4b96479f80"
+                "reference": "a22d0f89b131b3a85ad267188d89f7cb616f2bd9"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5786,12 +5863,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/sugar-gallery.git",
-                "reference": "38c15d810f7d0b379c522240821bb05d2dbe0fd6"
+                "reference": "33534bd91f72f25b6a8738531625c2ef6daa8652"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/sugar-gallery/zipball/38c15d810f7d0b379c522240821bb05d2dbe0fd6",
-                "reference": "38c15d810f7d0b379c522240821bb05d2dbe0fd6",
+                "url": "https://api.github.com/repos/sugarcraft/sugar-gallery/zipball/33534bd91f72f25b6a8738531625c2ef6daa8652",
+                "reference": "33534bd91f72f25b6a8738531625c2ef6daa8652",
                 "shasum": ""
             },
             "require": {
@@ -5838,7 +5915,7 @@
                 "issues": "https://github.com/sugarcraft/sugar-gallery/issues",
                 "source": "https://github.com/sugarcraft/sugar-gallery"
             },
-            "time": "2026-06-28T02:21:38+00:00"
+            "time": "2026-07-04T22:42:44+00:00"
         },
         {
             "name": "sugarcraft/sugar-glow",
@@ -5911,7 +5988,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-post",
-                "reference": "803a5cb9035e81dd5325522dc34c4eaf1f97f851"
+                "reference": "27a1f1081457f4ecd0e403191cccfaed99ba5923"
             },
             "require": {
                 "php": "^8.3",
@@ -5919,6 +5996,8 @@
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
+                "phpstan/phpstan": "^2.2",
+                "phpstan/phpstan-phpunit": "^2.0",
                 "phpunit/phpunit": "^10.5"
             },
             "bin": [
@@ -5970,7 +6049,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-prompt",
-                "reference": "01fe4ac891806dacb15318204dc77d369c0e80c4"
+                "reference": "6f238f3892f80110307cfc0cad1ea3302287be1e"
             },
             "require": {
                 "php": "^8.3",
@@ -6039,7 +6118,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-readline",
-                "reference": "d4aec2b507db962759de109158c99bb5ab0d1e15"
+                "reference": "75f7f81fe4422229005dd73fa718a00a39619360"
             },
             "require": {
                 "php": "^8.3",
@@ -6168,7 +6247,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-skate",
-                "reference": "d0d2ef2cea2b6d33518794b4d404078fa04ed563"
+                "reference": "31f008fa0c609adf560fa5e9130c4d674a426f93"
             },
             "require": {
                 "ext-sqlite3": "*",
@@ -6228,7 +6307,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-spark",
-                "reference": "dda8aa926ca567bb28b23ba36a0a253f9ffb3bb1"
+                "reference": "e53448342b6d16320d43cacce2d574186d142104"
             },
             "require": {
                 "php": "^8.3",
@@ -6290,7 +6369,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-stash",
-                "reference": "9d078ea3199fb7f852f6b345f5f73537d0152ac8"
+                "reference": "8faf90661c04f4718d1ea8ee8d87ea3fce8abc8f"
             },
             "require": {
                 "php": ">=8.3",
@@ -6409,7 +6488,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-table",
-                "reference": "4062f7742a0d7ae3761f90d391cda21ea318f10c"
+                "reference": "8c38c5f432410517fb50b241f2d6bc245d8d082c"
             },
             "require": {
                 "php": "^8.3",
@@ -6468,7 +6547,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-tick",
-                "reference": "e0a3bbc583728071ad170d2aa59ef158f63f3ff0"
+                "reference": "00d3e0aed962fd5878e5eb745801a88772dbed7d"
             },
             "require": {
                 "php": ">=8.3",
@@ -6531,7 +6610,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-toast",
-                "reference": "cc11792d8a0dc3766d203d612c35193a0e8b8150"
+                "reference": "8e5e737b0aef662ef21a70e8bf13e4058410df33"
             },
             "require": {
                 "php": "^8.3",
@@ -6588,7 +6667,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-veil",
-                "reference": "bdf6866da2e8d86ab93fe1787ff405b3dd98040e"
+                "reference": "e08b63719dbfe8e1c23d8aafdfa1f8c2f386f6f6"
             },
             "require": {
                 "php": "^8.3",
@@ -6626,6 +6705,7 @@
             "description": "PHP port of rmhubbert/bubbletea-overlay — modal/overlay compositing for terminal UIs. Composite foreground content over a background at any position (Top/Right/Bottom/Left/Center) with optional pixel offsets.",
             "homepage": "https://github.com/sugarcraft/sugar-veil",
             "keywords": [
+                "bubbletea-overlay",
                 "composite",
                 "modal",
                 "overlay",
@@ -7864,12 +7944,63 @@
     ],
     "packages-dev": [
         {
-            "name": "phpstan/phpstan",
-            "version": "2.2.2",
+            "name": "phar-io/version",
+            "version": "3.2.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/phar-io/version.git",
+                "reference": "4f7fd7836c6f332bb2933569e566a0d6c4cbed74"
+            },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/e5cc34d491a90e79c216d824f60fe21fd4d93bd6",
-                "reference": "e5cc34d491a90e79c216d824f60fe21fd4d93bd6",
+                "url": "https://api.github.com/repos/phar-io/version/zipball/4f7fd7836c6f332bb2933569e566a0d6c4cbed74",
+                "reference": "4f7fd7836c6f332bb2933569e566a0d6c4cbed74",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.2 || ^8.0"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "src/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Arne Blankerts",
+                    "email": "arne@blankerts.de",
+                    "role": "Developer"
+                },
+                {
+                    "name": "Sebastian Heuer",
+                    "email": "sebastian@phpeople.de",
+                    "role": "Developer"
+                },
+                {
+                    "name": "Sebastian Bergmann",
+                    "email": "sebastian@phpunit.de",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Library for handling version information and constraints",
+            "support": {
+                "issues": "https://github.com/phar-io/version/issues",
+                "source": "https://github.com/phar-io/version/tree/3.2.1"
+            },
+            "time": "2022-02-21T01:04:05+00:00"
+        },
+        {
+            "name": "phpstan/phpstan",
+            "version": "2.2.5",
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/909c1e5fef7989ac0d0c1c5c42e32a5c4f6198a0",
+                "reference": "909c1e5fef7989ac0d0c1c5c42e32a5c4f6198a0",
                 "shasum": ""
             },
             "require": {
@@ -7925,25 +8056,26 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-06-05T09:00:01+00:00"
+            "time": "2026-07-05T06:31:06+00:00"
         },
         {
             "name": "phpstan/phpstan-phpunit",
-            "version": "2.0.16",
+            "version": "2.0.18",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpstan/phpstan-phpunit.git",
-                "reference": "6ab598e1bc106e6827fd346ae4a12b4a5d634c32"
+                "reference": "f5dc20ff8082d02339b60cab68ec3eb0d859fb30"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan-phpunit/zipball/6ab598e1bc106e6827fd346ae4a12b4a5d634c32",
-                "reference": "6ab598e1bc106e6827fd346ae4a12b4a5d634c32",
+                "url": "https://api.github.com/repos/phpstan/phpstan-phpunit/zipball/f5dc20ff8082d02339b60cab68ec3eb0d859fb30",
+                "reference": "f5dc20ff8082d02339b60cab68ec3eb0d859fb30",
                 "shasum": ""
             },
             "require": {
+                "phar-io/version": "^3.2",
                 "php": "^7.4 || ^8.0",
-                "phpstan/phpstan": "^2.1.32"
+                "phpstan/phpstan": "^2.2.3"
             },
             "conflict": {
                 "phpunit/phpunit": "<7.0"
@@ -7953,7 +8085,8 @@
                 "php-parallel-lint/php-parallel-lint": "^1.2",
                 "phpstan/phpstan-deprecation-rules": "^2.0",
                 "phpstan/phpstan-strict-rules": "^2.0",
-                "phpunit/phpunit": "^9.6"
+                "phpunit/phpunit": "^9.6",
+                "shipmonk/name-collision-detector": "^2.1"
             },
             "type": "phpstan-extension",
             "extra": {
@@ -7979,9 +8112,9 @@
             ],
             "support": {
                 "issues": "https://github.com/phpstan/phpstan-phpunit/issues",
-                "source": "https://github.com/phpstan/phpstan-phpunit/tree/2.0.16"
+                "source": "https://github.com/phpstan/phpstan-phpunit/tree/2.0.18"
             },
-            "time": "2026-02-14T09:05:21+00:00"
+            "time": "2026-07-04T12:16:09+00:00"
         }
     ],
     "aliases": [],
