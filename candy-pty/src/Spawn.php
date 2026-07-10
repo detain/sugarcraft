@@ -15,9 +15,10 @@ use SugarCraft\Pty\Posix\PosixChild;
  * stdin / stdout / stderr all read from / write to the same pseudo-
  * terminal device.
  *
- * The slave path is opened three separate times — once per descriptor
- * — by PHP's stream layer. The kernel handles this fine on Linux; the
- * macOS path is verified by SpawnTest.
+ * The slave device is opened ONCE (O_RDWR) and the single stream is
+ * reused for all three of the child's stdio descriptors, so there is
+ * exactly one open()-by-path rather than three racing ones. The parent
+ * closes its handle after `proc_open`; the child keeps its dup'd copies.
  *
  * When `$controllingTerminal` is true, the spawn is wrapped in
  * `bin/pty-shim.php` which runs `setsid()` + `ioctl(0, TIOCSCTTY, 0)`
@@ -59,38 +60,60 @@ final class Spawn
             $cmd = self::wrapInShim($cmd);
         }
 
+        // TOCTOU: the previous descriptor spec named `$master->slavePath`
+        // three times, so PHP's stream layer opened the slave device by
+        // path THREE separate times — three independent open()-by-path
+        // races. Open it ONCE here (O_RDWR: readable for stdin slot 0,
+        // writable for stdout/stderr slots 1-2) and reuse the single
+        // resource for all three stdio slots. fd 0 is still the slave tty,
+        // so the shim's ioctl(0, TIOCSCTTY) keeps working.
+        $slave = @\fopen($master->slavePath, 'r+');
+        if ($slave === false) {
+            throw new PtyException(Lang::t('spawn.slave_open_failed', [
+                'path' => $master->slavePath,
+            ]));
+        }
+
         $descriptors = [
-            0 => ['file', $master->slavePath, 'r'],
-            1 => ['file', $master->slavePath, 'w'],
-            2 => ['file', $master->slavePath, 'w'],
+            0 => $slave,
+            1 => $slave,
+            2 => $slave,
         ];
         $pipes = [];
 
-        $process = @\proc_open(
-            $cmd,
-            $descriptors,
-            $pipes,
-            null,
-            $env,
-            null,
-        );
+        try {
+            $process = @\proc_open(
+                $cmd,
+                $descriptors,
+                $pipes,
+                null,
+                $env,
+                null,
+            );
 
-        if (!\is_resource($process)) {
-            throw new PtyException(Lang::t('spawn.proc_open_failed', [
-                'cmd' => \implode(' ', $cmd),
-            ]));
+            if (!\is_resource($process)) {
+                throw new PtyException(Lang::t('spawn.proc_open_failed', [
+                    'cmd' => \implode(' ', $cmd),
+                ]));
+            }
+
+            $status = \proc_get_status($process);
+            $pid = (int) ($status['pid'] ?? 0);
+            if ($pid <= 0) {
+                \proc_close($process);
+                throw new PtyException(Lang::t('spawn.no_pid', [
+                    'cmd' => \implode(' ', $cmd),
+                ]));
+            }
+
+            return new PosixChild($pid, $process);
+        } finally {
+            // proc_open dup()s the slave into the child, which now owns
+            // its copies; the parent's handle must not linger (it would
+            // keep the slave open on the master side). Close on EVERY exit
+            // path — success and both throw branches.
+            \fclose($slave);
         }
-
-        $status = \proc_get_status($process);
-        $pid = (int) ($status['pid'] ?? 0);
-        if ($pid <= 0) {
-            \proc_close($process);
-            throw new PtyException(Lang::t('spawn.no_pid', [
-                'cmd' => \implode(' ', $cmd),
-            ]));
-        }
-
-        return new PosixChild($pid, $process);
     }
 
     /**
