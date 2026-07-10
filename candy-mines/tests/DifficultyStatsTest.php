@@ -125,4 +125,106 @@ final class DifficultyStatsTest extends TestCase
         $this->expectException(\RuntimeException::class);
         DifficultyStats::load($this->persistencePath);
     }
+
+    /**
+     * Full round-trip through the AtomicJsonFile-backed store, exercising
+     * every field including the nullable best-time slots. Pins the save()
+     * payload mapping: a swapped/zeroed field would surface here.
+     */
+    public function testAtomicRoundTripPreservesAllFieldsIncludingNulls(): void
+    {
+        $stats = new Stats(
+            easyGames: 7,
+            easyWins: 4,
+            easyBest: null,
+            mediumGames: 3,
+            mediumWins: 2,
+            mediumBest: 99,
+            expertGames: 1,
+            expertWins: 0,
+            expertBest: null,
+        );
+
+        DifficultyStats::fromStats($stats)->save($this->persistencePath);
+        $loaded = DifficultyStats::load($this->persistencePath)?->getStats();
+
+        $this->assertNotNull($loaded);
+        $this->assertSame(7, $loaded->easyGames);
+        $this->assertSame(4, $loaded->easyWins);
+        $this->assertNull($loaded->easyBest);
+        $this->assertSame(3, $loaded->mediumGames);
+        $this->assertSame(2, $loaded->mediumWins);
+        $this->assertSame(99, $loaded->mediumBest);
+        $this->assertSame(1, $loaded->expertGames);
+        $this->assertSame(0, $loaded->expertWins);
+        $this->assertNull($loaded->expertBest);
+    }
+
+    /**
+     * The atomic write must leave the directory holding ONLY the target file —
+     * no temp artifact (whatever naming scheme AtomicJsonFile uses). Robust to
+     * the candy-core temp pattern `.<name>.tmp.<hex>`, unlike a `.tmp_*` glob.
+     */
+    public function testSaveLeavesNoTempArtifacts(): void
+    {
+        DifficultyStats::fromStats(new Stats(easyGames: 1))->save($this->persistencePath);
+
+        $entries = array_values(array_diff(scandir($this->tmpDir), ['.', '..']));
+        $this->assertSame(['stats.json'], $entries, 'Only the target file should remain');
+    }
+
+    /**
+     * A valid-but-non-array top level (e.g. a bare JSON scalar) is corruption,
+     * not empty state — load() must reject it loudly rather than treat it as
+     * absent. Enforced by AtomicJsonFile::read()/Json::decodeArray.
+     */
+    public function testLoadThrowsRuntimeExceptionOnNonArrayTopLevel(): void
+    {
+        file_put_contents($this->persistencePath, '5');
+        $this->expectException(\RuntimeException::class);
+        DifficultyStats::load($this->persistencePath);
+    }
+
+    /**
+     * Malformed JSON in a present file surfaces as \JsonException (the
+     * JSON_THROW_ON_ERROR contract carried through AtomicJsonFile::read()).
+     */
+    public function testLoadThrowsJsonExceptionOnMalformedJson(): void
+    {
+        file_put_contents($this->persistencePath, '{not valid json');
+        $this->expectException(\JsonException::class);
+        DifficultyStats::load($this->persistencePath);
+    }
+
+    /**
+     * On-disk backward-compat: files written by the pre-migration save()
+     * were COMPACT `{"version":1,"data":{...}}`. load() must still read them
+     * byte-for-byte, so existing stats files survive the format switch to
+     * pretty-printed output. Pins the exact on-disk key contract.
+     */
+    public function testLoadReadsLegacyCompactPayload(): void
+    {
+        // Exactly what the old hand-rolled save() emitted: compact, no PRETTY.
+        $legacy = json_encode([
+            'version' => 1,
+            'data' => [
+                'easyGames' => 11,
+                'easyWins' => 6,
+                'easyBest' => 55,
+                'mediumGames' => 0,
+                'mediumWins' => 0,
+                'mediumBest' => null,
+                'expertGames' => 0,
+                'expertWins' => 0,
+                'expertBest' => null,
+            ],
+        ], JSON_THROW_ON_ERROR);
+        file_put_contents($this->persistencePath, $legacy);
+
+        $loaded = DifficultyStats::load($this->persistencePath)?->getStats();
+        $this->assertNotNull($loaded);
+        $this->assertSame(11, $loaded->easyGames);
+        $this->assertSame(6, $loaded->easyWins);
+        $this->assertSame(55, $loaded->easyBest);
+    }
 }
