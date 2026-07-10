@@ -341,4 +341,72 @@ final class ParserOverflowTest extends TestCase
         $this->assertStringStartsWith('2;', $oscs[0]['detail']);
         $this->assertSame('a', substr($oscs[0]['detail'], -1));
     }
+
+    // -------------------------------------------------------------------------
+    // Constructor-configurable string-buffer cap (candy-vt de-fork prep).
+    // -------------------------------------------------------------------------
+
+    /**
+     * The string-buffer cap defaults to 64 KiB (65536) when the ctor param
+     * is omitted — preserving the prior hard-coded behaviour.
+     */
+    public function testDefaultStringBufferCapIs65536(): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler); // no explicit cap
+
+        $parser->feed("\x1b]2;" . str_repeat('a', 70000) . "\x07");
+
+        $oscs = $handler->filter('osc');
+        $this->assertNotEmpty($oscs);
+        $this->assertSame(65536, strlen($oscs[0]['detail']));
+    }
+
+    /**
+     * A smaller cap passed to the constructor truncates the payload earlier.
+     */
+    public function testCustomSmallStringBufferCapHonored(): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler, false, 1024);
+
+        $parser->feed("\x1b]2;" . str_repeat('a', 70000) . "\x07");
+
+        $oscs = $handler->filter('osc');
+        $this->assertNotEmpty($oscs);
+        $this->assertSame(1024, strlen($oscs[0]['detail']), 'payload capped at custom 1 KiB');
+    }
+
+    /**
+     * A larger cap (candy-vt used 1 MiB) accepts payloads the 64 KiB default
+     * would have truncated.
+     */
+    public function testCustomLargeStringBufferCapHonored(): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler, false, 1_048_576);
+
+        $payload = str_repeat('a', 70000);
+        $parser->feed("\x1b]2;" . $payload . "\x07");
+
+        $oscs = $handler->filter('osc');
+        $this->assertNotEmpty($oscs);
+        // "2;" (2 bytes) + 70000 = 70002, well under the 1 MiB cap → not truncated.
+        $this->assertSame(70002, strlen($oscs[0]['detail']));
+    }
+
+    /**
+     * The custom cap also governs the DCS passthrough buffer.
+     */
+    public function testCustomStringBufferCapAppliesToDcs(): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler, false, 512);
+
+        $parser->feed("\x1bP1;" . str_repeat('z', 70000) . "\x1b\\");
+
+        $dcs = $handler->filter('dcs');
+        $this->assertNotEmpty($dcs);
+        $this->assertSame(512, strlen($dcs[0]['detail']['data']));
+    }
 }
