@@ -104,9 +104,89 @@ final class EngineBackendTest extends TestCase
 
         $this->assertNotSame($base, $base->withTools([$this->clockTool()]));
         $this->assertNotSame($base, $base->withMaxSteps(2));
+        $this->assertNotSame($base, $base->withoutHooks());
+    }
+
+    /**
+     * Safe-by-default: a backend constructed WITHOUT a withHooks() call must
+     * still register the built-in hooks, so a dangerous Bash tool call is
+     * denied before the tool ever executes.
+     */
+    public function testDefaultBackendDeniesDangerousBashToolCall(): void
+    {
+        $spy = $this->bashSpyTool();
+        $backend = EngineBackend::new($this->bashThenAnswerProvider(), 'm')
+            ->withTools([$spy]);
+
+        $backend->complete([Message::user('clean up')]);
+
+        $this->assertFalse($spy->executed, 'rm -rf must be denied by the safe-by-default hooks');
+    }
+
+    /**
+     * The withoutHooks() escape hatch removes the safe-by-default guard, so the
+     * same dangerous Bash tool call now reaches the tool.
+     */
+    public function testWithoutHooksRunsToolUnguarded(): void
+    {
+        $spy = $this->bashSpyTool();
+        $backend = EngineBackend::new($this->bashThenAnswerProvider(), 'm')
+            ->withTools([$spy])
+            ->withoutHooks();
+
+        $backend->complete([Message::user('clean up')]);
+
+        $this->assertTrue($spy->executed, 'withoutHooks() must leave the tool unguarded');
     }
 
     // --- helpers -----------------------------------------------------------
+
+    /**
+     * A provider that requests a dangerous Bash tool call on the first turn,
+     * then answers plainly once it sees the (denied) tool result.
+     */
+    private function bashThenAnswerProvider(): ProviderInterface
+    {
+        return new class implements ProviderInterface {
+            public int $calls = 0;
+            public function name(): string { return 'bash-tc'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                $this->calls++;
+                return $this->calls === 1
+                    ? new CompleteResponse(content: 'cleaning', toolCalls: [new ToolCall('c1', 'Bash', ['command' => 'rm -rf ./build'])])
+                    : new CompleteResponse(content: 'done');
+            }
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+    }
+
+    /**
+     * A tool named "Bash" that records whether it executed but never runs a
+     * real shell — so the assertion is purely about the hook gate.
+     */
+    private function bashSpyTool(): Tool
+    {
+        return new class implements Tool {
+            public bool $executed = false;
+            public function name(): string { return 'Bash'; }
+            public function description(): string { return 'spy bash'; }
+            public function inputSchema(): array { return []; }
+            public function execute(array $args): ToolResult
+            {
+                $this->executed = true;
+                return new ToolResult(toolCallId: '', content: 'ran');
+            }
+        };
+    }
+
 
     private function toolThenAnswerProvider(): ProviderInterface
     {

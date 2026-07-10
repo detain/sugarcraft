@@ -97,6 +97,73 @@ final class ConfirmRemoveHookTest extends TestCase
     }
 
     // =========================================================================
+    // Extended Destructive-Form Denial Tests (long flags + other tools)
+    // =========================================================================
+
+    public function testDenyLongFormRecursiveRm(): void
+    {
+        $hook = new ConfirmRemoveHook();
+        $context = $this->createContext('rm --recursive /important');
+
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isDenied());
+    }
+
+    public function testDenyLongFormForceRm(): void
+    {
+        $hook = new ConfirmRemoveHook();
+        $context = $this->createContext('rm --force secret.txt');
+
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isDenied());
+    }
+
+    public function testDenyFindDelete(): void
+    {
+        $hook = new ConfirmRemoveHook();
+        $context = $this->createContext("find . -name '*.log' -delete");
+
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isDenied());
+    }
+
+    public function testDenyShred(): void
+    {
+        $hook = new ConfirmRemoveHook();
+        $context = $this->createContext('shred -u secret.key');
+
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isDenied());
+    }
+
+    public function testDenyDdWithOutputFile(): void
+    {
+        $hook = new ConfirmRemoveHook();
+        $context = $this->createContext('dd if=/dev/zero of=/dev/sda bs=1M');
+
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isDenied());
+    }
+
+    public function testShellIndirectionIsNotDetected(): void
+    {
+        // Documents the acknowledged blind spot: regex cannot see through
+        // variable indirection, so `x=rf; rm -$x` slips past. This asserts the
+        // heuristic's known limit, NOT a desired behaviour.
+        $hook = new ConfirmRemoveHook();
+        $context = $this->createContext('x=rf; rm -$x /tmp/data');
+
+        $result = $hook->execute($context);
+
+        $this->assertTrue($result->isAllowed());
+    }
+
+    // =========================================================================
     // Safe rm Command Allow Tests
     // =========================================================================
 
