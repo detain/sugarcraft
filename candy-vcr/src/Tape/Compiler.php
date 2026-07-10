@@ -48,6 +48,12 @@ final class Compiler
     /** @var list<Event> */
     private array $events = [];
 
+    /**
+     * Destination path requested by an `Output <path>` directive, confined to
+     * the tape's own directory. Null when no (valid) Output directive was seen.
+     */
+    private ?string $outputPath = null;
+
     private string $currentSourcePath = '';
 
     private int $sourceDepth = 0;
@@ -94,6 +100,20 @@ final class Compiler
     }
 
     /**
+     * Destination path requested by the tape's `Output <path>` directive,
+     * resolved and confined to the tape's own directory. Null when the tape
+     * had no Output directive, or when the requested path escaped the tape's
+     * directory (in which case the caller should fall back to its own default
+     * rather than honor an attacker-controlled traversal path).
+     *
+     * Reflects the most recent compile() call.
+     */
+    public function outputPath(): ?string
+    {
+        return $this->outputPath;
+    }
+
+    /**
      * @return array{ast: list<Directive>, errors: list<ParseError>}
      */
     public static function parseSource(string $source): array
@@ -130,6 +150,7 @@ final class Compiler
         $this->fontFamily = null;
         $this->currentTime = 0.0;
         $this->events = [];
+        $this->outputPath = null;
         $this->currentSourcePath = '';
         $this->sourceDepth = 0;
         $this->sourceStack = [];
@@ -138,7 +159,7 @@ final class Compiler
     private function compileNode(Directive $node): void
     {
         match (true) {
-            $node instanceof OutputDirective => null,
+            $node instanceof OutputDirective => $this->compileOutput($node),
             $node instanceof SetDirective => $this->compileSet($node),
             $node instanceof EnvDirective => $this->env[$node->key] = trim($node->value, '"\' '),
             $node instanceof TypeDirective => $this->compileType($node),
@@ -276,6 +297,74 @@ final class Compiler
             $ctrlCode = $ord & 0x1F;
         }
         $this->emitInputBytes(chr($ctrlCode));
+    }
+
+    /**
+     * Honor an `Output <path>` directive by recording where the rendered
+     * artifact should be written. The path is confined to the tape's own
+     * directory: a traversal (`..`) or absolute path that escapes the tape's
+     * directory is ignored (leaving outputPath null) so an untrusted tape
+     * cannot direct the render to overwrite an arbitrary file — the caller
+     * then falls back to its own default destination.
+     */
+    private function compileOutput(OutputDirective $node): void
+    {
+        $confined = $this->confineOutputPath($node->path);
+        if ($confined !== null) {
+            $this->outputPath = $confined;
+        }
+    }
+
+    /**
+     * Resolve a tape-supplied output path against the tape's directory,
+     * returning the confined absolute path or null when it escapes that
+     * directory. Mirrors the base-dir confinement used for Source includes
+     * and TapeToGif screenshot capture.
+     */
+    private function confineOutputPath(string $rawPath): ?string
+    {
+        if ($rawPath === '') {
+            return null;
+        }
+        // Reject traversal segments and Windows separators outright.
+        if (str_contains($rawPath, '..') || str_contains($rawPath, '\\')) {
+            return null;
+        }
+
+        $baseDir = dirname($this->currentSourcePath ?: '.');
+        if ($baseDir === '') {
+            $baseDir = '.';
+        }
+        $baseReal = realpath($baseDir);
+        if ($baseReal === false) {
+            return null;
+        }
+
+        $isAbsolute = str_starts_with($rawPath, '/')
+            || (strlen($rawPath) >= 2 && ctype_alpha($rawPath[0]) && $rawPath[1] === ':');
+
+        // The target file itself does not exist yet, so confine on its parent
+        // directory (which must already resolve to somewhere under the base).
+        if ($isAbsolute) {
+            $parentReal = realpath(dirname($rawPath));
+            if ($parentReal === false || !$this->isUnder($parentReal, $baseReal)) {
+                return null;
+            }
+            return $rawPath;
+        }
+
+        $target = $baseReal . DIRECTORY_SEPARATOR . $rawPath;
+        $parentReal = realpath(dirname($target));
+        if ($parentReal === false || !$this->isUnder($parentReal, $baseReal)) {
+            return null;
+        }
+        return $target;
+    }
+
+    private function isUnder(string $path, string $base): bool
+    {
+        return $path === $base
+            || str_starts_with($path . DIRECTORY_SEPARATOR, $base . DIRECTORY_SEPARATOR);
     }
 
     private function compileSource(SourceDirective $node): void
