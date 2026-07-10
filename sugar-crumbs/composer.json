@@ -32,13 +32,6 @@
         },
         {
             "type": "path",
-            "url": "../candy-zone",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "../candy-core",
             "options": {
                 "symlink": true
@@ -76,8 +69,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-mouse": "dev-master",
-        "sugarcraft/candy-zone": "dev-master"
+        "sugarcraft/candy-mouse": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
