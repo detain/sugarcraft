@@ -7,28 +7,35 @@ namespace SugarCraft\Zone;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Core\Util\Width;
+use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scan;
+use SugarCraft\Mouse\Sentinel;
 
 /**
- * Mouse-zone manager. Wraps content with APC escape sequences identifying
+ * Mouse-zone manager. Wraps content with invisible zone markers identifying
  * a logical "zone"; {@see scan()} later finds those markers, records each
  * zone's bounding box in terminal cells, and returns the cleaned-up frame.
  *
- * Marker format (terminal-ignored):
+ * Marker + bounding-box computation are delegated to candy-mouse, the shared
+ * hit-test primitive (single source of truth for the wire format across the
+ * SugarCraft tree). Markers are the private-use-area sentinel triples emitted
+ * by {@see \SugarCraft\Mouse\Mark::wrap()}:
  *
- *   start: ESC _ "candyzone:S:<id>" ESC \
- *   end  : ESC _ "candyzone:E:<id>" ESC \
+ *   open:  U+E000 <id> U+E001
+ *   close: U+E000 /<id> U+E001
+ *
+ * U+E000 / U+E001 are invisible and never collide with visible text or ANSI
+ * escape sequences, so they don't affect layout. Ids must match candy-mouse's
+ * charset `^[A-Za-z0-9._:-]+$` (letters, digits, and `._:-`) — an id carrying
+ * a sentinel/control/whitespace byte would desync scanning and is rejected by
+ * {@see mark()} with an \InvalidArgumentException. The combined
+ * `prefix() . $id` is what gets validated.
  *
  * Zones discovered during the most recent {@see scan()} replace any
- * previously known zones for the same id.
+ * previously known zones for the same id (other ids persist).
  */
 final class Manager
 {
-    private const APC_PREFIX = "\x1b_";
-    private const APC_ST     = "\x1b\\";
-    private const TAG_START  = 'candyzone:S:';
-    private const TAG_END    = 'candyzone:E:';
-
     /** @var array<string, Zone> */
     private array $zones = [];
     private bool $enabled = true;
@@ -50,7 +57,8 @@ final class Manager
      *
      * Mirrors bubblezone's `NewPrefix`. Pass an explicit `$prefix` to
      * fix the namespace; omit (or pass empty) to auto-generate one
-     * from a monotonic counter.
+     * from a monotonic counter. The generated prefix uses the
+     * candy-mouse-safe charset (`<n>-`), so `prefix() . $id` stays valid.
      */
     public static function newPrefix(string $prefix = ''): self
     {
@@ -89,6 +97,7 @@ final class Manager
      * The caller writes the returned string to the terminal to
      * activate/deactivate motion reporting. This manager does not
      * directly emit to the TTY — it is a text-processing component.
+     * This is unrelated to the zone markers.
      *
      * Mirrors bubblezone's `Manager::SetMotionTracking`.
      */
@@ -105,141 +114,51 @@ final class Manager
         return $this->idPrefix;
     }
 
-    /** Wrap $content with start/end markers for $id. */
+    /**
+     * Wrap $content with start/end markers for `prefix() . $id`.
+     *
+     * Delegates the marker encoding to {@see \SugarCraft\Mouse\Mark::wrap()}
+     * so the wire format lives in exactly one place. No-op (returns
+     * $content verbatim) when the manager is disabled.
+     *
+     * @throws \InvalidArgumentException When `prefix() . $id` contains a byte
+     *         outside candy-mouse's `^[A-Za-z0-9._:-]+$` charset (validated by
+     *         Mark::wrap). candy-zone's own prefixes and real consumer ids
+     *         (`tab-N`, `cell:N`, `item:N`) already comply.
+     */
     public function mark(string $id, string $content): string
     {
         if (!$this->enabled) {
             return $content;
         }
-        $fullId = $this->idPrefix . $id;
-        return self::APC_PREFIX . self::TAG_START . $fullId . self::APC_ST
-             . $content
-             . self::APC_PREFIX . self::TAG_END . $fullId . self::APC_ST;
+        return Mark::zone($this->idPrefix . $id, $content);
     }
 
     /**
-     * Strip markers from $rendered, recording each zone's bounding box.
-     * Returns the cleaned frame ready for the terminal.
+     * Strip markers from $rendered, recording each zone's bounding box,
+     * and return the cleaned frame ready for the terminal.
      *
-     * No-op when {@see setEnabled()} has flipped the manager off —
-     * the input passes through unchanged.
+     * Bounding-box computation is delegated to {@see \SugarCraft\Mouse\Scan}
+     * (CJK-width aware via candy-core's Width), then the discovered zones are
+     * upserted into this manager's registry as {@see Zone} adapters — same id,
+     * same bounds. The registry merges rather than replaces: ids seen this
+     * scan overwrite prior entries; other ids persist.
+     *
+     * No-op when {@see setEnabled()} has flipped the manager off — the input
+     * passes through unchanged and no zones are recorded.
      */
     public function scan(string $rendered): string
     {
         if (!$this->enabled) {
             return $rendered;
         }
-        $clean = '';
-        $row = 1;
-        $col = 1;
-        /** @var array<string, array{int,int,int,int}> $starts id => [startCol,startRow,maxCol,maxRow] */
-        $open = [];
 
-        $len = strlen($rendered);
-        $i = 0;
-        while ($i < $len) {
-            $b = $rendered[$i];
-
-            // APC zone marker?
-            if ($b === "\x1b" && ($rendered[$i + 1] ?? '') === '_') {
-                $end = strpos($rendered, self::APC_ST, $i + 2);
-                if ($end === false) {
-                    // Unterminated APC; leave the rest alone.
-                    $clean .= substr($rendered, $i);
-                    break;
-                }
-                $payload = substr($rendered, $i + 2, $end - $i - 2);
-                if (str_starts_with($payload, self::TAG_START)) {
-                    $id = substr($payload, strlen(self::TAG_START));
-                    $open[$id] = [$col, $row, $col, $row];
-                } elseif (str_starts_with($payload, self::TAG_END)) {
-                    $id = substr($payload, strlen(self::TAG_END));
-                    if (isset($open[$id])) {
-                        [$startCol, $startRow, $maxCol, $maxRow] = $open[$id];
-                        // End marker sits one cell past the last visible cell.
-                        // $col is already positioned at the cell *after* the last
-                        // content, so $col - 1 is the rightmost occupied cell on
-                        // the final row.
-                        $lastCol = $col - 1;
-                        // Bounding box is the union rectangle over all rows.
-                        if ($row === $startRow) {
-                            // Zone never wrapped to a new row.
-                            $endRow = $startRow;
-                            $endCol = max($startCol, $lastCol);
-                        } else {
-                            // Zone wrapped. If end marker is at col 1, the final
-                            // row had no visible content (just the end marker
-                            // itself), so the box ends on the previous row.
-                            if ($col === 1) {
-                                $endRow = $row - 1;
-                                $endCol = $maxCol;
-                            } else {
-                                $endRow = $row;
-                                $endCol = max($maxCol, $lastCol);
-                            }
-                        }
-                        $this->zones[$id] = new Zone($id, $startCol, $startRow, $endCol, $endRow);
-                        unset($open[$id]);
-                    }
-                }
-                // else: unknown APC payload, drop it silently.
-                $i = $end + strlen(self::APC_ST);
-                continue;
-            }
-
-            // CSI sequence: pass through unchanged, no width.
-            if ($b === "\x1b" && ($rendered[$i + 1] ?? '') === '[') {
-                $j = $i + 2;
-                while ($j < $len) {
-                    $c = ord($rendered[$j]);
-                    $j++;
-                    if ($c >= 0x40 && $c <= 0x7e) {
-                        break;
-                    }
-                }
-                $clean .= substr($rendered, $i, $j - $i);
-                $i = $j;
-                continue;
-            }
-
-            // OSC sequence: pass through unchanged, terminate on BEL or ST.
-            if ($b === "\x1b" && ($rendered[$i + 1] ?? '') === ']') {
-                $j = $i + 2;
-                while ($j < $len) {
-                    if ($rendered[$j] === "\x07") { $j++; break; }
-                    if ($rendered[$j] === "\x1b" && ($rendered[$j + 1] ?? '') === '\\') { $j += 2; break; }
-                    $j++;
-                }
-                $clean .= substr($rendered, $i, $j - $i);
-                $i = $j;
-                continue;
-            }
-
-            if ($b === "\n") {
-                // Mark each open zone as having reached the rightmost
-                // column of the current row before we move on.
-                foreach ($open as $id => $bounds) {
-                    [$sCol, $sRow, $maxCol, $maxRow] = $bounds;
-                    $open[$id] = [$sCol, $sRow, max($maxCol, $col - 1), max($maxRow, $row)];
-                }
-                $clean .= $b;
-                $row++;
-                $col = 1;
-                $i++;
-                continue;
-            }
-
-            // Plain visible character — measure its grapheme width and
-            // honour zero-width clusters (ZWJ, combining marks). Clamping
-            // those to 1 cell would inflate zone widths and drift later
-            // zones, breaking inBounds() / pos() calculations.
-            $cluster = self::nextGrapheme($rendered, $i);
-            $col    += Width::string($cluster);
-            $clean  .= $cluster;
-            $i      += strlen($cluster);
+        // candy-mouse is the single source of truth for parsing + bounds.
+        foreach ((new Scan())->parse($rendered) as $id => $mouseZone) {
+            $this->zones[$id] = Zone::fromMouseZone($mouseZone);
         }
 
-        return $clean;
+        return self::stripMarkers($rendered);
     }
 
     public function get(string $id): ?Zone
@@ -334,26 +253,59 @@ final class Manager
     }
 
     /**
-     * Return the next grapheme cluster starting at byte offset $i.
-     * Falls back to UTF-8 byte parsing when the intl extension is missing.
+     * Remove candy-mouse's PUA sentinel tags from a rendered frame, leaving
+     * the visible content byte-for-byte intact.
+     *
+     * Each tag is a `U+E000 … U+E001` span (open: `U+E000 <id> U+E001`,
+     * close: `U+E000 /<id> U+E001`); the content BETWEEN an open and its
+     * matching close is preserved. This mirrors the marker grammar walked by
+     * {@see \SugarCraft\Mouse\Scan::parse()} so the cleaned display string
+     * and the scanned bounds stay in lock-step. An unterminated open sentinel
+     * drops only its 3 sentinel bytes (Scan tolerates the same); a stray
+     * close sentinel is likewise dropped (Scan treats it as a zero-width,
+     * non-content byte).
      */
-    private static function nextGrapheme(string $s, int $i): string
+    private static function stripMarkers(string $rendered): string
     {
-        if (function_exists('grapheme_extract')) {
-            $next = 0;
-            $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
-            if (is_string($cluster) && $cluster !== '') {
-                return $cluster;
-            }
+        // Fast path — no sentinels present means nothing to strip.
+        if (!str_contains($rendered, Sentinel::OPEN) && !str_contains($rendered, Sentinel::CLOSE)) {
+            return $rendered;
         }
-        $b = ord($s[$i]);
-        $bytes = match (true) {
-            ($b & 0x80) === 0    => 1,
-            ($b & 0xe0) === 0xc0 => 2,
-            ($b & 0xf0) === 0xe0 => 3,
-            ($b & 0xf8) === 0xf0 => 4,
-            default              => 1,
-        };
-        return substr($s, $i, $bytes);
+
+        $out      = '';
+        $len      = strlen($rendered);
+        $i        = 0;
+        $runStart = 0;
+        while ($i < $len) {
+            if ($rendered[$i] === "\xEE" && ($rendered[$i + 1] ?? '') === "\x80") {
+                $third = $rendered[$i + 2] ?? '';
+
+                // U+E000 open sentinel (EE 80 80) — start of an open/close tag.
+                if ($third === "\x80") {
+                    $out .= substr($rendered, $runStart, $i - $runStart);
+                    $end  = strpos($rendered, Sentinel::CLOSE, $i + 3);
+                    if ($end === false) {
+                        // Unterminated tag — drop the 3 sentinel bytes only.
+                        $i += 3;
+                        $runStart = $i;
+                        continue;
+                    }
+                    $i        = $end + strlen(Sentinel::CLOSE);
+                    $runStart = $i;
+                    continue;
+                }
+
+                // Stray U+E001 close sentinel (EE 80 81) with no opener.
+                if ($third === "\x81") {
+                    $out .= substr($rendered, $runStart, $i - $runStart);
+                    $i += 3;
+                    $runStart = $i;
+                    continue;
+                }
+            }
+            $i++;
+        }
+        $out .= substr($rendered, $runStart);
+        return $out;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Zone\Tests;
 
+use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Zone\Manager;
 use SugarCraft\Zone\Zones;
 use PHPUnit\Framework\TestCase;
@@ -33,8 +34,10 @@ final class ZonesTest extends TestCase
     {
         $marked = Zones::mark('hero', 'Hello World');
         $scanned = Zones::scan($marked);
-        $this->assertStringNotContainsString('candyzone', $scanned);
-        $this->assertStringContainsString('Hello World', $scanned);
+        // scan() must strip every PUA sentinel tag, leaving display-ready text.
+        $this->assertStringNotContainsString(Sentinel::OPEN, $scanned);
+        $this->assertStringNotContainsString(Sentinel::CLOSE, $scanned);
+        $this->assertSame('Hello World', $scanned);
         $zone = Zones::get('hero');
         $this->assertNotNull($zone);
     }
