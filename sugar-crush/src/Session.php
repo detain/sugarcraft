@@ -97,10 +97,6 @@ final class Session
         $path = self::sessionFilePath();
         $dir = dirname($path);
 
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
-        }
-
         $data = [
             'cwd' => $this->cwd,
             'selected' => $this->selected,
@@ -110,10 +106,26 @@ final class Session
             'activePane' => $this->activePane,
         ];
 
-        @file_put_contents(
-            $path,
-            json_encode($data, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n",
-        );
+        // The session file records the user's working directory, selections and
+        // filter history — private data that must stay owner-only. A restrictive
+        // umask makes the directory (0700) and file (0600) owner-only AT CREATION
+        // time, closing the world-readable window a create-then-chmod would leave
+        // open. The trailing chmod re-asserts 0600 for a file that pre-existed
+        // with looser permissions (umask cannot tighten an existing file).
+        $previousUmask = umask(0077);
+        try {
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0700, true);
+            }
+
+            @file_put_contents(
+                $path,
+                json_encode($data, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n",
+            );
+            @chmod($path, 0600);
+        } finally {
+            umask($previousUmask);
+        }
     }
 
     /**
