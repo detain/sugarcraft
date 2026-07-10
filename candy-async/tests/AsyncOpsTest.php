@@ -10,6 +10,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Async\TimeoutException;
 
 /**
@@ -309,5 +310,87 @@ final class AsyncOpsTest extends TestCase
 
         $this->assertSame('slow_success', $result);
         $this->assertSame(1, $attempts);
+    }
+
+    public function testRetryRejectsWithOperationCancelledExceptionWhenPreCancelled(): void
+    {
+        $loop = Loop::get();
+        $source = CancellationSource::new();
+        // Cancel BEFORE the first attempt runs (hits the pre-attempt guard).
+        $source->cancel();
+
+        $attempts = 0;
+        $promise = AsyncOps::retry(
+            function () use (&$attempts): PromiseInterface {
+                $attempts++;
+                return \React\Promise\resolve('ok');
+            },
+            attempts: 3,
+            baseBackoffSeconds: 0.01,
+            token: $source->token(),
+        );
+
+        $rejected = null;
+        $promise->otherwise(function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+
+        $loop->addTimer(0.05, function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+
+        // The operation must never have been invoked.
+        $this->assertSame(0, $attempts);
+        $this->assertInstanceOf(OperationCancelledException::class, $rejected);
+        // BC guarantee: an OperationCancelledException IS-A RuntimeException,
+        // so pre-existing `catch (\RuntimeException)` sites keep catching it.
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertStringContainsString('cancelled', $rejected->getMessage());
+        $this->assertStringContainsString('1', $rejected->getMessage());
+    }
+
+    public function testRetryRejectsWithOperationCancelledExceptionWhenCancelledBetweenAttempts(): void
+    {
+        $loop = Loop::get();
+        $source = CancellationSource::new();
+
+        $attempts = 0;
+        $promise = AsyncOps::retry(
+            function () use (&$attempts, $source): PromiseInterface {
+                $attempts++;
+                // Cancel mid-flight so the failure handler observes cancellation
+                // (hits the post-attempt guard rather than retrying).
+                $source->cancel();
+                return \React\Promise\reject(new \RuntimeException("boom $attempts"));
+            },
+            attempts: 5,
+            baseBackoffSeconds: 0.01,
+            token: $source->token(),
+        );
+
+        $rejected = null;
+        $promise->otherwise(function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+
+        $loop->addTimer(0.05, function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+
+        // Only the first attempt ran; cancellation short-circuited the retries.
+        $this->assertSame(1, $attempts);
+        $this->assertInstanceOf(OperationCancelledException::class, $rejected);
+        // BC guarantee: still catchable as a plain RuntimeException.
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertStringContainsString('cancelled', $rejected->getMessage());
+    }
+
+    public function testOperationCancelledExceptionIsRuntimeException(): void
+    {
+        $e = new OperationCancelledException('cancelled');
+        $this->assertInstanceOf(\RuntimeException::class, $e);
+        $this->assertSame('cancelled', $e->getMessage());
     }
 }

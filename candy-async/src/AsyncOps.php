@@ -109,10 +109,9 @@ final class AsyncOps
         int $attempt,
     ): PromiseInterface {
         if ($token->isCancelled()) {
-            return reject(new \RuntimeException('Retry cancelled'));
+            return reject(new OperationCancelledException('Retry cancelled before attempt ' . $attempt));
         }
 
-        $operationPromise;
         try {
             $operationPromise = $operation();
         } catch (\Throwable $e) {
@@ -122,7 +121,7 @@ final class AsyncOps
             static fn ($value) => $value,
             static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt): PromiseInterface {
                 if ($token->isCancelled()) {
-                    return reject(new \RuntimeException('Retry cancelled'));
+                    return reject(new OperationCancelledException('Retry cancelled after attempt ' . $attempt));
                 }
 
                 if ($remaining <= 1) {
