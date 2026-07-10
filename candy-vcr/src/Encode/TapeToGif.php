@@ -59,8 +59,12 @@ final class TapeToGif
      *   encoder?: 'ffmpeg'|'php',
      *   strict?: bool,
      * } $options
+     *
+     * @return string The resolved output path the GIF was written to. When
+     *   $outputPath is null the tape's own confined `Output <path>` directive
+     *   is honored, falling back to the tape name with a `.gif` extension.
      */
-    public function render(string $tapePath, ?string $outputPath = null, array $options = []): void
+    public function render(string $tapePath, ?string $outputPath = null, array $options = []): string
     {
         $fps = (float) ($options['fps'] ?? 30.0);
         $cliTheme = $options['theme'] ?? null;
@@ -96,8 +100,12 @@ final class TapeToGif
         $pngPaths = [];
         $frameHoldsMs = [];
 
-        // Compute the output path early so screenshots can be confined to its directory
-        $output = $outputPath ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
+        // Compute the output path early so screenshots can be confined to its directory.
+        // Precedence: explicit caller-supplied path > the tape's confined `Output <path>`
+        // directive > the tape name with a `.gif` extension.
+        $output = $outputPath
+            ?? $this->compiler->outputPath()
+            ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
         $outputDir = dirname($output);
 
         // Snapshot captureCursor before iteration to avoid mutation during iteration.
@@ -157,6 +165,8 @@ final class TapeToGif
         } finally {
             $this->cleanupDir($tempDir);
         }
+
+        return $output;
     }
 
     /**
