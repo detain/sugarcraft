@@ -161,12 +161,72 @@ final class TapeToGif
                 throw new \RuntimeException("Tape produced no frames: {$tapePath}");
             }
 
-            $this->encoder->encode($pngPaths, $output, (int) round($fps), $frameHoldsMs);
+            $this->encodeAtomically($pngPaths, $output, $fps, $frameHoldsMs);
         } finally {
             $this->cleanupDir($tempDir);
         }
 
         return $output;
+    }
+
+    /**
+     * Encode the GIF to a unique temp file in the destination directory, then
+     * atomically rename it into place.
+     *
+     * The write is guarded here — at the single seam every output source funnels
+     * through ($output is already resolved from the explicit caller path, the
+     * confined `Output` directive, or the `<tape>.gif` fallback) — so the guard
+     * covers ALL THREE sources and BOTH encoders (which each write straight to
+     * the path they are handed and would otherwise follow a symlink there).
+     *
+     * `rename()` replaces the directory ENTRY at $output rather than writing
+     * *through* it, so a pre-existing symlink or hard link at $output is replaced
+     * by the freshly written regular file instead of being followed/truncated.
+     * That structurally closes CWE-59 (symlink-follow) for the default
+     * `<tape>.gif` path, the confine→write TOCTOU race (the check-and-place is
+     * the atomic rename, not a compile-time is_link() far ahead of the write),
+     * and hard-link truncation of a shared inode — all at once, without relying
+     * on a fopen O_NOFOLLOW that PHP does not expose.
+     *
+     * @param list<non-empty-string> $pngPaths
+     * @param list<int>              $frameHoldsMs
+     */
+    private function encodeAtomically(array $pngPaths, string $output, float $fps, array $frameHoldsMs): void
+    {
+        $outputDir = dirname($output);
+
+        // Reserve a unique temp name IN THE SAME DIRECTORY as $output so the final
+        // rename stays on one filesystem (atomic, never cross-device). The `.gif`
+        // suffix is required because the ffmpeg encoder infers its muxer from the
+        // extension. `x` mode is O_CREAT|O_EXCL|O_WRONLY: exclusive creation fails
+        // (and never follows) if the name is already a symlink or a regular file,
+        // and fails if $outputDir is not writable — so a hostile pre-plant or a
+        // read-only directory surfaces as an explicit error, not a silent write.
+        $tmp = $outputDir . DIRECTORY_SEPARATOR . '.candyvcr-' . bin2hex(random_bytes(8)) . '.gif';
+        $handle = @fopen($tmp, 'x');
+        if ($handle === false) {
+            throw new \RuntimeException("Cannot create a temporary file for atomic GIF write in: {$outputDir}");
+        }
+        fclose($handle);
+
+        try {
+            $this->encoder->encode($pngPaths, $tmp, (int) round($fps), $frameHoldsMs);
+
+            // rename() replaces the directory ENTRY at $output rather than writing
+            // *through* it: a pre-existing symlink or hard link at $output is
+            // replaced by this fresh regular file instead of being followed or
+            // truncating a shared inode. This is the structural close for CWE-59
+            // (symlink-follow) on the default `<tape>.gif` path, the confine→write
+            // TOCTOU race (check-and-place is the atomic rename, not a compile-time
+            // is_link() far ahead of the write), and hard-link truncation — all at
+            // once, without a fopen O_NOFOLLOW that PHP does not expose.
+            if (!@rename($tmp, $output)) {
+                throw new \RuntimeException("Failed to move rendered GIF into place: {$output}");
+            }
+        } catch (\Throwable $e) {
+            @unlink($tmp);
+            throw $e;
+        }
     }
 
     /**
