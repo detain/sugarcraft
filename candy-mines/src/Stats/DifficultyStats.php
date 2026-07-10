@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mines\Stats;
 
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Mines\Difficulty;
 use SugarCraft\Mines\Stats;
 
 /**
  * Atomic persistence wrapper for minesweeper difficulty statistics.
  *
- * Uses the Homestead atomic-save pattern: write to a temp file then
- * rename over the target. The rename is atomic on POSIX — the target
- * file is never in a partially-written state even if a crash occurs
- * mid-write.
+ * Delegates the durable-state read/write to candy-core's
+ * {@see AtomicJsonFile} SSOT: writes go to a same-dir temp file under an
+ * exclusive lock, then rename over the target. The rename is atomic on
+ * POSIX — the target file is never in a partially-written state even if a
+ * crash occurs mid-write. This document store keeps its own `{version,data}`
+ * envelope on top of that raw-array primitive.
  */
 final class DifficultyStats
 {
@@ -38,17 +41,17 @@ final class DifficultyStats
      */
     public static function load(string $path): ?self
     {
-        if (!file_exists($path)) {
+        $store = AtomicJsonFile::new($path);
+        // A missing file is "no stats yet" (null), not the empty state — keep
+        // the null contract rather than AtomicJsonFile's read()->[] convention.
+        if (!$store->exists()) {
             return null;
         }
 
-        $content = file_get_contents($path);
-        if ($content === false) {
-            throw new \RuntimeException("Failed to read persistence file: {$path}");
-        }
-
+        // read() delivers the is-array guard for free: a malformed file throws
+        // \JsonException, a valid-but-non-array top level throws \RuntimeException.
         /** @var array<string, mixed> $decoded */
-        $decoded = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+        $decoded = $store->read();
 
         if (!isset($decoded['version']) || !isset($decoded['data'])) {
             throw new \RuntimeException("Invalid persistence format in: {$path}");
@@ -110,22 +113,18 @@ final class DifficultyStats
     /**
      * Save difficulty stats atomically to a persistence file.
      *
-     * Uses tmp+rename so the file is never in a partial-write state.
+     * Delegates the tmp+flock+rename dance to {@see AtomicJsonFile::write()},
+     * so the file is never in a partial-write state and no temp artifact is
+     * left behind. The `{version,data}` envelope is preserved on disk (now
+     * pretty-printed — still valid JSON that {@see load()} round-trips).
      *
      * @param string $path Absolute path to the target file.
      * @throws \RuntimeException If write or rename fails.
      */
     public function save(string $path): void
     {
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
-                throw new \RuntimeException("Cannot create persistence directory: {$dir}");
-            }
-        }
-
         $s = $this->stats;
-        $payload = json_encode([
+        AtomicJsonFile::new($path)->write([
             'version' => 1,
             'data' => [
                 'easyGames' => $s->easyGames,
@@ -138,24 +137,7 @@ final class DifficultyStats
                 'expertWins' => $s->expertWins,
                 'expertBest' => $s->expertBest,
             ],
-        ], JSON_THROW_ON_ERROR);
-
-        $tmp = $dir . '/.tmp_' . basename($path) . '.' . bin2hex(random_bytes(8));
-
-        try {
-            if (file_put_contents($tmp, $payload, LOCK_EX) === false) {
-                throw new \RuntimeException("Failed to write temp file: {$tmp}");
-            }
-
-            if (!rename($tmp, $path)) {
-                throw new \RuntimeException("Failed to rename temp file to: {$path}");
-            }
-        } catch (\Throwable $e) {
-            if (file_exists($tmp)) {
-                unlink($tmp);
-            }
-            throw $e;
-        }
+        ]);
     }
 
     /**
