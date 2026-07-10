@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Core\Util\AtomicJsonFile;
+
 /**
  * Session persistence for sugar-crush.
  *
@@ -51,27 +53,14 @@ final class Session
      */
     public static function load(): self
     {
-        $path = self::sessionFilePath();
-
-        // Guard: file does not exist → fresh session
-        if (!is_file($path)) {
-            return new self();
-        }
-
-        // Guard: readable → parse content
-        $content = @file_get_contents($path);
-        if ($content === false) {
-            return new self();
-        }
-
-        // Guard: valid JSON → decode
-        /** @var array<string, mixed>|null $data */
+        // AtomicJsonFile::read() returns [] for a missing file and throws on a
+        // corrupt one: \JsonException for malformed JSON, \RuntimeException for
+        // a read failure or a non-array top level. Catch every failure and fall
+        // back to a fresh session, preserving the original never-throw contract
+        // (and the prior is_array guard, now enforced inside read()).
         try {
-            $data = json_decode($content, true, 16, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return new self();
-        }
-        if (!is_array($data)) {
+            $data = AtomicJsonFile::new(self::sessionFilePath())->read();
+        } catch (\Throwable) {
             return new self();
         }
 
@@ -94,8 +83,7 @@ final class Session
      */
     public function save(): void
     {
-        $path = self::sessionFilePath();
-        $dir = dirname($path);
+        $store = AtomicJsonFile::new(self::sessionFilePath());
 
         $data = [
             'cwd' => $this->cwd,
@@ -106,23 +94,23 @@ final class Session
             'activePane' => $this->activePane,
         ];
 
-        // The session file records the user's working directory, selections and
-        // filter history — private data that must stay owner-only. A restrictive
-        // umask makes the directory (0700) and file (0600) owner-only AT CREATION
-        // time, closing the world-readable window a create-then-chmod would leave
-        // open. The trailing chmod re-asserts 0600 for a file that pre-existed
-        // with looser permissions (umask cannot tighten an existing file).
+        // AtomicJsonFile persists via a same-dir temp + flock + rename, so a
+        // reader never sees a torn file, and it creates the parent dir 0700.
+        // What it does NOT do is chmod the data file: this session file records
+        // the user's working directory, selections and filter history — private
+        // data that must stay owner-only (a security requirement from #1232).
+        // The restrictive umask makes the temp file AtomicJsonFile creates
+        // owner-only AT BIRTH, closing any world-readable window before rename;
+        // the trailing chmod re-asserts 0600 as belt-and-suspenders (and covers
+        // filesystems that ignore umask). save() is best-effort — a persistence
+        // failure must never disrupt the session — so AtomicJsonFile's throw is
+        // swallowed, matching the prior @file_put_contents contract.
         $previousUmask = umask(0077);
         try {
-            if (!is_dir($dir)) {
-                @mkdir($dir, 0700, true);
-            }
-
-            @file_put_contents(
-                $path,
-                json_encode($data, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n",
-            );
-            @chmod($path, 0600);
+            $store->write($data);
+            @chmod($store->path(), 0600);
+        } catch (\Throwable) {
+            // Silent: save failures do not surface to the user.
         } finally {
             umask($previousUmask);
         }
