@@ -63,18 +63,12 @@ switch ($cmd) {
             fwrite(STDERR, Lang::t('cli.usage_get', ['bin' => $bin]) . "\n");
             exit(1);
         }
+        // get() already emits any "did you mean" typo suggestion to stderr on a
+        // miss; branch on entry existence so a truly-missing key exits 1 while an
+        // existing key that holds an empty value still exits 0.
         $val = $store->get($argv[2]);
-        // stderr may contain typo suggestion; only exit 1 on truly missing
-        if ($val === '' && !isset($argv[3])) {
-            // Check if key actually exists (might be empty value)
-            $entry = $store->entry($argv[2]);
-            if ($entry === null) {
-                $suggestion = $store->suggestSimilar($argv[2]);
-                if ($suggestion !== null) {
-                    \fwrite(STDERR, "key not found; did you mean '{$suggestion}'?" . \PHP_EOL);
-                }
-                exit(1);
-            }
+        if ($val === '' && $store->entry($argv[2]) === null) {
+            exit(1);
         }
         echo $val;
         break;
@@ -84,12 +78,12 @@ switch ($cmd) {
         $delim = $opts['delimiter'];
         foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $delim) as $item) {
             if ($item instanceof Entry) {
-                $key = Store::sanitizeForTty($item->key, false);
-                $val = Store::sanitizeForTty($item->rawValue(), $item->binary);
+                $key = Store::sanitizeForTty($item->key);
+                $val = Store::sanitizeForTty($item->rawValue());
                 echo "{$key}{$delim}{$val}\n";
             } else {
                 // keys-only or values-only mode: sanitize the yielded string
-                echo Store::sanitizeForTty((string) $item, false) . "\n";
+                echo Store::sanitizeForTty((string) $item) . "\n";
             }
         }
         break;
