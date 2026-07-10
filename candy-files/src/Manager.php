@@ -14,6 +14,7 @@ use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\Manager\ManagerBuilder;
 use SugarCraft\Files\Msg\CopyCompletedMsg;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
  * The dual-pane file manager `Model`.
@@ -846,10 +847,27 @@ final class Manager implements Model
             // Empty query shows all entries but stays in search mode
             return $this->withSearch('', $allEntries, 0);
         }
-        $results = array_values(array_filter(
-            $allEntries,
-            fn(Entry $e) => str_contains(strtolower($e->name), strtolower($query))
-        ));
+        // Fuzzy-match filenames through the candy-fuzzy SSOT (Smith-Waterman
+        // local alignment). matchAll() ranks by score descending, so the
+        // strongest subsequence matches float to the top and a query whose
+        // characters never appear yields no results. This upgrades the old
+        // exact-substring filter to fuzzy filtering without changing the
+        // search-mode UI or key handling.
+        $matcher = SmithWatermanMatcher::new();
+        // Queue entries per name so ranked results map back 1:1 even if a
+        // directory ever surfaces two entries sharing a name.
+        $byName = [];
+        foreach ($allEntries as $entry) {
+            $byName[$entry->name][] = $entry;
+        }
+        $names = array_map(static fn(Entry $e) => $e->name, $allEntries);
+        $results = [];
+        foreach ($matcher->matchAll($query, $names) as $result) {
+            $entry = array_shift($byName[$result->haystack]);
+            if ($entry !== null) {
+                $results[] = $entry;
+            }
+        }
         return $this->withSearch($query, $results, 0);
     }
 
