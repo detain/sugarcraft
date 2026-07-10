@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Middleware\Logger;
 use SugarCraft\Wish\Server;
@@ -24,7 +25,7 @@ use SugarCraft\Wish\Transport\HostSshdTransport;
 
 final class Banner implements Middleware
 {
-    public function handle(Session $s, callable $next): void
+    public function handle(Context $ctx, Session $s, callable $next): void
     {
         $cols = max(40, $s->cols);
         $line = str_repeat('─', $cols);
@@ -39,7 +40,7 @@ final class Banner implements Middleware
         if ($s->isInteractive()) {
             fread(STDIN, 1);
         }
-        $next($s);
+        $next($ctx, $s);
     }
 }
 
