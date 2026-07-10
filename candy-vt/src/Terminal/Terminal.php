@@ -6,9 +6,9 @@ namespace SugarCraft\Vt\Terminal;
 
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor\Cursor;
+use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
-use SugarCraft\Vt\Parser\Parser;
 use SugarCraft\Vt\Screen\Screen;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
@@ -42,7 +42,9 @@ final class Terminal
             mode: $mode,
             scrollback: new Scrollback($scrollbackSize),
         );
-        $this->parser = new Parser($this->handler);
+        // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
+        // memory; reduced from the fork's 1 MiB per the W1.2 security item.
+        $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
     }
 
     /**
@@ -126,7 +128,7 @@ final class Terminal
     public function __clone(): void
     {
         $this->handler = clone $this->handler;
-        $this->parser = new Parser($this->handler);
+        $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
     }
 
     /** @internal */
