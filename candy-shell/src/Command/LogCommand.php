@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Command;
 
+use SugarCraft\Shell\Lang;
 use SugarCraft\Shell\Log\LogLevel;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -49,7 +50,16 @@ final class LogCommand extends Command
 
         $fmt = (string) $input->getOption('format');
         if ($fmt !== '') {
-            $text = sprintf($fmt, $text);
+            // A user-supplied --format can carry malformed conversion specs
+            // (trailing '%', a missing positional arg, etc.). PHP 8 raises
+            // a ValueError/ArgumentCountError from sprintf() for these, which
+            // would otherwise crash the command with an uncaught stack trace.
+            try {
+                $text = sprintf($fmt, $text);
+            } catch (\ValueError | \ArgumentCountError $e) {
+                $output->writeln('<error>' . Lang::t('log.bad_format', ['format' => $fmt]) . '</error>');
+                return Command::FAILURE;
+            }
         }
 
         $time   = (string) $input->getOption('time');

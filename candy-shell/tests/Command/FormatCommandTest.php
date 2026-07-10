@@ -88,22 +88,79 @@ final class FormatCommandTest extends TestCase
     {
         putenv('SC_FMT_GREETING=hello');
         try {
-            $cmd = (new \SugarCraft\Shell\Application())->find('format');
-            $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
-            $tmp = tempnam(sys_get_temp_dir(), 'fmt');
-            file_put_contents($tmp, "{{SC_FMT_GREETING}} world");
-            try {
-                $tester->execute([
-                    'file'   => $tmp,
-                    '--type' => 'template',
-                ]);
-                $out = $tester->getDisplay();
-                $this->assertStringContainsString('hello world', $out);
-            } finally {
-                @unlink($tmp);
-            }
+            $out = self::runTemplate('{{SC_FMT_GREETING}} world', 'SC_FMT_GREETING');
+            $this->assertStringContainsString('hello world', $out);
         } finally {
             putenv('SC_FMT_GREETING');
+        }
+    }
+
+    /**
+     * Secure-by-default: without --allow-env, no {{VAR}} expands, so a
+     * secret in the environment cannot be exfiltrated by an
+     * attacker-influenced template body.
+     */
+    public function testTypeTemplateWithoutAllowlistDoesNotLeakEnv(): void
+    {
+        putenv('SC_FMT_SECRET=leak-me');
+        try {
+            $out = self::runTemplate('token={{SC_FMT_SECRET}}', null);
+            $this->assertStringNotContainsString('leak-me', $out);
+            $this->assertStringContainsString('token=', $out);
+        } finally {
+            putenv('SC_FMT_SECRET');
+        }
+    }
+
+    public function testTypeTemplateAllowlistedVarExpands(): void
+    {
+        putenv('SC_FMT_SECRET=leak-me');
+        try {
+            $out = self::runTemplate('token={{SC_FMT_SECRET}}', 'SC_FMT_SECRET');
+            $this->assertStringContainsString('leak-me', $out);
+        } finally {
+            putenv('SC_FMT_SECRET');
+        }
+    }
+
+    public function testTypeTemplateNonMatchingAllowlistDoesNotLeak(): void
+    {
+        putenv('SC_FMT_SECRET=leak-me');
+        try {
+            $out = self::runTemplate('token={{SC_FMT_SECRET}}', 'SC_FMT_OTHER');
+            $this->assertStringNotContainsString('leak-me', $out);
+        } finally {
+            putenv('SC_FMT_SECRET');
+        }
+    }
+
+    public function testTypeTemplateWildcardAllowlistExpands(): void
+    {
+        putenv('SC_FMT_SECRET=leak-me');
+        try {
+            $out = self::runTemplate('token={{SC_FMT_SECRET}}', '*');
+            $this->assertStringContainsString('leak-me', $out);
+        } finally {
+            putenv('SC_FMT_SECRET');
+        }
+    }
+
+    /** Run `format --type template` on $body with an optional --allow-env value. */
+    private static function runTemplate(string $body, ?string $allowEnv): string
+    {
+        $cmd = (new \SugarCraft\Shell\Application())->find('format');
+        $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
+        $tmp = tempnam(sys_get_temp_dir(), 'fmt');
+        file_put_contents($tmp, $body);
+        try {
+            $args = ['file' => $tmp, '--type' => 'template'];
+            if ($allowEnv !== null) {
+                $args['--allow-env'] = $allowEnv;
+            }
+            $tester->execute($args);
+            return $tester->getDisplay();
+        } finally {
+            @unlink($tmp);
         }
     }
 }

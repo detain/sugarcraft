@@ -41,6 +41,7 @@
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/candy-shine": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
+        "react/event-loop": "^1.6",
         "symfony/console": "^6.4 || ^7.0"
     },
     "require-dev": {
