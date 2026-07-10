@@ -8,6 +8,7 @@ return [
 
     // Golden file operations
     'golden.write_failed' => 'Failed to write golden file: {path}',
+    'golden.path_traversal' => 'Golden path escapes the fixtures directory: {path}',
 
     // Tape recorder operations
     'tape.write_failed' => 'Failed to write tape file: {path}',

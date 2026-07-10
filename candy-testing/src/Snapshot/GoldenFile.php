@@ -60,12 +60,66 @@ final class GoldenFile
     /**
      * Resolve a fixture-relative path to an absolute path.
      *
+     * A leading slash on $relative is treated as fixtures-relative (stripped),
+     * NOT as an absolute filesystem path. Any $relative that would escape the
+     * `<baseDir>/fixtures` base via `..` traversal is rejected — golden files
+     * must live under the base dir, so a test (or a poisoned relative path)
+     * cannot read or overwrite files elsewhere on disk.
+     *
      * @param string $baseDir  Directory the test file lives in
      * @param string $relative Relative path within fixtures/
      * @return string Resolved absolute path
+     * @throws \RuntimeException if $relative escapes the fixtures base dir
      */
     public static function resolve(string $baseDir, string $relative): string
     {
-        return $baseDir . '/fixtures/' . ltrim($relative, '/');
+        $base = \rtrim($baseDir, '/') . '/fixtures';
+        $full = $base . '/' . \ltrim($relative, '/');
+
+        // realpath() can't be used here: golden files may not exist yet (they
+        // are resolved for both reads and first-time writes), so normalize the
+        // '..'/'.' segments lexically and confirm the result stays under base.
+        $normBase = self::normalizePath($base);
+        $normFull = self::normalizePath($full);
+
+        if ($normFull !== $normBase && !\str_starts_with($normFull, $normBase . '/')) {
+            throw new \RuntimeException(Lang::t('golden.path_traversal', ['path' => $relative]));
+        }
+
+        return $full;
+    }
+
+    /**
+     * Lexically collapse `.`/`..`/empty segments in a path.
+     *
+     * Absolute inputs stay anchored at `/` and a `..` at the root is dropped
+     * (you cannot climb above `/`). Purely lexical — the path need not exist.
+     *
+     * @param string $path
+     * @return string
+     */
+    private static function normalizePath(string $path): string
+    {
+        $isAbsolute = \str_starts_with($path, '/');
+        $out = [];
+
+        foreach (\explode('/', $path) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+
+            if ($segment === '..') {
+                if ($out !== [] && \end($out) !== '..') {
+                    \array_pop($out);
+                } elseif (!$isAbsolute) {
+                    $out[] = '..';
+                }
+                continue;
+            }
+
+            $out[] = $segment;
+        }
+
+        return ($isAbsolute ? '/' : '') . \implode('/', $out);
     }
 }
