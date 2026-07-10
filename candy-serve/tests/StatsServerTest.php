@@ -154,6 +154,57 @@ final class StatsServerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Bind-address safety — unauthenticated stats must default to loopback,
+    // and a wider exposure must be an explicit, deliberate config.
+    // -------------------------------------------------------------------------
+
+    public function testOmittedHostDefaultsToLoopback(): void
+    {
+        // ":0" mirrors the shipped default ":23233" (host omitted) but on an
+        // ephemeral port — it must bind loopback, never the wildcard.
+        \file_put_contents(
+            $this->tmpDir . '/config.yaml',
+            "name: LoopbackTest\nstats:\n  listen_addr: \":0\"\n"
+        );
+        $config = Config::load($this->tmpDir . '/config.yaml');
+
+        $server = new StatsServer($config, new Stats());
+        $loop = new StreamSelectLoop();
+        $server->start($loop);
+
+        try {
+            $addr = $server->listenAddress();
+            $this->assertNotNull($addr);
+            $this->assertStringStartsWith('127.0.0.1:', $addr);
+        } finally {
+            $server->stop();
+        }
+    }
+
+    public function testWildcardBindRequiresExplicitHost(): void
+    {
+        // A network-wide bind is honored only because the operator wrote
+        // "0.0.0.0" explicitly — it is never the default.
+        \file_put_contents(
+            $this->tmpDir . '/config.yaml',
+            "name: WildcardTest\nstats:\n  listen_addr: \"0.0.0.0:0\"\n"
+        );
+        $config = Config::load($this->tmpDir . '/config.yaml');
+
+        $server = new StatsServer($config, new Stats());
+        $loop = new StreamSelectLoop();
+        $server->start($loop);
+
+        try {
+            $addr = $server->listenAddress();
+            $this->assertNotNull($addr);
+            $this->assertStringStartsWith('0.0.0.0:', $addr);
+        } finally {
+            $server->stop();
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
 

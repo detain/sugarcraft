@@ -44,7 +44,7 @@ final class LfsRoutesTest extends TestCase
         $this->server->setStats($this->stats);
 
         $this->server->registerRepo(Repo::new('testrepo.git', $this->tmpDir . '/testrepo.git'));
-        $this->server->registerUser(User::new('admin')->withAdmin(true));
+        $this->server->registerUser(User::new('admin')->withAdmin(true)->withPassword('adminpass'));
     }
 
     protected function tearDown(): void
@@ -80,7 +80,10 @@ final class LfsRoutesTest extends TestCase
 
     private function adminHeaders(): array
     {
-        return ['X-CandyServe-User' => 'admin'];
+        // Authenticate over the trusted Basic-auth path: the raw
+        // X-CandyServe-User header is no longer trusted by default
+        // (fail-closed impersonation fix; see UserTrustTest).
+        return ['Authorization' => 'Basic ' . \base64_encode('admin:adminpass')];
     }
 
     /** Store $content as an LFS object; returns its OID. */
