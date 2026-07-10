@@ -47,10 +47,21 @@ final class TableSanitizeTest extends TestCase
      */
     public function testSanitizeCollapsesNewlinesSingleLine(): void
     {
-        $arrow = "\xE2\x86\x92";  // ↵ as UTF-8
+        $arrow = "\xE2\x86\xB5";  // ↵ (U+21B5) as UTF-8
         $this->assertSame("a{$arrow}b", Sanitize::value("a\nb", false));
         $this->assertSame("a{$arrow}b", Sanitize::value("a\r\nb", false));
         $this->assertSame("a{$arrow}b", Sanitize::value("a\rb", false));
+    }
+
+    /**
+     * Verify TAB (0x09) is replaced with · (U+00B7) in BOTH newline modes.
+     * This is the canonical candy-core cellValue policy — TAB is treated as
+     * a control byte rather than being passed through.
+     */
+    public function testSanitizeReplacesTab(): void
+    {
+        $this->assertSame('a·b', Sanitize::value("a\tb", false));
+        $this->assertSame('a·b', Sanitize::value("a\tb", true));
     }
 
     /**
@@ -64,14 +75,15 @@ final class TableSanitizeTest extends TestCase
     }
 
     /**
-     * Verify invalid UTF-8 is repaired (or at least does not crash).
-     * Overlong encoding of NUL: \xc0\x80 — iconv //IGNORE drops it.
+     * Verify invalid UTF-8 is repaired to U+FFFD (was previously dropped).
+     * Overlong encoding of NUL: \xc0\x80 — the canonical cellValue policy
+     * substitutes each malformed byte with U+FFFD (\xEF\xBF\xBD) rather than
+     * silently dropping it, so width/truncation math keeps a 1:1 stand-in.
      */
     public function testSanitizeHandlesInvalidUtf8Gracefully(): void
     {
-        $result = Sanitize::value("\xc0\x80", false);
-        // iconv //IGNORE drops invalid bytes, so result may be '' or partial
-        $this->assertIsString($result);
+        // Both bad bytes of the overlong \xc0\x80 become U+FFFD.
+        $this->assertSame("\xEF\xBF\xBD\xEF\xBF\xBD", Sanitize::value("\xc0\x80", false));
     }
 
     /**
@@ -81,7 +93,7 @@ final class TableSanitizeTest extends TestCase
     {
         $this->assertSame('Hello', Sanitize::value('Hello'));
         $this->assertSame('日本語', Sanitize::value('日本語'));
-        $arrow = "\xE2\x86\x92";
+        $arrow = "\xE2\x86\xB5";  // ↵ (U+21B5)
         $this->assertSame("line1{$arrow}line2", Sanitize::value("line1\nline2", false));
     }
 
