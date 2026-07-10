@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wishlist\Tests;
 
 use SugarCraft\Wishlist\Config;
+use SugarCraft\Wishlist\Lang;
 use PHPUnit\Framework\TestCase;
 
 final class ConfigTest extends TestCase
@@ -212,5 +213,35 @@ YAML;
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage("continuation before any '- name:' block");
         Config::parse("  port: 2222\n- name: prod", 'wishlist.yml');
+    }
+
+    public function testMalformedJsonRejectedViaGuardedDecode(): void
+    {
+        // A present-but-corrupt JSON config must be rejected with the
+        // localized config error. The guarded decode (candy-core
+        // Json::decodeArray, JSON_THROW_ON_ERROR) chains the underlying
+        // \JsonException as the cause; the old unguarded json_decode()
+        // returned null with no cause, so getPrevious() pins the guard.
+        try {
+            Config::parse('[{"name": "prod", "host":', 'wishlist.json');
+            $this->fail('Expected malformed JSON to be rejected');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(Lang::t('config.json_top_level'), $e->getMessage());
+            $this->assertInstanceOf(\JsonException::class, $e->getPrevious());
+        }
+    }
+
+    public function testNonArrayScalarJsonTopLevelRejectedViaGuard(): void
+    {
+        // A present-but-non-array top level (a bare scalar) must be rejected.
+        // The guarded decode raises a \RuntimeException that is chained as the
+        // cause; the old json_decode()->!is_array() path threw with no cause.
+        try {
+            Config::parse('42', 'wishlist.json');
+            $this->fail('Expected non-array JSON top level to be rejected');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(Lang::t('config.json_top_level'), $e->getMessage());
+            $this->assertInstanceOf(\RuntimeException::class, $e->getPrevious());
+        }
     }
 }
