@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query;
 
+use SugarCraft\Core\Util\Sanitize;
+
 /**
  * Safe display formatting for arbitrary DB cell values.
  *
@@ -46,23 +48,16 @@ final class CellValue
      *   1. repair invalid UTF-8 (binary data) so width/truncation stay sane,
      *   2. collapse newlines to a visible marker (no extra rows), and
      *   3. replace every other control byte (C0, DEL, C1) with a middle dot.
+     *
+     * Delegates to candy-core's canonical {@see Sanitize::cellValue()} — the
+     * single source of truth shared with the sugar-table grid — so both grids
+     * neutralize binary/ANSI payloads identically. This grid is always
+     * single-line, so newlines collapse to the ↵ glyph ($preserveNewlines
+     * stays false); the output is byte-for-byte the same as the private copy
+     * this method used to carry.
      */
     public static function sanitize(string $s): string
     {
-        if (!mb_check_encoding($s, 'UTF-8')) {
-            $prev = mb_substitute_character();
-            mb_substitute_character(0xFFFD); // U+FFFD REPLACEMENT CHARACTER
-            $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
-            mb_substitute_character($prev);
-        }
-
-        // Visualize newlines so they can't break a cell into extra rows.
-        $s = str_replace(["\r\n", "\r", "\n"], '↵', $s);
-        // Strip dangerous control bytes: C0 (0x00-0x1F) + DEL (0x7F)…
-        $s = preg_replace('/[\x00-\x1F\x7F]/', '·', $s) ?? $s;
-        // …and the C1 control range (U+0080-U+009F), now valid UTF-8.
-        $s = preg_replace('/[\x{0080}-\x{009F}]/u', '·', $s) ?? $s;
-
-        return $s;
+        return Sanitize::cellValue($s, false);
     }
 }
