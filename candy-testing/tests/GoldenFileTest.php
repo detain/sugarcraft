@@ -8,7 +8,7 @@ use FilesystemIterator;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use SugarCraft\Testing\Tests\Concerns\TemporaryDirectoryTrait;
+use SugarCraft\Testing\Concerns\TemporaryDirectoryTrait;
 use SugarCraft\Testing\Snapshot\GoldenFile;
 
 final class GoldenFileTest extends TestCase
@@ -97,5 +97,36 @@ final class GoldenFileTest extends TestCase
         $resolved = GoldenFile::resolve($baseDir, $relative);
 
         $this->assertSame('/home/test/fixtures/counter.golden', $resolved);
+    }
+
+    public function testResolveAllowsNestedSubdirectory(): void
+    {
+        // A legitimate nested golden path must resolve unchanged.
+        $resolved = GoldenFile::resolve('/home/test', 'sub/dir/counter.golden');
+
+        $this->assertSame('/home/test/fixtures/sub/dir/counter.golden', $resolved);
+    }
+
+    public function testResolveAllowsInternalDotDotThatStaysInsideBase(): void
+    {
+        // '..' that does not escape the fixtures base is permitted and the
+        // raw (unnormalized) path is returned for byte-stable behaviour.
+        $resolved = GoldenFile::resolve('/home/test', 'sub/../counter.golden');
+
+        $this->assertSame('/home/test/fixtures/sub/../counter.golden', $resolved);
+    }
+
+    public function testResolveRejectsDotDotTraversalEscape(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/escapes the fixtures directory/');
+        GoldenFile::resolve('/home/test', '../../../etc/passwd');
+    }
+
+    public function testResolveRejectsTraversalThatClimbsOutThenBackIn(): void
+    {
+        // Climbs above <base>/fixtures before re-descending — still an escape.
+        $this->expectException(\RuntimeException::class);
+        GoldenFile::resolve('/home/test', 'ok/../../../test/fixtures-evil/x.golden');
     }
 }

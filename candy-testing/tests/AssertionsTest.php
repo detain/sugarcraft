@@ -7,9 +7,12 @@ namespace SugarCraft\Testing\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Subscriptions;
 use SugarCraft\Testing\Snapshot\Assertions;
 use SugarCraft\Testing\Snapshot\GoldenFile;
-use SugarCraft\Testing\Tests\Concerns\TemporaryDirectoryTrait;
+use SugarCraft\Testing\Concerns\TemporaryDirectoryTrait;
 
 final class AssertionsTest extends TestCase
 {
@@ -183,5 +186,44 @@ final class AssertionsTest extends TestCase
         $this->expectException(\PHPUnit\Framework\AssertionFailedError::class);
         $this->expectExceptionMessageMatches('/  Normal line/');
         Assertions::assertAnsiEquals($expected, $actual);
+    }
+
+    public function testAssertViewIdempotentPassesForPureModel(): void
+    {
+        // CounterModel::view() is a pure projection of its state.
+        Assertions::assertViewIdempotent(new CounterModel(5));
+        $this->assertTrue(true);
+    }
+
+    public function testAssertViewIdempotentFailsWhenViewIsNotIdempotent(): void
+    {
+        $model = new class implements Model {
+            private int $calls = 0;
+
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+
+            public function view(): string
+            {
+                // Impure: output depends on how many times view() was called.
+                return 'call:' . (++$this->calls);
+            }
+
+            public function subscriptions(): ?Subscriptions
+            {
+                return null;
+            }
+        };
+
+        $this->expectException(\PHPUnit\Framework\AssertionFailedError::class);
+        $this->expectExceptionMessageMatches('/not idempotent/');
+        Assertions::assertViewIdempotent($model);
     }
 }
