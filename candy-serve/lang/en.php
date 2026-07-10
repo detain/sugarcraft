@@ -16,6 +16,8 @@ return [
     'config.not_found'         => 'Config file not found: {path}',
     'config.read_failed'       => 'Failed to read config: {path}',
     'config.parse_failed'      => 'Invalid YAML config: {error}',
+    'config.invalid_user_trust_mode' => 'Invalid http.user_trust_mode "{mode}": expected off, proxy, or token',
+    'config.tls_not_supported' => 'http.tls_key_path/tls_cert_path are set but no HTTPS listener is wired yet; setting them does NOT enable TLS. Remove them until TLS is supported.',
     'jobs.invalid_schedule'    => 'Invalid job schedule "{schedule}": {reason}',
     'ssh.user_cannot_create'   => 'User {viewer} cannot create repos',
 

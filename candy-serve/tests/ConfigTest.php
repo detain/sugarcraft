@@ -148,6 +148,98 @@ final class ConfigTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // user-trust config tests (X-CandyServe-User header trust)
+    // -------------------------------------------------------------------------
+
+    public function testUserTrustModeDefaultsToOff(): void
+    {
+        $c = Config::fromDefaults();
+
+        $this->assertSame('off', $c->userTrustMode);
+        $this->assertSame([], $c->trustedProxies);
+        $this->assertSame('', $c->authSecret);
+    }
+
+    public function testLoadParsesProxyUserTrustConfig(): void
+    {
+        $configPath = $this->tmpDir . '/trust-proxy.yaml';
+        \file_put_contents(
+            $configPath,
+            "http: { user_trust_mode: \"proxy\", trusted_proxies: [\"10.0.0.0/8\", \"192.168.1.5\"] }\n"
+        );
+
+        $c = Config::load($configPath);
+
+        $this->assertSame('proxy', $c->userTrustMode);
+        $this->assertSame(['10.0.0.0/8', '192.168.1.5'], $c->trustedProxies);
+    }
+
+    public function testLoadParsesTokenUserTrustConfig(): void
+    {
+        $configPath = $this->tmpDir . '/trust-token.yaml';
+        \file_put_contents(
+            $configPath,
+            "http: { user_trust_mode: \"token\", auth_secret: \"s3cr3t\" }\n"
+        );
+
+        $c = Config::load($configPath);
+
+        $this->assertSame('token', $c->userTrustMode);
+        $this->assertSame('s3cr3t', $c->authSecret);
+    }
+
+    public function testLoadParsesCommaSeparatedTrustedProxies(): void
+    {
+        $configPath = $this->tmpDir . '/trust-csv.yaml';
+        \file_put_contents(
+            $configPath,
+            "http: { user_trust_mode: \"proxy\", trusted_proxies: \"10.0.0.1, 10.0.0.2 \" }\n"
+        );
+
+        $c = Config::load($configPath);
+
+        $this->assertSame(['10.0.0.1', '10.0.0.2'], $c->trustedProxies);
+    }
+
+    public function testInvalidUserTrustModeThrows(): void
+    {
+        $configPath = $this->tmpDir . '/trust-bad.yaml';
+        \file_put_contents($configPath, "http: { user_trust_mode: \"trust-everything\" }\n");
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        Config::load($configPath);
+    }
+
+    // -------------------------------------------------------------------------
+    // TLS fields are RESERVED / not enforced — setting them must fail loudly
+    // rather than give a false sense of an enabled-but-nonexistent HTTPS
+    // listener.
+    // -------------------------------------------------------------------------
+
+    public function testTlsPathsSetThrows(): void
+    {
+        $configPath = $this->tmpDir . '/tls.yaml';
+        \file_put_contents(
+            $configPath,
+            "http: { tls_key_path: \"/etc/ssl/server.key\", tls_cert_path: \"/etc/ssl/server.crt\" }\n"
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        Config::load($configPath);
+    }
+
+    public function testTlsPathsUnsetDoesNotThrow(): void
+    {
+        // Defaults leave both empty — construction must succeed.
+        $c = Config::fromDefaults();
+
+        $this->assertSame('', $c->tlsKeyPath);
+        $this->assertSame('', $c->tlsCertPath);
+    }
+
+    // -------------------------------------------------------------------------
     // load tests
     // -------------------------------------------------------------------------
 
