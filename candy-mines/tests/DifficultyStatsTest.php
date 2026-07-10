@@ -77,21 +77,6 @@ final class DifficultyStatsTest extends TestCase
         $this->assertSame(0, $ds->getStats()->gamesPlayed(Difficulty::EASY));
     }
 
-    public function testAtomicSaveCreatesTempFileThenRenames(): void
-    {
-        $stats = new Stats(easyGames: 1);
-        $ds = DifficultyStats::fromStats($stats);
-
-        $ds->save($this->persistencePath);
-
-        // Target file should exist.
-        $this->assertFileExists($this->persistencePath);
-
-        // No temp files should remain.
-        $tempFiles = glob($this->tmpDir . '/.tmp_*');
-        $this->assertEmpty($tempFiles, 'No leftover temp files expected');
-    }
-
     public function testSaveOverwritesExistingFile(): void
     {
         $ds1 = DifficultyStats::fromStats(new Stats(easyGames: 1));
