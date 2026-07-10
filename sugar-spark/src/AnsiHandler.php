@@ -64,19 +64,7 @@ final class AnsiHandler implements Handler
         $parser->feed($input);
         $stateBeforeFlush = $parser->currentState();
         $parser->flush();
-        $this->flushText();
-
-        if ($stateBeforeFlush === State::Escape) {
-            $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
-        }
-
-        if ($this->ss3Buffered) {
-            $this->segments[] = new SequenceSegment(
-                "\x1b" . chr($this->ss3Intermediate),
-                'SS3 ' . chr($this->ss3Intermediate),
-            );
-            $this->ss3Buffered = false;
-        }
+        $this->finishPending($stateBeforeFlush);
 
         return $this->segments;
     }
@@ -131,19 +119,36 @@ final class AnsiHandler implements Handler
     }
 
     /**
-     * Returns whether an SS3 intermediate byte is buffered awaiting a final byte.
+     * Finalise the end-of-stream tail after the parser has been flushed.
+     *
+     * Flushes any buffered text, then emits a trailing bare ESC (when the
+     * stream ended mid-escape) and any buffered SS3 intermediate (ESC O with
+     * no final byte). Shared by the one-shot {@see parse()} and the streaming
+     * {@see StreamingInspector::finish()} so both handle the dangling tail
+     * identically — and so the streaming path never needs to reach into this
+     * handler's private/protected members.
+     *
+     * The caller MUST capture the parser state BEFORE {@see Parser::flush()}
+     * (which resets it to Ground) and pass it here; a post-flush check would
+     * never observe {@see State::Escape}, silently dropping a trailing bare ESC.
+     *
+     * @param State $stateBeforeFlush parser state captured before flush()
      */
-    public function isSs3Buffered(): bool
+    public function finishPending(State $stateBeforeFlush): void
     {
-        return $this->ss3Buffered;
-    }
+        $this->flushText();
 
-    /**
-     * Returns the buffered SS3 intermediate byte value.
-     */
-    protected function getSs3Intermediate(): int
-    {
-        return $this->ss3Intermediate;
+        if ($stateBeforeFlush === State::Escape) {
+            $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
+        }
+
+        if ($this->ss3Buffered) {
+            $this->segments[] = new SequenceSegment(
+                "\x1b" . chr($this->ss3Intermediate),
+                'SS3 ' . chr($this->ss3Intermediate),
+            );
+            $this->ss3Buffered = false;
+        }
     }
 
     public function printChar(string $rune): void

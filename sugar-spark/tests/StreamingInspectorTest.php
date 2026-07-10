@@ -312,4 +312,45 @@ final class StreamingInspectorTest extends TestCase
         $this->assertSame($oneShot[0]->raw(), $allStreaming[0]->raw());
         $this->assertSame($oneShot[2]->raw(), $allStreaming[2]->raw());
     }
+
+    // --- End-of-stream tail: trailing bare ESC + dangling SS3 ---
+
+    /**
+     * A lone ESC (0x1b) at end-of-stream must be emitted by finish() as its
+     * own SequenceSegment. Regression: finish() used to check the parser state
+     * AFTER flush() reset it to Ground, so the branch was dead and the trailing
+     * bare ESC was silently dropped.
+     */
+    public function testFinishEmitsTrailingBareEsc(): void
+    {
+        $inspector = new StreamingInspector();
+        // Lone ESC with no following byte — incomplete, held in Escape state.
+        $segs = $inspector->feed("\x1b");
+        $this->assertCount(0, $segs);
+
+        $segs = $inspector->finish();
+        $this->assertCount(1, $segs);
+        $this->assertInstanceOf(SequenceSegment::class, $segs[0]);
+        $this->assertSame("\x1b", $segs[0]->raw());
+    }
+
+    /**
+     * A dangling SS3 (ESC O with no final byte) at end-of-stream must be
+     * finalised by finish() WITHOUT throwing. Regression: finish() used to
+     * write the private AnsiHandler::$segments and call the protected
+     * getSs3Intermediate() from a foreign class, raising a fatal \Error.
+     */
+    public function testFinishEmitsDanglingSs3WithoutError(): void
+    {
+        $inspector = new StreamingInspector();
+        // ESC O buffers an SS3 intermediate awaiting a final byte.
+        $segs = $inspector->feed("\x1bO");
+        $this->assertCount(0, $segs);
+
+        $segs = $inspector->finish();
+        $this->assertCount(1, $segs);
+        $this->assertInstanceOf(SequenceSegment::class, $segs[0]);
+        $this->assertSame("\x1bO", $segs[0]->raw());
+        $this->assertStringContainsString('SS3', $segs[0]->describe());
+    }
 }
