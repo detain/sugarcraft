@@ -530,4 +530,42 @@ final class StoreTest extends TestCase
         $this->assertSame('still', $this->store->get('before@mydb'));
         $this->assertSame('', $this->store->get('during@mydb'));
     }
+
+    // ─── sanitizeForTty: terminal-safe rendering of stored values ────────────
+
+    public function testSanitizeForTtyPassesPlainTextThrough(): void
+    {
+        $this->assertSame('hello world', Store::sanitizeForTty('hello world'));
+    }
+
+    public function testSanitizeForTtyStripsEscSequences(): void
+    {
+        // A poisoned value must not be able to emit an SGR/OSC escape.
+        $out = Store::sanitizeForTty("\x1b[31mRED\x1b[0m");
+        $this->assertStringNotContainsString("\x1b", $out);
+        $this->assertSame('[31mRED[0m', $out);
+    }
+
+    public function testSanitizeForTtyStripsC0AndDelControls(): void
+    {
+        // \x07 (BEL) and \x7f (DEL) are removed outright.
+        $this->assertSame('ab', Store::sanitizeForTty("a\x07\x7fb"));
+    }
+
+    public function testSanitizeForTtyFoldsNewlinesToSpaces(): void
+    {
+        // Single-line preview: \n / \r / \t collapse to spaces.
+        $this->assertSame('a b c', Store::sanitizeForTty("a\nb\tc"));
+    }
+
+    public function testSanitizeForTtyBinaryBecomesPlaceholder(): void
+    {
+        // Invalid UTF-8 bytes are rendered as a placeholder, never dumped raw.
+        $this->assertSame('<binary 3 bytes>', Store::sanitizeForTty("\xff\xfe\xfd"));
+    }
+
+    public function testSanitizeForTtyEmptyStringStaysEmpty(): void
+    {
+        $this->assertSame('', Store::sanitizeForTty(''));
+    }
 }
