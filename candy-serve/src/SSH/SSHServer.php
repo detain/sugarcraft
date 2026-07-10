@@ -157,15 +157,17 @@ final class SSHServer
             return \extension_loaded('ssh2') && $ac->allowAnonymousRead();
         }
 
-        // When the transport hands us the peer's key, a known username alone
-        // is not proof of identity — it must match the user's authorized_keys.
-        if ($presentedKey !== null && $presentedKey !== '') {
-            return $user->verifyPublicKey($presentedKey);
+        // A known username is not proof of identity: authenticating AS a user
+        // requires a real, non-empty public key that matches their
+        // authorized_keys. A null / empty / whitespace-only key is never a
+        // valid credential — treating it as one let a peer that presented no
+        // key be trusted as $user (auth bypass). Reject it outright: an empty
+        // key can never authenticate as a user.
+        if ($presentedKey === null || \trim($presentedKey) === '') {
+            return false;
         }
 
-        // No key material available: trust the transport (e.g. sshd
-        // ForceCommand where libssh2 already verified the key) as before.
-        return true;
+        return $user->verifyPublicKey($presentedKey);
     }
 
     /**

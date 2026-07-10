@@ -786,6 +786,40 @@ final class GitDaemon
             return;
         }
 
+        // A push carries its objects in a trailing packfile. Those objects
+        // MUST be written into the repo BEFORE any ref is moved to point at
+        // them — otherwise a ref references objects the repo does not have
+        // (corruption / data loss; this is the bug this path had). The HTTP
+        // path avoids it by delegating the whole exchange to
+        // `git receive-pack`, which index-packs then updates refs; here we
+        // do the same in two explicit steps. Deletes carry no pack.
+        $needsPack = false;
+        foreach ($commands as $cmd) {
+            if ($cmd['new'] !== \str_repeat('0', 40)) {
+                $needsPack = true;
+                break;
+            }
+        }
+
+        if ($needsPack) {
+            $packData = $this->extractPackData((string) \file_get_contents($stdinFile));
+            if ($packData === '') {
+                $this->writePacket($socket, 'unpack no packfile received');
+                $this->writePacket($socket, '');
+                return;
+            }
+
+            [$unpacked, $unpackErr] = $this->unpackObjects($repo->path(), $packData);
+            if (!$unpacked) {
+                $reason = \trim((string) \preg_replace('/[\x00-\x1f\s]+/', ' ', $unpackErr));
+                $this->writePacket($socket, 'unpack ' . ($reason === '' ? 'index-pack failed' : $reason));
+                $this->writePacket($socket, '');
+                return;
+            }
+        }
+
+        $this->writePacket($socket, 'unpack ok');
+
         // Process push
         $repoPath = \escapeshellarg($repo->path());
         foreach ($commands as $cmd) {
@@ -866,6 +900,66 @@ final class GitDaemon
         }
 
         return $commands;
+    }
+
+    /**
+     * Locate the packfile inside a raw receive-pack request buffer.
+     *
+     * The pushed pack follows the ref-update command list; it begins with
+     * the `PACK` signature and a 4-byte version (2 or 3). Matching the
+     * signature+version (not a bare "PACK") avoids a false positive on a
+     * ref literally named `.../PACK`.
+     *
+     * @return string The packfile bytes, or '' when no pack is present.
+     */
+    private function extractPackData(string $raw): string
+    {
+        foreach (["PACK\x00\x00\x00\x02", "PACK\x00\x00\x00\x03"] as $sig) {
+            $pos = \strpos($raw, $sig);
+            if ($pos !== false) {
+                return \substr($raw, $pos);
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Write the pushed objects into the repo via `git index-pack`, so they
+     * exist before any ref update references them. `--fix-thin` completes
+     * thin packs (deltas against objects already in the repo), matching what
+     * `git receive-pack` does for real pushes.
+     *
+     * @return array{0: bool, 1: string} [success, error message]
+     */
+    private function unpackObjects(string $repoPath, string $packData): array
+    {
+        $escaped = \escapeshellarg($repoPath);
+        $cmd = "git -C {$escaped} index-pack --stdin --fix-thin 2>&1";
+
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        /** @var resource|false $proc */
+        $proc = \proc_open($cmd, $desc, $pipes);
+        if ($proc === false) {
+            return [false, 'failed to start index-pack'];
+        }
+
+        \fwrite($pipes[0], $packData);
+        \fclose($pipes[0]);
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        $rc = \proc_close($proc);
+
+        if ($rc !== 0) {
+            $msg = \trim($err !== '' ? $err : $out);
+            return [false, $msg === '' ? 'index-pack failed' : $msg];
+        }
+        return [true, ''];
     }
 
     /**

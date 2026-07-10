@@ -196,12 +196,18 @@ final class StatsServer
     /**
      * Parse `stats.listen_addr` (":23233" / "127.0.0.1:23233") into host + port.
      *
+     * Security floor: an omitted host (e.g. the default ":23233") binds to
+     * loopback (127.0.0.1), NOT the wildcard 0.0.0.0. The stats endpoint is
+     * unauthenticated, so it must not be network-exposed by default — exposing
+     * it more widely has to be a deliberate choice (an explicit host such as
+     * "0.0.0.0:23233" in the config).
+     *
      * @return array{string, int}
      */
     private function listenHostPort(): array
     {
         $parts = \explode(':', $this->config->statsListenAddr);
-        $host = $parts[0] ?: '0.0.0.0';
+        $host = $parts[0] !== '' ? $parts[0] : '127.0.0.1';
         $port = isset($parts[1]) ? (int) $parts[1] : 23233;
 
         return [$host, $port];
