@@ -79,7 +79,15 @@ final class TextInput implements Model
         public readonly string $restrict = '',
     ) {}
 
-    /** Construct a fresh instance with default state. */
+    /**
+     * Construct a fresh instance with default state.
+     *
+     * `charLimit` defaults to 4096 to bound the input buffer against a
+     * paste-DoS (an unbounded buffer lets a single paste balloon memory).
+     * Opt out with `withCharLimit(0)` for genuinely unlimited input —
+     * enforcement is gated on `charLimit > 0`, so 0 restores the old
+     * unbounded behaviour.
+     */
     public static function new(): self
     {
         return new self(
@@ -88,7 +96,7 @@ final class TextInput implements Model
             placeholder: '',
             placeholderStyle: Style::new()->faint(),
             prompt: '> ',
-            charLimit: 0,
+            charLimit: 4096,
             width: 0,
             focused: false,
             cursor: Cursor::new(),

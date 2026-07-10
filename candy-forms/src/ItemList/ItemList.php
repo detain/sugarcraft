@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * Selectable, scrollable, filterable list of {@see Item}s.
@@ -128,7 +129,10 @@ final class ItemList implements Model
         $lines   = [];
 
         if ($this->title !== '') {
-            $lines[] = $this->title;
+            // Clean at the DISPLAY site only — the stored $this->title
+            // value is left raw; sanitising strips terminal-injection
+            // bytes from an attacker-influenced header.
+            $lines[] = RenderSafe::clean($this->title);
         }
         if ($this->showFilter && ($this->filtering || $this->filterText !== '')) {
             $lines[] = '/' . $this->filterText;
@@ -146,15 +150,22 @@ final class ItemList implements Model
         foreach ($window as $i => $item) {
             $idx = $top + $i;
             $sel = $idx === $this->cursor;
+            // Clean at the DISPLAY site only — the item's own title()/
+            // description() value stays raw (Select reads it back as the
+            // field VALUE via selectedItem()). Sanitising strips
+            // terminal-injection bytes from attacker-influenced labels
+            // without corrupting the returned value, matching how
+            // MultiSelect cleans at render rather than at value.
+            $itemTitle = RenderSafe::clean($item->title());
             // For selected, render the cursor prefix; for others, the unselected prefix.
             if ($sel) {
-                $title = $this->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $item->title() . Ansi::reset();
+                $title = $this->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
             } else {
-                $title = $this->unselectedPrefix . $item->title();
+                $title = $this->unselectedPrefix . $itemTitle;
             }
             $lines[] = $title;
             if ($this->showDescription && $item->description() !== '') {
-                $lines[] = '    ' . $item->description();
+                $lines[] = '    ' . RenderSafe::clean($item->description());
             }
         }
         if ($this->showStatusBar && ($status = $this->status()) !== '') {

@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * Read-only paragraph. Renders title + description; tab navigation
@@ -101,7 +102,10 @@ final class Note implements \SugarCraft\Forms\Field
         if ($desc  !== '') { $parts[] = $desc; }
         if ($this->next) {
             $marker = $this->focused ? '> ' : '  ';
-            $parts[] = $marker . '[ ' . $this->nextLabel . ' ]';
+            // Clean at the DISPLAY site — an attacker-influenced button
+            // label must not smuggle terminal-injection bytes into the
+            // rendered output. SGR is preserved.
+            $parts[] = $marker . '[ ' . RenderSafe::clean($this->nextLabel) . ' ]';
         }
         $body = implode("\n", $parts);
         if ($this->height > 0) {
