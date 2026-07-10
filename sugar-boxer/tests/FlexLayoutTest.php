@@ -168,4 +168,49 @@ final class FlexLayoutTest extends TestCase
         $n2 = Node::leaf('x')->withBorder(true)->withMinHeight(1);
         $this->assertTrue($n2->border);
     }
+
+    // ---- Margin is part of a fixed child's flex footprint -------------------
+
+    public function testHorizontalFixedMarginedChildReservesItsMargin(): void
+    {
+        // A fixed (non-flex) child with a right margin sits beside a flex child.
+        // Its flex "base" must be minWidth + left+right margin (4 + 2 = 6), so the
+        // flex sibling only gets the TRUE leftover. Under the old margin-omitting
+        // totalWidth() the base was 4: the fixed child was under-reserved, its own
+        // content ('SIDE') was truncated to 'SI', and the flex child stole 2 extra
+        // columns (7 X's instead of 5).
+        $layout = $this->boxer->horizontal(
+            $this->boxer->leaf('SIDE')->withBorder(false)->withMinWidth(4)->withMargin(0, 2, 0, 0),
+            $this->boxer->leaf(str_repeat('X', 20))->withBorder(false)->withGrow(),
+        )->withBorder(false)->withSpacing(1);
+
+        $out = $this->boxer->render($layout, 12, 1);
+
+        // Fixed child now reserves its full footprint → its content is not clipped.
+        $this->assertStringContainsString('SIDE', $out);
+        // Flex sibling gets exactly the leftover after the TRUE footprint (6 + gap 1).
+        $this->assertSame(5, substr_count($out, 'X'));
+    }
+
+    public function testVerticalFixedTopMarginedChildIsNotSqueezedOut(): void
+    {
+        // A fixed header with a 1-row top margin beside a growing body. Its flex
+        // "base" must be minHeight + top+bottom margin (1 + 1 = 2). Under the old
+        // margin-omitting totalHeight() the base was 1, the top margin consumed the
+        // child's entire 1-row slot, and the header ('TOP') vanished while the body
+        // absorbed the freed row (5 body lines instead of 4).
+        $layout = $this->boxer->vertical(
+            $this->boxer->leaf('TOP')->withBorder(false)->withMinHeight(1)->withMargin(1, 0, 0, 0),
+            $this->boxer->leaf("b1\nb2\nb3\nb4\nb5\nb6")->withBorder(false)->withGrow(),
+        )->withBorder(false)->withSpacing(1);
+
+        $rows = array_map('rtrim', explode("\n", $this->boxer->render($layout, 10, 7)));
+
+        // Header survives: blank top-margin row, then 'TOP' on row 1.
+        $this->assertSame('', $rows[0]);
+        $this->assertSame('TOP', $rows[1]);
+        // Body fills exactly the leftover after the header's TRUE footprint → 4 lines.
+        $body = count(array_filter($rows, static fn (string $r): bool => preg_match('/^b\d$/', $r) === 1));
+        $this->assertSame(4, $body);
+    }
 }
