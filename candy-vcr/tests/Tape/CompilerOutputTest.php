@@ -116,4 +116,54 @@ final class CompilerOutputTest extends TestCase
         $compiler->compile($withoutOutput['ast'], $this->tapePath);
         $this->assertNull($compiler->outputPath(), 'outputPath must reset between compiles');
     }
+
+    public function testOutputThroughPreplantedSymlinkIsRejected(): void
+    {
+        // Pre-plant a symlink inside the tape dir whose parent (the tape dir)
+        // resolves under base but whose target escapes it. The parent-realpath
+        // guard passes; only the symlink-target guard can catch this.
+        $outside = sys_get_temp_dir() . '/candy-vcr-symlink-target-' . bin2hex(random_bytes(4)) . '.gif';
+        $link = $this->dir . '/out.gif';
+        if (!@symlink($outside, $link)) {
+            self::markTestSkipped('symlink() not available on this platform');
+        }
+
+        $result = Compiler::parseSource('Output out.gif');
+        $compiler = new Compiler();
+        $compiler->compile($result['ast'], $this->tapePath);
+
+        $this->assertNull(
+            $compiler->outputPath(),
+            'an Output target that is a pre-planted symlink must be rejected',
+        );
+    }
+
+    public function testAbsoluteOutputThroughPreplantedSymlinkIsRejected(): void
+    {
+        $outside = sys_get_temp_dir() . '/candy-vcr-symlink-target-' . bin2hex(random_bytes(4)) . '.gif';
+        $link = $this->realDir . '/abs-out.gif';
+        if (!@symlink($outside, $link)) {
+            self::markTestSkipped('symlink() not available on this platform');
+        }
+
+        $result = Compiler::parseSource('Output ' . $link);
+        $compiler = new Compiler();
+        $compiler->compile($result['ast'], $this->tapePath);
+
+        $this->assertNull(
+            $compiler->outputPath(),
+            'an absolute Output target that is a pre-planted symlink must be rejected',
+        );
+    }
+
+    public function testNulByteOutputIsCleanlyRejected(): void
+    {
+        $result = Compiler::parseSource("Output foo\0bar.gif");
+        $compiler = new Compiler();
+
+        // Must reject up front (null), not defer a ValueError to write time.
+        $compiler->compile($result['ast'], $this->tapePath);
+
+        $this->assertNull($compiler->outputPath(), 'a NUL-byte path must be rejected cleanly');
+    }
 }
