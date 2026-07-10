@@ -6,7 +6,6 @@ namespace SugarCraft\Spark;
 
 use SugarCraft\Ansi\Parser\Handler;
 use SugarCraft\Ansi\Parser\Parser;
-use SugarCraft\Ansi\Parser\State;
 
 /**
  * Streaming incremental parser for ANSI escape sequences.
@@ -62,27 +61,15 @@ final class StreamingInspector
      */
     public function finish(): array
     {
+        // Capture the parser state BEFORE flush(): flush() resets it to Ground,
+        // so a post-flush check would never observe State::Escape and a trailing
+        // bare ESC would be silently dropped. finishPending() then flushes any
+        // remaining text and emits the bare ESC / dangling SS3 tail via public
+        // AnsiHandler API — no reaching into private/protected members.
+        $stateBeforeFlush = $this->parser->currentState();
         $this->parser->flush();
 
-        // Emit a bare ESC if the parser ended in Escape state (ESC alone with
-        // no following byte to complete a sequence).
-        if ($this->parser->currentState() === State::Escape) {
-            $this->handler->segments[] = new SequenceSegment(
-                "\x1b",
-                Inspector::describeEsc(''),
-            );
-        }
-
-        // Emit any buffered SS3 intermediate (e.g. ESC O at end-of-stream).
-        if ($this->handler->isSs3Buffered()) {
-            $this->handler->segments[] = new SequenceSegment(
-                "\x1b" . chr($this->handler->getSs3Intermediate()),
-                'SS3 ' . chr($this->handler->getSs3Intermediate()),
-            );
-        }
-
-        // Flush any remaining buffered text before draining.
-        $this->handler->flushText();
+        $this->handler->finishPending($stateBeforeFlush);
 
         $out = $this->handler->drainSegments();
         $this->handler->reset();
