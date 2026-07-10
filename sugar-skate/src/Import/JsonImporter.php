@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Skate\Import;
 
+use SugarCraft\Core\Util\Json;
 use SugarCraft\Skate\Store;
 
 /**
@@ -63,8 +64,11 @@ final class JsonImporter
      */
     public function importFromString(string $json, bool $atomic = true): int
     {
+        // Guarded decode: a non-array top level (bare scalar/null) is rejected
+        // with a clear \RuntimeException instead of silently iterating as an
+        // empty foreach downstream. Malformed JSON still surfaces \JsonException.
         /** @var array<string, mixed> $data */
-        $data = \json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
+        $data = Json::decodeArray($json);
 
         // Extract TTL map if present
         $ttlMap = [];
