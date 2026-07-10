@@ -8,10 +8,17 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-Constraint-based layout solver for terminal grid layouts. Ships two solvers:
+Constraint-based layout solver for terminal grid layouts.
 
-- **CassowarySolver** — simplex-based constraint solver (new investment)
-- **GreedySolver** — deterministic 5-phase fallback (ported from candy-sprinkles)
+**GreedySolver is the default and only supported solver.** It is deterministic
+and fully implements every constraint type (Length/Min/Max/Fill/Percentage/Ratio).
+
+`CassowarySolver` is **deprecated** — its Big-M simplex never converged (it hit
+the 1000-pivot cap on every call, including trivial layouts, and silently
+returned wrong state; its Ratio path returned 0). Rather than rewrite the
+simplex, `CassowarySolver::solve()` now emits `E_USER_DEPRECATED` and delegates
+wholly to `GreedySolver`. The class is retained only for backward compatibility;
+new code should use `GreedySolver` directly.
 
 ## Install
 
@@ -39,10 +46,10 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 
 ## Solvers
 
-| Solver          | Use case                                                    | Edit variables |
-| --------------- | ----------------------------------------------------------- | ---------------|
-| GreedySolver   | Deterministic, fast, no deps                                | No             |
-| CassowarySolver| Experimental simplex prototype; Min/Fill delegate to GreedySolver | No         |
+| Solver           | Use case                                                        | Status      |
+| ---------------- | -------------------------------------------------------------- | ----------- |
+| GreedySolver     | Deterministic, fast, no deps; all constraint types             | Supported   |
+| CassowarySolver  | Deprecated; `solve()` delegates to GreedySolver + warns        | Deprecated  |
 
 ## Constraint types
 
@@ -55,7 +62,9 @@ $rects = $solver->solve($region, Direction::Horizontal, [
 
 ## Shared foundations
 
-`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`candy-forms` (step-14/15). The `LayoutSolver` interface is the only public contract — swap `GreedySolver` for `CassowarySolver` without touching call-sites. Note: CassowarySolver delegates Min and Fill constraint sets to GreedySolver; only pure Length/Percentage/Ratio/Max sets use the simplex path.
+`candy-layout` is a **foundation package** consumed by `candy-sprinkles` (step-10) and `sugar-bits`/`candy-forms` (step-14/15). The `LayoutSolver` interface is the only public contract. Use `GreedySolver`; `CassowarySolver` is a deprecated shim that delegates to it.
+
+`Region` here is deliberately distinct from `SugarCraft\Buffer\Region` in candy-buffer (a leaf-package name collision that keeps candy-layout dependency-free); candy-sprinkles' `RegionBridge` converts between them.
 
 ## References
 
