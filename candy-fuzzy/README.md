@@ -24,9 +24,13 @@ use SugarCraft\Fuzzy\Highlighter;
 
 $matcher = new SmithWatermanMatcher();
 
-// Match a single candidate
+// Match a single candidate (full traceback → matched indices for highlighting)
 $result = $matcher->match('foo', 'foobar');
-// MatchResult(needle: 'foo', haystack: 'foobar', score: 16, matchedIndices: [0, 1, 2])
+// MatchResult(needle: 'foo', haystack: 'foobar', score: 19, matchedIndices: [0, 1, 2])
+
+// Score-only fast path (two-row DP, no traceback allocation) — same score,
+// for ranking/filtering when you don't need matched indices
+$score = $matcher->score('foo', 'foobar'); // 19
 
 // Match against multiple candidates (sorted by score desc)
 $results = $matcher->matchAll('app', ['apple', 'applet', 'application', 'apricot']);
@@ -41,6 +45,46 @@ $highlighter = new Highlighter();
 $styled = $highlighter->highlight($result, fn($matched) => "\033[1m$matched\033[0m");
 // Returns 'foobar' with matched chars styled
 ```
+
+## Scoring profiles
+
+The Smith-Waterman scoring weights are injectable via an immutable `ScoringProfile`.
+The **default** profile is bit-equivalent to the historical hard-coded constants,
+so passing no profile (or `ScoringProfile::default()`) preserves existing output
+byte-for-byte:
+
+```php
+use SugarCraft\Fuzzy\ScoringProfile;
+
+$default = new SmithWatermanMatcher();                          // canonical scores
+$strict  = new SmithWatermanMatcher(ScoringProfile::strict());  // higher rewards, harsher penalties
+$lenient = new SmithWatermanMatcher(ScoringProfile::lenient()); // lower rewards, gentler penalties
+$custom  = new SmithWatermanMatcher(
+    ScoringProfile::default()->withAdjacentBonus(8)
+);
+```
+
+| Weight            | default | strict | lenient |
+|-------------------|--------:|-------:|--------:|
+| `matchScore`      |       3 |      4 |       2 |
+| `mismatchPenalty` |      −3 |     −4 |      −2 |
+| `gapOpen`         |      −5 |     −6 |      −3 |
+| `gapExtend`       |      −1 |     −2 |      −1 |
+| `adjacentBonus`   |       5 |      6 |       3 |
+
+## DoS length caps
+
+The full-traceback path allocates an O(queryLen × candidateLen) matrix. To bound
+worst-case memory/time, queries or candidates longer than the caps (default 1000
+characters each) are delegated to the O(1)-memory `SahilmMatcher` instead of
+building the quadratic matrix:
+
+```php
+$matcher = new SmithWatermanMatcher(maxQueryLength: 200, maxCandidateLength: 4000);
+```
+
+Fallback scores are on the Sahilm scale, so this is a safety valve for pathological
+input, not a source of scores comparable with the sub-cap path.
 
 ## MatchResult
 
@@ -79,9 +123,23 @@ function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 | Case sensitive | ❌ | Optional |
 | Matching style | Best-alignment | Greedy first-occurrence |
 
-## Backward Compatibility
+## Canonical matcher & consumer migration
 
-The existing `SugarCraft\Forms\Fuzzy\FuzzyMatcher` and `SugarCraft\Lister\FuzzyMatch` classes remain as deprecated shims that delegate to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. Consumers will migrate in subsequent steps.
+`candy-fuzzy` is the single source of truth for fuzzy matching across the
+ecosystem. Consumer migration is in progress and NOT yet complete:
+
+- **`sugar-prompt`** — already delegates: `SugarCraft\Prompt\Fuzzy\FuzzyMatcher`
+  is a `class_alias` to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`.
+- **`candy-forms`** — `SugarCraft\Forms\Fuzzy\FuzzyMatcher` is marked
+  `@deprecated` but still ships its own standalone copy (its `Select` field
+  already uses candy-fuzzy's `SmithWatermanMatcher` directly). Conversion to a
+  shim is tracked for a follow-up batch.
+- **`candy-lister`** — `SugarCraft\Lister\FuzzyMatch` and its `ScoringProfile`
+  remain independent copies; this library's `ScoringProfile` is a superset port
+  of candy-lister's, so the follow-up batch can alias it here.
+
+Until those follow-ups land, treat the copies above as duplicates pending
+removal — new code should depend on `SugarCraft\Fuzzy\*` directly.
 
 ## Security note
 
