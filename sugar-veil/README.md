@@ -25,7 +25,6 @@ PHP port of [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea
 - **Auto-size**: compute veil dimensions from content rather than fixed width/height via `withAutoSize()`
 - **Border chrome**: wrap veil content in a terminal border via `withBorder()`
 - **VeilStack**: ordered collection of veils sorted by z-index for rendering layered overlays
-- **Zone manager integration**: integrate with candy-zone `Manager` for hit testing
 
 ## Install
 
@@ -227,17 +226,6 @@ Accessors: `clickOutsideDismiss(): bool`
 
 The `isClickOutside(MouseMsg $mouse): bool` method returns `true` when `clickOutsideDismiss` is enabled, a rendered output has been scanned, and the click falls outside all tracked zones. Returns `false` when no scan data is available or when click-outside-dismiss is disabled.
 
-## Zone Manager Integration (deprecated)
-
-`withManager(Manager $manager)` is retained for backward compatibility only. It stores the manager but does **not** drive `isClickOutside()`. The self-contained `Scanner` is always used for hit-testing. New code should use `scan()` / `hit()` directly instead of wiring a `Manager`.
-
-```php
-use SugarCraft\Veil\Veil;
-
-$modal = Veil::new()->withClickOutsideDismiss();
-// Use scan()/hit() for hit-testing — Manager is not consulted by isClickOutside()
-```
-
 ## Buffer diffing
 
 The `composite()` method maintains a `?Buffer $previousFrame` across calls. On each
@@ -255,7 +243,7 @@ behaviour is always correct.
 
 ## Shared foundations
 
-Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally via `scan()` / `hit()`. `withManager()` is retained as a deprecated back-compat wrapper and is not consulted by `isClickOutside()`.
+Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally via `scan()` / `hit()`.
 
 ## License
 

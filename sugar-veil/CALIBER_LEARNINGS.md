@@ -56,14 +56,14 @@
 
 ## Click-Outside Dismiss
 
-- `isClickOutside(MouseMsg $mouse): bool` returns `false` when either `clickOutsideDismiss` is `false` or `manager` is `null`
-- When both are set, delegates to `Manager::anyInBounds($mouse)` — returns `null` when click is outside all zones (i.e., click was outside the veil)
-- Multiple veils can share the same `Manager` instance for shared spatial hit testing
+- `isClickOutside(MouseMsg $mouse): bool` returns `false` when `clickOutsideDismiss` is `false`
+- Requires `scan($rendered)` to have been called first; otherwise throws `\RuntimeException`
+- When enabled and scanned, delegates to the self-contained candy-mouse `Scanner` via `hit($x, $y)` — a `null` hit means the click landed outside every zone (i.e., outside the veil)
 
 ## Immutable Pattern
 
 - `withBackdrop()` and `withAnimation()` return new instances via private `mutate()`
-- `withZIndex()`, `withClickOutsideDismiss()`, `withAutoSize()`, `withBorder()`, `withManager()`, and `withPosition()` also return new instances via `mutate()`
+- `withZIndex()`, `withClickOutsideDismiss()`, `withAutoSize()`, `withBorder()`, and `withPosition()` also return new instances via `mutate()`
 - `withoutSession()` returns a copy with a fresh `RenderSession`, used by `VeilStack` to ensure inner compositing always emits full frames
 - `animate()` delegates to `composite()` after applying animation transforms
 - All state held in `readonly` private properties
@@ -71,8 +71,8 @@
 
 ## Mouse hit-testing
 
-- Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code.
-- `withManager()` is kept as deprecated back-compat; internally delegates to own `Scanner`
+- Mouse hit-testing is self-contained via candy-mouse `Scanner` — no external Manager. `scan($rendered)` registers zones; `hit($col, $row)` queries them.
+- The inert candy-zone `Manager` back-compat shim (`withManager()`/`manager()`) was removed — sugar-veil no longer depends on candy-zone.
 
 ## Buffer diffing
 

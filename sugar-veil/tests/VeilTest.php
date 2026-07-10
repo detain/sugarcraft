@@ -7,7 +7,6 @@ namespace SugarCraft\Veil\Tests;
 use SugarCraft\Core\{MouseAction, MouseButton, Msg\MouseMsg};
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Veil\{Position, Veil};
-use SugarCraft\Zone\Manager;
 use PHPUnit\Framework\TestCase;
 
 final class VeilTest extends TestCase
@@ -332,15 +331,6 @@ final class VeilTest extends TestCase
         $this->assertFalse($v->isClickOutside($mouse));
     }
 
-    public function testIsClickOutsideReturnsFalseWhenManagerNotSet(): void
-    {
-        // Mark content covering coordinate (1,1) and scan it so click at (1,1) is inside the zone
-        $marked = $this->veil->mark('test-zone', 'X');
-        $v = $this->veil->withClickOutsideDismiss(true)->scan($marked);
-        $mouse = new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press);
-        $this->assertFalse($v->isClickOutside($mouse));
-    }
-
     public function testIsClickOutsideThrowsWhenNotScanned(): void
     {
         $v = $this->veil->withClickOutsideDismiss(true);
@@ -418,40 +408,6 @@ final class VeilTest extends TestCase
         $v = $this->veil->withBorder(Border::thick());
         $result = $v->applyBorderChrome("X");
         $this->assertStringContainsString('━', $result);
-    }
-
-    // ─── manager ────────────────────────────────────────────────────────────
-
-    public function testManagerDefaultsToNull(): void
-    {
-        $this->assertNull($this->veil->manager());
-    }
-
-    public function testWithManager(): void
-    {
-        $manager = Manager::newGlobal();
-        $v = $this->veil->withManager($manager);
-        $this->assertSame($manager, $v->manager());
-    }
-
-    public function testManagerIsImmutable(): void
-    {
-        $manager1 = Manager::newGlobal();
-        $manager2 = Manager::newGlobal();
-        $v1 = $this->veil->withManager($manager1);
-        $v2 = $v1->withManager($manager2);
-        $this->assertSame($manager1, $v1->manager());
-        $this->assertSame($manager2, $v2->manager());
-    }
-
-    public function testWithManagerReturnsNewInstance(): void
-    {
-        $original = $this->veil;
-        $manager = Manager::newGlobal();
-        $modified = $this->veil->withManager($manager);
-        $this->assertNotSame($original, $modified);
-        $this->assertNull($original->manager());
-        $this->assertSame($manager, $modified->manager());
     }
 
     // ─── autoSize behavior in composite ─────────────────────────────────────
@@ -621,23 +577,6 @@ final class VeilTest extends TestCase
         $zone = $veiled->hit(1, 1);
         $this->assertNotNull($zone);
         $this->assertSame('my-btn', $zone->id);
-    }
-
-    // ─── Back-compat: withManager() ─────────────────────────────────────────
-
-    public function testWithManagerBackCompatDoesNotThrow(): void
-    {
-        $manager = \SugarCraft\Zone\Manager::newGlobal();
-        // Should not throw — manager is stored but not used for hit-testing
-        $v = $this->veil->withManager($manager);
-        $this->assertInstanceOf(Veil::class, $v);
-    }
-
-    public function testWithManagerPreservesManager(): void
-    {
-        $manager = \SugarCraft\Zone\Manager::newGlobal();
-        $v = $this->veil->withManager($manager);
-        $this->assertSame($manager, $v->manager());
     }
 
     // ─── animate() ───────────────────────────────────────────────────────────
