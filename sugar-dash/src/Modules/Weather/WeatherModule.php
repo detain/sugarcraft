@@ -6,6 +6,7 @@ namespace SugarCraft\Dash\Modules\Weather;
 
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Dash\Module\BaseModule;
 use SugarCraft\Dash\Output\Sanitize;
 
@@ -144,26 +145,15 @@ class WeatherModule extends BaseModule
 
     private function loadCache(): ?WeatherSnapshot
     {
-        $path = $this->cachePath();
-        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
-        if (!is_file($path)) {
+        $file = AtomicJsonFile::new($this->cachePath());
+        if (!$file->exists()) {
             return null;
         }
 
-        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
-        $json = @file_get_contents($path);
-        if ($json === false) {
-            return null;
-        }
-
-        /** @var array<string, mixed>|null */
-        $data = json_decode($json, true);
-        if (!is_array($data)) {
-            return null;
-        }
-
+        // Cache read is best-effort: a corrupt or unreadable cache file must
+        // degrade to "no data", never surface as an exception up the tick path.
         try {
-            return WeatherSnapshot::fromArray($data);
+            return WeatherSnapshot::fromArray($file->read());
         } catch (\Throwable) {
             return null;
         }
@@ -171,25 +161,12 @@ class WeatherModule extends BaseModule
 
     private function saveCache(WeatherSnapshot $snapshot): void
     {
-        $dir = dirname($this->cachePath());
-        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
-        }
-
-        $path = $this->cachePath();
-        $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
-
-        $json = json_encode($snapshot->toArray(), JSON_THROW_ON_ERROR);
-        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
-        if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
-            // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
-            @unlink($tmp);
-            return;
-        }
-
-        if (!@rename($tmp, $path)) {
-            @unlink($tmp);
+        // Cache write is best-effort: a full disk / permission error must not
+        // abort a successful fetch, so failures are swallowed.
+        try {
+            AtomicJsonFile::new($this->cachePath())->write($snapshot->toArray());
+        } catch (\Throwable) {
+            // ignore — stale/missing cache is acceptable
         }
     }
 

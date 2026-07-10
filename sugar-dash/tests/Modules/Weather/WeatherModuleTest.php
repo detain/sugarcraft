@@ -189,6 +189,63 @@ final class WeatherModuleTest extends TestCase
         $msg = new TickMsg();
         $this->assertInstanceOf(Msg::class, $msg);
     }
+
+    /**
+     * Regression: the weather cache now round-trips through candy-core's
+     * AtomicJsonFile — saveCache() must produce a file loadCache() can read
+     * back, and the atomic tmp+rename must leave no temp artifacts behind.
+     */
+    public function testCacheRoundTripThroughAtomicFileLeavesNoTemp(): void
+    {
+        $snapshot = new WeatherSnapshot(
+            18.5,
+            'Foggy',
+            'RoundTripCity',
+            new \DateTimeImmutable('2020-01-01T00:00:00+00:00'),
+        );
+
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        $this->invokePrivate($module, 'saveCache', [$snapshot]);
+
+        $cacheSubdir = $this->cacheDir . '/.cache/sugar-dash';
+        $files = array_values(array_diff(scandir($cacheSubdir), ['.', '..']));
+        $this->assertSame(['weather.json'], $files, 'atomic cache write must leave no temp artifacts');
+
+        $loaded = $this->invokePrivate($module, 'loadCache', []);
+        $this->assertInstanceOf(WeatherSnapshot::class, $loaded);
+        $this->assertSame(18.5, $loaded->tempC);
+        $this->assertSame('Foggy', $loaded->condition);
+        $this->assertSame('RoundTripCity', $loaded->location);
+    }
+
+    /**
+     * Regression: cache reads are best-effort — a corrupt cache file must
+     * degrade to null (no data), never surface as an exception on the tick path.
+     */
+    public function testLoadCacheReturnsNullOnCorruptCacheFile(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        $path = $this->cacheDir . '/.cache/sugar-dash/weather.json';
+        @mkdir(dirname($path), 0755, true);
+        file_put_contents($path, '{ this is not json');
+
+        $this->assertNull($this->invokePrivate($module, 'loadCache', []));
+    }
+
+    /**
+     * @param array<int, mixed> $args
+     */
+    private function invokePrivate(WeatherModule $module, string $method, array $args): mixed
+    {
+        $ref = new \ReflectionMethod(WeatherModule::class, $method);
+        $ref->setAccessible(true);
+
+        return $ref->invoke($module, ...$args);
+    }
 }
 
 /**

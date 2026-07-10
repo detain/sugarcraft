@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\State;
 
+use SugarCraft\Core\Util\AtomicJsonFile;
+
 /**
  * Atomic persistence for dashboard panel/tab state.
  *
- * Uses tmp+rename to ensure the saved file is never in a partially-written
- * state even if a crash occurs mid-write (Homestead atomic-save pattern).
+ * Delegates the durable-state save/load to candy-core's AtomicJsonFile
+ * (tmp+flock+rename SSOT) so a reader never observes a partially-written file,
+ * while keeping this class's `{version, data}` wrapper as the on-disk shape.
  */
 final class Persistence
 {
@@ -21,34 +24,10 @@ final class Persistence
      */
     public function save(string $path, array $data): void
     {
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
-                throw new \RuntimeException("Cannot create persistence directory: {$dir}");
-            }
-        }
-
-        $payload = json_encode([
+        AtomicJsonFile::new($path)->write([
             'version' => 1,
             'data' => $data,
-        ], JSON_THROW_ON_ERROR);
-
-        $tmp = $dir . '/.tmp_' . basename($path) . '.' . bin2hex(random_bytes(8));
-
-        try {
-            if (file_put_contents($tmp, $payload, LOCK_EX) === false) {
-                throw new \RuntimeException("Failed to write temp file: {$tmp}");
-            }
-
-            if (!rename($tmp, $path)) {
-                throw new \RuntimeException("Failed to rename temp file to: {$path}");
-            }
-        } catch (\Throwable $e) {
-            if (file_exists($tmp)) {
-                unlink($tmp);
-            }
-            throw $e;
-        }
+        ]);
     }
 
     /**
@@ -60,17 +39,12 @@ final class Persistence
      */
     public function load(string $path): ?array
     {
-        if (!file_exists($path)) {
+        $file = AtomicJsonFile::new($path);
+        if (!$file->exists()) {
             return null;
         }
 
-        $content = file_get_contents($path);
-        if ($content === false) {
-            throw new \RuntimeException("Failed to read persistence file: {$path}");
-        }
-
-        /** @var array<string, mixed> $decoded */
-        $decoded = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+        $decoded = $file->read();
 
         // Version gate — future schema changes can be migrated here.
         if (!isset($decoded['version']) || !isset($decoded['data'])) {
@@ -81,6 +55,7 @@ final class Persistence
             throw new \RuntimeException("Unsupported persistence version: {$decoded['version']}");
         }
 
+        /** @var array<string, mixed> */
         return $decoded['data'];
     }
 }

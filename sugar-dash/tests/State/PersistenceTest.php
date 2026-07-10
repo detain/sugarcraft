@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\State;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Dash\State\Persistence;
 
 final class PersistenceTest extends TestCase
@@ -100,5 +101,64 @@ final class PersistenceTest extends TestCase
 
         $this->assertNotNull($loaded);
         $this->assertSame([], $loaded);
+    }
+
+    /**
+     * Regression: save() must persist the `{version, data}` wrapper through the
+     * shared candy-core atomic store, and load() must round-trip it back.
+     */
+    public function testSaveRoundTripsThroughAtomicJsonFile(): void
+    {
+        $path = $this->tmpDir . '/roundtrip.json';
+        $data = ['panels' => ['a', 'b'], 'active' => 'weather'];
+
+        $this->persistence->save($path, $data);
+
+        $raw = AtomicJsonFile::new($path)->read();
+        $this->assertSame(1, $raw['version']);
+        $this->assertSame($data, $raw['data']);
+
+        $this->assertSame($data, $this->persistence->load($path));
+    }
+
+    /**
+     * Regression: the atomic tmp+rename write must leave no temp artifacts
+     * behind, even across an overwrite.
+     */
+    public function testSaveLeavesNoLeftoverTempFiles(): void
+    {
+        $path = $this->tmpDir . '/notemp.json';
+
+        $this->persistence->save($path, ['k' => 'v1']);
+        $this->persistence->save($path, ['k' => 'v2']);
+
+        $files = array_values(array_diff(scandir($this->tmpDir), ['.', '..']));
+        $this->assertSame(['notemp.json'], $files, 'atomic save must leave no temp artifacts');
+    }
+
+    /**
+     * Regression: a present-but-malformed cache file must fail loudly per the
+     * load() contract, not be silently treated as empty state.
+     */
+    public function testLoadThrowsOnMalformedJson(): void
+    {
+        $path = $this->tmpDir . '/corrupt.json';
+        file_put_contents($path, '{not valid json');
+
+        $this->expectException(\JsonException::class);
+        $this->persistence->load($path);
+    }
+
+    /**
+     * Regression: a valid-JSON but non-array top level (e.g. a bare string)
+     * must throw rather than corrupt the loaded shape.
+     */
+    public function testLoadThrowsOnNonArrayTopLevel(): void
+    {
+        $path = $this->tmpDir . '/scalar.json';
+        file_put_contents($path, '"just a string"');
+
+        $this->expectException(\RuntimeException::class);
+        $this->persistence->load($path);
     }
 }
