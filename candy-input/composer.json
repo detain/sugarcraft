@@ -29,6 +29,7 @@
     },
     "require": {
         "php": "^8.3",
+        "react/stream": "^1.2",
         "sugarcraft/candy-core": "dev-master"
     },
     "repositories": [
