@@ -88,11 +88,9 @@ if ($zone !== null && \preg_match('/crumb-(\d+)/', $zone->id, $m)) {
 }
 ```
 
-`withZoneManager()` is a deprecated back-compat wrapper that (post-Step-4) internally delegates to a Scanner. Prefer `withScanner()` directly.
-
 ## Shared foundations
 
-Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally — external Manager wiring is no longer needed for mouse-only use cases. `withZoneManager()` is retained as a deprecated back-compat wrapper.
+Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally — no external zone-manager wiring is needed.
 
 ## License
 

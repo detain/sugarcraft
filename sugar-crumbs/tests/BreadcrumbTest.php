@@ -6,7 +6,6 @@ namespace SugarCraft\Crumbs\Tests;
 
 use SugarCraft\Crumbs\{Breadcrumb, NavStack};
 use SugarCraft\Mouse\Scanner;
-use SugarCraft\Zone\Manager;
 use PHPUnit\Framework\TestCase;
 
 final class BreadcrumbTest extends TestCase
@@ -113,26 +112,6 @@ final class BreadcrumbTest extends TestCase
         $this->assertNull($zone);
     }
 
-    // ─── Back-compat: withZoneManager() ─────────────────────────────────────
-
-    public function testWithZoneManagerBackCompatDoesNotThrow(): void
-    {
-        $manager = Manager::newGlobal();
-        $bc = new Breadcrumb();
-
-        // withZoneManager() is a no-op (deprecated, ignored)
-        // Should not throw even with null manager
-        $result = $bc->withZoneManager($manager);
-        $this->assertInstanceOf(Breadcrumb::class, $result);
-    }
-
-    public function testWithZoneManagerAcceptsNull(): void
-    {
-        $bc = new Breadcrumb();
-        $result = $bc->withZoneManager(null);
-        $this->assertInstanceOf(Breadcrumb::class, $result);
-    }
-
     // ─── Rendering integration ─────────────────────────────────────────────
 
     public function testRenderWithScannerAddsZoneMarkers(): void
@@ -207,31 +186,6 @@ final class BreadcrumbTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('itemRenderer must return string|null');
         $bc->render($s);
-    }
-
-    // ─── Step 4: withZoneManager now clones and wires Scanner ─────────────────
-
-    public function testWithZoneManagerReturnsNewInstance(): void
-    {
-        $original = new Breadcrumb();
-        $manager = Manager::newGlobal();
-        $modified = $original->withZoneManager($manager);
-
-        $this->assertNotSame($original, $modified);
-    }
-
-    public function testWithZoneManagerEnablesZoneMarkers(): void
-    {
-        $manager = Manager::newGlobal();
-        $bc = (new Breadcrumb())->withZoneManager($manager);
-
-        $s = new NavStack();
-        $s->push('Home')->push('Settings');
-
-        $rendered = $bc->render($s);
-
-        // Zone markers use U+E000 private-use sentinel
-        $this->assertStringContainsString("\u{E000}", $rendered);
     }
 
     // ─── Step 5: ::new() factory ───────────────────────────────────────────────

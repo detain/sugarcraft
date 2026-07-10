@@ -7,7 +7,6 @@ namespace SugarCraft\Crumbs;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
-use SugarCraft\Zone\Manager;
 
 /**
  * Renders a NavStack as a breadcrumb string.
@@ -16,16 +15,16 @@ use SugarCraft\Zone\Manager;
  *
  * Can truncate to a max width by dropping the leftmost (oldest) segments.
  *
- * When a {@see Manager} is attached via {@see withZoneManager()}, each
- * crumb item is wrapped in a named APC zone marker so the parent can
- * {@see Manager::scan()} to record bounding boxes for mouse routing.
+ * When a {@see Scanner} is attached via {@see withScanner()}, each
+ * crumb item is wrapped in a named zone marker so the parent can
+ * {@see scan()} to record bounding boxes for mouse routing.
  *
  * **Mutable by design** — `setSeparator`, `setTruncator`, `setMaxWidth`,
- * `setItemRenderer`, `withScanner`, and `withZoneManager` mutate `$this`
- * and return `$this` for fluent chaining. This is a deliberate exception to
- * the repo-wide immutable `with*()` convention: the `with*()` methods here
- * DO return new instances, but the `set*` setters mutate in place.
- * Callers must not assume copy-on-write for the `set*` family.
+ * and `setItemRenderer` mutate `$this` and return `$this` for fluent
+ * chaining. This is a deliberate exception to the repo-wide immutable
+ * `with*()` convention: the `with*()` methods here DO return new
+ * instances, but the `set*` setters mutate in place. Callers must not
+ * assume copy-on-write for the `set*` family.
  *
  * Port of KevM/bubbleo Breadcrumb.
  *
@@ -89,24 +88,6 @@ final class Breadcrumb
     {
         $this->itemRenderer = $fn;
         return $this;
-    }
-
-    /**
-     * Attach a {@see Manager} for mouse-click zone tracking.
-     *
-     * @deprecated Internally delegates to a self-contained Scanner (same as
-     *   {@see withScanner()}). Pass a Manager instance to get zone markers
-     *   rendered; pass null to detach. Prefer {@see withScanner()} directly.
-     */
-    public function withZoneManager(?Manager $manager): self
-    {
-        $clone = clone $this;
-        if ($manager !== null) {
-            $clone->scanner = $clone->scanner ?? Scanner::new();
-        } else {
-            $clone->scanner = null;
-        }
-        return $clone;
     }
 
     /**
