@@ -17,6 +17,7 @@ declare(strict_types=1);
  */
 namespace SugarCraft\Skate;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Skate\Lang;
 
@@ -137,6 +138,35 @@ final class Store
     {
         [$dbName, $entryKey] = $this->parseKey($key);
         return $this->database($dbName)->get($entryKey);
+    }
+
+    /**
+     * Render a stored value safely for a one-line terminal (TTY) listing.
+     *
+     * Stored values are attacker-controlled: a raw `list` would let a
+     * poisoned value smuggle terminal escape sequences (cursor moves, colour
+     * resets, even window-title rewrites) straight onto the operator's screen.
+     * This collapses a value to a single, control-free line:
+     *
+     *  - A non-UTF-8 (binary) payload becomes a `<binary N bytes>` placeholder
+     *    (N = raw byte length) instead of dumping raw bytes at the terminal.
+     *  - C0 control bytes are stripped and \n / \r / \t fold to spaces via
+     *    {@see Sanitize::controlChars()} — a deliberate single-line preview.
+     *  - ESC (0x1b) and DEL (0x7f) are additionally removed here: Sanitize
+     *    preserves ESC for trusted SGR output, but a *stored* value must never
+     *    be trusted to emit escape sequences.
+     *
+     * @param string $value Raw stored value (already base64-decoded for binary).
+     */
+    public static function sanitizeForTty(string $value): string
+    {
+        // Not valid UTF-8 → treat as opaque binary; never echo raw bytes.
+        if (\preg_match('//u', $value) !== 1) {
+            return '<binary ' . \strlen($value) . ' bytes>';
+        }
+
+        $safe = Sanitize::controlChars($value);
+        return \preg_replace('/[\x1b\x7f]/', '', $safe) ?? $safe;
     }
 
     /**
