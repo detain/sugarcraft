@@ -113,6 +113,17 @@ final class SpinCommandTest extends TestCase
 
     private function spinCommandWith(FakeProcess $fake): SpinCommand
     {
+        // The headless stdin below is a STREAM_PF_UNIX socket pair. The AF_UNIX
+        // domain is POSIX-only: on Windows stream_socket_pair() cannot honour it
+        // and raises an E_WARNING, which candy-shell's failOnWarning="true" turns
+        // into a CI failure. Only these two socket-backed tests need it (the rest
+        // of the class is Windows-clean), and the timeout wiring they exercise is
+        // already covered on Linux, so skip just this scaffolding on Windows —
+        // mirroring RealProcessTest's DIRECTORY_SEPARATOR gate.
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('stream_socket_pair(STREAM_PF_UNIX, …) is not supported on Windows.');
+        }
+
         return new SpinCommand(
             processFactory: static fn (array $argv, bool $so, bool $se): Process => $fake,
             programFactory: function (Model $model, LoopInterface $loop): Program {
