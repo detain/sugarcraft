@@ -479,11 +479,55 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => "\x1b["];
         }
 
+        // Bracketed paste markers (CSI 200~ / CSI 201~) are handled by decode()
+        // as paste sentinels, never as key events. A bare marker only reaches
+        // here split across chunks; buffer it so the paste path picks it up.
+        if ($csi === '200~' || $csi === '201~') {
+            return ['events' => [], 'remaining' => "\x1b[" . $csi];
+        }
+
+        // Structurally isolate the CSI up to AND INCLUDING its final byte. Per
+        // ECMA-48 a CSI (after "ESC [") is: parameter bytes 0x30-0x3F, then
+        // intermediate bytes 0x20-0x2F, then exactly one final byte 0x40-0x7E.
+        // Anything AFTER the final byte is a genuine suffix — the next key(s) in
+        // the same chunk — which we must hand back unconsumed so decodeClean()'s
+        // offset walk resumes on it. (Previously the final byte was located by a
+        // backward scan that peeled only a single trailing byte, so 2+ printable
+        // bytes after a complete/unknown CSI in one chunk were silently dropped.)
+        $len = strlen($csi);
+        $p = 0;
+        while ($p < $len && ($o = ord($csi[$p])) >= 0x30 && $o <= 0x3f) {
+            $p++;
+        }
+        while ($p < $len && ($o = ord($csi[$p])) >= 0x20 && $o <= 0x2f) {
+            $p++;
+        }
+        if ($p >= $len) {
+            // Ran out of bytes before a final byte — incomplete sequence.
+            // Buffer the whole thing for the next decode() call.
+            return ['events' => [], 'remaining' => "\x1b[" . $csi];
+        }
+        $finalOrd = ord($csi[$p]);
+        if ($finalOrd < 0x40 || $finalOrd > 0x7e) {
+            // Where the final byte must be, we found a byte outside 0x40-0x7E
+            // (a stray control byte, a fresh ESC interrupting the sequence, a
+            // high byte, …). The CSI is malformed: drop the "ESC [" + the
+            // parameter/intermediate run and resync by reprocessing from the
+            // offending byte (this recovers e.g. an ESC that starts a new
+            // sequence). $p < $len here, so the returned suffix is non-empty.
+            return ['events' => [], 'remaining' => substr($csi, $p)];
+        }
+
+        // $seq = the complete CSI body (params + intermediates + final byte);
+        // $rest = the untouched suffix returned to the caller.
+        $seq  = substr($csi, 0, $p + 1);
+        $rest = substr($csi, $p + 1);
+
         // Modified keys: CSI 1;<mod><final> (xterm format)
         // e.g., CSI 1;2A = Shift+ArrowUp, CSI 1;5C = Ctrl+ArrowRight
-        if (preg_match('/^(\d+)(?:;(\d+))?([A-DF-HJ-KP-T])$/', $csi, $m)) {
-            $num = (int)$m[1];
-            $modRaw = isset($m[2]) ? (int)$m[2] : 1;
+        if (preg_match('/^(\d+)(?:;(\d+))?([A-DF-HJ-KP-T])$/', $seq, $m)) {
+            $num = (int) $m[1];
+            $modRaw = isset($m[2]) ? (int) $m[2] : 1;
             $final = $m[3];
 
             // xterm modified keys always have num=1 and a modifier parameter
@@ -504,134 +548,64 @@ final class EscapeDecoder
                 ];
 
                 if (isset($keyMap[$final])) {
-                    $matched = $m[0];
                     return [
-                        'events' => [new KeyEvent($keyMap[$final], $modifiers, "\x1b[" . $matched)],
-                        'remaining' => substr($csi, strlen($matched)),
+                        'events' => [new KeyEvent($keyMap[$final], $modifiers, "\x1b[" . $seq)],
+                        'remaining' => $rest,
                     ];
                 }
             }
         }
 
-        // Arrow keys: CSI A/B/C/D (or SS3 O{A/B/C/D})
+        // Arrow keys: CSI A/B/C/D (a plain arrow has no params, so $seq is one byte)
         $arrowMap = ['A' => 'ArrowUp', 'B' => 'ArrowDown', 'C' => 'ArrowRight', 'D' => 'ArrowLeft'];
-        if (isset($arrowMap[$csi[0]])) {
+        if (isset($arrowMap[$seq])) {
             return [
-                'events' => [new KeyEvent($arrowMap[$csi[0]], KeyModifier::none(), "\x1b[" . $csi)],
-                'remaining' => substr($csi, 1),
+                'events' => [new KeyEvent($arrowMap[$seq], KeyModifier::none(), "\x1b[" . $seq)],
+                'remaining' => $rest,
             ];
         }
 
         // Home / End: CSI H or CSI F
-        if ($csi === 'H') return ['events' => [new KeyEvent('Home', KeyModifier::none(), "\x1b[H")], 'remaining' => ''];
-        if ($csi === 'F') return ['events' => [new KeyEvent('End', KeyModifier::none(), "\x1b[F")], 'remaining' => ''];
+        if ($seq === 'H') return ['events' => [new KeyEvent('Home', KeyModifier::none(), "\x1b[H")], 'remaining' => $rest];
+        if ($seq === 'F') return ['events' => [new KeyEvent('End', KeyModifier::none(), "\x1b[F")], 'remaining' => $rest];
 
-        // Bracketed paste: CSI 200 ~ (start) and CSI 201 ~ (end) are handled
-        // elsewhere as paste sentinel markers. They should not emit key events.
-        // Return incomplete so the main decode loop can detect the paste marker.
-        if ($csi === '200~' || $csi === '201~') {
-            return ['events' => [], 'remaining' => "\x1b[" . $csi];
-        }
-
-        // Numbered function keys and special keys: 1~, 2~, 3~, etc.
-        if (preg_match('/^(\d+)(~[HF]?|~)$/', $csi, $m)) {
+        // Numbered function keys and special keys: 1~, 2~, 3~, 15~, etc.
+        if (preg_match('/^(\d+)~$/', $seq, $m)) {
             $num = (int) $m[1];
-            $suffix = $m[2] ?? '';
 
             $specialKeys = [
-                '1' => 'Home', '2' => 'Insert', '3' => 'Delete', '4' => 'End',
-                '5' => 'PageUp', '6' => 'PageDown',
+                1 => 'Home', 2 => 'Insert', 3 => 'Delete', 4 => 'End',
+                5 => 'PageUp', 6 => 'PageDown',
             ];
 
-            // F1-F4 via 11~-14~ (some terminals) or SS3
-            if (isset($specialKeys[(string)$num])) {
-                $key = $specialKeys[(string)$num];
+            if (isset($specialKeys[$num])) {
                 return [
-                    'events' => [new KeyEvent($key, KeyModifier::none(), "\x1b[" . $csi)],
-                    'remaining' => '',
+                    'events' => [new KeyEvent($specialKeys[$num], KeyModifier::none(), "\x1b[" . $seq)],
+                    'remaining' => $rest,
                 ];
             }
 
+            // F1-F4 via 11~-14~ (some terminals); F5+ via 15~ onward
             $fKeys = [
-                '11' => 'F1', '12' => 'F2', '13' => 'F3', '14' => 'F4',
-                '15' => 'F5', '17' => 'F6', '18' => 'F7', '19' => 'F8',
-                '20' => 'F9', '21' => 'F10', '23' => 'F11', '24' => 'F12',
-                '25' => 'F13', '26' => 'F14', '28' => 'F15', '29' => 'F16',
-                '31' => 'F17', '32' => 'F18', '33' => 'F19', '34' => 'F20',
-                '35' => 'F21', '36' => 'F22', '37' => 'F23', '38' => 'F24',
+                11 => 'F1', 12 => 'F2', 13 => 'F3', 14 => 'F4',
+                15 => 'F5', 17 => 'F6', 18 => 'F7', 19 => 'F8',
+                20 => 'F9', 21 => 'F10', 23 => 'F11', 24 => 'F12',
+                25 => 'F13', 26 => 'F14', 28 => 'F15', 29 => 'F16',
+                31 => 'F17', 32 => 'F18', 33 => 'F19', 34 => 'F20',
+                35 => 'F21', 36 => 'F22', 37 => 'F23', 38 => 'F24',
             ];
 
-            if (isset($fKeys[(string)$num])) {
+            if (isset($fKeys[$num])) {
                 return [
-                    'events' => [new KeyEvent($fKeys[(string)$num], KeyModifier::none(), "\x1b[" . $csi)],
-                    'remaining' => '',
+                    'events' => [new KeyEvent($fKeys[$num], KeyModifier::none(), "\x1b[" . $seq)],
+                    'remaining' => $rest,
                 ];
             }
         }
 
-        // CSI number without known suffix — it might be a partial numbered key sequence
-        // e.g., "15" needs "~" to become "15~" (F5). Buffer it and wait for more.
-        if (is_numeric($csi[0]) && strlen($csi) > 0) {
-            if (is_numeric($csi[strlen($csi) - 1])) {
-                // Ends with digit — could be partial numbered key, buffer
-                return ['events' => [], 'remaining' => "\x1b[" . $csi];
-            }
-            // Non-numeric suffix — unknown complete CSI sequence.
-            // Find the final byte: it's the last byte in the valid final range (0x40-0x7E)
-            // that either has an intermediate byte before it OR is preceded by a digit
-            // (indicating parameters followed by final).
-            $csiLen = strlen($csi);
-            $finalBytePos = -1;
-            for ($i = $csiLen - 1; $i >= 0; $i--) {
-                $ord = ord($csi[$i]);
-                if ($ord >= 0x40 && $ord <= 0x7e) {
-                    $finalBytePos = $i;
-                    break;
-                }
-            }
-            if ($finalBytePos === -1) {
-                // No final byte found - might be incomplete, buffer
-                return ['events' => [], 'remaining' => "\x1b[" . $csi];
-            }
-            // Check if there's a valid intermediate (0x20-0x2F) or parameter before final byte
-            $beforeFinal = $finalBytePos - 1;
-            if ($beforeFinal >= 0) {
-                $beforeOrd = ord($csi[$beforeFinal]);
-                $isIntermediate = $beforeOrd >= 0x20 && $beforeOrd <= 0x2f;
-                $isDigitOrSemicolon = is_numeric($csi[$beforeFinal]) || $csi[$beforeFinal] === ';';
-                // If the byte before final is NOT a valid intermediate or parameter,
-                // the last byte might be trailing, not part of the CSI
-                if (!$isIntermediate && !$isDigitOrSemicolon && $finalBytePos === $csiLen - 1) {
-                    // Last byte is non-parameter, non-intermediate, and we're at the end
-                    // This suggests it might be trailing. Re-scan excluding last byte.
-                    $altFinalBytePos = -1;
-                    for ($i = $finalBytePos - 1; $i >= 0; $i--) {
-                        $ord = ord($csi[$i]);
-                        if ($ord >= 0x40 && $ord <= 0x7e) {
-                            $altFinalBytePos = $i;
-                            break;
-                        }
-                    }
-                    if ($altFinalBytePos !== -1) {
-                        $finalBytePos = $altFinalBytePos;
-                    }
-                }
-            }
-            // There might be bytes after the final byte (trailing)
-            $trailingStart = $finalBytePos + 1;
-            if ($trailingStart < $csiLen) {
-                $remaining = substr($csi, $trailingStart);
-                return ['events' => [], 'remaining' => $remaining];
-            }
-            // Full CSI consumed, no trailing bytes
-            return ['events' => [], 'remaining' => ''];
-        }
-
-        // Non-numeric CSI final byte we don't recognize — skip the first byte
-        return [
-            'events' => [],
-            'remaining' => substr($csi, 1),
-        ];
+        // Complete but unrecognized CSI — consume it, emit nothing, and return
+        // the genuine suffix so trailing bytes in the same chunk are preserved.
+        return ['events' => [], 'remaining' => $rest];
     }
 
     /**

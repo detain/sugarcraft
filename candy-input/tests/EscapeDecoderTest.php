@@ -1204,4 +1204,66 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount($n, $events);
         $this->assertLessThan(2.0, $elapsed, "decode of {$n} ASCII bytes took {$elapsed}s (expected O(n))");
     }
+
+    // ─── CSI trailing-byte regression (handleCsiKey suffix isolation) ─────────
+
+    /**
+     * A modified key immediately followed by a printable byte in the SAME chunk
+     * must emit BOTH events. Previously the CSI final byte was located by a
+     * backward scan that peeled only one trailing byte, so the Ctrl+ArrowRight
+     * was consumed with zero events and only 'z' survived.
+     */
+    public function testModifiedKeyFollowedByPrintable(): void
+    {
+        $events = $this->decoder->decode("\x1b[1;5Cz");
+        $this->assertCount(2, $events);
+        $this->assertSame('ArrowRight', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+        $this->assertSame('z', $events[1]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    /**
+     * An unknown-but-complete CSI (final byte 'Z') followed by 2+ printable
+     * bytes must drop the CSI (0 events) yet preserve EVERY trailing byte.
+     * Previously only the last trailing byte ('c') survived.
+     */
+    public function testUnknownCsiFollowedByMultipleTrailingBytes(): void
+    {
+        $events = $this->decoder->decode("\x1b[999Zabc");
+        $this->assertCount(3, $events);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertSame('b', $events[1]->key);
+        $this->assertSame('c', $events[2]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    /**
+     * Two complete CSI sequences back-to-back in one chunk must both decode —
+     * the first must not swallow the second's leading "ESC [".
+     */
+    public function testTwoBackToBackCsiSequences(): void
+    {
+        $events = $this->decoder->decode("\x1b[A\x1b[B");
+        $this->assertCount(2, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame('ArrowDown', $events[1]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    /**
+     * A modified key followed by a multibyte UTF-8 char in the same chunk: the
+     * CSI must be isolated at its final byte and the whole codepoint preserved
+     * as a single event (never split across the CSI/suffix boundary).
+     */
+    public function testModifiedKeyFollowedByMultibyteChar(): void
+    {
+        // é = U+00E9 = "\xc3\xa9"
+        $events = $this->decoder->decode("\x1b[1;2A\xc3\xa9");
+        $this->assertCount(2, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertSame("\xc3\xa9", $events[1]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
 }
