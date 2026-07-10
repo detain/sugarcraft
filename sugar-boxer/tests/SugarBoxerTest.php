@@ -82,6 +82,22 @@ final class SugarBoxerTest extends TestCase
         $this->assertGreaterThan(0, $v->totalHeight());
     }
 
+    public function testTotalWidthIncludesLeftRightMargin(): void
+    {
+        // The renderer insets each node by its own margin, so totalWidth (the
+        // footprint a fixed flex sibling must reserve) must include left+right.
+        // minWidth 5, no border/padding, margin left 4 + right 3 → 5 + 7 = 12.
+        $leaf = Node::leaf('hello')->withBorder(false)->withMinWidth(5)->withMargin(0, 3, 0, 4);
+        $this->assertSame(12, $leaf->totalWidth());
+    }
+
+    public function testTotalHeightIncludesTopBottomMargin(): void
+    {
+        // minHeight 2, no border/padding, margin top 1 + bottom 6 → 2 + 7 = 9.
+        $leaf = Node::leaf('x')->withBorder(false)->withMinHeight(2)->withMargin(1, 0, 6, 0);
+        $this->assertSame(9, $leaf->totalHeight());
+    }
+
     public function testRenderEmptyLayout(): void
     {
         $layout = Node::leaf('');
@@ -274,6 +290,57 @@ final class SugarBoxerTest extends TestCase
     {
         $n = Node::leaf('x')->withMargin(1, 2);
         $this->assertSame([1, 2, 1, 2], $n->margin);
+    }
+
+    // ---- Negative-input clamping (mirrors withFlex) -------------------------
+
+    public function testWithMinWidthClampsNegativeToZero(): void
+    {
+        $this->assertSame(0, Node::leaf('x')->withMinWidth(-5)->minWidth);
+    }
+
+    public function testWithMaxWidthClampsNegativeToZero(): void
+    {
+        $this->assertSame(0, Node::leaf('x')->withMaxWidth(-3)->maxWidth);
+    }
+
+    public function testWithMinHeightClampsNegativeToZero(): void
+    {
+        $this->assertSame(0, Node::leaf('x')->withMinHeight(-4)->minHeight);
+    }
+
+    public function testWithMaxHeightClampsNegativeToZero(): void
+    {
+        $this->assertSame(0, Node::leaf('x')->withMaxHeight(-2)->maxHeight);
+    }
+
+    public function testWithPaddingClampsNegativeToZero(): void
+    {
+        $this->assertSame(0, Node::leaf('x')->withPadding(-1)->padding);
+    }
+
+    public function testWithSpacingClampsNegativeToZero(): void
+    {
+        $n = Node::horizontal(Node::leaf('a'), Node::leaf('b'))->withSpacing(-7);
+        $this->assertSame(0, $n->spacing);
+    }
+
+    public function testWithMarginClampsNegativeSidesToZero(): void
+    {
+        // Each side clamps independently; positive sides pass through unchanged.
+        $this->assertSame([0, 0, 0, 0], Node::leaf('x')->withMargin(-1, -2, -3, -4)->margin);
+        $this->assertSame([0, 2, 0, 5], Node::leaf('x')->withMargin(-1, 2, -3, 5)->margin);
+    }
+
+    public function testClampsPreserveImmutability(): void
+    {
+        // A clamped builder still returns a NEW instance, leaving the source
+        // untouched — negative input is a no-op on state, not an in-place edit.
+        $orig    = Node::leaf('x')->withPadding(3);
+        $clamped = $orig->withPadding(-9);
+        $this->assertNotSame($orig, $clamped);
+        $this->assertSame(3, $orig->padding);    // source unchanged
+        $this->assertSame(0, $clamped->padding); // clamped to 0
     }
 
     public function testNodeWithAlignHCenter(): void
