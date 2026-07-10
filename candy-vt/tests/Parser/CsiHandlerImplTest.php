@@ -438,4 +438,153 @@ final class CsiHandlerImplTest extends TestCase
         // Should have scrolled, cursor stays at bottom row
         $this->assertSame(23, $this->csi->cursor()->row);
     }
+
+    // ─── Emulator CSI finals (dispatched by candy-ansi's HandlerAdapter) ─────
+
+    public function testSuScrollsRegionUp(): void
+    {
+        $grid = new CellGrid(4, 4);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+        $csi->cup(1, 1);
+        $csi->printable('A'); // row 0
+        $csi->cup(2, 1);
+        $csi->printable('B'); // row 1
+
+        $csi->su(1);
+
+        // Row 1's 'B' moves up to row 0; the bottom row is blanked.
+        $this->assertSame('B', $csi->grid()->get(0, 0)->char);
+        $this->assertSame(' ', $csi->grid()->get(3, 0)->char);
+    }
+
+    public function testSdScrollsRegionDown(): void
+    {
+        $grid = new CellGrid(4, 4);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+        $csi->cup(1, 1);
+        $csi->printable('A'); // row 0
+
+        $csi->sd(1);
+
+        // 'A' shifts down to row 1; the top row is blanked.
+        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
+        $this->assertSame('A', $csi->grid()->get(1, 0)->char);
+    }
+
+    public function testIlInsertsBlankLineShiftingDown(): void
+    {
+        $grid = new CellGrid(4, 4);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+        $csi->cup(1, 1);
+        $csi->printable('A'); // row 0
+        $csi->cup(2, 1);
+        $csi->printable('B'); // row 1
+        $csi->cup(1, 1);      // cursor back to row 0
+
+        $csi->il(1);
+
+        // A blank line is inserted at row 0, pushing 'A' and 'B' down.
+        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
+        $this->assertSame('A', $csi->grid()->get(1, 0)->char);
+        $this->assertSame('B', $csi->grid()->get(2, 0)->char);
+    }
+
+    public function testDlDeletesLineShiftingUp(): void
+    {
+        $grid = new CellGrid(4, 4);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+        $csi->cup(1, 1);
+        $csi->printable('A'); // row 0
+        $csi->cup(2, 1);
+        $csi->printable('B'); // row 1
+        $csi->cup(1, 1);      // cursor back to row 0
+
+        $csi->dl(1);
+
+        // Row 0 is deleted; 'B' shifts up to row 0.
+        $this->assertSame('B', $csi->grid()->get(0, 0)->char);
+    }
+
+    public function testIchInsertsBlankCellsShiftingRight(): void
+    {
+        $grid = new CellGrid(5, 1);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+        $csi->printable('A');
+        $csi->printable('B');
+        $csi->printable('C');
+        $csi->cup(1, 1); // cursor to col 0
+
+        $csi->ich(1);
+
+        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
+        $this->assertSame('A', $csi->grid()->get(0, 1)->char);
+        $this->assertSame('B', $csi->grid()->get(0, 2)->char);
+        $this->assertSame('C', $csi->grid()->get(0, 3)->char);
+    }
+
+    public function testDchDeletesCellsShiftingLeft(): void
+    {
+        $grid = new CellGrid(5, 1);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+        $csi->printable('A');
+        $csi->printable('B');
+        $csi->printable('C');
+        $csi->cup(1, 1); // cursor to col 0
+
+        $csi->dch(1);
+
+        $this->assertSame('B', $csi->grid()->get(0, 0)->char);
+        $this->assertSame('C', $csi->grid()->get(0, 1)->char);
+        $this->assertSame(' ', $csi->grid()->get(0, 2)->char);
+    }
+
+    public function testRepRepeatsLastPrintable(): void
+    {
+        $grid = new CellGrid(5, 1);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+        $csi->printable('X'); // col 0, cursor -> col 1
+
+        $csi->rep(3);
+
+        $this->assertSame('X', $csi->grid()->get(0, 0)->char);
+        $this->assertSame('X', $csi->grid()->get(0, 1)->char);
+        $this->assertSame('X', $csi->grid()->get(0, 2)->char);
+        $this->assertSame('X', $csi->grid()->get(0, 3)->char);
+        $this->assertSame(4, $csi->cursor()->col);
+    }
+
+    public function testRepIsNoOpWithoutPriorPrintable(): void
+    {
+        $grid = new CellGrid(5, 1);
+        $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
+
+        $csi->rep(3);
+
+        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
+        $this->assertSame(0, $csi->cursor()->col);
+    }
+
+    public function testScoscScorcSaveAndRestoreCursor(): void
+    {
+        $csi = new CsiHandlerImpl($this->grid, new Cursor(), $this->theme);
+        $csi->cup(5, 10); // row 4, col 9
+        $csi->scosc();
+        $csi->cup(1, 1);  // move away to row 0, col 0
+        $this->assertSame(0, $csi->cursor()->row);
+
+        $csi->scorc();
+
+        $this->assertSame(4, $csi->cursor()->row);
+        $this->assertSame(9, $csi->cursor()->col);
+    }
+
+    public function testScorcIsNoOpWithoutPriorSave(): void
+    {
+        $csi = new CsiHandlerImpl($this->grid, new Cursor(row: 3, col: 7), $this->theme);
+
+        $csi->scorc();
+
+        $this->assertSame(3, $csi->cursor()->row);
+        $this->assertSame(7, $csi->cursor()->col);
+    }
 }

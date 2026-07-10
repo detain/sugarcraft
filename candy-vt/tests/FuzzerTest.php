@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Parser\DebugHandler;
-use SugarCraft\Vt\Parser\Parser;
+use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Vt\Terminal\Terminal;
 
 /**

@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
-use SugarCraft\Vt\Parser\Parser;
+use SugarCraft\Ansi\Parser\Parser;
 
 /**
  * Tests for DECOM (DEC Origin Mode) — CSI ? 6 h enable, CSI ? 6 l disable.

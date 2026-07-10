@@ -10,7 +10,7 @@ use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Msg\FocusInMsg;
 use SugarCraft\Vt\Msg\FocusOutMsg;
-use SugarCraft\Vt\Parser\Parser;
+use SugarCraft\Ansi\Parser\Parser;
 
 /**
  * Tests for focus event reporting — DECSET 1004 (CSI ? 1004 h/l) and
