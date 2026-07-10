@@ -131,6 +131,37 @@ final class ConstraintTest extends TestCase
         $this->assertSame(24, $r->height);
     }
 
+    public function testRegionRejectsNegativeX(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Region(-1, 0, 10, 10);
+    }
+
+    public function testRegionRejectsNegativeY(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Region(0, -1, 10, 10);
+    }
+
+    public function testRegionRejectsNegativeWidth(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Region(0, 0, -10, 10);
+    }
+
+    public function testRegionRejectsNegativeHeight(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Region(0, 0, 10, -10);
+    }
+
+    public function testRegionAllowsZeroDimensions(): void
+    {
+        $r = new Region(0, 0, 0, 0);
+        $this->assertSame(0, $r->width);
+        $this->assertSame(0, $r->height);
+    }
+
     // ── Direction enum ─────────────────────────────────────────────────────
 
     public function testDirectionCases(): void
