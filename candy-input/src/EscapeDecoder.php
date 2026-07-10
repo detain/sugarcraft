@@ -32,6 +32,16 @@ final class EscapeDecoder
     private const PASTE_START = "\x1b[200~";
     private const PASTE_END   = "\x1b[201~";
 
+    /**
+     * Upper bound on how many bytes of an INCOMPLETE sequence we will hold in
+     * $remainder between decode() calls. A legitimate escape sequence is short
+     * (a handful of bytes); a legitimate large paste flows through the separate
+     * paste path, never $remainder. Anything longer is a malformed / hostile
+     * stream (e.g. "ESC [" plus an endless run of parameter bytes with no final
+     * byte) and is discarded rather than buffered without limit.
+     */
+    private const MAX_SEQUENCE_LENGTH = 128;
+
     /** @var list<Event> */
     private array $buffer = [];
 
@@ -88,55 +98,145 @@ final class EscapeDecoder
     /**
      * Core decode logic without paste handling.
      *
+     * Walks a fixed $stream with an integer offset $i rather than repeatedly
+     * `substr()`-ing off the front. The common printable/control/DEL/UTF-8
+     * cases advance $i in place — so a 160KB printable paste is O(n), not the
+     * O(n²) that byte-by-byte substr slicing produced. The escape sub-handlers
+     * still take/return strings unchanged, so we pay exactly one substr per
+     * escape sequence (not per byte).
+     *
      * @return list<Event>
      */
     private function decodeClean(string $stream): array
     {
         $events = [];
+        $len = strlen($stream);
+        $i = 0;
 
-        while ($stream !== '') {
-            $byte = $stream[0];
+        while ($i < $len) {
+            $byte = $stream[$i];
             $ord = ord($byte);
 
-            // Escape character
+            // Escape character — hand the tail to the (unchanged) string-based
+            // escape handlers. This is the ONE substr we allow per escape.
             if ($ord === 0x1b) {
-                $result = $this->handleEscape($stream);
-                if ($result['events'] !== []) {
+                $tail = substr($stream, $i);
+                $result = $this->handleEscape($tail);
+                // Events produced OR partial progress made (remaining is a proper
+                // suffix of the tail): advance past the consumed bytes and keep
+                // walking the same fixed $stream. handleEscape's `remaining` is
+                // always a suffix of `tail`, so (len-i) - strlen(remaining) is the
+                // exact byte count consumed.
+                if ($result['events'] !== [] || $result['remaining'] !== $tail) {
                     $events = array_merge($events, $result['events']);
-                    $stream = $result['remaining'];
+                    $i += ($len - $i) - strlen($result['remaining']);
                     continue;
                 }
-                // No events but have remaining bytes — consume what we can
-                if ($result['remaining'] !== '' && $result['remaining'] !== $stream) {
-                    // Partial progress: some bytes were consumed, continue with remainder
-                    $stream = $result['remaining'];
-                    continue;
-                }
-                // Incomplete escape sequence — buffer and stop
-                $this->remainder = $stream;
+                // Incomplete escape (no events, no progress): buffer the tail
+                // (capped) for the next decode() call and stop.
+                $this->bufferRemainder($tail);
                 return $events;
             }
 
-            // Control characters
+            // Control characters (ESC already handled above)
             if ($ord <= 0x1f) {
                 $events[] = $this->decodeControlChar($byte);
-                $stream = substr($stream, 1);
+                $i++;
                 continue;
             }
 
             // DEL
             if ($ord === 0x7f) {
                 $events[] = new KeyEvent('Backspace', KeyModifier::none(), "\x7f");
-                $stream = substr($stream, 1);
+                $i++;
                 continue;
             }
 
-            // Printable
+            // Printable ASCII
+            if ($ord <= 0x7e) {
+                $events[] = new KeyEvent($byte, KeyModifier::none(), $byte);
+                $i++;
+                continue;
+            }
+
+            // High byte (>= 0x80): a UTF-8 multibyte codepoint or an invalid byte.
+            // Decode the WHOLE codepoint as a single event — never split a
+            // multibyte char into per-byte KeyEvents (that corrupts it for every
+            // downstream consumer that treats key/raw as a UTF-8 string).
+            $seqLen = match (true) {
+                $ord >= 0xc2 && $ord <= 0xdf => 2,
+                $ord >= 0xe0 && $ord <= 0xef => 3,
+                $ord >= 0xf0 && $ord <= 0xf4 => 4,
+                // 0x80-0xBF (lone continuation) or 0xC0-0xC1/0xF5-0xFF (overlong
+                // or out-of-range lead): not a valid lead byte.
+                default => 0,
+            };
+
+            if ($seqLen === 0) {
+                // Invalid lead — emit it alone and resync on the next byte so a
+                // malformed stream can never hang the loop.
+                $events[] = new KeyEvent($byte, KeyModifier::none(), $byte);
+                $i++;
+                continue;
+            }
+
+            if ($i + $seqLen > $len) {
+                // Codepoint is split across the chunk boundary. If every byte we
+                // DO have is a valid continuation byte, this is an incomplete-but-
+                // valid tail: buffer it (a partial tail is <=3 bytes, so the cap
+                // never trips) and stop — the next decode() call completes it.
+                if ($this->allContinuationBytes($stream, $i + 1, $len)) {
+                    $this->bufferRemainder(substr($stream, $i));
+                    return $events;
+                }
+                // A present byte is already invalid — emit the lead alone, resync.
+                $events[] = new KeyEvent($byte, KeyModifier::none(), $byte);
+                $i++;
+                continue;
+            }
+
+            if ($this->allContinuationBytes($stream, $i + 1, $i + $seqLen)) {
+                // Full, well-formed codepoint present — emit as one event.
+                $seq = substr($stream, $i, $seqLen);
+                $events[] = new KeyEvent($seq, KeyModifier::none(), $seq);
+                $i += $seqLen;
+                continue;
+            }
+
+            // Malformed: a continuation byte is not 0x80-0xBF. Emit the lead byte
+            // alone and resync on the next byte.
             $events[] = new KeyEvent($byte, KeyModifier::none(), $byte);
-            $stream = substr($stream, 1);
+            $i++;
         }
 
         return $events;
+    }
+
+    /**
+     * True if every byte in the half-open range [$from, $to) is a UTF-8
+     * continuation byte (0x80-0xBF).
+     */
+    private function allContinuationBytes(string $stream, int $from, int $to): bool
+    {
+        for ($j = $from; $j < $to; $j++) {
+            $c = ord($stream[$j]);
+            if ($c < 0x80 || $c > 0xbf) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Buffer an incomplete trailing sequence for the next decode() call,
+     * bounding $remainder so a never-terminating sequence cannot grow it
+     * without limit (a DoS vector — see MAX_SEQUENCE_LENGTH). Oversized tails
+     * are dropped; whatever events were already decoded are still returned.
+     */
+    private function bufferRemainder(string $tail): void
+    {
+        $this->remainder = strlen($tail) > self::MAX_SEQUENCE_LENGTH ? '' : $tail;
     }
 
     /**
