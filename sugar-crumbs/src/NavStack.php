@@ -17,12 +17,11 @@ namespace SugarCraft\Crumbs;
  * push/pop/set family mutate in place. Callers must not assume
  * copy-on-write for the push/pop/set family.
  *
- * ## Click dispatch (step 10.21)
+ * ## Click dispatch
  *
- * When a {@see \SugarCraft\Zone\MsgZoneInBounds} is received for a crumb
- * zone (e.g. `crumb-0`, `crumb-1`), the parent component should dispatch
- * to this stack's `pushDirectory()` / `view()` — the actual wiring is
- * implemented in step 10.21.
+ * When a mouse click resolves to a crumb zone (e.g. `crumb-0`, `crumb-1`)
+ * via the {@see Breadcrumb} scanner, the parent component should dispatch
+ * to this stack's navigation methods accordingly.
  *
  * Port of KevM/bubbleo NavStack.
  *
