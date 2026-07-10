@@ -20,8 +20,10 @@ use PHPUnit\Framework\TestCase;
  */
 final class GoldenSnapshotTest extends TestCase
 {
-    private const GOLDEN_ROOT = __DIR__ . '/golden';
-    private const EXAMPLES_DIR = __DIR__ . '/../examples';
+    // Fixtures live at sugar-dash/tests/golden/ (written by tools/generate-goldens.php);
+    // examples live at sugar-dash/examples/. Both are two/one levels up from tests/Golden/.
+    private const GOLDEN_ROOT = __DIR__ . '/../golden';
+    private const EXAMPLES_DIR = __DIR__ . '/../../examples';
 
     /** @var bool Whether to regenerate goldens instead of comparing */
     private static bool $regenerate = false;
