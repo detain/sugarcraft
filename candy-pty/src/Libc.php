@@ -13,6 +13,14 @@ namespace SugarCraft\Pty;
  * platform default — `libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib`
  * on macOS.
  *
+ * SECURITY: `SUGARCRAFT_LIBC` feeds directly into `FFI::cdef($cdef, $lib)`,
+ * which loads and RUNS native code from the named shared object — i.e. it
+ * is an arbitrary-code-execution primitive if the value is ever influenced
+ * by untrusted input. Only set it in a trusted environment and never derive
+ * it from a request, config downloaded at runtime, etc. {@see libraryPath()}
+ * validates the override (absolute path, existing regular file, libc-shaped
+ * basename) and throws rather than loading anything that fails those checks.
+ *
  * Mirrors charmbracelet/x/xpty internals (which call the same libc
  * symbols directly via cgo / unix.Syscall).
  */
@@ -72,13 +80,40 @@ final class Libc
     /**
      * Resolve the libc shared-object path for the host platform.
      *
-     * Honours `SUGARCRAFT_LIBC` env override (useful for musl/Alpine
-     * sysroots and custom builds) before defaulting per `PHP_OS_FAMILY`.
+     * Honours the `SUGARCRAFT_LIBC` env override (required for musl/Alpine
+     * sysroots and custom builds — musl's libc is e.g.
+     * `/lib/ld-musl-x86_64.so.1`, not `libc.so.6`) before defaulting per
+     * `PHP_OS_FAMILY`.
+     *
+     * SECURITY: the override value is loaded and executed by
+     * `FFI::cdef($cdef, $lib)`, so an attacker-controlled `SUGARCRAFT_LIBC`
+     * is remote code execution. Only set it in a trusted environment; NEVER
+     * expose it to untrusted input. When present it is validated here —
+     * must be an absolute path (relative paths would load from the CWD),
+     * must exist as a regular file, and its basename must look like a real
+     * libc (contains `libc`, `libSystem`, or `musl`). Any violation throws
+     * loudly rather than silently loading the object or falling back to the
+     * platform default.
+     *
+     * @throws PtyException if `SUGARCRAFT_LIBC` is set but fails validation
      */
     public static function libraryPath(): string
     {
         $override = \getenv('SUGARCRAFT_LIBC');
         if (\is_string($override) && $override !== '') {
+            if (!\str_starts_with($override, '/')) {
+                throw new PtyException(Lang::t('libc.override_not_absolute', ['path' => $override]));
+            }
+            if (!\is_file($override)) {
+                throw new PtyException(Lang::t('libc.override_not_file', ['path' => $override]));
+            }
+            $base = \strtolower(\basename($override));
+            if (!\str_contains($base, 'libc')
+                && !\str_contains($base, 'libsystem')
+                && !\str_contains($base, 'musl')
+            ) {
+                throw new PtyException(Lang::t('libc.override_not_libc', ['path' => $override]));
+            }
             return $override;
         }
 

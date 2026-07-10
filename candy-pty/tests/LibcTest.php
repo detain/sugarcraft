@@ -58,14 +58,22 @@ final class LibcTest extends TestCase
     {
         $previous = \getenv('SUGARCRAFT_LIBC');
 
+        // Passes libraryPath() validation (absolute, exists, libc-shaped
+        // basename) but is an EMPTY file, so FFI::cdef() fails to load it
+        // as a shared object — exercising lib()'s FFI\Exception wrapping
+        // rather than the earlier path-validation guard.
+        $bogusLibc = \sys_get_temp_dir() . '/libc.so.bogus';
+        \touch($bogusLibc);
+
         try {
-            \putenv('SUGARCRAFT_LIBC=/nonexistent/libc.so.42');
+            \putenv('SUGARCRAFT_LIBC=' . $bogusLibc);
 
             $this->expectException(PtyException::class);
             $this->expectExceptionMessageMatches('#Failed to load libc#');
 
             Libc::lib();
         } finally {
+            @\unlink($bogusLibc);
             Libc::reset();
             if ($previous === false) {
                 \putenv('SUGARCRAFT_LIBC');
@@ -132,13 +140,18 @@ final class LibcTest extends TestCase
         $this->assertSame(Libc::DEFAULT_DARWIN, Libc::libraryPath());
     }
 
-    public function testLibraryPathHonoursEnvironmentOverride(): void
+    public function testLibraryPathHonoursValidatedEnvironmentOverride(): void
     {
         $previous = \getenv('SUGARCRAFT_LIBC');
 
+        // A validated override must be absolute, exist as a regular file,
+        // and have a libc-shaped basename (musl/Alpine + custom-build use).
+        $fakeLibc = \sys_get_temp_dir() . '/libc.so.override';
+        \touch($fakeLibc);
+
         try {
-            \putenv('SUGARCRAFT_LIBC=/my/custom/libc.so');
-            $this->assertSame('/my/custom/libc.so', Libc::libraryPath());
+            \putenv('SUGARCRAFT_LIBC=' . $fakeLibc);
+            $this->assertSame($fakeLibc, Libc::libraryPath());
 
             \putenv('SUGARCRAFT_LIBC=');
             $expected = PHP_OS_FAMILY === 'Darwin'
@@ -146,6 +159,30 @@ final class LibcTest extends TestCase
                 : Libc::DEFAULT_LINUX;
             $this->assertSame($expected, Libc::libraryPath());
         } finally {
+            @\unlink($fakeLibc);
+            if ($previous === false) {
+                \putenv('SUGARCRAFT_LIBC');
+            } else {
+                \putenv('SUGARCRAFT_LIBC=' . $previous);
+            }
+        }
+    }
+
+    public function testLibraryPathRejectsNonLibcOverride(): void
+    {
+        $previous = \getenv('SUGARCRAFT_LIBC');
+
+        // Existing, absolute, but not libc-shaped — the arbitrary-.so
+        // code-execution vector the validation exists to block.
+        $notLibc = \sys_get_temp_dir() . '/pwn.so';
+        \touch($notLibc);
+
+        try {
+            \putenv('SUGARCRAFT_LIBC=' . $notLibc);
+            $this->expectException(PtyException::class);
+            Libc::libraryPath();
+        } finally {
+            @\unlink($notLibc);
             if ($previous === false) {
                 \putenv('SUGARCRAFT_LIBC');
             } else {

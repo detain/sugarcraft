@@ -64,7 +64,14 @@ final class PosixPtySystem implements PtySystem
         // child holds an open reference to the master, the kernel's
         // master-side refcount never drops to 0 on parent close, and
         // tty_hangup() never fires (no SIGHUP for the session leader).
-        $libc->fcntl($masterFd, self::F_SETFD, self::FD_CLOEXEC);
+        // A failed set (rc === -1) is the EXACT bug this line exists to
+        // prevent, so abort loudly (close + throw) rather than silently
+        // handing back a master that will never hang up its child.
+        $cloexecRc = $libc->fcntl($masterFd, self::F_SETFD, self::FD_CLOEXEC);
+        if ($cloexecRc === -1) {
+            $libc->close($masterFd);
+        }
+        self::requireCloexec($cloexecRc, $masterFd);
 
         if ($libc->grantpt($masterFd) !== 0) {
             $libc->close($masterFd);
@@ -99,8 +106,21 @@ final class PosixPtySystem implements PtySystem
                 // Same fork+exec leak as the master fd above — the
                 // anchor only exists to keep the kernel slave-count ≥ 1
                 // in the PARENT, so it must not survive into the child.
-                $libc->fcntl($slaveFd, self::F_SETFD, self::FD_CLOEXEC);
-                $master->attachAnchorSlaveFd($slaveFd);
+                // Unlike the master this is best-effort: a non-cloexec
+                // anchor leaking into children is WORSE than no anchor,
+                // so if the flag can't be set, drop the fd and skip the
+                // anchor entirely. The macOS resize below is already
+                // best-effort, so a missing anchor is safe.
+                if ($libc->fcntl($slaveFd, self::F_SETFD, self::FD_CLOEXEC) === -1) {
+                    $libc->close($slaveFd);
+                    @\trigger_error(
+                        'candy-pty: FD_CLOEXEC on the macOS anchor slave fd failed; '
+                        . 'skipping the winsize anchor (resize remains best-effort).',
+                        \E_USER_WARNING,
+                    );
+                } else {
+                    $master->attachAnchorSlaveFd($slaveFd);
+                }
             }
             try {
                 $master->resize($cols, $rows);
@@ -111,6 +131,31 @@ final class PosixPtySystem implements PtySystem
         }
 
         return new PosixPtyPair($master, $slavePath);
+    }
+
+    /**
+     * Assert that an `fcntl(F_SETFD, FD_CLOEXEC)` call succeeded.
+     *
+     * `fcntl` returns -1 on failure. Leaving the master fd inheritable
+     * is the exact bug the FD_CLOEXEC line exists to prevent — the child
+     * inherits the master, the kernel's master-side refcount never drops
+     * to 0, and `tty_hangup()`/SIGHUP never fires — so a failed set must
+     * abort `open()` rather than continue silently. The CALLER is
+     * responsible for closing `$fd` before invoking this guard.
+     *
+     * Extracted as a pure guard so it is unit-testable without the libc
+     * singleton (`LibcAccess::libc()` has no injection seam to force
+     * rc === -1 from a full `open()` round-trip).
+     *
+     * @throws \SugarCraft\Pty\PtyException when $rc === -1
+     */
+    private static function requireCloexec(int $rc, int $fd): void
+    {
+        if ($rc === -1) {
+            throw new \SugarCraft\Pty\PtyException(
+                \SugarCraft\Pty\Lang::t('open.cloexec_failed', ['fd' => $fd])
+            );
+        }
     }
 
     /**

@@ -9,9 +9,38 @@ use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\SlavePty;
 use SugarCraft\Pty\Posix\PosixPtySystem;
+use SugarCraft\Pty\PtyException;
 
 final class PosixPtySystemTest extends TestCase
 {
+    /**
+     * Invoke the private static requireCloexec guard via reflection.
+     *
+     * Runs everywhere (no requirePtySyscalls() gate): the guard is pure
+     * rc validation, the injection-free seam the helper was extracted to
+     * make testable since fcntl runs through the libc singleton.
+     */
+    private function callRequireCloexec(int $rc, int $fd): void
+    {
+        $method = new \ReflectionMethod(PosixPtySystem::class, 'requireCloexec');
+        $method->setAccessible(true);
+        $method->invoke(null, $rc, $fd);
+    }
+
+    public function testRequireCloexecThrowsWhenFcntlFailed(): void
+    {
+        $this->expectException(PtyException::class);
+        $this->expectExceptionMessageMatches('#FD_CLOEXEC#');
+
+        $this->callRequireCloexec(-1, 7);
+    }
+
+    public function testRequireCloexecIsNoOpWhenFcntlSucceeded(): void
+    {
+        $this->callRequireCloexec(0, 7);
+        $this->addToAssertionCount(1); // reaching here == no throw
+    }
+
     private function requirePtySyscalls(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
