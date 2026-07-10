@@ -40,10 +40,32 @@ if ($z->get('btn:ok')?->inBounds($mouseMsg)) {
 }
 ```
 
-Markers are APC escape sequences (`ESC _ ... ESC \`) — terminals ignore them,
-so they don't affect layout. {@see Manager::scan()} computes each zone's
-bounding box in 1-based terminal cells, accounting for ANSI styling and
-Unicode width.
+CandyZone is a thin TEA-facing façade over
+[candy-mouse](../candy-mouse), the shared low-level hit-test primitive —
+the marker scheme and its parser live there once and are reused by every
+SugarCraft zone consumer. `mark()` delegates to
+`SugarCraft\Mouse\Mark::wrap()` and `scan()` delegates its bounding-box
+computation to `SugarCraft\Mouse\Scan::parse()`, then strips the markers
+so the returned frame is display-ready.
+
+Markers are invisible **private-use-area sentinels** (not visible text or
+ANSI, so they don't affect layout):
+
+```
+open:  U+E000 <id> U+E001
+close: U+E000 /<id> U+E001
+```
+
+`Manager::scan()` computes each zone's bounding box in 1-based terminal
+cells, accounting for ANSI styling and Unicode (CJK) width.
+
+**Id format:** the marked id — including any manager prefix, i.e.
+`prefix() . $id` — must match `^[A-Za-z0-9._:-]+$` (ASCII letters, digits,
+and `._:-`). candy-mouse validates this in `Mark::wrap()` and `mark()`
+throws `\InvalidArgumentException` on a bad id, since an id carrying a
+sentinel / control / whitespace byte would desync zone scanning. The real
+consumer ids (`tab-N`, `cell:N`, `item:N`) and the auto-generated prefixes
+(`1-`, `2-`, …) already comply.
 
 ## Manager API
 
@@ -219,10 +241,10 @@ text-processing component that produces the raw CSI sequence.
 - The PHP port has a synchronous `scan()` (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
-- An unterminated APC marker (missing the final ESC `\`) causes
-  `scan()` to append the remainder of the frame raw and stops
-  processing further markers — every start/end marker pair must be
-  properly terminated.
+- An unterminated marker (an open sentinel `U+E000` with no closing
+  `U+E001`) is tolerated: `scan()` drops the dangling sentinel bytes and
+  records no zone for it — but every open/close tag pair should still be
+  properly balanced for a zone's bounds to be discovered.
 
 ## API summary
 

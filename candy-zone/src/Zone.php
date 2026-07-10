@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Zone;
 
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Mouse\MouseAction as MouseGeometryAction;
+use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\Zone as MouseZone;
 
 /**
  * A rectangular zone discovered by {@see Manager::scan()}. Coordinates are
@@ -12,21 +15,52 @@ use SugarCraft\Core\Msg\MouseMsg;
  *
  * The zone is the smallest axis-aligned rectangle that contains every cell
  * occupied by the marked content.
+ *
+ * Backward-compatibility adapter: this type keeps its historical public
+ * surface (readonly bounds + `MouseMsg`-based {@see inBounds()} / {@see pos()}
+ * plus {@see contains()}), but delegates the point-in-rect / width / height
+ * math to a wrapped {@see \SugarCraft\Mouse\Zone} built from the same bounds.
+ * That keeps the geometry engine in exactly one place (candy-mouse) across
+ * both zone ports while consumers of candy-zone (sugar-bits, sugar-gallery)
+ * keep reading `->id`, `->startCol`, … and passing `MouseMsg`s unchanged.
  */
 final class Zone
 {
+    /**
+     * Shared geometry engine — the candy-mouse hit-test primitive built from
+     * the same bounds. All point-in-rect / dimension math routes through it.
+     */
+    private readonly MouseZone $geometry;
+
     public function __construct(
         public readonly string $id,
         public readonly int $startCol,
         public readonly int $startRow,
         public readonly int $endCol,
         public readonly int $endRow,
-    ) {}
+    ) {
+        $this->geometry = new MouseZone($id, $startCol, $startRow, $endCol, $endRow);
+    }
+
+    /**
+     * Adapt a candy-mouse {@see \SugarCraft\Mouse\Zone} into a candy-zone Zone,
+     * preserving id + bounds. Used by {@see Manager::scan()} to store the
+     * SSOT-parsed zones under candy-zone's public type.
+     */
+    public static function fromMouseZone(MouseZone $zone): self
+    {
+        return new self(
+            $zone->id,
+            $zone->startCol,
+            $zone->startRow,
+            $zone->endCol,
+            $zone->endRow,
+        );
+    }
 
     public function inBounds(MouseMsg $msg): bool
     {
-        return $msg->x >= $this->startCol && $msg->x <= $this->endCol
-            && $msg->y >= $this->startRow && $msg->y <= $this->endRow;
+        return $this->geometry->inBounds(self::event($msg));
     }
 
     /**
@@ -37,11 +71,11 @@ final class Zone
      */
     public function pos(MouseMsg $msg): array
     {
-        return [$msg->x - $this->startCol, $msg->y - $this->startRow];
+        return $this->geometry->pos(self::event($msg));
     }
 
-    public function width(): int  { return $this->endCol - $this->startCol + 1; }
-    public function height(): int { return $this->endRow - $this->startRow + 1; }
+    public function width(): int  { return $this->geometry->width(); }
+    public function height(): int { return $this->geometry->height(); }
 
     /**
      * True when the zone has no recorded position — bubblezone returns
@@ -53,10 +87,7 @@ final class Zone
      */
     public function isZero(): bool
     {
-        return $this->startCol === 0
-            && $this->startRow === 0
-            && $this->endCol === 0
-            && $this->endRow === 0;
+        return $this->geometry->isZero();
     }
 
     /**
@@ -70,5 +101,15 @@ final class Zone
             && $other->endCol <= $this->endCol
             && $other->startRow >= $this->startRow
             && $other->endRow <= $this->endRow;
+    }
+
+    /**
+     * Bridge a Core {@see MouseMsg} into a candy-mouse {@see MouseEvent} for
+     * geometry checks. Only x/y are read by the geometry primitive; button
+     * and action are irrelevant here, so a placeholder Press is used.
+     */
+    private static function event(MouseMsg $msg): MouseEvent
+    {
+        return new MouseEvent($msg->x, $msg->y, 0, MouseGeometryAction::Press);
     }
 }
