@@ -125,6 +125,21 @@ final class TextInputTest extends TestCase
         $this->assertSame('abc', $t->value);
     }
 
+    public function testDefaultCharLimitBoundsBuffer(): void
+    {
+        // Default charLimit caps the buffer against a paste-DoS.
+        $this->assertSame(4096, TextInput::new()->charLimit);
+        $t = TextInput::new()->setValue(str_repeat('a', 5000));
+        $this->assertSame(4096, mb_strlen($t->value, 'UTF-8'));
+    }
+
+    public function testWithCharLimitZeroRestoresUnlimited(): void
+    {
+        // Opt-out: charLimit 0 disables the cap entirely.
+        $t = TextInput::new()->withCharLimit(0)->setValue(str_repeat('a', 5000));
+        $this->assertSame(5000, mb_strlen($t->value, 'UTF-8'));
+    }
+
     public function testInsertInMiddle(): void
     {
         $t = $this->focused('helo');
