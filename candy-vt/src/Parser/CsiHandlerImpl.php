@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
+use SugarCraft\Ansi\Parser\CsiHandler;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\CellGrid;
@@ -14,6 +15,8 @@ use SugarCraft\Vt\Theme;
  * CSI handler for the vcr renderer path.
  *
  * Mutates CellGrid + Cursor directly in response to CSI dispatches.
+ * Implements candy-ansi's {@see \SugarCraft\Ansi\Parser\CsiHandler} — the
+ * shared parser dispatches completed sequences here via HandlerAdapter.
  *
  * Mirrors charmbracelet/x/vt CSI dispatcher (simplified for renderer use).
  */
@@ -25,6 +28,12 @@ final class CsiHandlerImpl implements CsiHandler
     private int $fg;
     private int $bg;
     private int $attrs = 0;
+
+    /** Saved cursor for SCO SC/RC (CSI s / CSI u). */
+    private ?Cursor $savedCursor = null;
+
+    /** Last printed graphic grapheme, replayed by REP (CSI b). */
+    private string $lastPrintable = '';
 
     public function __construct(
         private CellGrid $grid,
@@ -67,6 +76,9 @@ final class CsiHandlerImpl implements CsiHandler
             }
             return;
         }
+
+        // Remember the last graphic grapheme so REP (CSI b) can replay it.
+        $this->lastPrintable = $grapheme;
 
         // If the character doesn't fit on this row, wrap to the next line.
         if ($col + $width > $this->grid->cols) {
@@ -354,6 +366,157 @@ final class CsiHandlerImpl implements CsiHandler
         }
     }
 
+    /**
+     * SU — Scroll Up (CSI S). Scroll the scroll region up $count lines,
+     * introducing blank lines at the bottom. Cursor position unchanged.
+     */
+    public function su(int $count = 1): void
+    {
+        $this->scrollUp(max(1, $count));
+    }
+
+    /**
+     * SD — Scroll Down (CSI T). Scroll the scroll region down $count lines,
+     * introducing blank lines at the top. Cursor position unchanged.
+     */
+    public function sd(int $count = 1): void
+    {
+        $this->scrollDown(max(1, $count));
+    }
+
+    /**
+     * IL — Insert Line (CSI L). Insert $count blank lines at the cursor row,
+     * shifting existing lines down within the scroll region. No-op when the
+     * cursor sits outside the scroll region. Cursor position unchanged.
+     */
+    public function il(int $count = 1): void
+    {
+        $row = $this->cursor->row;
+        if ($row < $this->scrollTop || $row > $this->scrollBottom) {
+            return;
+        }
+        $count = min(max(1, $count), $this->scrollBottom - $row + 1);
+        $cols = $this->grid->cols;
+
+        for ($r = $this->scrollBottom; $r >= $row + $count; $r--) {
+            for ($c = 0; $c < $cols; $c++) {
+                $this->grid->set($r, $c, $this->grid->get($r - $count, $c));
+            }
+        }
+        for ($r = $row; $r < $row + $count; $r++) {
+            for ($c = 0; $c < $cols; $c++) {
+                $this->grid->set($r, $c, Cell::empty());
+            }
+        }
+    }
+
+    /**
+     * DL — Delete Line (CSI M). Delete $count lines at the cursor row,
+     * shifting lines below up within the scroll region. No-op when the
+     * cursor sits outside the scroll region. Cursor position unchanged.
+     */
+    public function dl(int $count = 1): void
+    {
+        $row = $this->cursor->row;
+        if ($row < $this->scrollTop || $row > $this->scrollBottom) {
+            return;
+        }
+        $count = min(max(1, $count), $this->scrollBottom - $row + 1);
+        $cols = $this->grid->cols;
+
+        for ($r = $row; $r <= $this->scrollBottom - $count; $r++) {
+            for ($c = 0; $c < $cols; $c++) {
+                $this->grid->set($r, $c, $this->grid->get($r + $count, $c));
+            }
+        }
+        for ($r = $this->scrollBottom - $count + 1; $r <= $this->scrollBottom; $r++) {
+            for ($c = 0; $c < $cols; $c++) {
+                $this->grid->set($r, $c, Cell::empty());
+            }
+        }
+    }
+
+    /**
+     * ICH — Insert Character (CSI @). Insert $count blank cells at the cursor,
+     * shifting the rest of the line right; cells pushed past the right edge
+     * are dropped. Cursor position unchanged.
+     */
+    public function ich(int $count = 1): void
+    {
+        $row = $this->cursor->row;
+        $col = $this->cursor->col;
+        $cols = $this->grid->cols;
+        $count = min(max(1, $count), $cols - $col);
+        if ($count <= 0) {
+            return;
+        }
+
+        for ($c = $cols - 1; $c >= $col + $count; $c--) {
+            $this->grid->set($row, $c, $this->grid->get($row, $c - $count));
+        }
+        for ($c = $col; $c < $col + $count; $c++) {
+            $this->grid->set($row, $c, Cell::empty());
+        }
+    }
+
+    /**
+     * DCH — Delete Character (CSI P). Delete $count cells at the cursor,
+     * shifting the rest of the line left and blanking the vacated right edge.
+     * Cursor position unchanged.
+     */
+    public function dch(int $count = 1): void
+    {
+        $row = $this->cursor->row;
+        $col = $this->cursor->col;
+        $cols = $this->grid->cols;
+        $count = min(max(1, $count), $cols - $col);
+        if ($count <= 0) {
+            return;
+        }
+
+        for ($c = $col; $c < $cols - $count; $c++) {
+            $this->grid->set($row, $c, $this->grid->get($row, $c + $count));
+        }
+        for ($c = $cols - $count; $c < $cols; $c++) {
+            $this->grid->set($row, $c, Cell::empty());
+        }
+    }
+
+    /**
+     * REP — Repeat (CSI b). Replay the last printed graphic grapheme $count
+     * times. No-op when nothing printable has been emitted yet.
+     */
+    public function rep(int $count = 1): void
+    {
+        if ($this->lastPrintable === '') {
+            return;
+        }
+        $grapheme = $this->lastPrintable;
+        $count = max(1, $count);
+        for ($i = 0; $i < $count; $i++) {
+            $this->printable($grapheme);
+        }
+    }
+
+    /**
+     * SCOSC — SCO Save Cursor (CSI s). Remember the current cursor position.
+     */
+    public function scosc(): void
+    {
+        $this->savedCursor = $this->cursor;
+    }
+
+    /**
+     * SCORC — SCO Restore Cursor (CSI u). Restore the cursor saved by SCOSC;
+     * no-op when nothing was saved.
+     */
+    public function scorc(): void
+    {
+        if ($this->savedCursor !== null) {
+            $this->cursor = $this->savedCursor;
+        }
+    }
+
     private function scrollUp(int $count): void
     {
         $height = $this->scrollBottom - $this->scrollTop + 1;
@@ -382,6 +545,37 @@ final class CsiHandlerImpl implements CsiHandler
 
         for ($c = 0; $c < $cols; $c++) {
             $this->grid->set($bottom, $c, Cell::empty());
+        }
+    }
+
+    private function scrollDown(int $count): void
+    {
+        $height = $this->scrollBottom - $this->scrollTop + 1;
+        $count = min($count, $height);
+        if ($count <= 0) {
+            return;
+        }
+
+        for ($i = 0; $i < $count; $i++) {
+            $this->scrollDownOne();
+        }
+    }
+
+    private function scrollDownOne(): void
+    {
+        $top = $this->scrollTop;
+        $bottom = $this->scrollBottom;
+        $cols = $this->grid->cols;
+
+        for ($r = $bottom; $r > $top; $r--) {
+            for ($c = 0; $c < $cols; $c++) {
+                $prev = $this->grid->get($r - 1, $c);
+                $this->grid->set($r, $c, $prev);
+            }
+        }
+
+        for ($c = 0; $c < $cols; $c++) {
+            $this->grid->set($top, $c, Cell::empty());
         }
     }
 }

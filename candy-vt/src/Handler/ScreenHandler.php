@@ -13,7 +13,7 @@ use SugarCraft\Vt\Hyperlink\Hyperlink;
 use SugarCraft\Vt\Msg\FocusInMsg;
 use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Mode\Mode;
-use SugarCraft\Vt\Parser\Handler;
+use SugarCraft\Ansi\Parser\Handler;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
