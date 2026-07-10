@@ -44,6 +44,13 @@ final class Server
     /** Current request query string. */
     private string $query = '';
 
+    /**
+     * Peer (immediate client) IP for the current request, or null when the
+     * host application does not supply it. Drives 'proxy' trust-mode checks
+     * for the {@see resolveTrustedUser()} header decision.
+     */
+    private ?string $peerIp = null;
+
     /** HTTP headers to send. */
     private array $responseHeaders = [];
 
@@ -107,6 +114,9 @@ final class Server
      * @param string $query      Query string (e.g. "service=git-upload-pack")
      * @param array<string, string> $headers  Request headers
      * @param string $body       Request body (for POST)
+     * @param string|null $peerIp Immediate client IP (from the accepting
+     *                            socket/transport). Required for 'proxy'
+     *                            user-trust mode; ignored otherwise.
      * @return array{status: int, headers: array<string, string>, body: string}
      */
     public function handleRequest(
@@ -115,10 +125,12 @@ final class Server
         string $query,
         array $headers,
         string $body,
+        ?string $peerIp = null,
     ): array {
         $this->path = $path;
         $this->method = $method;
         $this->query = $query;
+        $this->peerIp = $peerIp;
         $this->responseHeaders = [];
         $this->statusCode = 200;
         $this->body = '';
@@ -790,12 +802,154 @@ final class Server
             }
         }
 
-        // Check for session/user headers (custom CandyServe headers)
-        if (isset($headers['X-CandyServe-User'])) {
-            return $this->users[$headers['X-CandyServe-User']] ?? null;
+        // Custom CandyServe user header — trusted only when the configured
+        // trust mode's check passes (fail-closed; see resolveTrustedUser).
+        return $this->resolveTrustedUser($headers, $this->peerIp);
+    }
+
+    /**
+     * Resolve the user named by the untrusted `X-CandyServe-User` header,
+     * honoring it only when the configured trust mode's check passes.
+     *
+     * Fail-closed by design: 'off' (default) ignores the header entirely;
+     * 'proxy' requires the peer IP in the trusted-proxy allowlist; 'token'
+     * requires a valid HMAC-SHA256 signature in `X-CandyServe-User-Sig`.
+     * Absent required config (empty allowlist / empty secret) trusts
+     * nothing — a raw client-supplied header can never authenticate a user.
+     *
+     * Extracted from getUserFromHeaders() so the trust decision is unit
+     * testable without a live socket.
+     *
+     * @param array<string, string> $headers
+     */
+    private function resolveTrustedUser(array $headers, ?string $peerIp): ?User
+    {
+        $username = $headers['X-CandyServe-User'] ?? null;
+        if (!\is_string($username) || $username === '') {
+            return null;
         }
 
-        return null;
+        $trusted = match ($this->config->userTrustMode) {
+            'proxy' => $peerIp !== null
+                && self::ipInAllowlist(self::normalizeIp($peerIp), $this->config->trustedProxies),
+            'token' => $this->verifyUserToken($username, $headers),
+            default => false, // 'off' — the header is never trusted.
+        };
+
+        if (!$trusted) {
+            return null;
+        }
+
+        return $this->users[$username] ?? null;
+    }
+
+    /**
+     * Verify the `X-CandyServe-User-Sig` header is a valid hex HMAC-SHA256
+     * of the username keyed by the configured shared secret. Constant-time
+     * comparison via hash_equals(); missing secret or signature fails closed.
+     *
+     * @param array<string, string> $headers
+     */
+    private function verifyUserToken(string $username, array $headers): bool
+    {
+        $secret = $this->config->authSecret;
+        $sig = $headers['X-CandyServe-User-Sig'] ?? '';
+        if ($secret === '' || !\is_string($sig) || $sig === '') {
+            return false;
+        }
+
+        $expected = \hash_hmac('sha256', $username, $secret);
+        return \hash_equals($expected, $sig);
+    }
+
+    /**
+     * Normalize a peer address to a bare IP: strips a `[v6]:port` bracket
+     * form and an `ipv4:port` suffix (as ReactPHP/`stream_socket_get_name`
+     * report), leaving a raw IPv4/IPv6 address untouched.
+     */
+    private static function normalizeIp(string $addr): string
+    {
+        $addr = \trim($addr);
+        if ($addr === '') {
+            return '';
+        }
+        if ($addr[0] === '[') { // [2001:db8::1]:443
+            $end = \strpos($addr, ']');
+            return $end === false ? $addr : \substr($addr, 1, $end - 1);
+        }
+        if (\substr_count($addr, ':') === 1) { // 127.0.0.1:8080 (not raw IPv6)
+            return \substr($addr, 0, (int) \strpos($addr, ':'));
+        }
+        return $addr;
+    }
+
+    /**
+     * Whether $ip falls within any allowlist entry (plain IP or CIDR range,
+     * IPv4 and IPv6).
+     *
+     * @param list<string> $ranges
+     */
+    private static function ipInAllowlist(string $ip, array $ranges): bool
+    {
+        if ($ip === '') {
+            return false;
+        }
+        foreach ($ranges as $range) {
+            if (self::ipMatchesRange($ip, \trim((string) $range))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Match a bare IP against a single allowlist entry — an exact IP or a
+     * `subnet/bits` CIDR range. Works for both IPv4 and IPv6 by comparing
+     * the packed inet_pton() forms; a family mismatch never matches.
+     */
+    private static function ipMatchesRange(string $ip, string $range): bool
+    {
+        if ($range === '') {
+            return false;
+        }
+
+        $bits = null;
+        $subnet = $range;
+        if (\str_contains($range, '/')) {
+            [$subnet, $bitStr] = \explode('/', $range, 2);
+            if (!\ctype_digit($bitStr)) {
+                return false;
+            }
+            $bits = (int) $bitStr;
+        }
+
+        $ipBin = @\inet_pton($ip);
+        $subnetBin = @\inet_pton($subnet);
+        if ($ipBin === false || $subnetBin === false
+            || \strlen($ipBin) !== \strlen($subnetBin)) {
+            return false; // malformed, or IPv4-vs-IPv6 family mismatch
+        }
+
+        if ($bits === null) {
+            return \hash_equals($subnetBin, $ipBin);
+        }
+
+        $maxBits = \strlen($ipBin) * 8;
+        if ($bits < 0 || $bits > $maxBits) {
+            return false;
+        }
+
+        $whole = \intdiv($bits, 8);
+        if ($whole > 0 && \substr($ipBin, 0, $whole) !== \substr($subnetBin, 0, $whole)) {
+            return false;
+        }
+
+        $rem = $bits % 8;
+        if ($rem === 0) {
+            return true;
+        }
+        $mask = 0xff << (8 - $rem) & 0xff;
+        return (\ord($ipBin[$whole]) & $mask) === (\ord($subnetBin[$whole]) & $mask);
     }
 
     /**

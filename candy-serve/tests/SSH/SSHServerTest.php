@@ -135,6 +135,56 @@ final class SSHServerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Empty/null-key auth-bypass regression tests
+    //
+    // A known username plus a null / empty / whitespace-only presented key
+    // must NEVER authenticate as that user. authenticatedUser() stays null and
+    // handleConnection() returns non-zero — the peer is treated as having
+    // supplied no valid credential, not as $user.
+    // -------------------------------------------------------------------------
+
+    private const ALICE_KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
+
+    public function testNullPresentedKeyDoesNotAuthenticateAsUser(): void
+    {
+        $user = User::new('alice')->withAdmin(true)->addAuthorizedKey(self::ALICE_KEY);
+        $this->server->registerUser($user);
+
+        $stream = \fopen('php://memory', 'r+');
+        // No key material at all — must not be trusted as alice.
+        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /null-key-repo', null);
+
+        $this->assertSame(1, $result);
+        $this->assertNull($this->server->authenticatedUser());
+    }
+
+    public function testEmptyStringPresentedKeyDoesNotAuthenticateAsUser(): void
+    {
+        $user = User::new('alice')->withAdmin(true)->addAuthorizedKey(self::ALICE_KEY);
+        $this->server->registerUser($user);
+
+        $stream = \fopen('php://memory', 'r+');
+        // Empty string key is the concrete bypass — must be rejected.
+        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /empty-key-repo', '');
+
+        $this->assertSame(1, $result);
+        $this->assertNull($this->server->authenticatedUser());
+    }
+
+    public function testWhitespacePresentedKeyDoesNotAuthenticateAsUser(): void
+    {
+        $user = User::new('alice')->withAdmin(true)->addAuthorizedKey(self::ALICE_KEY);
+        $this->server->registerUser($user);
+
+        $stream = \fopen('php://memory', 'r+');
+        // Whitespace-only key is a blank credential — must be rejected.
+        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /ws-key-repo', "  \t \n ");
+
+        $this->assertSame(1, $result);
+        $this->assertNull($this->server->authenticatedUser());
+    }
+
+    // -------------------------------------------------------------------------
     // Command parsing tests
     // -------------------------------------------------------------------------
 
@@ -153,11 +203,14 @@ final class SSHServerTest extends TestCase
     public function testCommandRegexParsesReceivePack(): void
     {
         $stream = \fopen('php://memory', 'r+');
-        $user = User::new('alice')->withAdmin(true);
+        // Authenticating as a user now requires a real, verified key (an empty
+        // key can never authenticate as a user), so present alice's key.
+        $key = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
+        $user = User::new('alice')->withAdmin(true)->addAuthorizedKey($key);
         $this->server->registerUser($user);
 
         // With admin and git-receive-pack, on-demand repo creation succeeds
-        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /valid-name');
+        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /valid-name', $key);
         $this->assertSame(0, $result);
     }
 

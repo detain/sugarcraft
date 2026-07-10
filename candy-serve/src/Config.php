@@ -37,8 +37,30 @@ final class Config
     /** HTTP server config. */
     public readonly string $httpListenAddr;
     public readonly string $httpPublicUrl;
+
+    /**
+     * RESERVED — NOT yet enforced. No HTTPS/TLS listener is wired (that is a
+     * separate feature), so populating these does NOT enable TLS. To avoid a
+     * false sense of security, setting BOTH paths is rejected at config load
+     * (see the constructor) rather than silently ignored.
+     */
     public readonly string $tlsKeyPath;
     public readonly string $tlsCertPath;
+
+    /**
+     * How the `X-CandyServe-User` request header is trusted:
+     *  - `off`   (default) — the header is ignored; requests are anonymous.
+     *  - `proxy` — honored only when the peer IP is in {@see $trustedProxies}.
+     *  - `token` — honored only with a valid HMAC-SHA256 `X-CandyServe-User-Sig`.
+     * Fail-closed: anything but a passing check leaves the request anonymous.
+     */
+    public readonly string $userTrustMode;
+
+    /** @var list<string> Trusted proxy IPs / CIDR ranges (used when userTrustMode is 'proxy'). */
+    public readonly array $trustedProxies;
+
+    /** Shared secret keying the HMAC user token (used when userTrustMode is 'token'). */
+    public readonly string $authSecret;
 
     /** Max buffered packfile size in bytes (null = server default). */
     public readonly ?int $maxPackBytes;
@@ -162,7 +184,18 @@ final class Config
         $this->httpPublicUrl  = (string) ($http['public_url'] ?? 'http://localhost:23232');
         $this->tlsKeyPath     = $this->resolvePath((string) ($http['tls_key_path'] ?? ''), $dataPath);
         $this->tlsCertPath    = $this->resolvePath((string) ($http['tls_cert_path'] ?? ''), $dataPath);
+
+        // No silent failures (CONTRIBUTING.md): there is no HTTPS listener yet,
+        // so a configured key+cert would be a silent no-op — an operator would
+        // believe TLS is on when it is not. Fail loudly instead of pretending.
+        if ($this->tlsKeyPath !== '' && $this->tlsCertPath !== '') {
+            throw new \InvalidArgumentException(Lang::t('config.tls_not_supported'));
+        }
+
         $this->maxPackBytes   = isset($http['max_pack_bytes']) ? (int) $http['max_pack_bytes'] : null;
+        $this->userTrustMode  = self::parseUserTrustMode((string) ($http['user_trust_mode'] ?? 'off'));
+        $this->trustedProxies = self::parseTrustedProxies($http['trusted_proxies'] ?? []);
+        $this->authSecret     = (string) ($http['auth_secret'] ?? '');
 
         $db = $data['db'] ?? [];
         $this->dbDriver     = (string) ($db['driver'] ?? 'sqlite');
@@ -223,6 +256,55 @@ final class Config
         if ($path === '') return '';
         if (\str_starts_with($path, '/')) return $path;
         return $dataPath . '/' . $path;
+    }
+
+    /**
+     * Validate `http.user_trust_mode` to one of the three known modes.
+     *
+     * No silent failures (CONTRIBUTING.md): an unknown mode is a config
+     * mistake that would otherwise silently fall back to a less-safe
+     * behavior, so reject it up front.
+     *
+     * @throws \InvalidArgumentException on an unrecognized mode
+     */
+    private static function parseUserTrustMode(string $mode): string
+    {
+        $mode = \strtolower(\trim($mode));
+        if ($mode === '') {
+            return 'off';
+        }
+        if (!\in_array($mode, ['off', 'proxy', 'token'], true)) {
+            throw new \InvalidArgumentException(
+                Lang::t('config.invalid_user_trust_mode', ['mode' => $mode]),
+            );
+        }
+        return $mode;
+    }
+
+    /**
+     * Normalize `http.trusted_proxies` into a list of non-empty strings.
+     * Accepts a YAML list or a comma-separated string.
+     *
+     * @param mixed $value
+     * @return list<string>
+     */
+    private static function parseTrustedProxies($value): array
+    {
+        if (\is_string($value)) {
+            $value = $value === '' ? [] : \explode(',', $value);
+        }
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($value as $entry) {
+            $entry = \trim((string) $entry);
+            if ($entry !== '') {
+                $out[] = $entry;
+            }
+        }
+        return $out;
     }
 
     /**
