@@ -25,7 +25,10 @@ namespace SugarCraft\Metrics;
  *
  * When a metric accumulates too many unique label-value
  * combinations (cardinality explosion), the oldest combination
- * is evicted to stay within the configured limit.
+ * is evicted to stay within the configured limit — and the evicted
+ * series is also removed from the backend, so the bounded cache
+ * keeps the (otherwise unbounded) backend from growing without
+ * limit under a tag flood.
  */
 
 use SugarCraft\Metrics\Instrument\AsyncCounter;
@@ -40,7 +43,13 @@ final class Registry
     /** @var array<string, Descriptor> */
     private array $descriptors = [];
 
-    /** @var array<string, array<string>> */
+    /**
+     * Per-metric cardinality cache: metric name → (tag-key → merged tags).
+     * The value holds the merged tag set so an evicted series can be removed
+     * from the backend by rebuilding its storage key.
+     *
+     * @var array<string, array<string, array<string,string>>>
+     */
     private array $labelValueCache = [];
 
     /**
@@ -253,6 +262,12 @@ final class Registry
      * Track a label-value combination and evict the oldest when
      * the per-metric cardinality limit is exceeded.
      *
+     * Eviction also removes the evicted series from the backend, so a
+     * flood of unique tag combinations can't grow backend memory without
+     * bound — the cache is capped, but the backend is not. The merged tags
+     * are stored as the cache value precisely so the backend key can be
+     * rebuilt at eviction time.
+     *
      * @param array<string,string> $tags
      */
     private function trackCardinality(string $name, array $tags): void
@@ -265,11 +280,15 @@ final class Registry
         if (!isset($this->labelValueCache[$name])) {
             $this->labelValueCache[$name] = [];
         }
-        $this->labelValueCache[$name][$key] = true;
+        $this->labelValueCache[$name][$key] = $merged;
         if (count($this->labelValueCache[$name]) > $this->cardinalityLimit) {
-            reset($this->labelValueCache[$name]);
+            $oldestMergedTags = reset($this->labelValueCache[$name]);
             $oldestKey = key($this->labelValueCache[$name]);
             unset($this->labelValueCache[$name][$oldestKey]);
+            // Evicting from the bounded cache alone leaks the series in the
+            // unbounded backend — reclaim it so a flood of unique tag combos
+            // can't grow backend memory without limit (DoS).
+            $this->backend->remove($name, $oldestMergedTags);
         }
     }
 
