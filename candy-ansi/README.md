@@ -8,7 +8,7 @@ Upstream: [charmbracelet/x/ansi](https://github.com/charmbracelet/x/tree/main/an
 
 ## Status
 
-🟡 Initial port — extracts the state machine from candy-vt. Consumer handlers (CsiHandler, OscHandler) remain in candy-vt until their cell-grid dependencies are refactored.
+🟢 Working port. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`candy-vt`, `sugar-spark`, `candy-hermit`, `candy-freeze`, `candy-pty`). `CsiHandler` now covers the full emulator CSI-final set (cursor, erase, scroll, insert/delete line & char, repeat, SCO save/restore, CR/LF) so `candy-vt` can implement this interface directly instead of forking its own parser.
 
 ## Quickstart
 

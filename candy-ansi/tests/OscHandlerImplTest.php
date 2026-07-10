@@ -18,13 +18,42 @@ final class OscHandlerImplTest extends TestCase
         $this->assertSame('My Window Title', $impl->lastTitle());
     }
 
-    public function testHyperlinkIsNoOp(): void
+    public function testHyperlinkDoesNotAffectTitle(): void
     {
         $impl = new OscHandlerImpl();
 
         $impl->hyperlink('https://example.com', 'my-id');
 
         $this->assertSame('', $impl->lastTitle(), 'hyperlink() should not affect lastTitle()');
+    }
+
+    public function testHyperlinkStoresUriAndId(): void
+    {
+        $impl = new OscHandlerImpl();
+
+        $impl->hyperlink('https://example.com', 'anchor-1');
+
+        $this->assertSame('https://example.com', $impl->hyperlinkUri());
+        $this->assertSame('anchor-1', $impl->hyperlinkId());
+    }
+
+    public function testHyperlinkInitiallyEmpty(): void
+    {
+        $impl = new OscHandlerImpl();
+
+        $this->assertSame('', $impl->hyperlinkUri());
+        $this->assertSame('', $impl->hyperlinkId());
+    }
+
+    public function testHyperlinkEmptyUriClosesLink(): void
+    {
+        $impl = new OscHandlerImpl();
+
+        $impl->hyperlink('https://example.com', 'anchor-1');
+        $impl->hyperlink('', '');
+
+        $this->assertSame('', $impl->hyperlinkUri(), 'empty URI closes the hyperlink');
+        $this->assertSame('', $impl->hyperlinkId());
     }
 
     public function testLastTitleInitiallyEmpty(): void

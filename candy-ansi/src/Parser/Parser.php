@@ -31,7 +31,7 @@ final class Parser
     /** OSC / DCS / SOS / PM / APC payload accumulator. */
     private string $stringBuffer = '';
 
-    /** Maximum size for string buffer to prevent memory exhaustion from malicious sequences. */
+    /** Default string-buffer cap (64 KiB) — prevents memory exhaustion from malicious sequences. */
     private const MAX_STRING_BUFFER = 65536;
 
     /** Bytes of the current UTF-8 rune in flight. */
@@ -40,9 +40,16 @@ final class Parser
     /** Total length of the rune we're currently collecting. */
     private int $utf8Need = 0;
 
+    /**
+     * @param int $maxStringBuffer Cap (in bytes) on the DCS/OSC/SOS/PM/APC
+     *                             payload accumulator. Defaults to 64 KiB;
+     *                             emulator front-ends (e.g. candy-vt) may raise
+     *                             it for large passthrough payloads.
+     */
     public function __construct(
         private readonly Handler $handler,
         private readonly bool $replaceMalformed = false,
+        private readonly int $maxStringBuffer = self::MAX_STRING_BUFFER,
     ) {
     }
 
@@ -273,7 +280,7 @@ final class Parser
 
     private function put(int $byte): void
     {
-        if (strlen($this->stringBuffer) >= self::MAX_STRING_BUFFER) {
+        if (strlen($this->stringBuffer) >= $this->maxStringBuffer) {
             return;
         }
         $this->stringBuffer .= chr($byte);
