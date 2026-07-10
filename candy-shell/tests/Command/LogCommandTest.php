@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Shell\Tests\Command;
 
 use SugarCraft\Shell\Command\LogCommand;
+use Symfony\Component\Console\Command\Command;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -64,5 +65,44 @@ final class LogCommandTest extends TestCase
         $line = LogCommand::formatLine(\SugarCraft\Shell\Log\LogLevel::Info, 'hi', '', 'kitchen', 'logfmt');
         $this->assertStringContainsString('time=', $line);
         $this->assertDoesNotMatchRegularExpression('/time=kitchen/', $line);
+    }
+
+    /**
+     * A malformed --format (trailing '%') makes sprintf() raise a
+     * ValueError. The command must fail gracefully with a translated
+     * error, not crash with an uncaught exception.
+     */
+    public function testMalformedFormatTrailingPercentFailsGracefully(): void
+    {
+        $tester = self::runLog(['message' => ['hello'], '--format' => '%']);
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertStringContainsString('invalid --format string', $tester->getDisplay());
+    }
+
+    /**
+     * A positional spec referencing a missing arg (`%2$s`) raises an
+     * ArgumentCountError from sprintf(); it must be caught too.
+     */
+    public function testMalformedFormatMissingArgFailsGracefully(): void
+    {
+        $tester = self::runLog(['message' => ['hello'], '--format' => '%2$s']);
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertStringContainsString('invalid --format string', $tester->getDisplay());
+    }
+
+    public function testValidFormatWrapsMessage(): void
+    {
+        $tester = self::runLog(['message' => ['hello'], '--format' => '[%s]']);
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertStringContainsString('[hello]', $tester->getDisplay());
+    }
+
+    /** @param array<string,mixed> $args */
+    private static function runLog(array $args): \Symfony\Component\Console\Tester\CommandTester
+    {
+        $cmd = (new \SugarCraft\Shell\Application())->find('log');
+        $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
+        $tester->execute($args);
+        return $tester;
     }
 }
