@@ -84,6 +84,7 @@ final class Table
         $clone = clone $this;
         $clone->sortColIndex = $colIndex;
         $clone->sortAscending = $ascending;
+        $clone->syncSortedColumns();
         $clone->rebuildView();
         return $clone;
     }
@@ -253,6 +254,23 @@ final class Table
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Sync each Column's sorted() state to the current sort target so the
+     * header renders the ▲/▼ arrow on the sorted column and clears it on the
+     * others. Column is immutable, so the columns array is rebuilt with the
+     * updated Column instances. Sort ordering is untouched — this only mirrors
+     * the sort state into the column value objects that the header reads.
+     */
+    private function syncSortedColumns(): void
+    {
+        $dir = $this->sortAscending ? 1 : -1;
+        foreach ($this->columns as $i => $col) {
+            $this->columns[$i] = ($i === $this->sortColIndex)
+                ? $col->sorted($dir)
+                : $col->unsorted();
+        }
+    }
 
     /**
      * Rebuild the visible $rows view from $allRows by applying the current
