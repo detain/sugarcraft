@@ -71,7 +71,15 @@ final class TextArea implements Model
         public readonly string $editorExtension = '.txt',
     ) {}
 
-    /** Construct a fresh instance with default state. */
+    /**
+     * Construct a fresh instance with default state.
+     *
+     * `charLimit` defaults to 65536 to bound the buffer against a
+     * paste-DoS (an unbounded multi-line buffer lets a single paste
+     * balloon memory). Opt out with `withCharLimit(0)` for genuinely
+     * unlimited input — enforcement is gated on `charLimit > 0`, so 0
+     * restores the old unbounded behaviour.
+     */
     public static function new(): self
     {
         return new self(
@@ -79,7 +87,7 @@ final class TextArea implements Model
             row: 0,
             col: 0,
             placeholder: '',
-            charLimit: 0,
+            charLimit: 65536,
             width: 0,
             height: 0,
             focused: false,

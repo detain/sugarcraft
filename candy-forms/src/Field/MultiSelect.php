@@ -152,7 +152,9 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             $lines[] = $line;
         }
         if ($this->error !== null) {
-            $lines[] = '! ' . $this->error;
+            // Constraint/validator messages can echo user input — clean at the
+            // display site (the stored $this->error / getError() stay raw).
+            $lines[] = '! ' . RenderSafe::clean($this->error);
         }
         return implode("\n", $lines);
     }

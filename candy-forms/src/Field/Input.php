@@ -17,6 +17,7 @@ use SugarCraft\Forms\Fuzzy\FuzzyMatcher;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\TextInput\TextInput;
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Validator\Validator;
 
 /**
@@ -486,7 +487,9 @@ final class Input implements \SugarCraft\Forms\Field
         }
         $lines[] = $this->input->view();
         if ($this->error !== null) {
-            $lines[] = '! ' . $this->error;
+            // Validator messages can echo user input — clean at the display
+            // site (the stored $this->error / getError() stay raw).
+            $lines[] = '! ' . RenderSafe::clean($this->error);
         }
         return implode("\n", $lines);
     }
