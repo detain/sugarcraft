@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
+use SugarCraft\Ansi\Parser\Handler;
+
 /**
  * Records every action dispatched by the parser as a flat log of
  * `['type' => ..., 'detail' => ...]` rows. Used in tests to assert the
  * exact sequence of actions produced by feeding a byte stream.
+ *
+ * Implements candy-ansi's {@see \SugarCraft\Ansi\Parser\Handler}.
  */
 final class DebugHandler implements Handler
 {

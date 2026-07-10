@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt;
 
+use SugarCraft\Ansi\Parser\HandlerAdapter;
+use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
-use SugarCraft\Vt\Parser\HandlerAdapter;
 use SugarCraft\Vt\Parser\OscHandlerImpl;
-use SugarCraft\Vt\Parser\Parser;
 
 /**
  * Public terminal surface for the vcr renderer path.
  *
- * Holds a CellGrid, Cursor, and Parser with CsiHandlerImpl + OscHandlerImpl
- * wired. Feed bytes through `feed()`, capture frames via `snapshot()`.
+ * Holds a CellGrid, Cursor, and candy-ansi's Parser with CsiHandlerImpl +
+ * OscHandlerImpl wired through candy-ansi's HandlerAdapter. Feed bytes
+ * through `feed()`, capture frames via `snapshot()`.
  */
 final class Terminal
 {
@@ -52,7 +53,9 @@ final class Terminal
         $osc = new OscHandlerImpl();
 
         $handler = new HandlerAdapter($csi, $osc);
-        $parser = new Parser($handler);
+        // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
+        // memory; reduced from the fork's 1 MiB per the W1.2 security item.
+        $parser = new Parser($handler, maxStringBuffer: 65536);
 
         return new self($cols, $rows, $grid, $cursor, $parser, $csi, $osc, $theme);
     }

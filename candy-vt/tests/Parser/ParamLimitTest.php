@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Tests\Parser;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Parser\DebugHandler;
-use SugarCraft\Vt\Parser\Parser;
+use SugarCraft\Ansi\Parser\Parser;
 
 /**
  * DoS regression tests for Parser parameter and string accumulator caps.
