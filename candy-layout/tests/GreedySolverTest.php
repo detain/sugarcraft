@@ -102,6 +102,90 @@ final class GreedySolverTest extends TestCase
         $this->assertSame(20, $rects[1]->width);
     }
 
+    /**
+     * Regression: an all-`min(0)` layout with positive slack and no Fill/Max to
+     * absorb it reached the "distribute slack across Min proportionally" branch
+     * with a zero weight-sum ($reservedMinSum === 0), throwing DivisionByZeroError
+     * at GreedySolver.php:151. Sibling of the guard added in PR #1258. The guard
+     * falls back to EQUAL shares of the slack; produced sizes must not crash and
+     * must still tile the region exactly (sum invariant).
+     *
+     * @dataProvider minZeroSlackProvider
+     * @param Constraint[] $constraints
+     * @param int[] $expected
+     */
+    public function testMinZeroSlackNoCrashAndSumInvariant(
+        Region $area,
+        array $constraints,
+        Direction $dir,
+        array $expected
+    ): void {
+        $rects = GreedySolver::solveStatic($area, $constraints, $dir);
+
+        $sizes = array_map(
+            static fn(Region $r): int => $dir === Direction::Horizontal ? $r->width : $r->height,
+            $rects
+        );
+        $total = $dir === Direction::Horizontal ? $area->width : $area->height;
+
+        $this->assertSame($expected, $sizes, self::describeConstraints($constraints));
+        // Sum invariant: produced sizes tile the full region — no cell lost/gained.
+        $this->assertSame($total, array_sum($sizes), self::describeConstraints($constraints));
+    }
+
+    /**
+     * @return array<string, array{Region, Constraint[], Direction, int[]}>
+     */
+    public static function minZeroSlackProvider(): array
+    {
+        return [
+            'min(0)+length(5) @ w20 horizontal' => [
+                new Region(0, 0, 20, 24),
+                [Constraint::min(0), Constraint::length(5)],
+                Direction::Horizontal,
+                [15, 5],
+            ],
+            'min(0)+length(5) @ h20 vertical' => [
+                new Region(0, 0, 24, 20),
+                [Constraint::min(0), Constraint::length(5)],
+                Direction::Vertical,
+                [15, 5],
+            ],
+            'min(0) @ w10 horizontal' => [
+                new Region(0, 0, 10, 24),
+                [Constraint::min(0)],
+                Direction::Horizontal,
+                [10],
+            ],
+            'min(0) @ h10 vertical' => [
+                new Region(0, 0, 24, 10),
+                [Constraint::min(0)],
+                Direction::Vertical,
+                [10],
+            ],
+            'min(0)+min(0) @ w10 horizontal' => [
+                new Region(0, 0, 10, 24),
+                [Constraint::min(0), Constraint::min(0)],
+                Direction::Horizontal,
+                [5, 5],
+            ],
+            'min(0)+min(0) @ h10 vertical' => [
+                new Region(0, 0, 24, 10),
+                [Constraint::min(0), Constraint::min(0)],
+                Direction::Vertical,
+                [5, 5],
+            ],
+            // Odd slack across two min(0) recipients exercises the rounding
+            // remainder path — leftover cell goes to the first recipient.
+            'min(0)+min(0) @ w11 horizontal odd slack' => [
+                new Region(0, 0, 11, 24),
+                [Constraint::min(0), Constraint::min(0)],
+                Direction::Horizontal,
+                [6, 5],
+            ],
+        ];
+    }
+
     // ── Fill constraints ────────────────────────────────────────────────────
 
     public function testPureFillHorizontalEqualWeight(): void

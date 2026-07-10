@@ -146,9 +146,36 @@ final class GreedySolver implements LayoutSolver
                     }
                 } else {
                     // No fills or maxes — distribute slack to mins proportionally
-                    foreach ($constraints as $i => $c) {
-                        if ($c instanceof Min) {
-                            $rawSizes[$i] = (int) floor(($c->n / $reservedMinSum) * $slack) + $c->n;
+                    if ($reservedMinSum <= 0) {
+                        // Every Min is min(0), so the proportional weight-sum is
+                        // zero and $c->n / $reservedMinSum would divide by zero.
+                        // Mirror applyMaxClamp()'s guard: fall back to EQUAL
+                        // shares of the slack across the Min recipients, handing
+                        // any rounding remainder to the first recipient so the
+                        // produced sizes still sum to totalWidth.
+                        $minRecipients = [];
+                        foreach ($constraints as $i => $c) {
+                            if ($c instanceof Min) {
+                                $minRecipients[] = $i;
+                            }
+                        }
+                        $count = count($minRecipients);
+                        if ($count > 0) {
+                            $remainder = $slack;
+                            foreach ($minRecipients as $i) {
+                                $share = intdiv($slack, $count);
+                                $rawSizes[$i] = $share + $constraints[$i]->n;
+                                $remainder -= $share;
+                            }
+                            if ($remainder > 0) {
+                                $rawSizes[$minRecipients[0]] += $remainder;
+                            }
+                        }
+                    } else {
+                        foreach ($constraints as $i => $c) {
+                            if ($c instanceof Min) {
+                                $rawSizes[$i] = (int) floor(($c->n / $reservedMinSum) * $slack) + $c->n;
+                            }
                         }
                     }
 
