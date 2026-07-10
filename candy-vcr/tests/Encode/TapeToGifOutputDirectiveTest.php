@@ -84,4 +84,33 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         $this->assertFileExists($this->dir . '/demo.gif');
         $this->assertFileDoesNotExist($escapeTarget);
     }
+
+    public function testOutputThroughPreplantedSymlinkDoesNotEscapeTapeDir(): void
+    {
+        // Pre-plant a symlink `out.gif` inside the tape dir pointing OUTSIDE it.
+        // The parent-dir (tape dir) resolves under base, so the pre-fix
+        // parent-only guard writes the rendered GIF *through* the link to the
+        // outside target. The symlink-target guard must reject it: the render
+        // falls back to the safe default inside the tape dir and NOTHING is
+        // written at the outside target.
+        $escapeTarget = dirname($this->dir) . '/candy-vcr-pwned-' . bin2hex(random_bytes(4)) . '.gif';
+        $this->assertFileDoesNotExist($escapeTarget);
+
+        $link = $this->dir . '/out.gif';
+        if (!@symlink($escapeTarget, $link)) {
+            $this->markTestSkipped('symlink() not available on this platform');
+        }
+
+        $tape = $this->writeTape("Output out.gif\nSet Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+
+        try {
+            $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
+
+            $this->assertSame($this->dir . '/demo.gif', $written, 'must fall back to the safe default');
+            $this->assertFileExists($this->dir . '/demo.gif');
+            $this->assertFileDoesNotExist($escapeTarget, 'render must NOT write through the symlink');
+        } finally {
+            @unlink($escapeTarget);
+        }
+    }
 }
