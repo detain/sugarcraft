@@ -29,10 +29,21 @@ final class Highlighter
         $indices = $result->indices();
 
         // Normalize: MatchResult is publicly constructible, so external callers
-        // may pass unsorted or duplicate indices.  groupIntoRuns() assumes
-        // ascending order — enforce that invariant here.
+        // may pass unsorted, duplicate, or OUT-OF-RANGE indices. Drop indices
+        // outside [0, len) first — a negative or past-end index would otherwise
+        // make mb_substr slice the wrong bytes and corrupt/duplicate output —
+        // then dedupe and sort to satisfy groupIntoRuns()'s ascending invariant.
+        $len = mb_strlen($candidate, 'UTF-8');
+        $indices = array_values(array_filter(
+            $indices,
+            static fn(int $idx): bool => $idx >= 0 && $idx < $len,
+        ));
         $indices = array_values(array_unique($indices));
         sort($indices);
+
+        if ($indices === []) {
+            return $candidate;
+        }
 
         // Group consecutive indices into runs
         $runs = $this->groupIntoRuns($indices);

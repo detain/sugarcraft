@@ -113,4 +113,55 @@ final class HighlighterTest extends TestCase
         // Same output as sorted unique [0, 1, 2]
         $this->assertSame('[abc]', $output);
     }
+
+    public function testPastEndIndexIsDropped(): void
+    {
+        // Index 5 is past the end of 'abc' (len 3) — must be filtered, not
+        // slice an empty run that would corrupt output (regression: '[a]bc[]').
+        $result = new MatchResult('x', 'abc', 5, [0, 5]);
+
+        $output = $this->highlighter->highlight($result, fn($m) => "[$m]");
+
+        $this->assertSame('[a]bc', $output);
+    }
+
+    public function testAllIndicesOutOfRangeReturnsHaystackUnchanged(): void
+    {
+        $result = new MatchResult('x', 'abc', 5, [10, 11]);
+
+        $output = $this->highlighter->highlight($result, fn($m) => "[$m]");
+
+        $this->assertSame('abc', $output);
+    }
+
+    public function testBoundaryPastEndIndexIsDropped(): void
+    {
+        // Index 3 is exactly one past the last valid index (2) of 'abc'.
+        $result = new MatchResult('x', 'abc', 5, [1, 2, 3]);
+
+        $output = $this->highlighter->highlight($result, fn($m) => "[$m]");
+
+        $this->assertSame('a[bc]', $output);
+    }
+
+    public function testNegativeIndexIsDropped(): void
+    {
+        // Regression: a negative index previously made mb_substr duplicate
+        // content ('ab[c]bc'). It must be filtered out entirely.
+        $result = new MatchResult('x', 'abc', 5, [-1, 0]);
+
+        $output = $this->highlighter->highlight($result, fn($m) => "[$m]");
+
+        $this->assertSame('[a]bc', $output);
+    }
+
+    public function testMixedOutOfRangeIndicesAreNormalized(): void
+    {
+        // -1 and 5 dropped; {2,0,1} sorted-unique → single run [0,2].
+        $result = new MatchResult('abc', 'abc', 10, [2, 0, 5, 1, -1]);
+
+        $output = $this->highlighter->highlight($result, fn($m) => "[$m]");
+
+        $this->assertSame('[abc]', $output);
+    }
 }
