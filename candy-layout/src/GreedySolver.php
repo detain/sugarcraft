@@ -171,7 +171,11 @@ final class GreedySolver implements LayoutSolver
                     }
                 }
 
-                // Rounding error: distribute to first Fill or Max
+                // Rounding error: give the WHOLE remainder to the first Fill
+                // (or Max if no Fill). floor() distribution can lose more than
+                // one cell when several Fills compete (e.g. 3 fills lose up to
+                // 2 cells), so adding a fixed ±1 under-corrects and the sizes
+                // fail to tile the region — assign the full $diff instead.
                 if ($totalDistWeight > 0) {
                     $usedWidth = 0;
                     foreach ($rawSizes as $s) {
@@ -181,7 +185,7 @@ final class GreedySolver implements LayoutSolver
                     if ($diff !== 0) {
                         for ($i = 0; $i < $totalCount && $diff !== 0; $i++) {
                             if ($constraints[$i] instanceof Fill) {
-                                $rawSizes[$i] += $diff > 0 ? 1 : -1;
+                                $rawSizes[$i] += $diff;
                                 $diff = 0;
                                 break;
                             }
@@ -190,7 +194,7 @@ final class GreedySolver implements LayoutSolver
                         if ($diff !== 0) {
                             for ($i = 0; $i < $totalCount && $diff !== 0; $i++) {
                                 if ($constraints[$i] instanceof Max) {
-                                    $rawSizes[$i] += $diff > 0 ? 1 : -1;
+                                    $rawSizes[$i] += $diff;
                                     $diff = 0;
                                     break;
                                 }
@@ -306,10 +310,23 @@ final class GreedySolver implements LayoutSolver
 
         $totalWeight = array_sum($recipientWeights);
         $remainder = $reclaimed;
-        foreach ($recipients as $idx => $i) {
-            $share = (int) floor(($recipientWeights[$idx] / $totalWeight) * $reclaimed);
-            $clamped[$i] += $share;
-            $remainder -= $share;
+
+        if ($totalWeight <= 0) {
+            // Every recipient carries zero weight — e.g. the recipients are all
+            // Fill(0). Proportional distribution would divide by zero, so fall
+            // back to EQUAL shares. Keeps the sum invariant intact.
+            $count = count($recipients);
+            foreach ($recipients as $i) {
+                $share = intdiv($reclaimed, $count);
+                $clamped[$i] += $share;
+                $remainder -= $share;
+            }
+        } else {
+            foreach ($recipients as $idx => $i) {
+                $share = (int) floor(($recipientWeights[$idx] / $totalWeight) * $reclaimed);
+                $clamped[$i] += $share;
+                $remainder -= $share;
+            }
         }
 
         // Distribute rounding remainder to first recipient
