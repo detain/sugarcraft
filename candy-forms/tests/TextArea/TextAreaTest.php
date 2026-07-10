@@ -181,6 +181,21 @@ final class TextAreaTest extends TestCase
         $this->assertSame('hello', $t->value());
     }
 
+    public function testDefaultCharLimitBoundsBuffer(): void
+    {
+        // Default charLimit caps the buffer against a paste-DoS.
+        $this->assertSame(65536, TextArea::new()->charLimit);
+        $t = TextArea::new()->setValue(str_repeat('a', 70000));
+        $this->assertSame(65536, mb_strlen($t->value(), 'UTF-8'));
+    }
+
+    public function testWithCharLimitZeroRestoresUnlimited(): void
+    {
+        // Opt-out: charLimit 0 disables the cap entirely.
+        $t = TextArea::new()->withCharLimit(0)->setValue(str_repeat('a', 70000));
+        $this->assertSame(70000, mb_strlen($t->value(), 'UTF-8'));
+    }
+
     public function testShowLineNumbersAddsGutter(): void
     {
         $t = TextArea::new()

@@ -9,6 +9,7 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * Multi-line text field. Wraps a {@see TextArea}; Enter inserts a newline
@@ -109,7 +110,8 @@ final class Text implements \SugarCraft\Forms\Field
         if ($title !== '') { $lines[] = $title; }
         if ($desc  !== '') { $lines[] = $desc; }
         $lines[] = $this->area->view();
-        if ($this->error !== null)     { $lines[] = '! ' . $this->error; }
+        // Validator messages can echo user input — clean at the display site.
+        if ($this->error !== null)     { $lines[] = '! ' . RenderSafe::clean($this->error); }
         return implode("\n", $lines);
     }
 
