@@ -338,6 +338,35 @@ final class StickersTest extends TestCase
         $this->assertSame('Bob', $t->currentRow()[0]);
     }
 
+    /**
+     * Regression: Table::sortBy() must sync the target Column's sorted() state
+     * so the header renders the ▲ (asc) / ▼ (desc) arrow on the sorted column
+     * and shows no arrow on the others.
+     */
+    public function testTableSortByRendersSortArrowInHeader(): void
+    {
+        $base = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addColumn(Column::make('City', 10))
+            ->addRow(['Bob', 'LA'])
+            ->addRow(['Alice', 'NYC']);
+
+        // Ascending: ▲ on the sorted column (Name), no arrow on City.
+        $header = $base->sortBy(0, true)->buildLines()[0];
+        $this->assertStringContainsString('▲ Name', $header, 'Ascending sort must render ▲ on the sorted column');
+        $this->assertStringContainsString('City', $header, 'Non-sorted column title must still render');
+        $this->assertStringNotContainsString('▼', $header, 'Ascending sort must not render the ▼ glyph');
+        $this->assertStringNotContainsString('▲ City', $header, 'Non-sorted column must show no arrow');
+        $this->assertSame(1, \substr_count($header, '▲'), 'Only the sorted column may show an arrow');
+
+        // Descending: ▼ on the sorted column, no ▲ anywhere.
+        $headerDesc = $base->sortBy(0, false)->buildLines()[0];
+        $this->assertStringContainsString('▼ Name', $headerDesc, 'Descending sort must render ▼ on the sorted column');
+        $this->assertStringNotContainsString('▲', $headerDesc, 'Descending sort must not render the ▲ glyph');
+        $this->assertStringNotContainsString('▼ City', $headerDesc, 'Non-sorted column must show no arrow');
+        $this->assertSame(1, \substr_count($headerDesc, '▼'), 'Only the sorted column may show an arrow');
+    }
+
     public function testTableCurrentCell(): void
     {
         $t = (new Table())
