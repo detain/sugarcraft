@@ -126,6 +126,54 @@ final class ImportExportTest extends TestCase
         $this->assertSame('value', $this->store->get('str'));
     }
 
+    /**
+     * A non-array top-level JSON must be rejected loudly via candy-core's
+     * guarded Json::decodeArray() rather than silently iterating a scalar as
+     * an empty foreach (which previously masqueraded as a 0-entry import).
+     *
+     * @dataProvider nonArrayTopLevelProvider
+     */
+    public function testJsonImporterRejectsNonArrayTopLevel(string $json): void
+    {
+        $importer = new JsonImporter($this->store);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Expected JSON top level to be an array');
+        $importer->importFromString($json, false);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function nonArrayTopLevelProvider(): iterable
+    {
+        yield 'bare int' => ['42'];
+        yield 'bare string' => ['"str"'];
+        yield 'bare true' => ['true'];
+        yield 'bare null' => ['null'];
+        yield 'bare float' => ['3.14'];
+    }
+
+    public function testJsonImporterRejectsNonArrayTopLevelFromFile(): void
+    {
+        $path = $this->tmpDir . '/scalar.json';
+        \file_put_contents($path, '42');
+
+        $importer = new JsonImporter($this->store);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Expected JSON top level to be an array');
+        $importer->importFromFile($path, false);
+    }
+
+    public function testJsonImporterThrowsOnMalformedJson(): void
+    {
+        $importer = new JsonImporter($this->store);
+
+        $this->expectException(\JsonException::class);
+        $importer->importFromString('{not valid json', false);
+    }
+
     // ─── YamlImporter ─────────────────────────────────────────────────────────
 
     public function testYamlImporterFromFile(): void
