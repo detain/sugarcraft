@@ -50,8 +50,11 @@ final class CardinalityTest extends TestCase
         // 4th combo evicts the oldest (id=1) from cardinality tracker
         $r->counter('items', 1.0, ['id' => '4']);
         $this->assertSame(3, $r->cardinality('items'));
-        // id=1 tracking was removed so it no longer contributes to cardinality
-        // id=2,3,4 retained in cardinality tracker
+        // The evicted series (id=1) must ALSO be gone from the backend —
+        // otherwise a cardinality flood leaks series into unbounded backend
+        // memory (DoS). counterValue returns 0.0 once the series is removed.
+        $this->assertSame(0.0, $b->counterValue('items', ['id' => '1']));
+        // id=2,3,4 retained in both cardinality tracker and backend
         $this->assertSame(1.0, $b->counterValue('items', ['id' => '2']));
         $this->assertSame(1.0, $b->counterValue('items', ['id' => '3']));
         $this->assertSame(1.0, $b->counterValue('items', ['id' => '4']));
@@ -59,6 +62,45 @@ final class CardinalityTest extends TestCase
         // Final state: id=3, id=4, id=1 tracked; cardinality stays at 3
         $r->counter('items', 1.0, ['id' => '1']);
         $this->assertSame(3, $r->cardinality('items'));
+        // id=2 is now the evicted series and must be gone from the backend too
+        $this->assertSame(0.0, $b->counterValue('items', ['id' => '2']));
+        $this->assertSame(1.0, $b->counterValue('items', ['id' => '1']));
+        $this->assertSame(1.0, $b->counterValue('items', ['id' => '3']));
+        $this->assertSame(1.0, $b->counterValue('items', ['id' => '4']));
+    }
+
+    public function testCardinalityFloodDoesNotLeakBackendSeries(): void
+    {
+        // Regression for the DoS: flooding a metric with unique tag combos
+        // must not grow the backend past the cardinality limit. With limit 10
+        // and 100 unique combos, only the most-recent 10 series may survive in
+        // the backend; the 90 evicted ones must read back as 0.0.
+        $b = new InMemoryBackend();
+        $limit = 10;
+        $r = new Registry($b, [], $limit);
+        for ($i = 0; $i < 100; $i++) {
+            $r->counter('flood', 1.0, ['id' => (string) $i]);
+        }
+        $this->assertSame($limit, $r->cardinality('flood'));
+
+        // Count how many series the backend still holds for this metric by
+        // probing every combo we emitted — no more than $limit may be live.
+        $live = 0;
+        for ($i = 0; $i < 100; $i++) {
+            if ($b->counterValue('flood', ['id' => (string) $i]) !== 0.0) {
+                $live++;
+            }
+        }
+        $this->assertSame($limit, $live);
+
+        // The survivors must be exactly the most-recent $limit combos (90..99);
+        // everything older must have been reclaimed from the backend.
+        for ($i = 0; $i < 90; $i++) {
+            $this->assertSame(0.0, $b->counterValue('flood', ['id' => (string) $i]));
+        }
+        for ($i = 90; $i < 100; $i++) {
+            $this->assertSame(1.0, $b->counterValue('flood', ['id' => (string) $i]));
+        }
     }
 
     public function testDeleteLabelValuesRemovesTrackingForSpecificCombo(): void

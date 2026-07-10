@@ -240,4 +240,89 @@ final class FileHistoryTest extends TestCase
 
         $this->assertSame(0600, fileperms($this->historyFile) & 0777);
     }
+
+    // =========================================================================
+    // Security — temp-file hardening (tempnam + chmod-before-write)
+    // =========================================================================
+
+    /** The pre-fix predictable temp path an attacker could target. */
+    private function predictedTempPath(): string
+    {
+        return $this->tmpDir . '/.history.tmp.' . getmypid();
+    }
+
+    /**
+     * A symlink pre-planted at the old predictable temp path must NOT be
+     * followed by the append write. With the predictable-name code,
+     * fopen($tempFile, 'w') opened the attacker's symlink target and wrote
+     * history content through it (info leak / file corruption).
+     */
+    public function testSymlinkPreplantDefeatedOnAppend(): void
+    {
+        $victim = $this->tmpDir . '/victim';
+        file_put_contents($victim, 'VICTIM');
+        $predicted = $this->predictedTempPath();
+        if (!@symlink($victim, $predicted)) {
+            $this->markTestSkipped('symlink() not supported on this platform');
+        }
+
+        try {
+            $h = new FileHistory($this->historyFile, 0, $this->tmpDir);
+            $h->push('secret-command');
+
+            // Victim untouched — the write did not follow the symlink.
+            $this->assertSame('VICTIM', file_get_contents($victim));
+            // History was written to its own (unpredictable) temp, then renamed.
+            $this->assertStringContainsString('secret-command', file_get_contents($this->historyFile));
+        } finally {
+            if (is_link($predicted) || file_exists($predicted)) {
+                @unlink($predicted);
+            }
+        }
+    }
+
+    /**
+     * A symlink pre-planted at the old predictable temp path must NOT be
+     * followed by clear(). With the predictable-name code,
+     * file_put_contents($tempFile, '') truncated the symlink's target —
+     * arbitrary-file truncation.
+     */
+    public function testSymlinkPreplantDefeatedOnClear(): void
+    {
+        $victim = $this->tmpDir . '/victim';
+        file_put_contents($victim, 'VICTIM');
+        $predicted = $this->predictedTempPath();
+        if (!@symlink($victim, $predicted)) {
+            $this->markTestSkipped('symlink() not supported on this platform');
+        }
+
+        try {
+            $h = new FileHistory($this->historyFile, 0, $this->tmpDir);
+            $h->clear();
+
+            // Victim not truncated — clear() did not write through the symlink.
+            $this->assertSame('VICTIM', file_get_contents($victim));
+        } finally {
+            if (is_link($predicted) || file_exists($predicted)) {
+                @unlink($predicted);
+            }
+        }
+    }
+
+    /**
+     * Under a permissive umask a naive create would be world-readable; the
+     * chmod-before-write ordering must still yield an owner-only 0600 file.
+     */
+    public function testHistoryFileIs0600UnderPermissiveUmask(): void
+    {
+        $oldUmask = umask(0);
+        try {
+            $h = new FileHistory($this->historyFile, 0, $this->tmpDir);
+            $h->push('cmd');
+
+            $this->assertSame(0600, fileperms($this->historyFile) & 0777);
+        } finally {
+            umask($oldUmask);
+        }
+    }
 }

@@ -73,6 +73,50 @@ final class SpawnProcTest extends TestCase
         }
     }
 
+    public function testProcSharedSlaveTtyDeliversChildStdoutToMaster(): void
+    {
+        $this->requirePtySyscalls();
+
+        if (!\is_executable('/bin/sh')) {
+            $this->markTestSkipped('/bin/sh is required for this test.');
+        }
+
+        // Regression for the TOCTOU fix (single slave handle reused for
+        // all three stdio slots). The child's stdout slot must still be
+        // wired to the slave tty, so bytes it prints come back out the
+        // master end — verifies the shared handle wired stdout correctly,
+        // not just that the process spawned.
+        $pty = Pty::open();
+        try {
+            $child = Spawn::proc($pty->master, ['/bin/sh', '-c', 'printf PTY_OK']);
+
+            $seen = '';
+            $deadline = \microtime(true) + 2.0;
+            while (\microtime(true) < $deadline) {
+                $chunk = $pty->read(8192, 0.2);
+                if ($chunk === null) {
+                    continue;
+                }
+                if ($chunk === '') {
+                    break; // EOF: slave fully closed
+                }
+                $seen .= $chunk;
+                if (\str_contains($seen, 'PTY_OK')) {
+                    break;
+                }
+            }
+
+            $child->wait();
+            $this->assertStringContainsString(
+                'PTY_OK',
+                $seen,
+                'child stdout must reach the master through the shared slave tty',
+            );
+        } finally {
+            $pty->close();
+        }
+    }
+
     public function testProcWithNullEnvInheritsParentEnv(): void
     {
         $this->requirePtySyscalls();

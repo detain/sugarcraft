@@ -120,11 +120,28 @@ final class FileHistory extends InMemoryHistory
      * rename over the target. Prevents corruption if the process crashes
      * mid-write and keeps 0600 permissions.
      *
+     * The temp file is created with tempnam() (unpredictable random name) and
+     * chmod 0600 BEFORE any history content is written. History can contain
+     * sensitive shell commands, so this closes two holes a predictable name
+     * (.history.tmp.<pid>) left open: (1) a world-readable window between
+     * create and the post-rename chmod, and (2) a symlink pre-plant — an
+     * attacker with write access to $this->tempDir (which defaults to the
+     * history file's own directory) could plant a symlink at the predictable
+     * path so fopen(...,'w') would follow it and leak/corrupt an arbitrary
+     * target. tempnam() creates a fresh regular file with a name the attacker
+     * cannot guess and never opens through an existing symlink.
+     *
      * @param list<string> $lines
      */
     private function appendLinesAtomically(array $lines): void
     {
-        $tempFile = $this->tempDir . '/.history.tmp.' . getmypid();
+        $tempFile = @tempnam($this->tempDir, 'hist');
+        if ($tempFile === false) {
+            return;
+        }
+        // Restrict perms before writing so history content is never exposed,
+        // even briefly, on any platform/umask (tempnam is 0600 on POSIX only).
+        chmod($tempFile, 0600);
         $fp = fopen($tempFile, 'w');
         if ($fp === false) {
             return;
@@ -233,6 +250,13 @@ final class FileHistory extends InMemoryHistory
     /**
      * Clear all entries from both in-memory history and the persistence file.
      * Uses atomic write (temp + rename) to prevent corruption on crash.
+     *
+     * The temp file is created with tempnam() (unpredictable random name) and
+     * chmod 0600 BEFORE writing, then renamed over the target. A predictable
+     * name (.history.tmp.<pid>) let an attacker pre-plant a symlink at that
+     * path so file_put_contents(...,'') would truncate the symlink's TARGET —
+     * an arbitrary-file truncation. tempnam() defeats that: the name cannot be
+     * guessed and it never writes through an existing symlink.
      */
     public function clear(): void
     {
@@ -240,9 +264,15 @@ final class FileHistory extends InMemoryHistory
         // Drop queued-but-unwritten entries too — they were cleared with the rest.
         $this->pendingWrites = [];
         // Atomic write via temp file to prevent corruption on crash.
-        $tempFile = $this->tempDir . '/.history.tmp.' . getmypid();
-        file_put_contents($tempFile, '');
+        $tempFile = @tempnam($this->tempDir, 'hist');
+        if ($tempFile === false) {
+            return;
+        }
         chmod($tempFile, 0600);
+        file_put_contents($tempFile, '');
         rename($tempFile, $this->filePath);
+        // Defensive: if the destination pre-existed with looser perms, the
+        // rename inherits the temp file's 0600, but re-assert to be safe.
+        chmod($this->filePath, 0600);
     }
 }
