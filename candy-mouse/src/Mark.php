@@ -26,6 +26,16 @@ use SugarCraft\Mouse\Sentinel;
  */
 final class Mark
 {
+    /**
+     * Allowed id charset — ASCII letters, digits, and the punctuation used by
+     * real zone ids (`cell:5:3`, `crumb-2`, `a.b_c`).  Anchored with \A…\z
+     * (NOT $, which would also match before a trailing newline) and matched
+     * byte-wise (no /u) so any byte >= 0x80 is rejected.  This inherently bars
+     * the PUA sentinel bytes U+E000 (\xEE\x80\x80) / U+E001 (\xEE\x80\x81) plus
+     * any CSI/OSC/APC/control byte — an id carrying those would desync
+     * {@see Scan::parse()} (a zone-marker injection).
+     */
+    private const ID_PATTERN = '/\A[A-Za-z0-9._:-]+\z/';
 
     /**
      * @param bool $enabled Whether sentinels are emitted.  Defaults to true.
@@ -62,9 +72,26 @@ final class Mark
      *
      * The sentinels use private-use codepoints (U+E000 / U+E001) so they
      * never collide with visible text or ANSI escape sequences.
+     *
+     * @throws \InvalidArgumentException When $id contains any byte outside
+     *         {@see self::ID_PATTERN} — e.g. a raw sentinel byte, a control
+     *         byte, or whitespace — which would otherwise let a caller-supplied
+     *         id inject spurious zone markers into the scanned stream.
      */
     public function wrap(string $id, string $content): string
     {
+        // Validate unconditionally (even when disabled): an out-of-charset id
+        // is a caller bug regardless of whether sentinels are emitted, and the
+        // same id feeds both the marked render and any measurement pass.
+        if (preg_match(self::ID_PATTERN, $id) !== 1) {
+            throw new \InvalidArgumentException(
+                'Mark id must match ' . self::ID_PATTERN
+                . ' (ASCII letters, digits, and ._:- only); '
+                . 'got ' . var_export($id, true)
+                . ' — an id with sentinel/control/whitespace bytes would desync zone scanning.'
+            );
+        }
+
         if (!$this->enabled) {
             return $content;
         }
