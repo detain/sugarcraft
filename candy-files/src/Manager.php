@@ -39,6 +39,9 @@ final class Manager implements Model
 
     private const UNDO_LIMIT = 50;
 
+    /** Per-process trash directory, created lazily on first delete. @see trashRoot() */
+    private static ?string $trashRoot = null;
+
     /**
      * @param \Closure(string): list<Entry>|null $lister
      * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $tabs
@@ -87,9 +90,10 @@ final class Manager implements Model
         if ($shutdownRegistered === false) {
             $shutdownRegistered = true;
             register_shutdown_function(static function (): void {
-                $trashDir = sys_get_temp_dir() . '/candyfiles-trash-' . getmypid();
-                if (\is_dir($trashDir)) {
-                    self::removePath($trashDir);
+                // Clean up exactly the (randomly named) trash root we created,
+                // if any deletes happened this process.
+                if (self::$trashRoot !== null && \is_dir(self::$trashRoot)) {
+                    self::removePath(self::$trashRoot);
                 }
             });
         }
@@ -457,15 +461,37 @@ final class Manager implements Model
             ->withUndoRedoStacks($newUndoStack, []); // Clear redo on new action
     }
 
-    /** Build a trash-directory path for a deleted entry. */
+    /** Build a trash path for a deleted entry, creating the trash root on first use. */
     private function trashPath(string $originalPath): ?string
     {
-        $trashDir = sys_get_temp_dir() . '/candyfiles-trash-' . getmypid();
+        $trashDir = self::trashRoot();
+        // Lazily create the trash root. Without this the very first @rename()
+        // into it always failed (the directory did not exist), so performDelete()
+        // fell through to a permanent unlink and silently defeated undo. 0700
+        // keeps recovered files private to the owning process.
+        if (!is_dir($trashDir) && !@mkdir($trashDir, 0700, true) && !is_dir($trashDir)) {
+            return null;
+        }
         $basename = basename($originalPath);
-        // Use cryptographically secure random bytes for unpredictable trash path
+        // Use cryptographically secure random bytes for an unpredictable trash entry name.
         $trashName = sprintf('%s_%s', bin2hex(random_bytes(16)), $basename);
-        $trashDir = $trashDir . '/' . $trashName;
-        return $trashDir;
+        return $trashDir . '/' . $trashName;
+    }
+
+    /**
+     * Per-process trash root, computed once and reused for every delete so the
+     * shutdown handler can clean up exactly what was created. The random suffix
+     * makes the directory name unpredictable (guards against symlink attacks in
+     * the shared temp dir) and collision-free across concurrent processes/re-runs.
+     */
+    private static function trashRoot(): string
+    {
+        return self::$trashRoot ??= sprintf(
+            '%s/candyfiles-trash-%d-%s',
+            sys_get_temp_dir(),
+            getmypid(),
+            bin2hex(random_bytes(8)),
+        );
     }
 
     /** Arm copy confirmation — next KeyMsg triggers performCopy or cancel. */
@@ -1125,24 +1151,39 @@ final class Manager implements Model
             if (!file_exists($path)) {
                 // File doesn't exist — re-delete by moving to trash (it was restored by undo)
                 $trashPath = $this->trashPath($path);
-                if (@rename($path, $trashPath)) {
+                if ($trashPath !== null && @rename($path, $trashPath)) {
                     continue;
                 }
-                $errors++;
+                // Trash unavailable (null) or rename failed — fall back to
+                // permanent removal, exactly as performDelete() degrades under a
+                // broken filesystem, instead of passing null into rename().
+                if (!self::removePath($path)) {
+                    $errors++;
+                }
             } elseif (isset($item['isDir']) && $item['isDir']) {
                 // Directory still exists — re-delete by moving to trash
                 $trashPath = $this->trashPath($path);
-                if (@rename($path, $trashPath)) {
+                if ($trashPath !== null && @rename($path, $trashPath)) {
                     continue;
                 }
-                $errors++;
+                // Trash unavailable (null) or rename failed — fall back to
+                // permanent removal, exactly as performDelete() degrades under a
+                // broken filesystem, instead of passing null into rename().
+                if (!self::removePath($path)) {
+                    $errors++;
+                }
             } else {
                 // File exists — re-delete by moving to trash
                 $trashPath = $this->trashPath($path);
-                if (@rename($path, $trashPath)) {
+                if ($trashPath !== null && @rename($path, $trashPath)) {
                     continue;
                 }
-                $errors++;
+                // Trash unavailable (null) or rename failed — fall back to
+                // permanent removal, exactly as performDelete() degrades under a
+                // broken filesystem, instead of passing null into rename().
+                if (!self::removePath($path)) {
+                    $errors++;
+                }
             }
         }
         return $errors;
