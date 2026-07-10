@@ -218,6 +218,52 @@ final class SessionTest extends TestCase
         $this->assertSame(0600, fileperms($path) & 0777);
     }
 
+    public function testLoadNonArrayJsonReturnsFreshSession(): void
+    {
+        $configDir = $this->tempDir . '/.config/sugarcraft-crush';
+        mkdir($configDir, 0755, true);
+        $path = $configDir . '/session.json';
+
+        // Syntactically valid JSON whose top level is a scalar, not an array.
+        // AtomicJsonFile::read() rejects this with a \RuntimeException (a bare
+        // (array) cast would have silently produced a surprising shape); load()
+        // must still fall back to a fresh session rather than propagating.
+        file_put_contents($path, '42');
+
+        $session = Session::load();
+
+        $this->assertSame('', $session->cwd);
+        $this->assertSame([], $session->selected);
+        $this->assertSame('name', $session->sortColumn);
+        $this->assertSame('files', $session->activePane);
+    }
+
+    public function testSaveIsAtomicAndLeavesNoTemporaryFiles(): void
+    {
+        $configDir = $this->tempDir . '/.config/sugarcraft-crush';
+        $path = $configDir . '/session.json';
+
+        (new Session())->withCwd('/home/user/projects')->save();
+
+        $this->assertFileExists($path);
+
+        // AtomicJsonFile writes through a sibling `.session.json.tmp.<hex>`
+        // file and renames it into place; no temp file may survive the save.
+        $this->assertSame([], glob($configDir . '/.session.json.tmp.*') ?: []);
+        $entries = array_values(array_diff(scandir($configDir) ?: [], ['.', '..']));
+        $this->assertSame(['session.json'], $entries);
+
+        // AtomicJsonFile encodes with JSON_UNESCAPED_SLASHES and no trailing
+        // newline — distinct from the old non-atomic file_put_contents path,
+        // which escaped slashes and appended "\n". Pinning the on-disk bytes
+        // anchors save() to the atomic helper.
+        $raw = file_get_contents($path);
+        $this->assertIsString($raw);
+        $this->assertStringContainsString('"/home/user/projects"', $raw);
+        $this->assertStringNotContainsString('\/home\/user', $raw);
+        $this->assertStringEndsWith('}', $raw);
+    }
+
     public function testImmutabilityWithChainedWithers(): void
     {
         $original = new Session();
