@@ -82,7 +82,7 @@ if (!$result-&gt;ok) {
 }</code></pre>
 
     <h3 style="margin-top: 32px;">Cassette format</h3>
-    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/main/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Use <code>Recorder::withFormat(new RelativeFormat())</code> to record in delta-time mode for deterministic, edit-friendly cassettes.</p>
+    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/master/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Use <code>Recorder::withFormat(new RelativeFormat())</code> to record in delta-time mode for deterministic, edit-friendly cassettes.</p>
 
     <h3 style="margin-top: 32px;">CLI</h3>
     <pre class="code"><code>vendor/bin/candy-vcr inspect session.cas               # list events
@@ -128,7 +128,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-vcr">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-vcr/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vcr/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-vcr/tree/main/examples">Runnable examples</a></li>
       <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/vcr">charmbracelet/x/vcr</a> (Go upstream)</li>
     </ul>
