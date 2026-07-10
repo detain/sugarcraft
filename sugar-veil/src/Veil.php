@@ -17,7 +17,6 @@ use SugarCraft\Veil\Animation\AnimationKind;
 use SugarCraft\Veil\Animation\Fade;
 use SugarCraft\Veil\Animation\Scale;
 use SugarCraft\Veil\Animation\Slide;
-use SugarCraft\Zone\Manager;
 
 /**
  * Terminal overlay compositor.
@@ -59,9 +58,6 @@ final class Veil
     /** @var Mark Zone marker helper */
     private readonly Mark $marker;
 
-    /** @var Manager|null Stored manager for back-compat only (deprecated) */
-    private readonly ?Manager $manager;
-
     /** @var RenderSession Mutable diff/session state shared across with*() clones */
     private readonly RenderSession $session;
 
@@ -89,7 +85,6 @@ final class Veil
      * @param Border|null $border Border chrome
      * @param Scanner|null $scanner Self-contained mouse hit-testing scanner
      * @param string|null $lastRendered Last rendered output for scanner
-     * @param Manager|null $manager Stored manager for back-compat (deprecated)
      * @param RenderSession|null $session Mutable diff/session state
      * @param Position|null $vPosition Vertical position anchor
      * @param Position|null $hPosition Horizontal position anchor
@@ -106,7 +101,6 @@ final class Veil
         ?Border $border = null,
         ?Scanner $scanner = null,
         ?string $lastRendered = null,
-        ?Manager $manager = null,
         ?RenderSession $session = null,
         ?Position $vPosition = null,
         ?Position $hPosition = null,
@@ -123,7 +117,6 @@ final class Veil
         $this->scanner = $scanner ?? Scanner::new();
         $this->lastRendered = $lastRendered;
         $this->marker = new Mark();
-        $this->manager = $manager;
         $this->session = $session ?? new RenderSession();
         $this->vPosition = $vPosition;
         $this->hPosition = $hPosition;
@@ -197,7 +190,7 @@ final class Veil
      * Set the click-outside-dismiss flag.
      *
      * When true, clicking outside the veil's zone will dismiss it.
-     * Uses candy-zone Manager for hit testing.
+     * Uses the self-contained candy-mouse Scanner for hit testing.
      */
     public function withClickOutsideDismiss(bool $enabled = true): self
     {
@@ -272,29 +265,6 @@ final class Veil
     public function positionY(): int
     {
         return $this->posY;
-    }
-
-    /**
-     * Set the zone manager for click-outside hit testing.
-     *
-     * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
-     *   A self-contained Scanner is always used for hit-testing. The Manager
-     *   parameter is stored for back-compat only. Prefer scan()/hit() instead.
-     */
-    public function withManager(Manager $manager): self
-    {
-        return $this->mutate(manager: $manager);
-    }
-
-    /**
-     * Zone manager for click-outside hit testing.
-     *
-     * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
-     *   Use the self-contained scanner via scan()/hit() instead.
-     */
-    public function manager(): ?Manager
-    {
-        return $this->manager;
     }
 
     /**
@@ -630,7 +600,6 @@ final class Veil
         ?Border $border = null,
         ?Scanner $scanner = null,
         ?string $lastRendered = null,
-        ?Manager $manager = null,
         ?Position $vPosition = null,
         ?Position $hPosition = null,
         ?int $posX = null,
@@ -646,7 +615,6 @@ final class Veil
             border: $border ?? $this->border,
             scanner: $scanner,
             lastRendered: $lastRendered ?? $this->lastRendered,
-            manager: $manager ?? $this->manager,
             session: $this->session,
             vPosition: $vPosition ?? $this->vPosition,
             hPosition: $hPosition ?? $this->hPosition,
@@ -748,7 +716,6 @@ final class Veil
             border: $this->border,
             scanner: $this->scanner,
             lastRendered: $this->lastRendered,
-            manager: $this->manager,
             session: new RenderSession(),
             vPosition: $this->vPosition,
             hPosition: $this->hPosition,
