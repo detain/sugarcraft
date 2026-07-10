@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Json;
 use SugarCraft\Flap\PipeGenerator;
 
 /**
@@ -84,9 +85,13 @@ final class Game implements Model
         if ($contents === false) {
             throw new \RuntimeException("Cannot read high score file: {$path}");
         }
-        $decoded = json_decode($contents, true);
-        if (!is_array($decoded)) {
-            throw new \RuntimeException("Invalid high score file format: {$path}");
+        try {
+            // Delegate decode + top-level array guard to the candy-core SSOT
+            // so a corrupt/non-array saved-state file cannot masquerade as
+            // valid []-shaped data or surface as a raw TypeError downstream.
+            $decoded = Json::decodeArray($contents);
+        } catch (\JsonException | \RuntimeException $e) {
+            throw new \RuntimeException("Invalid high score file format: {$path}", 0, $e);
         }
         $scores = array_values(array_filter($decoded, 'is_int'));
         sort($scores, SORT_NUMERIC);

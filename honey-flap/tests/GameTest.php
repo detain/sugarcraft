@@ -193,6 +193,55 @@ final class GameTest extends TestCase
         Game::start(static fn(int $max): int => 0, $tmp);
     }
 
+    public function testReadScoresRejectsNonArrayScalarViaSharedGuard(): void
+    {
+        // A present-but-corrupt saved-state file whose top level is a JSON
+        // scalar (not an array) must be rejected with a clean RuntimeException
+        // via the candy-core Json::decodeArray SSOT — never a raw TypeError
+        // from array_filter() on a non-array.
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        file_put_contents($tmp . '/.honey-flap/scores.json', '"corrupt"');
+        try {
+            $this->expectException(\RuntimeException::class);
+            Game::start(static fn(int $max): int => 0, $tmp);
+        } finally {
+            @unlink($tmp . '/.honey-flap/scores.json');
+            @rmdir($tmp . '/.honey-flap');
+            @rmdir($tmp);
+        }
+    }
+
+    public function testReadScoresRejectsMalformedJsonViaSharedGuard(): void
+    {
+        // Malformed (unparseable) JSON is likewise rejected with a
+        // RuntimeException carrying the file path, preserving the pre-SSOT
+        // contract even though Json::decodeArray itself raises JsonException.
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        file_put_contents($tmp . '/.honey-flap/scores.json', '{not valid json');
+        try {
+            $this->expectException(\RuntimeException::class);
+            Game::start(static fn(int $max): int => 0, $tmp);
+        } finally {
+            @unlink($tmp . '/.honey-flap/scores.json');
+            @rmdir($tmp . '/.honey-flap');
+            @rmdir($tmp);
+        }
+    }
+
+    public function testReadScoresMissingFileReturnsEmptyList(): void
+    {
+        // New game with no save file: the missing-file fallback must survive
+        // the SSOT migration and still seed an empty high-score list.
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp, 0755, true);
+        $g = Game::start(static fn(int $max): int => 0, $tmp);
+        $this->assertSame([], $g->highScores());
+        $this->assertSame(0, $g->highScore());
+        @rmdir($tmp);
+    }
+
     public function testReadScoresFiltersNonIntEntries(): void
     {
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
