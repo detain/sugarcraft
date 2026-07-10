@@ -7,6 +7,7 @@ namespace SugarCraft\Shell\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Shell\Model\ConfirmModel;
+use SugarCraft\Shell\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -59,13 +60,23 @@ final class ConfirmCommand extends Command
             affirmative: $affirm,
             negative:    $negate,
         );
+        $loop    = \React\EventLoop\Loop::get();
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    false,
             hideCursor:      false,
             catchInterrupts: true,
+            loop:            $loop,
         ));
+        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
         /** @var ConfirmModel $final */
         $final = $program->run();
+        $guard->disarm();
+
+        // Deadline elapsed with no answer — surface the timeout exit code
+        // rather than a yes/no/abort verdict.
+        if ($guard->fired()) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
 
         if ($final->isAborted()) {
             return self::EXIT_ABORT;

@@ -7,6 +7,7 @@ namespace SugarCraft\Shell\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Shell\Model\ChooseModel;
+use SugarCraft\Shell\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -76,13 +77,23 @@ final class ChooseCommand extends Command
             cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
         );
+        $loop    = \React\EventLoop\Loop::get();
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
             hideCursor:      true,
             catchInterrupts: true,
+            loop:            $loop,
         ));
+        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
         /** @var ChooseModel $final */
         $final = $program->run();
+        $guard->disarm();
+
+        // Deadline elapsed before the user submitted — abort with the
+        // timeout exit code and print nothing.
+        if ($guard->fired()) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
 
         $noSelected = $input->getOption('no-selected');
 

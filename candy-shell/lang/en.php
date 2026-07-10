@@ -29,6 +29,7 @@ return [
     // Log/LogLevel.php
     'log.unknown_level'       => 'unknown log level: {name}',
     'log.encode_failed'       => 'failed to encode log entry to json',
+    'log.bad_format'          => 'invalid --format string: {format}',
 
     // Command/SpinCommand.php
     'spinner.unknown_style'   => 'unknown spinner style: {name}',

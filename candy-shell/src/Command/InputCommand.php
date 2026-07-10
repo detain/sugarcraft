@@ -7,6 +7,7 @@ namespace SugarCraft\Shell\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Shell\Model\InputModel;
+use SugarCraft\Shell\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -47,13 +48,22 @@ final class InputCommand extends Command
             width:       (int)    $input->getOption('width'),
             header:      (string) $input->getOption('header'),
         );
+        $loop    = \React\EventLoop\Loop::get();
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    false,
             hideCursor:      false,
             catchInterrupts: true,
+            loop:            $loop,
         ));
+        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
         /** @var InputModel $final */
         $final = $program->run();
+        $guard->disarm();
+
+        // Deadline elapsed before submit — discard input, exit timeout.
+        if ($guard->fired()) {
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
 
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
