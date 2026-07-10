@@ -326,8 +326,10 @@ final class Compiler
         if ($rawPath === '') {
             return null;
         }
-        // Reject traversal segments and Windows separators outright.
-        if (str_contains($rawPath, '..') || str_contains($rawPath, '\\')) {
+        // Reject traversal segments, Windows separators, and embedded NUL bytes
+        // outright. A NUL would otherwise only surface as a ValueError at write
+        // time; reject it cleanly here alongside `..`/`\`.
+        if (str_contains($rawPath, '..') || str_contains($rawPath, '\\') || str_contains($rawPath, "\0")) {
             return null;
         }
 
@@ -343,22 +345,41 @@ final class Compiler
         $isAbsolute = str_starts_with($rawPath, '/')
             || (strlen($rawPath) >= 2 && ctype_alpha($rawPath[0]) && $rawPath[1] === ':');
 
-        // The target file itself does not exist yet, so confine on its parent
-        // directory (which must already resolve to somewhere under the base).
+        // The target file itself usually does not exist yet, so confine on its
+        // parent directory (which must already resolve to somewhere under base).
         if ($isAbsolute) {
             $parentReal = realpath(dirname($rawPath));
             if ($parentReal === false || !$this->isUnder($parentReal, $baseReal)) {
                 return null;
             }
-            return $rawPath;
+            $finalPath = $rawPath;
+        } else {
+            $finalPath = $baseReal . DIRECTORY_SEPARATOR . $rawPath;
+            $parentReal = realpath(dirname($finalPath));
+            if ($parentReal === false || !$this->isUnder($parentReal, $baseReal)) {
+                return null;
+            }
         }
 
-        $target = $baseReal . DIRECTORY_SEPARATOR . $rawPath;
-        $parentReal = realpath(dirname($target));
-        if ($parentReal === false || !$this->isUnder($parentReal, $baseReal)) {
+        // Symlink-escape guard (CWE-59): the parent dir resolving under base is
+        // not enough — the target itself may be a pre-planted symlink pointing
+        // outside it, and TapeToGif would then write the rendered artifact
+        // *through* the link, landing it anywhere on disk. Reject any existing
+        // symlink target outright (is_link() is true regardless of whether or
+        // where the link resolves), matching (and exceeding) the realpath-based
+        // strictness the Source-include path already applies. For any other
+        // pre-existing target, re-canonicalize and re-verify it stays under base.
+        if (is_link($finalPath)) {
             return null;
         }
-        return $target;
+        if (file_exists($finalPath)) {
+            $targetReal = realpath($finalPath);
+            if ($targetReal === false || !$this->isUnder($targetReal, $baseReal)) {
+                return null;
+            }
+        }
+
+        return $finalPath;
     }
 
     private function isUnder(string $path, string $base): bool
