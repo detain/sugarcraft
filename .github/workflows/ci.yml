@@ -149,6 +149,27 @@ jobs:
       - name: Verify path-repo closure
         run: php tools/check-path-repos.php
 
+  # Guard against SugarCraft-org doc links pinned to the pre-flip default branch.
+  # The org default branch moved main→master (see CONTRIBUTING.md "flip every
+  # default branch from main → master"), so every
+  # github.com/sugarcraft/<lib>/blob/main/... link under docs/ now 404s. This
+  # step fails the build if any resurface. It is deliberately scoped to the
+  # sugarcraft org: upstream repos (charmbracelet, Textualize, python/cpython,
+  # git-lfs, …) legitimately still use `main`, so a blanket `blob/main/` check
+  # would flag correct links. Cheap — one grep, no PHP/composer needed.
+  docs-links:
+    name: 'Docs branch links'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Reject stale sugarcraft blob/main links under docs/
+        run: |
+          if grep -rEn 'github\.com/sugarcraft/[^/]+/blob/main/' docs/; then
+            echo "::error::Found github.com/sugarcraft/.../blob/main/ link(s) under docs/ — the org default branch is master. Replace blob/main/ with blob/master/ (offending lines listed above)."
+            exit 1
+          fi
+          echo "OK: no stale sugarcraft blob/main links under docs/"
+
   # Unified test matrix — every (php, lib) tuple comes from build-matrix, which
   # auto-discovers libs from filesystem (any dir with composer.json + phpunit.xml)
   # and scopes to libs affected by the change-set via the reverse-dep graph.
