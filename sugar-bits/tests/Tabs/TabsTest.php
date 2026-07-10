@@ -375,11 +375,17 @@ final class TabsTest extends TestCase
         $manager = \SugarCraft\Zone\Manager::newPrefix('test');
         $t = $this->tabs()->withWidth(200)->withZoneManager($manager);
         $view = $t->view();
-        // Zone markers are APC sequences: ESC _ "candyzone:S:prefix:id" ESC \
+        // Zone markers are candy-mouse PUA sentinels: U+E000 <id> U+E001 ...
         // Prefix is concatenated directly, so "test" + "tab-0" = "testtab-0".
-        $this->assertStringContainsString("\x1b_", $view);
-        $this->assertStringContainsString('candyzone:S:testtab-0', $view);
-        $this->assertStringContainsString('candyzone:S:testtab-1', $view);
+        $this->assertStringContainsString(\SugarCraft\Mouse\Sentinel::OPEN, $view);
+        $this->assertStringContainsString(
+            \SugarCraft\Mouse\Sentinel::OPEN . 'testtab-0' . \SugarCraft\Mouse\Sentinel::CLOSE,
+            $view,
+        );
+        $this->assertStringContainsString(
+            \SugarCraft\Mouse\Sentinel::OPEN . 'testtab-1' . \SugarCraft\Mouse\Sentinel::CLOSE,
+            $view,
+        );
     }
 
     public function testViewWithoutManagerHasNoZoneMarkers(): void

@@ -24,6 +24,14 @@ use SugarCraft\Zone\Msg\TripleClickMsg;
  *   if ($msg instanceof TripleClickMsg) { ... }
  *
  * Mirrors bubblezone's `NewZoneClickTracker`.
+ *
+ * dedup overlap with Mouse\ZoneClickTracker deferred: candy-mouse's
+ * ZoneClickTracker does Press+Release single-click dedup, NOT the
+ * interval-based double/triple streak counting this class implements.
+ * Routing this counter's single-click detection through it would change
+ * the emitted DoubleClickMsg/TripleClickMsg timing, so the delegation is
+ * intentionally not done. This class hit-tests via the (candy-mouse-backed)
+ * {@see Manager}, so its geometry already flows through the SSOT.
  */
 final class ClickCounter
 {

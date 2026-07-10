@@ -7,6 +7,7 @@ namespace SugarCraft\Zone\Tests;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Zone\Manager;
 use SugarCraft\Zone\Zone;
 use PHPUnit\Framework\TestCase;
@@ -18,13 +19,29 @@ final class ManagerTest extends TestCase
         return new MouseMsg($x, $y, MouseButton::Left, MouseAction::Press);
     }
 
-    public function testMarkWrapsContentWithApcMarkers(): void
+    public function testMarkWrapsContentWithPuaMarkers(): void
     {
         $m = Manager::newGlobal();
         $marked = $m->mark('btn', 'OK');
-        $this->assertStringContainsString("\x1b_candyzone:S:btn\x1b\\", $marked);
-        $this->assertStringContainsString("\x1b_candyzone:E:btn\x1b\\", $marked);
-        $this->assertStringContainsString('OK', $marked);
+        // Delegated to candy-mouse's Mark: PUA sentinel frame
+        // U+E000 <id> U+E001 <content> U+E000 /<id> U+E001.
+        $this->assertSame(
+            Sentinel::OPEN . 'btn' . Sentinel::CLOSE
+                . 'OK'
+                . Sentinel::OPEN . '/btn' . Sentinel::CLOSE,
+            $marked,
+        );
+        // The legacy APC wire format must be gone.
+        $this->assertStringNotContainsString("\x1b_candyzone", $marked);
+    }
+
+    public function testMarkRejectsIdOutsideCharset(): void
+    {
+        // Mark::wrap validates prefix()+id against ^[A-Za-z0-9._:-]+$; a
+        // space (or any sentinel/control byte) would desync zone scanning.
+        $m = Manager::newGlobal();
+        $this->expectException(\InvalidArgumentException::class);
+        $m->mark('bad id', 'X');
     }
 
     public function testScanStripsMarkersFromOutput(): void
@@ -164,7 +181,9 @@ final class ManagerTest extends TestCase
     public function testEndMarkerWithoutStartIsIgnored(): void
     {
         $m = Manager::newGlobal();
-        $clean = $m->scan("\x1b_candyzone:E:ghost\x1b\\hi");
+        // A close tag (U+E000 /ghost U+E001) with no matching open — Scan
+        // records nothing, and stripMarkers still removes the dangling tag.
+        $clean = $m->scan(Sentinel::OPEN . '/ghost' . Sentinel::CLOSE . 'hi');
         $this->assertSame('hi', $clean);
         $this->assertNull($m->get('ghost'));
     }
@@ -189,7 +208,7 @@ final class ManagerTest extends TestCase
         $m->setEnabled(true);
         $this->assertTrue($m->isEnabled());
         $marked = $m->mark('foo', 'hi');
-        $this->assertStringContainsString('candyzone:S:foo', $marked);
+        $this->assertStringContainsString(Sentinel::OPEN . 'foo' . Sentinel::CLOSE, $marked);
     }
 
     public function testNewPrefixGeneratesUniqueIds(): void
@@ -203,8 +222,9 @@ final class ManagerTest extends TestCase
     {
         $m = Manager::newPrefix('myWidget-');
         $marked = $m->mark('item-0', 'X');
-        $this->assertStringContainsString('candyzone:S:myWidget-item-0', $marked);
-        $this->assertStringContainsString('candyzone:E:myWidget-item-0', $marked);
+        // The prefix is folded into the marked id before delegating to Mark.
+        $this->assertStringContainsString(Sentinel::OPEN . 'myWidget-item-0' . Sentinel::CLOSE, $marked);
+        $this->assertStringContainsString(Sentinel::OPEN . '/myWidget-item-0' . Sentinel::CLOSE, $marked);
     }
 
     public function testGetUsesPrefix(): void
@@ -399,6 +419,41 @@ final class ManagerTest extends TestCase
         $this->assertSame(1, $z3->startRow);
         $this->assertSame(7, $z3->endCol);  // maxCol from the longrow
         $this->assertSame(1, $z3->endRow);  // endRow = row - 1 (col was 1)
+    }
+
+    /**
+     * Mimics the real consumers: sugar-bits Tabs marks `tab-{i}` and
+     * sugar-gallery PosterGrid marks `cell:{i}`. Verifies the full
+     * mark → scan → hit-resolution round-trip (bounds + MsgZoneInBounds id)
+     * survives the APC→PUA wire-format change and the `:` in `cell:N` is a
+     * valid id byte.
+     */
+    public function testMarkScanRoundTripForConsumerIds(): void
+    {
+        $m = Manager::newGlobal();
+        // Two 5-cell tabs then a 6-cell grid cell, side by side.
+        $frame = $m->mark('tab-0', ' One ')      // cols 1-5
+            . $m->mark('tab-1', ' Two ')          // cols 6-10
+            . $m->mark('cell:3', '[cell]');       // cols 11-16
+        $clean = $m->scan($frame);
+
+        // Markers fully stripped; visible content intact.
+        $this->assertSame(' One  Two [cell]', $clean);
+        $this->assertStringNotContainsString(Sentinel::OPEN, $clean);
+        $this->assertStringNotContainsString(Sentinel::CLOSE, $clean);
+
+        // Bounds land where the content is.
+        $this->assertSame([1, 5], [$m->get('tab-0')->startCol, $m->get('tab-0')->endCol]);
+        $this->assertSame([6, 10], [$m->get('tab-1')->startCol, $m->get('tab-1')->endCol]);
+        $this->assertSame([11, 16], [$m->get('cell:3')->startCol, $m->get('cell:3')->endCol]);
+
+        // Click resolution → MsgZoneInBounds carries the right id.
+        $model = new ZoneRoutingModel();
+        [$next] = $m->anyInBoundsAndUpdate($model, $this->click(8, 1));
+        $this->assertSame('tab-1', $next->lastInBoundsHit->zone->id);
+
+        [$next2] = $m->anyInBoundsAndUpdate($model, $this->click(13, 1));
+        $this->assertSame('cell:3', $next2->lastInBoundsHit->zone->id);
     }
 }
 
