@@ -106,9 +106,14 @@ final class Stage
                . $theme->muted->render(str_repeat('░', 10 - $filled));
             $pct = $theme->muted->render(sprintf(' %3d%%', (int) round(100 * $current / $total)));
         } else {
-            // Indeterminate: cycle through a rotating spinner glyph
+            // Indeterminate: cycle through a rotating spinner glyph.
+            // microtime(true) returns a float (seconds); microtime(false) returns
+            // the string "0.xxxxxx sssss" which triggers a non-numeric-value warning
+            // when used in arithmetic (fatal here under failOnWarning). The integer
+            // seconds contribute a multiple of 10 to `* 10`, so only the fractional
+            // part drives the frame index — behaviour is unchanged.
             static $spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-            $frame = $spinnerFrames[(int) (microtime(false) * 10) % 10];
+            $frame = $spinnerFrames[(int) (microtime(true) * 10) % 10];
             $bar = $theme->accent->render($frame);
         }
 
