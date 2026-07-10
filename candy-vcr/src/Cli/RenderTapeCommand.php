@@ -36,10 +36,11 @@ final class RenderTapeCommand extends Command
     {
         $tapeArg = $input->getArgument('tape');
         $tapePath = is_string($tapeArg) ? $tapeArg : '';
+        // Leave the output path null when --output is absent so the tape's own
+        // (confined) `Output <path>` directive is honored; TapeToGif falls back
+        // to the tape name with a `.gif` extension when neither is present.
         $outputOpt = $input->getOption('output');
-        $outputPath = is_string($outputOpt)
-            ? $outputOpt
-            : (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
+        $explicitOutput = is_string($outputOpt) ? $outputOpt : null;
 
         $fpsOpt = $input->getOption('fps');
         $fps = is_numeric($fpsOpt) ? (float) $fpsOpt : 30.0;
@@ -69,12 +70,12 @@ final class RenderTapeCommand extends Command
         $fontFamily = is_string($fontOpt) ? $fontOpt : 'JetBrainsMono';
 
         try {
-            TapeToGif::create([
+            $writtenPath = TapeToGif::create([
                 'fps' => $fps,
                 'backend' => $backend,
                 'encoder' => $encoderType,
                 'fontFamily' => $fontFamily,
-            ])->render($tapePath, $outputPath, [
+            ])->render($tapePath, $explicitOutput, [
                 'fps' => $fps,
                 'backend' => $backend,
                 'encoder' => $encoderType,
@@ -87,7 +88,7 @@ final class RenderTapeCommand extends Command
             return 1;
         }
 
-        $output->writeln("GIF written to {$outputPath}");
+        $output->writeln("GIF written to {$writtenPath}");
         return 0;
     }
 
