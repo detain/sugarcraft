@@ -6,17 +6,53 @@ namespace SugarCraft\Testing\Snapshot;
 
 use PHPUnit\Framework\Assert;
 use SugarCraft\Buffer\Buffer;
+use SugarCraft\Core\Model;
 
 /**
  * Static assertion helpers for TEA snapshot testing.
  *
- * Provides assertGoldenAnsi, assertCellGrid, and assertAnsiEquals
- * for deterministic regression testing of terminal output.
+ * Provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals, and
+ * assertViewIdempotent for deterministic regression testing of terminal output.
  *
  * @see Mirrors charmbracelet/bubbletea — snapshot testing pattern from issue #1654
  */
 final class Assertions
 {
+    /**
+     * Assert that a model's view() is idempotent and side-effect free.
+     *
+     * view() must be a pure projection of model state: two consecutive
+     * calls must yield identical output, and the call must not mutate the
+     * model. This underpins the render invariants the diff renderer relies
+     * on — a view() that changed between frames for the same state would
+     * desync the terminal. Intended as a reusable check for W13 render-
+     * purity coverage across libs.
+     *
+     * The model-unchanged check uses a shallow clone, so mutation of a
+     * nested object reachable by reference is not detected — the primary
+     * guarantee is output idempotence.
+     *
+     * @param Model $model The model whose view() to check
+     */
+    public static function assertViewIdempotent(Model $model): void
+    {
+        $before = clone $model;
+
+        $first  = $model->view();
+        $second = $model->view();
+
+        Assert::assertEquals(
+            $first,
+            $second,
+            'view() is not idempotent: two consecutive calls returned different output.',
+        );
+        Assert::assertEquals(
+            $before,
+            $model,
+            'view() mutated the model: model state changed after calling view().',
+        );
+    }
+
     /**
      * Assert that $actual matches the golden file at $goldenPath.
      *

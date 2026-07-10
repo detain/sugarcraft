@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Testing\Tests\Concerns;
+namespace SugarCraft\Testing\Concerns;
 
 use FilesystemIterator;
 use PHPUnit\Framework\TestCase;

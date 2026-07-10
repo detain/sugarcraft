@@ -23,6 +23,38 @@ final class ProgramSimulatorTest extends TestCase
         $this->assertInstanceOf(ProgramSimulator::class, $sim);
     }
 
+    public function testForAcceptsBareModelAndWrapsItInProgram(): void
+    {
+        // A bare Model may be passed directly; it is wrapped in a default
+        // Program internally, so run() drives its init/update/view.
+        $sim = ProgramSimulator::for(new CounterModel(7));
+
+        $this->assertInstanceOf(ProgramSimulator::class, $sim);
+
+        $result = $sim->run();
+
+        $this->assertInstanceOf(CounterModel::class, $result->model);
+        $this->assertSame("Count: 7\n", $result->view);
+    }
+
+    public function testForBareModelProcessesQueuedMessages(): void
+    {
+        $sim = ProgramSimulator::for(new CounterModel(0));
+        $sim->send(new KeyMsg(
+            type: KeyType::Char,
+            rune: '+',
+            alt: false,
+            ctrl: false,
+            shift: false,
+        ));
+
+        $result = $sim->run();
+
+        /** @var CounterModel $finalModel */
+        $finalModel = $result->model;
+        $this->assertSame(1, $finalModel->count());
+    }
+
     public function testSendReturnsSelfForChaining(): void
     {
         $model = new CounterModel();
