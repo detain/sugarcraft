@@ -712,6 +712,123 @@ final class GreedySolverTest extends TestCase
         $this->assertSame(100, $total, 'Three ratio(1,3) in width 100 must sum to exactly 100 after rounding reclaim');
     }
 
+    // ── applyMaxClamp div-by-zero guard (all-Fill-0 recipients) ─────────────
+
+    /**
+     * Max reclaim onto all-zero-weight Fill recipients used to divide by zero
+     * (weight-sum 0). The guard falls back to EQUAL shares.
+     *
+     * [max(20), fill(0), fill(0)] @ 90: Max greedily grabs the slack (90) then
+     * clamps to 20, reclaiming 70. Both recipients are Fill(0) → 70 splits
+     * equally into 35 + 35, and the sum invariant still holds.
+     */
+    public function testMaxWithAllZeroWeightFillsDistributesEqualShares(): void
+    {
+        $rects = GreedySolver::solveStatic(
+            new Region(0, 0, 90, 24),
+            [Constraint::max(20), Constraint::fill(0), Constraint::fill(0)],
+            Direction::Horizontal
+        );
+
+        $this->assertCount(3, $rects);
+        $this->assertSame(20, $rects[0]->width); // clamped to its Max
+        $this->assertSame(35, $rects[1]->width); // equal share of reclaimed
+        $this->assertSame(35, $rects[2]->width); // equal share of reclaimed
+        $this->assertSame(90, $rects[0]->width + $rects[1]->width + $rects[2]->width);
+    }
+
+    // ── Pure Ratio (the value the old CassowarySolver simplex returned 0 for) ─
+
+    /**
+     * Ratio distributes correctly through GreedySolver. The deprecated
+     * CassowarySolver now delegates here, so this is also the value its old
+     * broken simplex (which returned 0) now yields.
+     */
+    public function testPureRatioDistributesCorrectly(): void
+    {
+        $rects = GreedySolver::solveStatic(
+            new Region(0, 0, 100, 24),
+            [Constraint::ratio(1, 2), Constraint::ratio(1, 2)],
+            Direction::Horizontal
+        );
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(50, $rects[0]->width);
+        $this->assertSame(50, $rects[1]->width);
+        $this->assertSame(100, $rects[0]->width + $rects[1]->width);
+    }
+
+    // ── Randomized sum-invariant sweep ───────────────────────────────────────
+
+    /**
+     * For a large sweep of random constraint mixes that each include at least
+     * one positive-weight Fill (so all slack is absorbed) and keep reserved
+     * space small (so there is never overflow), the produced sizes must tile
+     * the region exactly — their widths sum to the region width.
+     */
+    public function testRandomizedSumInvariant(): void
+    {
+        mt_srand(20260710);
+        $iterations = 250;
+
+        for ($iter = 0; $iter < $iterations; $iter++) {
+            $total = mt_rand(40, 240);
+            $constraints = [];
+
+            // 0-4 small "reserved" constraints — bounded so reserved < total.
+            $reservedCount = mt_rand(0, 4);
+            for ($k = 0; $k < $reservedCount; $k++) {
+                $constraints[] = match (mt_rand(0, 3)) {
+                    0 => Constraint::length(mt_rand(0, 6)),
+                    1 => Constraint::min(mt_rand(0, 6)),
+                    2 => Constraint::percentage(mt_rand(0, 10)),
+                    default => Constraint::ratio(1, mt_rand(8, 16)),
+                };
+            }
+            // Always at least one positive-weight Fill to absorb the remainder.
+            $fillCount = mt_rand(1, 3);
+            for ($k = 0; $k < $fillCount; $k++) {
+                $constraints[] = Constraint::fill(mt_rand(1, 4));
+            }
+
+            $rects = GreedySolver::solveStatic(
+                new Region(0, 0, $total, 24),
+                $constraints,
+                Direction::Horizontal
+            );
+
+            $sum = array_sum(array_map(static fn($r) => $r->width, $rects));
+            $this->assertCount(count($constraints), $rects, "iter {$iter}");
+            $this->assertSame(
+                $total,
+                $sum,
+                "Widths must sum to total ({$total}) on iteration {$iter} with "
+                . count($constraints) . ' constraints'
+            );
+        }
+    }
+
+    // ── Zero / degenerate region ─────────────────────────────────────────────
+
+    /**
+     * A zero-sized region is degenerate but legal (0 is non-negative): every
+     * sub-rect collapses to width 0 and nothing throws.
+     */
+    public function testZeroWidthRegionProducesZeroSizedRects(): void
+    {
+        $rects = GreedySolver::solveStatic(
+            Region::fromSize(0, 0),
+            [Constraint::fill(1), Constraint::length(5), Constraint::percentage(50)],
+            Direction::Horizontal
+        );
+
+        $this->assertCount(3, $rects);
+        foreach ($rects as $r) {
+            $this->assertSame(0, $r->width);
+            $this->assertSame(0, $r->x);
+        }
+    }
+
     /**
      * Verifies the tiling/sum invariant: for any layout that fits (no overflow,
      * no min-shortage), the sum of all constraint widths equals the region width.

@@ -11,7 +11,7 @@ namespace SugarCraft\Layout;
  * returning a list of sub-regions whose widths (or heights) sum to the
  * region's total dimension.
  *
- * Mirrors ratatui's layout constraint solving (charmbracelet/bubbletea).
+ * Mirrors ratatui's layout constraint solving.
  */
 interface LayoutSolver
 {
