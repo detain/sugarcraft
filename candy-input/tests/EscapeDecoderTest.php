@@ -1056,4 +1056,152 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('Q', $events[0]->key);
         $this->assertFalse($events[0]->key === 'F2');
     }
+
+    // ─── UTF-8 multibyte: one event per codepoint ─────────────────────────────
+
+    public function testMultibyteTwoByteSingleEvent(): void
+    {
+        // "é" = 0xC3 0xA9 — one codepoint must be one event carrying both bytes,
+        // never split into two per-byte KeyEvents.
+        $events = $this->decoder->decode("\xc3\xa9");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xc3\xa9", $events[0]->key);
+        $this->assertSame("\xc3\xa9", $events[0]->raw);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testMultibyteThreeByteSingleEvent(): void
+    {
+        // "€" = 0xE2 0x82 0xAC
+        $events = $this->decoder->decode("\xe2\x82\xac");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xe2\x82\xac", $events[0]->key);
+        $this->assertSame("\xe2\x82\xac", $events[0]->raw);
+    }
+
+    public function testMultibyteFourByteSingleEvent(): void
+    {
+        // "😀" = 0xF0 0x9F 0x98 0x80
+        $events = $this->decoder->decode("\xf0\x9f\x98\x80");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xf0\x9f\x98\x80", $events[0]->key);
+        $this->assertSame("\xf0\x9f\x98\x80", $events[0]->raw);
+    }
+
+    public function testMixedAsciiAndMultibyte(): void
+    {
+        // "héllo" — 'é' (0xC3 0xA9) is a single event; ASCII chars one each.
+        $events = $this->decoder->decode("h\xc3\xa9llo");
+        $this->assertCount(5, $events);
+        $this->assertSame('h', $events[0]->key);
+        $this->assertSame("\xc3\xa9", $events[1]->key);
+        $this->assertSame('l', $events[2]->key);
+        $this->assertSame('l', $events[3]->key);
+        $this->assertSame('o', $events[4]->key);
+    }
+
+    // ─── UTF-8 split across chunk boundaries ──────────────────────────────────
+
+    public function testMultibyteSplitAcrossChunks(): void
+    {
+        // First byte of "é" arrives alone — buffered, no event yet.
+        $events = $this->decoder->decode("\xc3");
+        $this->assertCount(0, $events);
+        $this->assertSame("\xc3", $this->decoder->remainder());
+
+        // Continuation byte on the next call completes it — one event, correct.
+        $events = $this->decoder->decode("\xa9");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xc3\xa9", $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testFourByteSplitAcrossChunks(): void
+    {
+        // "😀" split 2 + 2 bytes across two decode() calls.
+        $events = $this->decoder->decode("\xf0\x9f");
+        $this->assertCount(0, $events);
+        $this->assertSame("\xf0\x9f", $this->decoder->remainder());
+
+        $events = $this->decoder->decode("\x98\x80");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xf0\x9f\x98\x80", $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    // ─── Invalid UTF-8 never hangs ────────────────────────────────────────────
+
+    public function testLoneContinuationByteFallsBack(): void
+    {
+        // 0xA9 is a continuation byte with no lead — single-byte fallback.
+        $events = $this->decoder->decode("\xa9");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xa9", $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testInvalidLeadByteFallsBack(): void
+    {
+        // 0xFF is never a valid UTF-8 lead — single-byte fallback, no hang.
+        $events = $this->decoder->decode("\xff");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xff", $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testValidLeadFollowedByNonContinuation(): void
+    {
+        // 0xC3 is a valid 2-byte lead, but 'z' is not a continuation byte. The
+        // lead falls back to a single byte, then 'z' decodes normally.
+        $events = $this->decoder->decode("\xc3z");
+        $this->assertCount(2, $events);
+        $this->assertSame("\xc3", $events[0]->key);
+        $this->assertSame('z', $events[1]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    // ─── MAX_SEQUENCE_LENGTH cap on $remainder ────────────────────────────────
+
+    public function testOversizedIncompleteCsiIsDiscarded(): void
+    {
+        // Unterminated CSI with 200 param bytes (202 total) breaches the 128-byte
+        // cap: it is dropped, not buffered, so $remainder cannot grow unbounded.
+        $events = $this->decoder->decode("\x1b[" . str_repeat('1', 200));
+        $this->assertCount(0, $events);
+        $this->assertLessThanOrEqual(128, strlen($this->decoder->remainder()));
+        $this->assertSame('', $this->decoder->remainder(), 'oversized unterminated CSI must be discarded');
+    }
+
+    public function testSmallIncompleteCsiStillCompletes(): void
+    {
+        // A short unterminated CSI is under the cap: buffer it, then complete it
+        // on the next call.
+        $events = $this->decoder->decode("\x1b[");
+        $this->assertCount(0, $events);
+        $this->assertSame("\x1b[", $this->decoder->remainder());
+
+        $events = $this->decoder->decode("A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    // ─── Perf regression guard (O(n) not O(n²)) ───────────────────────────────
+
+    public function testLargeAsciiPasteIsLinear(): void
+    {
+        // ~500KB of printable ASCII. The old byte-by-byte substr loop was O(n²)
+        // (~0.8s at 160KB → ~8s extrapolated to 500KB); the offset walk is O(n)
+        // and finishes in a fraction of a second. A generous 2.0s bound cleanly
+        // separates fixed from broken without CI flakiness.
+        $n = 500000;
+        $input = str_repeat('x', $n);
+
+        $start = microtime(true);
+        $events = $this->decoder->decode($input);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertCount($n, $events);
+        $this->assertLessThan(2.0, $elapsed, "decode of {$n} ASCII bytes took {$elapsed}s (expected O(n))");
+    }
 }
