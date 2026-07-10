@@ -18,6 +18,7 @@ return [
     'smtp.send_failed'           => 'SMTP send failed: {message}',
     'smtp.connect_failed'        => 'Cannot connect to {addr}: {errstr} ({errno})',
     'smtp.starttls_failed'       => 'STARTTLS negotiation failed',
+    'smtp.tls_required'          => 'TLS is required but could not be established: {host} did not offer STARTTLS',
     'smtp.not_connected'         => 'Not connected',
     'smtp.no_response'           => 'Server sent no response',
     'smtp.empty_response'        => 'Server sent empty response',
