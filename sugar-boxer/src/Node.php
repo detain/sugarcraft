@@ -136,22 +136,23 @@ final class Node
 
     public function withMinWidth(int $w): self
     {
-        return $this->with(minWidth: $w);
+        // Clamp negatives to 0 — a dimension can never be < 0. Mirrors withFlex().
+        return $this->with(minWidth: \max(0, $w));
     }
 
     public function withMaxWidth(int $w): self
     {
-        return $this->with(maxWidth: $w);
+        return $this->with(maxWidth: \max(0, $w));
     }
 
     public function withMinHeight(int $h): self
     {
-        return $this->with(minHeight: $h);
+        return $this->with(minHeight: \max(0, $h));
     }
 
     public function withMaxHeight(int $h): self
     {
-        return $this->with(maxHeight: $h);
+        return $this->with(maxHeight: \max(0, $h));
     }
 
     /**
@@ -173,7 +174,8 @@ final class Node
 
     public function withPadding(int $cells): self
     {
-        return $this->with(padding: $cells);
+        // Clamp negatives to 0 — padding can never be < 0. Mirrors withFlex().
+        return $this->with(padding: \max(0, $cells));
     }
 
     public function withBorder(bool $show): self
@@ -189,7 +191,8 @@ final class Node
 
     public function withSpacing(int $cells): self
     {
-        return $this->with(spacing: $cells);
+        // Clamp negatives to 0 — spacing can never be < 0. Mirrors withFlex().
+        return $this->with(spacing: \max(0, $cells));
     }
 
     /**
@@ -233,7 +236,9 @@ final class Node
         $right  ??= $top;
         $bottom ??= $top;
         $left   ??= $right;
-        return $this->with(margin: [$top, $right, $bottom, $left], borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
+        // Clamp negatives to 0 — a margin can never be < 0. Mirrors withFlex().
+        $margin = [\max(0, $top), \max(0, $right), \max(0, $bottom), \max(0, $left)];
+        return $this->with(margin: $margin, borderStyle: self::preserve(), style: self::preserve(), alignH: self::preserve(), alignV: self::preserve());
     }
 
     /**
@@ -261,14 +266,21 @@ final class Node
     // Dimension queries
     // -------------------------------------------------------------------------
 
-    /** Total width including border and padding. */
+    /** Total width including border, padding and the node's own left+right margin. */
     public function totalWidth(): int
     {
+        // The renderer insets each node's region by its own margin before laying
+        // it out (SugarBoxer::renderNode), so a node's real horizontal footprint —
+        // the space a fixed sibling must reserve in flex layout — is its content
+        // width PLUS its left+right margin. Omitting it makes margined children
+        // under-claim, so the flex solver overlaps or clips them.
+        $marginW = $this->margin[3] + $this->margin[1]; // left + right
+
         if ($this->kind === self::LEAF) {
             $inner = $this->minWidth;
             if ($this->border) $inner += 2;
             if ($this->padding > 0) $inner += $this->padding * 2;
-            return $inner;
+            return $inner + $marginW;
         }
 
         $childWidths = \array_sum(\array_map(fn(Node $c) => $c->totalWidth(), $this->children));
@@ -277,7 +289,7 @@ final class Node
         // For HORIZONTAL, border is shared; for VERTICAL, each child may have border
         if ($this->kind === self::HORIZONTAL) {
             $extra = $this->border ? 2 : 0;
-            return $childWidths + $gaps + $extra;
+            return $childWidths + $gaps + $extra + $marginW;
         }
 
         // VERTICAL: use max child width
@@ -285,24 +297,28 @@ final class Node
             ? \max(...\array_map(fn(Node $c) => $c->totalWidth(), $this->children))
             : 0;
         $extra = $this->border ? 2 : 0;
-        return $maxChild + $gaps + $extra;
+        return $maxChild + $gaps + $extra + $marginW;
     }
 
-    /** Total height including border and padding. */
+    /** Total height including border, padding and the node's own top+bottom margin. */
     public function totalHeight(): int
     {
+        // See totalWidth(): the renderer insets by margin, so a node's real
+        // vertical footprint includes its own top+bottom margin.
+        $marginH = $this->margin[0] + $this->margin[2]; // top + bottom
+
         if ($this->kind === self::LEAF) {
             $inner = $this->minHeight;
             if ($this->border) $inner += 2;
             if ($this->padding > 0) $inner += $this->padding * 2;
-            return $inner;
+            return $inner + $marginH;
         }
 
         if ($this->kind === self::VERTICAL) {
             $childHeights = \array_sum(\array_map(fn(Node $c) => $c->totalHeight(), $this->children));
             $gaps = (\count($this->children) - 1) * $this->spacing;
             $extra = $this->border ? 2 : 0;
-            return $childHeights + $gaps + $extra;
+            return $childHeights + $gaps + $extra + $marginH;
         }
 
         // HORIZONTAL: use max child height
@@ -310,7 +326,7 @@ final class Node
             ? \max(...\array_map(fn(Node $c) => $c->totalHeight(), $this->children))
             : 0;
         $extra = $this->border ? 2 : 0;
-        return $maxChild + $extra;
+        return $maxChild + $extra + $marginH;
     }
 
     // -------------------------------------------------------------------------
