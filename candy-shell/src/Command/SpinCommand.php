@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Command;
 
+use React\EventLoop\LoopInterface;
 use SugarCraft\Forms\Spinner\Style as SpinStyle;
+use SugarCraft\Core\Model;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Shell\Lang;
 use SugarCraft\Shell\Model\SpinModel;
+use SugarCraft\Shell\Process\Process;
 use SugarCraft\Shell\Process\RealProcess;
+use SugarCraft\Shell\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -30,6 +34,44 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'spin', description: 'Run a command while showing a spinner.')]
 final class SpinCommand extends Command
 {
+    /** @var \Closure(list<string>, bool, bool): Process spawns the child */
+    private readonly \Closure $processFactory;
+
+    /** @var \Closure(Model, LoopInterface): Program builds the spinner runtime */
+    private readonly \Closure $programFactory;
+
+    /**
+     * The class is `final`, so the child-process spawn and the {@see Program}
+     * construction are injected as optional factory closures rather than
+     * exposed as overridable methods. Production leaves both null (real
+     * {@see RealProcess} + a TTY Program); tests pass a {@see \SugarCraft\Shell\Process\FakeProcess}
+     * that never exits plus a headless Program so the `--timeout` path can be
+     * driven deterministically. The zero-arg default keeps `new SpinCommand()`
+     * working for {@see \SugarCraft\Shell\Application} auto-registration.
+     *
+     * @param ?\Closure(list<string>, bool, bool): Process $processFactory
+     * @param ?\Closure(Model, LoopInterface): Program      $programFactory
+     */
+    public function __construct(
+        ?\Closure $processFactory = null,
+        ?\Closure $programFactory = null,
+    ) {
+        parent::__construct();
+
+        $this->processFactory = $processFactory
+            ?? static fn (array $argv, bool $captureStdout, bool $captureStderr): Process
+                => RealProcess::spawn($argv, captureStdout: $captureStdout, captureStderr: $captureStderr);
+
+        $this->programFactory = $programFactory
+            ?? static fn (Model $model, LoopInterface $loop): Program
+                => new Program($model, new ProgramOptions(
+                    useAltScreen:    false,
+                    hideCursor:      true,
+                    catchInterrupts: true,
+                    loop:            $loop,
+                ));
+    }
+
     protected function configure(): void
     {
         $this
@@ -68,16 +110,35 @@ final class SpinCommand extends Command
             $align = 'left';
         }
 
-        $process = RealProcess::spawn($argv, captureStdout: $showOutput, captureStderr: $showError);
+        $process = ($this->processFactory)($argv, $showOutput, $showError);
         $model   = SpinModel::spawn($process, $title, $style, $align);
 
-        $program = new Program($model, new ProgramOptions(
-            useAltScreen:    false,
-            hideCursor:      true,
-            catchInterrupts: true,
-        ));
+        $loop    = \React\EventLoop\Loop::get();
+        $program = ($this->programFactory)($model, $loop);
+        // Two statements on fire, so a real closure (not an arrow fn): the
+        // deadline must both signal the child AND stop the loop — killing
+        // the Program alone would orphan the still-running command.
+        $guard = TimeoutGuard::arm(
+            $loop,
+            (float) $input->getOption('timeout'),
+            function () use ($process, $program): void {
+                $process->terminate();
+                $program->kill();
+            },
+        );
+
         /** @var SpinModel $final */
         $final = $program->run();
+        $guard->disarm();
+
+        // Check the deadline FIRST: a timed-out run also leaves exitCode()
+        // null, so without this the interrupted->130 branch below would
+        // mis-report a timeout as a Ctrl-C. The child was already signalled
+        // in the onFire closure; close() reaps it so the handle doesn't leak.
+        if ($guard->fired()) {
+            $process->close();
+            return TimeoutGuard::EXIT_TIMEOUT;
+        }
 
         $code = $final->exitCode();
         // The Program installs a SIGINT handler that stops the loop

@@ -32,6 +32,7 @@ final class FormatCommand extends Command
             ->addOption('theme', null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | dracula | tokyo-night | pink | notty | ascii', 'ansi')
             ->addOption('type',  't',  InputOption::VALUE_REQUIRED, 'Render type: markdown | code | template | emoji. Default markdown.', 'markdown')
             ->addOption('language', 'l', InputOption::VALUE_REQUIRED, 'Source language for `--type code`.', '')
+            ->addOption('allow-env', null, InputOption::VALUE_REQUIRED, 'Comma-separated allowlist of env var names permitted for {{VAR}} expansion in --type template. Empty = expand none; "*" = expand all (opt-in, unsafe with untrusted input).', '')
             ->addOption('strip-ansi', null, InputOption::VALUE_NONE, 'Strip ANSI escapes from the rendered output.')
             ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
             ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive format).', 0);
@@ -50,11 +51,16 @@ final class FormatCommand extends Command
             $raw = self::readStdin();
         }
 
+        $allowEnv = array_values(array_filter(
+            array_map('trim', explode(',', (string) $input->getOption('allow-env'))),
+            static fn (string $s): bool => $s !== '',
+        ));
+
         $type = strtolower((string) $input->getOption('type'));
         $rendered = match ($type) {
             'markdown', '' => (new Renderer(self::pickTheme((string) $input->getOption('theme'))))->render($raw),
             'code'         => self::renderCode($raw, (string) $input->getOption('language'), (string) $input->getOption('theme')),
-            'template'     => self::renderTemplate($raw),
+            'template'     => self::renderTemplate($raw, $allowEnv),
             'emoji'        => self::renderEmoji($raw),
             default        => throw new \InvalidArgumentException(Lang::t('format.unknown_type', ['type' => $type])),
         };
@@ -93,12 +99,35 @@ final class FormatCommand extends Command
      * `--type template` expands `{{var}}` placeholders from environment
      * variables and emits the result. Mirrors gum's lightweight
      * template mode (no Go template-function support).
+     *
+     * Secure-by-default: expansion is gated by an explicit allowlist so
+     * an attacker-influenced template body (an untrusted markdown file
+     * or piped stdin) cannot exfiltrate arbitrary secrets — a bare
+     * `{{AWS_SECRET_ACCESS_KEY}}` or `{{DB_PASSWORD}}` would otherwise
+     * leak ANY env var. A `{{NAME}}` is only substituted from the
+     * environment when NAME is in $allowlist (or the allowlist is `*`);
+     * every other placeholder renders empty — the same result an
+     * undefined var already produced, so no leak and no error. The
+     * default (no --allow-env) is an empty allowlist: nothing expands.
+     *
+     * @param list<string> $allowlist Env var names permitted for
+     *                                expansion; `['*']` opts every var in
+     *                                (explicit, unsafe with untrusted
+     *                                input); `[]` expands none.
      */
-    private static function renderTemplate(string $raw): string
+    private static function renderTemplate(string $raw, array $allowlist): string
     {
+        $allowAll = in_array('*', $allowlist, true);
+        $set = array_flip($allowlist);
         return (string) preg_replace_callback(
             '/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/',
-            static fn (array $m) => (string) (getenv($m[1]) ?: ''),
+            static function (array $m) use ($allowAll, $set): string {
+                $name = $m[1];
+                if ($allowAll || isset($set[$name])) {
+                    return (string) (getenv($name) ?: '');
+                }
+                return '';
+            },
             $raw,
         );
     }
