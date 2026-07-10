@@ -28,13 +28,56 @@ final class Git implements GitDriver
                 $rows[] = ['branch_summary' => trim(substr($line, 2))];
                 continue;
             }
-            $rows[] = [
-                'index_status'   => $line[0] ?? ' ',
-                'work_status'    => $line[1] ?? ' ',
-                'path'           => substr($line, 3),
+            $index = $line[0] ?? ' ';
+            $work  = $line[1] ?? ' ';
+            $field = substr($line, 3);
+            $row = [
+                'index_status' => $index,
+                'work_status'  => $work,
+                'path'         => $field,
             ];
+            // Porcelain v1 renders renamed/copied entries (R/C in either
+            // status column) as "ORIG_PATH -> PATH". Splitting on the literal
+            // " -> " keeps PATH as the working path — a bare substr($line, 3)
+            // leaves the whole "old -> new" string as the path and corrupts
+            // every downstream stage/discard/diff on the file.
+            if ($index === 'R' || $index === 'C' || $work === 'R' || $work === 'C') {
+                $parts = explode(' -> ', $field, 2);
+                if (count($parts) === 2) {
+                    $row['orig_path'] = $parts[0];
+                    $row['path']      = $parts[1];
+                }
+            }
+            $rows[] = $row;
         }
         return $rows;
+    }
+
+    /**
+     * Probe whether $cwd sits inside a git working tree, including a LINKED
+     * worktree where `.git` is a FILE (a `gitdir:` pointer), not a directory.
+     * `is_dir("$cwd/.git")` wrongly rejects linked worktrees; asking git to
+     * resolve `--absolute-git-dir` succeeds in both layouts, so a zero exit
+     * with a non-empty git dir is the authoritative "yes, this is a repo".
+     */
+    public static function isRepository(string $cwd): bool
+    {
+        if ($cwd === '' || !is_dir($cwd)) {
+            return false;
+        }
+        $proc = proc_open(
+            ['git', '-C', $cwd, 'rev-parse', '--absolute-git-dir'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        if (!is_resource($proc)) {
+            return false;
+        }
+        $gitDir = trim(stream_get_contents($pipes[1]) ?: '');
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($proc);
+        return $exit === 0 && $gitDir !== '';
     }
 
     public function branches(): array
