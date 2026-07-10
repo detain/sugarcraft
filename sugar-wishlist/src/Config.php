@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wishlist;
 
+use SugarCraft\Core\Util\Json;
 use SugarCraft\Wishlist\Lang;
 
 /**
@@ -69,9 +70,16 @@ final class Config
      */
     private static function parseJson(string $raw): array
     {
-        $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
-            throw new \RuntimeException(Lang::t('config.json_top_level'));
+        // Guarded decode via candy-core's SSOT helper: JSON_THROW_ON_ERROR
+        // rejects malformed input (\JsonException) and a non-array top level
+        // is rejected loudly (\RuntimeException) instead of silently becoming
+        // a surprising shape. Both map back to the localized config error the
+        // old json_decode()->!is_array() check raised, with the original
+        // failure chained as the cause.
+        try {
+            $decoded = Json::decodeArray($raw);
+        } catch (\JsonException | \RuntimeException $e) {
+            throw new \RuntimeException(Lang::t('config.json_top_level'), 0, $e);
         }
         $out = [];
         foreach ($decoded as $row) {
