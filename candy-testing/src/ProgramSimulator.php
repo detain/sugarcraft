@@ -59,10 +59,19 @@ final class ProgramSimulator
     ) {}
 
     /**
-     * Factory — wrap a Program instance for testing.
+     * Factory — wrap a Program or a bare Model for testing.
+     *
+     * A bare {@see Model} is convenient for behaviour tests that only
+     * exercise init/update/view and don't need to configure runtime
+     * {@see ProgramOptions}; it is wrapped in a default {@see Program}
+     * (no I/O happens because the simulator never calls Program::run()).
      */
-    public static function for(Program $program): self
+    public static function for(Model|Program $program): self
     {
+        if ($program instanceof Model) {
+            $program = new Program($program);
+        }
+
         return new self($program);
     }
 

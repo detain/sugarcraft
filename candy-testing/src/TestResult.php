@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Testing;
 
+use PHPUnit\Framework\Assert;
+
 /**
  * The result of a {@see ProgramSimulator::run()} call.
  *
@@ -31,48 +33,52 @@ final readonly class TestResult
     /**
      * Assert the exact number of commands was emitted.
      *
+     * Routes through PHPUnit's {@see Assert} so a mismatch raises an
+     * {@see \PHPUnit\Framework\AssertionFailedError} (counted as an
+     * assertion) rather than a raw \RuntimeException that PHPUnit would
+     * report as an error.
+     *
      * @param int $expected Expected command count
-     * @throws \RuntimeException if count does not match
+     * @throws \PHPUnit\Framework\AssertionFailedError if count does not match
      */
     public function assertCmdCount(int $expected): void
     {
-        $actual = count($this->cmds);
-        if ($actual !== $expected) {
-            throw new \RuntimeException(
-                "Expected {$expected} commands, but got {$actual}"
-            );
-        }
+        Assert::assertCount(
+            $expected,
+            $this->cmds,
+            \sprintf('Expected %d commands, but got %d.', $expected, \count($this->cmds)),
+        );
     }
 
     /**
      * Assert that at least one command matches the given filter.
      *
      * @param callable(\Closure): bool $filter Returns true for matching cmd
-     * @throws \RuntimeException if no cmd matches
+     * @throws \PHPUnit\Framework\AssertionFailedError if no cmd matches
      */
     public function assertCmdContains(callable $filter): void
     {
         foreach ($this->cmds as $cmd) {
             if ($filter($cmd)) {
+                Assert::assertTrue(true);
                 return;
             }
         }
-        throw new \RuntimeException(
-            "No command matched the given filter"
-        );
+
+        Assert::fail('No command matched the given filter.');
     }
 
     /**
      * Assert that no commands were emitted.
      *
-     * @throws \RuntimeException if any commands were emitted
+     * @throws \PHPUnit\Framework\AssertionFailedError if any commands were emitted
      */
     public function assertNoCmds(): void
     {
-        if (count($this->cmds) !== 0) {
-            throw new \RuntimeException(
-                "Expected no commands, but got " . count($this->cmds)
-            );
-        }
+        Assert::assertCount(
+            0,
+            $this->cmds,
+            \sprintf('Expected no commands, but got %d.', \count($this->cmds)),
+        );
     }
 }

@@ -10,7 +10,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Testing\Tests\Concerns\TemporaryDirectoryTrait;
+use SugarCraft\Testing\Concerns\TemporaryDirectoryTrait;
 use SugarCraft\Testing\Tape\TapeRecorder;
 
 final class TapeRecorderTest extends TestCase
