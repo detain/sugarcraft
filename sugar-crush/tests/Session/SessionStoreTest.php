@@ -54,6 +54,30 @@ final class SessionStoreTest extends TestCase
         $this->assertContains('tool_calls', $tables);
     }
 
+    public function testConstructorCreatesOwnerOnlyDatabaseFile(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $this->assertFileExists($this->dbPath);
+        // Transcript DB holds full conversation history — must be owner-only.
+        clearstatcache(true, $this->dbPath);
+        $this->assertSame(0600, fileperms($this->dbPath) & 0777);
+    }
+
+    public function testConstructorTightensPermissionsOnPreexistingLooseDatabase(): void
+    {
+        // Simulate a database left world-readable by an older version.
+        touch($this->dbPath);
+        chmod($this->dbPath, 0644);
+
+        $store = new SessionStore($this->dbPath);
+
+        // The setup chmod above pollutes PHP's stat cache; clear it so
+        // fileperms() reflects the constructor's on-disk 0600.
+        clearstatcache(true, $this->dbPath);
+        $this->assertSame(0600, fileperms($this->dbPath) & 0777);
+    }
+
     public function testConstructorEnablesWALMode(): void
     {
         $store = new SessionStore($this->dbPath);

@@ -186,6 +186,38 @@ final class SessionTest extends TestCase
         $this->assertDirectoryExists($this->tempDir . '/.config/sugarcraft-crush');
     }
 
+    public function testSaveWritesOwnerOnlyFileAndDirectory(): void
+    {
+        $configDir = $this->tempDir . '/.config/sugarcraft-crush';
+        $path = $configDir . '/session.json';
+
+        (new Session())->withCwd('/secret/workspace')->save();
+
+        $this->assertFileExists($path);
+        clearstatcache();
+        // Transcript must never be world- or group-readable.
+        $this->assertSame(0600, fileperms($path) & 0777);
+        // The directory the lib created must be owner-only too.
+        $this->assertSame(0700, fileperms($configDir) & 0777);
+    }
+
+    public function testSaveTightensPermissionsOnPreexistingLooseFile(): void
+    {
+        $configDir = $this->tempDir . '/.config/sugarcraft-crush';
+        mkdir($configDir, 0755, true);
+        $path = $configDir . '/session.json';
+        // Simulate a file left world-readable by an older version.
+        file_put_contents($path, '{}');
+        chmod($path, 0644);
+
+        (new Session())->withCwd('/x')->save();
+
+        // The setup chmod above pollutes PHP's stat cache; clear it so
+        // fileperms() reflects the save()'s on-disk 0600.
+        clearstatcache(true, $path);
+        $this->assertSame(0600, fileperms($path) & 0777);
+    }
+
     public function testImmutabilityWithChainedWithers(): void
     {
         $original = new Session();

@@ -46,6 +46,7 @@ final class EngineBackend implements Backend
         private readonly array $skills = [],
         private readonly ?HookManager $hookManager = null,
         private readonly int $maxSteps = 8,
+        private readonly bool $hooksDisabled = false,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -58,7 +59,7 @@ final class EngineBackend implements Backend
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled);
     }
 
     /**
@@ -66,23 +67,33 @@ final class EngineBackend implements Backend
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps);
+        // An explicit hook manager always wins and clears any prior opt-out.
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false);
+    }
+
+    /**
+     * Escape hatch for callers that deliberately want an UNGUARDED engine —
+     * no built-in hooks, no custom manager. Everything else is safe-by-default
+     * (see {@see resolveHookManager()}), so opting out is an explicit choice.
+     */
+    public function withoutHooks(): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps));
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled);
     }
 
     public function complete(array $history, ?callable $onToken = null): Message
     {
-        $hookManager = $this->hookManager ?? new HookManager(new HookRegistry());
-        $runtime = new Runtime($this->provider, $hookManager);
+        $runtime = new Runtime($this->provider, $this->resolveHookManager());
 
         $app = App::new($this->provider, $this->model)
             ->withTools($this->tools)
@@ -140,6 +151,31 @@ final class EngineBackend implements Backend
                 $reject($e);
             }
         });
+    }
+
+    /**
+     * Resolve the hook manager that gates every tool call this turn.
+     *
+     * Safe-by-default: a backend constructed without an explicit
+     * {@see withHooks()} call still registers the built-in hooks
+     * ({@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook},
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook},
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\AuditHook}) so Bash/Edit/Write
+     * tools never run unguarded. Callers opt out explicitly via
+     * {@see withoutHooks()}.
+     */
+    private function resolveHookManager(): HookManager
+    {
+        if ($this->hookManager !== null) {
+            return $this->hookManager;
+        }
+
+        $manager = new HookManager(new HookRegistry());
+        if (!$this->hooksDisabled) {
+            $manager->registerBuiltIns();
+        }
+
+        return $manager;
     }
 
     /**

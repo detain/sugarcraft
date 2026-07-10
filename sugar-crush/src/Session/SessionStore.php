@@ -17,14 +17,29 @@ final class SessionStore
 
     public function __construct(string $dbPath)
     {
-        $this->pdo = new PDO("sqlite:$dbPath");
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $this->pdo->exec('PRAGMA journal_mode=WAL');
-        // Foreign keys are OFF by default in SQLite and must be enabled per
-        // connection. Without this the FK/ON DELETE CASCADE clauses below are
-        // inert and orphaned rows can accumulate.
-        $this->pdo->exec('PRAGMA foreign_keys=ON');
-        $this->initSchema();
+        // The transcript database holds full conversation history — sensitive
+        // data that must stay owner-only. Setting a restrictive umask BEFORE PDO
+        // touches the filesystem makes the main DB and its WAL/SHM sidecar files
+        // 0600 at creation time, closing the world-readable window a
+        // create-then-chmod would leave open. The trailing chmod re-asserts 0600
+        // for a database that pre-existed with looser permissions.
+        $previousUmask = umask(0077);
+        try {
+            $this->pdo = new PDO("sqlite:$dbPath");
+            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->pdo->exec('PRAGMA journal_mode=WAL');
+            // Foreign keys are OFF by default in SQLite and must be enabled per
+            // connection. Without this the FK/ON DELETE CASCADE clauses below are
+            // inert and orphaned rows can accumulate.
+            $this->pdo->exec('PRAGMA foreign_keys=ON');
+            $this->initSchema();
+        } finally {
+            umask($previousUmask);
+        }
+
+        if (is_file($dbPath)) {
+            @chmod($dbPath, 0600);
+        }
     }
 
     private function initSchema(): void

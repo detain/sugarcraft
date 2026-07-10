@@ -14,7 +14,19 @@ use React\EventLoop\Loop;
  * Sends email via direct SMTP (TCP/TLS).
  *
  * Implements a minimal SMTP client sufficient for sending plain-text and
- * multi-part MIME emails. TLS is supported on port 465; STARTTLS on 587.
+ * multi-part MIME emails.
+ *
+ * Two TLS modes are supported:
+ *  - **Implicit TLS / SMTPS** (port 465, or {@see withImplicitTls()}): the
+ *    socket is wrapped in TLS at connect time, before any SMTP bytes are
+ *    exchanged. STARTTLS is never sent on such a connection.
+ *  - **Opportunistic STARTTLS** (e.g. port 587): plaintext connect, then the
+ *    channel is upgraded via STARTTLS *only when the server advertises it*.
+ *
+ * Peer certificates are verified in both modes. {@see withRequireTls()} turns
+ * an unencrypted outcome into a hard failure, closing the downgrade-strip hole.
+ *
+ * Mirrors charmbracelet/pop SMTP transport.
  */
 final class SmtpTransport implements Transport
 {
@@ -23,12 +35,17 @@ final class SmtpTransport implements Transport
     private string $username;
     private string $password;
     private int $timeout;
-    private bool $tls;
+    /** True for SMTPS/implicit-TLS ports: wrap the socket in TLS at connect. */
+    private bool $implicitTls;
+    /** When true, a send that cannot establish TLS throws instead of proceeding in plaintext. */
+    private bool $requireTls;
     private string $heloHost;
 
     /** @var resource|null */
     private $socket = null;
     private string $lastResponse = '';
+    /** Runtime flag: is the live channel currently encrypted? */
+    private bool $encrypted = false;
 
     public function __construct(
         string $host,
@@ -38,13 +55,68 @@ final class SmtpTransport implements Transport
         int $timeout = 30,
         string $heloHost = '',
     ) {
-        $this->host     = $host;
-        $this->port     = $port;
-        $this->username = $username;
-        $this->password = $password;
-        $this->timeout  = $timeout;
-        $this->tls      = ($port === 465);
-        $this->heloHost = $heloHost;
+        $this->host        = $host;
+        $this->port        = $port;
+        $this->username    = $username;
+        $this->password    = $password;
+        $this->timeout     = $timeout;
+        $this->implicitTls = ($port === 465);
+        $this->requireTls  = false;
+        $this->heloHost    = $heloHost;
+    }
+
+    /**
+     * Return a copy that fails the send unless the channel ends up encrypted.
+     *
+     * With implicit TLS this is always satisfied at connect; with opportunistic
+     * STARTTLS it means "throw if the server did not offer STARTTLS or the
+     * upgrade failed" — i.e. never fall back to sending credentials/mail in the
+     * clear. Immutable per repo convention: yields a fresh, unconnected clone.
+     */
+    public function withRequireTls(bool $require = true): self
+    {
+        $clone = clone $this;
+        $clone->requireTls   = $require;
+        $clone->socket       = null;
+        $clone->lastResponse = '';
+        $clone->encrypted    = false;
+        return $clone;
+    }
+
+    /**
+     * Return a copy that connects with implicit TLS (SMTPS) regardless of port.
+     *
+     * Use for servers that speak TLS-from-connect on a non-465 port. Immutable:
+     * yields a fresh, unconnected clone.
+     */
+    public function withImplicitTls(bool $implicit = true): self
+    {
+        $clone = clone $this;
+        $clone->implicitTls  = $implicit;
+        $clone->socket       = null;
+        $clone->lastResponse = '';
+        $clone->encrypted    = false;
+        return $clone;
+    }
+
+    /**
+     * Mask secrets so the SMTP password never leaks through var_dump(),
+     * print_r(depth), stack traces, or logging that reflects object state.
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'host'        => $this->host,
+            'port'        => $this->port,
+            'username'    => $this->username,
+            'password'    => $this->password === '' ? '' : '****',
+            'timeout'     => $this->timeout,
+            'implicitTls' => $this->implicitTls,
+            'requireTls'  => $this->requireTls,
+            'heloHost'    => $this->heloHost,
+            'encrypted'   => $this->encrypted,
+            'connected'   => $this->socket !== null,
+        ];
     }
 
     /**
@@ -69,7 +141,6 @@ final class SmtpTransport implements Transport
 
         try {
             $this->connect();
-            $this->helo();
             $this->startTlsIfNeeded();
             $this->authenticateIfNeeded();
             $this->sendMailFrom($email->from[0] ?? 'unknown@localhost');
@@ -95,25 +166,31 @@ final class SmtpTransport implements Transport
 
     private function connect(): void
     {
-        $addr = "tcp://{$this->host}:{$this->port}";
-        $context = \stream_context_create([
-            'socket' => ['connect_timeout' => $this->timeout],
-        ]);
-        $socket = @\stream_socket_client(
-            $addr,
+        $target  = $this->connectTarget();
+        $context = \stream_context_create($this->streamContextOptions());
+        $socket  = @\stream_socket_client(
+            $target,
             $errno,
             $errstr,
-            $this->timeout,
+            (float) $this->timeout,
             \STREAM_CLIENT_CONNECT,
             $context,
         );
 
         if ($socket === false) {
-            throw new \RuntimeException(Lang::t('smtp.connect_failed', ['addr' => $addr, 'errstr' => (string) $errstr, 'errno' => (string) $errno]));
+            throw new \RuntimeException(Lang::t('smtp.connect_failed', ['addr' => $target, 'errstr' => (string) $errstr, 'errno' => (string) $errno]));
         }
 
         $this->socket = $socket;
         \stream_set_timeout($this->socket, $this->timeout);
+
+        // On implicit-TLS ports (SMTPS/465) the TLS handshake already completed
+        // during stream_socket_client(): the greeting and every byte after it
+        // travel over TLS. Mark the channel encrypted so STARTTLS is never sent.
+        if ($this->implicitTls) {
+            $this->encrypted = true;
+        }
+
         $this->readResponse(220);
 
         // Identify with EHLO
@@ -121,26 +198,74 @@ final class SmtpTransport implements Transport
         $this->readResponse(250);
     }
 
+    /**
+     * Build the stream_socket_client() target.
+     *
+     * Implicit-TLS ports use the `tls://` scheme so the socket is encrypted from
+     * the first byte; everything else connects plaintext (and may upgrade later
+     * via STARTTLS). Pure/side-effect-free so the choice is unit-testable.
+     */
+    private function connectTarget(): string
+    {
+        $scheme = $this->implicitTls ? 'tls' : 'tcp';
+        return "{$scheme}://{$this->host}:{$this->port}";
+    }
+
+    /**
+     * Stream-context options for the connect. Peer verification is always on for
+     * TLS connects — never blanket-disable verify_peer.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function streamContextOptions(): array
+    {
+        $options = ['socket' => ['connect_timeout' => $this->timeout]];
+        if ($this->implicitTls) {
+            $options['ssl'] = [
+                'verify_peer'      => true,
+                'verify_peer_name' => true,
+                'peer_name'        => $this->host,
+                'SNI_enabled'      => true,
+            ];
+        }
+        return $options;
+    }
+
     private function startTlsIfNeeded(): void
     {
-        if ($this->tls || $this->hasExtension('STARTTLS')) {
-            $this->sendRaw("STARTTLS\r\n");
-            $this->readResponse(220);
-
-            // Set SSL options on the socket BEFORE enabling crypto
-            \stream_context_set_option($this->socket, 'ssl', 'verify_peer', true);
-            \stream_context_set_option($this->socket, 'ssl', 'verify_peer_name', true);
-            \stream_context_set_option($this->socket, 'ssl', 'peer_name', $this->host);
-
-            $crypto = \stream_socket_enable_crypto($this->socket, true, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
-            if ($crypto === false) {
-                throw new \RuntimeException(Lang::t('smtp.starttls_failed'));
-            }
-
-            // Re-EHLO after TLS
-            $this->sendRaw("EHLO {$this->getHeloHost()}\r\n");
-            $this->readResponse(250);
+        // Already encrypted (implicit TLS / SMTPS) — STARTTLS would be a protocol
+        // error against an already-secured channel.
+        if ($this->encrypted) {
+            return;
         }
+
+        if (!$this->hasExtension('STARTTLS')) {
+            // Server did not advertise STARTTLS: we cannot upgrade. Refuse to
+            // continue in plaintext when TLS was required (downgrade-strip guard).
+            if ($this->requireTls) {
+                throw new \RuntimeException(Lang::t('smtp.tls_required', ['host' => $this->host]));
+            }
+            return;
+        }
+
+        $this->sendRaw("STARTTLS\r\n");
+        $this->readResponse(220);
+
+        // Set SSL options on the socket BEFORE enabling crypto. Peer verification
+        // stays ON — do not blanket-disable verify_peer.
+        \stream_context_set_option($this->socket, 'ssl', 'verify_peer', true);
+        \stream_context_set_option($this->socket, 'ssl', 'verify_peer_name', true);
+        \stream_context_set_option($this->socket, 'ssl', 'peer_name', $this->host);
+
+        $crypto = \stream_socket_enable_crypto($this->socket, true, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        if ($crypto === false) {
+            throw new \RuntimeException(Lang::t('smtp.starttls_failed'));
+        }
+        $this->encrypted = true;
+
+        // Re-EHLO after TLS so the post-upgrade extension list (e.g. AUTH) is fresh.
+        $this->sendRaw("EHLO {$this->getHeloHost()}\r\n");
+        $this->readResponse(250);
     }
 
     private function authenticateIfNeeded(): void
@@ -184,12 +309,6 @@ final class SmtpTransport implements Transport
     // -------------------------------------------------------------------------
     // SMTP commands
     // -------------------------------------------------------------------------
-
-    private function helo(): void
-    {
-        $this->sendRaw("HELO {$this->getHeloHost()}\r\n");
-        $this->readResponse(250);
-    }
 
     private function sendMailFrom(string $address): void
     {
@@ -369,35 +488,56 @@ final class SmtpTransport implements Transport
         }
     }
 
+    /**
+     * Read a (possibly multi-line) SMTP reply and validate its status code.
+     *
+     * RFC 5321 §4.2.1: continuation lines use "<code>-text", the final line
+     * "<code> text". All lines are captured into {@see $lastResponse} (joined by
+     * "\n") so {@see hasExtension()} can inspect the full EHLO keyword list —
+     * reading only the first line would hide advertised extensions like STARTTLS.
+     */
     private function readResponse(int $expectedCode): void
     {
         if ($this->socket === null) {
             throw new \RuntimeException(Lang::t('smtp.not_connected'));
         }
 
-        $line = \fgets($this->socket);
-        if ($line === false) {
-            throw new \RuntimeException(Lang::t('smtp.no_response'));
-        }
-        if ($line === '') {
-            throw new \RuntimeException(Lang::t('smtp.empty_response'));
-        }
+        $lines = [];
+        do {
+            $line = \fgets($this->socket);
+            if ($line === false) {
+                throw new \RuntimeException(Lang::t('smtp.no_response'));
+            }
+            if ($line === '') {
+                throw new \RuntimeException(Lang::t('smtp.empty_response'));
+            }
+            $line     = \rtrim($line, "\r\n");
+            $lines[]  = $line;
+            // A hyphen in the 4th column marks a continuation; anything else ends it.
+            $continue = \strlen($line) >= 4 && $line[3] === '-';
+        } while ($continue);
 
-        $this->lastResponse = \trim($line);
+        $this->lastResponse = \implode("\n", $lines);
 
-        $code = (int) \substr($this->lastResponse, 0, 3);
+        $code = (int) \substr($lines[0], 0, 3);
         if ($code !== $expectedCode) {
             throw new \RuntimeException(Lang::t('smtp.unexpected_response', ['response' => $this->lastResponse]));
         }
     }
 
+    /**
+     * True when the last (EHLO) reply advertised the named SMTP extension.
+     *
+     * Each reply line is "<3-digit code><sep><keyword> [params]"; strip the code
+     * and separator before matching so "250-STARTTLS" / "250 AUTH LOGIN" resolve
+     * to the keywords STARTTLS / AUTH.
+     */
     private function hasExtension(string $name): bool
     {
-        $lines = \explode("\n", $this->lastResponse);
-        foreach ($lines as $line) {
-            $line = \trim($line);
-            // Extension names appear at the start of lines (e.g., "250-SIZE" or "250 AUTH")
-            if (\str_starts_with($line, $name) || $line === $name) {
+        $name = \strtoupper($name);
+        foreach (\explode("\n", $this->lastResponse) as $line) {
+            $keyword = \strtoupper(\trim(\substr($line, 4)));
+            if ($keyword === $name || \str_starts_with($keyword, $name . ' ')) {
                 return true;
             }
         }
