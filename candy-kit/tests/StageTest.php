@@ -50,4 +50,28 @@ final class StageTest extends TestCase
         $this->assertStringContainsString('•', $out);
         $this->assertStringContainsString('init', $out);
     }
+
+    public function testSubStepWithProgressRendersBarAndPercent(): void
+    {
+        $out = Stage::subStepWithProgress('upload', 4, 10, Theme::plain(), isLast: false, indent: 2);
+        // 40% → 4 filled / 6 empty segments, right-aligned percentage.
+        $this->assertSame('  ├─ upload ████░░░░░░  40%', $out);
+    }
+
+    /**
+     * Regression: the indeterminate path (`total = 0`) previously multiplied
+     * microtime(false) — a STRING like "0.12 1700000000" — which raises a
+     * "non-numeric value encountered" warning. Under failOnWarning=true that
+     * warning fails the suite. Drive that exact path and assert a clean render.
+     */
+    public function testSubStepWithProgressIndeterminateSpinnerHasNoWarning(): void
+    {
+        $out = Stage::subStepWithProgress('syncing', 0, 0, Theme::plain(), isLast: false, indent: 2);
+
+        $this->assertStringStartsWith('  ├─ syncing ', $out);
+
+        $spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+        $frame = mb_substr($out, -1);
+        $this->assertContains($frame, $spinnerFrames, 'trailing glyph must be a spinner frame');
+    }
 }
