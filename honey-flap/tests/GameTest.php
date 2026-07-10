@@ -198,13 +198,25 @@ final class GameTest extends TestCase
         // A present-but-corrupt saved-state file whose top level is a JSON
         // scalar (not an array) must be rejected with a clean RuntimeException
         // via the candy-core Json::decodeArray SSOT — never a raw TypeError
-        // from array_filter() on a non-array.
+        // from array_filter() on a non-array. The pre-SSOT loader ALREADY
+        // rejected a non-array via a local is_array() check, so a bare
+        // expectException(RuntimeException) pins nothing the migration added.
+        // Assert the chained cause instead: decodeArray's own \RuntimeException
+        // (top level not an array) is wrapped with the localized file-format
+        // message, whereas the old is_array() path threw with no cause.
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', '"corrupt"');
         try {
-            $this->expectException(\RuntimeException::class);
             Game::start(static fn(int $max): int => 0, $tmp);
+            $this->fail('Expected a non-array saved-state top level to be rejected');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Invalid high score file format', $e->getMessage());
+            $this->assertInstanceOf(\RuntimeException::class, $e->getPrevious());
+            $this->assertStringContainsString(
+                'Expected JSON top level to be an array',
+                (string) $e->getPrevious()?->getMessage(),
+            );
         } finally {
             @unlink($tmp . '/.honey-flap/scores.json');
             @rmdir($tmp . '/.honey-flap');
@@ -216,13 +228,20 @@ final class GameTest extends TestCase
     {
         // Malformed (unparseable) JSON is likewise rejected with a
         // RuntimeException carrying the file path, preserving the pre-SSOT
-        // contract even though Json::decodeArray itself raises JsonException.
+        // contract. The migration's added JSON_THROW_ON_ERROR is what makes
+        // decodeArray surface a \JsonException here; the pre-SSOT json_decode()
+        // returned null (no throw) and the is_array() check threw with NO
+        // cause. Asserting the chained \JsonException therefore pins the
+        // guard rather than the pre-existing is_array() rejection.
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', '{not valid json');
         try {
-            $this->expectException(\RuntimeException::class);
             Game::start(static fn(int $max): int => 0, $tmp);
+            $this->fail('Expected malformed saved-state JSON to be rejected');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Invalid high score file format', $e->getMessage());
+            $this->assertInstanceOf(\JsonException::class, $e->getPrevious());
         } finally {
             @unlink($tmp . '/.honey-flap/scores.json');
             @rmdir($tmp . '/.honey-flap');
