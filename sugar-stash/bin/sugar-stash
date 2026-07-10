@@ -22,7 +22,9 @@ use SugarCraft\Stash\Git;
 use SugarCraft\Stash\Lang;
 
 $cwd = getcwd();
-if ($cwd === false || !is_dir("$cwd/.git")) {
+// Probe via git itself rather than is_dir("$cwd/.git") so we launch inside a
+// LINKED worktree too, where `.git` is a file (gitdir pointer), not a dir.
+if ($cwd === false || !Git::isRepository($cwd)) {
     fwrite(STDERR, Lang::t('cli.not_a_repo', ['cwd' => (string) $cwd]) . "\n");
     exit(1);
 }

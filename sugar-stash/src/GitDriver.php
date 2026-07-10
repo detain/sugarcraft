@@ -18,11 +18,16 @@ interface GitDriver
     /**
      * Parse `git status --porcelain=v1 -b`.
      *
+     * For renamed/copied entries (R/C status) `path` is the destination
+     * (the working path) and `orig_path` carries the source, so callers can
+     * drive rename-aware operations without re-parsing the "old -> new" field.
+     *
      * @return list<array{
      *     branch_summary?: string,
      *     index_status?:   string,
      *     work_status?:    string,
      *     path?:           string,
+     *     orig_path?:      string,
      * }>
      */
     public function status(): array;
