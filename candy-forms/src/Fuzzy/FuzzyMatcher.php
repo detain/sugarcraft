@@ -4,19 +4,30 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\Fuzzy;
 
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+
 /**
  * Fuzzy substring matcher using Smith-Waterman-style local alignment scoring.
  *
+ * Backward-compatibility shim. The former hand-rolled two-row DP core has been
+ * removed; all scoring now delegates to the canonical candy-fuzzy SSOT
+ * {@see SmithWatermanMatcher} with its default {@see \SugarCraft\Fuzzy\ScoringProfile},
+ * which is bit-equivalent to the historical constants for ASCII input. This
+ * class survives only to preserve the legacy `match(string, array): list<[string, int]>`
+ * ranking shape that {@see SmithWatermanMatcher::match()} no longer exposes, and the
+ * legacy negative empty-candidate score (the SSOT returns 0 there).
+ *
  * @deprecated since 1.x, use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher
- * @see SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher
+ * @see SmithWatermanMatcher
  */
 final class FuzzyMatcher
 {
-    private const MATCH_SCORE = 3;
-    private const MISMATCH_PENALTY = -3;
-    private const GAP_OPEN = -5;
-    private const GAP_EXTEND = -1;
-    private const ADJACENT_BONUS = 5;
+    private readonly SmithWatermanMatcher $delegate;
+
+    public function __construct()
+    {
+        $this->delegate = SmithWatermanMatcher::new();
+    }
 
     /**
      * Score a candidate against a query using Smith-Waterman local alignment.
@@ -32,57 +43,17 @@ final class FuzzyMatcher
         if ($query === '') {
             return 0;
         }
+
+        // Legacy boundary: an empty candidate yields a gap-only NEGATIVE score
+        // (gap-open + one gap-extend per query char), whereas the SSOT returns 0.
+        // Preserved so direct score() callers keep byte-identical results.
         if ($candidate === '') {
-            return self::GAP_OPEN + (self::GAP_EXTEND * strlen($query));
+            $profile = $this->delegate->profile();
+
+            return $profile->gapOpen + ($profile->gapExtend * strlen($query));
         }
 
-        $queryLen = strlen($query);
-        $candidateLen = strlen($candidate);
-
-        // Use two rows instead of full matrix for memory efficiency
-        $prevRow = array_fill(0, $candidateLen + 1, 0);
-        $currRow = array_fill(0, $candidateLen + 1, 0);
-
-        $maxScore = 0;
-
-        for ($i = 1; $i <= $queryLen; $i++) {
-            $qChar = strtolower($query[$i - 1]);
-            for ($j = 1; $j <= $candidateLen; $j++) {
-                $cChar = strtolower($candidate[$j - 1]);
-
-                $match = $qChar === $cChar
-                    ? self::MATCH_SCORE
-                    : self::MISMATCH_PENALTY;
-
-                // Add adjacent bonus for consecutive character matches in sequence
-                $adjBonus = 0;
-                if ($match > 0 && $i > 1 && $j > 1) {
-                    $prevQChar = strtolower($query[$i - 2]);
-                    $prevCChar = strtolower($candidate[$j - 2]);
-                    if ($prevQChar === $prevCChar) {
-                        $adjBonus = self::ADJACENT_BONUS;
-                    }
-                }
-
-                $effectiveMatch = $match + $adjBonus;
-                $scoreDiag = $prevRow[$j - 1] + $effectiveMatch;
-                $scoreUp = $currRow[$j - 1] + ($currRow[$j - 1] === 0 ? self::GAP_OPEN : self::GAP_EXTEND);
-                $scoreLeft = $prevRow[$j] + ($prevRow[$j] === 0 ? self::GAP_OPEN : self::GAP_EXTEND);
-
-                $cell = max(0, $scoreDiag, $scoreUp, $scoreLeft);
-                $currRow[$j] = $cell;
-
-                if ($cell > $maxScore) {
-                    $maxScore = $cell;
-                }
-            }
-            // Swap rows
-            $temp = $prevRow;
-            $prevRow = $currRow;
-            $currRow = $temp;
-        }
-
-        return $maxScore;
+        return $this->delegate->score($query, $candidate);
     }
 
     /**
@@ -108,7 +79,8 @@ final class FuzzyMatcher
             }
         }
 
-        // Sort by score descending
+        // Sort by score descending (usort is stable on PHP 8+, so equal scores
+        // retain input order — matching the legacy ranking byte-for-byte).
         usort($scored, static fn(array $a, array $b) => $b[1] <=> $a[1]);
 
         return $scored;
