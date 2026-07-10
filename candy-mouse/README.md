@@ -55,6 +55,15 @@ Sentinels use private-use codepoints U+E000 (open) and U+E001 (close) — they n
 
 A zone spanning multiple rows (e.g. `"line1\nline2"`) is stored as the **smallest axis-aligned bounding box** that contains all marked cells.  The `inBounds()` check uses this rectangle, so an interior cell that was never part of the original content may still report as inside the zone.  Callers wrapping reflowed or indented text should be aware that the hit-test is approximate for multi-line content.
 
+## See also
+
+[candy-zone](../candy-zone) is the TEA-facing façade (`Manager`, hover /
+drag / multi-click trackers, package-level `Zones`) layered over this
+low-level Mark/Scan/Zone primitive. It delegates its marker wrapping and
+bounding-box scanning to `SugarCraft\Mouse` — reach for candy-zone when you
+want the Bubble Tea-style zone workflow, and for candy-mouse directly when you
+just need self-contained hit-testing.
+
 ## Coverage
 
 [![codecov](https://codecov.io/gh/sugarcraft/candy-mouse/branch/master/graph/badge.svg?flag=candy-mouse)](https://codecov.io/gh/sugarcraft/candy-mouse)
