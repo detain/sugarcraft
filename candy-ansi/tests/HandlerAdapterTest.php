@@ -165,6 +165,146 @@ final class HandlerAdapterTest extends TestCase
         $this->parser->feed("\x1b[2I");
     }
 
+    // -------------------------------------------------------------------------
+    // Emulator CSI finals grown onto CsiHandler for the candy-vt de-fork.
+    // -------------------------------------------------------------------------
+
+    public function testCsiDispatchHVP(): void
+    {
+        // CSI `f` (HVP) routes to hvp(), distinct from CSI `H` (CUP).
+        $this->csi->expects($this->once())->method('hvp')->with(3, 4);
+        $this->csi->expects($this->never())->method('cup');
+
+        $this->parser->feed("\x1b[3;4f");
+    }
+
+    public function testCsiDispatchHVPDefaultParams(): void
+    {
+        $this->csi->expects($this->once())->method('hvp')->with(1, 1);
+
+        $this->parser->feed("\x1b[f");
+    }
+
+    public function testCsiDispatchSU(): void
+    {
+        $this->csi->expects($this->once())->method('su')->with(2);
+
+        $this->parser->feed("\x1b[2S");
+    }
+
+    public function testCsiDispatchSUDefaultCount(): void
+    {
+        $this->csi->expects($this->once())->method('su')->with(1);
+
+        $this->parser->feed("\x1b[S");
+    }
+
+    public function testCsiDispatchSD(): void
+    {
+        $this->csi->expects($this->once())->method('sd')->with(3);
+
+        $this->parser->feed("\x1b[3T");
+    }
+
+    public function testCsiDispatchIL(): void
+    {
+        $this->csi->expects($this->once())->method('il')->with(4);
+
+        $this->parser->feed("\x1b[4L");
+    }
+
+    public function testCsiDispatchDL(): void
+    {
+        $this->csi->expects($this->once())->method('dl')->with(5);
+
+        $this->parser->feed("\x1b[5M");
+    }
+
+    public function testCsiDispatchICH(): void
+    {
+        $this->csi->expects($this->once())->method('ich')->with(2);
+
+        $this->parser->feed("\x1b[2@");
+    }
+
+    public function testCsiDispatchICHDefaultCount(): void
+    {
+        $this->csi->expects($this->once())->method('ich')->with(1);
+
+        $this->parser->feed("\x1b[@");
+    }
+
+    public function testCsiDispatchDCH(): void
+    {
+        $this->csi->expects($this->once())->method('dch')->with(6);
+
+        $this->parser->feed("\x1b[6P");
+    }
+
+    public function testCsiDispatchREP(): void
+    {
+        $this->csi->expects($this->once())->method('rep')->with(7);
+
+        $this->parser->feed("\x1b[7b");
+    }
+
+    public function testCsiDispatchSCOSC(): void
+    {
+        $this->csi->expects($this->once())->method('scosc');
+        $this->csi->expects($this->never())->method('scorc');
+
+        $this->parser->feed("\x1b[s");
+    }
+
+    public function testCsiDispatchSCORC(): void
+    {
+        $this->csi->expects($this->once())->method('scorc');
+        $this->csi->expects($this->never())->method('scosc');
+
+        $this->parser->feed("\x1b[u");
+    }
+
+    // -------------------------------------------------------------------------
+    // OSC 8 hyperlink dispatch (previously silently dropped).
+    // -------------------------------------------------------------------------
+
+    public function testOscDispatchHyperlink(): void
+    {
+        $this->osc->expects($this->once())
+            ->method('hyperlink')
+            ->with('https://example.com', '');
+
+        $this->parser->feed("\x1b]8;;https://example.com\x07");
+    }
+
+    public function testOscDispatchHyperlinkWithId(): void
+    {
+        $this->osc->expects($this->once())
+            ->method('hyperlink')
+            ->with('https://example.com', 'anchor-1');
+
+        $this->parser->feed("\x1b]8;id=anchor-1;https://example.com\x1b\\");
+    }
+
+    public function testOscDispatchHyperlinkCloseEmptyUri(): void
+    {
+        // OSC 8 with an empty URI closes the currently-open hyperlink.
+        $this->osc->expects($this->once())->method('hyperlink')->with('', '');
+        $this->osc->expects($this->never())->method('title');
+
+        $this->parser->feed("\x1b]8;;\x07");
+    }
+
+    public function testOscDispatchHyperlinkIgnoresNonIdParams(): void
+    {
+        // Only `id=` is extracted; other key=value pairs are ignored.
+        $this->osc->expects($this->once())
+            ->method('hyperlink')
+            ->with('https://example.com', 'x');
+
+        $this->parser->feed("\x1b]8;foo=bar:id=x;https://example.com\x07");
+    }
+
     public function testOscDispatchTitle(): void
     {
         $this->osc->expects($this->once())->method('title')->with('Hello World');
@@ -207,8 +347,10 @@ final class HandlerAdapterTest extends TestCase
         $this->parser->feed("\x09");
     }
 
-    public function testCarriageReturnDoesNothing(): void
+    public function testCarriageReturnTriggersCr(): void
     {
+        // C0 CR (0x0D) now routes to the handler's cr().
+        $this->csi->expects($this->once())->method('cr');
         $this->csi->expects($this->never())->method('printable');
 
         $this->parser->feed("\x0d");
@@ -293,16 +435,18 @@ final class HandlerAdapterTest extends TestCase
         $this->parser->feed("\x1b]2;\x07"); // OSC 2 + BEL terminator
     }
 
-    public function testExecuteControlByteTriggersNoCsiHandlerMethod(): void
+    public function testLineFeedTriggersLf(): void
     {
-        // Control byte LF (0x0A) falls to default => null in HandlerAdapter::execute()
-        // Verify no CsiHandler method is invoked
+        // C0 LF (0x0A) now routes to the handler's lf(); no other CsiHandler
+        // method is invoked.
+        $this->csi->expects($this->once())->method('lf');
         $this->csi->expects($this->never())->method('cht');
         $this->csi->expects($this->never())->method('cub');
         $this->csi->expects($this->never())->method('cud');
         $this->csi->expects($this->never())->method('cuf');
         $this->csi->expects($this->never())->method('cuu');
         $this->csi->expects($this->never())->method('cup');
+        $this->csi->expects($this->never())->method('cr');
         $this->csi->expects($this->never())->method('sgr');
         $this->csi->expects($this->never())->method('ed');
         $this->csi->expects($this->never())->method('el');
@@ -311,10 +455,21 @@ final class HandlerAdapterTest extends TestCase
         $this->csi->expects($this->never())->method('decstbm');
         $this->csi->expects($this->never())->method('tbc');
         $this->csi->expects($this->never())->method('cbt');
-        $this->csi->expects($this->never())->method('cht');
         $this->csi->expects($this->never())->method('printable');
 
         $this->parser->feed("\x0A"); // LF
+    }
+
+    public function testExecuteUnhandledControlByteTriggersNoCsiHandlerMethod(): void
+    {
+        // BEL (0x07) is not routed by HandlerAdapter::execute() (default => null).
+        $this->csi->expects($this->never())->method('cr');
+        $this->csi->expects($this->never())->method('lf');
+        $this->csi->expects($this->never())->method('cht');
+        $this->csi->expects($this->never())->method('cub');
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x07"); // BEL
     }
 
     // -------------------------------------------------------------------------

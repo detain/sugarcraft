@@ -34,7 +34,8 @@ final class HandlerAdapter implements Handler
     {
         match ($byte) {
             0x09 => $this->csi->cht(1),
-            0x0D => null,
+            0x0A => $this->csi->lf(),  // LF — line feed
+            0x0D => $this->csi->cr(),  // CR — carriage return
             0x08 => $this->csi->cub(1),
             default => null,
         };
@@ -52,7 +53,11 @@ final class HandlerAdapter implements Handler
             'B' => $this->csi->cud($count),
             'C' => $this->csi->cuf($count),
             'D' => $this->csi->cub($count),
-            'H', 'f' => $this->csi->cup(
+            'H' => $this->csi->cup(
+                $p0 === -1 ? 1 : $p0,
+                $p1 === -1 ? 1 : $p1,
+            ),
+            'f' => $this->csi->hvp(
                 $p0 === -1 ? 1 : $p0,
                 $p1 === -1 ? 1 : $p1,
             ),
@@ -68,6 +73,15 @@ final class HandlerAdapter implements Handler
             'g' => $this->csi->tbc($p0 === -1 ? 0 : $p0),
             'Z' => $this->csi->cbt($count),
             'I' => $this->csi->cht($count),
+            'S' => $this->csi->su($count),
+            'T' => $this->csi->sd($count),
+            'L' => $this->csi->il($count),
+            'M' => $this->csi->dl($count),
+            '@' => $this->csi->ich($count),
+            'P' => $this->csi->dch($count),
+            'b' => $this->csi->rep($count),
+            's' => $this->csi->scosc(),
+            'u' => $this->csi->scorc(),
             default => null,
         };
     }
@@ -78,10 +92,38 @@ final class HandlerAdapter implements Handler
 
     public function oscDispatch(string $data): void
     {
-        // .+ requires at least one char; .* allows empty payload (e.g. "2;" = clear title)
+        // OSC 8 — hyperlink: `ESC ] 8 ; params ; uri ST`.
+        // `params` is a colon-separated key=value list (only `id=` is defined);
+        // `uri` is everything after the second `;` and may be empty (closes the
+        // hyperlink). The /s flag lets the URI span any byte the parser buffered.
+        if (preg_match('/^8;([^;]*);(.*)$/s', $data, $m)) {
+            $this->osc->hyperlink($m[2], $this->parseHyperlinkId($m[1]));
+            return;
+        }
+
+        // OSC 0/1/2 — window / icon title.
+        // .* allows an empty payload (e.g. "2;" = clear title).
         if (preg_match('/^([0-2]);(.*)$/', $data, $m)) {
             $this->osc->title($m[2]);
         }
+    }
+
+    /**
+     * Extract the `id=` value from an OSC 8 params field. The field is a
+     * colon-separated list of key=value pairs; every key other than `id`
+     * is ignored. Returns '' when no id is present.
+     */
+    private function parseHyperlinkId(string $params): string
+    {
+        if ($params === '') {
+            return '';
+        }
+        foreach (explode(':', $params) as $pair) {
+            if (str_starts_with($pair, 'id=')) {
+                return substr($pair, 3);
+            }
+        }
+        return '';
     }
 
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void

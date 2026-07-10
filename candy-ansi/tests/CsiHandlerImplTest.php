@@ -107,9 +107,86 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertTrue(true);
     }
 
+    public function testHvpIsNoOp(): void
+    {
+        $this->handler->hvp(3, 4);
+        $this->assertTrue(true);
+    }
+
+    public function testCrIsNoOp(): void
+    {
+        $this->handler->cr();
+        $this->assertTrue(true);
+    }
+
+    public function testLfIsNoOp(): void
+    {
+        $this->handler->lf();
+        $this->assertTrue(true);
+    }
+
+    public function testSuIsNoOp(): void
+    {
+        $this->handler->su(2);
+        $this->assertTrue(true);
+    }
+
+    public function testSdIsNoOp(): void
+    {
+        $this->handler->sd(2);
+        $this->assertTrue(true);
+    }
+
+    public function testIlIsNoOp(): void
+    {
+        $this->handler->il(2);
+        $this->assertTrue(true);
+    }
+
+    public function testDlIsNoOp(): void
+    {
+        $this->handler->dl(2);
+        $this->assertTrue(true);
+    }
+
+    public function testIchIsNoOp(): void
+    {
+        $this->handler->ich(2);
+        $this->assertTrue(true);
+    }
+
+    public function testDchIsNoOp(): void
+    {
+        $this->handler->dch(2);
+        $this->assertTrue(true);
+    }
+
+    public function testRepIsNoOp(): void
+    {
+        $this->handler->rep(2);
+        $this->assertTrue(true);
+    }
+
+    public function testScoscIsNoOp(): void
+    {
+        $this->handler->scosc();
+        $this->assertTrue(true);
+    }
+
+    public function testScorcIsNoOp(): void
+    {
+        $this->handler->scorc();
+        $this->assertTrue(true);
+    }
+
     public function testGridRowsReturnsZero(): void
     {
         $this->assertSame(0, $this->handler->gridRows());
+    }
+
+    public function testGridColsReturnsZero(): void
+    {
+        $this->assertSame(0, $this->handler->gridCols());
     }
 
     public function testAllPublicMethodsReturnWithoutError(): void
@@ -121,6 +198,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->handler->cuf();
         $this->handler->cub();
         $this->handler->cup(1, 1);
+        $this->handler->hvp(1, 1);
         $this->handler->sgr([]);
         $this->handler->ed();
         $this->handler->el();
@@ -130,8 +208,20 @@ final class CsiHandlerImplTest extends TestCase
         $this->handler->tbc();
         $this->handler->cbt();
         $this->handler->cht();
+        $this->handler->cr();
+        $this->handler->lf();
+        $this->handler->su();
+        $this->handler->sd();
+        $this->handler->il();
+        $this->handler->dl();
+        $this->handler->ich();
+        $this->handler->dch();
+        $this->handler->rep();
+        $this->handler->scosc();
+        $this->handler->scorc();
 
         // Final check
         $this->assertSame(0, $this->handler->gridRows());
+        $this->assertSame(0, $this->handler->gridCols());
     }
 }

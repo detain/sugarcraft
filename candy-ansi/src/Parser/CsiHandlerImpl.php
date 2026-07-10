@@ -46,6 +46,11 @@ final class CsiHandlerImpl implements CsiHandler
         // No-op: requires Cursor from terminal state.
     }
 
+    public function hvp(int $row, int $col): void
+    {
+        // No-op: requires Cursor from terminal state (identical to cup()).
+    }
+
     public function sgr(array $params): void
     {
         // No-op: requires theme-aware color/attribute tracking.
@@ -91,7 +96,67 @@ final class CsiHandlerImpl implements CsiHandler
         // No-op: requires Cursor + tab stop table from terminal state.
     }
 
+    public function cr(): void
+    {
+        // No-op: requires Cursor from terminal state.
+    }
+
+    public function lf(): void
+    {
+        // No-op: requires Cursor + scroll region from terminal state.
+    }
+
+    public function su(int $count = 1): void
+    {
+        // No-op: requires CellGrid + scroll region from terminal state.
+    }
+
+    public function sd(int $count = 1): void
+    {
+        // No-op: requires CellGrid + scroll region from terminal state.
+    }
+
+    public function il(int $count = 1): void
+    {
+        // No-op: requires CellGrid + Cursor from terminal state.
+    }
+
+    public function dl(int $count = 1): void
+    {
+        // No-op: requires CellGrid + Cursor from terminal state.
+    }
+
+    public function ich(int $count = 1): void
+    {
+        // No-op: requires CellGrid + Cursor from terminal state.
+    }
+
+    public function dch(int $count = 1): void
+    {
+        // No-op: requires CellGrid + Cursor from terminal state.
+    }
+
+    public function rep(int $count = 1): void
+    {
+        // No-op: requires last-graphic-char tracking from terminal state.
+    }
+
+    public function scosc(): void
+    {
+        // No-op: requires saved-cursor state from terminal state.
+    }
+
+    public function scorc(): void
+    {
+        // No-op: requires saved-cursor state from terminal state.
+    }
+
     public function gridRows(): int
+    {
+        return 0;
+    }
+
+    public function gridCols(): int
     {
         return 0;
     }
