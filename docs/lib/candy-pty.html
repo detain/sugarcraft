@@ -105,7 +105,7 @@ SignalForwarder::attachSigwinchToFd(
       <div class="feature"><strong>ControllingTerminal::claim()</strong><span>Static method: <code>setsid()</code> + <code>ioctl(fd, TIOCSCTTY, 0)</code> to claim a fd as the session's controlling terminal. Used by the <code>controllingTerminal: true</code> shim path; callable directly from FFI-heavy code that needs the same effect without the PHP shim overhead. Throws <code>PtyException</code> on failure.</span></div>
       <div class="feature"><strong>PosixPump + PumpOptions</strong><span>Byte pump with <code>onIdle</code> (idle tick), <code>onSigwinch</code> (dimension change), <code>onChildExit</code> (child exit), and <code>recorder</code> (session tap) callbacks. Wire via <code>PumpOptions::withOnIdle()</code> / <code>withOnSigwinch()</code> / <code>withOnChildExit()</code> / <code>withRecorder()</code>.</span></div>
       <div class="feature"><strong>SUGARCRAFT_LIBC override</strong><span>Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Override via env var for musl, Alpine, or custom sysroots.</span></div>
-      <div class="feature"><strong>SUGARCRAFT_PTY_BACKEND</strong><span>Selects the PTY backend. Recognised values: <code>posix-ffi</code> (default on POSIX), <code>auto</code> (same as unset), <code>sidecar</code> or <code>pecl</code> (throw <code>UnsupportedPlatformException</code> — deferred to phase 12). Unrecognised values throw <code>InvalidArgumentException</code>. See the <a href="https://github.com/sugarcraft/candy-pty/blob/main/README.md#backend-selection">full backend selection table</a> in the README.</span></div>
+      <div class="feature"><strong>SUGARCRAFT_PTY_BACKEND</strong><span>Selects the PTY backend. Recognised values: <code>posix-ffi</code> (default on POSIX), <code>auto</code> (same as unset), <code>sidecar</code> or <code>pecl</code> (throw <code>UnsupportedPlatformException</code> — deferred to phase 12). Unrecognised values throw <code>InvalidArgumentException</code>. See the <a href="https://github.com/sugarcraft/candy-pty/blob/master/README.md#backend-selection">full backend selection table</a> in the README.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
@@ -134,7 +134,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-pty">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-pty/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-pty/tree/main/examples">Runnable examples</a></li>
       <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a> (Go upstream)</li>
     </ul>
