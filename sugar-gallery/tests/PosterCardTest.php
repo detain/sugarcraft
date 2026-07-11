@@ -271,4 +271,40 @@ final class PosterCardTest extends TestCase
         self::assertSame($byNew->poster, $byNew2->poster);
         self::assertSame($byNew->progress, $byNew2->progress);
     }
+
+    public function testFitCacheRenderIsByteIdenticalAcrossClears(): void
+    {
+        $card = (new PosterCard('1', 'Movie', null, 0.5))->withPoster("AAA\nBBB");
+
+        $cached = $card->render(true, 10, 2);
+        PosterCard::clearFitCache();          // force the next render to re-fit cold
+        $cold = $card->render(true, 10, 2);
+
+        self::assertSame($cached, $cold, 'cached and freshly-fitted renders are byte-identical');
+    }
+
+    public function testFitCacheFitsTheBodyOncePerGeometryAcrossRenders(): void
+    {
+        PosterCard::clearFitCache();
+        $card = (new PosterCard('1', 'X'))->withPoster("AAA\nBBB\nCCC");
+
+        // Two renders differing only in $focused reuse the same fitted body — the
+        // poster rows do not depend on the cursor marker, so nothing re-fits.
+        $card->render(false, 8, 3);
+        $card->render(true, 8, 3);
+
+        self::assertSame(1, PosterCard::clearFitCache(), 'the fitted body is memoized once despite two renders');
+        self::assertSame(0, PosterCard::clearFitCache(), 'the memo is now empty');
+    }
+
+    public function testFitCacheKeepsDistinctGeometriesApart(): void
+    {
+        PosterCard::clearFitCache();
+        $card = (new PosterCard('1', 'X'))->withPoster("AAA\nBBB");
+
+        $card->render(false, 8, 2);
+        $card->render(false, 10, 2); // a different width is a distinct fitted body
+
+        self::assertSame(2, PosterCard::clearFitCache(), 'each geometry memoizes its own body');
+    }
 }
