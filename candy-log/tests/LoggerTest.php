@@ -363,4 +363,58 @@ final class LoggerTest extends TestCase
         $this->expectExceptionMessage('stream must be a valid resource');
         $log->setOutput('not a resource');
     }
+
+    // -------------------------------------------------------------------------
+    // [PERF] enabled() level gate — *f helpers must not sprintf when filtered
+    // -------------------------------------------------------------------------
+
+    public function testEnabledReflectsMinLevel(): void
+    {
+        $log = $this->logger(Level::Warn);
+
+        $this->assertFalse($log->enabled(Level::Debug));
+        $this->assertFalse($log->enabled(Level::Info));
+        $this->assertTrue($log->enabled(Level::Warn));
+        $this->assertTrue($log->enabled(Level::Error));
+        $this->assertTrue($log->enabled(Level::Fatal));
+    }
+
+    public function testFilteredDebugfDoesNotRunSprintf(): void
+    {
+        // A __toString spy proves whether sprintf('%s', $spy) actually executed.
+        $spy = new class {
+            public int $calls = 0;
+            public function __toString(): string
+            {
+                $this->calls++;
+                return 'x';
+            }
+        };
+
+        $log = $this->logger(Level::Error); // Debug is below the threshold
+        $log->debugf('%s', [], $spy);
+        \fclose($this->tempFile);
+
+        $this->assertSame(0, $spy->calls, 'sprintf must not run for a filtered-out level');
+        $this->assertSame('', \file_get_contents($this->tempPath));
+    }
+
+    public function testEnabledDebugfStillRunsSprintf(): void
+    {
+        $spy = new class {
+            public int $calls = 0;
+            public function __toString(): string
+            {
+                $this->calls++;
+                return 'baked';
+            }
+        };
+
+        $log = $this->logger(Level::Debug); // Debug is enabled
+        $log->debugf('%s', [], $spy);
+        \fclose($this->tempFile);
+
+        $this->assertSame(1, $spy->calls);
+        $this->assertStringContainsString('baked', \file_get_contents($this->tempPath));
+    }
 }

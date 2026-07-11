@@ -31,7 +31,18 @@ final class PanicFormatter
         $this->redactPaths = $redactPaths;
     }
 
-    /** Default pretty formatter with color-coded output. */
+    /**
+     * Default pretty formatter with color-coded output.
+     *
+     * SECURITY: $showLocals dumps each backtrace frame's scalar arguments,
+     * which frequently include passwords, API tokens, and connection strings
+     * passed into the call that panicked. Leave it OFF for any report that may
+     * reach logs, CI output, or an end user. When it must be on, list every
+     * sensitive substring (secret values AND file paths) in $redactPaths — each
+     * is replaced with "[redacted]" in both frame paths and dumped locals.
+     *
+     * @param list<string> $redactPaths Substrings to redact from paths and locals.
+     */
     public static function pretty(bool $showLocals = false, array $redactPaths = []): self
     {
         return new self(
@@ -147,6 +158,15 @@ final class PanicFormatter
             if ($this->showLocals && isset($frame['args'])) {
                 foreach ($frame['args'] as $arg) {
                     $argStr = is_scalar($arg) ? (string) $arg : gettype($arg);
+                    // Redact configured secret substrings from dumped locals,
+                    // not just from file paths — a token/password passed as a
+                    // call argument would otherwise leak verbatim. Redact BEFORE
+                    // truncation so secrets longer than the cap are still caught.
+                    foreach ($this->redactPaths as $path) {
+                        if ($path !== '') {
+                            $argStr = str_replace($path, '[redacted]', $argStr);
+                        }
+                    }
                     if (mb_strlen($argStr) > 40) {
                         $argStr = mb_substr($argStr, 0, 40) . '…';
                     }

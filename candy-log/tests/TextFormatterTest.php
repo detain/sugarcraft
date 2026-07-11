@@ -267,4 +267,71 @@ final class TextFormatterTest extends TestCase
         // Should NOT start with a timestamp (no date pattern at start)
         $this->assertStringStartsWith('INF', \trim($line));
     }
+
+    // -------------------------------------------------------------------------
+    // [SEC] Log-injection / ANSI-injection neutralization
+    // -------------------------------------------------------------------------
+
+    public function testTextFormatterNeutralizesLogInjectionInMessage(): void
+    {
+        // Colors OFF so any ESC / newline in the output must originate from the
+        // untrusted message, not from the library's own styling.
+        $tf = new TextFormatter(false, null, false, false);
+        $evil = "ok\nFAKE root login\x1b[31mred\x1b[0m";
+        $line = $tf->format(Level::Info, $evil, [], new \DateTimeImmutable(), null, null);
+
+        // Exactly one physical line — only the formatter's own trailing "\n".
+        $this->assertSame(1, \substr_count($line, "\n"));
+        // No raw ESC smuggled through from the message.
+        $this->assertStringNotContainsString("\x1b", $line);
+        // Injected newline flattened to a space; the forged text can no longer
+        // start its own log line.
+        $this->assertStringContainsString('ok FAKE root login', $line);
+    }
+
+    public function testTextFormatterNeutralizesInjectionInContextValues(): void
+    {
+        $tf = new TextFormatter(false, null, false, false);
+        $line = $tf->format(
+            Level::Info,
+            'msg',
+            ['k' => "v\nINJECT\x1b[0m"],
+            new \DateTimeImmutable(),
+            null,
+            null,
+        );
+
+        $this->assertSame(1, \substr_count($line, "\n"));
+        $this->assertStringNotContainsString("\x1b", $line);
+        $this->assertStringContainsString('k=v INJECT', $line);
+    }
+
+    public function testLogfmtFormatterNeutralizesLogInjection(): void
+    {
+        $lf = new LogfmtFormatter(false);
+        $evil = "ok\nlevel=FATAL msg=forged";
+        $line = $lf->format(Level::Info, $evil, [], new \DateTimeImmutable(), null, null);
+
+        // Single physical line — the injected newline must not split the record
+        // (which would forge a second logfmt entry).
+        $this->assertSame(1, \substr_count($line, "\n"));
+        // The raw newline was backslash-escaped, not passed through verbatim.
+        $this->assertStringContainsString('\\n', $line);
+    }
+
+    public function testLogfmtFormatterStripsEscInContextValues(): void
+    {
+        $lf = new LogfmtFormatter(false);
+        $line = $lf->format(
+            Level::Info,
+            'm',
+            ['k' => "\x1b[31mred\x1b[0m"],
+            new \DateTimeImmutable(),
+            null,
+            null,
+        );
+
+        $this->assertStringNotContainsString("\x1b", $line);
+        $this->assertSame(1, \substr_count($line, "\n"));
+    }
 }
