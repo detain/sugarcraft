@@ -10,6 +10,7 @@ use SugarCraft\Dash\Components\Card\Text;
 use SugarCraft\Dash\Layout\HAlign;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Palettes;
 use PHPUnit\Framework\TestCase;
 
 final class ThemeTest extends TestCase
@@ -285,5 +286,75 @@ final class ThemeTest extends TestCase
         $uniqueNames = array_unique($names);
 
         $this->assertCount(count($themes), $uniqueNames);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Palettes SSOT parity (drift guard)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Each migrated slot must equal its candy-core {@see Palettes} source.
+     * Compared via the rendered/normalised hex ({@see Color::toHex}) so the
+     * cosmetic uppercase→lowercase change is transparent and the assertion
+     * fails loudly if either the palette or the mapping ever drifts.
+     *
+     * @dataProvider paletteParityProvider
+     */
+    public function testFactoryReSourcesFromPalettesSsot(
+        Theme $theme,
+        string $slot,
+        string $expectedHex,
+    ): void {
+        $color = $theme->color($slot);
+        $this->assertInstanceOf(Color::class, $color);
+        $this->assertSame(
+            strtolower(Color::hex($expectedHex)->toHex()),
+            strtolower($color->toHex()),
+        );
+    }
+
+    /**
+     * @return array<string, array{Theme, string, string}>
+     */
+    public static function paletteParityProvider(): array
+    {
+        $dracula = Palettes::DRACULA;
+        $oneDark = Palettes::ONE_DARK;
+        $github  = Palettes::GITHUB_DARK;
+
+        return [
+            // Dracula: primary/highlight→purple, secondary/success→green, accent→pink, warning→orange.
+            'dracula fg'         => [Theme::dracula(), 'foreground', $dracula['foreground']],
+            'dracula bg'         => [Theme::dracula(), 'background', $dracula['background']],
+            'dracula primary'    => [Theme::dracula(), 'primary', $dracula['purple']],
+            'dracula secondary'  => [Theme::dracula(), 'secondary', $dracula['green']],
+            'dracula accent'     => [Theme::dracula(), 'accent', $dracula['pink']],
+            'dracula error'      => [Theme::dracula(), 'error', $dracula['red']],
+            'dracula warning'    => [Theme::dracula(), 'warning', $dracula['orange']],
+            'dracula success'    => [Theme::dracula(), 'success', $dracula['green']],
+            'dracula highlight'  => [Theme::dracula(), 'highlight', $dracula['purple']],
+
+            // One Dark: primary/highlight→blue, secondary/success→green, accent→magenta, warning→yellow.
+            'oneDark fg'         => [Theme::oneDark(), 'foreground', $oneDark['foreground']],
+            'oneDark bg'         => [Theme::oneDark(), 'background', $oneDark['background']],
+            'oneDark primary'    => [Theme::oneDark(), 'primary', $oneDark['blue']],
+            'oneDark secondary'  => [Theme::oneDark(), 'secondary', $oneDark['green']],
+            'oneDark accent'     => [Theme::oneDark(), 'accent', $oneDark['magenta']],
+            'oneDark error'      => [Theme::oneDark(), 'error', $oneDark['red']],
+            'oneDark warning'    => [Theme::oneDark(), 'warning', $oneDark['yellow']],
+            'oneDark success'    => [Theme::oneDark(), 'success', $oneDark['green']],
+            'oneDark highlight'  => [Theme::oneDark(), 'highlight', $oneDark['blue']],
+
+            // GitHub Dark: primary/highlight→blue, secondary/success→green, accent→pink, warning→yellow.
+            'githubDark fg'        => [Theme::githubDark(), 'foreground', $github['foreground']],
+            'githubDark bg'        => [Theme::githubDark(), 'background', $github['background']],
+            'githubDark primary'   => [Theme::githubDark(), 'primary', $github['blue']],
+            'githubDark secondary' => [Theme::githubDark(), 'secondary', $github['green']],
+            'githubDark accent'    => [Theme::githubDark(), 'accent', $github['pink']],
+            'githubDark error'     => [Theme::githubDark(), 'error', $github['red']],
+            'githubDark warning'   => [Theme::githubDark(), 'warning', $github['yellow']],
+            'githubDark success'   => [Theme::githubDark(), 'success', $github['green']],
+            'githubDark highlight' => [Theme::githubDark(), 'highlight', $github['blue']],
+        ];
     }
 }
