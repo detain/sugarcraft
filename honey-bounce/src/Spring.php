@@ -129,6 +129,19 @@ final class Spring
         return [$newPos, $newVel];
     }
 
+    /**
+     * Whether a spring resting at ($pos, $vel) has settled at $target.
+     *
+     * Settled means both the displacement from target AND the velocity have
+     * fallen below $threshold. The default is {@see SETTLING_THRESHOLD}; callers
+     * that need a different band (e.g. {@see SpringChain}'s looser stage-handoff
+     * threshold) pass their own.
+     */
+    public static function settled(float $pos, float $vel, float $target, float $threshold = self::SETTLING_THRESHOLD): bool
+    {
+        return abs($pos - $target) < $threshold && abs($vel) < $threshold;
+    }
+
     /** Frame-time (seconds) for a given frame rate. `Spring::fps(60)` → 1/60. */
     public static function fps(float $n): float
     {

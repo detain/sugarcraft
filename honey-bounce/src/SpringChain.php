@@ -13,7 +13,14 @@ namespace SugarCraft\Bounce;
  */
 final class SpringChain
 {
-    /** Threshold below which a spring is considered settled (position and velocity near zero). */
+    /**
+     * Threshold below which a chain stage is considered settled.
+     *
+     * Deliberately looser than a lone spring's {@see Spring::SETTLING_THRESHOLD}
+     * (1e-4): staggered stages hand off as soon as the previous stage is
+     * visually at rest, so the wider 5e-4 band avoids a perceptible pause
+     * between stages.
+     */
     private const SETTLING_THRESHOLD = 0.0005;
 
     /** @var list<array{0: Spring, 1:float, 2:float, 3:float}> */
@@ -80,15 +87,10 @@ final class SpringChain
 
         [$newPos, $newVel] = $spring->update($pos, $vel, $target);
 
-        // Build new stages array with updated position and velocity
-        $newStages = [];
-        foreach ($this->stages as $i => $stage) {
-            if ($i === $this->activeIndex) {
-                $newStages[] = [$spring, $newPos, $newVel, $target];
-            } else {
-                $newStages[] = $stage;
-            }
-        }
+        // Copy-on-write: clone the stages list once and rewrite only the active
+        // stage instead of rebuilding the whole array element by element.
+        $newStages = $this->stages;
+        $newStages[$this->activeIndex] = [$spring, $newPos, $newVel, $target];
 
         return [$this->currentPositions(), false, new self($newStages, $this->activeIndex)];
     }
@@ -125,6 +127,6 @@ final class SpringChain
 
     private function isSettled(float $pos, float $vel, float $target): bool
     {
-        return abs($pos - $target) < self::SETTLING_THRESHOLD && abs($vel) < self::SETTLING_THRESHOLD;
+        return Spring::settled($pos, $vel, $target, self::SETTLING_THRESHOLD);
     }
 }
