@@ -32,7 +32,6 @@
         "php": ">=8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-pty": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master",
         "ext-gd": "*"
     },
     "repositories": [
@@ -46,20 +45,6 @@
         {
             "type": "path",
             "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-layout",
             "options": {
                 "symlink": true
             }
