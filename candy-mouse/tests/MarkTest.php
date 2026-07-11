@@ -182,6 +182,47 @@ final class MarkTest extends TestCase
         ];
     }
 
+    // ─── [SEC] length guards (bounded input) ────────────────────────────────
+
+    public function testOversizedContentIsRejected(): void
+    {
+        // Reflected/untrusted content beyond the cap would give an attacker an
+        // arbitrarily large buffer for Scan::parse() to walk — reject it.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('content exceeds');
+        (new Mark())->wrap('ok', str_repeat('x', Mark::MAX_CONTENT_BYTES + 1));
+    }
+
+    public function testContentAtExactlyMaxIsAccepted(): void
+    {
+        // Boundary: the cap itself is inclusive — exactly-MAX must not throw.
+        $content = str_repeat('x', Mark::MAX_CONTENT_BYTES);
+        $wrapped = (new Mark())->wrap('ok', $content);
+        self::assertStringContainsString($content, $wrapped);
+    }
+
+    public function testOversizedIdIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('id exceeds');
+        (new Mark())->wrap(str_repeat('a', Mark::MAX_ID_BYTES + 1), 'x');
+    }
+
+    public function testIdAtExactlyMaxIsAccepted(): void
+    {
+        $id = str_repeat('a', Mark::MAX_ID_BYTES);
+        $wrapped = (new Mark())->wrap($id, 'x');
+        self::assertStringContainsString($id, $wrapped);
+    }
+
+    public function testDisabledMarkStillEnforcesContentGuard(): void
+    {
+        // Length guards are unconditional (like the id-charset guard) so a
+        // disabled measurement pass and an enabled render agree on limits.
+        $this->expectException(\InvalidArgumentException::class);
+        Mark::disabled()->wrap('ok', str_repeat('x', Mark::MAX_CONTENT_BYTES + 1));
+    }
+
     // ─── enabled / disabled ─────────────────────────────────────────────────
 
     public function testDisabledWrapReturnsContentUnchanged(): void

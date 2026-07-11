@@ -18,8 +18,23 @@ namespace SugarCraft\Mouse;
  */
 final class Scanner
 {
+    /**
+     * Grid quantisation for the {@see hit()} spatial index — each bucket
+     * covers a GRID_BUCKET × GRID_BUCKET block of terminal cells.
+     */
+    private const GRID_BUCKET = 32;
+
     /** @var array<string, Zone> */
     private array $zones = [];
+
+    /**
+     * Lazily-built bucket index: "bx:by" => list of zones (in insertion
+     * order) whose bounding box overlaps that grid bucket.  null until the
+     * first {@see hit()} after a {@see scan()}/{@see clear()}.
+     *
+     * @var array<string, list<Zone>>|null
+     */
+    private ?array $grid = null;
 
     /**
      * Factory — creates an empty scanner ready for scan().
@@ -41,6 +56,7 @@ final class Scanner
     {
         $parser = new Scan();
         $this->zones = $parser->parse($rendered, $width);
+        $this->grid = null; // invalidate the spatial index — zones changed.
         return $this;
     }
 
@@ -82,22 +98,29 @@ final class Scanner
      * Reverse-lookup: return the first zone whose bounding box contains
      * (col, row), or null if no zone matches.
      *
-     * Performance: O(n) linear scan — adequate for n < 100 zones.
-     * For large interactive UIs (tables, lists, grids), callers should
-     * consider a spatial index for sub-linear lookup:
-     *   - Grid-based: quantize the terminal into cells, map zones to grid
-     *     buckets, query only buckets overlapping (col, row).
-     *   - R-tree: bulk-load all zones into an R-tree for bounding-box
-     *     intersection queries (see php-rtree or similar).
-     *   - Sort-by-area: sort zones largest-to-smallest so early exits
-     *     hit the most-visible zones first (good heuristic, not a index).
+     * Backed by a lazily-built grid-bucket index: zones are bucketed by the
+     * GRID_BUCKET × GRID_BUCKET blocks their bbox overlaps, so a lookup only
+     * scans the (usually tiny) candidate list in the queried bucket instead of
+     * every zone — sub-linear for the dense table/list/grid UIs bubblezone
+     * targets.  The index is built once on the first call after a scan and
+     * reused until the zone set changes.
+     *
+     * "First zone" is preserved verbatim: buckets are populated in zone
+     * insertion order, so among overlapping zones the earliest-registered
+     * still wins — identical to the old linear scan.
      *
      * @param int $col Terminal column (1-based).
      * @param int $row Terminal row (1-based).
      */
     public function hit(int $col, int $row): ?Zone
     {
-        foreach ($this->zones as $zone) {
+        if ($this->zones === []) {
+            return null;
+        }
+        $this->grid ??= $this->buildGrid();
+
+        $key = self::bucket($col) . ':' . self::bucket($row);
+        foreach ($this->grid[$key] ?? [] as $zone) {
             if ($col >= $zone->startCol && $col <= $zone->endCol
                 && $row >= $zone->startRow && $row <= $zone->endRow
             ) {
@@ -108,10 +131,42 @@ final class Scanner
     }
 
     /**
+     * Bucket coordinate for a 1-based terminal column/row.
+     */
+    private static function bucket(int $coord): int
+    {
+        return intdiv($coord - 1, self::GRID_BUCKET);
+    }
+
+    /**
+     * Populate the grid index from the current zone set, iterating in
+     * insertion order so each bucket's candidate list preserves it.
+     *
+     * @return array<string, list<Zone>>
+     */
+    private function buildGrid(): array
+    {
+        $grid = [];
+        foreach ($this->zones as $zone) {
+            $bxStart = self::bucket($zone->startCol);
+            $bxEnd   = self::bucket($zone->endCol);
+            $byStart = self::bucket($zone->startRow);
+            $byEnd   = self::bucket($zone->endRow);
+            for ($by = $byStart; $by <= $byEnd; $by++) {
+                for ($bx = $bxStart; $bx <= $bxEnd; $bx++) {
+                    $grid[$bx . ':' . $by][] = $zone;
+                }
+            }
+        }
+        return $grid;
+    }
+
+    /**
      * Clear all recorded zones.
      */
     public function clear(): void
     {
         $this->zones = [];
+        $this->grid = null;
     }
 }

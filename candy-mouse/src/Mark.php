@@ -38,6 +38,23 @@ final class Mark
     private const ID_PATTERN = '/\A[A-Za-z0-9._:-]+\z/';
 
     /**
+     * Upper bound on id length in bytes.  Ids are short identifiers
+     * (`cell:5:3`, `crumb-2`); an oversized id only bloats every emitted
+     * sentinel and the scanner's forward id-terminator search.
+     */
+    public const MAX_ID_BYTES = 256;
+
+    /**
+     * Upper bound on wrapped-content length in bytes.  A single zone wraps
+     * one widget's rendered cells (with SGR), so 1 MiB is far above any real
+     * terminal region.  The guard bounds {@see Scan::parse()}'s work when a
+     * caller reflects untrusted text through {@see wrap()} (mild-DoS defence:
+     * an unbounded region would give an attacker an arbitrarily large buffer
+     * to scan).
+     */
+    public const MAX_CONTENT_BYTES = 1_048_576;
+
+    /**
      * @param bool $enabled Whether sentinels are emitted.  Defaults to true.
      *                     Set to false to suppress all sentinel output.
      */
@@ -76,7 +93,10 @@ final class Mark
      * @throws \InvalidArgumentException When $id contains any byte outside
      *         {@see self::ID_PATTERN} — e.g. a raw sentinel byte, a control
      *         byte, or whitespace — which would otherwise let a caller-supplied
-     *         id inject spurious zone markers into the scanned stream.
+     *         id inject spurious zone markers into the scanned stream; or when
+     *         $id / $content exceed {@see self::MAX_ID_BYTES} /
+     *         {@see self::MAX_CONTENT_BYTES} (bounds the scanner's work on
+     *         reflected untrusted text).
      */
     public function wrap(string $id, string $content): string
     {
@@ -89,6 +109,23 @@ final class Mark
                 . ' (ASCII letters, digits, and ._:- only); '
                 . 'got ' . var_export($id, true)
                 . ' — an id with sentinel/control/whitespace bytes would desync zone scanning.'
+            );
+        }
+
+        // Length guards — also unconditional so a disabled measurement pass and
+        // an enabled render agree on what is acceptable.  Bounds the id-field
+        // search and the total buffer Scan::parse() must walk.
+        $idLen = strlen($id);
+        if ($idLen > self::MAX_ID_BYTES) {
+            throw new \InvalidArgumentException(
+                'Mark id exceeds ' . self::MAX_ID_BYTES . ' bytes (got ' . $idLen . ').'
+            );
+        }
+        $contentLen = strlen($content);
+        if ($contentLen > self::MAX_CONTENT_BYTES) {
+            throw new \InvalidArgumentException(
+                'Mark content exceeds ' . self::MAX_CONTENT_BYTES . ' bytes (got ' . $contentLen . ') '
+                . '— cap oversized/reflected input to bound zone scanning.'
             );
         }
 
