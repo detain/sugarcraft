@@ -6,7 +6,7 @@
 
 [pattern:callerformatter-internal-skip] — `CallerFormatter::find()` walks `debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 20)` to skip frames inside the `SugarCraft\Log` package and return "file:line" of the first external caller. Used by formatters to show the true log call site rather than internal library frames.
 
-[pattern:hook-registry-callable] — `HookRegistry::onLevel(Level, callable): int` stores callbacks in a per-level array and returns a sequential int ID. The original `remove(int $id)` method was broken (Closure::fromCallable rejects int) and was removed — the step only required `onLevel` and `fire`; no removal API is needed.
+[pattern:hook-registry-callable] — `HookRegistry::onLevel(Level, callable): int` stores callbacks in a per-level array and returns a sequential int ID. `remove(int $id): void` deregisters a handler by nulling its slot (`$this->handlers[$id] = null`); `fire()` skips null slots. Removal by ID is intentional — never wrap the ID in `Closure::fromCallable`, which only accepts callables.
 
 [pattern:partsorder-config-dto] — `PartsOrder` is a config DTO for log-part ordering: `list<PART_*>` consts (PART_TIMESTAMP, PART_LEVEL, PART_PREFIX, PART_CALLER, PART_MESSAGE, PART_FIELDS), a `readonly array $parts` property, nullable constructor defaulting to standard order, and static factories (`default()`, `syslog()`, `messageFirst()`). Immutable + fluent pattern.
 
