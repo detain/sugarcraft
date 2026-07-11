@@ -40,6 +40,8 @@ final class Reel
      * @param bool         $loop  When true, playback restarts at end instead of stopping
      * @param string       $ramp  Luma ramp name: 'minimal', 'standard', or 'dense'
      * @param string|null  $subtitlePath  Path to a WebVTT/SRT subtitle file, or null
+     * @param list<string>|null $allowedHosts  Host allowlist for remote (http(s)) sources,
+     *               or null to disable host restriction (SSRF surface — see {@see openUrl()})
      */
     private function __construct(
         private readonly string $path,
@@ -50,6 +52,7 @@ final class Reel
         private readonly bool $loop = false,
         private readonly string $ramp = 'standard',
         private readonly ?string $subtitlePath = null,
+        private readonly ?array $allowedHosts = null,
     ) {
     }
 
@@ -85,15 +88,34 @@ final class Reel
      * named for intent and it rejects a non-http(s) argument so a path typo
      * surfaces immediately rather than as an obscure ffmpeg failure.
      *
-     * @throws \InvalidArgumentException When $url is not an http(s) URL
+     * SSRF: the recorded URL is handed verbatim to ffmpeg (and ffplay/mpv for
+     * audio), which resolves DNS and follows HTTP redirects itself — so a URL
+     * that looks external can still reach an internal/link-local host (e.g.
+     * cloud metadata at `http://169.254.169.254/…`). The scheme check alone does
+     * NOT prevent that. Pass $allowedHosts to restrict playback to a set of
+     * trusted hosts; a URL whose host is not allowlisted is rejected up front.
+     * When $allowedHosts is null the previous unrestricted behavior is kept, but
+     * a warning is logged noting the remote URL is being fed to ffmpeg.
+     *
+     * @param string            $url          Remote http(s) URL.
+     * @param list<string>|null $allowedHosts Case-insensitive host allowlist, or
+     *               null to allow any host (logs an SSRF-surface warning).
+     * @throws \InvalidArgumentException When $url is not an http(s) URL, or when
+     *               $allowedHosts is set and the URL's host is not in it.
      */
-    public static function openUrl(string $url): self
+    public static function openUrl(string $url, ?array $allowedHosts = null): self
     {
         if (preg_match('#^https?://#i', $url) !== 1) {
             throw new \InvalidArgumentException("Not an http(s) URL: {$url}");
         }
 
-        return new self($url, null, 80, 24, null, false, 'standard');
+        if ($allowedHosts !== null) {
+            self::assertHostAllowed($url, $allowedHosts);
+        } else {
+            self::warnRemoteSsrf($url);
+        }
+
+        return new self($url, null, 80, 24, null, false, 'standard', null, $allowedHosts);
     }
 
     /**
@@ -150,6 +172,17 @@ final class Reel
     public function ramp(): string
     {
         return $this->ramp;
+    }
+
+    /**
+     * The configured remote-host allowlist, or null when host restriction is
+     * disabled (any host is accepted — SSRF surface; see {@see openUrl()}).
+     *
+     * @return list<string>|null
+     */
+    public function allowedHosts(): ?array
+    {
+        return $this->allowedHosts;
     }
 
     /**
@@ -221,6 +254,29 @@ final class Reel
     }
 
     /**
+     * Restrict remote (http(s)) playback to a set of trusted hosts.
+     *
+     * This is the config seam for the SSRF surface described on {@see openUrl()}:
+     * with an allowlist set, a remote URL whose host is not listed is rejected
+     * before it ever reaches ffmpeg. When a remote URL is already bound (via
+     * {@see openUrl()}), its host is re-validated against the new allowlist here
+     * so the restriction can be tightened after the fact. Returns a new Reel
+     * (immutable).
+     *
+     * @param list<string> $hosts Case-insensitive host allowlist.
+     * @throws \InvalidArgumentException When a remote URL is already bound and
+     *               its host is not in $hosts.
+     */
+    public function withAllowedHosts(array $hosts): self
+    {
+        if ($this->path !== '' && preg_match('#^https?://#i', $this->path) === 1) {
+            self::assertHostAllowed($this->path, $hosts);
+        }
+
+        return $this->with(allowedHosts: $hosts);
+    }
+
+    /**
      * Run the player: creates a Player from the configured options and
      * executes the TEA program loop via Program::run().
      *
@@ -272,6 +328,7 @@ final class Reel
      * @param bool|null          $loop  Leave null to keep current
      * @param string|null        $ramp  Leave null to keep current
      * @param string|null        $subtitlePath  Path to subtitle file, leave null to keep current
+     * @param list<string>|null  $allowedHosts  Remote-host allowlist, leave null to keep current
      */
     private function with(
         ?string $path = null,
@@ -282,6 +339,7 @@ final class Reel
         ?bool $loop = null,
         ?string $ramp = null,
         ?string $subtitlePath = null,
+        ?array $allowedHosts = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -295,6 +353,54 @@ final class Reel
             $loop ?? $this->loop,
             $ramp ?? $this->ramp,
             $subtitlePath ?? $this->subtitlePath,
+            $allowedHosts ?? $this->allowedHosts,
         );
+    }
+
+    /**
+     * Extract the lowercased host from a URL, or '' when it has none.
+     */
+    private static function hostOf(string $url): string
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        return is_string($host) ? strtolower($host) : '';
+    }
+
+    /**
+     * Reject a remote URL whose host is not in $allowedHosts.
+     *
+     * @param list<string> $allowedHosts
+     * @throws \InvalidArgumentException When the host is missing or not allowlisted.
+     */
+    private static function assertHostAllowed(string $url, array $allowedHosts): void
+    {
+        $host = self::hostOf($url);
+        $allowed = array_map('strtolower', $allowedHosts);
+        if ($host === '' || !in_array($host, $allowed, true)) {
+            throw new \InvalidArgumentException(
+                'Remote host not in allowlist: ' . ($host === '' ? '(none)' : $host)
+            );
+        }
+    }
+
+    /**
+     * Log a warning that a remote URL is being handed to ffmpeg without a host
+     * allowlist. Only the host is logged — never the full URL — so a signed
+     * stream token in the query string is not leaked to the error log.
+     *
+     * Uses error_log() (not trigger_error()) so it never surfaces as a PHP
+     * warning that a strict test harness would fail on.
+     */
+    private static function warnRemoteSsrf(string $url): void
+    {
+        $host = self::hostOf($url);
+        error_log(sprintf(
+            'sugar-reel: openUrl() to remote host "%s" without a host allowlist — the URL is '
+            . 'handed to ffmpeg, which resolves DNS and follows redirects and can reach '
+            . 'internal/link-local hosts (SSRF surface). Restrict it via openUrl($url, [...]) '
+            . 'or withAllowedHosts([...]).',
+            $host === '' ? '(unknown)' : $host
+        ));
     }
 }

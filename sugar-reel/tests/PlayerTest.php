@@ -932,6 +932,83 @@ final class PlayerTest extends TestCase
     }
 
     /**
+     * frameToBuffer() PERF parity. The per-cell Buffer::withCellAt() loop (each
+     * call copy-on-write duplicated the whole grid → O(cells²)/frame) was
+     * replaced with grid accumulation + a single Buffer::fromGrid() call. The
+     * refactor MUST be byte-identical to the old path.
+     *
+     * These EXPECTED byte strings were captured from the pre-refactor per-cell
+     * code (see the commit that introduces this test). Each covers one branch of
+     * frameToBuffer: HalfBlock, Ascii (luma ramp), TrueColor, and QuarterBlock.
+     * A future divergence in the grid ordering or wrapping would change view()
+     * and fail this test.
+     *
+     * @dataProvider frameToBufferParityCases
+     */
+    public function testFrameToBufferParityWithPerCellPath(string $bytes, int $w, int $h, Mode $mode, string $expectedB64): void
+    {
+        $frame = new RgbFrame($bytes, $w, $h);
+
+        $base = Player::openForTest(new FakeDecoder([$frame]), 1.0, 0, $w, $h, '/fake', false, 'standard');
+        $player = $this->createPlayerWithOverrides($base, [
+            'currentFrame' => $frame,
+            'frameIndex' => 0,
+            'mode' => $mode,
+        ]);
+
+        $this->assertSame(
+            base64_decode($expectedB64),
+            $player->view(),
+            "frameToBuffer() {$mode->name} output must be byte-identical to the old per-cell path",
+        );
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: int, 3: Mode, 4: string}>
+     */
+    public static function frameToBufferParityCases(): array
+    {
+        // QuarterBlock frame: 4×4 varied colors (mirrors the capture fixture).
+        $qb = '';
+        for ($y = 0; $y < 4; $y++) {
+            for ($x = 0; $x < 4; $x++) {
+                $qb .= chr(($x * 60) % 256) . chr(($y * 60) % 256) . chr((($x + $y) * 40) % 256);
+            }
+        }
+
+        return [
+            'HalfBlock' => [
+                str_repeat("\xff\x00\x00", 4) . str_repeat("\x00\x80\x00", 4),
+                4,
+                2,
+                Mode::HalfBlock,
+                'G1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swOzM4OzI7MjU1OzA7MDs0ODsyOzA7MTI4OzBt4paAG1swbQ==',
+            ],
+            'Ascii' => [
+                "\x00\x00\x00" . "\x7f\x7f\x7f" . "\x7f\x7f\x7f" . "\xff\xff\xff",
+                2,
+                2,
+                Mode::Ascii,
+                'IHQKdEA=',
+            ],
+            'TrueColor' => [
+                "\xff\x00\x00" . "\x00\xff\x00" . "\x00\x00\xff" . "\xff\xff\x00",
+                2,
+                2,
+                Mode::TrueColor,
+                'G1swOzM4OzI7MjU1OzA7MG07G1swOzM4OzI7MDsyNTU7MG1mChtbMDszODsyOzA7MDsyNTVtLhtbMDszODsyOzI1NTsyNTU7MG04G1swbQ==',
+            ],
+            'QuarterBlock' => [
+                $qb,
+                4,
+                4,
+                Mode::QuarterBlock,
+                'G1swOzM4OzI7NDA7NDA7NTM7NDg7MjswOzA7MG3ilp8bWzA7Mzg7MjsxNjA7NDA7MTMzOzQ4OzI7MTIwOzA7ODBt4pafChtbMDszODsyOzQwOzE2MDsxMzM7NDg7MjswOzEyMDs4MG3ilp8bWzA7Mzg7MjsxNjA7MTYwOzIxMzs0ODsyOzEyMDsxMjA7MTYwbeKWnxtbMG0=',
+            ],
+        ];
+    }
+
+    /**
      * Regression (tick path): after a tick advances the frame, view() must
      * still emit the full frame. The old implementation set the diff baseline
      * to the just-advanced frame inside updateTick(), so view() diffed the
