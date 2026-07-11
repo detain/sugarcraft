@@ -283,11 +283,14 @@ final class Node
             return $inner + $marginW;
         }
 
-        $childWidths = \array_sum(\array_map(fn(Node $c) => $c->totalWidth(), $this->children));
         $gaps = (\count($this->children) - 1) * $this->spacing;
 
-        // For HORIZONTAL, border is shared; for VERTICAL, each child may have border
+        // For HORIZONTAL, children sit side-by-side so width is their SUM and the
+        // border is shared once. Compute the child sum only on this branch — the
+        // VERTICAL branch below never uses it, so summing there was a wasted full
+        // subtree traversal (it already re-walks the children for the max).
         if ($this->kind === self::HORIZONTAL) {
+            $childWidths = \array_sum(\array_map(fn(Node $c) => $c->totalWidth(), $this->children));
             $extra = $this->border ? 2 : 0;
             return $childWidths + $gaps + $extra + $marginW;
         }

@@ -666,4 +666,99 @@ final class SugarBoxerTest extends TestCase
         // The last child's content 'c4' should appear (trailing child never vanishes)
         $this->assertStringContainsString('c4', $result);
     }
+
+    // -------------------------------------------------------------------------
+    // SGR-prefix cache (WeakMap): parity, eviction, reset
+    // -------------------------------------------------------------------------
+
+    /**
+     * A warm SGR-prefix cache must render byte-identically to a cold one. A resize
+     * forces the full-output path again while leaving the WeakMap warm (only
+     * resetPreviousFrame() clears it), so the second render is served from the
+     * cache — and must match a fresh cold render exactly.
+     */
+    public function testStyledRenderByteIdenticalWarmVsColdCache(): void
+    {
+        $style = Style::new()->fg(Color::ansi(14));
+        $layout = Node::leaf('ABCD')->withBorder(false)->withStyle($style);
+
+        // Cold: fresh boxer, first (full-output) render.
+        $cold = SugarBoxer::new()->render($layout, 8, 2);
+
+        // Warm: render once to populate the WeakMap, then resize to force the
+        // full-output path again with the cache still warm (same Style object).
+        $warmBoxer = SugarBoxer::new();
+        $warmBoxer->render($layout, 8, 1);         // warms the cache
+        $warm = $warmBoxer->render($layout, 8, 2); // full output, warm cache hit
+
+        $this->assertSame($cold, $warm, 'Warm-cache render must be byte-identical to cold-cache render');
+        $this->assertStringContainsString("\x1b[", $cold, 'Output is actually styled (carries an SGR escape)');
+    }
+
+    /**
+     * Regression for the spl_object_id-reuse stale-cache bug: the SGR-prefix
+     * cache is a WeakMap keyed by the Style OBJECT, so a freed style's entry is
+     * evicted automatically. The prior int-keyed (spl_object_id) array never
+     * evicted, so a later, DIFFERENT style reusing the freed id would have
+     * aliased this dead style's stale prefix (wrong colour). Auto-eviction is the
+     * mechanism that makes that aliasing impossible.
+     */
+    public function testSgrPrefixCacheEvictsFreedStyle(): void
+    {
+        $boxer = SugarBoxer::new();
+        $ref = new \ReflectionProperty($boxer, 'sgrPrefixCache');
+        $ref->setAccessible(true);
+
+        $style = Style::new()->fg(Color::ansi(14));
+        $node  = Node::leaf('x')->withBorder(false)->withStyle($style);
+        $boxer->render($node, 6, 1);
+
+        $cache = $ref->getValue($boxer);
+        $this->assertInstanceOf(\WeakMap::class, $cache, 'SGR prefix cache is a WeakMap keyed by Style object');
+        $this->assertCount(1, $cache, 'Rendering a styled leaf populates the cache');
+
+        // Drop every strong reference to the style; a WeakMap drops its entry
+        // with the object (an int-keyed array never would).
+        unset($style, $node);
+        \gc_collect_cycles();
+
+        $this->assertCount(0, $cache, 'Freed Style must be evicted from the WeakMap (no stale-alias, no unbounded growth)');
+    }
+
+    /**
+     * resetPreviousFrame() must also drop the SGR-prefix cache so it is rebuilt
+     * alongside the next full frame.
+     */
+    public function testResetPreviousFrameClearsSgrPrefixCache(): void
+    {
+        $boxer = SugarBoxer::new();
+        $ref = new \ReflectionProperty($boxer, 'sgrPrefixCache');
+        $ref->setAccessible(true);
+
+        $style = Style::new()->fg(Color::ansi(14));
+        $boxer->render(Node::leaf('x')->withBorder(false)->withStyle($style), 6, 1);
+        $this->assertCount(1, $ref->getValue($boxer), 'Cache populated before reset');
+
+        $boxer->resetPreviousFrame();
+        $this->assertCount(0, $ref->getValue($boxer), 'resetPreviousFrame() clears the SGR prefix cache');
+    }
+
+    /**
+     * Guards the totalWidth() restructure: a VERTICAL node's footprint is its
+     * WIDEST child (stacked), a HORIZONTAL node's is the SUM (side-by-side).
+     */
+    public function testTotalWidthByKind(): void
+    {
+        $vertical = Node::vertical(
+            Node::leaf('a')->withBorder(false)->withMinWidth(3),
+            Node::leaf('b')->withBorder(false)->withMinWidth(7),
+        )->withBorder(false);
+        $this->assertSame(7, $vertical->totalWidth(), 'VERTICAL width = widest child');
+
+        $horizontal = Node::horizontal(
+            Node::leaf('a')->withBorder(false)->withMinWidth(3),
+            Node::leaf('b')->withBorder(false)->withMinWidth(7),
+        )->withBorder(false);
+        $this->assertSame(10, $horizontal->totalWidth(), 'HORIZONTAL width = sum of children');
+    }
 }

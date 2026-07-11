@@ -28,8 +28,21 @@ final class SugarBoxer
     /** Cap for combining character carry string to prevent memory exhaustion. */
     private const MAX_CARRY = 100;
 
-    /** @var array<int, string> SGR prefix cache keyed by spl_object_id for style object reuse */
-    private array $sgrPrefixCache = [];
+    /**
+     * Per-Style SGR-prefix cache, keyed by the Style OBJECT via a WeakMap.
+     *
+     * A WeakMap ties each entry's lifetime to its Style: when a style is GC'd,
+     * its entry is evicted automatically. This replaces the previous
+     * spl_object_id keying, which had a latent correctness bug — PHP reuses an
+     * object id immediately after the object dies, so a later, DIFFERENT style
+     * allocated into that same id slot would alias the dead style's stale prefix
+     * and render with the wrong colour/attributes. The old int-keyed array also
+     * never evicted, growing unbounded on a long-lived boxer. Keying by the
+     * object identity fixes both without changing a single rendered byte.
+     *
+     * @var \WeakMap<Style, string>
+     */
+    private \WeakMap $sgrPrefixCache;
 
     /** @var Buffer|null Lazily-built previous frame buffer for diff-based emission */
     private ?Buffer $previousFrame = null;
@@ -52,7 +65,7 @@ final class SugarBoxer
 
     public function __construct()
     {
-        // SGR prefix cache initialized as empty array
+        $this->sgrPrefixCache = new \WeakMap();
     }
 
     // -------------------------------------------------------------------------
@@ -403,20 +416,22 @@ final class SugarBoxer
         }
         $topPad = \max(0, $topPad);
 
-        // Pre-compute the SGR prefix from the style (render a single-char probe and strip trailing reset)
-        // Use array cache keyed by spl_object_id to avoid recomputing the same style's prefix repeatedly
+        // Pre-compute the SGR prefix from the style (render a single-char probe and strip trailing reset).
+        // Cache per Style OBJECT via the WeakMap (see $sgrPrefixCache) so repeated leaves and
+        // frames that reuse the same immutable Style skip the probe render, while a freed
+        // style's entry is evicted automatically and never aliases a later style.
         $sgrPrefix = '';
         if ($style !== null) {
-            $id = \spl_object_id($style);
-            if (isset($this->sgrPrefixCache[$id])) {
-                $sgrPrefix = $this->sgrPrefixCache[$id];
+            $cached = $this->sgrPrefixCache[$style] ?? null;
+            if ($cached !== null) {
+                $sgrPrefix = $cached;
             } else {
                 $probe = $style->render(' ');
                 // The render output is: SGR-open + ' ' + SGR-close
                 // Split on the sentinel byte (NUL) to isolate the opening SGR.
                 $parts = \explode("\x00", $probe, 2);
                 $sgrPrefix = $parts[0] ?? '';
-                $this->sgrPrefixCache[$id] = $sgrPrefix;
+                $this->sgrPrefixCache[$style] = $sgrPrefix;
             }
         }
 
@@ -988,5 +1003,8 @@ final class SugarBoxer
         $this->previousOutput = null;
         $this->prevWidth = null;
         $this->prevHeight = null;
+        // Drop the per-Style SGR-prefix cache too: a reset means "forget prior
+        // render state", so the prefix cache is rebuilt alongside the frame.
+        $this->sgrPrefixCache = new \WeakMap();
     }
 }
