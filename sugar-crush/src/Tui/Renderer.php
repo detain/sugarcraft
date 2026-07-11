@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Tty;
+use SugarCraft\Sprinkles\Bar\Segment;
+use SugarCraft\Sprinkles\Bar\StatusBar as BarStatusBar;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
@@ -113,18 +115,47 @@ final class Renderer
         return '';
     }
 
+    /**
+     * The live bottom status bar.
+     *
+     * Delegates segment joining, the `' | '` separator and the leading-space
+     * edge cap to the shared {@see BarStatusBar} (candy-sprinkles) primitive —
+     * the same primitive sugar-dash and candy-hermit's status bars sit on top
+     * of — so there is a single status-bar implementation. This class only
+     * supplies the crush theme (per-segment colours) and the segment set,
+     * including the literal `[Tab] Switch Pane` hint. The provider / model
+     * colours (`#9ece6a` / `#e0af68`) and the error (`#f7768e` bold) vs. status
+     * (`#9ece6a`) precedence are unchanged from the previous hand-rolled string.
+     *
+     * Behaviour note: the primitive skips an empty segment, so when there is
+     * neither an error nor a status the previous hand-rolled template's trailing
+     * dangling `' | '` separator (an empty final slot) is no longer emitted — the
+     * bar simply ends at `[Tab] Switch Pane`. All populated cases stay byte-exact.
+     */
     private static function statusBar(App $a): string
     {
-        $provider = Style::new()->foreground(Color::hex('#9ece6a'))->render($a->provider->name());
-        $model = Style::new()->foreground(Color::hex('#e0af68'))->render($a->model);
-        $pane = $a->pane->label();
+        $segments = [
+            Segment::of($a->provider->name(), Style::new()->foreground(Color::hex('#9ece6a'))),
+            Segment::of($a->model, Style::new()->foreground(Color::hex('#e0af68'))),
+            Segment::of('[Tab] Switch Pane'),
+        ];
 
-        $status = $a->error
-            ? Style::new()->foreground(Color::hex('#f7768e'))->bold()->render('error: ' . $a->error)
-            : ($a->status
-                ? Style::new()->foreground(Color::hex('#9ece6a'))->render($a->status)
-                : '');
+        if ($a->error) {
+            $segments[] = Segment::of(
+                'error: ' . $a->error,
+                Style::new()->foreground(Color::hex('#f7768e'))->bold(),
+            );
+        } elseif ($a->status) {
+            $segments[] = Segment::of(
+                $a->status,
+                Style::new()->foreground(Color::hex('#9ece6a')),
+            );
+        }
 
-        return " $provider | $model | [Tab] Switch Pane | $status";
+        return BarStatusBar::new()
+            ->separator(' | ')
+            ->caps(' ', '')
+            ->left(...$segments)
+            ->render();
     }
 }
