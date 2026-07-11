@@ -647,6 +647,15 @@ final class Veil
             $lineLen = \strlen($line);
             $pos = 0;
 
+            // Split into characters ONCE per row so the per-column read below is
+            // O(1). mb_substr($line, $pos, 1) is O($pos) (it re-scans from the
+            // start of the string to reach character offset $pos), which made the
+            // old per-position loop O(n²) per row. mb_str_split()[$pos] ?? '' is
+            // byte-for-byte identical to mb_substr($line, $pos, 1) for every
+            // $pos >= 0 — including the byte-tail edge where $pos exceeds the
+            // character count and both yield '' (see testMultibyteLineThroughDiffBuffer).
+            $chars = \mb_str_split($line);
+
             while ($pos < $lineLen) {
                 // Skip ANSI escape sequences (CSI format: ESC [ ... letter)
                 if ($line[$pos] === "\e" && $pos + 1 < $lineLen && $line[$pos + 1] === '[') {
@@ -665,7 +674,7 @@ final class Veil
                 }
 
                 // Place this visible character at the current column
-                $char = \mb_substr($line, $pos, 1);
+                $char = $chars[$pos] ?? '';
                 $grid[$row * $width + $col] = Cell::new($char, null, null, 1);
                 $col++;
                 $pos++;

@@ -817,6 +817,55 @@ final class VeilTest extends TestCase
         $this->assertStringNotContainsString('background line', $delta, 'Changed frame is a delta, not full output');
     }
 
+    /**
+     * Byte-for-byte parity anchor for the mb_str_split() refactor of
+     * bufferFromOutput(). The per-column read now indexes a once-per-row
+     * mb_str_split() array instead of calling mb_substr($line, $pos, 1) inside
+     * the loop (O(n²) -> O(n) per row). Because mb_substr($s, $i, 1) equals
+     * mb_str_split($s)[$i] ?? '' for every $i >= 0, the diff-path output must be
+     * identical to the last byte. These golden strings were captured from the
+     * pre-refactor mb_substr() implementation — reverting the optimization must
+     * reproduce them exactly, so any drift in the diff encoding is caught here.
+     *
+     * The wide-CJK frame is the important case: it exercises the byte-index vs
+     * character-index tail where a 3-byte rune spans several $pos values and the
+     * out-of-range reads return '' — precisely where a naive character-indexed
+     * rewrite would silently change the emitted bytes.
+     */
+    public function testBufferFromOutputDiffBytesAreStableAcrossMbRefactor(): void
+    {
+        $bg  = str_repeat("background line padding here\n", 6);
+
+        // Wide-CJK overlay: one-character change on line 2 between frames.
+        $cjk = Veil::new();
+        $cjk->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER);
+        $cjkDelta = $cjk->composite("日本語テスト\nコンポジッX", $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame(
+            "\e[4;14HXding here",
+            $cjkDelta,
+            'Wide-CJK diff-path bytes must be byte-identical to the pre-refactor mb_substr() output',
+        );
+
+        // ASCII overlay: single-character change between frames.
+        $ascii = Veil::new();
+        $ascii->composite("overlay-one\noverlay-two", $bg, Position::CENTER, Position::CENTER);
+        $asciiDelta = $ascii->composite("overlay-one\noverlay-tXo", $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame(
+            "\e[4;18HX",
+            $asciiDelta,
+            'ASCII diff-path bytes must be byte-identical to the pre-refactor mb_substr() output',
+        );
+
+        // An identical CJK frame still yields an empty delta (no spurious churn).
+        $same = Veil::new();
+        $same->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame(
+            '',
+            $same->composite("日本語テスト\nコンポジット", $bg, Position::CENTER, Position::CENTER),
+            'An unchanged multibyte frame must produce an empty delta',
+        );
+    }
+
     // ─── Step 3: per-veil position ──────────────────────────────────────────────
 
     public function testWithPositionReturnsNewInstance(): void
