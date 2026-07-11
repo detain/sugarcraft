@@ -60,6 +60,22 @@ final class AliasResolutionTest extends TestCase
         $this->assertSame(24, $matcher->score('abc', 'abc'));
     }
 
+    public function testWithProfileRebuildsDelegateMatcher(): void
+    {
+        // withProfile() must rebuild the delegate SmithWatermanMatcher from the
+        // aliased profile: strict abc/abc = 24 (vs the default profile's 19).
+        // Pins the only FuzzyMatch public method not exercised elsewhere after
+        // the duplicate scoring characterization was removed.
+        $default = new FuzzyMatch();
+        $this->assertSame(19, $default->score('abc', 'abc'));
+
+        $strict = $default->withProfile(ScoringProfile::strict());
+        $this->assertSame(24, $strict->score('abc', 'abc'));
+
+        // withProfile is immutable — the original matcher keeps its profile.
+        $this->assertSame(19, $default->score('abc', 'abc'));
+    }
+
     public function testCandyAsyncCancellationExceptionResolves(): void
     {
         // Model doc-comments reference this class as the intended cancellation
