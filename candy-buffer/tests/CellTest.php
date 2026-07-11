@@ -108,4 +108,28 @@ final class CellTest extends TestCase
         $cell6 = Cell::new('x', $style, $link, 2);
         $this->assertFalse($cell1->equals($cell6));
     }
+
+    /**
+     * Pins the documented control-byte contract (see Cell class docblock):
+     * Cell deliberately does NOT validate its rune — control bytes are
+     * stored and returned VERBATIM, so callers rendering untrusted text
+     * must sanitize before building cells. A hard reject in Cell::new()/
+     * the constructor was evaluated but deferred because foundation
+     * consumers (candy-lister, sugar-crush, sugar-table) splat pre-rendered
+     * strings char-by-char into runes and rely on this pass-through. If the
+     * pass-through is ever swapped for a hard reject, this test fails —
+     * forcing that decision (and its dependents' sanitization) to be
+     * revisited deliberately.
+     */
+    public function testRuneStoresControlBytesVerbatim(): void
+    {
+        foreach (["\x00", "\x07", "\x1b", "\x1f", "\x7f"] as $ctrl) {
+            $cell = Cell::new($ctrl);
+            $this->assertSame($ctrl, $cell->rune());
+        }
+
+        // Same pass-through via the raw constructor (the applyDiff sink path).
+        $viaCtor = new Cell("\x1b[0m", null, null, 1);
+        $this->assertSame("\x1b[0m", $viaCtor->rune());
+    }
 }
