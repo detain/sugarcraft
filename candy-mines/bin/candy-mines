@@ -18,12 +18,66 @@ declare(strict_types=1);
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Mines\Difficulty;
 use SugarCraft\Mines\Game;
+use SugarCraft\Mines\Stats\DifficultyStats;
+use SugarCraft\Mines\Ui\CustomDifficulty;
 
-// Optional CLI: candy-mines [width] [height] [mines]
-$argv2 = $argv ?? [];
-$w = (int)($argv2[1] ?? 10);
-$h = (int)($argv2[2] ?? 10);
-$m = (int)($argv2[3] ?? max(1, intdiv($w * $h, 8)));
+/**
+ * CLI:
+ *   candy-mines                        # default 10×10, 12 mines
+ *   candy-mines [width] [height] [mines]
+ *   candy-mines --easy|--medium|--expert
+ *
+ * Stats persistence is opt-in: set CANDY_MINES_STATS=/path/to/stats.json and a
+ * completed game's outcome is recorded there across sessions.
+ */
+$args   = array_slice($argv ?? [], 1);
+$preset = null;
+$positional = [];
+foreach ($args as $arg) {
+    switch ($arg) {
+        case '--easy':   $preset = Difficulty::EASY;   break;
+        case '--medium': $preset = Difficulty::MEDIUM; break;
+        case '--expert': $preset = Difficulty::EXPERT; break;
+        default:
+            if (str_starts_with($arg, '-')) {
+                fwrite(STDERR, "candy-mines: unknown option {$arg}\n");
+                fwrite(STDERR, "usage: candy-mines [width] [height] [mines] | --easy | --medium | --expert\n");
+                exit(1);
+            }
+            $positional[] = $arg;
+    }
+}
 
-(new Program(Game::start($w, $h, $m), new ProgramOptions(useAltScreen: true, mouseMode: MouseMode::CellMotion)))->run();
+// Opt-in stats persistence: seed accumulated stats from disk if the file exists.
+$statsPathEnv = getenv('CANDY_MINES_STATS');
+$statsPath = ($statsPathEnv !== false && $statsPathEnv !== '') ? $statsPathEnv : null;
+$stats = null;
+if ($statsPath !== null && is_file($statsPath)) {
+    try {
+        $stats = DifficultyStats::load($statsPath)?->getStats();
+    } catch (\Throwable $e) {
+        fwrite(STDERR, "candy-mines: ignoring unreadable stats file ({$e->getMessage()})\n");
+    }
+}
+
+if ($preset !== null) {
+    $game = Game::withDifficulty($preset, stats: $stats, statsPath: $statsPath);
+} else {
+    $w = (int)($positional[0] ?? 10);
+    $h = (int)($positional[1] ?? 10);
+    $m = (int)($positional[2] ?? max(1, intdiv($w * $h, 8)));
+    // Route raw CLI ints through CustomDifficulty::fromInput() so unsafe boards
+    // (e.g. a mine count that leaves no safe 3×3 for the first click) are
+    // rejected loudly instead of producing a broken game.
+    try {
+        CustomDifficulty::fromInput($h, $w, $m);
+    } catch (\InvalidArgumentException $e) {
+        fwrite(STDERR, "candy-mines: {$e->getMessage()}\n");
+        exit(1);
+    }
+    $game = Game::start($w, $h, $m, stats: $stats, statsPath: $statsPath);
+}
+
+(new Program($game, new ProgramOptions(useAltScreen: true, mouseMode: MouseMode::CellMotion)))->run();

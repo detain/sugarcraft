@@ -10,10 +10,13 @@ use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
+use SugarCraft\Mines\Board;
+use SugarCraft\Mines\Cell;
 use SugarCraft\Mines\Difficulty;
 use SugarCraft\Mines\Game;
 use SugarCraft\Mines\Renderer;
 use SugarCraft\Mines\Stats;
+use SugarCraft\Mines\Stats\DifficultyStats;
 use PHPUnit\Framework\TestCase;
 
 final class GameTest extends TestCase
@@ -252,7 +255,8 @@ final class GameTest extends TestCase
             $this->markTestSkipped('Could not trigger explosion with deterministic rand');
         }
 
-        $g = $g->recordResult(30);
+        // update() auto-records the loss on the explosion transition — calling
+        // recordResult() again here would double-count the game.
         $stats = $g->stats();
 
         $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
@@ -326,6 +330,130 @@ final class GameTest extends TestCase
         $stats = $g->stats();
 
         $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+    }
+
+    // ─── W15: update() wires recordResult() into the win/lose transition ─────
+
+    /**
+     * Build a 9×9 EASY board that is exactly one safe reveal away from a win,
+     * with the cursor on the last unrevealed safe cell (8,8). The target has a
+     * non-zero adjacent count so revealing it does not cascade. Presets are
+     * required because recordResult() only records for recognised difficulties.
+     */
+    private static function nearWinEasyGame(?string $statsPath = null): Game
+    {
+        // 10 mines placed off the target (8,8); (7,7) makes the target adj>0.
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '7,7'];
+        $rows = [];
+        $revealedCount = 0;
+        for ($y = 0; $y < 9; $y++) {
+            $row = [];
+            for ($x = 0; $x < 9; $x++) {
+                $isMine   = in_array("$x,$y", $mineSet, true);
+                $isTarget = ($x === 8 && $y === 8);
+                $revealed = !$isMine && !$isTarget;
+                if ($revealed) {
+                    $revealedCount++;
+                }
+                // Target adj=1 so floodReveal stops after the single cell.
+                $row[] = new Cell($isMine, $revealed, false, $isTarget ? 1 : 0);
+            }
+            $rows[] = $row;
+        }
+        // 81 cells − 10 mines − 1 unrevealed target = 70 revealed safe cells.
+        $board = new Board(9, 9, 10, $rows, true, false, $revealedCount, 0);
+
+        return new Game(
+            board: $board,
+            cursorX: 8,
+            cursorY: 8,
+            rand: static fn(int $max): int => 0,
+            startedAt: microtime(true),
+            statsPath: $statsPath,
+        );
+    }
+
+    public function testUpdateRecordsWinTransition(): void
+    {
+        $g = self::nearWinEasyGame();
+        $this->assertFalse($g->board->isWon(), 'sanity: game not yet won');
+        $this->assertSame(0, $g->stats()->gamesPlayed(Difficulty::EASY));
+
+        // Revealing the last safe cell wins — update() must record it.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        $this->assertTrue($g->board->isWon(), 'sanity: reveal should win the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(1, $g->stats()->wins(Difficulty::EASY));
+        $this->assertNotNull($g->stats()->bestTime(Difficulty::EASY), 'a win must record a best time');
+    }
+
+    public function testUpdateRecordsLossTransition(): void
+    {
+        // 9×9 EASY board with a mine under the cursor at (0,0).
+        $mineSet = ['0,0', '1,0', '2,0', '3,0', '4,0', '5,0', '6,0', '7,0', '8,0', '0,1'];
+        $rows = [];
+        for ($y = 0; $y < 9; $y++) {
+            $row = [];
+            for ($x = 0; $x < 9; $x++) {
+                $row[] = new Cell(in_array("$x,$y", $mineSet, true), false, false, 0);
+            }
+            $rows[] = $row;
+        }
+        $board = new Board(9, 9, 10, $rows, true, false, 0, 0);
+        $g = new Game($board, 0, 0, static fn(int $max): int => 0, microtime(true));
+
+        // Revealing the mine explodes — update() must record the loss.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        $this->assertTrue($g->board->exploded, 'sanity: reveal should explode the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+        $this->assertSame(0, $g->stats()->wins(Difficulty::EASY));
+    }
+
+    public function testUpdateDoesNotRecordTwiceAfterGameEnds(): void
+    {
+        $g = self::nearWinEasyGame();
+        [$g, ] = $g->update(self::key(KeyType::Space));   // win, records once
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+
+        // Further keys on a finished board must not re-record.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+    }
+
+    public function testRestartPreservesAccumulatedStats(): void
+    {
+        $g = self::nearWinEasyGame();
+        [$g, ] = $g->update(self::key(KeyType::Space));   // win recorded
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+
+        // Restart must carry the session tally (and stats path) forward.
+        [$g, ] = $g->update(self::key(KeyType::Char, 'r'));
+        $this->assertFalse($g->board->minesPlaced, 'sanity: restart resets the board');
+        $this->assertSame(1, $g->stats()->gamesPlayed(Difficulty::EASY));
+    }
+
+    public function testUpdatePersistsStatsToDiskOnGameOver(): void
+    {
+        $path = sys_get_temp_dir() . '/candy-mines-w15-' . bin2hex(random_bytes(4)) . '.json';
+        try {
+            $g = self::nearWinEasyGame($path);
+            $this->assertFileDoesNotExist($path, 'sanity: no stats file before the game ends');
+
+            [$g, ] = $g->update(self::key(KeyType::Space));   // win → persisted
+
+            $this->assertFileExists($path, 'winning game must write the opt-in stats file');
+            $loaded = DifficultyStats::load($path)?->getStats();
+            $this->assertNotNull($loaded);
+            $this->assertSame(1, $loaded->gamesPlayed(Difficulty::EASY));
+            $this->assertSame(1, $loaded->wins(Difficulty::EASY));
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
     }
 
     // ─── Chord key ─────────────────────────────────────────────────────────
