@@ -70,6 +70,60 @@ final class SanitizeTest extends TestCase
         $this->assertStringNotContainsString("\x1b[0m", $rendered);
     }
 
+    /**
+     * renderFencedCode strips C0/ESC control bytes BEFORE handing the body to
+     * the syntax highlighter, so crafted terminal-control sequences embedded in
+     * a fenced code block can never reach the terminal — even when the code is
+     * routed through the *active* (colour-emitting) highlighter. Guards against
+     * terminal-injection via markdown code blocks (title-set OSC, cursor DSR,
+     * raw colour CSI), the one behaviour the deleted sugar-glow
+     * ChromaJsonHighlighter reimplemented locally.
+     */
+    public function testInjectedControlBytesInHighlightedFencedCodeNeutralized(): void
+    {
+        $osc = "\x1b]0;INJECTED\x07"; // OSC set-window-title + BEL terminator
+        $dsr = "\x1b[6n";              // device-status-report cursor query
+        $csi = "\x1b[31m";             // raw red SGR
+        // Number 42 sits on a clean line; the injection rides a comment line so
+        // it cannot glue onto the token we assert on.
+        $input = "```php\n\$x = 42;\n// note{$csi}{$osc}{$dsr}\n```\n";
+
+        // ANSI theme => the highlighter emits real SGR: the negative assertions
+        // below are meaningful, not a no-colour no-op.
+        $rendered = Renderer::ansi()->render($input);
+
+        // Injected control introducers are gone: the highlighter only ever emits
+        // SGR (ending in 'm'), never an OSC-0, BEL, or DSR query.
+        $this->assertStringNotContainsString("\x1b]0;", $rendered);
+        $this->assertStringNotContainsString("\x07", $rendered);
+        $this->assertStringNotContainsString("\x1b[6n", $rendered);
+
+        // Payload text survives as inert, visible characters — proving the ESC/BEL
+        // bytes were neutralised, not that the whole block was dropped.
+        $this->assertStringContainsString('INJECTED', $rendered);
+
+        // Sanity: the highlighter is active (number 42 → yellow), so the strip is
+        // exercised on the real "before highlighting" path.
+        $this->assertStringContainsString("\x1b[38;2;255;255;0m", $rendered);
+    }
+
+    /**
+     * Contrast/regression guard: with sanitisation disabled the SAME injected
+     * fenced-code sequence leaks through verbatim. This proves the strip in
+     * renderFencedCode — not the tokeniser — is what neutralises the injection,
+     * making {@see testInjectedControlBytesInHighlightedFencedCodeNeutralized}
+     * load-bearing.
+     */
+    public function testFencedCodeSanitizeFalseLeaksInjection(): void
+    {
+        $input = "```php\n\$x = 42;\n// note\x1b]0;INJECTED\x07\n```\n";
+        // Plain theme keeps the highlighter output free of its own SGR, so the
+        // leaked bytes are unambiguously the source injection.
+        $rendered = Renderer::plain()->withSanitize(false)->render($input);
+        $this->assertStringContainsString("\x1b]0;", $rendered);
+        $this->assertStringContainsString("\x07", $rendered);
+    }
+
     public function testHyperlinkUrlEscStripped(): void
     {
         // ESC ]2; is the OSC-8 opener; BEL terminates it — neither belongs in URL.
