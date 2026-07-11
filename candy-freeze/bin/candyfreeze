@@ -29,6 +29,52 @@ use SugarCraft\Freeze\PngRenderer;
 use SugarCraft\Freeze\SvgRenderer;
 use SugarCraft\Freeze\Theme;
 
+/**
+ * Resolve a filesystem path and require it to live inside the current working
+ * directory, defeating `../` traversal and absolute-path escapes before we
+ * read or write attacker-influenced locations. Returns the resolved absolute
+ * path, or null when it escapes the CWD (the caller rejects with exit 2).
+ *
+ * `$unsafe` (the `--unsafe-paths` opt-out) bypasses confinement entirely.
+ *
+ * Paths that do not yet exist (e.g. an `--output` target, or a new file in the
+ * CWD) are confined by their nearest existing ancestor directory, so creating
+ * a file inside the CWD stays allowed while writing outside it does not.
+ */
+function candyfreeze_confine_path(string $path, bool $unsafe): ?string
+{
+    if ($unsafe) {
+        return $path;
+    }
+    $cwd = realpath(getcwd() ?: '.');
+    if ($cwd === false) {
+        return null;
+    }
+    $cwd = rtrim($cwd, DIRECTORY_SEPARATOR);
+
+    $absolute = preg_match('#^([/\\\\]|[A-Za-z]:)#', $path) === 1
+        ? $path
+        : $cwd . DIRECTORY_SEPARATOR . $path;
+
+    // Walk up to the nearest existing ancestor so a not-yet-created target is
+    // still confined by the directory it would be written into.
+    $ancestor = $absolute;
+    while (($real = realpath($ancestor)) === false) {
+        $parent = dirname($ancestor);
+        if ($parent === $ancestor) {
+            return null; // ran off the filesystem root without resolving
+        }
+        $ancestor = $parent;
+    }
+    $resolved = $real . substr($absolute, strlen($ancestor));
+
+    $prefix = $cwd . DIRECTORY_SEPARATOR;
+    if ($resolved !== $cwd && !str_starts_with($resolved, $prefix)) {
+        return null;
+    }
+    return $resolved;
+}
+
 $argv = $_SERVER['argv'] ?? $argv ?? [];
 array_shift($argv);
 
@@ -47,6 +93,7 @@ $output         = null;
 $inputPath      = null;
 $format         = 'svg';
 $language       = null;
+$unsafePaths    = false;
 
 while (($arg = array_shift($argv)) !== null) {
     switch ($arg) {
@@ -67,12 +114,11 @@ while (($arg = array_shift($argv)) !== null) {
             $windowStyle = $styleRaw;
             break;
         case '--ligatures':     $ligatures    = true; break;
+        case '--unsafe-paths':  $unsafePaths  = true; break;
         case '--font':
+            // Existence, confinement and font-signature checks are deferred
+            // until after parsing so --unsafe-paths (order-independent) applies.
             $fontPath = (string) array_shift($argv);
-            if (!file_exists($fontPath)) {
-                fwrite(STDERR, Lang::t('cli.font_not_found', ['path' => $fontPath]) . "\n");
-                exit(2);
-            }
             break;
         case '--highlight':
             $hlFormat = (string) array_shift($argv);
@@ -125,11 +171,41 @@ if ($theme === null) {
     exit(2);
 }
 
-if ($inputPath !== null && is_link($inputPath)) {
-    $realPath = realpath($inputPath);
-    $cwd = getcwd();
-    if ($realPath !== false && str_starts_with($realPath, $cwd) === false) {
-        fwrite(STDERR, Lang::t('cli.path_outside_cwd') . "\n");
+// Confine every attacker-influenced filesystem path to the CWD (defeats `../`
+// traversal, absolute-path escapes and symlink hops) unless the operator
+// explicitly opts out with --unsafe-paths.
+if ($inputPath !== null) {
+    $confined = candyfreeze_confine_path($inputPath, $unsafePaths);
+    if ($confined === null) {
+        fwrite(STDERR, Lang::t('cli.path_outside_cwd', ['path' => $inputPath]) . "\n");
+        exit(2);
+    }
+    $inputPath = $confined;
+}
+if ($output !== null) {
+    $confined = candyfreeze_confine_path($output, $unsafePaths);
+    if ($confined === null) {
+        fwrite(STDERR, Lang::t('cli.path_outside_cwd', ['path' => $output]) . "\n");
+        exit(2);
+    }
+    $output = $confined;
+}
+if ($fontPath !== null) {
+    $confined = candyfreeze_confine_path($fontPath, $unsafePaths);
+    if ($confined === null) {
+        fwrite(STDERR, Lang::t('cli.path_outside_cwd', ['path' => $fontPath]) . "\n");
+        exit(2);
+    }
+    $fontPath = $confined;
+    if (!is_file($fontPath)) {
+        fwrite(STDERR, Lang::t('cli.font_not_found', ['path' => $fontPath]) . "\n");
+        exit(2);
+    }
+    // Reject any blob without a real font signature before base64-embedding it
+    // into the SVG — a hostile file could otherwise smuggle in markup/script.
+    $fontHead = @file_get_contents($fontPath, false, null, 0, 4);
+    if ($fontHead === false || SvgRenderer::sniffFontMime($fontHead) === null) {
+        fwrite(STDERR, Lang::t('cli.font_invalid', ['path' => $fontPath]) . "\n");
         exit(2);
     }
 }
