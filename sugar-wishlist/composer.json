@@ -33,7 +33,6 @@
         "php": ">=8.3",
         "ext-pcntl": "*",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/sugar-bits": "dev-master",
         "sugarcraft/candy-fuzzy": "dev-master"
     },
     "require-dev": {
@@ -61,13 +60,6 @@
         },
         {
             "type": "path",
-            "url": "../sugar-bits",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "../candy-pty",
             "options": {
                 "symlink": true
@@ -75,70 +67,7 @@
         },
         {
             "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-forms",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-zone",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../honey-bounce",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-palette",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-buffer",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "../candy-fuzzy",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-layout",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-mouse",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-async",
             "options": {
                 "symlink": true
             }
