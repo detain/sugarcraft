@@ -120,4 +120,45 @@ final class PanicFormatterTest extends TestCase
         $this->assertStringContainsString('file.php', $out);
         $this->assertStringContainsString('42', $out);
     }
+
+    // -------------------------------------------------------------------------
+    // [SEC] showLocals secret exposure + redaction of dumped locals
+    // -------------------------------------------------------------------------
+
+    /** @return \Throwable A throwable whose top frame carries a secret arg. */
+    private function exceptionWithSecretLocal(string $secret): \Throwable
+    {
+        $e = new \RuntimeException('boom');
+        $traceProp = new \ReflectionProperty(\Exception::class, 'trace');
+        $traceProp->setAccessible(true);
+        $traceProp->setValue($e, [[
+            'file' => __FILE__,
+            'line' => 5,
+            'function' => 'connect',
+            'class' => 'Db',
+            'type' => '->',
+            'args' => [$secret],
+        ]]);
+        return $e;
+    }
+
+    public function testShowLocalsDumpsScalarArgs(): void
+    {
+        // Documents the risk the redaction guards against: with showLocals ON
+        // and no redaction configured, a secret argument leaks verbatim.
+        $f = PanicFormatter::pretty(showLocals: true);
+        $out = $f->format($this->exceptionWithSecretLocal('supersecret-token'));
+        $this->assertStringContainsString('supersecret-token', $out);
+    }
+
+    public function testShowLocalsRedactsConfiguredSecretsInLocals(): void
+    {
+        // The fix: redactPaths substrings are now stripped from dumped locals,
+        // not just from backtrace file paths.
+        $f = PanicFormatter::pretty(showLocals: true, redactPaths: ['supersecret-token']);
+        $out = $f->format($this->exceptionWithSecretLocal('supersecret-token'));
+
+        $this->assertStringNotContainsString('supersecret-token', $out);
+        $this->assertStringContainsString('[redacted]', $out);
+    }
 }

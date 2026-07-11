@@ -10,6 +10,12 @@ namespace SugarCraft\Log;
  * Allows callers to specify which log-parts appear and in what sequence,
  * enabling custom log formats (e.g., msg-first, syslog-friendly, etc.).
  *
+ * Scope: PartsOrder is honored ONLY by {@see \SugarCraft\Log\Formatter\TextFormatter}.
+ * The JSON and logfmt formatters intentionally ignore it — a JSON object has
+ * no significant member order and a logfmt record follows a fixed conventional
+ * order. {@see \SugarCraft\Log\Logger::withPartsOrder()} therefore only rewires
+ * the active formatter when it is a TextFormatter.
+ *
  * Mirrors charmbracelet/log's PartsOrder where applicable.
  */
 final class PartsOrder

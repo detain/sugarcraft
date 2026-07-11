@@ -10,6 +10,12 @@ use SugarCraft\Log\Level;
 /**
  * JSON formatter — emits one JSON object per log line.
  * Mirrors charmbracelet/log's JSONFormatter.
+ *
+ * The emitted object always carries the same fixed keys (level, msg, time,
+ * caller, prefix, then context); this formatter does NOT honor
+ * {@see \SugarCraft\Log\PartsOrder}, which is a TextFormatter-only concern.
+ * JSON object member order is not semantically significant, so there is
+ * nothing for PartsOrder to reorder here.
  */
 final class JsonFormatter implements Formatter
 {
