@@ -17,6 +17,7 @@ use SugarCraft\Forms\Fuzzy\FuzzyMatcher;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\TextInput\TextInput;
+use SugarCraft\Forms\TextInput\ValidateOn;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Validator\Validator;
 
@@ -33,6 +34,17 @@ final class Input implements \SugarCraft\Forms\Field
      * @var list<\Closure(string):?string>
      */
     private array $validators = [];
+
+    /**
+     * When the Field-level validator chain runs. Defaults to
+     * {@see ValidateOn::None} (validate on every keystroke) to preserve the
+     * historical validate-on-change behaviour. When set to
+     * {@see ValidateOn::Blur} or {@see ValidateOn::Submit} the chain is NOT
+     * run per-keystroke — it runs on {@see blur()} / {@see revalidate()}
+     * respectively — which also avoids paying a per-keystroke ReDoS cost for
+     * expensive validators (e.g. a catastrophic {@see Validator\Pattern}).
+     */
+    private ValidateOn $validateOn = ValidateOn::None;
 
     /** @var (\Closure(string):list<string>)|null */
     private $suggestionsFunc;
@@ -69,6 +81,7 @@ final class Input implements \SugarCraft\Forms\Field
         int $pendingAsyncSeq = 0,
         ?CancellationSource $pendingAsyncCancellation = null,
         WorkerPool $workerPool = null,
+        ValidateOn $validateOn = ValidateOn::None,
     ) {
         $this->validators = $validators;
         $this->suggestionsFunc = $suggestionsFunc;
@@ -78,6 +91,7 @@ final class Input implements \SugarCraft\Forms\Field
         $this->pendingAsyncSeq = $pendingAsyncSeq;
         $this->pendingAsyncCancellation = $pendingAsyncCancellation;
         $this->workerPool = $workerPool;
+        $this->validateOn = $validateOn;
     }
 
     public static function new(string $key): self
@@ -144,6 +158,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $cancellationSource,
             workerPool:                $this->workerPool,
+            validateOn:                $this->validateOn,
         );
     }
 
@@ -203,6 +218,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
+            validateOn:                $this->validateOn,
         );
     }
 
@@ -241,6 +257,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
+            validateOn:                $this->validateOn,
         );
     }
 
@@ -270,6 +287,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $workerPool,
+            validateOn:                $this->validateOn,
         );
     }
 
@@ -314,6 +332,43 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
+            validateOn:                $this->validateOn,
+        );
+    }
+
+    /**
+     * Control WHEN the Field-level validator chain runs. Mirrors the timing
+     * modes of the inner {@see TextInput} but applies to the Field's own
+     * validators (which run independently of the TextInput's).
+     *
+     * - {@see ValidateOn::None} / {@see ValidateOn::Change} — validate on
+     *   every keystroke (the default, backward-compatible behaviour).
+     * - {@see ValidateOn::Blur} — validate only when the field loses focus
+     *   (see {@see blur()}).
+     * - {@see ValidateOn::Submit} — validate only when the form re-validates
+     *   the field (see {@see revalidate()}), i.e. on submit.
+     *
+     * Deferring to Blur/Submit avoids running an expensive validator on every
+     * keystroke — notably a catastrophic {@see Validator\Pattern} whose PCRE
+     * would otherwise pay its (potentially ReDoS-scale) cost per keypress.
+     */
+    public function withValidateOn(ValidateOn $timing): self
+    {
+        return new self(
+            key:                       $this->key,
+            input:                     $this->input,
+            title:                     $this->title,
+            description:               $this->description,
+            error:                     $this->error,
+            validators:                $this->validators,
+            suggestionsFunc:           $this->suggestionsFunc,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+            asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+            workerPool:                $this->workerPool,
+            validateOn:                $timing,
         );
     }
 
@@ -370,7 +425,12 @@ final class Input implements \SugarCraft\Forms\Field
 
     public function blur(): Field
     {
-        return $this->mutate(input: $this->input->blur());
+        $next = $this->mutate(input: $this->input->blur());
+        // When timing is Blur, run the deferred validator chain now.
+        if ($this->validateOn === ValidateOn::Blur) {
+            $next = $next->validate();
+        }
+        return $next;
     }
 
     public function update(Msg $msg): array
@@ -391,7 +451,12 @@ final class Input implements \SugarCraft\Forms\Field
             $ti = $ti->withSuggestions($candidates)->showSuggestions($candidates !== []);
         }
         $next = $this->mutate(input: $ti);
-        $next = $next->validate();
+        // Only validate per-keystroke when timing is None/Change (the default).
+        // Blur/Submit defer the chain to blur()/revalidate() so an expensive
+        // validator (e.g. a catastrophic Pattern) isn't paid on every keypress.
+        if ($this->validateOn === ValidateOn::None || $this->validateOn === ValidateOn::Change) {
+            $next = $next->validate();
+        }
 
         // Schedule async suggestions with debounce on Char keystroke
         // Cancel any previously pending operation so only the latest keystroke fires
@@ -527,6 +592,7 @@ final class Input implements \SugarCraft\Forms\Field
                     pendingAsyncSeq:           $this->pendingAsyncSeq,
                     pendingAsyncCancellation:  $this->pendingAsyncCancellation,
                     workerPool:                $this->workerPool,
+                    validateOn:                $this->validateOn,
                 );
             }
         }
@@ -545,6 +611,7 @@ final class Input implements \SugarCraft\Forms\Field
                 pendingAsyncSeq:           $this->pendingAsyncSeq,
                 pendingAsyncCancellation:  $this->pendingAsyncCancellation,
                 workerPool:                $this->workerPool,
+                validateOn:                $this->validateOn,
             );
         }
         return $this;
@@ -566,6 +633,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
+            validateOn:                $this->validateOn,
         );
     }
 }
