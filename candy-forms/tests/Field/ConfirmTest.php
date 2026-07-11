@@ -7,6 +7,8 @@ namespace SugarCraft\Forms\Tests\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Field\Confirm;
+use SugarCraft\Forms\Validator\Required;
+use SugarCraft\Forms\Validator\Validator;
 use PHPUnit\Framework\TestCase;
 
 final class ConfirmTest extends TestCase
@@ -80,5 +82,54 @@ final class ConfirmTest extends TestCase
             ->withValidator(static fn (bool $v): ?string => 'always')
             ->withValidator(null);
         $this->assertNull($f->getError());
+    }
+
+    /**
+     * withValidator() must accept a Validator instance (parity with Input),
+     * not just a Closure. Revert to `?\Closure` → TypeError here.
+     * A Validator is fed the checkbox state as '1' (checked) / '' (unchecked).
+     */
+    public function testWithValidatorAcceptsValidatorInstance(): void
+    {
+        $validator = new class implements Validator {
+            public function validate(string $input): true|string
+            {
+                return $input === '1' ? true : 'must check';
+            }
+        };
+
+        // Unchecked (false) → fed '' → invalid.
+        $f = Confirm::new('agree', false)->withValidator($validator);
+        $this->assertSame('must check', $f->getError());
+
+        // Checked default (true) → fed '1' → valid.
+        $f2 = Confirm::new('agree', true)->withValidator($validator);
+        $this->assertNull($f2->getError());
+    }
+
+    public function testWithValidatorAcceptsBuiltinRequiredValidator(): void
+    {
+        // Required on a Confirm means "must be checked": false → '' → fails.
+        $f = Confirm::new('agree', false)->withValidator(new Required());
+        $this->assertNotNull($f->getError());
+
+        // Toggling to checked ('1') clears the error via revalidate().
+        [$f] = $f->focus();
+        [$f] = $f->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($f->getError());
+    }
+
+    public function testWithValidatorStillAcceptsClosure(): void
+    {
+        // The Closure path must remain intact after widening the union.
+        $f = Confirm::new('agree', false)
+            ->withValidator(static fn (bool $v): ?string => $v ? null : 'must agree');
+        $this->assertSame('must agree', $f->getError());
+    }
+
+    public function testValidatorShortAliasAcceptsValidatorInstance(): void
+    {
+        $f = Confirm::new('agree', false)->validator(new Required());
+        $this->assertNotNull($f->getError());
     }
 }

@@ -12,6 +12,7 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\Util\RenderSafe;
+use SugarCraft\Forms\Validator\Validator;
 
 /**
  * Yes / No question. The user toggles the answer with `←/→`, `h/l`, or
@@ -50,14 +51,29 @@ final class Confirm implements \SugarCraft\Forms\Field
     public function withDefault(bool $v): self       { return $this->mutate(value: $v); }
 
     /**
-     * Run the closure on every value change. Returns null on valid,
-     * a non-empty error string on invalid. Mirrors huh's
-     * `WithValidator` on Confirm.
+     * Run the validator on every value change. Returns null on valid,
+     * a non-empty error string on invalid. Mirrors huh's `WithValidator`
+     * on Confirm.
      *
-     * @param ?\Closure(bool):?string $fn pass null to clear
+     * Accepts a bool closure or a {@see Validator} instance (for parity with
+     * {@see Input::withValidator()}, which also accepts both). Because the
+     * {@see Validator} contract validates a string, a Validator is fed the
+     * checkbox state as `'1'` (checked) / `''` (unchecked) — so e.g. a
+     * {@see Validator\Required} means "must be checked".
+     *
+     * @param Validator|\Closure(bool):?string|null $validator pass null to clear
      */
-    public function withValidator(?\Closure $fn): self
+    public function withValidator(Validator|\Closure|null $validator): self
     {
+        if ($validator instanceof Validator) {
+            $fn = static function (bool $value) use ($validator): ?string {
+                $result = $validator->validate($value ? '1' : '');
+                return $result === true ? null : (string) $result;
+            };
+        } else {
+            $fn = $validator;
+        }
+
         $clone = clone $this;
         $clone->validator = $fn;
         return $clone->revalidate();
@@ -68,7 +84,7 @@ final class Confirm implements \SugarCraft\Forms\Field
     public function desc(string $d): self                 { return $this->withDescription($d); }
     public function labels(string $yes, string $no): self { return $this->withLabels($yes, $no); }
     public function default(bool $v): self                { return $this->withDefault($v); }
-    public function validator(?\Closure $fn): self        { return $this->withValidator($fn); }
+    public function validator(Validator|\Closure|null $fn): self { return $this->withValidator($fn); }
 
     /** @internal */
     public function revalidate(): Field
