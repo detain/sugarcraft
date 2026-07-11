@@ -23,7 +23,7 @@ PHP port of [treilik/bubblelister](https://github.com/treilik/bubblelister) — 
 - **`StringItem` adapter** — wrap plain strings as list items without a class
 - **`LessFunc` / `EqualsFunc`** — plug-in sorting and equality comparison
 - **Fuzzy matching** — `FuzzyMatch` scores candidates via Smith-Waterman local alignment
-- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering / filtered)
+- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering)
 - **Pure rendering** — outputs ANSI-styled strings; integrate with any TUI framework
 
 ## Install
@@ -129,7 +129,7 @@ foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
 $filtered = $model->withFilterFn(
     fn(\Stringable $item) => stripos((string) $item, 'a') === 0
 );
-// filterState is now FilterState::filtering → FilterState::filtered
+// filterState is now FilterState::filtering
 
 echo $filtered->length(); // 2 (apple, apricot)
 echo $filtered->View();
@@ -144,10 +144,8 @@ Filter state transitions:
 
 | From | To | Trigger |
 |------|----|---------|
-| `unfiltered` | `filtering` | `withFilterFn()` called |
-| `filtering` | `filtered` | filter applied, items reduced |
-| `filtered` | `unfiltered` | `withoutFilter()` called |
-| `filtering` | `unfiltered` | filter cleared before result |
+| `unfiltered` | `filtering` | `withFilterFn()` called (filter applied, items reduced) |
+| `filtering` | `unfiltered` | `withoutFilter()` called (original items restored) |
 
 ## Fuzzy Matching
 

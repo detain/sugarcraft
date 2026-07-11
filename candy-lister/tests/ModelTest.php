@@ -338,6 +338,78 @@ final class ModelTest extends TestCase
         $this->assertSame("\x1b[1m", $m->currentStyle);
     }
 
+    // --- Style escape-injection guard (SEC) --------------------------------
+
+    public function testSetLineStyleAcceptsBareSgrCodes(): void
+    {
+        $m = $this->model
+            ->addItem(new StringItem('cur'))
+            ->addItem(new StringItem('row'))
+            ->setLineStyle('1;31');
+        $this->assertSame('1;31', $m->lineStyle);
+        // lineStyle applies to non-current rows; the bare codes must render as a
+        // well-formed SGR sequence (proving a legit "1;31" passes the guard).
+        $this->assertStringContainsString("\x1b[1;31m", implode("\n", $m->lines()));
+    }
+
+    public function testSetLineStyleRejectsEscapeInjection(): void
+    {
+        // OSC title-set payload smuggled inside a "style" string.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setLineStyle("\x1b]0;pwned\x07");
+    }
+
+    public function testSetCurrentStyleRejectsEscapeInjection(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setCurrentStyle("1;31m\x1b]0;pwned");
+    }
+
+    public function testApplyStyleRejectsInjectionFromDirectPropertyAssignment(): void
+    {
+        // The public $currentStyle bypasses the setter — the render-time guard
+        // must still refuse to splice a raw escape into the output stream.
+        $m = $this->model->addItem(new StringItem('row'));
+        $m->currentStyle = "\x1b]0;pwned\x07";
+        $this->expectException(\InvalidArgumentException::class);
+        $m->lines();
+    }
+
+    // --- Viewport dimension bounds (SEC) -----------------------------------
+
+    public function testSetWidthRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setWidth(-1);
+    }
+
+    public function testSetHeightRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setHeight(-1);
+    }
+
+    public function testSetWidthRejectsAbsurdlyLargeValue(): void
+    {
+        // A memory-exhaustion DoS: width×height cells would be allocated.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setWidth(Model::MAX_DIMENSION + 1);
+    }
+
+    public function testSetViewportRejectsNegativeHeight(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setViewport(80, -5);
+    }
+
+    public function testSetWidthAllowsZeroAndUpperBound(): void
+    {
+        // Zero stays valid at the setter (lines() rejects a zero viewport at
+        // render time); the upper bound itself is accepted.
+        $this->assertSame(0, $this->model->setWidth(0)->width);
+        $this->assertSame(Model::MAX_DIMENSION, $this->model->setWidth(Model::MAX_DIMENSION)->width);
+    }
+
     public function testSortWithNullLessFuncReturnsSelf(): void
     {
         $this->model->addItem(new StringItem('z'));
