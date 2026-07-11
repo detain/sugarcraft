@@ -49,11 +49,12 @@ final class PosixTermiosTest extends TestCase
             $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
         }
 
+        $saved = null;
         try {
             $termios = new PosixTermios($slaveFd);
 
             $saved = $termios->current();
-            $termios->restore();
+            $saved->restore();
 
             $raw = $termios->makeRaw();
             $raw->apply();
@@ -79,7 +80,7 @@ final class PosixTermiosTest extends TestCase
             $this->assertStringContainsString('hello', $captured, 'cat should have echoed input');
             $this->assertStringNotContainsString("\r", $captured, 'raw mode should have no CR from echo');
         } finally {
-            $termios->restore();
+            $saved?->restore();
             $libc->close($slaveFd);
             $master->close();
         }
@@ -109,13 +110,37 @@ final class PosixTermiosTest extends TestCase
             $raw = $termios->makeRaw();
             $raw->apply();
 
-            $termios->restore();
+            $original->restore();
 
             $this->assertTrue($termios->isAtty(), 'PTY slave should be a tty');
         } finally {
             $libc->close($slaveFd);
             $master->close();
         }
+    }
+
+    /**
+     * A fresh instance never captured a snapshot via current(), so
+     * restore() must fail loudly instead of silently no-op'ing (which
+     * would strand the terminal in raw mode). This branch short-circuits
+     * before any libc call, so it needs ext-ffi (constructor) but NOT a
+     * real PTY — run it unconditionally on any FFI-capable host.
+     */
+    public function testRestoreWithoutSnapshotThrows(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('candy-pty is POSIX-only.');
+        }
+        if (!\extension_loaded('ffi')) {
+            $this->markTestSkipped('ext-ffi is required to construct PosixTermios.');
+        }
+
+        // fd value is irrelevant: restore() throws on the null-snapshot
+        // guard before touching the descriptor.
+        $termios = new PosixTermios(0);
+
+        $this->expectException(\LogicException::class);
+        $termios->restore();
     }
 
     public function testCurrentReturnsImmutableCopy(): void
@@ -183,15 +208,16 @@ final class PosixTermiosTest extends TestCase
             $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
         }
 
+        $saved = null;
         try {
             $termios = new PosixTermios($slaveFd);
-            $termios->current();
+            $saved = $termios->current();
             $raw = $termios->makeRaw();
             $raw->apply(PosixTermios::TCSADRAIN);
 
             $this->assertTrue(true, 'apply(TCSADRAIN) must not throw');
         } finally {
-            $termios->restore();
+            $saved?->restore();
             $libc->close($slaveFd);
             $master->close();
         }
@@ -214,15 +240,16 @@ final class PosixTermiosTest extends TestCase
             $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
         }
 
+        $saved = null;
         try {
             $termios = new PosixTermios($slaveFd);
-            $termios->current();
+            $saved = $termios->current();
             $raw = $termios->makeRaw();
             $raw->apply(PosixTermios::TCSAFLUSH);
 
             $this->assertTrue(true, 'apply(TCSAFLUSH) must not throw');
         } finally {
-            $termios->restore();
+            $saved?->restore();
             $libc->close($slaveFd);
             $master->close();
         }
