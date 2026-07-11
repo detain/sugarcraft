@@ -556,6 +556,152 @@ final class StickersTest extends TestCase
         $this->assertLessThanOrEqual(320, $totalDelta, 'Total delta bytes for 2 frames should be ≤320');
     }
 
+    // ---- SEC: style setters reject SGR injection ---------------------------
+
+    /**
+     * Caller-controlled style strings that MUST be rejected: each can break out
+     * of the `CSI <style> m` wrapper (applyStyle) and inject arbitrary terminal
+     * control sequences (window-title spoofing, screen clears, etc.).
+     *
+     * @return list<string>
+     */
+    private static function maliciousStyles(): array
+    {
+        return [
+            "\x1b]0;pwned\x07",        // OSC set-window-title + BEL
+            "\x1bP0;1|17/ab\x1b\\",  // DCS ... ST
+            "\x1b[31m",                // raw CSI SGR (ESC + letter)
+            "31mHACK",                 // closes SGR early, then literal text
+            "1;31m",                   // trailing 'm' terminator
+            "7\x1b[2J",                // valid code then ESC + clear-screen
+        ];
+    }
+
+    public function testTableWithCursorStyleRejectsSgrInjection(): void
+    {
+        foreach (self::maliciousStyles() as $bad) {
+            try {
+                (new Table())->withCursorStyle($bad);
+                $this->fail('withCursorStyle must reject ' . \bin2hex($bad));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        // Legit SGR params and the empty ("no style") case still pass through.
+        $this->assertInstanceOf(Table::class, (new Table())->withCursorStyle('1;31'));
+        $this->assertInstanceOf(Table::class, (new Table())->withCursorStyle(''));
+    }
+
+    public function testTableWithHeaderStyleRejectsSgrInjection(): void
+    {
+        foreach (self::maliciousStyles() as $bad) {
+            try {
+                (new Table())->withHeaderStyle($bad);
+                $this->fail('withHeaderStyle must reject ' . \bin2hex($bad));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertInstanceOf(Table::class, (new Table())->withHeaderStyle('1;31'));
+        $this->assertInstanceOf(Table::class, (new Table())->withHeaderStyle(''));
+    }
+
+    public function testColumnWithStyleRejectsSgrInjection(): void
+    {
+        foreach (self::maliciousStyles() as $bad) {
+            try {
+                Column::make('Name', 10)->withStyle($bad);
+                $this->fail('Column::withStyle must reject ' . \bin2hex($bad));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertSame('1;31', Column::make('Name', 10)->withStyle('1;31')->ansiStyle);
+        $this->assertSame('', Column::make('Name', 10)->withStyle('')->ansiStyle);
+    }
+
+    public function testFlexItemWithStyleRejectsSgrInjection(): void
+    {
+        foreach (self::maliciousStyles() as $bad) {
+            try {
+                FlexItem::new('x')->withStyle($bad);
+                $this->fail('FlexItem::withStyle must reject ' . \bin2hex($bad));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertSame('1;31', FlexItem::new('x')->withStyle('1;31')->style);
+        $this->assertSame('', FlexItem::new('x')->withStyle('')->style);
+    }
+
+    // ---- Sort-arrow glyph render pin (#1234) -------------------------------
+
+    /**
+     * Load-bearing pin for the #1234 fix: the sort arrow glyph must actually
+     * appear in the rendered view() output (not merely in buildLines internals)
+     * after sortBy()/sortByNext(), for both ascending and descending directions.
+     * Reverting the Column::sorted() sync in Table::sortBy() drops the glyph and
+     * fails this test.
+     */
+    public function testSortByRendersArrowGlyph(): void
+    {
+        $base = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Bob'])
+            ->addRow(['Alice']);
+
+        $asc = $base->sortBy(0, true)->render();
+        $this->assertStringContainsString('▲', $asc, 'Ascending sort must render the ▲ glyph in the view');
+        $this->assertStringNotContainsString('▼', $asc);
+
+        // sortByNext toggles asc → desc, which must swap the glyph in the view.
+        $desc = $base->sortBy(0, true)->sortByNext(0)->render();
+        $this->assertStringContainsString('▼', $desc, 'Toggled sort must render the ▼ glyph in the view');
+        $this->assertStringNotContainsString('▲', $desc);
+    }
+
+    // ---- Data-origin sanitization ------------------------------------------
+
+    /**
+     * Column::sanitize() (reached via format()/padded()) strips OSC/DCS/ESC and
+     * C0 control characters from cell data so untrusted row values cannot inject
+     * terminal control sequences.
+     */
+    public function testColumnSanitizeStripsControlSequences(): void
+    {
+        $col = Column::make('X', 20);
+
+        // OSC window-title injection embedded in a cell value.
+        $out = $col->padded("a\x1b]0;pwned\x07b", 0);
+        $this->assertStringNotContainsString("\x1b", $out, 'ESC must be stripped');
+        $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+        $this->assertStringContainsString('ab', $out, 'Visible text survives sanitization');
+
+        // DCS sequence + a bare C0 control.
+        $out2 = $col->padded("x\x1bP1;2|q\x1b\\y\x01z", 0);
+        $this->assertStringNotContainsString("\x1b", $out2, 'DCS ESC must be stripped');
+        $this->assertStringNotContainsString("\x01", $out2, 'C0 control must be stripped');
+        $this->assertStringContainsString('xyz', $out2, 'Visible text survives sanitization');
+    }
+
+    /**
+     * FlexBox::sanitize() (reached via render()) strips OSC/DCS/ESC and C0
+     * control characters from item content so untrusted panel data cannot inject
+     * terminal control sequences.
+     */
+    public function testFlexBoxSanitizeStripsControlSequences(): void
+    {
+        // FlexItem has no style, so the library itself emits no ESC — any ESC in
+        // the output would have to have come from the (malicious) content.
+        $box = FlexBox::row(FlexItem::new("a\x1b]0;pwned\x07b\x01c"));
+        $out = $box->render(20, 1);
+
+        $this->assertStringNotContainsString("\x1b", $out, 'ESC must be stripped from item content');
+        $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+        $this->assertStringNotContainsString("\x01", $out, 'C0 control must be stripped');
+        $this->assertStringContainsString('abc', $out, 'Visible text survives sanitization');
+    }
+
     // ---- Viewport scrollbar delegator tests ----
 
     /** withScrollbar(true) returns a new Viewport with scrollbar enabled. */
