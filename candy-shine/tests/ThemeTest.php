@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine\Tests;
 
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Shine\Renderer;
 use SugarCraft\Shine\Theme;
+use SugarCraft\Sprinkles\Style;
 use PHPUnit\Framework\TestCase;
 
 final class ThemeTest extends TestCase
@@ -196,5 +199,57 @@ final class ThemeTest extends TestCase
         // Fallback is Style::new()->strikethrough() which emits the strikethrough SGR code.
         $this->assertStringContainsString("\x1b[9m", $out);
         $this->assertStringContainsString('strike', $out);
+    }
+
+    /**
+     * Drift guard: the 9 named colours the dracula() factory renders with
+     * must stay byte-identical to the candy-core Palettes SSOT they are
+     * now sourced from. Style hides its `$fg`/`$bg` behind private
+     * readonly props, so we compare the emitted truecolor SGR sequence
+     * (`38;2;r;g;b` for fg, `48;2;r;g;b` for bg) of each dracula slot
+     * against the same sequence produced independently from
+     * Palettes::DRACULA. If someone re-hardcodes a slot to a literal that
+     * no longer matches the SSOT, the sequences diverge and this fails.
+     */
+    public function testDraculaColoursMatchCorePalettesSsot(): void
+    {
+        $t = Theme::dracula();
+
+        // Foreground SGR sequence a palette colour renders to.
+        $fgSeq = static function (string $name): string {
+            $out = Style::new()->foreground(Color::hex(Palettes::DRACULA[$name]))->render('x');
+            self::assertSame(1, preg_match('/38;2;\d+;\d+;\d+/', $out, $m), "no fg SGR for {$name}");
+            return $m[0];
+        };
+        // Background SGR sequence a palette colour renders to.
+        $bgSeq = static function (string $name): string {
+            $out = Style::new()->background(Color::hex(Palettes::DRACULA[$name]))->render('x');
+            self::assertSame(1, preg_match('/48;2;\d+;\d+;\d+/', $out, $m), "no bg SGR for {$name}");
+            return $m[0];
+        };
+
+        // fg-only slots (bold flag doesn't affect the colour sequence).
+        $fgSlots = [
+            'pink'       => [$t->heading1, $t->listMarker, $t->keyword],
+            'purple'     => [$t->heading2, $t->number],
+            'cyan'       => [$t->heading3, $t->link, $t->linkText, $t->image, $t->autolink],
+            'green'      => [$t->heading4],
+            'orange'     => [$t->heading5],
+            'yellow'     => [$t->heading6, $t->string],
+            'foreground' => [$t->paragraph],
+            'comment'    => [$t->blockquote, $t->rule, $t->comment, $t->strike, $t->htmlBlock, $t->htmlSpan],
+        ];
+        foreach ($fgSlots as $name => $styles) {
+            $seq = $fgSeq($name);
+            foreach ($styles as $i => $style) {
+                $this->assertStringContainsString($seq, $style->render('x'), "{$name} slot #{$i}");
+            }
+        }
+
+        // code fg=pink over bg=background; codeBlock fg=foreground over bg=background.
+        $this->assertStringContainsString($fgSeq('pink'),        $t->code->render('x'));
+        $this->assertStringContainsString($bgSeq('background'),  $t->code->render('x'));
+        $this->assertStringContainsString($fgSeq('foreground'),  $t->codeBlock->render('x'));
+        $this->assertStringContainsString($bgSeq('background'),  $t->codeBlock->render('x'));
     }
 }
