@@ -11,4 +11,5 @@ declare(strict_types=1);
 return [
     'render.unknown_theme' => 'unknown theme: {name}',
     'render.theme_config_unreadable' => 'theme config not readable: {path}',
+    'render.theme_config_too_large' => 'theme config exceeds {limit} bytes: {path}',
 ];
