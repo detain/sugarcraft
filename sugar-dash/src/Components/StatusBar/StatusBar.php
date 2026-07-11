@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Sprinkles\Bar\StatusBar as SprinklesStatusBar;
 
 /**
  * A horizontal status bar with multiple segments.
@@ -20,6 +21,12 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors the statusbar concept from bubble-tea but adapted
  * to PHP with wither-style immutable setters.
+ *
+ * The three-column layout — segment positioning, gap-fill and (ANSI-aware)
+ * truncation, plus the left/right border caps — is delegated to the shared
+ * {@see SprinklesStatusBar} primitive. This class stays a thin themed
+ * wrapper that adds fg/bg colours, {@see \SugarCraft\Dash\Foundation\Sizer}
+ * sizing and the plain-string withers on top.
  */
 final class StatusBar implements \SugarCraft\Dash\Foundation\Sizer
 {
@@ -83,25 +90,25 @@ final class StatusBar implements \SugarCraft\Dash\Foundation\Sizer
             return '';
         }
 
-        // Calculate segment widths
-        $leftWidth = Width::string($this->left);
-        $centerWidth = Width::string($this->center);
-        $rightWidth = Width::string($this->right);
-        $totalContentWidth = $leftWidth + $centerWidth + $rightWidth;
+        // Delegate the three-column layout (fill + ANSI-aware truncation) and
+        // the border caps to the shared status-bar primitive. Empty segments
+        // collapse to nothing there, matching the previous concatenation.
+        $bar = SprinklesStatusBar::new()
+            ->left($this->left)
+            ->center($this->center)
+            ->right($this->right)
+            ->caps($this->leftBorder, $this->rightBorder)
+            ->width($width)
+            ->render();
 
-        // Build the content with proper spacing
-        $content = $this->buildContent($this->left, $this->center, $this->right, $availableWidth);
-
-        // Build the complete bar
-        $bar = $this->leftBorder . $content . $this->rightBorder;
-
-        // Calculate total width and pad if needed
+        // The primitive already fills to $width; this only pads back the
+        // pathological case where the caps alone exceed the target width.
         $totalWidth = Width::string($bar);
         if ($totalWidth < $width) {
             $bar .= str_repeat(' ', $width - $totalWidth);
         }
 
-        // Apply colors if set
+        // Apply colors if set (byte layout unchanged: bg, fg, bar, reset).
         $result = '';
         if ($this->foreground !== null || $this->background !== null) {
             if ($this->background !== null) {
@@ -117,86 +124,6 @@ final class StatusBar implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         return $result;
-    }
-
-    /**
-     * Build the content string with proper segment spacing.
-     */
-    private function buildContent(string $left, string $center, string $right, int $availableWidth): string
-    {
-        $leftWidth = Width::string($left);
-        $centerWidth = Width::string($center);
-        $rightWidth = Width::string($right);
-        $totalContentWidth = $leftWidth + $centerWidth + $rightWidth;
-
-        // If content fits, distribute remaining space
-        if ($totalContentWidth <= $availableWidth) {
-            $remaining = $availableWidth - $totalContentWidth;
-
-            // Distribute remaining space: left gets 0, center gets most, right gets 0
-            $leftPad = 0;
-            $centerPad = $remaining;
-            $rightPad = 0;
-
-            return $left . str_repeat(' ', $leftPad)
-                . str_repeat(' ', (int) floor($centerPad / 2)) . $center . str_repeat(' ', (int) ceil($centerPad / 2))
-                . str_repeat(' ', $rightPad) . $right;
-        }
-
-        // Content doesn't fit - need to truncate
-        // Priority: center > left > right
-        $minCenterWidth = 1;
-        $minLeftWidth = 1;
-        $minRightWidth = 1;
-        $minTotal = $minCenterWidth + $minLeftWidth + $minRightWidth;
-
-        if ($availableWidth < $minTotal) {
-            // Not enough space for minimum - just show what fits
-            return mb_substr($left, 0, $availableWidth, 'UTF-8');
-        }
-
-        // First allocate minimum widths
-        $leftAlloc = $minLeftWidth;
-        $centerAlloc = $minCenterWidth;
-        $rightAlloc = $minRightWidth;
-
-        // Remaining space to distribute
-        $remaining = $availableWidth - $minTotal;
-
-        // Try to fit each segment proportionally
-        if ($totalContentWidth > 0) {
-            $leftAlloc = min($leftWidth, (int) floor($remaining * ($leftWidth / $totalContentWidth)) + $minLeftWidth);
-            $remaining -= ($leftAlloc - $minLeftWidth);
-
-            $centerAlloc = min($centerWidth, (int) floor($remaining * ($centerWidth / $totalContentWidth)) + $minCenterWidth);
-            $remaining -= ($centerAlloc - $minCenterWidth);
-
-            $rightAlloc = min($rightWidth, $remaining + $minRightWidth);
-        }
-
-        // Truncate each segment to its allocated width
-        $leftTruncated = $this->truncateToWidth($left, $leftAlloc);
-        $centerTruncated = $this->truncateToWidth($center, $centerAlloc);
-        $rightTruncated = $this->truncateToWidth($right, $rightAlloc);
-
-        // Recalculate actual widths
-        $actualLeftWidth = Width::string($leftTruncated);
-        $actualCenterWidth = Width::string($centerTruncated);
-        $actualRightWidth = Width::string($rightTruncated);
-
-        // Fill remaining space with padding between segments
-        $usedWidth = $actualLeftWidth + $actualCenterWidth + $actualRightWidth;
-        $padding = $availableWidth - $usedWidth;
-
-        // Distribute padding: left side gets floor(padding/2), right side gets ceil(padding/2)
-        $leftPadding = (int) floor($padding / 2);
-        $rightPadding = $padding - $leftPadding;
-
-        return $leftTruncated
-            . str_repeat(' ', $leftPadding)
-            . $centerTruncated
-            . str_repeat(' ', $rightPadding)
-            . $rightTruncated;
     }
 
     /**
@@ -225,34 +152,6 @@ final class StatusBar implements \SugarCraft\Dash\Foundation\Sizer
     {
         $w = $this->getWidth();
         return [$w > 0 ? $w : 1, 1];
-    }
-
-    /**
-     * Truncate a string to fit within the given width.
-     */
-    private function truncateToWidth(string $s, int $width): string
-    {
-        if ($width <= 0) {
-            return '';
-        }
-        if (Width::string($s) <= $width) {
-            return $s;
-        }
-        $lo = 0;
-        $hi = mb_strlen($s, 'UTF-8');
-        while ($lo < $hi) {
-            $mid = (int) (($lo + $hi + 1) / 2);
-            $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
-                $lo = $mid;
-            } else {
-                $hi = $mid - 1;
-            }
-        }
-        if ($lo === 0) {
-            return '';
-        }
-        return mb_substr($s, 0, $lo, 'UTF-8');
     }
 
     // ─── Withers ──────────────────────────────────────────────────
