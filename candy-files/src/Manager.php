@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Files;
 
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -35,6 +36,14 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 final class Manager implements Model
 {
     use SubscriptionCapable;
+
+    /**
+     * Immutable-with helper. Rebuilds via the constructor with named args, so
+     * the derived {@see $lister} (already resolved to a non-null closure on the
+     * live instance) round-trips unchanged and no ctor-side logic is skipped.
+     */
+    use Mutable;
+
     /** @var \Closure(string): list<Entry> */
     private readonly \Closure $lister;
 
@@ -250,21 +259,9 @@ final class Manager implements Model
             $newTab = ['left' => $tab['left'], 'right' => $tab['right'], 'activeIdx' => $idx];
             $newTabs = $this->tabs;
             $newTabs[$this->tabIndex] = $newTab;
-            return new self(
-                $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
-                $this->searchQuery, $this->searchResults, $this->searchCursor,
-                $newTabs, $this->tabIndex, $this->showTabBar,
-                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-                $this->inputBuffer
-            );
+            return $this->mutate(['activeIdx' => $idx, 'tabs' => $newTabs]);
         }
-        return new self(
-            $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate(['activeIdx' => $idx]);
     }
 
     /**
@@ -285,30 +282,12 @@ final class Manager implements Model
             // Keep $this->left/$this->right in sync with the active tab's panes
             $newLeft = $newTab['left'];
             $newRight = $newTab['right'];
-            return new self(
-                $newLeft, $newRight, $this->activeIdx, $this->status, $this->confirm, $this->lister,
-                $this->searchQuery, $this->searchResults, $this->searchCursor,
-                $newTabs, $this->tabIndex, $this->showTabBar,
-                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-                $this->inputBuffer
-            );
+            return $this->mutate(['left' => $newLeft, 'right' => $newRight, 'tabs' => $newTabs]);
         }
         if ($this->activeIdx === 0) {
-            return new self(
-                $fn($this->left), $this->right, 0, $this->status, $this->confirm, $this->lister,
-                $this->searchQuery, $this->searchResults, $this->searchCursor,
-                $this->tabs, $this->tabIndex, $this->showTabBar,
-                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-                $this->inputBuffer
-            );
+            return $this->mutate(['left' => $fn($this->left)]);
         }
-        return new self(
-            $this->left, $fn($this->right), 1, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate(['right' => $fn($this->right), 'activeIdx' => 1]);
     }
 
     private function navigate(): self
@@ -836,35 +815,23 @@ final class Manager implements Model
 
     private function withConfirm(ConfirmState $state, string $status, ?string $pendingOpDest = null, ?string $pendingOpType = null, ?string $inputBuffer = null): self
     {
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $status, $state, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $pendingOpDest, $pendingOpType,
-            $inputBuffer
-        );
+        return $this->mutate([
+            'status' => $status,
+            'confirm' => $state,
+            'pendingOpDest' => $pendingOpDest,
+            'pendingOpType' => $pendingOpType,
+            'inputBuffer' => $inputBuffer,
+        ]);
     }
 
     private function withStatus(string $status): self
     {
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate(['status' => $status]);
     }
 
     private function withInputBuffer(?string $inputBuffer): self
     {
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $inputBuffer
-        );
+        return $this->mutate(['inputBuffer' => $inputBuffer]);
     }
 
     /** Start search mode with a query */
@@ -940,13 +907,11 @@ final class Manager implements Model
 
     private function withSearch(?string $query, array $results, int $cursor): self
     {
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm,
-            $this->lister, $query, $results, $cursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate([
+            'searchQuery' => $query,
+            'searchResults' => $results,
+            'searchCursor' => $cursor,
+        ]);
     }
 
     /** Handle keys while in search mode */
@@ -1032,13 +997,11 @@ final class Manager implements Model
             'activeIdx' => 0,
         ];
         $newTabs = [...$this->tabs, $newTab];
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $newTabs, count($newTabs) - 1, $newTabs !== [],
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate([
+            'tabs' => $newTabs,
+            'tabIndex' => count($newTabs) - 1,
+            'showTabBar' => $newTabs !== [],
+        ]);
     }
 
     /** Close the tab at index, unless it's the last tab */
@@ -1051,13 +1014,11 @@ final class Manager implements Model
         $newTabs = $this->tabs;
         array_splice($newTabs, $index, 1);
         $newIndex = min($this->tabIndex, count($newTabs) - 1);
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $newTabs, $newIndex, $newTabs !== [],
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate([
+            'tabs' => $newTabs,
+            'tabIndex' => $newIndex,
+            'showTabBar' => $newTabs !== [],
+        ]);
     }
 
     /** Switch to tab at index */
@@ -1066,13 +1027,7 @@ final class Manager implements Model
         if ($this->tabs === [] || $index < 0 || $index >= count($this->tabs)) {
             return $this;
         }
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $index, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate(['tabIndex' => $index]);
     }
 
     /** Open a new tab with current pane's directory */
@@ -1088,13 +1043,11 @@ final class Manager implements Model
             'activeIdx' => 0,
         ];
         $newTabs = [...$this->tabs, $newTab];
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $newTabs, count($newTabs) - 1, $newTabs !== [],
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate([
+            'tabs' => $newTabs,
+            'tabIndex' => count($newTabs) - 1,
+            'showTabBar' => $newTabs !== [],
+        ]);
     }
 
     /** @return array{left:Pane,right:Pane,activeIdx:int}|null */
@@ -1106,13 +1059,7 @@ final class Manager implements Model
     /** Create a new Manager with modified undo/redo stacks */
     private function withUndoRedoStacks(array $undoStack, array $redoStack): self
     {
-        return new self(
-            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar,
-            $undoStack, $redoStack, $this->pendingOpDest, $this->pendingOpType,
-            $this->inputBuffer
-        );
+        return $this->mutate(['undoStack' => $undoStack, 'redoStack' => $redoStack]);
     }
 
     /** Undo the last operation */
