@@ -500,6 +500,44 @@ final class RenderCommandTest extends TestCase
         }
     }
 
+    public function testExecuteRejectsOversizedThemeConfig(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'glow-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello");
+        $configTmp = tempnam(sys_get_temp_dir(), 'glow-config-');
+        $this->assertNotFalse($configTmp);
+        // Valid JSON that WOULD decode fine, but exceeds the 1 MB byte cap.
+        // Without the cap the decoder happily accepts it (the extra 'pad' key
+        // is ignored); with the cap it is rejected before ever being decoded.
+        // Reverting the cap makes this input load successfully -> no exception
+        // -> this test fails, which is exactly what pins the guard in place.
+        $huge = '{"paragraph":{"fg":"white","bg":"black"},"pad":"' . str_repeat('a', 1_000_001) . '"}';
+        file_put_contents($configTmp, $huge);
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', $configTmp],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+
+            $command = new RenderCommand();
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/exceeds \d+ bytes/');
+            $this->invokeExecute($command, $input, $output);
+        } finally {
+            unlink($tmp);
+            unlink($configTmp);
+        }
+    }
+
     public function testBuildPagerModelWiresContentAndSize(): void
     {
         $rendered = "line1\nline2\nline3";

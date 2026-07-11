@@ -10,6 +10,6 @@ declare(strict_types=1);
 
 return [
     'render.unknown_theme' => 'tema desconhecido: {name}',
-];
     'render.theme_config_unreadable' => 'configuração do tema ilegível: {path}',
+    'render.theme_config_too_large' => 'configuração do tema excede {limit} bytes: {path}',
 ];
