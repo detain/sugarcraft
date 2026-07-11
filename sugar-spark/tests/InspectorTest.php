@@ -179,6 +179,30 @@ final class InspectorTest extends TestCase
         $this->assertStringContainsString('S:btn-1',          $seg->describe());
     }
 
+    /**
+     * A DCS payload carrying embedded control bytes must be neutralised the
+     * same way OSC/APC labels are, so a captured reply can't inject raw ESC/BEL
+     * into the inspector's own output. Guards {@see Inspector::describeDcs()}.
+     */
+    public function testDcsPayloadSanitizesControlBytes(): void
+    {
+        // Unknown-DCS fallback branch (no final byte) — raw payload interpolation.
+        $out = Inspector::describeDcs("evil\x1bpayload\x07");
+        $this->assertStringNotContainsString("\x1b", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringContainsString('ESC', $out);
+        $this->assertStringContainsString('BEL', $out);
+    }
+
+    public function testDcsXtversionReplySanitizesControlBytes(): void
+    {
+        // XTVERSION-reply branch: payload='>' + version, final='|'.
+        $out = Inspector::describeDcs(">ver\x1bsion", ord('|'));
+        $this->assertStringContainsString('terminal version', $out);
+        $this->assertStringNotContainsString("\x1b", $out);
+        $this->assertStringContainsString('ESC', $out);
+    }
+
     public function testApcKittyGraphics(): void
     {
         $seg = Inspector::parse("\x1b_GBASE64DATA\x1b\\")[0];

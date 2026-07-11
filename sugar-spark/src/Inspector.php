@@ -360,13 +360,15 @@ final class Inspector
         // XTVERSION reply: DCS P >| version ST
         // candy-ansi parser interprets: '>' as intermediate, '|' as final, 'version' as data
         // So payload = '>version' and final = '|'
+        // Payload bytes are attacker-controlled: sanitize like OSC/APC labels so a
+        // captured reply can't inject control bytes into the inspector's own output.
         if (chr($final) === '|' && str_starts_with($payload, '>')) {
-            return 'terminal version (XTVERSION reply): ' . substr($payload, 1);
+            return 'terminal version (XTVERSION reply): ' . self::sanitizeLabelBytes(substr($payload, 1));
         }
         // For StreamingInspector (old byte-loop) or when final is not available,
         // the payload may contain the full sequence including intermediate+final
         if (str_starts_with($payload, '>|')) {
-            return 'terminal version (XTVERSION reply): ' . substr($payload, 2);
+            return 'terminal version (XTVERSION reply): ' . self::sanitizeLabelBytes(substr($payload, 2));
         }
         // sixel: DCS P q data ST
         // The 'q' is consumed as final byte, data starts directly with sixel pixels.
@@ -384,14 +386,16 @@ final class Inspector
         if (chr($final) === 'r' && str_starts_with($payload, '$$')) {
             $params = explode(';', substr($payload, 2));
             if (count($params) >= 2) {
-                return 'DECRPSS reply ' . $params[0] . '$r' . $params[1] . '$p';
+                return 'DECRPSS reply ' . self::sanitizeLabelBytes($params[0]) . '$r' . self::sanitizeLabelBytes($params[1]) . '$p';
             }
         }
-        // Unknown DCS: reconstruct full sequence including final byte
+        // Unknown DCS: reconstruct full sequence including final byte. The final byte
+        // is a parser-validated terminator (0x40-0x7E); only the data payload is
+        // attacker-controlled, so route it through the same label sanitizer as OSC/APC.
         if ($final !== 0) {
-            return 'DCS ' . chr($final) . $payload;
+            return 'DCS ' . chr($final) . self::sanitizeLabelBytes($payload);
         }
-        return 'DCS ' . $payload;
+        return 'DCS ' . self::sanitizeLabelBytes($payload);
     }
 
     /** Decode APC payloads — CandyZone markers, kitty graphics. */
@@ -453,7 +457,7 @@ final class Inspector
     /**
      * Replace C0 control bytes in a label interpolation with visible tokens.
      *
-     * Prevents an embedded ESC in a captured OSC/APC payload from re-arming
+     * Prevents an embedded ESC in a captured OSC/APC/DCS payload from re-arming
      * a sequence when the report is rendered to a live terminal.
      *
      * @param string $s Raw payload string interpolated into a human-readable label.
