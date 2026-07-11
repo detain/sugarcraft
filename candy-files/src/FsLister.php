@@ -30,10 +30,17 @@ final class FsLister
                     continue;
                 }
                 $mode = $stat['mode'];
-                // Use bitmask from mode bits — avoids 2 extra syscalls per entry
+                // lstat() does not follow symlinks, so isLink comes straight
+                // from the mode bits with no extra syscall. isDir, however,
+                // must FOLLOW the link: a symlink whose target is a directory
+                // has to report isDir=true, or navigate() treats it as a file
+                // and refuses to enter it. Only pay the extra is_dir() syscall
+                // for the (rare) symlink case; plain files/dirs stay bitmask-only.
                 // S_IFMT=0170000 mask, S_IFLNK=0120000 symlink, S_IFDIR=0040000 directory
                 $isLink = ($mode & 0170000) === 0120000;
-                $isDir  = ($mode & 0170000) === 0040000;
+                $isDir  = $isLink
+                    ? \is_dir($full)
+                    : ($mode & 0170000) === 0040000;
                 $out[] = new Entry(
                     name:     $name,
                     isDir:    $isDir,
