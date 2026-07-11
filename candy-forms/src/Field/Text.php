@@ -9,6 +9,7 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Forms\TextInput\ValidateOn;
 use SugarCraft\Forms\Util\RenderSafe;
 
 /**
@@ -24,6 +25,13 @@ final class Text implements \SugarCraft\Forms\Field
     /** @var (\Closure(string):?string)|null */
     private $validator;
 
+    /**
+     * When the validator runs. Defaults to {@see ValidateOn::None}
+     * (validate on every keystroke) for backward compatibility. Blur/Submit
+     * defer validation to {@see blur()} / {@see revalidate()}.
+     */
+    private ValidateOn $validateOn = ValidateOn::None;
+
     private function __construct(
         public readonly string $key,
         public readonly TextArea $area,
@@ -31,8 +39,10 @@ final class Text implements \SugarCraft\Forms\Field
         public readonly string $description,
         public readonly ?string $error,
         ?\Closure $validator = null,
+        ValidateOn $validateOn = ValidateOn::None,
     ) {
         $this->validator = $validator;
+        $this->validateOn = $validateOn;
     }
 
     public static function new(string $key): self
@@ -56,7 +66,18 @@ final class Text implements \SugarCraft\Forms\Field
     /** @param \Closure(string):?string $fn */
     public function withValidator(\Closure $fn): self
     {
-        return new self($this->key, $this->area, $this->title, $this->description, $this->error, $fn);
+        return new self($this->key, $this->area, $this->title, $this->description, $this->error, $fn, $this->validateOn);
+    }
+
+    /**
+     * Control WHEN the validator runs. Defaults to validate-on-every-keystroke.
+     * {@see ValidateOn::Blur} / {@see ValidateOn::Submit} defer validation to
+     * {@see blur()} / {@see revalidate()} so an expensive validator isn't paid
+     * on every keypress. Mirrors {@see Input::withValidateOn()}.
+     */
+    public function withValidateOn(ValidateOn $timing): self
+    {
+        return new self($this->key, $this->area, $this->title, $this->description, $this->error, $this->validator, $timing);
     }
 
     /**
@@ -92,13 +113,22 @@ final class Text implements \SugarCraft\Forms\Field
 
     public function blur(): Field
     {
-        return $this->mutate(area: $this->area->blur());
+        $next = $this->mutate(area: $this->area->blur());
+        if ($this->validateOn === ValidateOn::Blur) {
+            $next = $next->validate();
+        }
+        return $next;
     }
 
     public function update(Msg $msg): array
     {
         [$a, $cmd] = $this->area->update($msg);
-        $next = $this->mutate(area: $a)->validate();
+        $next = $this->mutate(area: $a);
+        // Only validate per-keystroke for None/Change (default); Blur/Submit
+        // defer to blur()/revalidate() to avoid per-keystroke validator cost.
+        if ($this->validateOn === ValidateOn::None || $this->validateOn === ValidateOn::Change) {
+            $next = $next->validate();
+        }
         return [$next, $cmd];
     }
 
@@ -146,7 +176,7 @@ final class Text implements \SugarCraft\Forms\Field
         if ($err === $this->error) {
             return $this;
         }
-        return new self($this->key, $this->area, $this->title, $this->description, $err, $this->validator);
+        return new self($this->key, $this->area, $this->title, $this->description, $err, $this->validator, $this->validateOn);
     }
 
     private function mutate(?TextArea $area = null, ?string $title = null, ?string $description = null): self
@@ -158,6 +188,7 @@ final class Text implements \SugarCraft\Forms\Field
             description: $description ?? $this->description,
             error:       $this->error,
             validator:   $this->validator,
+            validateOn:  $this->validateOn,
         );
     }
 }
