@@ -183,6 +183,62 @@ final class ProtectFilesHookTest extends TestCase
     }
 
     // =========================================================================
+    // Configurable Protected-Files List
+    // =========================================================================
+
+    public function testDefaultsUsedWhenNotConfigured(): void
+    {
+        $hook = new ProtectFilesHook();
+
+        $this->assertSame(
+            ProtectFilesHook::DEFAULT_PROTECTED_PATTERNS,
+            $hook->protectedPatterns()
+        );
+    }
+
+    public function testCustomProtectedListIsHonored(): void
+    {
+        $hook = new ProtectFilesHook(['/secrets\.yaml\b/']);
+
+        // The custom pattern denies its target...
+        $this->assertTrue($hook->execute($this->createContext('Edit', 'secrets.yaml'))->isDenied());
+        // ...and the built-in defaults are NOT applied (only the custom list is).
+        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isAllowed());
+    }
+
+    public function testWithProtectedPatternsIsImmutable(): void
+    {
+        $hook = new ProtectFilesHook();
+        $custom = $hook->withProtectedPatterns(['/secrets\.yaml\b/']);
+
+        // Original instance keeps the defaults (still denies composer.json).
+        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isDenied());
+        // New instance guards only the custom pattern.
+        $this->assertTrue($custom->execute($this->createContext('Edit', 'secrets.yaml'))->isDenied());
+        $this->assertTrue($custom->execute($this->createContext('Edit', 'composer.json'))->isAllowed());
+        $this->assertNotSame($hook, $custom);
+    }
+
+    public function testEmptyProtectedListProtectsNothing(): void
+    {
+        $hook = new ProtectFilesHook([]);
+
+        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isAllowed());
+        $this->assertTrue($hook->execute($this->createContext('Bash', 'nano .env'))->isAllowed());
+    }
+
+    public function testNullConstructorArgKeepsDefaults(): void
+    {
+        $hook = new ProtectFilesHook(null);
+
+        $this->assertSame(
+            ProtectFilesHook::DEFAULT_PROTECTED_PATTERNS,
+            $hook->protectedPatterns()
+        );
+        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isDenied());
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
 
