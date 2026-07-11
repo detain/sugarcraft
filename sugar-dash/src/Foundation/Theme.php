@@ -6,6 +6,7 @@ namespace SugarCraft\Dash\Foundation;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Layout\HAlign;
 use SugarCraft\Dash\Components\Card\Text;
@@ -55,58 +56,71 @@ final class Theme
 
     /**
      * Create the Dracula theme.
+     *
+     * Hex literals are re-sourced from candy-core's {@see Palettes::DRACULA}
+     * SSOT so the scheme cannot drift from the shared palette. The constants
+     * are lowercase `#rrggbb`; sugar-dash historically used uppercase, but the
+     * rendered SGR bytes are numeric RGB, so the case change is cosmetic.
      */
     public static function dracula(): self
     {
         return new self(
             name: 'dracula',
-            foreground: Color::hex('#F8F8F2'),
-            background: Color::hex('#282A36'),
-            primary: Color::hex('#BD93F9'),
-            secondary: Color::hex('#50FA7B'),
-            accent: Color::hex('#FF79C6'),
-            error: Color::hex('#FF5555'),
-            warning: Color::hex('#FFB86C'),
-            success: Color::hex('#50FA7B'),
-            highlight: Color::hex('#BD93F9'),
+            foreground: Color::hex(Palettes::DRACULA['foreground']),
+            background: Color::hex(Palettes::DRACULA['background']),
+            primary: Color::hex(Palettes::DRACULA['purple']),
+            secondary: Color::hex(Palettes::DRACULA['green']),
+            accent: Color::hex(Palettes::DRACULA['pink']),
+            error: Color::hex(Palettes::DRACULA['red']),
+            warning: Color::hex(Palettes::DRACULA['orange']),
+            success: Color::hex(Palettes::DRACULA['green']),
+            highlight: Color::hex(Palettes::DRACULA['purple']),
         );
     }
 
     /**
      * Create the One Dark theme.
+     *
+     * Hex literals are re-sourced from candy-core's {@see Palettes::ONE_DARK}
+     * SSOT (lowercase `#rrggbb`); the previous uppercase literals rendered to
+     * the same numeric-RGB SGR bytes, so the case change is cosmetic.
      */
     public static function oneDark(): self
     {
         return new self(
             name: 'one-dark',
-            foreground: Color::hex('#ABB2BF'),
-            background: Color::hex('#282C34'),
-            primary: Color::hex('#61AFEF'),
-            secondary: Color::hex('#98C379'),
-            accent: Color::hex('#C678DD'),
-            error: Color::hex('#E06C75'),
-            warning: Color::hex('#E5C07B'),
-            success: Color::hex('#98C379'),
-            highlight: Color::hex('#61AFEF'),
+            foreground: Color::hex(Palettes::ONE_DARK['foreground']),
+            background: Color::hex(Palettes::ONE_DARK['background']),
+            primary: Color::hex(Palettes::ONE_DARK['blue']),
+            secondary: Color::hex(Palettes::ONE_DARK['green']),
+            accent: Color::hex(Palettes::ONE_DARK['magenta']),
+            error: Color::hex(Palettes::ONE_DARK['red']),
+            warning: Color::hex(Palettes::ONE_DARK['yellow']),
+            success: Color::hex(Palettes::ONE_DARK['green']),
+            highlight: Color::hex(Palettes::ONE_DARK['blue']),
         );
     }
 
     /**
      * Create the GitHub Dark theme.
+     *
+     * Hex literals are re-sourced from candy-core's {@see Palettes::GITHUB_DARK}
+     * SSOT (lowercase `#rrggbb`); the previous uppercase literals rendered to
+     * the same numeric-RGB SGR bytes, so the case change is cosmetic.
      */
     public static function githubDark(): self
     {
         return new self(
             name: 'github-dark',
-            foreground: Color::hex('#C9D1D9'),
-            background: Color::hex('#0D1117'),
-            primary: Color::hex('#58A6FF'),
-            secondary: Color::hex('#3FB950'),
-            accent: Color::hex('#F778BA'),
-            error: Color::hex('#F85149'),
-            warning: Color::hex('#D29922'),
-            success: Color::hex('#3FB950'),
-            highlight: Color::hex('#58A6FF'),
+            foreground: Color::hex(Palettes::GITHUB_DARK['foreground']),
+            background: Color::hex(Palettes::GITHUB_DARK['background']),
+            primary: Color::hex(Palettes::GITHUB_DARK['blue']),
+            secondary: Color::hex(Palettes::GITHUB_DARK['green']),
+            accent: Color::hex(Palettes::GITHUB_DARK['pink']),
+            error: Color::hex(Palettes::GITHUB_DARK['red']),
+            warning: Color::hex(Palettes::GITHUB_DARK['yellow']),
+            success: Color::hex(Palettes::GITHUB_DARK['green']),
+            highlight: Color::hex(Palettes::GITHUB_DARK['blue']),
         );
     }
 
