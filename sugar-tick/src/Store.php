@@ -19,11 +19,27 @@ use SugarCraft\Async\CancellationToken;
  */
 final class Store
 {
+    /**
+     * Upper bound on a CLI date-range walk (~10 years). `loadRange()` iterates
+     * one `loadDay()` per day, so an unclamped day count from the CLI could walk
+     * a century of empty days. Guards `export`/`gaps` — see Store::clampRangeDays().
+     */
+    public const MAX_RANGE_DAYS = 3660;
+
     // memoization, not observable state
     private array $dayCache = [];
 
     public function __construct(public readonly string $dir)
     {}
+
+    /**
+     * Clamp a requested day count to [1, MAX_RANGE_DAYS] so an out-of-range
+     * value from the CLI cannot drive `loadRange()` into an unbounded walk.
+     */
+    public static function clampRangeDays(int $days): int
+    {
+        return max(1, min($days, self::MAX_RANGE_DAYS));
+    }
 
     /** Default per-user directory (XDG / fallback to ~). */
     public static function defaultDir(): string
@@ -46,14 +62,27 @@ final class Store
         if (!is_file($file)) {
             return [];
         }
+        // Stream the file line-by-line with fgets() rather than slurping the whole
+        // day into memory — a busy day's JSONL can grow large and loadRange()
+        // stacks many of these, so bounded per-line memory matters.
+        $fh = fopen($file, 'rb');
+        if ($fh === false) {
+            return [];
+        }
         $rows = [];
-        foreach (explode("\n", (string) file_get_contents($file)) as $line) {
-            $line = trim($line);
-            if ($line === '') continue;
-            $decoded = json_decode($line, true);
-            if (is_array($decoded)) {
-                $rows[] = Heartbeat::fromArray($decoded);
+        try {
+            while (($line = fgets($fh)) !== false) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                $decoded = json_decode($line, true);
+                if (is_array($decoded)) {
+                    $rows[] = Heartbeat::fromArray($decoded);
+                }
             }
+        } finally {
+            fclose($fh);
         }
         $this->dayCache[$key] = $rows;
         return $rows;
@@ -110,6 +139,8 @@ final class Store
             throw new \RuntimeException('Heartbeat append cancelled');
         }
 
-        file_put_contents($file, $line, FILE_APPEND);
+        // LOCK_EX serialises concurrent appenders (editor plugin + CLI + cron)
+        // so their lines can't interleave into a torn write.
+        file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
     }
 }
