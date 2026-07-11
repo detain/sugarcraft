@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\Tests;
 
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Sprinkles\Style;
 use PHPUnit\Framework\TestCase;
@@ -150,6 +151,47 @@ final class ThemeTest extends TestCase
         $titleRendered = $theme->title->render('Title');
         // Pink #ff79c6 = rgb(255,121,198)
         $this->assertStringContainsString("\x1b[38;2;255;121;198m", $titleRendered);
+    }
+
+    /**
+     * Drift guard: every coloured dracula() slot must source its hex from
+     * {@see Palettes::DRACULA} (the candy-core single source of truth), so a
+     * change to a Palettes constant flows through byte-for-byte and a
+     * re-hardcoded literal that diverges from the SSOT fails here.
+     */
+    public function testDraculaColorsMatchCorePalettesSsot(): void
+    {
+        $theme = Theme::dracula();
+
+        // Build the true-color foreground SGR directly from a Palettes hex.
+        $sgr = static function (string $hex): string {
+            [$r, $g, $b] = sscanf($hex, '#%02x%02x%02x');
+
+            return "\x1b[38;2;{$r};{$g};{$b}m";
+        };
+
+        $expectations = [
+            'title'          => 'pink',
+            'description'    => 'comment',
+            'focusedTitle'   => 'purple',
+            'blurredTitle'   => 'comment',
+            'error'          => 'red',
+            'errorSummary'   => 'red',
+            'cursor'         => 'pink',
+            'option'         => 'foreground',
+            'selectedOption' => 'green',
+            'help'           => 'comment',
+            'prompt'         => 'cyan',
+        ];
+
+        foreach ($expectations as $slot => $paletteKey) {
+            $rendered = $theme->{$slot}->render('X');
+            $this->assertStringContainsString(
+                $sgr(Palettes::DRACULA[$paletteKey]),
+                $rendered,
+                "dracula() slot '{$slot}' must source its colour from Palettes::DRACULA['{$paletteKey}']",
+            );
+        }
     }
 
     public function testCatppuccinThemeUsesPastelColors(): void
