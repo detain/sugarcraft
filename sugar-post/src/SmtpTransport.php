@@ -7,8 +7,6 @@ namespace SugarCraft\Post;
 use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationToken;
 use SugarCraft\Post\Lang;
-use React\EventLoop\LoopInterface;
-use React\EventLoop\Loop;
 
 /**
  * Sends email via direct SMTP (TCP/TLS).
@@ -122,13 +120,19 @@ final class SmtpTransport implements Transport
     /**
      * Send an email with optional cancellation support.
      *
+     * Blocking contract: this call is synchronous. It drives the entire SMTP
+     * conversation with blocking socket I/O (stream_socket_client/fwrite/fgets)
+     * and therefore BLOCKS the ReactPHP event loop for its full duration — up
+     * to `$timeout` seconds per network round-trip. Run it off the loop (worker
+     * or child process) when loop responsiveness matters.
+     *
      * @param Email $email
      * @param CancellationToken|null $token  Optional cancellation token to abort the send
      * @throws \RuntimeException  On cancellation, timeout, or other send failures
      *
      * @note AsyncOps::withTimeout() cannot be used here without a full async rewrite
-     *       of the transport layer (replacing blocking stream_socket_client/fwrite/fgets
-     *       with ReactPHP streams). CancellationToken::isCancelled() pre-check and
+     *       of the transport layer (replacing the blocking stream_socket_client/fwrite/fgets
+     *       above with ReactPHP streams). CancellationToken::isCancelled() pre-check and
      *       onCancel() callback provide best-effort cancellation within the current
      *       synchronous scope.
      */
