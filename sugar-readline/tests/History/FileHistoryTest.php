@@ -325,4 +325,171 @@ final class FileHistoryTest extends TestCase
             umask($oldUmask);
         }
     }
+
+    // =========================================================================
+    // Append fast-path — byte parity with the rewrite fallback
+    // =========================================================================
+
+    /**
+     * Several sequential push()es via the in-place LOCK_EX append fast-path must
+     * lay down exactly the bytes the read-and-rewrite fallback would have, and a
+     * fresh instance must reload them newest-first. Pinned bytes so reverting the
+     * fast path to the rewrite keeps this green (both produce identical output).
+     */
+    public function testAppendFastPathMatchesRewriteBytesAndReload(): void
+    {
+        $h = new FileHistory($this->historyFile);
+        $h->push('alpha');
+        $h->push('beta');
+        $h->push('gamma');
+
+        $this->assertSame("alpha\nbeta\ngamma\n", file_get_contents($this->historyFile));
+
+        $fresh = new FileHistory($this->historyFile);
+        $this->assertSame('gamma', $fresh->getPrevious());
+        $this->assertSame('beta', $fresh->getPrevious());
+        $this->assertSame('alpha', $fresh->getPrevious());
+        $this->assertNull($fresh->getPrevious());
+    }
+
+    /**
+     * When the existing file lacks a trailing newline the fast-path check fails
+     * and the rewrite fallback must normalize it before appending — no glued
+     * "oldnew" line.
+     */
+    public function testAppendNormalizesMissingTrailingNewline(): void
+    {
+        file_put_contents($this->historyFile, 'old'); // no trailing "\n"
+
+        $h = new FileHistory($this->historyFile);
+        $h->push('new');
+
+        $this->assertSame("old\nnew\n", file_get_contents($this->historyFile));
+    }
+
+    /**
+     * Two independent instances appending in turn (each loads, then pushes) must
+     * not corrupt the file — the fast path serializes writes under LOCK_EX and
+     * only ever appends whole newline-terminated records.
+     */
+    public function testMultiInstanceAppendDoesNotCorrupt(): void
+    {
+        $a = new FileHistory($this->historyFile);
+        $a->push('one');
+        unset($a);
+
+        $b = new FileHistory($this->historyFile);
+        $b->push('two');
+        unset($b);
+
+        $c = new FileHistory($this->historyFile);
+        $c->push('three');
+        unset($c);
+
+        $this->assertSame("one\ntwo\nthree\n", file_get_contents($this->historyFile));
+
+        $fresh = new FileHistory($this->historyFile);
+        $this->assertSame('three', $fresh->getPrevious());
+        $this->assertSame('two', $fresh->getPrevious());
+        $this->assertSame('one', $fresh->getPrevious());
+    }
+
+    /**
+     * The sync-path dup guard reads the last on-disk entry via a bounded tail
+     * read. Simulate another process appending an entry AFTER this instance
+     * loaded (so the in-memory guard can't catch it): pushing that same line
+     * must be suppressed by peekLastOnDisk() finding the true tail of a long
+     * file, leaving no duplicate.
+     */
+    public function testDupGuardFindsTailInLongFile(): void
+    {
+        $lines = '';
+        for ($i = 0; $i < 499; $i++) {
+            $lines .= "entry{$i}\n";
+        }
+        file_put_contents($this->historyFile, $lines);
+
+        $h = new FileHistory($this->historyFile); // loads entry0..entry498
+
+        // Another process appends a fresh entry this instance never loaded.
+        file_put_contents($this->historyFile, "entry499\n", FILE_APPEND);
+        $expected = $lines . "entry499\n";
+
+        $h->push('entry499'); // in-memory miss; peekLastOnDisk() must catch it
+
+        $this->assertSame($expected, file_get_contents($this->historyFile));
+    }
+
+    /**
+     * The bounded tail read must still recover the last content line when it is
+     * longer than the read chunk (4096 bytes), so the dup guard works on a
+     * concurrently-appended oversized entry.
+     */
+    public function testDupGuardHandlesLineLongerThanChunk(): void
+    {
+        $long = str_repeat('x', 5000);
+        file_put_contents($this->historyFile, "short\n");
+
+        $h = new FileHistory($this->historyFile); // loads only "short"
+
+        // Concurrent append of an oversized entry (> one 4096-byte read chunk).
+        file_put_contents($this->historyFile, "{$long}\n", FILE_APPEND);
+
+        $h->push($long); // peekLastOnDisk() must reassemble the tail across chunks
+
+        $this->assertSame("short\n{$long}\n", file_get_contents($this->historyFile));
+    }
+
+    // =========================================================================
+    // load() dedup + maxHistory eviction — O(1) hash-set parity
+    // =========================================================================
+
+    /**
+     * Non-adjacent duplicates in the file collapse to the first occurrence's
+     * slot, newest-first, exactly as the old in_array() dedup did. Pinned order
+     * guards the hash-set rewrite against an O(n) regression.
+     */
+    public function testLoadDedupsNonAdjacentDuplicates(): void
+    {
+        // oldest -> newest: A, B, A, C  =>  newest-first result: C, B, A
+        file_put_contents($this->historyFile, "A\nB\nA\nC\n");
+
+        $h = new FileHistory($this->historyFile);
+
+        $this->assertSame('C', $h->getPrevious());
+        $this->assertSame('B', $h->getPrevious());
+        $this->assertSame('A', $h->getPrevious());
+        $this->assertNull($h->getPrevious());
+    }
+
+    /**
+     * maxHistory caps the loaded set to the newest N entries, evicting oldest.
+     */
+    public function testLoadEvictsToMaxHistory(): void
+    {
+        file_put_contents($this->historyFile, "A\nB\nC\nD\n");
+
+        $h = new FileHistory($this->historyFile, 2); // keep newest 2
+
+        $this->assertSame('D', $h->getPrevious());
+        $this->assertSame('C', $h->getPrevious());
+        $this->assertNull($h->getPrevious()); // A, B evicted
+    }
+
+    /**
+     * Eviction and dedup interact: once the cap evicts an entry, a later
+     * duplicate of that evicted line is re-admitted. The hash set must forget
+     * evicted entries, matching an in_array() over the live (post-eviction)
+     * history. File A,B,C,A @ max 2 => newest-first A,C.
+     */
+    public function testLoadEvictionReadmitsDuplicateOfEvictedEntry(): void
+    {
+        file_put_contents($this->historyFile, "A\nB\nC\nA\n");
+
+        $h = new FileHistory($this->historyFile, 2);
+
+        $this->assertSame('A', $h->getPrevious());
+        $this->assertSame('C', $h->getPrevious());
+        $this->assertNull($h->getPrevious());
+    }
 }
