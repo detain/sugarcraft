@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Vt\Theme;
 use SugarCraft\Vt\Themes;
 
@@ -82,6 +83,32 @@ final class ThemeTest extends TestCase
         $theme = Theme::dracula();
         $this->assertSame(0x21222c, $theme->color(0));
         $this->assertSame(0xff5555, $theme->color(1));
+    }
+
+    /**
+     * The seven overlapping Dracula slots must stay byte-identical to
+     * candy-core's Palettes SSOT so the two never drift apart.
+     */
+    public function testDraculaOverlapMatchesCorePalettesSsot(): void
+    {
+        $theme = Theme::dracula();
+        $overlap = [
+            1 => 'red',
+            2 => 'green',
+            3 => 'yellow',
+            4 => 'comment',
+            5 => 'pink',
+            6 => 'cyan',
+            7 => 'foreground',
+            8 => 'comment',
+        ];
+        foreach ($overlap as $slot => $name) {
+            $this->assertSame(
+                hexdec(ltrim(Palettes::DRACULA[$name], '#')),
+                $theme->color($slot),
+                "dracula slot {$slot} should equal Palettes::DRACULA['{$name}']",
+            );
+        }
     }
 
     public function testSolarizedDarkHasDifferentPalette(): void
