@@ -121,16 +121,20 @@ final class RecordCommandEnvFilterTest extends TestCase
     }
 
     /**
-     * @see RecordCommand::filteredHostEnv() — empty string means "skip
-     *   all filtering". This is the mechanism behind --env-allow-secrets.
+     * Security regression: an empty regex must NOT be a "skip all filtering"
+     * signal. It falls back to the conservative SECRET_KEY_REGEX so a caller
+     * can never accidentally slurp secrets by passing ''. Capturing the full
+     * env now requires the explicit $captureAll opt-in (--env-all).
+     *
+     * @see RecordCommand::filteredHostEnv()
      */
-    public function testFilteredHostEnvWithEmptyStringSkipsAllFiltering(): void
+    public function testFilteredHostEnvWithEmptyStringFallsBackToDefaultFilter(): void
     {
         $fixtures = [
-            'VCR_FIXTURE_SECRET_TOKEN' => 'should-be-kept',
-            'VCR_FIXTURE_DB_PASSWORD'    => 'should-be-kept',
-            'VCR_FIXTURE_OAUTH_KEY'      => 'should-be-kept',
-            'VCR_FIXTURE_BENIGN_VAR'     => 'also-kept',
+            'VCR_FIXTURE_SECRET_TOKEN' => 'must-be-stripped',
+            'VCR_FIXTURE_DB_PASSWORD'    => 'must-be-stripped',
+            'VCR_FIXTURE_OAUTH_KEY'      => 'must-be-stripped',
+            'VCR_FIXTURE_BENIGN_VAR'     => 'kept',
         ];
         $prior = [];
         foreach ($fixtures as $k => $v) {
@@ -139,14 +143,14 @@ final class RecordCommandEnvFilterTest extends TestCase
         }
 
         try {
-            // Empty string → skip all filtering (--env-allow-secrets path).
+            // Empty string is NO LONGER skip-all — it applies the default
+            // secret filter, so secrets stay out of the cassette.
             $kept = RecordCommand::filteredHostEnv('');
 
-            $this->assertArrayHasKey('VCR_FIXTURE_SECRET_TOKEN', $kept);
-            $this->assertArrayHasKey('VCR_FIXTURE_DB_PASSWORD', $kept);
-            $this->assertArrayHasKey('VCR_FIXTURE_OAUTH_KEY', $kept);
+            $this->assertArrayNotHasKey('VCR_FIXTURE_SECRET_TOKEN', $kept);
+            $this->assertArrayNotHasKey('VCR_FIXTURE_DB_PASSWORD', $kept);
+            $this->assertArrayNotHasKey('VCR_FIXTURE_OAUTH_KEY', $kept);
             $this->assertArrayHasKey('VCR_FIXTURE_BENIGN_VAR', $kept);
-            $this->assertSame('should-be-kept', $kept['VCR_FIXTURE_SECRET_TOKEN']);
         } finally {
             foreach ($prior as $k => $v) {
                 if ($v === false) {
@@ -156,6 +160,57 @@ final class RecordCommandEnvFilterTest extends TestCase
                 }
             }
         }
+    }
+
+    /**
+     * The explicit $captureAll opt-in (behind --env-all) is the ONLY way to
+     * capture the full env including secrets.
+     */
+    public function testCaptureAllOptInCapturesSecrets(): void
+    {
+        $fixtures = [
+            'VCR_FIXTURE_SECRET_TOKEN' => 'now-kept',
+            'VCR_FIXTURE_DB_PASSWORD'    => 'now-kept',
+            'VCR_FIXTURE_BENIGN_VAR'     => 'kept',
+        ];
+        $prior = [];
+        foreach ($fixtures as $k => $v) {
+            $prior[$k] = \getenv($k);
+            \putenv("{$k}={$v}");
+        }
+
+        try {
+            $kept = RecordCommand::filteredHostEnv(null, true);
+
+            $this->assertArrayHasKey('VCR_FIXTURE_SECRET_TOKEN', $kept);
+            $this->assertArrayHasKey('VCR_FIXTURE_DB_PASSWORD', $kept);
+            $this->assertArrayHasKey('VCR_FIXTURE_BENIGN_VAR', $kept);
+            $this->assertSame('now-kept', $kept['VCR_FIXTURE_SECRET_TOKEN']);
+        } finally {
+            foreach ($prior as $k => $v) {
+                if ($v === false) {
+                    \putenv($k);
+                } else {
+                    \putenv("{$k}={$v}");
+                }
+            }
+        }
+    }
+
+    public function testEnvAllWarningNamesEveryCapturedVar(): void
+    {
+        $warning = RecordCommand::envAllWarning([
+            'GITHUB_TOKEN' => 'x',
+            'AWS_SECRET_ACCESS_KEY' => 'y',
+            'PATH' => '/usr/bin',
+        ]);
+
+        $this->assertStringContainsString('--env-all', $warning);
+        $this->assertStringContainsString('WITHOUT secret filtering', $warning);
+        $this->assertStringContainsString('(3 vars)', $warning);
+        $this->assertStringContainsString('GITHUB_TOKEN', $warning);
+        $this->assertStringContainsString('AWS_SECRET_ACCESS_KEY', $warning);
+        $this->assertStringContainsString('PATH', $warning);
     }
 
     public function testEnvFlagPopulatesCassetteHeader(): void
@@ -215,6 +270,49 @@ final class RecordCommandEnvFilterTest extends TestCase
             $loaded = (new JsonlFormat())->read($cassette);
             $this->assertSame([], $loaded->header->env, 'env must stay empty without --env');
         } finally {
+            \fclose($stdout);
+            \fclose($stderr);
+            if (\file_exists($cassette)) {
+                @\unlink($cassette);
+            }
+        }
+    }
+
+    public function testEnvAllCapturesSecretsAndWarnsWithVarNames(): void
+    {
+        $this->requirePtySyscalls();
+
+        \putenv('VCR_FIXTURE_SAFE=hello');
+        \putenv('VCR_FIXTURE_OAUTH_TOKEN=leaked-on-purpose');
+
+        $cassette = \tempnam(\sys_get_temp_dir(), 'rec-envall-');
+        $this->assertIsString($cassette);
+        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
+        $stdout = \fopen('php://memory', 'r+');
+        $stderr = \fopen('php://memory', 'r+');
+
+        try {
+            $rc = $cmd->run(
+                ['--env-all', '--output', $cassette, '--', '/bin/echo', 'env-all-test'],
+                $stdout,
+                $stderr,
+            );
+            $this->assertSame(0, $rc);
+
+            // With --env-all the secret var IS captured (footgun opt-in).
+            $loaded = (new JsonlFormat())->read($cassette);
+            $this->assertArrayHasKey('VCR_FIXTURE_OAUTH_TOKEN', $loaded->header->env);
+            $this->assertSame('leaked-on-purpose', $loaded->header->env['VCR_FIXTURE_OAUTH_TOKEN']);
+
+            // ...and the operator is warned on stderr, by name.
+            \rewind($stderr);
+            $err = (string) \stream_get_contents($stderr);
+            $this->assertStringContainsString('--env-all', $err);
+            $this->assertStringContainsString('WITHOUT secret filtering', $err);
+            $this->assertStringContainsString('VCR_FIXTURE_OAUTH_TOKEN', $err);
+        } finally {
+            \putenv('VCR_FIXTURE_SAFE');
+            \putenv('VCR_FIXTURE_OAUTH_TOKEN');
             \fclose($stdout);
             \fclose($stderr);
             if (\file_exists($cassette)) {
