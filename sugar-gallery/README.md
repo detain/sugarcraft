@@ -39,13 +39,20 @@ $grid = $grid->moveTo(2600);       // jump (e.g. an A–Z letter offset)
 ### Owner-driven paging (the `need-range` pattern)
 
 After each move, read the visible window and fetch the page(s) covering it, then
-splice the results back in at their absolute index:
+splice the results back in at their absolute index. `needsFetch()` dedups the
+request against the last range you loaded, so the cursor can roam inside an
+already-fetched window without re-hitting your API:
 
 ```php
-[$start, $end] = $grid->visibleRange(overscanRows: 1);
-if ($start <= $end && $start !== $lastFetchedStart) {
-    // fetch items [$start, $end] from your API, build cards keyed by index…
-    $grid = $grid->withItems([$start => $card0, $start + 1 => $card1, /* … */]);
+$want = $grid->visibleRange(overscanRows: 1);
+if ($grid->needsFetch($lastFetched, overscanRows: 1)) {
+    // fetch items [$want[0], $want[1]] from your API, build cards keyed by index…
+    $grid = $grid->withItems([$want[0] => $card0, $want[0] + 1 => $card1, /* … */]);
+    $lastFetched = $want;
+
+    // Keep the sparse card map bounded on a huge library: drop everything the
+    // owner is no longer near (the map otherwise only ever grows).
+    $grid = $grid->withoutItemsOutside($grid->visibleRange(overscanRows: 8));
 }
 ```
 
@@ -90,6 +97,21 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);
 Every card row is exactly `width` cells wide and the grid normalizes each cell
 to `cardWidth × (posterHeight + 2)`, so columns and rows always line up whether
 or not a card carries a progress bar.
+
+### Title trust boundary
+
+The plain `title` is treated as **untrusted** (it is typically DB-sourced):
+`render()` strips C0 control bytes — cursor-move, clear-screen, `ESC`, `BEL` —
+before drawing it, so a hostile title can't corrupt the terminal.
+
+`withStyledTitle($ansi)` is the **escape hatch** for a *pre-styled* title (e.g. a
+[candy-fuzzy](https://github.com/sugarcraft/candy-fuzzy) match highlight). It is
+emitted **verbatim** — only ANSI-aware *truncated*, never stripped — because
+sanitising it would destroy the very SGR escapes it exists to carry. That makes
+**you** the trust boundary: pass only styling you produced yourself over
+already-safe text, **never** raw untrusted / DB-sourced bytes. When the source
+is untrusted, leave the styled title unset and rely on the sanitised plain
+`title`.
 
 ## License
 

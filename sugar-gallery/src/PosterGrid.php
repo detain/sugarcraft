@@ -34,6 +34,21 @@ final class PosterGrid
     /** @var array<int, PosterCard> absolute index → card (sparse) */
     private array $items = [];
 
+    /**
+     * Process-wide memo of boxed cells: `cardWidth|cellHeight|len|hash` → the
+     * width/height-normalised block. {@see render()} re-boxes every visible cell
+     * every frame and most frames repeat the previous frame's cells verbatim
+     * (every unloaded cell is the *same* skeleton), so caching {@see box()}'s
+     * per-line {@see Width::string()} work turns a per-frame cost into a one-time
+     * one. Keyed by content so it can never return a stale box; bounded to
+     * {@see BOX_CACHE_CAP}, evicting the oldest half when full.
+     *
+     * @var array<string, string>
+     */
+    private static array $boxCache = [];
+
+    private const BOX_CACHE_CAP = 2048;
+
     private int $total = 0;
     private int $cursor = 0;
     private int $scrollRow = 0;
@@ -114,6 +129,41 @@ final class PosterGrid
         }
         $clone = clone $this;
         $clone->items[$index] = $card;
+
+        return $clone;
+    }
+
+    /**
+     * Evict every loaded card whose absolute index falls OUTSIDE the inclusive
+     * [$start, $end] window, keeping the sparse {@see $items} map bounded to the
+     * live region. The map otherwise only ever grows — each range fetch
+     * accumulates cards forever, even after the user scrolls far past them — so
+     * an owner paging a very large library should prune off-screen cards after
+     * each move, typically passing a widened {@see visibleRange()} (a superset of
+     * what will be re-fetched). Returns the receiver unchanged when the window
+     * already covers every loaded card (nothing to evict), so a caller can
+     * cheaply detect the no-op by identity.
+     *
+     * @param array{0:int, 1:int} $range inclusive [startIndex, endIndex]; an
+     *                                    empty window ([a,b] with b < a) drops all
+     */
+    public function withoutItemsOutside(array $range): self
+    {
+        [$start, $end] = $range;
+
+        $kept = [];
+        foreach ($this->items as $index => $card) {
+            if ($index >= $start && $index <= $end) {
+                $kept[$index] = $card;
+            }
+        }
+
+        if (count($kept) === count($this->items)) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        $clone->items = $kept;
 
         return $clone;
     }
@@ -218,6 +268,38 @@ final class PosterGrid
         $end = min(($lastRow + 1) * $cols - 1, $this->total - 1);
 
         return [$start, $end];
+    }
+
+    /**
+     * Whether the current {@see visibleRange()} still needs a fetch given the
+     * last range the owner already loaded — the fetch-dedup companion to
+     * {@see visibleRange()}. Returns true when the visible window (widened by the
+     * same $overscanRows you page with) is NOT fully covered by $lastFetched, so
+     * an owner can skip the redundant range fetch while the cursor moves inside
+     * an already-loaded window:
+     *
+     *     $want = $grid->visibleRange(1);
+     *     if ($grid->needsFetch($lastFetched, 1)) {
+     *         // fetch [$want[0], $want[1]], splice with withItems(), then:
+     *         $lastFetched = $want;
+     *     }
+     *
+     * Pass null for $lastFetched (nothing fetched yet) to always fetch. Returns
+     * false on an empty grid — there is nothing to load.
+     *
+     * @param array{0:int, 1:int}|null $lastFetched inclusive [start, end] already loaded
+     */
+    public function needsFetch(?array $lastFetched, int $overscanRows = 0): bool
+    {
+        [$start, $end] = $this->visibleRange($overscanRows);
+        if ($end < $start) {
+            return false;
+        }
+        if ($lastFetched === null) {
+            return true;
+        }
+
+        return !($lastFetched[0] <= $start && $end <= $lastFetched[1]);
     }
 
     // ---- geometry / accessors ------------------------------------------
@@ -339,6 +421,12 @@ final class PosterGrid
     {
         $width = $this->cardWidth;
         $height = $this->cellHeight();
+
+        $key = $width . '|' . $height . '|' . strlen($block) . '|' . md5($block);
+        if (isset(self::$boxCache[$key])) {
+            return self::$boxCache[$key];
+        }
+
         $lines = explode("\n", $block);
 
         if (count($lines) > $height) {
@@ -357,7 +445,29 @@ final class PosterGrid
             }
         }
 
-        return implode("\n", $lines);
+        $boxed = implode("\n", $lines);
+
+        if (count(self::$boxCache) >= self::BOX_CACHE_CAP) {
+            self::$boxCache = array_slice(self::$boxCache, self::BOX_CACHE_CAP >> 1, null, true);
+        }
+        self::$boxCache[$key] = $boxed;
+
+        return $boxed;
+    }
+
+    /**
+     * Drop the shared boxed-cell memo, returning how many entries were cleared.
+     * The counterpart to {@see PosterCard::clearFitCache()}: the cache is
+     * self-bounding ({@see BOX_CACHE_CAP}), but a long-lived program can call
+     * this to reclaim memory eagerly. Purely an optimization — never changes a
+     * single rendered byte.
+     */
+    public static function clearBoxCache(): int
+    {
+        $count = count(self::$boxCache);
+        self::$boxCache = [];
+
+        return $count;
     }
 
     private function skeletonCell(): string

@@ -293,4 +293,84 @@ final class PosterGridTest extends TestCase
         self::assertNotSame($g, $moved);
         self::assertSame(0, $g->cursorIndex(), 'the original grid is unchanged');
     }
+
+    public function testWithoutItemsOutsideEvictsCardsOutsideTheWindow(): void
+    {
+        $g = $this->grid(50)->withItems($this->cardsAt([0, 5, 20, 21, 22, 45]));
+        self::assertSame(6, $g->loadedCount());
+
+        $pruned = $g->withoutItemsOutside([20, 22]);
+
+        self::assertSame(3, $pruned->loadedCount(), 'only the in-window cards survive');
+        self::assertNotNull($pruned->item(20));
+        self::assertNotNull($pruned->item(22));
+        self::assertNull($pruned->item(5), 'a card below the window is evicted');
+        self::assertNull($pruned->item(45), 'a card above the window is evicted');
+
+        // Memory-bound eviction is immutable: the receiver keeps every card.
+        self::assertSame(6, $g->loadedCount(), 'the original grid is untouched');
+        self::assertNotNull($g->item(45));
+    }
+
+    public function testWithoutItemsOutsideIsANoOpWhenWindowCoversAll(): void
+    {
+        $g = $this->grid(50)->withItems($this->cardsAt([10, 11, 12]));
+
+        self::assertSame($g, $g->withoutItemsOutside([0, 49]), 'a covering window → identity no-op');
+        self::assertSame($g, $g->withoutItemsOutside([10, 12]), 'the exact window → identity no-op');
+    }
+
+    public function testWithoutItemsOutsideEmptyWindowDropsEverything(): void
+    {
+        $g = $this->grid(50)->withItems($this->cardsAt([1, 2, 3]));
+
+        // visibleRange() returns [0, -1] for an empty grid; passing that (or any
+        // empty [a,b] with b < a) evicts all cached cards.
+        self::assertSame(0, $g->withoutItemsOutside([0, -1])->loadedCount());
+    }
+
+    public function testNeedsFetchDedupsAgainstTheLastLoadedRange(): void
+    {
+        $g = $this->grid(50); // visibleRange() == [0, 11]
+
+        self::assertTrue($g->needsFetch(null), 'nothing fetched yet → fetch');
+        self::assertTrue($g->needsFetch([0, 5]), 'partial coverage → fetch');
+        self::assertFalse($g->needsFetch([0, 11]), 'exact coverage → skip');
+        self::assertFalse($g->needsFetch([0, 20]), 'superset coverage → skip');
+
+        // Moving to a window the old fetch does not cover needs a fresh fetch.
+        $scrolled = $g->end(); // visibleRange() == [40, 49]
+        self::assertTrue($scrolled->needsFetch([0, 11]), 'cursor moved past the loaded window → fetch');
+    }
+
+    public function testNeedsFetchHonoursOverscanWhenMeasuringCoverage(): void
+    {
+        $g = $this->grid(50); // visibleRange(1) == [0, 15]
+
+        self::assertTrue($g->needsFetch([0, 11], 1), 'overscan enlarges the window past the loaded range → fetch');
+        self::assertFalse($g->needsFetch([0, 15], 1), 'range covers the overscanned window → skip');
+    }
+
+    public function testNeedsFetchIsFalseOnAnEmptyGrid(): void
+    {
+        self::assertFalse($this->grid(0)->needsFetch(null), 'an empty grid has nothing to fetch');
+    }
+
+    public function testBoxCacheClearsAndRendersByteIdentical(): void
+    {
+        // An oversized poster forces box() to do real per-line width work.
+        $wide = (new PosterCard('0', 'Wide'))->withPoster(str_repeat('X', 40));
+        $g = $this->grid(4)->withItems([0 => $wide]);
+
+        PosterGrid::clearBoxCache();
+        $a = $g->render(true);
+        self::assertGreaterThan(0, PosterGrid::clearBoxCache(), 'rendering populated the box memo');
+
+        // Re-render from a cold cache: bytes must match the cached render exactly.
+        $b = $g->render(true);
+        self::assertSame($a, $b, 'cached and cold-computed boxes are byte-identical');
+
+        self::assertGreaterThan(0, PosterGrid::clearBoxCache());
+        self::assertSame(0, PosterGrid::clearBoxCache(), 'a second clear finds an empty memo');
+    }
 }
