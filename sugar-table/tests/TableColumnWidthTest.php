@@ -315,4 +315,74 @@ final class TableColumnWidthTest extends TestCase
         $view = $t->View();
         $this->assertIsString($view);
     }
+
+    // -------------------------------------------------------------------------
+    // computeTotalWidth() fixed-point convergence
+    // -------------------------------------------------------------------------
+
+    /** Invoke the private auto-sizing total-width solver. */
+    private function computeTotalWidthOf(Table $t): int
+    {
+        $m = new \ReflectionMethod(Table::class, 'computeTotalWidth');
+        $m->setAccessible(true);
+        return $m->invoke($t);
+    }
+
+    /**
+     * A Percent column sizes itself as a fraction of the total width, but the
+     * total is the sum of the resolved column widths — a mutual dependency a
+     * single pass cannot resolve. computeTotalWidth() must iterate to a fixed
+     * point so the reported total equals what the columns actually render to.
+     *
+     * Regression guard: the pre-fix single pass reported 32 for this table
+     * while the columns rendered a 43-wide span. Reverting the fixed-point loop
+     * makes the self-consistency assertion below fail (32 is not a fixed point:
+     * computeColumnWidths(32) sums back to 38, not 32).
+     */
+    public function testComputeTotalWidthConvergesOnMixedPercentAndDynamic(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('pct', 'PCT', 10)->withColumnWidth(ColumnWidth::Percent, 50.0),
+            Column::new('dyn', 'DYN', 10)->withColumnWidth(ColumnWidth::Dynamic),
+        ])->withRows([
+            Row::new(RowData::from(['pct' => 'x', 'dyn' => 'ThisIsTwentyCharsLong'])),
+        ]);
+
+        $total = $this->computeTotalWidthOf($t);
+
+        // Converged, self-consistent fixed point: resolving the columns at the
+        // reported total sums back to that same total (+ inter-column borders).
+        $borders = \count($t->Columns()) - 1;
+        $resolved = \array_sum($t->computeColumnWidths($total)) + $borders;
+        $this->assertSame($total, $resolved, 'reported total must be a fixed point of the width solve');
+
+        // Pin the exact converged value (Percent 50% ⇒ 21, Dynamic content ⇒ 21,
+        // + 1 border = 43). The old non-converged single pass returned 32.
+        $this->assertSame(43, $total);
+    }
+
+    /**
+     * An over-subscribed Percent set (columns summing to > 100%) has no fixed
+     * point, so the solver can never converge. The iteration bound must still
+     * make computeTotalWidth() terminate and clamp to a finite width rather
+     * than spin forever.
+     */
+    public function testComputeTotalWidthTerminatesWhenPercentOverSubscribed(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('p1', 'P1', 8)->withColumnWidth(ColumnWidth::Percent, 60.0),
+            Column::new('p2', 'P2', 8)->withColumnWidth(ColumnWidth::Percent, 60.0),
+            Column::new('con', 'CON', 4)->withColumnWidth(ColumnWidth::Content),
+        ])->withRows([
+            Row::new(RowData::from(['p1' => 'a', 'p2' => 'b', 'con' => 'TenCharsss'])),
+        ]);
+
+        // Reaching this assertion at all proves the bounded loop terminated.
+        $total = $this->computeTotalWidthOf($t);
+        $this->assertGreaterThan(0, $total);
+        $this->assertLessThan(100000, $total, 'clamp bound must keep the width finite');
+
+        // And it still renders without error.
+        $this->assertIsString($t->View());
+    }
 }
