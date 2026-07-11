@@ -152,15 +152,24 @@ final class Renderer
     private static function renderMini(Tetromino $kind): string
     {
         $cells = self::cellMap($kind->cells(0));
-        $lines = [];
+
+        // 4×2 preview grid, two Buffer columns per tetromino cell so the
+        // mini blocks keep the playfield's width. Rendered through a Buffer
+        // (same path as renderBoard) instead of hand-rolled SGR strings.
+        $buf = Buffer::new(8, 2);
         for ($y = 0; $y < 2; $y++) {
-            $line = '';
             for ($x = 0; $x < 4; $x++) {
-                $line .= isset($cells["$x,$y"]) ? self::block($kind) : '  ';
+                if (!isset($cells["$x,$y"])) {
+                    continue;
+                }
+                $cell = Cell::new(' ', self::blockStyle($kind));
+                $buf = $buf
+                    ->withCellAt($x * 2, $y, $cell)
+                    ->withCellAt($x * 2 + 1, $y, $cell);
             }
-            $lines[] = $line;
         }
-        return implode("\n", $lines);
+
+        return $buf->toAnsi();
     }
 
     private static function renderMiniPlaceholder(): string
@@ -179,26 +188,6 @@ final class Renderer
             $out["$x,$y"] = true;
         }
         return $out;
-    }
-
-    private static function block(Tetromino $kind): string
-    {
-        $rgb = self::COLOR_MAP[$kind->color()] ?? 0xffffff;
-        $r = ($rgb >> 16) & 0xFF;
-        $g = ($rgb >> 8) & 0xFF;
-        $b = $rgb & 0xFF;
-
-        return "\x1b[48;2;{$r};{$g};{$b}m  \x1b[0m";
-    }
-
-    private static function ghost(Tetromino $kind): string
-    {
-        $rgb = self::COLOR_MAP[$kind->color()] ?? 0x888888;
-        $r = ($rgb >> 16) & 0xFF;
-        $g = ($rgb >> 8) & 0xFF;
-        $b = $rgb & 0xFF;
-
-        return "\x1b[38;2;{$r};{$g};{$b}m\x1b[2m▒▒\x1b[0m";
     }
 
     /**

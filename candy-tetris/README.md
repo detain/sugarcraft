@@ -53,8 +53,24 @@ The computer opponent uses weighted heuristics (board height, holes, gaps, lines
 | z         | Rotate counter-cw |
 | ↓         | Soft drop         |
 | Space     | Hard drop         |
+| c         | Hold piece        |
 | p         | Pause / resume    |
 | q         | Quit              |
+
+### Hold
+
+Press **c** to stash the falling piece into the hold slot; press it again on
+the next piece to swap it back in. You can only hold once per drop — the slot
+dims until the current piece locks.
+
+![hold demo](.vhs/hold-demo.gif)
+
+### Lock delay
+
+A grounded piece does not lock instantly — you get a short window to slide or
+rotate it before it settles (the standard SRS lock delay, live in the binary
+via `Game::startWithLockDelay()`). A successful move or rotation while grounded
+re-arms the window; a hard drop bypasses it and locks immediately.
 
 ## Scoring
 
