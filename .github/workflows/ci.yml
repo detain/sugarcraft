@@ -148,6 +148,8 @@ jobs:
           coverage: none
       - name: Verify path-repo closure
         run: php tools/check-path-repos.php
+      - name: Verify no unused path-repo deps
+        run: php tools/check-path-repos.php --unused
 
   # Guard against SugarCraft-org doc links pinned to the pre-flip default branch.
   # The org default branch moved main→master (see CONTRIBUTING.md "flip every
