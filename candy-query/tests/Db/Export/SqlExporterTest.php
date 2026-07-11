@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Db\Export;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Export\SqlExporter;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 use SugarCraft\Query\Db\SqliteDatabase;
 
 /**
@@ -42,9 +44,13 @@ final class SqlExporterTest extends TestCase
         $this->assertStringContainsString('-- SugarCraft Database Dump', $content);
         $this->assertStringContainsString('-- Generated:', $content);
 
-        // Should contain INSERT statements with proper quoting
-        $this->assertStringContainsString("INSERT INTO `users` (`id`, `name`, `email`) VALUES (1, 'alice', 'alice@example.com');", $content);
-        $this->assertStringContainsString("INSERT INTO `users` (`id`, `name`, `email`) VALUES (2, 'bob', 'bob@example.com');", $content);
+        // Should contain INSERT statements with driver-correct identifier
+        // quoting. SQLite uses standard double-quote identifiers (not MySQL
+        // backticks), derived from the connection's driver.
+        $this->assertStringContainsString('INSERT INTO "users" ("id", "name", "email") VALUES (1, \'alice\', \'alice@example.com\');', $content);
+        $this->assertStringContainsString('INSERT INTO "users" ("id", "name", "email") VALUES (2, \'bob\', \'bob@example.com\');', $content);
+        // Regression guard: the hardcoded-MySQL bug emitted backticks on SQLite.
+        $this->assertStringNotContainsString('`users`', $content);
 
         unlink($sqlPath);
     }
@@ -114,5 +120,99 @@ final class SqlExporterTest extends TestCase
         $this->assertStringContainsString("'simple'", $content);
 
         unlink($sqlPath);
+    }
+
+    public function testExportSqlUsesPostgresQuotingForPostgresDriver(): void
+    {
+        // A PostgreSQL-flavored connection must yield double-quoted identifiers;
+        // MySQL backticks are a syntax error in PostgreSQL. Quoting is derived
+        // from the connection's driver, not hardcoded to MySQL.
+        $db = new SqlExporterFakePgDb();
+        $exporter = new SqlExporter($db);
+
+        $sqlPath = tempnam(sys_get_temp_dir(), 'sql');
+        $exporter->exportSql($sqlPath);
+        $content = file_get_contents($sqlPath);
+        unlink($sqlPath);
+
+        $this->assertStringContainsString('INSERT INTO "widgets" ("id", "label")', $content);
+        $this->assertStringNotContainsString('`widgets`', $content);
+        $this->assertStringNotContainsString('`id`', $content);
+    }
+}
+
+/**
+ * Minimal PostgreSQL-flavored fake: reports driverName() 'pgsql' and returns a
+ * single widgets row so SqlExporter emits one INSERT with driver-correct quoting.
+ */
+final class SqlExporterFakePgDb implements DatabaseInterface
+{
+    public function tables(): array
+    {
+        return ['widgets'];
+    }
+
+    public function rows(string $table, int $limit = 100): array
+    {
+        return [['id' => 1, 'label' => 'x']];
+    }
+
+    public function query(string $sql): array
+    {
+        return [['id' => 1, 'label' => 'x']];
+    }
+
+    public function exec(string $sql): int
+    {
+        return 0;
+    }
+
+    public function lastInsertId(): string|int
+    {
+        return 0;
+    }
+
+    public function quote(string $value): string
+    {
+        return "'" . str_replace("'", "''", $value) . "'";
+    }
+
+    public function close(): void
+    {
+    }
+
+    public function serverVersion(): string
+    {
+        return 'PostgreSQL 16.2';
+    }
+
+    public function driverName(): string
+    {
+        return 'pgsql';
+    }
+
+    public function ping(): bool
+    {
+        return true;
+    }
+
+    public function databases(): array
+    {
+        return [];
+    }
+
+    public function prepare(string $sql): ?PreparedStatementInterface
+    {
+        return null;
+    }
+
+    public function dsn(): string
+    {
+        return '';
+    }
+
+    public function username(): string
+    {
+        return '';
     }
 }

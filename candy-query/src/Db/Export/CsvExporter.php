@@ -22,6 +22,24 @@ final class CsvExporter
     }
 
     /**
+     * Identifier-quoting flavor for the connection's actual driver.
+     *
+     * Only the quoting family matters (backtick vs double-quote), so map the
+     * driver name directly rather than hardcoding MySQL: emitting backticks
+     * against a PostgreSQL connection produces invalid SQL. `serverVersion()` is
+     * not used because it returns a worded string ("MySQL version 8.0.33") that
+     * Flavor::detectFromDriver would misclassify.
+     */
+    private function quoteFlavor(): Flavor
+    {
+        return match ($this->db->driverName()) {
+            'mysql' => Flavor::MySQL,
+            'pgsql' => Flavor::Postgres,
+            default => Flavor::Sqlite,
+        };
+    }
+
+    /**
      * Import a CSV file into a table.
      *
      * The first row of the CSV must contain column headers matching table columns.
@@ -58,7 +76,7 @@ final class CsvExporter
 
             // Build column list with identifier quoting (MySQL backtick standard)
             $columnList = implode(',', array_map(
-                fn(string $col): string => Identifier::quote(Flavor::MySQL, $col),
+                fn(string $col): string => Identifier::quote($this->quoteFlavor(), $col),
                 $headers
             ));
 
@@ -76,7 +94,7 @@ final class CsvExporter
                     $row
                 ));
 
-                $this->db->exec("INSERT INTO " . Identifier::quote(Flavor::MySQL, $table) . " ({$columnList}) VALUES ({$valuesList})");
+                $this->db->exec("INSERT INTO " . Identifier::quote($this->quoteFlavor(), $table) . " ({$columnList}) VALUES ({$valuesList})");
             }
         } finally {
             fclose($handle);
@@ -203,7 +221,7 @@ final class CsvExporter
     {
         // LIMIT 0 query to get column names without fetching rows
         try {
-            $safeTable = Identifier::quote(Flavor::MySQL, $table);
+            $safeTable = Identifier::quote($this->quoteFlavor(), $table);
             $result = $this->db->query("SELECT * FROM {$safeTable} LIMIT 0");
             if ($result !== null && count($result) > 0) {
                 return array_keys($result[0]);
@@ -214,7 +232,7 @@ final class CsvExporter
 
         // LIMIT 0 returned empty - try LIMIT 1 to get sample row
         try {
-            $safeTable = Identifier::quote(Flavor::MySQL, $table);
+            $safeTable = Identifier::quote($this->quoteFlavor(), $table);
             $sampleResult = $this->db->query("SELECT * FROM {$safeTable} LIMIT 1");
             if ($sampleResult !== null && count($sampleResult) > 0) {
                 return array_keys($sampleResult[0]);
@@ -225,7 +243,7 @@ final class CsvExporter
 
         // Both returned empty - verify table exists
         try {
-            $safeTable = Identifier::quote(Flavor::MySQL, $table);
+            $safeTable = Identifier::quote($this->quoteFlavor(), $table);
             $this->db->query("SELECT 1 FROM {$safeTable} LIMIT 1");
         } catch (\PDOException $e) {
             throw new \RuntimeException("Table not found: " . htmlspecialchars($table, ENT_QUOTES, 'UTF-8'));

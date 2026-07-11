@@ -101,6 +101,22 @@ final class ConnectionActionsTest extends TestCase
         $result = $actions->isInstrumentationEnabled();
         $this->assertNull($result);
     }
+
+    public function testIsInstrumentationEnabledUsesCatchAllActorSemantics(): void
+    {
+        // The setup_actors probe must match the catch-all actor (all hosts /
+        // all users) via LIKE, not a literal `= '%'` which only matches a row
+        // whose stored value is the single character '%'.
+        $this->db->setQueryResult([['ENABLED' => 'YES']]);
+        $actions = ConnectionActions::new($this->ctx);
+        $actions->isInstrumentationEnabled();
+
+        $this->assertStringContainsString('setup_actors', $this->db->lastQuery);
+        $this->assertStringContainsString("HOST LIKE '%'", $this->db->lastQuery);
+        $this->assertStringContainsString("USER LIKE '%'", $this->db->lastQuery);
+        $this->assertStringNotContainsString("HOST = '%'", $this->db->lastQuery);
+        $this->assertStringNotContainsString("USER = '%'", $this->db->lastQuery);
+    }
 }
 
 final class ConnectionDetailTabsTest extends TestCase
@@ -163,6 +179,7 @@ final class FakeDb implements DatabaseInterface
 {
     /** @var list<array<string, mixed>> */
     public array $queryResult = [];
+    public string $lastQuery = '';
     private ?\PDOException $queryException = null;
 
     /** @param \PDOException|null */
@@ -198,6 +215,7 @@ final class FakeDb implements DatabaseInterface
 
     public function query(string $sql): array
     {
+        $this->lastQuery = $sql;
         if ($this->queryException !== null) {
             throw $this->queryException;
         }
