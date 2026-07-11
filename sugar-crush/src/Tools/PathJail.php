@@ -28,7 +28,10 @@ final class PathJail
             return null;
         }
 
-        if (!str_starts_with($resolved, $rootReal . '/')) {
+        // The jail root itself is a valid in-jail path — accept an exact match
+        // as well as any descendant. Requiring only the `$rootReal . '/'` prefix
+        // rejected the root, which is an off-by-one against the jail boundary.
+        if ($resolved !== $rootReal && !str_starts_with($resolved, $rootReal . '/')) {
             return null;
         }
 
@@ -53,7 +56,8 @@ final class PathJail
             return null;
         }
 
-        if (!str_starts_with($resolved, $rootReal . '/')) {
+        // Same jail-boundary rule as resolve(): the root itself is in-jail.
+        if ($resolved !== $rootReal && !str_starts_with($resolved, $rootReal . '/')) {
             return null;
         }
 
