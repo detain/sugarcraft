@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Scatter;
 use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Legend\Legend;
 
@@ -64,13 +65,29 @@ final class Scatter
     /** @param list<array{0:int|float,1:int|float}> $points */
     public static function new(array $points = [], int $width = 40, int $height = 8): self
     {
+        self::assertFinitePoints($points);
         return new self(array_values($points), $width, $height, null, null, null, null, '*');
     }
 
     /** @param list<array{0:int|float,1:int|float}> $points */
     public function withPoints(array $points): self
     {
+        self::assertFinitePoints($points);
         return $this->copy(points: array_values($points));
+    }
+
+    /**
+     * Ingestion guard: reject any point whose X or Y is non-finite, which
+     * would otherwise defeat the range maths in {@see renderChart()}.
+     *
+     * @param list<array{0:int|float,1:int|float}> $points
+     */
+    private static function assertFinitePoints(array $points): void
+    {
+        foreach ($points as $p) {
+            Finite::assert((float) $p[0]);
+            Finite::assert((float) $p[1]);
+        }
     }
 
     public function withSize(int $w, int $h): self
