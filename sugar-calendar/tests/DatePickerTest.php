@@ -488,6 +488,106 @@ final class DatePickerTest extends TestCase
             'Cursor must be clamped to last valid index of shorter month');
     }
 
+    // -------------------------------------------------------------------------
+    // [BUG] View() immutability — rendering must not mutate $this.
+    // -------------------------------------------------------------------------
+
+    public function testViewDoesNotMutateInstance(): void
+    {
+        // Regression: View() used to memoise cachedView/cachedCells/cacheValid
+        // ONTO $this, violating immutability. serialize() captures every private
+        // field, so a pure View() leaves the snapshot byte-identical.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        $before = serialize($dp);
+        $dp->View();
+        $dp->View(21, true);
+        $dp->View(31);
+        $after = serialize($dp);
+
+        $this->assertSame($before, $after,
+            'View() must not mutate the instance (no internal render cache)');
+    }
+
+    public function testViewIsDeterministicAcrossCalls(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        $this->assertSame($dp->View(), $dp->View(),
+            'Repeated View() calls on the same instance must be identical');
+    }
+
+    // -------------------------------------------------------------------------
+    // ISO week column boundary (year rollover at the top of the grid).
+    // -------------------------------------------------------------------------
+
+    public function testViewWeekNumbersCrossYearBoundary(): void
+    {
+        // Jan 2026: firstDow=4 (Thu). The first displayed (Sunday-first) week
+        // row begins Sun 2025-12-28 → ISO week 52 of 2025, then week 1 of 2026.
+        // Regression: a malformed "+-4 days" offset used to shift these forward.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
+            ->withToday(new \DateTimeImmutable('2026-01-15'));
+
+        $plain = \preg_replace('/\x1b\[[0-9;]*m/', '', $dp->View(21, true));
+        $lines = \array_values(\array_filter(
+            \explode("\n", $plain),
+            static fn (string $l): bool => \trim($l) !== '',
+        ));
+
+        // Locate the week rows: the first day-grid row contains "1  2  3".
+        $firstWeekRow = null;
+        foreach ($lines as $line) {
+            if (\str_contains($line, ' 1  2  3')) {
+                $firstWeekRow = $line;
+                break;
+            }
+        }
+        $this->assertNotNull($firstWeekRow, 'first week grid row must be present');
+        $this->assertStringStartsWith('52', \ltrim($firstWeekRow),
+            'Week row crossing the year boundary must be ISO week 52, not shifted');
+        $this->assertStringContainsString('52', $plain,
+            'Boundary ISO week 52 must appear in the week-number column');
+    }
+
+    // -------------------------------------------------------------------------
+    // [DEDUP] dateAtCursor() delegates to Navigation::gridIndexToDate().
+    // -------------------------------------------------------------------------
+
+    public function testDateAtCursorDelegatesToNavigation(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        for ($i = 0; $i < 41; $i++) {
+            $expected = Navigation::gridIndexToDate($i, 5, 2026);
+            $actual = $dp->dateAtCursor();
+
+            $this->assertSame(
+                $expected?->format('Y-m-d'),
+                $actual?->format('Y-m-d'),
+                "dateAtCursor() must match Navigation::gridIndexToDate() at index $i",
+            );
+            $dp = $dp->MoveCursorRight();
+        }
+    }
+
+    public function testClampCursorMarchToFebruary(): void
+    {
+        // March 2026 (31 days, firstDow=0), cursor at End (index 41).
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-03-10'))
+            ->withToday(new \DateTimeImmutable('2026-03-15'))
+            ->handleKey('end');
+        $this->assertSame(41, $dp->CursorIndex());
+
+        // → Feb 2026 (28 days, firstDow=0): last valid index = 0 + 28 - 1 = 27.
+        $feb = $dp->GoToPreviousMonth();
+        $this->assertSame(2, $feb->ViewMonth());
+        $this->assertSame(27, $feb->CursorIndex(),
+            'Cursor must clamp to Feb 28 (index 27) when leaving a 31-day month');
+        $this->assertSame('2026-02-28', $feb->dateAtCursor()?->format('Y-m-d'));
+    }
+
     public function testCursorDateMappingsAgree(): void
     {
         // dateAtCursor() (uses viewMonth/viewYear) and Navigation::gridIndexToDate()
