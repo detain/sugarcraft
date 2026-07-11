@@ -37,16 +37,7 @@ final class ResendTransport implements Transport
         $json = \json_encode($payload, \JSON_THROW_ON_ERROR);
 
         $ch = \curl_init('https://api.resend.com/emails');
-        \curl_setopt_array($ch, [
-            \CURLOPT_POST           => true,
-            \CURLOPT_HTTPHEADER     => [
-                'Authorization: Bearer ' . $this->apiKey,
-                'Content-Type: application/json',
-            ],
-            \CURLOPT_POSTFIELDS     => $json,
-            \CURLOPT_RETURNTRANSFER => true,
-            \CURLOPT_TIMEOUT        => 30,
-        ]);
+        \curl_setopt_array($ch, $this->curlOptions($json));
 
         $body  = \curl_exec($ch);
         $code  = \curl_getinfo($ch, \CURLINFO_HTTP_CODE);
@@ -68,6 +59,36 @@ final class ResendTransport implements Transport
     public function name(): string
     {
         return 'resend';
+    }
+
+    /**
+     * Build the curl option map for the send request.
+     *
+     * Extracted so the network hardening — a bounded TCP-connect timeout and
+     * explicit TLS peer/host verification — is assertable without issuing a
+     * real HTTP request.
+     *
+     * @return array<int, mixed>
+     */
+    protected function curlOptions(string $json): array
+    {
+        return [
+            \CURLOPT_POST           => true,
+            \CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $this->apiKey,
+                'Content-Type: application/json',
+            ],
+            \CURLOPT_POSTFIELDS     => $json,
+            \CURLOPT_RETURNTRANSFER => true,
+            // Cap the TCP handshake separately from the overall transfer so a
+            // black-holed host fails fast instead of consuming the full timeout.
+            \CURLOPT_CONNECTTIMEOUT => 10,
+            \CURLOPT_TIMEOUT        => 30,
+            // Verify the API's TLS certificate explicitly rather than trusting
+            // curl's build-time defaults for this credential-bearing request.
+            \CURLOPT_SSL_VERIFYPEER => true,
+            \CURLOPT_SSL_VERIFYHOST => 2,
+        ];
     }
 
     /**
