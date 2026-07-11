@@ -453,4 +453,98 @@ final class ScannerTest extends TestCase
         // Should cover rows 1 through 3.
         self::assertGreaterThanOrEqual(3, $zone->endRow);
     }
+
+    // ─── [PERF] hit() grid-bucket index ─────────────────────────────────────
+
+    /**
+     * The grid-bucket index must return byte-for-byte what the old linear
+     * scan did: for every cell in a wide, tall layout the indexed hit() must
+     * equal a brute-force "first zone (in insertion order) whose bbox contains
+     * (col,row)".  The layout spans multiple grid buckets on both axes
+     * (GRID_BUCKET = 32) so multi-bucket zone registration is exercised.
+     */
+    public function testHitMatchesLinearScanAcrossManyBuckets(): void
+    {
+        $mark = new Mark();
+        $parts = [];
+        // 41 rows (crosses the row-bucket boundary at 33), each a 40-wide zone
+        // (crosses the col-bucket boundary at 33).
+        for ($r = 0; $r < 41; $r++) {
+            $parts[] = $mark->wrap("row-{$r}", str_repeat('X', 40));
+            $parts[] = "\n";
+        }
+        $scanner = Scanner::new()->scan(implode('', $parts));
+        $zones = $scanner->all();
+
+        $brute = static function (int $col, int $row) use ($zones): ?string {
+            foreach ($zones as $z) {
+                if ($col >= $z->startCol && $col <= $z->endCol
+                    && $row >= $z->startRow && $row <= $z->endRow
+                ) {
+                    return $z->id;
+                }
+            }
+            return null;
+        };
+
+        $mismatches = 0;
+        for ($col = 1; $col <= 50; $col++) {
+            for ($row = 1; $row <= 45; $row++) {
+                if ($scanner->hit($col, $row)?->id !== $brute($col, $row)) {
+                    $mismatches++;
+                }
+            }
+        }
+        self::assertSame(0, $mismatches, 'grid hit() must match a linear scan for every cell');
+    }
+
+    /**
+     * Overlapping zones that straddle a bucket boundary: the earliest-inserted
+     * zone (first finalized) must still win, exactly as the linear scan did.
+     * Nested markup — inner closes first, so it is inserted before outer — and
+     * both cover column 40 (bucket 1).
+     */
+    public function testHitPrefersFirstInsertedZoneAcrossBucketBoundary(): void
+    {
+        $mark = new Mark();
+        $inner = $mark->wrap('inner', str_repeat('I', 20));               // cols 31–50
+        $rendered = $mark->wrap('outer', str_repeat('A', 30) . $inner . str_repeat('B', 30)); // cols 1–80
+
+        $scanner = Scanner::new()->scan($rendered);
+
+        // Column 40 lands inside both zones and in a non-zero bucket; inner is
+        // finalized (closed) first, so it is the first insertion-order match.
+        self::assertSame('inner', $scanner->hit(40, 1)?->id);
+        // Column 5 is only inside outer.
+        self::assertSame('outer', $scanner->hit(5, 1)?->id);
+    }
+
+    /**
+     * The lazily-built index must be discarded when the zone set changes, so a
+     * re-scan is reflected by hit() (not served from a stale grid).
+     */
+    public function testHitIndexInvalidatedOnRescan(): void
+    {
+        $mark = new Mark();
+        $scanner = Scanner::new()->scan($mark->wrap('a', 'AAAAA'));
+        self::assertSame('a', $scanner->hit(1, 1)?->id); // builds the grid
+
+        $scanner->scan($mark->wrap('b', 'BBBBB'));        // must invalidate it
+        self::assertSame('b', $scanner->hit(1, 1)?->id);
+        self::assertNull($scanner->get('a'));
+    }
+
+    /**
+     * clear() must also drop the index — a hit() after clear returns null even
+     * if the grid had been built for the pre-clear zones.
+     */
+    public function testHitReturnsNullAfterClearInvalidatesIndex(): void
+    {
+        $mark = new Mark();
+        $scanner = Scanner::new()->scan($mark->wrap('z', 'ZZZZZ'));
+        self::assertNotNull($scanner->hit(1, 1)); // builds the grid
+
+        $scanner->clear();
+        self::assertNull($scanner->hit(1, 1));
+    }
 }

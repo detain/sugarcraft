@@ -409,7 +409,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "b4c8bc37272946862f83f140e9250a3bfc12b479"
+                "reference": "1dd21498e249f92df969b48a4e66e4c93b01e1ab"
             },
             "require": {
                 "php": "^8.3",

@@ -7,6 +7,7 @@ namespace SugarCraft\Mouse\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mouse\Scan;
 use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
 final class ScanTest extends TestCase
@@ -278,5 +279,107 @@ final class ScanTest extends TestCase
         $zone = $zones['normal'];
         self::assertSame(1, $zone->startCol);
         self::assertSame(5, $zone->endCol); // Full width, unclamped.
+    }
+
+    // ─── [BUG] duplicate zone id rejection ──────────────────────────────────
+
+    /**
+     * A second open of an id that is still open would clobber the first
+     * zone's recorded start, merging two zones into one wrong bounding box.
+     * The parser must reject it instead of silently corrupting the bbox.
+     *
+     * Raw sentinels: OPEN dup / AAA / OPEN dup / BBB / CLOSE-a / CLOSE-b —
+     * the first open sits at col 1, the second (nested) at col 4.
+     */
+    public function testDuplicateOpenWhileStillOpenIsRejected(): void
+    {
+        $o = Sentinel::OPEN;
+        $c = Sentinel::CLOSE;
+        $rendered = $o . 'dup' . $c . 'AAA'
+            . $o . 'dup' . $c . 'BBB'
+            . $o . '/dup' . $c
+            . $o . '/dup' . $c;
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('duplicate zone id');
+        (new Scan())->parse($rendered);
+    }
+
+    /**
+     * Two well-formed but separate zones sharing an id (first fully closed
+     * before the second opens) previously last-write-wins, silently dropping
+     * the first.  The re-open must be rejected — the id can no longer address
+     * a single zone.
+     */
+    public function testDuplicateIdReopenedAfterCloseIsRejected(): void
+    {
+        $mark = new Mark();
+        $rendered = $mark->wrap('dup', 'AAAAA') . 'XXXXX' . $mark->wrap('dup', 'B');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("'dup'");
+        (new Scan())->parse($rendered);
+    }
+
+    /**
+     * Distinct ids that merely share a prefix must NOT trip the duplicate
+     * guard — guards against an over-broad check keying on anything but the
+     * exact id.
+     */
+    public function testDistinctIdsAreNotRejectedAsDuplicates(): void
+    {
+        $mark = new Mark();
+        $rendered = $mark->wrap('dup', 'A') . $mark->wrap('dup-2', 'B') . $mark->wrap('dupe', 'C');
+
+        $zones = (new Scan())->parse($rendered);
+        self::assertCount(3, $zones);
+        self::assertArrayHasKey('dup', $zones);
+        self::assertArrayHasKey('dup-2', $zones);
+        self::assertArrayHasKey('dupe', $zones);
+    }
+
+    // ─── [PERF] O(n) close-sentinel lookup ──────────────────────────────────
+
+    /**
+     * Regression for the O(n^2) forward-strpos rescan at Scan.php:74 — each of
+     * N unmatched open sentinels used to rescan to end-of-string.  With the
+     * precomputed close-sentinel index the whole parse is O(n log n).  A
+     * many-unmatched-open buffer must therefore both yield no zones and stay
+     * well within a generous wall-clock bound (pre-fix this ran in seconds;
+     * post-fix in milliseconds).
+     */
+    public function testManyUnmatchedOpenSentinelsStayBounded(): void
+    {
+        $rendered = str_repeat(Sentinel::OPEN, 40000);
+
+        $start = microtime(true);
+        $zones = (new Scan())->parse($rendered);
+        $elapsed = microtime(true) - $start;
+
+        self::assertSame([], $zones, 'unmatched open sentinels must yield no zones');
+        self::assertLessThan(
+            2.0,
+            $elapsed,
+            'parse of many unmatched open sentinels must stay near-linear, not O(n^2)'
+        );
+    }
+
+    /**
+     * The precomputed close-sentinel index must not change well-formed parse
+     * results: a valid zone sitting after a run of interleaved unmatched close
+     * sentinels is still discovered with correct bounds.
+     */
+    public function testValidZoneAfterUnmatchedCloseSentinelsUnaffected(): void
+    {
+        $mark = new Mark();
+        // Lone close sentinels are skipped (never used as id terminators),
+        // so the trailing well-formed zone parses exactly as normal.
+        $rendered = str_repeat(Sentinel::CLOSE, 500) . $mark->wrap('real', 'HELLO');
+
+        $zones = (new Scan())->parse($rendered);
+        self::assertCount(1, $zones);
+        self::assertArrayHasKey('real', $zones);
+        self::assertSame(1, $zones['real']->startCol);
+        self::assertSame(5, $zones['real']->endCol);
     }
 }
