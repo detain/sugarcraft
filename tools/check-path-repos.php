@@ -69,6 +69,10 @@ $help = false;
 // (no false positives), unless --strict-closure is also given.
 $strictClosure = false;
 $noNetwork = false;
+// --unused is an opt-in, READ-ONLY pass (composes with nothing else — it prints
+// its own dead-dependency report and exits). It does NOT change the default
+// closure-check behaviour, so existing CI invocations are unaffected.
+$unused = false;
 
 foreach ($_SERVER['argv'] as $arg) {
     if ($arg === '--fix') {
@@ -77,6 +81,8 @@ foreach ($_SERVER['argv'] as $arg) {
         $strictClosure = true;
     } elseif ($arg === '--no-network') {
         $noNetwork = true;
+    } elseif ($arg === '--unused') {
+        $unused = true;
     } elseif ($arg === '--help' || $arg === '-h') {
         $help = true;
     }
@@ -103,6 +109,28 @@ genuinely-unresolvable gaps — e.g. an unpublished, freshly-extracted lib — a
 flagged. Pass --strict-closure to demand a local path-repo for the FULL
 transitive closure regardless of Packagist (the pre-1.0 ideal).
 
+The inverse check — `--unused` — walks the SAME dev-pinned require graph but
+hunts DEAD path-repo deps instead of missing ones. For every direct sugarcraft/*
+require it resolves the dep's real PSR-4 prefix(es) from the DEP's own
+composer.json and greps the consuming lib's src/ for them; a require with zero
+src references is a prune candidate, classified by whether the dep is still
+pulled in transitively:
+
+  PRUNE_REQUIRE_KEEP_REPO  Unused directly but still reachable via another
+                           require — drop the `require`, KEEP the repo entry.
+  PRUNE_REQUIRE_AND_REPO   Unused directly AND unreachable transitively — drop
+                           BOTH the require and the repositories[] entry.
+  PRUNE_REPO_ONLY          A repositories[] path entry that is neither a direct
+                           require nor in any direct require's transitive
+                           closure (a lingering dead entry).
+
+--unused is read-only (no auto-prune) and NOT wired into CI; it prints a per-lib
+report and exits 1 on any finding. Each flagged require is annotated with
+`tests_uses: yes|no` (whether the lib's tests/ still reference the dep — a "yes"
+means the prune is a move-to-require-dev, not a delete). Findings are CANDIDATES:
+confirm by hand before pruning (a dep referenced only via a string class-name or
+composer script, not a namespace, will read as unused here).
+
 Options:
   --fix             Auto-insert missing path-repo entries (direct AND
                     transitive) into affected composer.json files. Idempotent
@@ -111,11 +139,14 @@ Options:
   --no-network      Skip Packagist HEAD checks; assume unknown deps are
                     published (combine with --strict-closure for full offline
                     closure enforcement).
+  --unused          Report DEAD path-repo deps (unused requires + lingering repo
+                    entries) instead of missing ones. Read-only; exits 1 on any
+                    finding. Runs on its own — ignores the other flags.
   --help            Show this usage message.
 
 Exit codes:
-  0  No issues found (or --fix succeeded for all issues)
-  1  Issues detected (report printed to stderr)
+  0  No issues found (or --fix succeeded for all issues; or --unused clean)
+  1  Issues detected (closure drift, or --unused prune candidates)
   2  Fatal error (cannot resolve monorepo root)
 
 EOF
@@ -176,24 +207,28 @@ foreach ($libs as $manifestPath) {
         continue;
     }
 
-    /** @var array<string, string> $requires */
-    $requires = (array) ($manifest['require'] ?? []);
+    // Collect sugarcraft/* dev-pinned deps from a require block: slug=>constraint.
+    $collectDevDeps = static function ($requires) use ($isDevConstraint): array {
+        $out = [];
+        foreach ((array) $requires as $name => $constraint) {
+            if (!\is_string($name) || !\is_string($constraint)) {
+                continue;
+            }
+            if (!\str_starts_with($name, 'sugarcraft/') || !$isDevConstraint($constraint)) {
+                continue;
+            }
+            $out[\substr($name, \strlen('sugarcraft/'))] = $constraint;
+        }
+        return $out;
+    };
 
-    // depSlug => constraint, for sugarcraft/* dev-pinned requires only.
-    $devDeps = [];
-    foreach ($requires as $name => $constraint) {
-        if (!\is_string($name) || !\is_string($constraint)) {
-            continue;
-        }
-        if (!\str_starts_with($name, 'sugarcraft/')) {
-            continue;
-        }
-        if (!$isDevConstraint($constraint)) {
-            continue;
-        }
-        $depSlug = \substr($name, \strlen('sugarcraft/'));
-        $devDeps[$depSlug] = $constraint;
-    }
+    // $devDeps = production `require`; $testDeps = `require-dev`. The closure
+    // checker only walks production requires (that is the fresh-install path),
+    // but require-dev deps ALSO need their path-repo (+ their production
+    // closure), so --unused tracks them separately to avoid flagging a
+    // still-needed test harness like candy-testing as a dead entry.
+    $devDeps = $collectDevDeps($manifest['require'] ?? []);
+    $testDeps = $collectDevDeps($manifest['require-dev'] ?? []);
 
     $libData[$slug] = [
         'slug' => $slug,
@@ -201,6 +236,7 @@ foreach ($libs as $manifestPath) {
         'manifest' => $manifest,
         'repos' => $manifest['repositories'] ?? [],
         'devDeps' => $devDeps,
+        'testDeps' => $testDeps,
     ];
 }
 
@@ -242,6 +278,248 @@ $transitiveDeps = static function (string $startSlug, array $libData): array {
 
     return $found;
 };
+
+// ---------------------------------------------------------------------------
+// --unused — dead path-repo dependency detector (opt-in; read-only).
+//
+// The default checker hunts MISSING path-repo entries; this is the inverse pass
+// — it hunts DEAD ones. For each lib and each of its DIRECT dev-pinned
+// sugarcraft/* production requires it resolves the dep's real PSR-4 prefix(es)
+// from the DEP's OWN composer.json (never guessed from the slug) and searches
+// the CONSUMING lib's src/ for any of them. A require with zero src references
+// is a prune candidate, classified by whether the dep is still pulled in when
+// that one require is dropped — reachable from the lib's OTHER production
+// requires PLUS its require-dev deps (each walked over production `require`
+// edges): reachable ⇒ PRUNE_REQUIRE_KEEP_REPO (drop `require`, keep the repo),
+// unreachable ⇒ PRUNE_REQUIRE_AND_REPO (drop both). Separately, a repositories[]
+// path entry whose target is neither a require, a require-dev, nor in the
+// production closure of either is PRUNE_REPO_ONLY (a lingering dead entry).
+//
+// require-dev matters: a test harness like candy-testing appears only in
+// require-dev, yet its path-repo (and its production closure) is genuinely
+// needed for `composer install --dev`. Ignoring require-dev would wrongly flag
+// ~20 such entries as dead, so both roots feed the reachability walk. Each
+// flagged require is annotated `tests_uses: yes|no` (does tests/ still reference
+// it — a "yes" means move-to-require-dev, not delete).
+//
+// Namespace matching runs in PHP via str_contains against the literal
+// single-backslash prefix (e.g. "SugarCraft\Core\"), sidestepping shell/grep
+// backslash-escaping entirely. This mode is READ-ONLY (no --fix), runs
+// independently of the other flags, and exits 1 on any finding, 0 when clean.
+// ---------------------------------------------------------------------------
+if ($unused) {
+    // Slim dependency graph (slug => devDeps) so closure walks don't copy the
+    // full manifests on every excluded-root recomputation.
+    $graph = [];
+    foreach ($libData as $s => $d) {
+        $graph[$s] = ['devDeps' => $d['devDeps']];
+    }
+
+    // Namespace prefix(es) a dep declares in its OWN autoload.psr-4. Keys are
+    // already single-backslash, trailing-backslash forms — exactly how a `use`
+    // / FQCN reference appears in source, so they match literally.
+    $psr4PrefixesOf = static function (string $depSlug) use ($libData): array {
+        $psr4 = $libData[$depSlug]['manifest']['autoload']['psr-4'] ?? null;
+        if (!\is_array($psr4)) {
+            return [];
+        }
+        return \array_values(\array_filter(\array_keys($psr4), 'is_string'));
+    };
+
+    // Recursively collect *.php files under $dir that reference ANY of $prefixes
+    // (literal substring). Returns matching paths so callers can eyeball them.
+    $namespaceHits = static function (string $dir, array $prefixes): array {
+        if ($prefixes === [] || !\is_dir($dir)) {
+            return [];
+        }
+        $hits = [];
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($it as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $contents = @\file_get_contents($file->getPathname());
+            if ($contents === false) {
+                continue;
+            }
+            foreach ($prefixes as $prefix) {
+                if (\str_contains($contents, $prefix)) {
+                    $hits[] = $file->getPathname();
+                    break;
+                }
+            }
+        }
+        return $hits;
+    };
+
+    // dep slug => url for every type=path repositories[] entry in a lib.
+    $pathRepoTargetsOf = static function ($repos): array {
+        $reposArray = [];
+        if (\is_array($repos) && $repos !== []) {
+            if (\array_keys($repos) === \range(0, \count($repos) - 1)) {
+                $reposArray = $repos;
+            } else {
+                foreach ($repos as $repo) {
+                    if (\is_array($repo)) {
+                        $reposArray[] = $repo;
+                    }
+                }
+            }
+        }
+        $targets = [];
+        foreach ($reposArray as $repo) {
+            if (!\is_array($repo) || ($repo['type'] ?? null) !== 'path') {
+                continue;
+            }
+            $url = (string) ($repo['url'] ?? '');
+            if ($url === '') {
+                continue;
+            }
+            $targets[\basename(\rtrim($url, '/'))] = $url;
+        }
+        return $targets;
+    };
+
+    // Everything reachable from a set of root slugs by following production
+    // `require` edges, INCLUDING the roots themselves. Returns slug =>
+    // introducing-path (roots map to their own name). This models what a fresh
+    // `composer install` must resolve path-repos for: the lib's own requires,
+    // its require-dev deps, and the full production closure of both. A repo
+    // entry is dead only when its target is NOT in this set.
+    $reachablePaths = static function (array $roots, array $graph): array {
+        $found = [];
+        $queue = [];
+        foreach ($roots as $r) {
+            if (!isset($found[$r])) {
+                $found[$r] = $r;
+                $queue[] = [$r, $r];
+            }
+        }
+        while ($queue !== []) {
+            [$current, $path] = \array_shift($queue);
+            foreach ($graph[$current]['devDeps'] ?? [] as $depSlug => $_c) {
+                if (isset($found[$depSlug])) {
+                    continue;
+                }
+                $childPath = $path . ' -> ' . $depSlug;
+                $found[$depSlug] = $childPath;
+                $queue[] = [$depSlug, $childPath];
+            }
+        }
+        return $found;
+    };
+
+    $unusedFindings = 0;
+    $report = '';
+
+    foreach ($libData as $slug => $data) {
+        $srcDir = \dirname($data['manifestPath']) . '/src';
+        $testsDir = \dirname($data['manifestPath']) . '/tests';
+        $directDeps = \array_keys($data['devDeps']);
+        \sort($directDeps);
+        $testRoots = \array_keys($data['testDeps']);
+        $pathRepoTargets = $pathRepoTargetsOf($data['repos']);
+
+        // Full set of siblings a fresh `composer install` (incl. dev) must
+        // resolve: production requires + require-dev + the production closure of
+        // both. Used for PRUNE_REPO_ONLY (a repo target absent here is dead).
+        $neededSet = $reachablePaths(\array_merge($directDeps, $testRoots), $graph);
+
+        $lines = [];
+
+        // (1) Unused DIRECT (production) requires.
+        foreach ($directDeps as $depSlug) {
+            $prefixes = $psr4PrefixesOf($depSlug);
+            if ($prefixes === []) {
+                // No PSR-4 to grep for — cannot decide; surface for a human.
+                $lines[] = \sprintf(
+                    '  - %-23s sugarcraft/%s  (dep declares no autoload.psr-4 — cannot resolve namespace; classify by hand)',
+                    'AMBIGUOUS_NO_PSR4',
+                    $depSlug
+                );
+                $unusedFindings++;
+                continue;
+            }
+            if ($namespaceHits($srcDir, $prefixes) !== []) {
+                continue; // referenced in src/ — genuinely used.
+            }
+            // Would the dep still be pulled in if we dropped THIS direct require?
+            // Reachable from every OTHER production require plus every require-dev
+            // root. The lib's own edge to the dep is removed from the graph too —
+            // otherwise a cycle back through this lib (e.g. candy-core ⇄ candy-pty)
+            // would re-traverse the very edge we are hypothetically deleting and
+            // falsely report the dep as still reachable. In-set ⇒ keep the repo
+            // entry (only drop `require`); absent ⇒ the repo entry is safe to drop.
+            $otherRoots = \array_merge(
+                \array_values(\array_diff($directDeps, [$depSlug])),
+                $testRoots
+            );
+            $prunedGraph = $graph;
+            unset($prunedGraph[$slug]['devDeps'][$depSlug]);
+            $reach = $reachablePaths($otherRoots, $prunedGraph);
+            $keepRepo = isset($reach[$depSlug]);
+            $class = $keepRepo ? 'PRUNE_REQUIRE_KEEP_REPO' : 'PRUNE_REQUIRE_AND_REPO';
+            $testsUses = $namespaceHits($testsDir, $prefixes) !== [] ? 'yes' : 'no';
+            if ($keepRepo) {
+                $path = $reach[$depSlug] ?? '?';
+                $viaTestDep = isset($data['testDeps'][\explode(' -> ', $path)[0]]);
+                $note = 'transitive via ' . $path . ($viaTestDep ? ' [require-dev]' : '');
+            } else {
+                $note = 'not reachable via other requires or require-dev';
+            }
+            $lines[] = \sprintf(
+                '  - %-23s sugarcraft/%s  tests_uses: %s  (%s)',
+                $class,
+                $depSlug,
+                $testsUses,
+                $note
+            );
+            $unusedFindings++;
+        }
+
+        // (2) Lingering repo-only entries: a path repo whose target is neither a
+        // require, a require-dev, nor in the production closure of either.
+        $repoOnly = [];
+        foreach ($pathRepoTargets as $target => $_url) {
+            if (!isset($neededSet[$target])) {
+                $repoOnly[] = $target;
+            }
+        }
+        \sort($repoOnly);
+        foreach ($repoOnly as $target) {
+            $lines[] = \sprintf(
+                '  - %-23s ../%s  (repo entry: not a require/require-dev, not in either closure)',
+                'PRUNE_REPO_ONLY',
+                $target
+            );
+            $unusedFindings++;
+        }
+
+        if ($lines !== []) {
+            $report .= $slug . ":\n" . \implode("\n", $lines) . "\n";
+        }
+    }
+
+    \printf("check-path-repos --unused: scanned %d libs\n", \count($libData));
+    if ($unusedFindings === 0) {
+        \fwrite(\STDOUT, "check-path-repos --unused: no dead path-repo deps found\n");
+        exit(0);
+    }
+    \fwrite(\STDOUT, "\nDead path-repo dependencies (candidates for pruning):\n\n");
+    \fwrite(\STDOUT, $report);
+    \fprintf(
+        \STDOUT,
+        "\n%d finding(s). Read-only report — prune by hand: remove the require AND its\n"
+        . "repositories[] entry (PRUNE_REQUIRE_AND_REPO), just the require (KEEP_REPO), or\n"
+        . "just the repo entry (PRUNE_REPO_ONLY). A `tests_uses: yes` means move the\n"
+        . "require to require-dev rather than delete it. Re-run without --unused to\n"
+        . "re-verify closure afterwards.\n",
+        $unusedFindings
+    );
+    exit(1);
+}
 
 /**
  * Is `sugarcraft/<slug>` published on Packagist? Composer resolves a transitive
