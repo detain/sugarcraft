@@ -393,4 +393,132 @@ final class AsyncOpsTest extends TestCase
         $this->assertInstanceOf(\RuntimeException::class, $e);
         $this->assertSame('cancelled', $e->getMessage());
     }
+
+    public function testRetryUsesInjectedLoopAndJitterStaysWithinBounds(): void
+    {
+        // A mock loop that fires each scheduled timer synchronously drives the
+        // whole retry without touching the global Loop::get(). If retry() were
+        // still hardcoded to Loop::get(), the backoff callbacks would never run
+        // here and $result would stay null.
+        $delays = [];
+        $loop = $this->createMock(\React\EventLoop\LoopInterface::class);
+        $loop->method('addTimer')->willReturnCallback(
+            function (float $interval, callable $cb) use (&$delays): \React\EventLoop\TimerInterface {
+                $delays[] = $interval;
+                $cb();
+                return $this->createStub(\React\EventLoop\TimerInterface::class);
+            },
+        );
+
+        $attempts = 0;
+        $result = null;
+        AsyncOps::retry(
+            function () use (&$attempts): PromiseInterface {
+                $attempts++;
+                if ($attempts < 3) {
+                    return \React\Promise\reject(new \RuntimeException("fail $attempts"));
+                }
+                return \React\Promise\resolve('ok');
+            },
+            attempts: 3,
+            baseBackoffSeconds: 1.0,
+            jitter: 0.5,
+            loop: $loop,
+        )->then(function ($v) use (&$result): void {
+            $result = $v;
+        });
+
+        $this->assertSame('ok', $result);
+        $this->assertSame(3, $attempts);
+        // Two backoffs were scheduled (after attempts 1 and 2).
+        $this->assertCount(2, $delays);
+        // First backoff base=1.0, jitter 0.5 -> [1.0, 1.5].
+        $this->assertGreaterThanOrEqual(1.0, $delays[0]);
+        $this->assertLessThanOrEqual(1.5, $delays[0]);
+        // Second backoff base doubled to 2.0 -> [2.0, 3.0].
+        $this->assertGreaterThanOrEqual(2.0, $delays[1]);
+        $this->assertLessThanOrEqual(3.0, $delays[1]);
+    }
+
+    public function testRetryZeroJitterKeepsExactBackoff(): void
+    {
+        // With jitter 0.0 the scheduled delay must equal the base backoff
+        // exactly (BC: unchanged from the historical schedule).
+        $delays = [];
+        $loop = $this->createMock(\React\EventLoop\LoopInterface::class);
+        $loop->method('addTimer')->willReturnCallback(
+            function (float $interval, callable $cb) use (&$delays): \React\EventLoop\TimerInterface {
+                $delays[] = $interval;
+                $cb();
+                return $this->createStub(\React\EventLoop\TimerInterface::class);
+            },
+        );
+
+        AsyncOps::retry(
+            fn(): PromiseInterface => \React\Promise\reject(new \RuntimeException('fail')),
+            attempts: 3,
+            baseBackoffSeconds: 0.2,
+            loop: $loop,
+        )->otherwise(static fn () => null);
+
+        $this->assertSame([0.2, 0.4], $delays);
+    }
+
+    public function testRetryAbortsOnceMaxTotalSecondsExceeded(): void
+    {
+        // baseBackoff (30ms) > maxTotalSeconds (20ms): after attempt 1 fails at
+        // t~=0 the budget still has room, so a 30ms backoff is scheduled; when
+        // attempt 2 fails at t~=30ms the budget is spent, so retry aborts with
+        // the last error instead of exhausting all 5 attempts.
+        //
+        // Use a private loop (via the injection seam) rather than the shared
+        // Loop::get(): stale timers from earlier tests on the singleton perturb
+        // this deadline-sensitive timing.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $attempts = 0;
+
+        $promise = AsyncOps::retry(
+            function () use (&$attempts): PromiseInterface {
+                $attempts++;
+                return \React\Promise\reject(new \RuntimeException("fail $attempts"));
+            },
+            attempts: 5,
+            baseBackoffSeconds: 0.03,
+            maxTotalSeconds: 0.02,
+            loop: $loop,
+        );
+
+        $rejected = null;
+        $promise->otherwise(function (\Throwable $e) use (&$rejected, $loop): void {
+            $rejected = $e;
+            $loop->stop();
+        });
+
+        $loop->addTimer(0.5, function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+
+        $this->assertSame(2, $attempts);
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertSame('fail 2', $rejected->getMessage());
+    }
+
+    public function testRetryThrowsOnNonPositiveMaxTotalSeconds(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        AsyncOps::retry(
+            fn() => \React\Promise\resolve('ok'),
+            maxTotalSeconds: 0.0,
+        );
+    }
+
+    public function testRetryThrowsOnNegativeJitter(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        AsyncOps::retry(
+            fn() => \React\Promise\resolve('ok'),
+            jitter: -0.1,
+        );
+    }
 }

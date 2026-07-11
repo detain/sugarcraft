@@ -129,6 +129,38 @@ final class SubscriptionsTest extends TestCase
         $this->assertTrue($composite->isEmpty());
         $this->assertSame(0, $composite->count());
     }
+
+    public function testDisposeAllDisposesEveryOneEvenWhenFirstThrows(): void
+    {
+        // The FIRST subscription throws on unsubscribe. Every subscription must
+        // still be disposed, and the FIRST caught exception must be rethrown
+        // (not the later one, and not swallowed).
+        $first = new ThrowingSubscription('first fail');
+        $second = new ThrowingSubscription(null);
+        $third = new ThrowingSubscription('third fail');
+
+        $composite = Subscriptions::compose($first, $second, $third);
+
+        $caught = null;
+        try {
+            $composite->unsubscribe();
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        // No subscription leaked despite the first one throwing.
+        $this->assertTrue($first->wasUnsubscribed);
+        $this->assertTrue($second->wasUnsubscribed);
+        $this->assertTrue($third->wasUnsubscribed);
+
+        // The FIRST failure surfaced (later throwers do not mask it).
+        $this->assertInstanceOf(\RuntimeException::class, $caught);
+        $this->assertSame('first fail', $caught->getMessage());
+
+        // Composite is still marked disposed / emptied.
+        $this->assertFalse($composite->isActive());
+        $this->assertSame(0, $composite->count());
+    }
 }
 
 /**
@@ -146,5 +178,32 @@ final class TestSubscription implements Subscription
     public function isActive(): bool
     {
         return $this->active;
+    }
+}
+
+/**
+ * @internal Test helper whose unsubscribe() optionally throws, while still
+ * recording that it was invoked. Used to prove disposeAll() disposes every
+ * subscription even when one throws.
+ */
+final class ThrowingSubscription implements Subscription
+{
+    public bool $wasUnsubscribed = false;
+
+    public function __construct(private ?string $throwMessage = null)
+    {
+    }
+
+    public function unsubscribe(): void
+    {
+        $this->wasUnsubscribed = true;
+        if ($this->throwMessage !== null) {
+            throw new \RuntimeException($this->throwMessage);
+        }
+    }
+
+    public function isActive(): bool
+    {
+        return !$this->wasUnsubscribed;
     }
 }
