@@ -46,9 +46,15 @@ final class Endpoint
             $argv[] = '-p';
             $argv[] = (string) $this->port;
         }
-        if ($this->identityFiles !== [] && $this->identityFiles[0] !== '') {
+        // Emit one `-i <file>` pair per identity file, preserving order.
+        // Previously only identityFiles[0] was passed, silently dropping every
+        // additional key ssh(1) should have been offered.
+        foreach ($this->identityFiles as $identityFile) {
+            if ($identityFile === '') {
+                continue;
+            }
             $argv[] = '-i';
-            $argv[] = $this->identityFiles[0];
+            $argv[] = $identityFile;
         }
         if ($this->proxyJump !== null && $this->proxyJump !== '') {
             $this->assertNotOption('proxyJump', $this->proxyJump);

@@ -16,16 +16,34 @@ final class EndpointIdentityFilesTest extends TestCase
         $this->assertNotContains('-i', $argv);
     }
 
-    public function testIdentityFilesFirstKeyIsUsedInToSshArgv(): void
+    public function testMultipleIdentityFilesEmitOneFlagEachInOrder(): void
+    {
+        // Regression: toSshArgv() previously emitted only identityFiles[0],
+        // silently dropping every subsequent key. Each file must now produce
+        // its own `-i <file>` pair, preserving the configured order.
+        $e = new Endpoint(
+            name: 'prod',
+            host: 'prod.example.com',
+            user: 'deploy',
+            identityFiles: ['/path/to/key1', '/path/to/key2', '/path/to/key3'],
+        );
+        $argv = $e->toSshArgv();
+        $this->assertSame(
+            ['ssh', '-i', '/path/to/key1', '-i', '/path/to/key2', '-i', '/path/to/key3', '--', 'deploy@prod.example.com'],
+            $argv,
+        );
+    }
+
+    public function testEmptyStringIdentityFileEntriesAreSkipped(): void
     {
         $e = new Endpoint(
             name: 'prod',
             host: 'prod.example.com',
             user: 'deploy',
-            identityFiles: ['/path/to/key1', '/path/to/key2'],
+            identityFiles: ['', '/path/to/key', ''],
         );
         $argv = $e->toSshArgv();
-        $this->assertSame(['ssh', '-i', '/path/to/key1', '--', 'deploy@prod.example.com'], $argv);
+        $this->assertSame(['ssh', '-i', '/path/to/key', '--', 'deploy@prod.example.com'], $argv);
     }
 
     public function testIdentityFilesSingleItem(): void
