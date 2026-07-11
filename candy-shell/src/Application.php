@@ -33,6 +33,19 @@ final class Application extends SymfonyApplication
 {
     private const ENV_PREFIX = 'CANDYSHELL_';
 
+    /**
+     * The PRIVATE property on {@see \Symfony\Component\Console\Input\ArgvInput}
+     * that holds the raw token stream. {@see applyEnvVarFallbackToInput()}
+     * reflects into it to prepend env-backed value options so they survive
+     * Command::run()'s second bind(). Symfony treats this as an internal
+     * implementation detail, so a major bump could rename or remove it — which
+     * would silently disable the CANDYSHELL_* value-option fallback. The name is
+     * centralised here so {@see \SugarCraft\Shell\Tests\ApplicationEnvTokenInjectionTest}
+     * can pin its presence: that test fails loudly in CI if Symfony moves the
+     * property, and the reflection below degrades gracefully instead of fataling.
+     */
+    private const ARGV_TOKENS_PROPERTY = 'tokens';
+
     public function __construct()
     {
         parent::__construct('candyshell', $this->versionFromComposer());
@@ -114,7 +127,10 @@ final class Application extends SymfonyApplication
         // both invoke bind/parse, which resets options bag to defaults before
         // re-processing the token stream). By injecting tokens at the front,
         // the value is re-parsed and persists.
-        $tokens = [];
+        //
+        // @var array<string,string> env-backed value options as name => value;
+        //      injected as tokens when possible, else applied best-effort.
+        $valueOptions = [];
         $definition = $command->getDefinition();
         foreach ($definition->getOptions() as $option) {
             // Explicit CLI flag always wins over env var.
@@ -141,16 +157,34 @@ final class Application extends SymfonyApplication
                 // Command::run() (handleErrors). Token injection is the only approach
                 // that survives because bind()/parse() re-populates the options bag
                 // from the token stream.
-                $tokens[] = '--' . $option->getName() . '=' . $envValue;
+                $valueOptions[$option->getName()] = $envValue;
             }
         }
-        // Inject tokens at the front of the ArgvInput token stream only for
-        // options that couldn't be set via setOption().
-        if ($tokens !== [] && $input instanceof \Symfony\Component\Console\Input\ArgvInput) {
-            $reflector = new \ReflectionProperty($input, 'tokens');
+        // Inject the env-backed value options at the front of the ArgvInput
+        // token stream so they survive Command::run()'s second bind().
+        if ($valueOptions === [] || !$input instanceof \Symfony\Component\Console\Input\ArgvInput) {
+            return;
+        }
+        if (property_exists($input, self::ARGV_TOKENS_PROPERTY)) {
+            $tokens = [];
+            foreach ($valueOptions as $name => $value) {
+                $tokens[] = '--' . $name . '=' . $value;
+            }
+            $reflector = new \ReflectionProperty($input, self::ARGV_TOKENS_PROPERTY);
             $reflector->setAccessible(true);
             $currentTokens = $reflector->getValue($input);
             $reflector->setValue($input, array_merge($tokens, $currentTokens));
+            return;
+        }
+        // Documented graceful fallback: a Symfony upgrade renamed or removed
+        // ArgvInput's private $tokens property, so we can no longer inject
+        // tokens. Fall back to best-effort setOption() for each value option.
+        // This may not survive Command::run()'s second bind() (the very reason
+        // token injection exists), but it beats a fatal ReflectionException.
+        // ApplicationEnvTokenInjectionTest fails loudly in CI when this path is
+        // reached so ARGV_TOKENS_PROPERTY gets updated to the new name.
+        foreach ($valueOptions as $name => $value) {
+            $input->setOption($name, $value);
         }
     }
 

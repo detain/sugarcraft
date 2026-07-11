@@ -101,6 +101,137 @@ final class SpinCommandTest extends TestCase
     }
 
     /**
+     * A child that exits non-zero forwards its own exit code as candyshell's
+     * exit code — it is NOT coerced to the interrupted (130) or timeout (124)
+     * code. Guards the happy-path exit-code forwarding in SpinCommand::execute().
+     */
+    public function testNonZeroChildExitCodeIsForwarded(): void
+    {
+        $fake = new FakeProcess();
+        $fake->finish(3); // child failed with code 3
+
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $status = (new CommandTester($command))->execute(
+            ['argv' => ['false'], '--timeout' => '0'],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(3, $status, 'the child exit code must pass through verbatim');
+        $this->assertFalse($fake->terminated, 'a self-completed child must not be terminated');
+        $this->assertTrue($fake->closed, 'the process handle must still be reaped');
+    }
+
+    /**
+     * `--show-output` (and its `--show-stdout` gum alias) prints the child's
+     * captured stdout after the spinner stops. The buffered bytes land on the
+     * command's own output, so they are observable via CommandTester's display.
+     */
+    public function testShowOutputPrintsCapturedStdout(): void
+    {
+        $fake = new FakeProcess();
+        $fake->bufferedStdout = 'BUILD-STDOUT-MARKER';
+        $fake->finish(0);
+
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $tester = new CommandTester($command);
+        $status = $tester->execute(
+            ['argv' => ['npm', 'run', 'build'], '--timeout' => '0', '--show-output' => true],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertTrue($fake->stdoutRead, '--show-output must read the child stdout');
+        $this->assertStringContainsString('BUILD-STDOUT-MARKER', $tester->getDisplay());
+    }
+
+    /** The `--show-stdout` gum alias resolves to the same show-output behaviour. */
+    public function testShowStdoutAliasPrintsCapturedStdout(): void
+    {
+        $fake = new FakeProcess();
+        $fake->bufferedStdout = 'ALIAS-STDOUT-MARKER';
+        $fake->finish(0);
+
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $tester = new CommandTester($command);
+        $status = $tester->execute(
+            ['argv' => ['npm', 'run', 'build'], '--timeout' => '0', '--show-stdout' => true],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('ALIAS-STDOUT-MARKER', $tester->getDisplay());
+    }
+
+    /**
+     * `--show-error` consumes the child's captured stderr. SpinCommand writes it
+     * to the real STDERR fd (not the command output), so assert the branch ran
+     * via the FakeProcess read flag rather than the display buffer — and keep the
+     * buffer empty so nothing pollutes the test runner's stderr.
+     */
+    public function testShowErrorReadsCapturedStderr(): void
+    {
+        $fake = new FakeProcess();
+        $fake->bufferedStderr = ''; // empty: exercise the branch without STDERR noise
+        $fake->finish(0);
+
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $status = (new CommandTester($command))->execute(
+            ['argv' => ['./flaky.sh'], '--timeout' => '0', '--show-error' => true],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertTrue($fake->stderrRead, '--show-error must read the child stderr');
+        $this->assertFalse($fake->stdoutRead, 'stdout must not be read when only --show-error is set');
+    }
+
+    /**
+     * The `--align`/`--title` options flow through SpinCommand into SpinModel's
+     * rendered view: driving a headless Program with a right-aligned title emits
+     * that title onto the Program output stream (the align ORDER itself is pinned
+     * in SpinModelTest; here we prove the command wires the options through).
+     */
+    public function testAlignedTitleReachesProgramOutput(): void
+    {
+        $fake = new FakeProcess();
+        $fake->finish(0); // complete immediately so run() returns after the first frame
+
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $status = (new CommandTester($command))->execute(
+            ['argv' => ['true'], '--timeout' => '0', '--title' => 'DEPLOYING', '--align' => 'right'],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(0, $status);
+        $this->assertStringContainsString('DEPLOYING', $this->readRendered(), 'the spinner title must reach the Program output');
+    }
+
+    /**
      * Build a SpinCommand wired to a fake child + a headless Program via its
      * injectable factory closures, so the TEA runtime drives on a socket/memory
      * pair instead of the real TTY. The streams are parked on the test instance
@@ -110,6 +241,19 @@ final class SpinCommandTest extends TestCase
      * @var list<resource> keeps the injected stream resources referenced
      */
     private array $streams = [];
+
+    /** @var resource|null the Program's output stream, kept so tests can read the rendered frames */
+    private $lastOutput = null;
+
+    /** Rewind and read everything the headless Program rendered to its output. */
+    private function readRendered(): string
+    {
+        if (!is_resource($this->lastOutput)) {
+            return '';
+        }
+        rewind($this->lastOutput);
+        return (string) stream_get_contents($this->lastOutput);
+    }
 
     private function spinCommandWith(FakeProcess $fake): SpinCommand
     {
@@ -134,6 +278,7 @@ final class SpinCommandTest extends TestCase
                 $this->streams[] = $reader;
                 $this->streams[] = $writer;
                 $this->streams[] = $out;
+                $this->lastOutput = $out;
 
                 return new Program($model, new ProgramOptions(
                     useAltScreen:    false,
