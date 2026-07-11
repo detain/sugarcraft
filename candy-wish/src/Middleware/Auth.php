@@ -31,6 +31,21 @@ use SugarCraft\Wish\StreamHelper;
  * Rejection messages sanitize user-controlled values (username,
  * fingerprint) to strip ANSI escape sequences and C0/C1 control
  * characters before writing to stderr.
+ *
+ * **Trust boundary — the fingerprint is NOT verified here.** The
+ * fingerprint is read verbatim from environment variables
+ * (`SSH_USER_KEY_FINGERPRINT` / `KEY_FINGERPRINT` / `SSH_USER_AUTH`).
+ * In the intended deployment those are written by the host `sshd` AFTER
+ * it has cryptographically verified the client's key — sshd is the real
+ * trust boundary and this class is a post-hoc allowlist layered on top.
+ * In any other arrangement (a middleware upstream that copies client-
+ * supplied data into these vars, an in-process transport without a
+ * verifying sshd) the values are FORGEABLE: matching the allowlist then
+ * proves nothing. To actually verify the presented key, wire a
+ * validator via the `$fingerprintValidator` constructor argument — it
+ * runs in addition to the allowlist and can consult a real key store /
+ * CA / agent. Do NOT rely on the allowlist alone as cryptographic proof
+ * of identity.
  */
 final class Auth implements Middleware
 {
@@ -40,17 +55,29 @@ final class Auth implements Middleware
     private array $keyFingerprints;
     /** @var resource */
     private $stderr;
+    /** @var (callable(string, Session): bool)|null */
+    private $fingerprintValidator;
 
     /**
-     * @param list<string>     $users           Allowed `Session::$user` values; [] = any
-     * @param list<string>     $keyFingerprints Allowed `SHA256:...` fingerprints; [] = skip
-     * @param resource|null    $stderr          Stream for the rejection notice
+     * @param list<string>                          $users                Allowed `Session::$user` values; [] = any
+     * @param list<string>                          $keyFingerprints      Allowed `SHA256:...` fingerprints; [] = skip
+     * @param resource|null                         $stderr               Stream for the rejection notice
+     * @param (callable(string, Session): bool)|null $fingerprintValidator Optional real verifier: receives the
+     *                                                                    presented fingerprint (or '' if none) plus
+     *                                                                    the Session and returns true to accept. Runs
+     *                                                                    in addition to the allowlist, closing the
+     *                                                                    forgeable-fingerprint trust gap.
      */
-    public function __construct(array $users = [], array $keyFingerprints = [], $stderr = null)
-    {
-        $this->users           = $users;
-        $this->keyFingerprints = $keyFingerprints;
-        $this->stderr          = StreamHelper::openOrValidate($stderr);
+    public function __construct(
+        array $users = [],
+        array $keyFingerprints = [],
+        $stderr = null,
+        ?callable $fingerprintValidator = null,
+    ) {
+        $this->users                = $users;
+        $this->keyFingerprints      = $keyFingerprints;
+        $this->stderr               = StreamHelper::openOrValidate($stderr);
+        $this->fingerprintValidator = $fingerprintValidator;
     }
 
     public function handle(Context $ctx, Session $session, callable $next)
@@ -59,10 +86,21 @@ final class Auth implements Middleware
             $this->reject('user not allowed: ' . $this->sanitize($session->user));
             return;
         }
-        if ($this->keyFingerprints !== []) {
+        if ($this->keyFingerprints !== [] || $this->fingerprintValidator !== null) {
             $fp = $this->fingerprint();
-            if ($fp === null || !in_array($fp, $this->keyFingerprints, true)) {
+            if ($this->keyFingerprints !== []
+                && ($fp === null || !in_array($fp, $this->keyFingerprints, true))
+            ) {
                 $this->reject('key not allowed: ' . $this->sanitize($fp ?? '<missing>'));
+                return;
+            }
+            // The allowlist only proves the presented (forgeable) value
+            // matches a known string. When a validator is wired, require
+            // it to actually vouch for the key before admitting.
+            if ($this->fingerprintValidator !== null
+                && !($this->fingerprintValidator)($fp ?? '', $session)
+            ) {
+                $this->reject('key validation failed: ' . $this->sanitize($fp ?? '<missing>'));
                 return;
             }
         }
