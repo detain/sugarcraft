@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Kit;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Kit\Internal\SafeText;
 
 /**
  * Render a section header — a label sandwiched between two horizontal
@@ -30,6 +31,7 @@ final class Section
         string $rune = '─',
     ): string {
         $theme   ??= Theme::ansi();
+        $label   = SafeText::line($label);  // neutralize escape/control injection
         $runeW   = max(1, Width::string($rune));  // cell width of the fill rune
         // $leftPad is a rune count (not cell count) — each rune repeats once
         $left    = str_repeat($rune, max(0, $leftPad));
@@ -88,6 +90,7 @@ final class Section
         string $rune = '·',
     ): string {
         $theme  ??= Theme::ansi();
+        $label  = SafeText::line($label);  // neutralize escape/control injection
         $runeW  = max(1, Width::string($rune));
         $pad    = str_repeat(' ', max(0, $indent));
         $labelOut = $label === '' ? '' : ' ' . $theme->accent->render($label) . ' ';
