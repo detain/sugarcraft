@@ -432,4 +432,212 @@ final class FocusRingTest extends TestCase
 
         self::assertSame(['a', 'c'], $ring->enabledIds());
     }
+
+    // ─── disabledIds() ─────────────────────────────────────────────────────
+
+    public function testDisabledIdsReturnsOnlyDisabledInTraversalOrder(): void
+    {
+        // Disable out of traversal order to prove the result is traversal-ordered,
+        // not disable-ordered.
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('d')->disable('b');
+
+        self::assertSame(['b', 'd'], $ring->disabledIds());
+    }
+
+    public function testDisabledIdsIsEmptyWhenNothingDisabled(): void
+    {
+        self::assertSame([], FocusRing::of('a', 'b', 'c')->disabledIds());
+        self::assertSame([], FocusRing::new()->disabledIds());
+    }
+
+    public function testDisabledIdsAndEnabledIdsPartitionTheRing(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b');
+
+        self::assertSame(['a', 'c', 'd'], $ring->enabledIds());
+        self::assertSame(['b'], $ring->disabledIds());
+    }
+
+    // ─── enabledCount() / disabledCount() ──────────────────────────────────
+
+    public function testCountsOnAllEnabledRing(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c');
+
+        self::assertSame(3, $ring->enabledCount());
+        self::assertSame(0, $ring->disabledCount());
+    }
+
+    public function testCountsReflectDisableAndEnable(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b')->disable('c');
+
+        self::assertSame(2, $ring->enabledCount());
+        self::assertSame(2, $ring->disabledCount());
+
+        $ring = $ring->enable('b');
+        self::assertSame(3, $ring->enabledCount());
+        self::assertSame(1, $ring->disabledCount());
+    }
+
+    public function testCountsOnEmptyRingAreZero(): void
+    {
+        $ring = FocusRing::new();
+
+        self::assertSame(0, $ring->enabledCount());
+        self::assertSame(0, $ring->disabledCount());
+    }
+
+    public function testEnabledPlusDisabledCountEqualsTotal(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd', 'e')->disable('a')->disable('e');
+
+        self::assertSame($ring->count(), $ring->enabledCount() + $ring->disabledCount());
+    }
+
+    // ─── getIterator() ─────────────────────────────────────────────────────
+
+    public function testGetIteratorYieldsIdsInTraversalOrder(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c');
+
+        self::assertSame(['a', 'b', 'c'], iterator_to_array($ring));
+    }
+
+    public function testForeachOverRingWalksEveryRegionIncludingDisabled(): void
+    {
+        // getIterator yields the full traversal order — disabled regions are not
+        // filtered out (that is enabledIds()'s job).
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b');
+
+        $collected = [];
+        foreach ($ring as $id) {
+            $collected[] = $id;
+        }
+
+        self::assertSame(['a', 'b', 'c'], $collected);
+    }
+
+    public function testGetIteratorOnEmptyRingYieldsNothing(): void
+    {
+        self::assertSame([], iterator_to_array(FocusRing::new()));
+    }
+
+    // ─── jsonSerialize() ───────────────────────────────────────────────────
+
+    public function testJsonSerializeCapturesIdsIndexAndDisabled(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('c');
+
+        self::assertSame(
+            ['ids' => ['a', 'b', 'c'], 'index' => 1, 'disabled' => ['c']],
+            $ring->jsonSerialize(),
+        );
+    }
+
+    public function testJsonSerializeOnEmptyRing(): void
+    {
+        self::assertSame(
+            ['ids' => [], 'index' => -1, 'disabled' => []],
+            FocusRing::new()->jsonSerialize(),
+        );
+    }
+
+    public function testJsonEncodeProducesExpectedShape(): void
+    {
+        $ring = FocusRing::of('a', 'b')->disable('b');
+
+        self::assertSame(
+            '{"ids":["a","b"],"index":0,"disabled":["b"]}',
+            json_encode($ring, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    // ─── PERF refactor: incremental enabledPositions maintenance ────────────
+
+    /**
+     * Load-bearing regression for the incremental-maintenance refactor: pin the
+     * exact current() sequence over a scenario that mixes next()/previous() with
+     * register/unregister/disable/enable. The sequence and enabled-skip semantics
+     * must stay byte-identical to the O(n)-rebuild implementation — reverting the
+     * incremental maintenance to a wrong cache diverges this sequence (or trips
+     * the reflection invariant below).
+     */
+    public function testTraversalParityAcrossMutationScenario(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd', 'e'); // index 0 -> 'a'
+        self::assertCacheConsistent($ring);
+
+        $steps = [
+            fn (FocusRing $r) => $r->disable('c'),   // 'a'
+            fn (FocusRing $r) => $r->next(),         // 'b'
+            fn (FocusRing $r) => $r->next(),         // 'd' (skips disabled 'c')
+            fn (FocusRing $r) => $r->next(),         // 'e'
+            fn (FocusRing $r) => $r->next(),         // 'a' (wrap)
+            fn (FocusRing $r) => $r->previous(),     // 'e' (wrap back, skips 'c')
+            fn (FocusRing $r) => $r->enable('c'),    // 'e'
+            fn (FocusRing $r) => $r->next(),         // 'a' (wrap)
+            fn (FocusRing $r) => $r->next(),         // 'b'
+            fn (FocusRing $r) => $r->next(),         // 'c' (re-enabled)
+            fn (FocusRing $r) => $r->unregister('a'), // 'c' (positions shift left)
+            fn (FocusRing $r) => $r->next(),         // 'd'
+            fn (FocusRing $r) => $r->disable('e'),   // 'd'
+            fn (FocusRing $r) => $r->next(),         // 'b' (wrap, skips 'e')
+            fn (FocusRing $r) => $r->previous(),     // 'd' (wrap back, skips 'e')
+            fn (FocusRing $r) => $r->register('f'),  // 'd' (append enabled)
+            fn (FocusRing $r) => $r->next(),         // 'f' (skips disabled 'e')
+            fn (FocusRing $r) => $r->next(),         // 'b' (wrap)
+        ];
+
+        $expected = ['a', 'b', 'd', 'e', 'a', 'e', 'e', 'a', 'b', 'c', 'c', 'd', 'd', 'b', 'd', 'd', 'f', 'b'];
+
+        foreach ($steps as $i => $step) {
+            $ring = $step($ring);
+            self::assertSame($expected[$i], $ring->current(), "step {$i} focus mismatch");
+            // Invariant: the maintained cache equals a freshly-computed one.
+            self::assertCacheConsistent($ring);
+        }
+    }
+
+    public function testEnabledPositionsCacheMatchesRebuildAfterEnableDisableChurn(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd');
+        self::assertCacheConsistent($ring);
+
+        foreach (['b', 'd', 'a', 'c'] as $id) {
+            $ring = $ring->disable($id);
+            self::assertCacheConsistent($ring);
+        }
+        foreach (['c', 'a', 'd', 'b'] as $id) {
+            $ring = $ring->enable($id);
+            self::assertCacheConsistent($ring);
+        }
+    }
+
+    /**
+     * Read the private, incrementally-maintained enabledPositions and assert it
+     * equals a list freshly computed from the ring's public state. This is the
+     * white-box half of the parity guard: it holds regardless of whether runtime
+     * assertions are enabled (zend.assertions may be -1 under phpunit).
+     */
+    private static function assertCacheConsistent(FocusRing $ring): void
+    {
+        $ref = new \ReflectionProperty(FocusRing::class, 'enabledPositions');
+        /** @var list<int> $actual */
+        $actual = $ref->getValue($ring);
+
+        $disabled = array_fill_keys($ring->disabledIds(), true);
+        $expected = [];
+        foreach ($ring->ids() as $i => $id) {
+            if (!isset($disabled[$id])) {
+                $expected[] = $i;
+            }
+        }
+
+        self::assertSame(
+            $expected,
+            $actual,
+            'maintained enabledPositions must equal a freshly-computed list',
+        );
+    }
 }
