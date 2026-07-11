@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Freeze;
 
+use SugarCraft\Core\Util\Palettes;
+
 /**
  * Visual theme for {@see SvgRenderer}. Carries the colours of every
  * surface the renderer paints (background, foreground, frame chrome,
@@ -62,14 +64,16 @@ final class Theme
     public static function dracula(): self
     {
         return new self(
-            background:   '#282a36',
-            foreground:   '#f8f8f2',
-            border:       '#44475a',
-            shadow:       'rgba(0, 0, 0, 0.5)',
-            lineNumber:   '#6272a4',
-            windowRed:    '#ff5555',
-            windowYellow: '#f1fa8c',
-            windowGreen:  '#50fa7b',
+            background:   Palettes::DRACULA['background'],
+            foreground:   Palettes::DRACULA['foreground'],
+            border:       Palettes::DRACULA['currentLine'],
+            shadow:       'rgba(0, 0, 0, 0.5)', // not a Dracula palette colour — keep as literal
+            lineNumber:   Palettes::DRACULA['comment'],
+            windowRed:    Palettes::DRACULA['red'],
+            // Freeze deliberately uses Dracula 'yellow' for the window button;
+            // this differs from candy-sprinkles' 'warning' → 'orange' mapping.
+            windowYellow: Palettes::DRACULA['yellow'],
+            windowGreen:  Palettes::DRACULA['green'],
         );
     }
 
