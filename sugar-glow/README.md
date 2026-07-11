@@ -72,26 +72,8 @@ Standard reader keys come from `Viewport`:
 
 ## Library API
 
-Beyond the CLI, sugar-glow exposes three utility classes for integrating its
+Beyond the CLI, sugar-glow exposes two utility helpers for integrating its
 behaviour into other PHP projects.
-
-### GlamourTheme
-
-Loads and parses Glamour-style theme JSON files (block_prefix/suffix,
-indent_token, margin, chroma token mapping).
-
-```php
-use SugarCraft\Glow\GlamourTheme;
-
-// From a JSON string
-$theme = GlamourTheme::fromJson(file_get_contents('./my-theme.json'));
-
-// From a file path
-$theme = GlamourTheme::fromFile('./my-theme.json');
-
-// Resolve a chroma token to an SGR color code (e.g., "31" for red)
-$sgr = $theme->resolve('emphasis'); // => "31" or null
-```
 
 ### FileWatcher
 
