@@ -746,4 +746,84 @@ final class HermitTest extends TestCase
         $this->assertStringContainsString("\x1b[0m", $result);
         $this->assertStringContainsString('x', $result);
     }
+
+    public function testViewBuildsOverlayLinesOnce(): void
+    {
+        // With an explicit windowWidth, computeWidth() is skipped, so the item
+        // formatter runs ONLY inside buildOverlayLines(). A single View() that
+        // built the overlay twice (the old code path) invoked the formatter twice
+        // per visible row; building it once invokes it exactly once per row.
+        // Revert View() to the double buildOverlayLines() call and $calls doubles.
+        $calls = 0;
+        $items = [
+            new FilteredItem(1, 'apple'),
+            new FilteredItem(2, 'banana'),
+            new FilteredItem(3, 'cherry'),
+        ];
+        $h = Hermit::new($items)
+            ->setWindowWidth(40)
+            ->setWindowHeight(10)
+            ->setItemFormatter(static function (string $item, bool $sel, int $n = 0) use (&$calls): string {
+                $calls++;
+                return $item;
+            })
+            ->show();
+
+        $bg = implode("\n", array_fill(0, 12, str_repeat(' ', 40)));
+        $h->View($bg);
+
+        // 3 visible rows, formatter called exactly once each — not 6 (double build).
+        $this->assertSame(3, $calls, 'buildOverlayLines must run once per View(), not twice');
+    }
+
+    public function testViewOutputIsByteIdenticalAcrossRepresentativeFrames(): void
+    {
+        // Byte-for-byte goldens captured from the pre-refactor View(). The
+        // build-once, dropped dead $background param, and mb_str_split highlight
+        // changes must all be output-preserving; any drift flips these asserts.
+
+        // Frame 1: ASCII, help+status bars, offset, background padding, substring highlight.
+        $frame1 = \base64_decode(
+            'Li4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uLgouLj4gYSAgICAgICAgICAgICAg'
+            . 'ICAgICAgICAgICAgIC4uLi4uLi4uCi4u4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA'
+            . '4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSALi4uLi4u'
+            . 'Li4KICAxLiAbWzMzbWEbWzBtcHBsZSBwaWUgICAgICAgICAgICAgICAgCuKXjyAyLiBiG1szM21hG1sw'
+            . 'bW4bWzMzbWEbWzBtbhtbMzNtYRtbMG0gYnJlG1szM21hG1swbWQgICAgICAgICAgICAgCiAgNC4gZBtb'
+            . 'MzNtYRtbMG10ZSB0G1szM21hG1swbXJ0ICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAg'
+            . 'ICAgICAgICAgICAKRXNjOiBjbG9zZSDilIIgeDogbmF2ICAgICAgICAgICA=',
+        );
+        $h1 = Hermit::new([
+            new FilteredItem(1, 'apple pie'),
+            new FilteredItem(2, 'banana bread'),
+            new FilteredItem(3, 'cherry cake'),
+            new FilteredItem(4, 'date tart'),
+        ])
+            ->setWindowWidth(30)
+            ->setWindowHeight(6)
+            ->setMatchStyle("\x1b[33m")
+            ->setOffset(2, 1)
+            ->withHelpBar(new HelpBar(['Esc' => 'close', 'x' => 'nav']))
+            ->withStatusBar(new StatusBar('4 items'))
+            ->show()
+            ->type('a')
+            ->cursorDown();
+        $bg1 = implode("\n", array_fill(0, 3, str_repeat('.', 40)));
+        $this->assertSame($frame1, $h1->View($bg1), 'frame 1 View() output must be byte-identical');
+
+        // Frame 2: multibyte (accented + CJK) content, multiple substring matches.
+        $frame2 = \base64_decode(
+            'PiBhICAgICAgICAgICAgICAgICAgICAgCuKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAril48gMS4gYxtbMzFtYRtbMG1mw6kg5pel5pysIBtbMzFtYRtbMG0bWzMxbWEbWzBtG1szMW1hG1swbSAgICAgIAogIDIuIGIbWzMxbWEbWzBtbhtbMzFtYRtbMG1uG1szMW1hG1swbSAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAg',
+        );
+        $h2 = Hermit::new([
+            new FilteredItem(1, 'café 日本 aaa'),
+            new FilteredItem(2, 'banana'),
+        ])
+            ->setWindowWidth(24)
+            ->setWindowHeight(4)
+            ->setMatchStyle("\x1b[31m")
+            ->show()
+            ->type('a');
+        $bg2 = implode("\n", array_fill(0, 5, str_repeat(' ', 24)));
+        $this->assertSame($frame2, $h2->View($bg2), 'frame 2 View() output must be byte-identical');
+    }
 }

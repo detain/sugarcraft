@@ -509,17 +509,18 @@ final class Hermit
 
         $bgLines = \explode("\n", $backgroundView);
         if (\end($bgLines) === '') \array_pop($bgLines);
-        $totalOverlayLines = \count($this->buildOverlayLines($winWidth));
+
+        // Build the overlay once — the previous code built it twice (once just to
+        // count lines for padding, once to composite).
+        $lines = $this->buildOverlayLines($winWidth);
+        $totalOverlayLines = \count($lines);
         if ($totalOverlayLines > \count($bgLines)) {
             // Pad background with empty lines so compositeOver has room.
             $padding = \array_fill(0, $totalOverlayLines - \count($bgLines), '');
             $bgLines = \array_merge($bgLines, $padding);
-            $backgroundView = \implode("\n", $bgLines);
         }
 
-        $lines = $this->buildOverlayLines($winWidth);
-
-        return $this->compositeOver($lines, $backgroundView, $winWidth, $bgLines);
+        return $this->compositeOver($lines, $winWidth, $bgLines);
     }
 
     /**
@@ -792,31 +793,33 @@ final class Hermit
     {
         $charString = $this->printableText($text);
 
-        $lower = \mb_strtolower($charString, 'UTF-8');
+        // Split into character arrays ONCE. The previous per-index mb_substr()
+        // calls made each character access O(n), so scanning the whole string
+        // was O(n²); indexing pre-split arrays keeps the scan linear.
+        $chars      = \mb_str_split($charString, 1, 'UTF-8');
+        $lowerChars = \mb_str_split(\mb_strtolower($charString, 'UTF-8'), 1, 'UTF-8');
         $filterLower = \mb_strtolower($filter, 'UTF-8');
         $flen = \mb_strlen($filterLower, 'UTF-8');
-        $charLen = \mb_strlen($charString, 'UTF-8');
+        $charLen = \count($chars);
         $result = '';
         $i = 0;
 
         while ($i < $charLen) {
             $matched = false;
-            $remainingChars = $charLen - $i;
-            if ($remainingChars >= $flen) {
-                $charSubstr = \mb_substr($lower, $i, $flen, 'UTF-8');
+            if ($flen > 0 && $charLen - $i >= $flen) {
+                $charSubstr = \implode('', \array_slice($lowerChars, $i, $flen));
                 if ($charSubstr === $filterLower) {
-                    $matchLenChars = $flen;
                     $result .= $this->matchStyle;
-                    for ($j = 0; $j < $matchLenChars; $j++) {
-                        $result .= \mb_substr($charString, $i + $j, 1, 'UTF-8');
+                    for ($j = 0; $j < $flen; $j++) {
+                        $result .= $chars[$i + $j];
                     }
                     $result .= Ansi::reset();
-                    $i += $matchLenChars;
+                    $i += $flen;
                     $matched = true;
                 }
             }
             if (!$matched) {
-                $result .= \mb_substr($charString, $i, 1, 'UTF-8');
+                $result .= $chars[$i];
                 $i++;
             }
         }
@@ -845,7 +848,7 @@ final class Hermit
         );
     }
 
-    private function compositeOver(array $overlayLines, string $background, int $winWidth, array $bgLines): string
+    private function compositeOver(array $overlayLines, int $winWidth, array $bgLines): string
     {
         $x = $this->xOffset;
         $y = $this->yOffset;
