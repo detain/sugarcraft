@@ -197,4 +197,63 @@ final class StoreTest extends TestCase
         $this->assertCount(1, $loaded);
         $this->assertSame('proj', $loaded[0]->project);
     }
+
+    public function testClampRangeDaysCeilsHugeValues(): void
+    {
+        // BUG guard: export/gaps must not walk a 100-year range. Reverting the
+        // upper clamp makes these return the raw value and fail.
+        $this->assertSame(Store::MAX_RANGE_DAYS, Store::clampRangeDays(1_000_000));
+        $this->assertSame(Store::MAX_RANGE_DAYS, Store::clampRangeDays(Store::MAX_RANGE_DAYS + 1));
+        $this->assertSame(Store::MAX_RANGE_DAYS, Store::clampRangeDays(PHP_INT_MAX));
+    }
+
+    public function testClampRangeDaysFloorsAtOne(): void
+    {
+        $this->assertSame(1, Store::clampRangeDays(0));
+        $this->assertSame(1, Store::clampRangeDays(-5));
+    }
+
+    public function testClampRangeDaysPassesThroughInRange(): void
+    {
+        $this->assertSame(7, Store::clampRangeDays(7));
+        $this->assertSame(30, Store::clampRangeDays(30));
+        $this->assertSame(Store::MAX_RANGE_DAYS, Store::clampRangeDays(Store::MAX_RANGE_DAYS));
+    }
+
+    public function testLoadDayStreamsLargeFileWithoutDataLoss(): void
+    {
+        // PERF/parity guard: loadDay() streams with fgets(); a large multi-line
+        // day must round-trip every line identically to the old slurp path.
+        $day = new \DateTimeImmutable('2026-05-03');
+        $file = $this->tmp . '/2026-05-03.jsonl';
+        $fh = fopen($file, 'wb');
+        $this->assertNotFalse($fh);
+        for ($i = 0; $i < 5000; $i++) {
+            fwrite($fh, json_encode([
+                'time' => $day->getTimestamp() + $i,
+                'project' => 'p',
+                'language' => 'php',
+                'file' => 'f' . $i . '.php',
+                'duration' => 60,
+            ]) . "\n");
+        }
+        fclose($fh);
+
+        $s = new Store($this->tmp);
+        $loaded = $s->loadDay($day);
+        $this->assertCount(5000, $loaded);
+        $this->assertSame('f0.php', $loaded[0]->file);
+        $this->assertSame('f4999.php', $loaded[4999]->file);
+    }
+
+    public function testAppendUsesExclusiveLockAndLoadDayStreams(): void
+    {
+        // The LOCK_EX flag and fgets() streaming are not runtime-observable, so
+        // assert on the source as a revert-proof seam: dropping LOCK_EX or going
+        // back to file_get_contents() slurping fails this guard.
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Store.php');
+        $this->assertStringContainsString('FILE_APPEND | LOCK_EX', $src);
+        $this->assertStringContainsString('fgets(', $src);
+        $this->assertStringNotContainsString('file_get_contents(', $src);
+    }
 }
