@@ -6,6 +6,7 @@ namespace SugarCraft\Sprinkles\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Sprinkles\Theme;
 
 final class ThemeTest extends TestCase
@@ -428,5 +429,70 @@ final class ThemeTest extends TestCase
             $this->assertInstanceOf(Theme::class, $theme, "Theme::{$name}() must return a Theme");
             $this->assertInstanceOf(Color::class, $theme->foreground);
         }
+    }
+
+    // ─── Palettes SSOT drift guard ─────────────────────────────────────────
+
+    /**
+     * Every slot of the rich named themes is re-sourced from
+     * {@see Palettes} in candy-core. Pin each slot's rendered hex against the
+     * corresponding palette constant so an upstream palette edit that silently
+     * drifts from this port (or vice-versa) fails loudly.
+     */
+    public function testDraculaSlotsMatchPalettesConstant(): void
+    {
+        $t = Theme::dracula();
+        $p = Palettes::DRACULA;
+        $this->assertSame($p['foreground'], $t->foreground->toHex());
+        $this->assertSame($p['background'], $t->background->toHex());
+        $this->assertSame($p['purple'], $t->primary->toHex());
+        $this->assertSame($p['green'], $t->secondary->toHex());
+        $this->assertSame($p['pink'], $t->accent->toHex());
+        $this->assertSame($p['comment'], $t->muted->toHex());
+        $this->assertSame($p['red'], $t->error->toHex());
+        $this->assertSame($p['orange'], $t->warning->toHex());
+        $this->assertSame($p['green'], $t->success->toHex());
+        $this->assertSame($p['cyan'], $t->info->toHex());
+        $this->assertSame($p['currentLine'], $t->border->toHex());
+        $this->assertSame($p['separator'], $t->separator->toHex());
+        $this->assertSame($p['foreground'], $t->cursor->toHex());
+    }
+
+    public function testOneDarkSlotsMatchPalettesConstant(): void
+    {
+        $t = Theme::oneDark();
+        $p = Palettes::ONE_DARK;
+        $this->assertSame($p['foreground'], $t->foreground->toHex());
+        $this->assertSame($p['background'], $t->background->toHex());
+        $this->assertSame($p['blue'], $t->primary->toHex());
+        $this->assertSame($p['green'], $t->secondary->toHex());
+        $this->assertSame($p['magenta'], $t->accent->toHex());
+        $this->assertSame($p['comment'], $t->muted->toHex());
+        $this->assertSame($p['red'], $t->error->toHex());
+        $this->assertSame($p['yellow'], $t->warning->toHex());
+        $this->assertSame($p['green'], $t->success->toHex());
+        $this->assertSame($p['cyan'], $t->info->toHex());
+        $this->assertSame($p['currentLine'], $t->border->toHex());
+        $this->assertSame($p['separator'], $t->separator->toHex());
+        $this->assertSame($p['cursor'], $t->cursor->toHex());
+    }
+
+    public function testGithubDarkSlotsMatchPalettesConstant(): void
+    {
+        $t = Theme::githubDark();
+        $p = Palettes::GITHUB_DARK;
+        $this->assertSame($p['foreground'], $t->foreground->toHex());
+        $this->assertSame($p['background'], $t->background->toHex());
+        $this->assertSame($p['blue'], $t->primary->toHex());
+        $this->assertSame($p['green'], $t->secondary->toHex());
+        $this->assertSame($p['pink'], $t->accent->toHex());
+        $this->assertSame($p['comment'], $t->muted->toHex());
+        $this->assertSame($p['red'], $t->error->toHex());
+        $this->assertSame($p['yellow'], $t->warning->toHex());
+        $this->assertSame($p['green'], $t->success->toHex());
+        $this->assertSame($p['cyan'], $t->info->toHex());
+        $this->assertSame($p['currentLine'], $t->border->toHex());
+        $this->assertSame($p['separator'], $t->separator->toHex());
+        $this->assertSame($p['blue'], $t->cursor->toHex());
     }
 }
