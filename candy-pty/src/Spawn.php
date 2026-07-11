@@ -7,9 +7,11 @@ namespace SugarCraft\Pty;
 use SugarCraft\Pty\Posix\PosixChild;
 
 /**
- * @deprecated since v0.x; use PosixSlavePty::spawn() or inject
- *              SugarCraft\Pty\Contract\SlavePty via PtySystemFactory.
- *              Will be removed in v2.0.
+ * @internal Low-level spawn helper — not part of the public API. Call
+ *           {@see \SugarCraft\Pty\Posix\PosixSlavePty::spawn()} (or inject
+ *           {@see \SugarCraft\Pty\Contract\SlavePty} via PtySystemFactory)
+ *           instead; both of those delegate here. This class is the live
+ *           implementation, NOT a deprecated-for-removal shim.
  *
  * Wires `proc_open()` to a slave PTY path so the spawned child's
  * stdin / stdout / stderr all read from / write to the same pseudo-
@@ -34,8 +36,9 @@ final class Spawn
     private const SHIM_RELATIVE = '/../bin/pty-shim.php';
 
     /**
-     * @deprecated since v0.x; use PosixSlavePty::spawn() instead.
-     *              Will be removed in v2.0.
+     * @internal Live internal helper reached via
+     *           {@see \SugarCraft\Pty\Posix\PosixSlavePty::spawn()} and
+     *           {@see \SugarCraft\Pty\Pty::spawn()}. Not removal-scheduled.
      *
      * @param list<string>              $cmd
      * @param array<string,string>|null $env  null inherits parent env

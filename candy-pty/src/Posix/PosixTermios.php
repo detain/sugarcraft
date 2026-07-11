@@ -57,6 +57,10 @@ final class PosixTermios implements Termios
                 'tcgetattr failed on fd ' . $this->fd
             );
         }
+        // Record the just-captured attributes as the restore target so
+        // restore() on this snapshot can revert the fd to them. Without
+        // this, $original stays null and restore() is a dead no-op.
+        $instance->original = $this->withCData($instance->buf);
         return $instance;
     }
 
@@ -86,11 +90,26 @@ final class PosixTermios implements Termios
 
     /**
      * @see portable-pty.Termios.Restore()
+     *
+     * @throws \LogicException if no snapshot was captured via current()
+     *                         first. Unlike SttyTermios — whose empty
+     *                         saved-mode string is a legitimate "never
+     *                         captured, nothing to restore" no-op — a
+     *                         PosixTermios restore() is only ever reached
+     *                         on the immutable snapshot current() returns.
+     *                         A null $original therefore means the caller
+     *                         is restoring the wrong instance (e.g. the
+     *                         fresh constructor instance), which would
+     *                         silently leave the terminal in raw mode. Fail
+     *                         loudly rather than pretend the tty was reset.
      */
     public function restore(): void
     {
         if ($this->original === null) {
-            return;
+            throw new \LogicException(
+                'PosixTermios::restore() called without a captured snapshot; '
+                . 'call current() and restore() the returned instance.'
+            );
         }
         \FFI::memcpy(\FFI::addr($this->buf), \FFI::addr($this->original->buf), self::BUFSIZE);
         $this->apply(self::TCSANOW);
