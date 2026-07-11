@@ -51,13 +51,6 @@
         },
         {
             "type": "path",
-            "url": "../candy-async",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "../candy-ansi",
             "options": {
                 "symlink": true
