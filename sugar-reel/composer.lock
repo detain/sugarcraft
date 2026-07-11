@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4aa422faf439a3e319d0f50ccbf2b52b",
+    "content-hash": "c5dba2aa1f6bc73d5be42e724c3babb5",
     "packages": [
         {
             "name": "evenement/evenement",
@@ -409,64 +409,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-async",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "../candy-async",
-                "reference": "733cbca976b48de553dbdd48e93d5bff738d6571"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Async\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Async\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
-            "homepage": "https://github.com/sugarcraft/candy-async",
-            "keywords": [
-                "async",
-                "cancellation",
-                "event-loop",
-                "promise",
-                "reactphp",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-async/issues",
-                "source": "https://github.com/sugarcraft/candy-async",
-                "docs": "https://github.com/sugarcraft/candy-async/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-buffer",
             "version": "dev-master",
             "dist": {
@@ -527,13 +469,12 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-core",
-                "reference": "d400b0a062454887b52c008dc781542948ed50b1"
+                "reference": "0a6f36e494222c663c9d88c1b3e85d29e7c0bb39"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-pty": "dev-master"
             },
             "require-dev": {
@@ -598,14 +539,13 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-flip",
-                "reference": "a883c7dd56d99057d4cb037f21111b7f239389b8"
+                "reference": "2fa03262420c6e509c10863a7236138426b41fd8"
             },
             "require": {
                 "ext-gd": "*",
                 "php": ">=8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-pty": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.0",
@@ -662,10 +602,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "b1647ee3fef0810972e985fd65059f32418a2300"
+                "reference": "b4c8bc37272946862f83f140e9250a3bfc12b479"
             },
             "require": {
                 "php": "^8.3",
+                "react/stream": "^1.2",
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
@@ -844,13 +785,12 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-palette",
-                "reference": "c616ce65cdccba485e93beb78f059cab622328d4"
+                "reference": "7b796eee0bd34e56ca954c2255e8947e8a8bdd53"
             },
             "require": {
                 "php": "^8.3",
                 "react/child-process": "^0.6",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.1",
@@ -974,10 +914,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-sprinkles",
-                "reference": "a90aa45201d382535e3a246e2366b5f6490aa685"
+                "reference": "0cddbfeef4c6d6cf5ec7f0734d9e8f1fb9b1ff31"
             },
             "require": {
                 "php": "^8.3",
+                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-layout": "dev-master"
             },
@@ -2747,15 +2688,11 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "sugarcraft/candy-ansi": 20,
-        "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-flip": 20,
-        "sugarcraft/candy-input": 20,
         "sugarcraft/candy-mosaic": 20,
         "sugarcraft/candy-palette": 20,
-        "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-testing": 20
     },
     "prefer-stable": true,
