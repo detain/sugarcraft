@@ -41,6 +41,13 @@ final class Parser
     private int $utf8Need = 0;
 
     /**
+     * Number of Ground-state printable-ASCII runs dispatched via the
+     * {@see feed()} fast path (one per contiguous run, not per byte).
+     * Diagnostic only — lets tests assert the fast path is exercised.
+     */
+    private int $fastPathRuns = 0;
+
+    /**
      * @param int $maxStringBuffer Cap (in bytes) on the DCS/OSC/SOS/PM/APC
      *                             payload accumulator. Defaults to 64 KiB;
      *                             emulator front-ends (e.g. candy-vt) may raise
@@ -60,8 +67,32 @@ final class Parser
     public function feed(string $bytes): void
     {
         $len = strlen($bytes);
-        for ($i = 0; $i < $len; $i++) {
-            $this->advance(ord($bytes[$i]));
+        $i = 0;
+        while ($i < $len) {
+            $b = ord($bytes[$i]);
+
+            // Ground-state fast path: in Ground, every printable-ASCII byte
+            // (0x20-0x7E) maps to Action::Print and stays in Ground (see the
+            // transition table). Sweep the maximal run and emit its per-byte
+            // printChar() calls directly, skipping the transition-table
+            // round-trip (two enum ::from()s + a table lookup) for each byte.
+            //
+            // This is byte-for-byte identical to advancing one byte at a
+            // time: exactly one printChar() with a single-byte rune per byte,
+            // in order. 0x7F (DEL, Execute), C0 controls, ESC, C1 and UTF-8
+            // lead bytes (>=0x80) all fall outside the range and route through
+            // the normal state machine, preserving every boundary behaviour.
+            if ($this->state === State::Ground && $b >= 0x20 && $b <= 0x7E) {
+                $this->fastPathRuns++;
+                do {
+                    $this->handler->printChar($bytes[$i]);
+                    $i++;
+                } while ($i < $len && ($b = ord($bytes[$i])) >= 0x20 && $b <= 0x7E);
+                continue;
+            }
+
+            $this->advance($b);
+            $i++;
         }
     }
 
@@ -153,6 +184,12 @@ final class Parser
     public function currentState(): State
     {
         return $this->state;
+    }
+
+    /** @internal Exposed for tests asserting the Ground-state fast path is taken. */
+    public function fastPathRuns(): int
+    {
+        return $this->fastPathRuns;
     }
 
     private function advance(int $byte): void
