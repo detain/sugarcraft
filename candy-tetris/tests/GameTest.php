@@ -394,4 +394,81 @@ final class GameTest extends TestCase
         $this->assertSame(1, $dropped->score->points - $startPoints,
             'Soft drop must award 1 point per cell successfully moved');
     }
+
+    public function testTopOutIsDrivenThroughRealLockAndSpawn(): void
+    {
+        // Regression: the game-over branch of lockAndSpawn() was only ever
+        // reached by hand-building over=true. Drive it for real: block the
+        // spawn zone so the *next* piece cannot fit after the current one
+        // locks. Fill cols 1-9 of rows 0-1 (col 0 left empty → neither row is
+        // full, so nothing clears on lock).
+        $g = Game::start(new Bag(static fn(int $max): int => 0)); // bag: O, T, ...
+        $rows = $g->board->rows();
+        for ($r = 0; $r < 2; $r++) {
+            for ($col = 1; $col < Board::COLS; $col++) {
+                $rows[$r][$col] = Tetromino::I;
+            }
+        }
+        $board = new Board($rows);
+        // Park the current piece harmlessly on the floor (cols 1-2, rows 22-23)
+        // so its lock completes no line and the spawn zone stays blocked.
+        $current = new Piece(Tetromino::O, 0, 0, 22);
+        $game = $g->mutate(['board' => $board, 'piece' => $current]);
+        $this->assertFalse($game->over);
+
+        // Hard drop → lockAndSpawn → next piece (T) spawns into cols 3-5 of
+        // rows 0-1 (all filled) → real top-out.
+        [$afterDrop, $cmd] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        $this->assertTrue($afterDrop->over, 'spawning into a blocked zone must top-out via lockAndSpawn');
+        $this->assertNull($cmd, 'a topped-out game schedules no further gravity tick');
+    }
+
+    public function testLineClearThroughLockAndSpawnUpdatesScore(): void
+    {
+        // End-to-end: complete a row by dropping a piece and assert the clear
+        // propagates to Score (lines + points) via lockAndSpawn.
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $rows = $g->board->rows();
+        // Fill the floor row everywhere except cols 1-2 — exactly where an O
+        // piece dropped from x=0 lands (O rot0 occupies cols x+1, x+2).
+        for ($col = 0; $col < Board::COLS; $col++) {
+            if ($col === 1 || $col === 2) {
+                continue;
+            }
+            $rows[Board::ROWS - 1][$col] = Tetromino::I;
+        }
+        $board = new Board($rows);
+        $o = new Piece(Tetromino::O, 0, 0, 0);
+        $game = $g->mutate(['board' => $board, 'piece' => $o, 'score' => new Score()]);
+        $this->assertSame(0, $game->score->lines);
+        $this->assertSame(0, $game->score->points);
+
+        [$after] = $game->update(new KeyMsg(KeyType::Char, ' ')); // hard drop
+        $this->assertSame(1, $after->score->lines, 'completing the floor row must clear exactly one line');
+        $this->assertGreaterThan(0, $after->score->points, 'a line clear must award points');
+    }
+
+    public function testWallKickSelectsNonNaiveCandidateOnOccupiedBoard(): void
+    {
+        // Regression: SRS kick selection was only exercised on an empty board
+        // (where the naive rotation always fits). Here the naive clockwise
+        // rotation of a T collides with a locked block, and only the SRS
+        // [-1,0] kick fits → the piece must shift left by one column.
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $rows = $g->board->rows();
+        $rows[12][5] = Tetromino::I; // blocks the naive rot-1 cell (5,12) only
+        $board = new Board($rows);
+        $t = new Piece(Tetromino::T, 0, 4, 10);
+        $game = $g->mutate(['board' => $board, 'piece' => $t]);
+
+        // Naive CW rotation (no kick) collides with the block.
+        $this->assertFalse($game->board->fits($t->rotated(1)), 'naive CW rotation must collide with the block');
+
+        // Rotate CW through the game: SRS must apply the [-1,0] kick.
+        [$rotated] = $game->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(1, $rotated->piece->rotation, 'piece must have rotated clockwise');
+        $this->assertSame(3, $rotated->piece->x, 'SRS must apply the [-1,0] wall kick (x: 4 → 3)');
+        $this->assertSame(10, $rotated->piece->y, 'the [-1,0] kick must not change y');
+        $this->assertTrue($rotated->board->fits($rotated->piece), 'the kicked position must fit');
+    }
 }
