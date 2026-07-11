@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crumbs;
 
+use SugarCraft\Core\Util\Sanitize;
+
 /**
  * Navigation stack — last-in, first-out navigation state.
  *
@@ -184,9 +186,25 @@ final class NavStack
             return '';
         }
         return \implode($separator, \array_map(
-            static fn(NavigationItem $item): string => $item->title,
+            static fn(NavigationItem $item): string => self::sanitizeTitle($item->title),
             $this->items
         ));
+    }
+
+    /**
+     * Neutralize terminal-control-sequence injection in an untrusted title.
+     *
+     * Segments reaching a stack come from user-controlled sources —
+     * {@see Shell::pushDirectory} filesystem paths and {@see Url::parse}
+     * URL-decoded segments — so a raw ESC (desyncs the frame-diff renderer)
+     * or a newline (breaks the one-line-per-row model) can be injected. Full
+     * ANSI + C0/C1 strip via candy-core Sanitize (SSOT), then collapse the
+     * whitespace controls it deliberately preserves (\n \r \t) to spaces so
+     * the single-line breadcrumb stays single-line.
+     */
+    private static function sanitizeTitle(string $title): string
+    {
+        return \str_replace(["\r\n", "\r", "\n", "\t"], ' ', Sanitize::untrusted($title));
     }
 
     /**
@@ -233,7 +251,12 @@ final class NavStack
             $this->items,
             static function(NavigationItem $item) use ($term): bool {
                 $titleMatch = \stripos($item->title, $term) !== false;
-                $dataMatch = $item->data !== null && \stripos((string) $item->data, $term) !== false;
+                // Only stringify data that is actually stringifiable: array or
+                // plain-object data (the example pattern stores arrays) would
+                // otherwise fatal / warn on the (string) cast under strict types.
+                $dataMatch = $item->data !== null
+                    && (\is_scalar($item->data) || $item->data instanceof \Stringable)
+                    && \stripos((string) $item->data, $term) !== false;
                 return $titleMatch || $dataMatch;
             }
         );
