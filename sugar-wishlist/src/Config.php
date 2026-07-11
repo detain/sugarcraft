@@ -206,20 +206,44 @@ final class Config
         if (!isset($row['name'], $row['host'])) {
             throw new \RuntimeException(Lang::t('config.entry_missing_field'));
         }
+        // Reject non-scalar field shapes BEFORE the (string)/(int) casts below.
+        // Without these guards a nested array (e.g. `name: [foo]`) would silently
+        // cast to the literal "Array", smuggling `ssh user@Array` into the argv —
+        // the same silent-cast footgun the candy-mines Board scalar-shape guards
+        // close. isset() already excludes null, so the optional fields are only
+        // checked when actually present.
+        self::assertScalar('name', $row['name']);
+        self::assertScalar('host', $row['host']);
+        if (isset($row['port'])) {
+            self::assertScalar('port', $row['port']);
+        }
+        if (isset($row['user'])) {
+            self::assertScalar('user', $row['user']);
+        }
+        if (isset($row['description'])) {
+            self::assertScalar('description', $row['description']);
+        }
+        if (isset($row['proxyJump'])) {
+            self::assertScalar('proxyJump', $row['proxyJump']);
+        }
         $opts = [];
         if (isset($row['options']) && is_array($row['options'])) {
             foreach ($row['options'] as $o) {
+                self::assertScalar('options', $o);
                 $opts[] = (string) $o;
             }
         }
         $identityFiles = [];
         if (isset($row['identityFiles']) && is_array($row['identityFiles'])) {
             foreach ($row['identityFiles'] as $f) {
+                self::assertScalar('identityFiles', $f);
                 $identityFiles[] = (string) $f;
             }
         } elseif (isset($row['identity_file']) && $row['identity_file'] !== null) {
+            self::assertScalar('identity_file', $row['identity_file']);
             $identityFiles[] = (string) $row['identity_file'];
         } elseif (isset($row['identityFile']) && $row['identityFile'] !== null) {
+            self::assertScalar('identityFile', $row['identityFile']);
             $identityFiles[] = (string) $row['identityFile'];
         }
         return new Endpoint(
@@ -232,6 +256,23 @@ final class Config
             proxyJump:     isset($row['proxyJump']) && $row['proxyJump'] !== null ? (string) $row['proxyJump'] : null,
             options:      $opts,
         );
+    }
+
+    /**
+     * Guard that a config field is a scalar before it is `(string)`/`(int)`
+     * cast into the ssh(1) argv. A non-scalar value (array/object) would
+     * otherwise cast silently — an array becomes the literal "Array", which
+     * is a config-injection footgun; throw loudly instead.
+     *
+     * @throws \InvalidArgumentException when $value is not a scalar
+     */
+    private static function assertScalar(string $field, mixed $value): void
+    {
+        if (!is_scalar($value)) {
+            throw new \InvalidArgumentException(
+                Lang::t('config.field_not_scalar', ['field' => $field, 'type' => get_debug_type($value)])
+            );
+        }
     }
 
     /**

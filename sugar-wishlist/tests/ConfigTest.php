@@ -6,6 +6,7 @@ namespace SugarCraft\Wishlist\Tests;
 
 use SugarCraft\Wishlist\Config;
 use SugarCraft\Wishlist\Lang;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class ConfigTest extends TestCase
@@ -243,5 +244,50 @@ YAML;
             $this->assertSame(Lang::t('config.json_top_level'), $e->getMessage());
             $this->assertInstanceOf(\RuntimeException::class, $e->getPrevious());
         }
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function nonScalarFieldProvider(): array
+    {
+        // Each entry supplies a JSON config whose named field carries a
+        // non-scalar (array/object) value. Without the is_scalar() guards
+        // these would silently (string)/(int)-cast — e.g. `ssh user@Array`.
+        return [
+            'name is array'              => ['[{"name": ["oops"], "host": "h.test"}]'],
+            'host is object'            => ['[{"name": "n", "host": {"a": 1}}]'],
+            'user is array'             => ['[{"name": "n", "host": "h.test", "user": ["deploy"]}]'],
+            'port is array'             => ['[{"name": "n", "host": "h.test", "port": [22]}]'],
+            'description is array'      => ['[{"name": "n", "host": "h.test", "description": ["d"]}]'],
+            'proxyJump is array'        => ['[{"name": "n", "host": "h.test", "proxyJump": ["gw"]}]'],
+            'options element is array'  => ['[{"name": "n", "host": "h.test", "options": [["nested"]]}]'],
+            'identityFiles element arr' => ['[{"name": "n", "host": "h.test", "identityFiles": [["nested"]]}]'],
+        ];
+    }
+
+    #[DataProvider('nonScalarFieldProvider')]
+    public function testNonScalarFieldShapeIsRejected(string $json): void
+    {
+        // Revert-prove: drop the assertScalar() guards in Config::buildEndpoint
+        // and these silently (string)/(int)-cast an array into the ssh argv
+        // (the classic `ssh user@Array` footgun) instead of throwing.
+        $this->expectException(\InvalidArgumentException::class);
+        Config::parse($json, 'wishlist.json');
+    }
+
+    public function testScalarFieldsStillParseAfterGuards(): void
+    {
+        // The guards must not reject legitimate scalar-valued configs.
+        $raw = '[{"name": "prod", "host": "prod.test", "port": 2222, "user": "deploy", '
+             . '"identityFiles": ["/tmp/key"], "options": ["ServerAliveInterval=30"], '
+             . '"description": "prod box", "proxyJump": "gw.test"}]';
+        $endpoints = Config::parse($raw, 'wishlist.json');
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('prod',    $endpoints[0]->name);
+        $this->assertSame(2222,      $endpoints[0]->port);
+        $this->assertSame('deploy',  $endpoints[0]->user);
+        $this->assertSame(['/tmp/key'], $endpoints[0]->identityFiles);
+        $this->assertSame(['ServerAliveInterval=30'], $endpoints[0]->options);
     }
 }
