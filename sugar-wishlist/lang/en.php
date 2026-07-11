@@ -17,6 +17,7 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuation before any '- name:' block",
     'config.yaml_unparseable'  => 'wishlist yaml: unparseable line: {line}',
     'config.entry_missing_field' => 'wishlist entry missing required field: name or host',
+    'config.field_not_scalar'  => 'wishlist entry: field [{field}] must be a scalar, got {type}',
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist endpoint: field [{field}] has unsafe leading-dash value [{value}]',
