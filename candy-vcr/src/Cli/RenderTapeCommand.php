@@ -9,6 +9,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use SugarCraft\Vcr\Encode\TapeToGif;
 use SugarCraft\Vcr\Tape\Compiler;
@@ -69,13 +70,15 @@ final class RenderTapeCommand extends Command
         $fontOpt = $input->getOption('font');
         $fontFamily = is_string($fontOpt) ? $fontOpt : 'JetBrainsMono';
 
+        $tapeToGif = TapeToGif::create([
+            'fps' => $fps,
+            'backend' => $backend,
+            'encoder' => $encoderType,
+            'fontFamily' => $fontFamily,
+        ]);
+
         try {
-            $writtenPath = TapeToGif::create([
-                'fps' => $fps,
-                'backend' => $backend,
-                'encoder' => $encoderType,
-                'fontFamily' => $fontFamily,
-            ])->render($tapePath, $explicitOutput, [
+            $writtenPath = $tapeToGif->render($tapePath, $explicitOutput, [
                 'fps' => $fps,
                 'backend' => $backend,
                 'encoder' => $encoderType,
@@ -86,6 +89,10 @@ final class RenderTapeCommand extends Command
         } catch (\Throwable $e) {
             $output->writeln("<error>Failed: {$e->getMessage()}</error>");
             return 1;
+        }
+
+        foreach ($tapeToGif->warnings() as $warning) {
+            $output->writeln("<comment>Warning: {$warning}</comment>");
         }
 
         $output->writeln("GIF written to {$writtenPath}");
@@ -108,10 +115,22 @@ final class RenderTapeCommand extends Command
             }
             $tokens = (new Lexer())->tokenize($source);
             $ast = (new Parser())->parse($tokens);
-            $cassette = (new Compiler())->compile($ast, $tapePath);
+            $compiler = new Compiler();
+            $cassette = $compiler->compile($ast, $tapePath);
         } catch (\Throwable $e) {
             $output->writeln("<error>Failed: {$e->getMessage()}</error>");
             return 1;
+        }
+
+        // Route Source-include warnings to stderr so they never pollute the
+        // JSONL event stream this path writes to stdout for downstream tooling.
+        // Without a real stderr (non-console output), stay silent rather than
+        // corrupt the machine-readable stream.
+        if ($output instanceof ConsoleOutputInterface) {
+            $errOut = $output->getErrorOutput();
+            foreach ($compiler->warnings() as $warning) {
+                $errOut->writeln("<comment>Warning: {$warning}</comment>");
+            }
         }
 
         $header = $cassette->header;

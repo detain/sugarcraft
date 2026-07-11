@@ -64,11 +64,30 @@ final class Compiler
     private const MAX_SOURCE_DEPTH = 10;
 
     /**
+     * When true, a Source directive that escapes the tape's directory or cannot
+     * be resolved/read raises a parse error (\RuntimeException) instead of being
+     * silently skipped. Threaded in from compile()'s $strict argument so the
+     * Source path matches the existing strict handling of ParseError nodes.
+     */
+    private bool $strict = false;
+
+    /**
+     * Non-fatal diagnostics accumulated during the most recent compile(): an
+     * unresolvable or out-of-base Source include under non-strict mode records
+     * a message here (strict mode throws instead). Callers surface these to
+     * stderr so a skipped include is never silent.
+     *
+     * @var list<string>
+     */
+    private array $warnings = [];
+
+    /**
      * @param list<Directive|ParseError> $ast
      */
     public function compile(array $ast, string $sourcePath, bool $strict = false): Cassette
     {
         $this->reset();
+        $this->strict = $strict;
         $this->currentSourcePath = $sourcePath;
 
         foreach ($ast as $node) {
@@ -154,6 +173,21 @@ final class Compiler
         $this->currentSourcePath = '';
         $this->sourceDepth = 0;
         $this->sourceStack = [];
+        $this->strict = false;
+        $this->warnings = [];
+    }
+
+    /**
+     * Non-fatal diagnostics from the most recent compile() — currently
+     * unresolvable / out-of-base Source includes skipped under non-strict mode.
+     * Empty when the tape compiled cleanly or ran under strict mode (which
+     * throws on the first such problem instead of collecting).
+     *
+     * @return list<string>
+     */
+    public function warnings(): array
+    {
+        return $this->warnings;
     }
 
     private function compileNode(Directive $node): void
@@ -388,6 +422,21 @@ final class Compiler
             || str_starts_with($path . DIRECTORY_SEPARATOR, $base . DIRECTORY_SEPARATOR);
     }
 
+    /**
+     * Surface a Source-include problem instead of dropping it silently. Under
+     * strict mode this throws a parse error (mirroring compile()'s handling of
+     * ParseError nodes); under non-strict mode it appends to {@see warnings()}
+     * so the caller can report it while compilation continues.
+     */
+    private function reportSourceProblem(string $path, string $reason): void
+    {
+        $message = "Source include {$reason}: {$path}";
+        if ($this->strict) {
+            throw new \RuntimeException("Parse error: {$message}");
+        }
+        $this->warnings[] = $message;
+    }
+
     private function compileSource(SourceDirective $node): void
     {
         $baseDir = dirname($this->currentSourcePath ?: '.');
@@ -409,7 +458,10 @@ final class Compiler
         $baseReal = realpath($baseDir ?: '.');
         if ($realPath !== false && $baseReal !== false) {
             if (!str_starts_with($realPath, $baseReal . DIRECTORY_SEPARATOR)) {
-                return; // Path escapes base directory
+                // Escaping the tape directory is never silent: raise a parse
+                // error in strict mode, otherwise record a warning and skip.
+                $this->reportSourceProblem($node->path, 'escapes the tape directory');
+                return;
             }
         }
 
@@ -428,6 +480,9 @@ final class Compiler
             : @file_get_contents($fullPath);
 
         if ($source === false) {
+            // Unresolvable / unreadable include: raise a parse error in strict
+            // mode, otherwise record a warning and skip.
+            $this->reportSourceProblem($node->path, 'could not be resolved or read');
             return;
         }
 
