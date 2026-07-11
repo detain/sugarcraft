@@ -101,4 +101,37 @@ final class GitGuardTest extends TestCase
         $git->merge('feature');
         $this->assertTrue(true);
     }
+
+    public function testWorktreeAddRejectsDotDotPath(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\InvalidArgumentException::class);
+        $git->worktreeAdd('../evil', 'main');
+    }
+
+    public function testWorktreeAddRejectsEmbeddedTraversal(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\InvalidArgumentException::class);
+        $git->worktreeAdd('foo/../../etc', 'main');
+    }
+
+    public function testWorktreeAddRejectsBackslashTraversal(): void
+    {
+        $git = new Git($this->cwd);
+        $this->expectException(\InvalidArgumentException::class);
+        $git->worktreeAdd('foo\\..\\bar', 'main');
+    }
+
+    public function testWorktreeAddResolvesLegitRelativePath(): void
+    {
+        // A legit relative path is anchored to the realpath'd repo root and the
+        // worktree is actually created there — proving the guard resolves rather
+        // than rejects safe input.
+        exec("git -C {$this->cwd} -c user.email=test@example.com -c user.name=Test commit --allow-empty -m 'first' 2>/dev/null");
+        exec("git -C {$this->cwd} branch feature 2>/dev/null");
+        $git = new Git($this->cwd);
+        $git->worktreeAdd('wt-sub', 'feature');
+        $this->assertDirectoryExists(realpath($this->cwd) . '/wt-sub');
+    }
 }

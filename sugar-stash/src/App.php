@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Clamp;
 
 /**
@@ -21,6 +22,12 @@ use SugarCraft\Core\Util\Clamp;
  */
 final class App implements Model
 {
+    /** Pane frame width used until the terminal reports its size via WindowSizeMsg. */
+    private const DEFAULT_PANE_WIDTH = 36;
+
+    /** Floor so a very narrow terminal still renders a usable pane. */
+    private const MIN_PANE_WIDTH = 20;
+
     /**
      * @param list<array<string,mixed>> $status
      * @param list<array{name:string,sha:string,current:bool}> $branches
@@ -67,6 +74,10 @@ final class App implements Model
         public readonly ?Worktrees $worktrees = null,
         /** Interactive rebase overlay (shown when 'i' is pressed). */
         public readonly ?InteractiveRebase $interactiveRebase = null,
+        /** Terminal width in columns, from the latest WindowSizeMsg (null until first resize). */
+        public readonly ?int $width = null,
+        /** Terminal height in rows, from the latest WindowSizeMsg (null until first resize). */
+        public readonly ?int $height = null,
     ) {}
 
     public static function start(GitDriver $git): self
@@ -81,6 +92,9 @@ final class App implements Model
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof WindowSizeMsg) {
+            return [$this->withSize($msg->cols, $msg->rows), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -385,6 +399,46 @@ final class App implements Model
         return Renderer::render($this);
     }
 
+    /**
+     * Width of each of the two side-by-side pane columns. Derived from the
+     * terminal width reported via {@see WindowSizeMsg} — the two columns split
+     * the width minus the border/padding/gutter overhead — and falls back to
+     * the historical constant until a size arrives so first-frame output stays
+     * byte-stable.
+     */
+    public function paneWidth(): int
+    {
+        if ($this->width === null) {
+            return self::DEFAULT_PANE_WIDTH;
+        }
+        // Two frames each cost 4 cols (rounded border + 1-col padding, both
+        // sides) plus a 2-col gutter between them: total overhead = 10.
+        return max(self::MIN_PANE_WIDTH, intdiv($this->width - 10, 2));
+    }
+
+    /** Status-pane path budget: pane width minus padding (2) and the 3-col "XY " marker. */
+    public function statusPathWidth(): int
+    {
+        return max(1, $this->paneWidth() - 5);
+    }
+
+    /** Branch-name budget: pane width minus padding (2) and the 2-col current-branch marker. */
+    public function branchNameWidth(): int
+    {
+        return max(1, $this->paneWidth() - 4);
+    }
+
+    /** Log-subject budget: pane width minus padding (2) and the short-sha + 2-space gap (8). */
+    public function logSubjectWidth(): int
+    {
+        return max(1, $this->paneWidth() - 10);
+    }
+
+    private function withSize(int $width, int $height): self
+    {
+        return $this->withAll(width: $width, height: $height);
+    }
+
     public function refresh(): self
     {
         try {
@@ -468,6 +522,8 @@ final class App implements Model
         ?CherryPick $cherryPick = null,
         ?Worktrees $worktrees = null,
         ?InteractiveRebase $interactiveRebase = null,
+        ?int $width = null,
+        ?int $height = null,
     ): self {
         return new self(
             git: $this->git,
@@ -495,6 +551,8 @@ final class App implements Model
             cherryPick: $cherryPick ?? $this->cherryPick,
             worktrees: $worktrees ?? $this->worktrees,
             interactiveRebase: $interactiveRebase ?? $this->interactiveRebase,
+            width: $width ?? $this->width,
+            height: $height ?? $this->height,
         );
     }
 
@@ -654,6 +712,8 @@ final class App implements Model
             cherryPick: $this->cherryPick,
             worktrees: $this->worktrees,
             interactiveRebase: $this->interactiveRebase,
+            width: $this->width,
+            height: $this->height,
         );
     }
 
@@ -964,6 +1024,8 @@ final class App implements Model
             cherryPick: $this->cherryPick,
             worktrees: $this->worktrees,
             interactiveRebase: $this->interactiveRebase,
+            width: $this->width,
+            height: $this->height,
         );
     }
 
@@ -1043,6 +1105,8 @@ final class App implements Model
             cherryPick: $cp,
             worktrees: $this->worktrees,
             interactiveRebase: $this->interactiveRebase,
+            width: $this->width,
+            height: $this->height,
         );
     }
 
@@ -1103,6 +1167,8 @@ final class App implements Model
             cherryPick: $this->cherryPick,
             worktrees: $wt,
             interactiveRebase: $this->interactiveRebase,
+            width: $this->width,
+            height: $this->height,
         );
     }
 
@@ -1182,6 +1248,8 @@ final class App implements Model
             cherryPick: $this->cherryPick,
             worktrees: $this->worktrees,
             interactiveRebase: $ir,
+            width: $this->width,
+            height: $this->height,
         );
     }
 

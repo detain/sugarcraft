@@ -123,7 +123,7 @@ final class Renderer
         foreach ($a->status as $i => $row) {
             $idx  = $row['index_status'] ?? ' ';
             $work = $row['work_status']  ?? ' ';
-            $path = self::truncate(self::sanitize($row['path'] ?? ''), 31);
+            $path = self::truncate(self::sanitize($row['path'] ?? ''), $a->statusPathWidth());
             $marker = sprintf('%s%s ', $idx, $work);
             $line = $marker . $path;
             $st = Style::new();
@@ -139,7 +139,7 @@ final class Renderer
             $rows[] = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render(Lang::t('status.clean'));
         }
-        return self::frame($a, Pane::Status, ' status ', implode("\n", $rows), 36);
+        return self::frame($a, Pane::Status, ' status ', implode("\n", $rows), $a->paneWidth());
     }
 
     private static function branchesPane(App $a): string
@@ -147,7 +147,7 @@ final class Renderer
         $rows = [];
         foreach ($a->branches as $i => $b) {
             $marker = $b['current'] ? '* ' : '  ';
-            $line   = $marker . self::truncate(self::sanitize($b['name']), 32);
+            $line   = $marker . self::truncate(self::sanitize($b['name']), $a->branchNameWidth());
             $st = Style::new();
             $st = $b['current']
                 ? $st->bold()->foreground(Color::hex('#fde68a'))
@@ -160,7 +160,7 @@ final class Renderer
         if ($rows === []) {
             $rows[] = Lang::t('branches.empty');
         }
-        return self::frame($a, Pane::Branches, ' branches ', implode("\n", $rows), 36);
+        return self::frame($a, Pane::Branches, ' branches ', implode("\n", $rows), $a->paneWidth());
     }
 
     private static function logPane(App $a): string
@@ -169,8 +169,9 @@ final class Renderer
         foreach ($a->log as $i => $entry) {
             $sha     = Style::new()->foreground(Color::hex('#fde68a'))->render($entry['sha']);
             $subject = self::sanitize($entry['subject']);
-            if (mb_strlen($subject) > 26) {
-                $subject = mb_substr($subject, 0, 25) . '…';
+            $subjectMax = $a->logSubjectWidth();
+            if (mb_strlen($subject) > $subjectMax) {
+                $subject = mb_substr($subject, 0, $subjectMax - 1) . '…';
             }
             $line = $sha . '  ' . $subject;
             if ($a->pane === Pane::Log && $i === $a->logCursor) {
@@ -181,7 +182,7 @@ final class Renderer
         if ($rows === []) {
             $rows[] = Lang::t('log.empty');
         }
-        return self::frame($a, Pane::Log, ' log ', implode("\n", $rows), 36);
+        return self::frame($a, Pane::Log, ' log ', implode("\n", $rows), $a->paneWidth());
     }
 
     private static function truncate(string $s, int $max): string

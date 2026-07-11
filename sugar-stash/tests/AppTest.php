@@ -6,6 +6,7 @@ namespace SugarCraft\Stash\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Stash\App;
 use SugarCraft\Stash\GitDriver;
 use SugarCraft\Stash\Pane;
@@ -708,5 +709,59 @@ final class AppTest extends TestCase
         $this->assertNotNull($a->interactiveRebase);
         [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertNull($a->interactiveRebase);
+    }
+
+    public function testDefaultGeometryBeforeAnyWindowSize(): void
+    {
+        $a = App::start($this->git());
+        $this->assertNull($a->width);
+        $this->assertNull($a->height);
+        // Historical fallback constants — kept so the first frame stays byte-stable.
+        $this->assertSame(36, $a->paneWidth());
+        $this->assertSame(31, $a->statusPathWidth());
+        $this->assertSame(32, $a->branchNameWidth());
+        $this->assertSame(26, $a->logSubjectWidth());
+    }
+
+    public function testWindowSizeMsgStoresSizeAndDerivesGeometry(): void
+    {
+        $a = App::start($this->git());
+        [$a2, $cmd] = $a->update(new WindowSizeMsg(120, 40));
+
+        $this->assertInstanceOf(App::class, $a2);
+        $this->assertNull($cmd);
+
+        // Size is stored from the message ...
+        $this->assertSame(120, $a2->width);
+        $this->assertSame(40, $a2->height);
+
+        // ... and geometry is DERIVED from it, not the hardcoded 36/31/32/26.
+        $expectedPane = intdiv(120 - 10, 2); // 55
+        $this->assertSame($expectedPane, $a2->paneWidth());
+        $this->assertSame($expectedPane - 5, $a2->statusPathWidth());
+        $this->assertSame($expectedPane - 4, $a2->branchNameWidth());
+        $this->assertSame($expectedPane - 10, $a2->logSubjectWidth());
+        $this->assertNotSame(36, $a2->paneWidth());
+
+        // Immutability: the original model is untouched.
+        $this->assertNull($a->width);
+        $this->assertSame(36, $a->paneWidth());
+    }
+
+    public function testWindowSizeMsgWidenedPaneIsReflectedInView(): void
+    {
+        $a = App::start($this->git());
+        $narrow = $a->view();
+        [$wide, ] = $a->update(new WindowSizeMsg(160, 50));
+        // A wider terminal yields wider frames, so the rendered output grows.
+        $this->assertGreaterThan(strlen($narrow), strlen($wide->view()));
+    }
+
+    public function testWindowSizeMsgClampsToMinimumPaneWidth(): void
+    {
+        $a = App::start($this->git());
+        [$tiny, ] = $a->update(new WindowSizeMsg(4, 4));
+        // Even a 4-col terminal must not collapse the pane below the floor.
+        $this->assertSame(20, $tiny->paneWidth());
     }
 }
