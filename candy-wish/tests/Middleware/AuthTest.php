@@ -188,4 +188,51 @@ final class AuthTest extends TestCase
         $output = $readErr();
         $this->assertStringNotContainsString("\x1b", $output);
     }
+
+    public function testValidatorRejectsFingerprintThatMatchesAllowlist(): void
+    {
+        // The (forgeable) fingerprint matches the allowlist, so the
+        // allowlist alone would admit. A wired validator that refuses
+        // must still deny — this is the trust-gap closure.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:forged';
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth([], ['SHA256:forged'], $err, fn (string $fp, Session $s): bool => false);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached, 'a validator returning false must deny even when the allowlist matches');
+        $this->assertStringContainsString('key validation failed', $readErr());
+    }
+
+    public function testValidatorAcceptsWhenItVouchesForKey(): void
+    {
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:real';
+        [$err] = $this->stderr();
+        $seen = null;
+        $a = new Auth([], ['SHA256:real'], $err, function (string $fp, Session $s) use (&$seen): bool {
+            $seen = $fp;
+            return $s->user === 'alice';
+        });
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached);
+        $this->assertSame('SHA256:real', $seen, 'validator receives the presented fingerprint');
+    }
+
+    public function testValidatorGatesEvenWithEmptyAllowlist(): void
+    {
+        // No allowlist, but a validator is wired: the validator becomes
+        // the sole fingerprint gate.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:whatever';
+        [$err] = $this->stderr();
+        $a = new Auth([], [], $err, fn (string $fp, Session $s): bool => false);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached, 'validator-only mode must deny when the validator refuses');
+    }
 }

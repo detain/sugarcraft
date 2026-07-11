@@ -9,27 +9,34 @@ use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 
 /**
- * Declares which authentication methods the server accepts and
- * records the active method in Context so downstream middleware can
- * inspect which one succeeded.
+ * Records an informational list of accepted authentication methods in
+ * Context and echoes it to the client.
  *
- * SSH authentication is multi-round-trip: the server advertises
- * available methods, the client picks one and tries it, and the
- * server either accepts or rejects with a fresh list of remaining
- * methods. This middleware runs early in the chain before any
- * credential-checking middleware and:
+ * **Informational only — this does NOT negotiate RFC 4252 auth.** Real
+ * SSH authentication is a multi-round-trip exchange (the server
+ * advertises methods, the client tries one, the server accepts or
+ * replies with the remaining methods). By the time candy-wish
+ * middleware run, that exchange has ALREADY completed inside the host
+ * `sshd` (the ForceCommand deployment) — auth is done and this process
+ * is the forced command. There is no live transport here on which to
+ * offer or refuse methods, so this middleware cannot implement RFC 4252
+ * semantics and must not be relied on as an auth gate. Its value is
+ * purely descriptive:
  *
  *   1. Stores the method list in Context under the key
- *      `auth.methods` so any subsequent auth middleware can
- *      consult it.
- *   2. Writes the method list to STDOUT as an RFC 4252-style
- *      banner line so the SSH client knows what's available.
+ *      `auth.methods` so later middleware (or logging) can record
+ *      which methods the operator considers acceptable.
+ *   2. Writes the method list to STDOUT as a human-readable banner
+ *      line so an interactive client/user can see what's configured.
  *
  * The banner format is:
  *
  *     SSH_AUTH_METHODS publickey password keyboard-interactive
  *
- * It is written once per session and then `next` is called.
+ * It is written once per session and then `next` is called. Enforcement
+ * of specific methods belongs to the host sshd config (the real trust
+ * boundary) plus the credential-checking middleware ({@see \SugarCraft\Wish\Middleware\Auth},
+ * {@see PasswordAuth}).
  */
 final class AuthMethods implements Middleware
 {
@@ -74,8 +81,10 @@ final class AuthMethods implements Middleware
     }
 
     /**
-     * Read the auth methods list from a Context (convenience for
-     * downstream middleware).
+     * Read the informational auth-methods list back from a Context
+     * (convenience for downstream middleware / logging). This is the
+     * list the operator declared via the constructor — it is NOT proof
+     * that any method actually authenticated the session.
      *
      * @return list<string>
      */
