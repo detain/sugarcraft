@@ -770,9 +770,9 @@ final class SyntaxHighlighterTest extends TestCase
 
     /**
      * An unclosed block-comment opener (opening marker only, no close)
-     * must not cause catastrophic backtracking. The possessive
-     * quantifier regex is linear O(n) and should complete in well
-     * under a second. Graceful degradation: no highlighting.
+     * must not cause catastrophic backtracking. The unrolled-loop
+     * (linear) form of the comment regex is O(n) and should complete in
+     * well under a second. Graceful degradation: no highlighting.
      */
     public function testUnterminatedBlockCommentDoesNotDegradeOrHang(): void
     {
@@ -781,7 +781,7 @@ final class SyntaxHighlighterTest extends TestCase
         $out = SyntaxHighlighter::highlight($code, 'php', self::themed());
         $elapsed = microtime(true) - $start;
 
-        // Possessive quantifier is O(n) — must complete in < 1 second.
+        // Unrolled-loop (linear) form is O(n) — must complete in < 1 second.
         $this->assertLessThan(1.0, $elapsed, 'Unterminated comment took too long — possible catastrophic backtracking');
         // Should degrade to plain code (no SGR escapes from highlighting).
         $this->assertStringNotContainsString("\x1b[1m", $out);
@@ -791,7 +791,7 @@ final class SyntaxHighlighterTest extends TestCase
 
     /**
      * Unterminated HTML comment (<!-- without -->) must also degrade
-     * gracefully via the possessive quantifier in the comment regex.
+     * gracefully via the unrolled-loop (linear) form of the comment regex.
      */
     public function testUnterminatedHtmlCommentDoesNotDegradeOrHang(): void
     {
@@ -803,5 +803,43 @@ final class SyntaxHighlighterTest extends TestCase
         $this->assertLessThan(1.0, $elapsed, 'Unterminated HTML comment took too long');
         $this->assertStringNotContainsString("\x1b[1m", $out);
         $this->assertStringContainsString('no close', $out);
+    }
+
+    /**
+     * Input above the 1 MB cap must skip tokenisation entirely and fall
+     * back to the plain code-block style — the same graceful degradation
+     * the unknown-language path uses. This closes the multi-megabyte
+     * fenced-block CPU-DoS surface: the combined tokeniser regex plus
+     * per-token render is O(n) with a heavy constant, so an unbounded
+     * paste (e.g. a minified bundle) is a cheap way to burn CPU and
+     * balloon the output.
+     *
+     * The load-bearing, deterministic proof is byte-exact equality with
+     * the fallback render: with the cap removed the input is tokenised
+     * instead, yielding a different (much larger) string that carries
+     * number-style SGR — so this test fails without the guard. A
+     * wall-clock threshold is deliberately avoided: the fallback render
+     * of a >1 MB string is itself inherently O(n) (a pre-existing Style
+     * cost shared with the unknown-language path), which would make any
+     * "near-instant" bound flaky rather than meaningful.
+     */
+    public function testOversizedInputSkipsHighlightingAndFallsBack(): void
+    {
+        $theme = self::themed();
+        // Just over the 1 MB cap: 150_000 * 7 bytes = 1_050_000.
+        $code = str_repeat('x = 1; ', 150_000);
+        self::assertGreaterThan(1_000_000, strlen($code));
+
+        $out = SyntaxHighlighter::highlight($code, 'php', $theme);
+
+        // Byte-exact graceful fallback, identical to the unknown-language path.
+        $expected = $theme->codeBlock?->render($code) ?? $code;
+        $this->assertSame($expected, $out);
+
+        // The '1' literals must NOT be number-styled (yellow) — tokenisation
+        // was skipped. The same content at a small size WOULD get it, so the
+        // negative assertion below is meaningful, not vacuous.
+        $this->assertStringNotContainsString("\x1b[38;2;255;255;0m", $out);
+        self::assertNumberStyled('1', SyntaxHighlighter::highlight('x = 1;', 'php', $theme));
     }
 }

@@ -17,6 +17,18 @@ namespace SugarCraft\Shine;
  */
 final class SyntaxHighlighter
 {
+    /**
+     * Upper bound on the byte length of code we will run the tokeniser
+     * regex over. The combined pattern is linear O(n), but a
+     * multi-megabyte fenced block (e.g. a pasted minified bundle in a
+     * README) still burns CPU proportionally — an unbounded input is a
+     * cheap denial-of-service surface. Mirrors the 1 MB caps already
+     * enforced by the sibling loaders (LanguageDetector,
+     * candy-freeze ChromaThemeLoader / VsCodeThemeLoader); oversized
+     * input degrades gracefully to the plain code-block style.
+     */
+    private const MAX_HIGHLIGHT_BYTES = 1_000_000;
+
     /** @var array<string, list<string>> language → keyword list */
     private const KEYWORDS = [
         'php' => [
@@ -88,6 +100,13 @@ final class SyntaxHighlighter
      */
     public static function highlight(string $code, string $language, Theme $theme, bool $lineNumbers = false): string
     {
+        // DoS guard: skip tokenisation for oversized input and fall back
+        // to the plain code-block style, exactly as the unknown-language
+        // path does below. Keeps highlighting a bounded-cost operation.
+        if (strlen($code) > self::MAX_HIGHLIGHT_BYTES) {
+            return $theme->codeBlock?->render($code) ?? $code;
+        }
+
         $lang = strtolower(trim($language));
         $lang = self::ALIASES[$lang] ?? $lang;
 
