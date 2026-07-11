@@ -988,4 +988,53 @@ final class ProgramTest extends TestCase
         fclose($in);
         fclose($out);
     }
+
+    public function testInstallSignalHandlersEnablesAsyncSignals(): void
+    {
+        if (!function_exists('pcntl_signal')
+            || !function_exists('pcntl_async_signals')
+            || !defined('SIGINT')
+        ) {
+            $this->markTestSkipped('pcntl async signals not available');
+        }
+        // Save + reset the process-wide async-signals flag so the assertion
+        // proves installSignalHandlers() flipped it (not a leftover from an
+        // earlier test).
+        $prevAsync = pcntl_async_signals();
+        pcntl_async_signals(false);
+
+        [$in, $out, $writer] = $this->pipes();
+        $program = new Program(new RecordingModel(quitAfter: 1), new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: true,   // installs handlers → enables async delivery
+            input: $in,
+            output: $out,
+            loop: new StreamSelectLoop(),
+        ));
+
+        $install = new \ReflectionMethod(Program::class, 'installSignalHandlers');
+        $install->setAccessible(true);
+        $install->invoke($program);
+
+        $this->assertTrue(pcntl_async_signals(), 'async signal delivery must be enabled');
+        $asyncProp = new \ReflectionProperty(Program::class, 'asyncSignals');
+        $asyncProp->setAccessible(true);
+        $this->assertTrue($asyncProp->getValue($program));
+
+        // Restore signal handlers + async state so sibling tests are unaffected.
+        pcntl_signal(SIGINT, SIG_DFL);
+        if (defined('SIGWINCH')) {
+            pcntl_signal(SIGWINCH, SIG_DFL);
+        }
+        if (defined('SIGTSTP')) {
+            pcntl_signal(SIGTSTP, SIG_DFL);
+        }
+        if (defined('SIGCONT')) {
+            pcntl_signal(SIGCONT, SIG_DFL);
+        }
+        pcntl_async_signals($prevAsync);
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
 }
