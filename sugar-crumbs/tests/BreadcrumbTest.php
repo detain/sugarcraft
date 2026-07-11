@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crumbs\Tests;
 
 use SugarCraft\Crumbs\{Breadcrumb, NavStack};
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Scanner;
 use PHPUnit\Framework\TestCase;
 
@@ -221,27 +222,78 @@ final class BreadcrumbTest extends TestCase
 
     public function testTruncationWithScannerZoneCountMatchesVisibleCrumbs(): void
     {
-        // Regression test: after Step 1, a title containing the separator
-        // must not corrupt crumb→zone mapping.
-        // Escape::title() uses hardcoded separator ' > ', different from
-        // Breadcrumb's default ' › ', so this is NOT auto-applied.
-        // The fix is the list-carry of Step 1 (no string round-trip).
+        // A title that itself contains the separator (' › ') must map to exactly
+        // ONE zone: titles are carried as a list (no string round-trip), so
+        // 'A › B' must not split into two crumbs and inflate the zone count.
+        $scanner = Scanner::new();
         $s = new NavStack();
-        // Push items where one title itself contains the separator substring
         $s->push('A › B')->push('C');
 
-        $bc = (new Breadcrumb())->withScanner(Scanner::new())->setMaxWidth(10);
+        // Wide enough that BOTH crumbs stay visible (width 'A › B › C' = 9).
+        $bc = (new Breadcrumb())->withScanner($scanner)->setMaxWidth(20);
         $rendered = $bc->render($s);
         $bc->scan($rendered);
 
-        // Should have exactly 1 zone (only 'C' visible after truncation)
-        // or 2 if no truncation occurred — count must match actual visible crumbs
-        $zones = [];
-        foreach ($bc->hit(1, 1) ? [$bc->hit(1, 1)] : [] as $z) {
-            $zones[] = $z;
-        }
-        // At minimum: zones should not exceed the number of items that fit
-        $this->assertTrue(true); // placeholder — actual zone counting done via integration
+        // Two visible crumbs → exactly two zones (crumb-0, crumb-1), NOT three
+        // despite the separator inside 'A › B'.
+        $zones = $scanner->prefixed('crumb-');
+        $this->assertCount(2, $zones);
+        $this->assertNotNull($scanner->get('crumb-0'));
+        $this->assertNotNull($scanner->get('crumb-1'));
+        $this->assertNull($scanner->get('crumb-2'));
+    }
+
+    public function testTruncationWithScannerZoneCountShrinksToVisibleAfterTruncation(): void
+    {
+        // When truncation drops all but the most-recent crumb, the zone count
+        // must shrink to match: exactly one visible crumb → exactly one zone.
+        $scanner = Scanner::new();
+        $s = new NavStack();
+        $s->push('A › B')->push('C');
+
+        // Narrow enough that only 'C' survives (width 'A › B › C' = 9 > 5).
+        $bc = (new Breadcrumb())->withScanner($scanner)->setMaxWidth(5);
+        $rendered = $bc->render($s);
+        $bc->scan($rendered);
+
+        $this->assertCount(1, $scanner->prefixed('crumb-'));
+        $this->assertNotNull($scanner->get('crumb-0'));
+        $this->assertNull($scanner->get('crumb-1'));
+    }
+
+    // ─── SEC: control-sequence injection ────────────────────────────────────
+
+    public function testRenderSanitizesControlSequenceInjection(): void
+    {
+        // Titles reaching render() are user-controlled (Shell::pushDirectory /
+        // Url::parse). A raw ANSI sequence + NUL + newline must be neutralized.
+        $s = new NavStack();
+        $s->push('Home');
+        $s->push("Ev\x1b[31mil\x00\nName");
+
+        $rendered = (new Breadcrumb())->render($s);
+
+        $this->assertStringNotContainsString("\x1b", $rendered);
+        $this->assertStringNotContainsString("\x00", $rendered);
+        $this->assertStringNotContainsString("\n", $rendered);
+        $this->assertStringNotContainsString('[31m', $rendered);
+        $this->assertStringContainsString('Home', $rendered);
+        $this->assertStringContainsString('Evil', $rendered);
+    }
+
+    // ─── BUG: setMaxWidth() must be a hard cap on the final segment ──────────
+
+    public function testTruncateEllipsizesFinalSegmentToHonorMaxWidth(): void
+    {
+        $bc = (new Breadcrumb())->setMaxWidth(10);
+        // The most-recent segment alone is far wider than maxWidth; upstream
+        // keeps it verbatim (busting the cap), we ellipsis-truncate it.
+        $result = $bc->renderTitles(['Home', 'AVeryLongCurrentTitle']);
+
+        // setMaxWidth() is a hard cap on the visible width...
+        $this->assertLessThanOrEqual(10, Width::string($result));
+        // ...achieved by ellipsis-truncating the final segment.
+        $this->assertStringEndsWith('…', $result);
     }
 
     public function testBreadcrumbTitleContainingSeparatorRendersCorrectly(): void

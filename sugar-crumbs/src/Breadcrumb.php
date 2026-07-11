@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crumbs;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
@@ -179,10 +180,25 @@ final class Breadcrumb
      */
     private function doRender(array $titles): string
     {
+        // Neutralize terminal-control-sequence injection from untrusted titles
+        // (Shell::pushDirectory / Url::parse segments are user-controlled)
+        // BEFORE any width math, truncation, or zone-wrapping — otherwise a raw
+        // ESC/newline both desyncs the render and skews width accounting.
+        $titles = \array_map([self::class, 'sanitizeTitle'], $titles);
+
         // Truncate from the left if too wide
         if ($this->maxWidth > 0 && $this->effectiveWidth(\implode($this->separator, $titles)) > $this->maxWidth) {
             [$titles, $elided] = $this->truncate($titles);
-            $result = ($elided ? $this->truncator : '') . \implode($this->separator, $titles);
+            $prefix = $elided ? $this->truncator : '';
+            $result = $prefix . \implode($this->separator, $titles);
+
+            // Left-dropping bottoms out at the single most-recent crumb; if even
+            // that lone crumb overflows, ellipsis-truncate it so setMaxWidth() is
+            // a hard cap (upstream keeps the last crumb verbatim — the bug here).
+            if (\count($titles) === 1 && $this->effectiveWidth($result) > $this->maxWidth) {
+                $titles = [$this->truncateSegment($titles[0], $this->maxWidth - $this->effectiveWidth($prefix))];
+                $result = $prefix . $titles[0];
+            }
         } else {
             $result = \implode($this->separator, $titles);
         }
@@ -193,6 +209,38 @@ final class Breadcrumb
         }
 
         return $result;
+    }
+
+    /**
+     * Full ANSI + C0/C1 strip via candy-core Sanitize (SSOT), then collapse the
+     * whitespace controls it deliberately preserves (\n \r \t) to spaces so an
+     * untrusted title cannot inject a newline into the single-line breadcrumb.
+     */
+    private static function sanitizeTitle(string $title): string
+    {
+        return \str_replace(["\r\n", "\r", "\n", "\t"], ' ', Sanitize::untrusted($title));
+    }
+
+    /**
+     * Ellipsis-truncate a single crumb so its visible width fits $budget.
+     * Grapheme-aware via candy-core Width. Used only for the lone surviving
+     * (most-recent) crumb when even it alone overflows maxWidth.
+     */
+    private function truncateSegment(string $segment, int $budget): string
+    {
+        if ($budget <= 0) {
+            return '';
+        }
+        if ($this->effectiveWidth($segment) <= $budget) {
+            return $segment;
+        }
+        $ellipsis      = '…';
+        $ellipsisWidth = $this->effectiveWidth($ellipsis);
+        if ($ellipsisWidth >= $budget) {
+            // No room for content beside the ellipsis — hard-cut to budget.
+            return Width::truncate($segment, $budget);
+        }
+        return Width::truncate($segment, $budget - $ellipsisWidth) . $ellipsis;
     }
 
     /**

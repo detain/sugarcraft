@@ -203,6 +203,28 @@ final class NavStackTest extends TestCase
         $this->assertSame('', $s->view());
     }
 
+    public function testViewSanitizesControlSequenceInjection(): void
+    {
+        // A directory segment (Shell::pushDirectory) or URL-decoded segment
+        // (Url::parse) is user-controlled and may smuggle an ANSI SGR sequence,
+        // a raw NUL, and a newline into a title.
+        $s = new NavStack();
+        $s->push('Home');
+        $s->push("Ev\x1b[31mil\x00\nName");
+
+        $view = $s->view();
+
+        // Nothing that could desync the terminal / frame-diff renderer survives.
+        $this->assertStringNotContainsString("\x1b", $view);
+        $this->assertStringNotContainsString("\x00", $view);
+        $this->assertStringNotContainsString("\n", $view);
+        // The escape sequence is stripped whole (params included), not just ESC.
+        $this->assertStringNotContainsString('[31m', $view);
+        // Printable text is preserved.
+        $this->assertStringContainsString('Home', $view);
+        $this->assertStringContainsString('Evil', $view);
+    }
+
     public function testFilterMatchingTitle(): void
     {
         $s = new NavStack();
@@ -241,6 +263,40 @@ final class NavStackTest extends TestCase
         $filtered = $s->filter('SET');
         $this->assertSame(1, $filtered->depth());
         $this->assertSame('Settings', $filtered->items()[0]->title);
+    }
+
+    public function testFilterWithArrayDataDoesNotFatal(): void
+    {
+        // The example pattern stores an array as item data. filter() casts data
+        // to string for matching; a raw (string) cast on an array warns (fatal
+        // under failOnWarning) — non-stringifiable data must be skipped, not cast.
+        $s = new NavStack();
+        $s->push('Dashboard', ['route' => '/dash', 'id' => 7]); // array data
+        $s->push('Reports', '/reports');                        // scalar data
+
+        // 'dash' matches the 'Dashboard' title; iterating the array-data item
+        // must not trigger an Array-to-string conversion.
+        $filtered = $s->filter('dash');
+        $this->assertSame(1, $filtered->depth());
+        $this->assertSame('Dashboard', $filtered->items()[0]->title);
+
+        // A term that only appears in scalar data still matches (regression:
+        // the guard must not disable scalar-data matching).
+        $this->assertSame(1, $s->filter('reports')->depth());
+    }
+
+    public function testFilterMatchesStringableData(): void
+    {
+        $stringable = new class {
+            public function __toString(): string
+            {
+                return '/settings/display';
+            }
+        };
+        $s = new NavStack();
+        $s->push('Settings', $stringable);
+
+        $this->assertSame(1, $s->filter('display')->depth());
     }
 
     public function testPushDirectory(): void
