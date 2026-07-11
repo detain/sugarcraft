@@ -24,6 +24,8 @@ return [
     'image_source.too_large'         => 'Image dimensions {width}×{height} exceed the maximum of {max} pixels',
     'image_source.redirect_no_location' => 'Redirect response from {url} is missing a Location header',
     'image_source.too_many_redirects'   => 'Too many redirects while fetching image from URL: {url}',
+    'image_source.url_host_blocked'     => 'URL host {host} resolves to a blocked private/reserved address ({ip})',
+    'image_source.url_host_unresolved'  => 'URL host {host} could not be resolved to an IP address',
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',

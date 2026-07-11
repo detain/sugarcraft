@@ -284,14 +284,21 @@ final class ImageSource
      * Redirects are followed. This blocks the calling thread; for the
      * event loop use {@see ImageSource::fromUrlAsync()} instead.
      *
-     * Security: the initial scheme is validated against $allowedSchemes, and
-     * every redirect hop is re-validated against the SAME list (redirects are
-     * followed manually with `max_redirects: 0`), so a 3xx to `file://`,
-     * `gopher://`, or another disallowed scheme cannot smuggle past the
-     * allow-list. The trust decision for the source host is still the
-     * caller's: an allowed-scheme redirect to a private/link-local host (e.g.
-     * cloud metadata at `http://169.254.169.254/…`) is not blocked by scheme
-     * validation alone. Only pass URLs you control or have validated.
+     * Security (scheme): the initial scheme is validated against
+     * $allowedSchemes, and every redirect hop is re-validated against the SAME
+     * list (redirects are followed manually with `max_redirects: 0`), so a 3xx
+     * to `file://`, `gopher://`, or another disallowed scheme cannot smuggle
+     * past the allow-list.
+     *
+     * Security (host / SSRF): for http(s) each hop's host — the initial URL
+     * AND every redirect target — is resolved to its A/AAAA addresses and
+     * rejected BEFORE the fetch if ANY resolved IP is private, loopback,
+     * link-local, or reserved (RFC-1918, `127.0.0.0/8`, `169.254.0.0/16` incl.
+     * the `169.254.169.254` cloud-metadata IP, `::1`, `fc00::/7`, `fe80::/10`,
+     * CGNAT `100.64.0.0/10`, …). Resolving ALL addresses defeats DNS-rebinding
+     * where a public name points at a metadata/internal IP. Deployments that
+     * legitimately need a specific internal host pass it in $allowedHosts to
+     * bypass the deny-list for that host only.
      *
      * @param string $url     Absolute URL (http/https/file/data).
      * @param array<string,string>|list<string> $headers  Optional request
@@ -300,9 +307,15 @@ final class ImageSource
      * @param array<string>|null $allowedSchemes  Enforced on the initial URL
      *               AND on every redirect target; null opts out of validation.
      * @param int $maxPixels  Decompression-bomb ceiling; see {@see self::MAX_PIXELS}.
+     * @param array<string>|null $allowedHosts  Hosts permitted to bypass the
+     *               private/reserved-IP deny-list (opt-in seam for trusted
+     *               internal endpoints), matched case-insensitively on every
+     *               hop. null (default) allow-lists nothing, so every private
+     *               host is blocked.
      * @throws \InvalidArgumentException  if the URL cannot be fetched, a header
      *                                    contains CR/LF, a redirect targets a
-     *                                    disallowed scheme, or the payload is
+     *                                    disallowed scheme, the host resolves to
+     *                                    a private/reserved IP, or the payload is
      *                                    not a supported image
      * @throws \RuntimeException          if ext-gd is not available
      */
@@ -311,9 +324,13 @@ final class ImageSource
         ?array $headers = null,
         ?array $allowedSchemes = ['http', 'https'],
         int $maxPixels = self::MAX_PIXELS,
+        ?array $allowedHosts = null,
     ): self {
         self::validateUrlScheme($url, $allowedSchemes);
-        return self::fromString(self::fetchUrlSync($url, $headers, $allowedSchemes), $maxPixels);
+        return self::fromString(
+            self::fetchUrlSync($url, $headers, $allowedSchemes, $allowedHosts),
+            $maxPixels,
+        );
     }
 
     /**
@@ -336,6 +353,223 @@ final class ImageSource
                 Lang::t('image_source.url_invalid_scheme', ['scheme' => $scheme, 'allowed' => implode(', ', $allowedSchemes)])
             );
         }
+    }
+
+    /**
+     * Cloud/link-local metadata endpoints that must never be reachable via a
+     * fetched URL — an SSRF here leaks IAM credentials. Rejected explicitly in
+     * addition to the range checks, since some PHP builds classify these
+     * inconsistently under FILTER_FLAG_NO_RES_RANGE.
+     */
+    private const METADATA_IPS = ['169.254.169.254', 'fd00:ec2::254'];
+
+    /**
+     * Test-only override for host → IP resolution.
+     *
+     * Lets the SSRF / DNS-rebinding guards be exercised deterministically
+     * without real DNS. Production code leaves this null and resolves via
+     * dns_get_record()/gethostbyname(). Receives the bracket-stripped,
+     * lower-cased host and returns a list of IP strings.
+     *
+     * @var (callable(string): list<string>)|null
+     * @internal
+     */
+    private static $hostResolver = null;
+
+    /**
+     * @internal Test seam ONLY — override host resolution so SSRF guards can be
+     *           verified without touching the network. Pass null to restore
+     *           real DNS resolution. Never call from production code.
+     */
+    public static function overrideHostResolver(?callable $resolver): void
+    {
+        self::$hostResolver = $resolver;
+    }
+
+    /**
+     * Reject a URL whose host resolves to a private, loopback, link-local, or
+     * reserved IP (SSRF / cloud-metadata defense).
+     *
+     * Only http(s) URLs carry a remote host worth guarding; other schemes
+     * (file://, data://) are governed by the scheme allow-list. The host is
+     * resolved to ALL of its A/AAAA addresses and rejected if ANY is
+     * non-public — this defeats DNS-rebinding where a public name resolves to
+     * `169.254.169.254` or an RFC-1918 address. A host named in $allowedHosts
+     * bypasses the check: the opt-in seam for deployments that must reach a
+     * specific internal host.
+     *
+     * @param array<string>|null $allowedHosts  Hosts permitted to bypass the
+     *              private-IP deny-list; matched case-insensitively against the
+     *              URL host. null allow-lists nothing.
+     * @throws \InvalidArgumentException  if the host resolves to a blocked
+     *              address or cannot be resolved at all
+     */
+    private static function guardHostNotPrivate(string $url, ?array $allowedHosts): void
+    {
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        if (!is_string($scheme)) {
+            return;
+        }
+        $scheme = strtolower($scheme);
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            return;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            // http(s) with no host is malformed; let the fetch surface it.
+            return;
+        }
+
+        $host = self::normalizeHost($host);
+
+        if ($allowedHosts !== null) {
+            foreach ($allowedHosts as $allowed) {
+                if (strcasecmp($host, self::normalizeHost($allowed)) === 0) {
+                    return;
+                }
+            }
+        }
+
+        $ips = self::resolveHost($host);
+        if ($ips === []) {
+            // Fail closed: a host we cannot resolve might rebind to an internal
+            // address between this check and the fetch.
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.url_host_unresolved', ['host' => $host]),
+            );
+        }
+
+        foreach ($ips as $ip) {
+            if (self::isPrivateOrReservedIp($ip)) {
+                throw new \InvalidArgumentException(
+                    Lang::t('image_source.url_host_blocked', ['host' => $host, 'ip' => $ip]),
+                );
+            }
+        }
+    }
+
+    /** Strip IPv6 brackets and lower-case a host for comparison/resolution. */
+    private static function normalizeHost(string $host): string
+    {
+        $host = trim($host);
+        if (str_starts_with($host, '[') && str_ends_with($host, ']')) {
+            $host = substr($host, 1, -1);
+        }
+
+        return strtolower($host);
+    }
+
+    /**
+     * Resolve a host to its list of IP addresses (both IPv4 and IPv6).
+     *
+     * A literal IP resolves to itself. A hostname is looked up via
+     * dns_get_record() for A and AAAA records, falling back to gethostbyname()
+     * for IPv4. The {@see self::$hostResolver} test seam, when set,
+     * short-circuits the DNS calls.
+     *
+     * @return list<string>
+     */
+    private static function resolveHost(string $host): array
+    {
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return [$host];
+        }
+
+        if (self::$hostResolver !== null) {
+            return array_values(array_unique((self::$hostResolver)($host)));
+        }
+
+        $ips = [];
+
+        $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+        if (is_array($records)) {
+            foreach ($records as $rec) {
+                if (isset($rec['ip'])) {
+                    $ips[] = $rec['ip'];
+                } elseif (isset($rec['ipv6'])) {
+                    $ips[] = $rec['ipv6'];
+                }
+            }
+        }
+
+        if ($ips === []) {
+            $v4 = gethostbyname($host); // returns the input unchanged on failure
+            if ($v4 !== $host && filter_var($v4, FILTER_VALIDATE_IP) !== false) {
+                $ips[] = $v4;
+            }
+        }
+
+        return array_values(array_unique($ips));
+    }
+
+    /**
+     * Whether an IP is private, loopback, link-local, or otherwise reserved
+     * (i.e. NOT a routable public address) and therefore an SSRF risk.
+     *
+     * Combines explicit range checks (so the security-critical ranges are
+     * covered regardless of PHP-version quirks in FILTER_FLAG_NO_RES_RANGE,
+     * and CGNAT `100.64.0.0/10` which that flag misses) with a final
+     * filter_var() catch-all. IPv4-mapped IPv6 (`::ffff:a.b.c.d`) is unwrapped
+     * and re-checked so it cannot smuggle a private IPv4 past the guard.
+     */
+    private static function isPrivateOrReservedIp(string $ip): bool
+    {
+        if (in_array($ip, self::METADATA_IPS, true)) {
+            return true;
+        }
+
+        $packed = @inet_pton($ip);
+        if ($packed === false) {
+            return true; // unparseable → treat as unsafe
+        }
+
+        if (strlen($packed) === 4) {
+            $b = array_values(unpack('C4', $packed));
+
+            // 0.0.0.0/8, 10/8, loopback 127/8, link-local 169.254/16,
+            // 172.16/12, 192.168/16, CGNAT 100.64/10, reserved 240/4+broadcast.
+            $blockedV4 = ($b[0] === 0)
+                || ($b[0] === 10)
+                || ($b[0] === 127)
+                || ($b[0] === 169 && $b[1] === 254)
+                || ($b[0] === 172 && $b[1] >= 16 && $b[1] <= 31)
+                || ($b[0] === 192 && $b[1] === 168)
+                || ($b[0] === 100 && $b[1] >= 64 && $b[1] <= 127)
+                || ($b[0] >= 240);
+            if ($blockedV4) {
+                return true;
+            }
+        }
+
+        if (strlen($packed) === 16) {
+            // :: unspecified and ::1 loopback.
+            if ($packed === str_repeat("\0", 16) || $packed === str_repeat("\0", 15) . "\1") {
+                return true;
+            }
+
+            $b0 = ord($packed[0]);
+            $b1 = ord($packed[1]);
+            // fc00::/7 unique-local (top 7 bits 1111110) and fe80::/10
+            // link-local (top 10 bits 1111111010).
+            if (($b0 & 0xFE) === 0xFC || ($b0 === 0xFE && ($b1 & 0xC0) === 0x80)) {
+                return true;
+            }
+
+            // IPv4-mapped IPv6 (::ffff:a.b.c.d): unwrap and re-check.
+            if (str_starts_with($packed, "\0\0\0\0\0\0\0\0\0\0\xFF\xFF")) {
+                $v4 = inet_ntop(substr($packed, 12));
+                if (is_string($v4) && self::isPrivateOrReservedIp($v4)) {
+                    return true;
+                }
+            }
+        }
+
+        return filter_var(
+            $ip,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
+        ) === false;
     }
 
     /**
@@ -408,12 +642,20 @@ final class ImageSource
      *
      * @param array<string,string>|list<string>|null $headers
      * @param array<string>|null $allowedSchemes  Re-validated on every hop.
+     * @param array<string>|null $allowedHosts    Bypass the private-IP deny-list
+     *                                    for these hosts; re-checked on every hop.
      * @throws \InvalidArgumentException  if the fetch fails, a redirect targets
-     *                                    a disallowed scheme, the redirect chain
-     *                                    is too long, or the response is empty
+     *                                    a disallowed scheme, the host resolves
+     *                                    to a private/reserved IP, the redirect
+     *                                    chain is too long, or the response is
+     *                                    empty
      */
-    private static function fetchUrlSync(string $url, ?array $headers, ?array $allowedSchemes = null): string
-    {
+    private static function fetchUrlSync(
+        string $url,
+        ?array $headers,
+        ?array $allowedSchemes = null,
+        ?array $allowedHosts = null,
+    ): string {
         $headerLines = ($headers !== null && $headers !== []) ? self::formatHeaders($headers) : null;
         $current     = $url;
 
@@ -421,6 +663,13 @@ final class ImageSource
             // Re-validate the scheme on every hop — the initial URL and each
             // redirect target — so a 3xx cannot smuggle a disallowed scheme in.
             self::validateUrlScheme($current, $allowedSchemes);
+
+            // SSRF / cloud-metadata guard: resolve the host and reject any hop
+            // whose host maps to a private, loopback, link-local, or reserved
+            // address — on the initial URL AND every redirect target — unless
+            // it is explicitly allow-listed. Runs BEFORE file_get_contents(),
+            // so a 3xx to http://169.254.169.254/ is refused, not requested.
+            self::guardHostNotPrivate($current, $allowedHosts);
 
             $http = [
                 'method'          => 'GET',
