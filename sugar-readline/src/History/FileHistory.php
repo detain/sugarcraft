@@ -64,8 +64,9 @@ final class FileHistory extends InMemoryHistory
 
     /**
      * Append $line to the history file and notify the parent to update its
-     * in-memory state.  Uses atomic write (read existing + write temp + rename)
-     * to prevent corruption on crash and ensures 0600 permissions.
+     * in-memory state. Persistence goes through appendLinesAtomically(), which
+     * takes an in-place LOCK_EX append fast-path and falls back to a secure
+     * temp + rename rewrite, keeping 0600 permissions either way.
      *
      * In deferred mode the entry is only queued; see flush().
      */
@@ -116,25 +117,70 @@ final class FileHistory extends InMemoryHistory
     }
 
     /**
-     * Atomic append: copy existing content plus $lines into a temp file, then
-     * rename over the target. Prevents corruption if the process crashes
-     * mid-write and keeps 0600 permissions.
+     * Append $lines to the history file, keeping 0600 permissions.
      *
-     * The temp file is created with tempnam() (unpredictable random name) and
-     * chmod 0600 BEFORE any history content is written. History can contain
-     * sensitive shell commands, so this closes two holes a predictable name
-     * (.history.tmp.<pid>) left open: (1) a world-readable window between
-     * create and the post-rename chmod, and (2) a symlink pre-plant — an
-     * attacker with write access to $this->tempDir (which defaults to the
-     * history file's own directory) could plant a symlink at the predictable
-     * path so fopen(...,'w') would follow it and leak/corrupt an arbitrary
-     * target. tempnam() creates a fresh regular file with a name the attacker
-     * cannot guess and never opens through an existing symlink.
+     * Fast path: when the file already ends with a newline (or is empty), the
+     * entries are appended in place under LOCK_EX — O(appended) rather than the
+     * O(file) read-and-rewrite the fallback pays on every push(). The trailing
+     * byte is inspected under the SAME exclusive lock as the write, so a
+     * concurrent appender cannot slip a non-terminated tail past the check.
+     *
+     * Fallback (also the create-from-absent path): a secure temp + rename
+     * rewrite that copies existing content, normalizes a missing trailing
+     * newline, then renames over the target. The temp file is created with
+     * tempnam() (unpredictable random name) and chmod 0600 BEFORE any history
+     * content is written — history can contain sensitive shell commands, so
+     * this closes two holes a predictable name (.history.tmp.<pid>) left open:
+     * (1) a world-readable window between create and the post-rename chmod, and
+     * (2) a symlink pre-plant — an attacker with write access to $this->tempDir
+     * (which defaults to the history file's own directory) could plant a symlink
+     * at the predictable path so fopen(...,'w') would follow it and leak/corrupt
+     * an arbitrary target. tempnam() creates a fresh regular file with a name
+     * the attacker cannot guess and never opens through an existing symlink.
+     *
+     * Both paths produce byte-identical output for a given prior file state, so
+     * the fast path is a pure performance optimization over the rewrite.
      *
      * @param list<string> $lines
      */
     private function appendLinesAtomically(array $lines): void
     {
+        if ($lines === []) {
+            return;
+        }
+
+        // Fast path: append in place when the on-disk tail is newline-terminated.
+        // The file already exists at 0600 (constructor touch + clear()/rewrite),
+        // so an in-place append preserves those perms; re-assert defensively in
+        // case it was re-created since construction.
+        if (file_exists($this->filePath)) {
+            $fp = fopen($this->filePath, 'a+');
+            if ($fp !== false) {
+                flock($fp, LOCK_EX);
+                $stat = fstat($fp);
+                $size = $stat !== false ? (int) ($stat['size'] ?? 0) : 0;
+                $endsWithNewline = true;
+                if ($size > 0) {
+                    fseek($fp, -1, SEEK_END);
+                    $endsWithNewline = fread($fp, 1) === "\n";
+                }
+                if ($endsWithNewline) {
+                    foreach ($lines as $line) {
+                        fwrite($fp, $line . "\n");
+                    }
+                    fflush($fp);
+                    flock($fp, LOCK_UN);
+                    fclose($fp);
+                    chmod($this->filePath, 0600);
+                    return;
+                }
+                // Missing trailing newline — release and fall through to the
+                // normalizing rewrite below.
+                flock($fp, LOCK_UN);
+                fclose($fp);
+            }
+        }
+
         $tempFile = @tempnam($this->tempDir, 'hist');
         if ($tempFile === false) {
             return;
@@ -202,18 +248,42 @@ final class FileHistory extends InMemoryHistory
 
         // File is oldest→newest; parent::push() prepends (newest-first), so
         // iterating in normal (oldest→newest) order ends up with newest at [0].
-        // Apply same dedup guard as push() to skip entries already in memory.
+        //
+        // Apply the same dedup guard as push(), but back the membership test
+        // with an O(1) hash set instead of inMemoryContains()'s in_array()
+        // scan — otherwise load() is O(n²) in the number of file lines. The set
+        // must mirror $this->history EXACTLY, including maxHistory eviction:
+        // when a push overflows the cap, parent::push() drops the oldest (tail)
+        // entry, which must also leave the set so a later duplicate of an
+        // evicted line is re-admitted precisely as an in_array() over the live
+        // (post-eviction) history would be.
+        $seen = [];
         foreach ($lines as $entry) {
-            if ($this->inMemoryContains($entry)) {
+            if (isset($seen[$entry])) {
                 continue;
             }
+            $sizeBefore = \count($this->history);
+            // $entry is guaranteed absent from history here (not in $seen), so
+            // parent::push() always prepends: the count grows by one unless the
+            // cap evicted the previous tail, in which case it stays equal.
+            $tailBefore = $sizeBefore > 0 ? $this->history[$sizeBefore - 1] : null;
             parent::push($entry);
+            $seen[$entry] = true;
+            if (\count($this->history) === $sizeBefore && $tailBefore !== null) {
+                unset($seen[$tailBefore]);
+            }
         }
     }
 
     /**
-     * Peek at the last line already written to the history file without
-     * loading the full file.
+     * Peek at the last non-empty line already written to the history file.
+     *
+     * Reads the file back-to-front in bounded chunks and stops as soon as the
+     * final content line is fully in the buffer, so the per-push dup guard is
+     * O(tail) rather than the O(file) full scan it used to run. Matches the old
+     * scan semantics: trailing blank/newline-only lines are ignored and the
+     * result is the last line with content (or null when the file is
+     * missing/empty/all-blank).
      */
     private function peekLastOnDisk(): ?string
     {
@@ -226,17 +296,44 @@ final class FileHistory extends InMemoryHistory
             return null;
         }
         flock($fp, LOCK_SH);
-        $last = null;
-        while (($line = fgets($fp)) !== false) {
-            $trimmed = rtrim($line, "\r\n");
-            if ($trimmed !== '') {
-                $last = $trimmed;
+        $stat = fstat($fp);
+        $size = $stat !== false ? (int) ($stat['size'] ?? 0) : 0;
+
+        $chunkSize = 4096;
+        $tail = '';
+        $pos = $size;
+        $result = null;
+        while ($pos > 0) {
+            $read = (int) min($chunkSize, $pos);
+            $pos -= $read;
+            fseek($fp, $pos, SEEK_SET);
+            $tail = fread($fp, $read) . $tail;
+            // Strip trailing CR/LF so a file ending in one or more newlines does
+            // not yield an empty last line — mirrors the blank-skipping scan.
+            $trimmedTail = rtrim($tail, "\r\n");
+            if ($trimmedTail === '') {
+                // Only blank/newline bytes seen so far — keep reading backwards.
+                continue;
             }
+            $nlPos = strrpos($trimmedTail, "\n");
+            if ($nlPos !== false) {
+                // Final newline delimits the last content line entirely in-buffer.
+                $result = substr($trimmedTail, $nlPos + 1);
+                break;
+            }
+            if ($pos === 0) {
+                // Reached the start of the file: the whole trimmed tail is the
+                // single (last) content line.
+                $result = $trimmedTail;
+                break;
+            }
+            // No delimiter yet and more file remains: the last line is longer
+            // than the buffer so far — read another chunk further back.
         }
         flock($fp, LOCK_UN);
         fclose($fp);
 
-        return $last;
+        return ($result === null || $result === '') ? null : $result;
     }
 
     /**
