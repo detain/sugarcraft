@@ -345,4 +345,83 @@ final class VeilStackTest extends TestCase
         $this->assertStringContainsString('.', $frame2, 'Frame 2 should still contain background (full frame)');
         $this->assertGreaterThan(35, \strlen($frame2));
     }
+
+    // ─── Overlap / topmost resolution ───────────────────────────────────────────
+
+    /**
+     * The whole point of z-index is overlap resolution: when two veils occupy the
+     * same cell, the one with the higher z-index (composited last, per sorted())
+     * must win. Drive the composite in sorted() order and assert the topmost
+     * glyph is what survives at the shared cell.
+     */
+    public function testStackCompositeTopmostVeilWinsOverlap(): void
+    {
+        $bg = str_repeat('.', 10) . "\n" . str_repeat('.', 10);
+
+        $bottom = Veil::new()->withZIndex(0); // glyph 'B'
+        $top    = Veil::new()->withZIndex(5); // glyph 'T'
+
+        // Added out of z-order; sorted() must return [bottom(0), top(5)].
+        $stack  = VeilStack::new()->add($top)->add($bottom);
+        $sorted = $stack->sorted();
+        $this->assertSame(0, $sorted[0]->zIndex());
+        $this->assertSame(5, $sorted[1]->zIndex());
+
+        // Composite each veil's glyph at the SAME cell (TOP, LEFT) in sorted order.
+        $glyphs = ['B', 'T'];
+        $result = $bg;
+        foreach ($sorted as $i => $veil) {
+            $result = $veil->withoutSession()->composite($glyphs[$i], $result, Position::TOP, Position::LEFT);
+        }
+
+        $firstLine = Veil::new()->splitLines($result)[0];
+        $this->assertSame('T', \mb_substr($firstLine, 0, 1), 'Highest z-index veil wins the shared cell');
+        $this->assertStringNotContainsString('B', $result, 'Overwritten lower-z glyph is gone');
+    }
+
+    /**
+     * add() returns a new stack whose sorted cache is invalidated, so a newly
+     * added higher-z veil resolves as topmost. The source stack keeps its own
+     * (already primed) cache unchanged — immutability holds both ways.
+     */
+    public function testSortedCacheInvalidatedAfterAdd(): void
+    {
+        $stack = VeilStack::new()
+            ->add(Veil::new()->withZIndex(1))
+            ->add(Veil::new()->withZIndex(2));
+
+        // Prime the sorted cache on the source stack.
+        $this->assertSame(2, $stack->sorted()[1]->zIndex());
+
+        $bigger = $stack->add(Veil::new()->withZIndex(9));
+        $sorted = $bigger->sorted();
+        $this->assertCount(3, $sorted);
+        $this->assertSame(9, $sorted[2]->zIndex(), 'New highest-z veil is topmost after cache rebuild');
+
+        // Source stack's cache is untouched.
+        $this->assertSame(2, $stack->sorted()[1]->zIndex());
+        $this->assertCount(2, $stack);
+    }
+
+    /**
+     * Removing the current topmost veil promotes the next-highest to topmost —
+     * overlap resolution follows the surviving veils.
+     */
+    public function testRemoveWhereReassignsTopmost(): void
+    {
+        $low  = Veil::new()->withZIndex(1);
+        $mid  = Veil::new()->withZIndex(5);
+        $high = Veil::new()->withZIndex(9);
+
+        $stack = VeilStack::new()->add($low)->add($high)->add($mid);
+        $this->assertSame(9, $stack->maxZIndex());
+
+        $trimmed = $stack->removeWhere(fn(Veil $v): bool => $v->zIndex() === 9);
+        $this->assertSame(5, $trimmed->maxZIndex());
+        $sorted = $trimmed->sorted();
+        $this->assertSame(5, $sorted[$trimmed->count() - 1]->zIndex(), 'Next-highest veil is topmost after removal');
+
+        // Original stack still reports the removed veil (immutability).
+        $this->assertSame(9, $stack->maxZIndex());
+    }
 }
