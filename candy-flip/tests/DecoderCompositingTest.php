@@ -219,6 +219,179 @@ final class DecoderCompositingTest extends TestCase
         }
     }
 
+    /**
+     * Pixel-level regression proving DISPOSAL_PREVIOUS (method 3) genuinely
+     * restores the canvas to its pre-frame state — the behaviour the
+     * {@see Frame} docblock now documents as supported (rather than "treated
+     * as NONE").
+     *
+     * A 3-frame 4x4 GIF (shared global colour table) is decoded:
+     *   frame 0: solid red,                    DISPOSAL_NONE
+     *   frame 1: green 2x2 top-left / transp.,  DISPOSAL_PREVIOUS
+     *   frame 2: blue 2x2 bottom-right / transp., DISPOSAL_NONE
+     * After frame 1's DISPOSAL_PREVIOUS the canvas must revert to frame 0's
+     * all-red state before frame 2 paints. So frame 2's top-left cell must be
+     * RED (frame 0 restored), NOT green (frame 1 leaking through). Were disposal
+     * 3 treated as keep/none, the top-left would remain green — this test fails.
+     */
+    public function testDisposalPreviousRestoresPriorFramePixels(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $gif = $this->buildDisposalPreviousGif();
+        $this->tmpPath = sys_get_temp_dir() . '/disp3-pixel-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $gif);
+
+        $frames = Decoder::decode($this->tmpPath, cellsW: 4, cellsH: 4);
+        $this->assertCount(3, $frames, 'DISPOSAL_PREVIOUS fixture must decode to 3 frames');
+        $this->assertSame(Frame::DISPOSAL_PREVIOUS, $frames[1]->disposal,
+            'Frame 1 must carry DISPOSAL_PREVIOUS (3) from its GCE');
+
+        // Sanity: frame 1 renders green in its top-left cell.
+        $this->assertColorApprox([0, 255, 0], $frames[1]->cells[0][0], 'frame 1 top-left = green');
+
+        // The proof: frame 2's top-left reverted to frame 0's red (restore-to-
+        // previous), and its bottom-right shows the freshly-painted blue.
+        $this->assertColorApprox([255, 0, 0], $frames[2]->cells[0][0], 'frame 2 top-left restored to red');
+        $this->assertColorApprox([0, 0, 255], $frames[2]->cells[3][3], 'frame 2 bottom-right = blue');
+    }
+
+    /**
+     * @param array{0:int,1:int,2:int}      $expected
+     * @param array{0:int,1:int,2:int}|null $actual
+     */
+    private function assertColorApprox(array $expected, ?array $actual, string $msg): void
+    {
+        $this->assertNotNull($actual, $msg . ' (cell must not be transparent)');
+        $this->assertEqualsWithDelta($expected[0], $actual[0], 8, $msg . ' [r]');
+        $this->assertEqualsWithDelta($expected[1], $actual[1], 8, $msg . ' [g]');
+        $this->assertEqualsWithDelta($expected[2], $actual[2], 8, $msg . ' [b]');
+    }
+
+    /**
+     * Assemble a valid 3-frame 4x4 GIF89a exercising DISPOSAL_PREVIOUS.
+     *
+     * All frames share one global colour table (idx0=black/transparent,
+     * idx1=red, idx2=green, idx3=blue) so no per-frame local table is needed
+     * — GD's LZW data is copied verbatim per frame and the shared palette
+     * keeps every frame's indices consistent.
+     */
+    private function buildDisposalPreviousGif(): string
+    {
+        // Frame 0: solid red, opaque.
+        $f0 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f0, 0, 0, 3, 3, imagecolorexact($f0, 255, 0, 0));
+        $g0 = $this->gdGifBytes($f0);
+
+        // Frame 1: green 2x2 top-left, rest idx0 (transparent).
+        $f1 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f1, 0, 0, 3, 3, imagecolorexact($f1, 0, 0, 0));
+        imagefilledrectangle($f1, 0, 0, 1, 1, imagecolorexact($f1, 0, 255, 0));
+        $g1 = $this->gdGifBytes($f1);
+
+        // Frame 2: blue 2x2 bottom-right, rest idx0 (transparent).
+        $f2 = $this->newSharedPaletteImage();
+        imagefilledrectangle($f2, 0, 0, 3, 3, imagecolorexact($f2, 0, 0, 0));
+        imagefilledrectangle($f2, 2, 2, 3, 3, imagecolorexact($f2, 0, 0, 255));
+        $g2 = $this->gdGifBytes($f2);
+
+        // Shared global colour table + logical screen descriptor (GCT flag set,
+        // size exp = 1 → 4 entries).
+        $gct = "\x00\x00\x00" . "\xFF\x00\x00" . "\x00\xFF\x00" . "\x00\x00\xFF";
+        $header = "GIF89a" . "\x04\x00" . "\x04\x00" . "\x81" . "\x00" . "\x00" . $gct;
+
+        return $header
+            . $this->composeFrameBlock($g0, Frame::DISPOSAL_NONE, false, 0)
+            . $this->composeFrameBlock($g1, Frame::DISPOSAL_PREVIOUS, true, 0)
+            . $this->composeFrameBlock($g2, Frame::DISPOSAL_NONE, true, 0)
+            . "\x3B";
+    }
+
+    /** A 4x4 palette image with the canonical black/red/green/blue table. */
+    private function newSharedPaletteImage(): \GdImage
+    {
+        $im = imagecreate(4, 4);
+        imagecolorallocate($im, 0, 0, 0);     // idx0
+        imagecolorallocate($im, 255, 0, 0);   // idx1
+        imagecolorallocate($im, 0, 255, 0);   // idx2
+        imagecolorallocate($im, 0, 0, 255);   // idx3
+        return $im;
+    }
+
+    private function gdGifBytes(\GdImage $im): string
+    {
+        ob_start();
+        imagegif($im);
+        $g = (string) ob_get_clean();
+        imagedestroy($im);
+        return $g;
+    }
+
+    /**
+     * Build one frame block (GCE + Image Descriptor + LZW) for the combined
+     * GIF, reusing GD's Image Descriptor + LZW data but clearing the local
+     * colour-table flag so the shared global table applies.
+     */
+    private function composeFrameBlock(string $gd, int $disposal, bool $transparent, int $transparentIndex): string
+    {
+        [$id10, $lzw] = $this->extractDescriptorAndLzw($gd);
+        // Clear the descriptor's packed byte: no local colour table, no interlace.
+        $id = substr($id10, 0, 9) . "\x00";
+        $gce = "\x21\xF9\x04"
+            . chr((($disposal & 0x07) << 2) | ($transparent ? 0x01 : 0x00))
+            . "\x01\x00" // delay = 1 centisecond
+            . chr($transparent ? $transparentIndex : 0)
+            . "\x00";    // GCE block terminator
+        return $gce . $id . $lzw;
+    }
+
+    /**
+     * Pull the 10-byte Image Descriptor and the LZW data (min-code byte +
+     * sub-blocks + 0x00 terminator, excluding the trailing 0x3B) out of a
+     * GD-produced single-frame GIF.
+     *
+     * @return array{0:string,1:string}
+     */
+    private function extractDescriptorAndLzw(string $g): array
+    {
+        $packed = ord($g[10]);
+        $gctExp = $packed & 0x07;
+        $gctBytes = ($packed & 0x80) ? ((1 << ($gctExp + 1)) * 3) : 0;
+        $i = 13 + $gctBytes;
+        $len = strlen($g);
+        while ($i < $len) {
+            $b = ord($g[$i]);
+            if ($b === 0x3B) {
+                break;
+            }
+            if ($b === 0x21) {
+                if (ord($g[$i + 1]) === 0xF9) {
+                    $i += 8; // fixed-size GCE
+                } else {
+                    $j = $i + 2;
+                    while ($j < $len) {
+                        $sl = ord($g[$j]);
+                        $j++;
+                        if ($sl === 0) {
+                            break;
+                        }
+                        $j += $sl;
+                    }
+                    $i = $j;
+                }
+                continue;
+            }
+            if ($b === 0x2C) {
+                $id10 = substr($g, $i, 10);
+                $lzw = substr($g, $i + 10, ($len - 1) - ($i + 10));
+                return [$id10, $lzw];
+            }
+            $i++;
+        }
+        throw new \RuntimeException('no Image Descriptor in GD GIF');
+    }
+
     // -------------------------------------------------------------------------
 
     /**

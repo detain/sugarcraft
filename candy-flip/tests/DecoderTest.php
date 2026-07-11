@@ -243,4 +243,44 @@ final class DecoderTest extends TestCase
             unlink($path);
         }
     }
+
+    /**
+     * Regression: a GIF truncated in the middle of a Graphic Control
+     * Extension must degrade gracefully. The GCE delay bytes were read with
+     * an unguarded ord($bytes[$i + 4]) / ord($bytes[$i + 5]) while the
+     * neighbouring reads used `?? ''`; on a mid-GCE truncation the unguarded
+     * pair raised "Uninitialized string offset" warnings (a hard failure
+     * under failOnWarning) instead of failing cleanly. Every GCE byte read
+     * is now guarded uniformly.
+     */
+    public function testDecodeHandlesTruncatedGraphicControlExtension(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // Valid GIF89a header + logical screen descriptor (no GCT), then a
+        // Graphic Control Extension cut off right after its block-size byte —
+        // bytes[$i+4], [$i+5] and [$i+6] are all past EOF.
+        $buf = "GIF89a"
+             . pack('v', 4)    // width = 4
+             . pack('v', 4)    // height = 4
+             . "\x00"          // packed: no global color table
+             . "\x00"          // bg index
+             . "\x00"          // pixel aspect ratio
+             . "\x21\xF9\x04";  // GCE introducer + label + block size, then EOF
+        $path = sys_get_temp_dir() . '/trunc-gce-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+
+        try {
+            // No @ suppression: with an unguarded ord() the truncated GCE would
+            // raise an "Uninitialized string offset" warning, which the suite's
+            // failOnWarning turns into a test failure. The guarded reads decode
+            // cleanly, yielding an empty frame list rather than a crash.
+            $frames = Decoder::decode($path, 4, 4);
+            $this->assertIsArray($frames);
+            $this->assertSame([], $frames, 'a GIF truncated mid-GCE yields no frames');
+        } finally {
+            @unlink($path);
+        }
+    }
 }
