@@ -15,8 +15,13 @@ use SugarCraft\Stash\Lang;
  */
 final class Git implements GitDriver
 {
-    public function __construct(public readonly string $cwd)
-    {}
+    /** Wall-clock ceiling (seconds) for a single git invocation before it is killed. */
+    public const DEFAULT_TIMEOUT = 30.0;
+
+    public function __construct(
+        public readonly string $cwd,
+        public readonly float $timeout = self::DEFAULT_TIMEOUT,
+    ) {}
 
     public function status(): array
     {
@@ -65,19 +70,8 @@ final class Git implements GitDriver
         if ($cwd === '' || !is_dir($cwd)) {
             return false;
         }
-        $proc = proc_open(
-            ['git', '-C', $cwd, 'rev-parse', '--absolute-git-dir'],
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        if (!is_resource($proc)) {
-            return false;
-        }
-        $gitDir = trim(stream_get_contents($pipes[1]) ?: '');
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $exit = proc_close($proc);
-        return $exit === 0 && $gitDir !== '';
+        $r = Process::run(['git', '-C', $cwd, 'rev-parse', '--absolute-git-dir'], null, self::DEFAULT_TIMEOUT);
+        return $r['exit'] === 0 && trim($r['stdout']) !== '';
     }
 
     public function branches(): array
@@ -249,9 +243,9 @@ final class Git implements GitDriver
 
     public function worktreeAdd(string $path, string $branch): void
     {
-        $this->guardRef($path);
+        $resolved = $this->guardWorktreePath($path);
         $this->guardRef($branch);
-        $this->run(['worktree', 'add', $path, $branch]);
+        $this->run(['worktree', 'add', $resolved, $branch]);
     }
 
     public function worktreeRemove(string $path): void
@@ -282,49 +276,70 @@ final class Git implements GitDriver
         }
     }
 
+    /**
+     * Validate + canonicalize a worktree destination path.
+     *
+     * The worktree path is attacker-influenceable — it is collected keystroke
+     * by keystroke in the TUI — so the leading-dash option-injection guard
+     * alone is not enough. Reject any `..` traversal segment outright, then
+     * anchor a relative path to the realpath'd repository root so a
+     * CWD-relative or `foo/../../etc`-style value cannot plant a worktree
+     * outside the intended tree. Returns the absolute path handed to git.
+     *
+     * @throws \InvalidArgumentException
+     */
+    private function guardWorktreePath(string $path): string
+    {
+        $this->guardRef($path);
+        if ($path === '') {
+            throw new \InvalidArgumentException(Lang::t('git.unsafe_path', ['path' => $path]));
+        }
+        foreach (preg_split('#[\\\\/]#', $path) as $segment) {
+            if ($segment === '..') {
+                throw new \InvalidArgumentException(Lang::t('git.unsafe_path', ['path' => $path]));
+            }
+        }
+        $isAbsolute = str_starts_with($path, '/')
+            || (bool) preg_match('#^[A-Za-z]:[\\\\/]#', $path); // Windows drive-letter root
+        if ($isAbsolute) {
+            return $path;
+        }
+        $base = realpath($this->cwd);
+        if ($base === false) {
+            throw new \InvalidArgumentException(Lang::t('git.unsafe_path', ['path' => $path]));
+        }
+        return $base . '/' . $path;
+    }
+
     /** @return list<string> */
     private function run(array $args): array
     {
-        $cmd = array_merge(['git', '-C', $this->cwd], $args);
-        $proc = proc_open(
-            $cmd,
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        if (!is_resource($proc)) {
-            throw new \RuntimeException(Lang::t('git.spawn_failed'));
+        $r = Process::run(array_merge(['git', '-C', $this->cwd], $args), null, $this->timeout);
+        $this->assertNotTimedOut($r);
+        if ($r['exit'] !== 0) {
+            throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($r['stderr'])]));
         }
-        $stdout = stream_get_contents($pipes[1]) ?: '';
-        $stderr = stream_get_contents($pipes[2]) ?: '';
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $exit = proc_close($proc);
-        if ($exit !== 0) {
-            throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($stderr)]));
-        }
-        return explode("\n", rtrim($stdout, "\n"));
+        return explode("\n", rtrim($r['stdout'], "\n"));
     }
 
     /** Like run() but passes $input via stdin and does not capture stdout. */
     private function runPatch(string $path, string $hunk, array $args): void
     {
-        $cmd = array_merge(['git', '-C', $this->cwd], $args);
-        $proc = proc_open(
-            $cmd,
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-        );
-        if (!is_resource($proc)) {
-            throw new \RuntimeException(Lang::t('git.spawn_failed'));
+        $r = Process::run(array_merge(['git', '-C', $this->cwd], $args), $hunk, $this->timeout);
+        $this->assertNotTimedOut($r);
+        if ($r['exit'] !== 0) {
+            throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($r['stderr'])]));
         }
-        fwrite($pipes[0], $hunk);
-        fclose($pipes[0]);
-        $stderr = stream_get_contents($pipes[2]) ?: '';
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $exit = proc_close($proc);
-        if ($exit !== 0) {
-            throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($stderr)]));
+    }
+
+    /**
+     * @param array{stdout: string, stderr: string, exit: int, timedOut: bool} $result
+     * @throws \RuntimeException
+     */
+    private function assertNotTimedOut(array $result): void
+    {
+        if ($result['timedOut']) {
+            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => (string) $this->timeout]));
         }
     }
 }
