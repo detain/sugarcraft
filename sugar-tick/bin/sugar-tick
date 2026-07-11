@@ -61,7 +61,8 @@ if ($cmd === 'push') {
 
 if ($cmd === 'export') {
     $format = $argv[2] ?? null;
-    $days = isset($argv[3]) ? max(1, (int)$argv[3]) : 7;
+    // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
+    $days = isset($argv[3]) ? Store::clampRangeDays((int)$argv[3]) : 7;
 
     if ($format === null || !in_array($format, ['csv', 'json', 'ics'], true)) {
         fwrite(STDERR, Lang::t('cli.export_invalid_format') . "\n");
@@ -83,7 +84,8 @@ if ($cmd === 'export') {
 }
 
 if ($cmd === 'gaps') {
-    $days = isset($argv[2]) ? max(1, (int)$argv[2]) : 7;
+    // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
+    $days = isset($argv[2]) ? Store::clampRangeDays((int)$argv[2]) : 7;
 
     $endDay = new \DateTimeImmutable('today');
     $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
@@ -114,7 +116,14 @@ if ($cmd === 'backup') {
     $dataDir = $store->dir;
     $backupDir = $dataDir . '-backups';
     $autoBackup = new AutoBackup($backupDir, [$dataDir]);
-    $count = $autoBackup->rotate(30);
+    try {
+        $count = $autoBackup->rotate(30);
+    } catch (\RuntimeException $e) {
+        // rotate() now throws on mkdir/copy failure rather than losing data
+        // silently — surface it to the user with a non-zero exit.
+        fwrite(STDERR, $e->getMessage() . "\n");
+        exit(1);
+    }
     if ($count > 0) {
         fwrite(STDOUT, Lang::t('cli.backup_done', ['count' => $count]) . "\n");
     } else {
