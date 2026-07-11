@@ -96,4 +96,42 @@ final class RegionTest extends TestCase
         $this->assertFalse($region->contains(1, 0));
         $this->assertFalse($region->contains(0, 1));
     }
+
+    public function testNegativeWidthThrows(): void
+    {
+        // Regression: a negative width used to be silently accepted and then
+        // quietly produced no fill/copy output, masking the caller's bug.
+        $this->expectException(\InvalidArgumentException::class);
+
+        Region::new(Position::new(0, 0), -1, 5);
+    }
+
+    public function testNegativeHeightThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new Region(Position::new(2, 2), 5, -3);
+    }
+
+    public function testNegativeOriginStillAllowed(): void
+    {
+        // Only dimensions are guarded — a negative origin (used by
+        // Buffer::withRegion for clipped blits) remains valid.
+        $region = new Region(Position::new(-1, -1), 2, 2);
+
+        $this->assertSame(-1, $region->origin()->col);
+        $this->assertSame(2, $region->width());
+    }
+
+    public function testZeroAreaRegionIsAllowed(): void
+    {
+        // Zero-area (0×N / N×0) is an explicit, documented no-op — allowed.
+        $zeroWidth = Region::new(Position::new(0, 0), 0, 5);
+        $this->assertSame(0, $zeroWidth->width());
+        $this->assertSame(5, $zeroWidth->height());
+
+        $zeroHeight = new Region(Position::new(0, 0), 5, 0);
+        $this->assertSame(5, $zeroHeight->width());
+        $this->assertSame(0, $zeroHeight->height());
+    }
 }

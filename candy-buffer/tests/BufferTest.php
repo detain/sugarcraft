@@ -933,4 +933,19 @@ final class BufferTest extends TestCase
         // ID is lost (reconstruction omits it)
         $this->assertSame('', $cell->link()->id());
     }
+
+    public function testFillWithZeroAreaRegionIsNoOp(): void
+    {
+        // Zero-area regions are explicitly allowed and must leave the
+        // buffer untouched (the fill loop runs zero iterations).
+        $buf = Buffer::new(3, 2);
+        $before = $buf->toAnsi();
+
+        $filled = $buf->fill(new Region(Position::new(0, 0), 0, 2), Cell::new('X'));
+        $this->assertSame($before, $filled->toAnsi());
+        $this->assertSame(' ', $filled->cellAt(0, 0)->rune());
+
+        $filled2 = $buf->fill(new Region(Position::new(0, 0), 3, 0), Cell::new('X'));
+        $this->assertSame($before, $filled2->toAnsi());
+    }
 }
