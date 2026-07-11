@@ -14,10 +14,13 @@ use PHPUnit\Framework\TestCase;
 final class FileHistoryTest extends TestCase
 {
     private string $tmpPath;
+    private string $baseDir;
 
     protected function setUp(): void
     {
         $this->tmpPath = \sys_get_temp_dir() . '/hermit_history_' . \uniqid() . '.jsonl';
+        $this->baseDir = \sys_get_temp_dir() . '/hermit_base_' . \uniqid();
+        \mkdir($this->baseDir, 0700, true);
     }
 
     protected function tearDown(): void
@@ -25,6 +28,12 @@ final class FileHistoryTest extends TestCase
         if (\is_file($this->tmpPath)) {
             \unlink($this->tmpPath);
         }
+        foreach (\glob($this->baseDir . '/*') ?: [] as $f) {
+            @\unlink($f);
+        }
+        @\rmdir($this->baseDir);
+        // Clean up an escape artifact in the parent, in case confinement is bypassed.
+        @\unlink(\dirname($this->baseDir) . '/hermit_evil.jsonl');
     }
 
     public function testAppendStoresItem(): void
@@ -108,6 +117,36 @@ final class FileHistoryTest extends TestCase
 
         $this->assertSame([], $first);
         $this->assertSame([], $second);
+    }
+
+    public function testBaseDirConfinementRejectsTraversalEscape(): void
+    {
+        // A '..' traversal that resolves outside the base dir must be rejected at
+        // construction. Revert the confinement check and this escape is allowed —
+        // the constructor would silently accept a path that append() writes into
+        // the parent directory, outside the intended base.
+        $this->expectException(\InvalidArgumentException::class);
+        new FileHistory($this->baseDir . '/../hermit_evil.jsonl', $this->baseDir);
+    }
+
+    public function testBaseDirConfinementRejectsAbsoluteOutsideBase(): void
+    {
+        // An absolute path pointing entirely outside the base is rejected too.
+        $this->expectException(\InvalidArgumentException::class);
+        new FileHistory('/etc/hermit_evil.jsonl', $this->baseDir);
+    }
+
+    public function testBaseDirConfinementAllowsInBasePath(): void
+    {
+        // A legitimate path inside the base dir is accepted and works end to end.
+        $history = new FileHistory($this->baseDir . '/hist.jsonl', $this->baseDir);
+        $history->append(new FilteredItem(1, 'apple'));
+
+        $items = $history->all();
+        $this->assertCount(1, $items);
+        $this->assertSame('apple', $items[0]->value());
+        // The resolved path lives inside the base directory.
+        $this->assertStringStartsWith(\realpath($this->baseDir), $history->path());
     }
 
     public function testMultipleAppendsPersist(): void
