@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Forms;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -94,20 +95,20 @@ final class Theme
     /** Dracula palette — dark magenta / cyan / green. */
     public static function dracula(): self
     {
-        $pink  = Color::hex('#ff79c6');
-        $purp  = Color::hex('#bd93f9');
-        $cyan  = Color::hex('#8be9fd');
-        $green = Color::hex('#50fa7b');
-        $com   = Color::hex('#6272a4');
+        $pink  = Color::hex(Palettes::DRACULA['pink']);
+        $purp  = Color::hex(Palettes::DRACULA['purple']);
+        $cyan  = Color::hex(Palettes::DRACULA['cyan']);
+        $green = Color::hex(Palettes::DRACULA['green']);
+        $com   = Color::hex(Palettes::DRACULA['comment']);
         return new self(
             title:          Style::new()->bold()->foreground($pink),
             description:    Style::new()->foreground($com),
             focusedTitle:   Style::new()->bold()->foreground($purp),
             blurredTitle:   Style::new()->foreground($com),
-            error:          Style::new()->bold()->foreground(Color::hex('#ff5555')),
-            errorSummary:   Style::new()->bold()->foreground(Color::hex('#ff5555')),
+            error:          Style::new()->bold()->foreground(Color::hex(Palettes::DRACULA['red'])),
+            errorSummary:   Style::new()->bold()->foreground(Color::hex(Palettes::DRACULA['red'])),
             cursor:         Style::new()->reverse()->foreground($pink),
-            option:         Style::new()->foreground(Color::hex('#f8f8f2')),
+            option:         Style::new()->foreground(Color::hex(Palettes::DRACULA['foreground'])),
             selectedOption: Style::new()->bold()->foreground($green),
             help:           Style::new()->foreground($com),
             prompt:         Style::new()->foreground($cyan),
