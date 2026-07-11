@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\MouseMode;
+use SugarCraft\Mines\Stats\DifficultyStats;
 
 /**
  * Minesweeper as a SugarCraft Model. Keys:
@@ -38,26 +39,35 @@ final class Game implements Model
         public readonly ?float $startedAt = null,
         public readonly ?int $elapsedSeconds = null,
         public readonly ?Stats $stats = null,
+        /**
+         * Opt-in absolute path for persisting {@see Stats} across sessions.
+         * Null (the default) keeps the game entirely in-memory. When set, a
+         * completed game's result is written via {@see DifficultyStats} on the
+         * win/lose transition — best-effort, never fatal.
+         */
+        public readonly ?string $statsPath = null,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
 
-    public static function start(int $width = 10, int $height = 10, int $mines = 12, ?\Closure $rand = null): self
+    public static function start(int $width = 10, int $height = 10, int $mines = 12, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null): self
     {
         return new self(
             board: Board::blank($width, $height, $mines),
             rand:  $rand,
+            stats: $stats,
+            statsPath: $statsPath,
         );
     }
 
-    public static function withDifficulty(Difficulty $d, ?\Closure $rand = null): self
+    public static function withDifficulty(Difficulty $d, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null): self
     {
-        return self::start($d->width(), $d->height(), $d->mines(), $rand);
+        return self::start($d->width(), $d->height(), $d->mines(), $rand, $stats, $statsPath);
     }
 
-    public static function withCustom(int $width, int $height, int $mines, ?\Closure $rand = null): self
+    public static function withCustom(int $width, int $height, int $mines, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null): self
     {
-        return self::start($width, $height, $mines, $rand);
+        return self::start($width, $height, $mines, $rand, $stats, $statsPath);
     }
 
     public function difficulty(): ?Difficulty
@@ -86,9 +96,13 @@ final class Game implements Model
 
     public function update(Msg $msg): array
     {
+        // Snapshot terminal state BEFORE the action so afterAction() can detect
+        // the exact frame a game is won/lost and record the result once.
+        $wasOver = $this->board->exploded || $this->board->isWon();
+
         // Wire mouse before the KeyMsg guard so clicks are handled first.
         if ($msg instanceof MouseMsg) {
-            return [$this->onMouse($msg), null];
+            return [$this->afterAction($this->onMouse($msg), $wasOver), null];
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -99,8 +113,11 @@ final class Game implements Model
             return [$this, Cmd::quit()];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'r') {
+            // Restart carries the accumulated stats + persistence path forward so
+            // a session's tally survives replays.
             return [self::withCustom(
-                $this->board->width, $this->board->height, $this->board->mineCount, $this->rand,
+                $this->board->width, $this->board->height, $this->board->mineCount,
+                $this->rand, $this->stats, $this->statsPath,
             ), null];
         }
         if ($this->board->exploded || $this->board->isWon()) {
@@ -124,7 +141,52 @@ final class Game implements Model
                 => $this->chord(),
             default => $this,
         };
-        return [$next, null];
+        return [$this->afterAction($next, $wasOver), null];
+    }
+
+    /**
+     * Detect the win/lose transition produced by a board-mutating action and
+     * record the result exactly once. This is the wiring that makes the whole
+     * Stats system live from the CLI — previously {@see recordResult()} was only
+     * ever called by tests, so every game's outcome was silently dropped.
+     *
+     * The transition is "was not over → is now over". Re-entrant key/mouse
+     * events on an already-finished board keep $wasOver true and record nothing.
+     * Persistence to {@see $statsPath} is opt-in and best-effort.
+     */
+    private function afterAction(self $next, bool $wasOver): self
+    {
+        if ($wasOver) {
+            return $next;
+        }
+        $nowOver = $next->board->exploded || $next->board->isWon();
+        if (!$nowOver) {
+            return $next;
+        }
+        // Freeze the elapsed time at the transition frame — once the board is
+        // over, elapsed() reads elapsedSeconds, which recordResult() stamps.
+        $elapsed = $next->startedAt !== null ? microtime(true) - $next->startedAt : null;
+        $recorded = $next->recordResult($elapsed);
+        $recorded->persistStats();
+
+        return $recorded;
+    }
+
+    /**
+     * Best-effort write of the accumulated stats to the opt-in path. A stats
+     * write failure must never crash a game in progress, so everything is
+     * swallowed; a no-op when no path is configured.
+     */
+    private function persistStats(): void
+    {
+        if ($this->statsPath === null) {
+            return;
+        }
+        try {
+            DifficultyStats::fromStats($this->stats())->save($this->statsPath);
+        } catch (\Throwable) {
+            // Non-fatal: stats persistence is a convenience, not a game invariant.
+        }
     }
 
     public function view(): string
@@ -142,6 +204,7 @@ final class Game implements Model
             startedAt: $this->startedAt,
             elapsedSeconds: $this->elapsedSeconds,
             stats: $this->stats,
+            statsPath: $this->statsPath,
         );
     }
 
@@ -156,6 +219,7 @@ final class Game implements Model
             startedAt: $now,
             elapsedSeconds: null,
             stats: $this->stats,
+            statsPath: $this->statsPath,
         );
     }
 
@@ -169,6 +233,7 @@ final class Game implements Model
             startedAt: $this->startedAt,
             elapsedSeconds: $this->elapsedSeconds,
             stats: $this->stats,
+            statsPath: $this->statsPath,
         );
     }
 
@@ -183,6 +248,7 @@ final class Game implements Model
             startedAt: $now,
             elapsedSeconds: null,
             stats: $this->stats,
+            statsPath: $this->statsPath,
         );
     }
 
@@ -235,6 +301,7 @@ final class Game implements Model
             startedAt: $now,
             elapsedSeconds: null,
             stats: $this->stats,
+            statsPath: $this->statsPath,
         );
     }
 
@@ -248,6 +315,7 @@ final class Game implements Model
             startedAt: $this->startedAt,
             elapsedSeconds: $this->elapsedSeconds,
             stats: $this->stats,
+            statsPath: $this->statsPath,
         );
     }
 
@@ -262,6 +330,7 @@ final class Game implements Model
             startedAt: $now,
             elapsedSeconds: null,
             stats: $this->stats,
+            statsPath: $this->statsPath,
         );
     }
 
@@ -298,6 +367,7 @@ final class Game implements Model
             startedAt: $this->startedAt,
             elapsedSeconds: $elapsed !== null ? (int) $elapsed : null,
             stats: $this->stats()->withGame($difficulty, $won, $elapsed !== null ? (int) $elapsed : null),
+            statsPath: $this->statsPath,
         );
     }
 

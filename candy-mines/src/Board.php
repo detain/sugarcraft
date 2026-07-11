@@ -31,6 +31,7 @@ final class Board
         public readonly bool $minesPlaced = false,
         public readonly bool $exploded = false,
         public readonly int $revealedCount = 0,
+        public readonly int $flaggedCount = 0,
     ) {
         if ($width < 2 || $height < 2) {
             throw new \InvalidArgumentException(Lang::t('board.too_small'));
@@ -100,9 +101,15 @@ final class Board
         }
         $rows = $this->rows;
         $rows[$y][$x] = $cell->toggleFlag();
+        // Track the flag count incrementally so flagCount() stays O(1) and the
+        // renderer never scans the grid per frame. A revealed cell can't flag
+        // (Cell::toggleFlag() no-ops), so the delta is derived from the cell's
+        // prior flagged state.
+        $flaggedDelta = $cell->revealed ? 0 : ($cell->flagged ? -1 : 1);
         return new self(
             $this->width, $this->height, $this->mineCount,
             $rows, $this->minesPlaced, $this->exploded, $this->revealedCount,
+            $this->flaggedCount + $flaggedDelta,
         );
     }
 
@@ -117,6 +124,24 @@ final class Board
                     continue;
                 }
                 $candidates[] = [$x, $y];
+            }
+        }
+        // On a dense board the full 3×3 safe zone can leave fewer cells than
+        // mines; the old array_slice() then silently placed FEWER mines than
+        // requested, permanently breaking win detection (revealedCount can
+        // never reach width*height - mineCount). Fall back to excluding only
+        // the clicked cell — the first click is still never a mine and every
+        // requested mine gets placed. The constructor bound (mineCount <=
+        // w*h-1) guarantees this fallback always has enough candidates.
+        if (count($candidates) < $this->mineCount) {
+            $candidates = [];
+            for ($y = 0; $y < $this->height; $y++) {
+                for ($x = 0; $x < $this->width; $x++) {
+                    if ($x === $sx && $y === $sy) {
+                        continue;
+                    }
+                    $candidates[] = [$x, $y];
+                }
             }
         }
         // Knuth shuffle, take the first $mineCount.
@@ -152,7 +177,7 @@ final class Board
         }
         return new self(
             $this->width, $this->height, $this->mineCount,
-            $rows, true, $this->exploded, $this->revealedCount,
+            $rows, true, $this->exploded, $this->revealedCount, $this->flaggedCount,
         );
     }
 
@@ -193,7 +218,7 @@ final class Board
         }
         return new self(
             $this->width, $this->height, $this->mineCount,
-            $rows, $this->minesPlaced, $exploded, $revealedCount,
+            $rows, $this->minesPlaced, $exploded, $revealedCount, $this->flaggedCount,
         );
     }
 
@@ -204,15 +229,10 @@ final class Board
         return $this->revealedCount === $this->width * $this->height - $this->mineCount;
     }
 
+    /** Number of flagged cells. O(1) via the incrementally-tracked counter. */
     public function flagCount(): int
     {
-        $n = 0;
-        foreach ($this->rows as $row) {
-            foreach ($row as $c) {
-                if ($c->flagged) $n++;
-            }
-        }
-        return $n;
+        return $this->flaggedCount;
     }
 
     /**
@@ -274,6 +294,7 @@ final class Board
         }
         $rows = [];
         $revealedCount = 0;
+        $flaggedCount = 0;
         for ($y = 0; $y < $h; $y++) {
             if (!is_array($cells[$y]) || count($cells[$y]) !== $w) {
                 throw new \InvalidArgumentException('Invalid board serialization');
@@ -291,16 +312,20 @@ final class Board
                 if ($revealed) {
                     $revealedCount++;
                 }
+                if ($flagged) {
+                    $flaggedCount++;
+                }
                 $row[] = new Cell($mine, $revealed, $flagged, $adjacent);
             }
             $rows[] = $row;
         }
         // Drop the persisted 'r' value entirely — recompute from live cell state
         // so a tampered payload cannot inflate revealedCount to force a false win
-        // or deflate it to make a finished board un-winnable.
+        // or deflate it to make a finished board un-winnable. flaggedCount is
+        // likewise derived from the reconstructed cells, never trusted from disk.
         return new self(
             (int) $w, (int) $h, (int) $m,
-            $rows, (bool) $p2, (bool) $e, $revealedCount,
+            $rows, (bool) $p2, (bool) $e, $revealedCount, $flaggedCount,
         );
     }
 
