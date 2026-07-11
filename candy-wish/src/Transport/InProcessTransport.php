@@ -242,6 +242,20 @@ final class InProcessTransport implements Transport, ChildSpawner
             throw new \InvalidArgumentException(Lang::t('transport.bad_stdout'));
         }
 
+        // Defense-in-depth: strip the plaintext SSH_PASSWORD from the
+        // ambient process environment (and any explicit env map) before
+        // spawning ANY child. PasswordAuth also scrubs it, but only if it
+        // ran — a spawner middleware placed *before* PasswordAuth in the
+        // stack would otherwise leak the password into the child via
+        // /proc/<pid>/environ (candy-pty's proc_open inherits the parent
+        // environment when $env is null). Scrubbing here makes the
+        // guarantee independent of middleware ordering.
+        unset($_SERVER['SSH_PASSWORD']);
+        \putenv('SSH_PASSWORD');
+        if ($env !== null) {
+            unset($env['SSH_PASSWORD']);
+        }
+
         $handler = $this->channelHandler($session);
 
         // Consult the channel handler for dimensions — it may have
