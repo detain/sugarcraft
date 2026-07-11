@@ -37,6 +37,7 @@
         "php": "^8.3",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-focus": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-pty": "@dev",
         "sugarcraft/sugar-toast": "dev-master"
@@ -73,6 +74,13 @@
         {
             "type": "path",
             "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-focus",
             "options": {
                 "symlink": true
             }

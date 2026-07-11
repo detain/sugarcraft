@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Events;
 
 use SugarCraft\Dash\Events\KeyEvent;
-use SugarCraft\Dash\Events\MouseEvent;
 use SugarCraft\Dash\Events\ResizeEvent;
 use SugarCraft\Dash\Events\FocusEvent;
 use SugarCraft\Dash\Events\PasteEvent;
@@ -48,45 +47,6 @@ final class EventTest extends TestCase
         $event = new KeyEvent(time(), 'a');
         $this->assertTrue($event->isType('key'));
         $this->assertFalse($event->isType('mouse'));
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // MouseEvent
-    // ═══════════════════════════════════════════════════════════════
-
-    public function testMouseEventGetType(): void
-    {
-        $event = new MouseEvent(time(), 10, 20, MouseEvent::BUTTON_LEFT);
-        $this->assertSame('mouse', $event->getType());
-    }
-
-    public function testMouseEventIsClick(): void
-    {
-        $clickEvent = new MouseEvent(time(), 10, 20, MouseEvent::BUTTON_LEFT);
-        $scrollEvent = new MouseEvent(time(), 10, 20, MouseEvent::WHEEL_UP);
-
-        $this->assertTrue($clickEvent->isClick());
-        $this->assertFalse($scrollEvent->isClick());
-    }
-
-    public function testMouseEventIsScroll(): void
-    {
-        $scrollUpEvent = new MouseEvent(time(), 10, 20, MouseEvent::WHEEL_UP);
-        $scrollDownEvent = new MouseEvent(time(), 10, 20, MouseEvent::WHEEL_DOWN);
-        $clickEvent = new MouseEvent(time(), 10, 20, MouseEvent::BUTTON_LEFT);
-
-        $this->assertTrue($scrollUpEvent->isScroll());
-        $this->assertTrue($scrollDownEvent->isScroll());
-        $this->assertFalse($clickEvent->isScroll());
-    }
-
-    public function testMouseEventIsDrag(): void
-    {
-        $dragEvent = new MouseEvent(time(), 10, 20, MouseEvent::BUTTON_RELEASE);
-        $clickEvent = new MouseEvent(time(), 10, 20, MouseEvent::BUTTON_LEFT);
-
-        $this->assertTrue($dragEvent->isDrag());
-        $this->assertFalse($clickEvent->isDrag());
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -263,7 +223,7 @@ final class EventTest extends TestCase
     public function testClearRemovesAllHandlers(): void
     {
         $handler1 = fn(KeyEvent $e) => $e;
-        $handler2 = fn(MouseEvent $e) => $e;
+        $handler2 = fn(Event $e) => $e;
 
         $dispatcher = EventDispatcher::new()
             ->on('key', $handler1)
@@ -326,13 +286,11 @@ final class EventTest extends TestCase
         $timestamp = time();
 
         $keyEvent = new KeyEvent($timestamp, 'a');
-        $mouseEvent = new MouseEvent($timestamp, 0, 0, 0);
         $resizeEvent = new ResizeEvent($timestamp, 80, 24);
         $focusEvent = new FocusEvent($timestamp, true);
         $pasteEvent = new PasteEvent($timestamp, 'text');
 
         $this->assertSame($timestamp, $keyEvent->timestamp);
-        $this->assertSame($timestamp, $mouseEvent->timestamp);
         $this->assertSame($timestamp, $resizeEvent->timestamp);
         $this->assertSame($timestamp, $focusEvent->timestamp);
         $this->assertSame($timestamp, $pasteEvent->timestamp);
