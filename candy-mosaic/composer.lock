@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b5d6269ade4a784a1162ce146b418888",
+    "content-hash": "0dff25e96ffaa30487931efb04aeb729",
     "packages": [
         {
             "name": "evenement/evenement",
@@ -409,76 +409,17 @@
             }
         },
         {
-            "name": "sugarcraft/candy-async",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "../candy-async",
-                "reference": "733cbca976b48de553dbdd48e93d5bff738d6571"
-            },
-            "require": {
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Async\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Async\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
-            "homepage": "https://github.com/sugarcraft/candy-async",
-            "keywords": [
-                "async",
-                "cancellation",
-                "event-loop",
-                "promise",
-                "reactphp",
-                "sugarcraft"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-async/issues",
-                "source": "https://github.com/sugarcraft/candy-async",
-                "docs": "https://github.com/sugarcraft/candy-async/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-core",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "../candy-core",
-                "reference": "d400b0a062454887b52c008dc781542948ed50b1"
+                "reference": "0a6f36e494222c663c9d88c1b3e85d29e7c0bb39"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-pty": "dev-master"
             },
             "require-dev": {
@@ -543,10 +484,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "b1647ee3fef0810972e985fd65059f32418a2300"
+                "reference": "b4c8bc37272946862f83f140e9250a3bfc12b479"
             },
             "require": {
                 "php": "^8.3",
+                "react/stream": "^1.2",
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
@@ -597,73 +539,17 @@
             }
         },
         {
-            "name": "sugarcraft/candy-layout",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "../candy-layout",
-                "reference": "6bb06cb08328a655672bdf569a829a1c664cba02"
-            },
-            "require": {
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Layout\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Layout\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Constraint-based layout solver (Cassowary simplex + greedy fallback)",
-            "homepage": "https://github.com/sugarcraft/candy-layout",
-            "keywords": [
-                "cassowary",
-                "constraint-solver",
-                "layout",
-                "ratatui",
-                "sugarcraft",
-                "terminal"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-layout/issues",
-                "source": "https://github.com/sugarcraft/candy-layout/tree/master",
-                "docs": "https://github.com/sugarcraft/candy-layout/blob/master/README.md"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-palette",
             "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "../candy-palette",
-                "reference": "c616ce65cdccba485e93beb78f059cab622328d4"
+                "reference": "7b796eee0bd34e56ca954c2255e8947e8a8bdd53"
             },
             "require": {
                 "php": "^8.3",
                 "react/child-process": "^0.6",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.1",
@@ -775,69 +661,6 @@
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
                 "source": "https://github.com/sugarcraft/candy-pty",
                 "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "sugarcraft/candy-sprinkles",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "../candy-sprinkles",
-                "reference": "a90aa45201d382535e3a246e2366b5f6490aa685"
-            },
-            "require": {
-                "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-layout": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Sprinkles\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Sprinkles\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "PHP port of charmbracelet/lipgloss — declarative terminal styling and layout.",
-            "homepage": "https://github.com/sugarcraft/candy-sprinkles",
-            "keywords": [
-                "ansi",
-                "borders",
-                "cli",
-                "layout",
-                "lipgloss",
-                "list",
-                "styling",
-                "sugarcraft",
-                "tables",
-                "terminal",
-                "tree",
-                "tui"
-            ],
-            "support": {
-                "issues": "https://github.com/sugarcraft/candy-sprinkles/issues",
-                "source": "https://github.com/sugarcraft/candy-sprinkles",
-                "docs": "https://sugarcraft.github.io/lib/candy-sprinkles.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -2931,8 +2754,7 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "sugarcraft/candy-core": 20,
-        "sugarcraft/candy-palette": 20,
-        "sugarcraft/candy-sprinkles": 20
+        "sugarcraft/candy-palette": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
