@@ -26,6 +26,24 @@ final class SqlExporter
     }
 
     /**
+     * Identifier-quoting flavor for the connection's actual driver.
+     *
+     * Only the quoting family matters (backtick vs double-quote), so map the
+     * driver name directly rather than hardcoding MySQL: emitting backticks
+     * against a PostgreSQL connection produces invalid SQL. `serverVersion()` is
+     * not used because it returns a worded string ("MySQL version 8.0.33") that
+     * Flavor::detectFromDriver would misclassify.
+     */
+    private function quoteFlavor(): Flavor
+    {
+        return match ($this->db->driverName()) {
+            'mysql' => Flavor::MySQL,
+            'pgsql' => Flavor::Postgres,
+            default => Flavor::Sqlite,
+        };
+    }
+
+    /**
      * Export the entire database to a SQL dump file.
      *
      * Generates INSERT statements for all tables.
@@ -62,11 +80,11 @@ final class SqlExporter
                         array_values($row)
                     );
                     $columnsList = implode(', ', array_map(
-                        fn(string $col): string => Identifier::quote(Flavor::MySQL, $col),
+                        fn(string $col): string => Identifier::quote($this->quoteFlavor(), $col),
                         $columns
                     ));
                     $valuesList = implode(', ', $values);
-                    $safeTable = Identifier::quote(Flavor::MySQL, $table);
+                    $safeTable = Identifier::quote($this->quoteFlavor(), $table);
                     fwrite($handle, "INSERT INTO {$safeTable} ({$columnsList}) VALUES ({$valuesList});\n");
                 }
                 fwrite($handle, "\n");
@@ -106,7 +124,7 @@ final class SqlExporter
     private function getColumnNames(string $table): array
     {
         // LIMIT 1 returns first row with column keys we can extract
-        $safeTable = Identifier::quote(Flavor::MySQL, $table);
+        $safeTable = Identifier::quote($this->quoteFlavor(), $table);
         $result = $this->db->query("SELECT * FROM {$safeTable} LIMIT 1");
         if ($result !== null && count($result) > 0) {
             return array_keys($result[0]);

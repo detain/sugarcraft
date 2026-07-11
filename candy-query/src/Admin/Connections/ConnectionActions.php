@@ -104,7 +104,13 @@ final class ConnectionActions
      */
     public function isInstrumentationEnabled(): ?bool
     {
-        $sql = "SELECT ENABLED FROM performance_schema.setup_actors WHERE HOST = '%' AND USER = '%' LIMIT 1";
+        // The "catch-all" actor governs instrumentation for all hosts and all
+        // users. In performance_schema.setup_actors that actor is expressed with
+        // the '%' wildcard in HOST/USER, so match it with LIKE (catch-all
+        // semantics). A literal `HOST = '%' AND USER = '%'` only matches a row
+        // whose stored value is the single character '%', missing a customized
+        // catch-all default and misreporting instrumentation as disabled.
+        $sql = "SELECT ENABLED FROM performance_schema.setup_actors WHERE HOST LIKE '%' AND USER LIKE '%' LIMIT 1";
 
         try {
             $connection = $this->context->connection();
