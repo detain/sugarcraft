@@ -29,6 +29,14 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'render', description: 'Render Markdown and print or page it.')]
 final class RenderCommand extends Command
 {
+    /**
+     * Hard cap on `--theme-config` bytes read before the JSON decode. A
+     * theme config is a few KB in practice; this ceiling stops a malicious
+     * or runaway file (or an attacker-controlled path) from being slurped
+     * whole into memory. Mirrors candy-shine's MAX_HIGHLIGHT_BYTES.
+     */
+    private const MAX_THEME_CONFIG_BYTES = 1_000_000;
+
     /** @var callable|null */
     private static $colorProbeCallback = null;
 
@@ -73,7 +81,7 @@ final class RenderCommand extends Command
             if (!is_readable($configPath)) {
                 throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $configPath]));
             }
-            $theme = Theme::fromJson($configPath);
+            $theme = self::loadThemeConfig($configPath);
         } elseif (!$explicitTheme && !self::terminalSupportsColor()) {
             // No explicit theme AND terminal cannot render color → use notty.
             $theme = Theme::notty();
@@ -169,6 +177,28 @@ final class RenderCommand extends Command
         // Color decision now lives entirely in execute(); loadInput just reads stdin.
         $raw = stream_get_contents($stream);
         return is_string($raw) && $raw !== '' ? $raw : null;
+    }
+
+    /**
+     * Read a `--theme-config` JSON file under a byte cap, then decode it.
+     *
+     * {@see Theme::fromJson()} slurps the whole file unbounded; reading at
+     * most {@see self::MAX_THEME_CONFIG_BYTES}+1 bytes here bounds memory and
+     * rejects an oversized config instead of letting it through to the decoder.
+     */
+    private static function loadThemeConfig(string $path): Theme
+    {
+        $raw = @file_get_contents($path, false, null, 0, self::MAX_THEME_CONFIG_BYTES + 1);
+        if ($raw === false) {
+            throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $path]));
+        }
+        if (strlen($raw) > self::MAX_THEME_CONFIG_BYTES) {
+            throw new \InvalidArgumentException(Lang::t('render.theme_config_too_large', [
+                'path'  => $path,
+                'limit' => self::MAX_THEME_CONFIG_BYTES,
+            ]));
+        }
+        return Theme::fromJsonString($raw);
     }
 
     /**
