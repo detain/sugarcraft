@@ -276,15 +276,16 @@ Spawn the user's `$SHELL -l` (falling back to `/bin/sh -l` when `$SHELL` is empt
 
 #### `--env` and `--env-regex=PATTERN` (PR P6.5.2)
 
-Env capture is **opt-in** — `--env` snapshots the host environment into the cassette header. By default, keys matching the conservative secret-name regex `/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i` are stripped before they hit disk. The bias is "rather strip-too-much than leak" — `KEYBOARD_LAYOUT` is stripped because it contains `KEY`. Override the regex with `--env-regex=PATTERN` when you need a narrower (or wider) filter; passing `--env-regex` implies `--env`.
+Env capture is **opt-in** — `--env` snapshots the host environment into the cassette header. By default, keys matching the conservative secret-name regex `/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i` are stripped before they hit disk. The bias is "rather strip-too-much than leak" — `KEYBOARD_LAYOUT` is stripped because it contains `KEY`. Override the regex with `--env-regex=PATTERN` when you need a narrower (or wider) filter; passing `--env-regex` implies `--env`. An **empty** `--env-regex=` is rejected — it can no longer be used to silently disable filtering (that footgun previously recorded every secret).
 
-#### `--env-allow-secrets` (PR P6.5.2)
+#### `--env-all` (formerly `--env-allow-secrets`)
 
-**DANGEROUS — for trusted, isolated environments only.** When this flag is set, secret-key filtering is disabled entirely and the cassette will contain credential values verbatim (API tokens, passwords, private keys, etc.). Only use this flag when recording in a fully isolated environment and you understand that the resulting cassette must never be shared or stored in an untrusted location.
+**DANGEROUS — for trusted, isolated environments only.** When this flag is set, secret-key filtering is disabled entirely and the cassette will contain the **full** host environment with credential values verbatim (API tokens, passwords, private keys, etc.). Because that is a footgun, capturing everything now requires this explicit flag, and every captured variable name is printed to stderr as a warning so you can see exactly what landed in the cassette. Only use it when recording in a fully isolated environment and you understand that the resulting cassette must never be shared or stored in an untrusted location. `--env-allow-secrets` remains as a legacy alias.
 
 ```sh
-vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $GITHUB_TOKEN'
-# GITHUB_TOKEN value is now in the cassette in plain text
+vendor/bin/candy-vcr record --env-all -- bash -c 'echo $GITHUB_TOKEN'
+# GITHUB_TOKEN value is now in the cassette in plain text, and stderr prints:
+# candy-vcr record: WARNING --env-all captured the full host environment WITHOUT secret filtering (N vars): ..., GITHUB_TOKEN, ...
 ```
 
 Captured env lands on the cassette header as a JSON object:
@@ -293,7 +294,7 @@ Captured env lands on the cassette header as a JSON object:
 {"v":1,"created":"...","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record","env":{"HOME":"/home/me","LANG":"en_US.UTF-8","PATH":"/usr/bin:/bin","TERM":"xterm-256color"}}
 ```
 
-`Recorder::filteredHostEnv(string $regex = SECRET_KEY_REGEX): array<string,string>` is the public helper invoked under the hood; tests can drive it directly without spawning a child.
+`RecordCommand::filteredHostEnv(?string $regex = null, bool $captureAll = false): array<string,string>` is the public helper invoked under the hood; tests can drive it directly without spawning a child. An empty/null `$regex` falls back to the default secret filter — the full env is captured only when `$captureAll` is true.
 
 #### `--idle-trim N` and `replay --no-trim` (PR P6.5.3)
 
