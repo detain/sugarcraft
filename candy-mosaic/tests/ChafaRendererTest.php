@@ -53,6 +53,63 @@ final class ChafaRendererTest extends TestCase
         }
     }
 
+    public function testScratchFileReusedAcrossRenders(): void
+    {
+        // PERF: an animation renders many frames; the input image must reuse
+        // ONE per-process temp file (keyed by content hash) instead of a fresh
+        // tempnam() each frame. scratchFile() runs before proc_open(), so the
+        // reuse is observable whether or not chafa is installed.
+        ChafaRenderer::resetScratch();
+
+        $gifBytes = base64_decode('R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==');
+        $source   = ImageSource::fromString($gifBytes);
+        $renderer = new ChafaRenderer();
+
+        $this->silentRender($renderer, $source);
+        $path1 = ChafaRenderer::currentScratchPath();
+
+        $this->silentRender($renderer, $source);
+        $path2 = ChafaRenderer::currentScratchPath();
+
+        $this->assertNotNull($path1, 'a scratch file should have been created');
+        // Reused, not re-created: a fresh tempnam() per frame would differ.
+        $this->assertSame($path1, $path2);
+    }
+
+    public function testScratchFileHoldsTheImageBytes(): void
+    {
+        // Parity: chafa must read the exact source bytes from the scratch file.
+        ChafaRenderer::resetScratch();
+
+        $gifBytes = base64_decode('R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==');
+        $source   = ImageSource::fromString($gifBytes);
+        $renderer = new ChafaRenderer();
+
+        $this->silentRender($renderer, $source);
+
+        $path = ChafaRenderer::currentScratchPath();
+        $this->assertNotNull($path);
+        $this->assertFileExists($path);
+        $this->assertSame($source->bytes, (string) file_get_contents($path));
+
+        ChafaRenderer::resetScratch();
+        $this->assertNull(ChafaRenderer::currentScratchPath());
+        $this->assertFileDoesNotExist($path);
+    }
+
+    /**
+     * Render, swallowing the RuntimeException chafa throws when it is not
+     * installed — the scratch-file bookkeeping we assert on happens first.
+     */
+    private function silentRender(ChafaRenderer $renderer, ImageSource $source): void
+    {
+        try {
+            $renderer->render($source, 10, 10);
+        } catch (\RuntimeException) {
+            // chafa binary missing — irrelevant to the scratch-file assertions.
+        }
+    }
+
     public function testChafaRendererInvalidWidthThrows(): void
     {
         $gifBytes = base64_decode('R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==');

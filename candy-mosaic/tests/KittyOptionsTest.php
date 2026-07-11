@@ -104,4 +104,41 @@ final class KittyOptionsTest extends TestCase
 
         $this->assertStringContainsString('z=-3', $out);
     }
+
+    public function testWithCellDimensionsEmitsSAndVParams(): void
+    {
+        // cellWidth/cellHeight had no setter, so s=/v= were never emitted.
+        // withCellDimensions() is the seam that makes them settable.
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(1)->withCellDimensions(120, 48);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        $this->assertStringContainsString('s=120', $out);
+        $this->assertStringContainsString('v=48', $out);
+    }
+
+    public function testWithCellDimensionsPopulatesToArray(): void
+    {
+        $arr = KittyOptions::transmit(1)->withCellDimensions(64, 32)->toArray();
+
+        $this->assertSame(64, $arr['s']);
+        $this->assertSame(32, $arr['v']);
+    }
+
+    public function testCellDimensionsOmittedByDefault(): void
+    {
+        // Without the setter the fields stay 0, so s=/v= must NOT appear.
+        $arr = KittyOptions::transmit(1)->toArray();
+
+        $this->assertNull($arr['s']);
+        $this->assertNull($arr['v']);
+    }
+
+    public function testWithCellDimensionsRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        KittyOptions::transmit(1)->withCellDimensions(-1, 10);
+    }
 }

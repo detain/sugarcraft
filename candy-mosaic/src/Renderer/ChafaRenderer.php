@@ -31,6 +31,20 @@ final class ChafaRenderer implements Renderer
     private static ?bool $available = null;
 
     /**
+     * Reused per-process scratch file for the chafa input image, plus the
+     * content hash of whatever is currently written to it.
+     *
+     * An animation renders many frames; a fresh tempnam() + full rewrite +
+     * unlink per frame is wasteful. Instead we keep ONE temp file for the
+     * process and only rewrite it when the image bytes actually change (keyed
+     * by hash), so a static image re-rendered on every TUI redraw skips the
+     * write entirely. The file is unlinked on shutdown.
+     *
+     * @var array{path: string, hash: string}|null
+     */
+    private static ?array $scratch = null;
+
+    /**
      * @param list<string> $options Additional chafa CLI options (e.g. ['--colors=256', '--work=n'])
      * @param string|null  $format  chafa output format: 'sixels', 'iterm', 'kitty', or
      *                              'symbols'. null leaves chafa's own default (symbols)
@@ -90,48 +104,98 @@ final class ChafaRenderer implements Renderer
         }
         $cmd = array_merge($cmd, $this->options);
 
-        $tempFile = tempnam(sys_get_temp_dir(), 'chafa');
-        if ($tempFile === false) {
-            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+        $cmd[] = self::scratchFile($image->bytes);
+
+        $descriptorSpec = [1 => ['pipe', 'w']];
+        $process = @proc_open($cmd, $descriptorSpec, $pipes);
+
+        if ($process === false) {
+            throw new \RuntimeException(Lang::t('chafa.not_found'));
         }
 
-        try {
-            $written = file_put_contents($tempFile, $image->bytes);
-            if ($written === false) {
+        if (!is_resource($process)) {
+            throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'proc_open returned false']));
+        }
+
+        $stdout = stream_get_contents($pipes[1]);
+        if ($stdout === false) {
+            $stdout = '';
+        }
+
+        fclose($pipes[1]);
+
+        $exitCode = proc_close($process);
+
+        if ($exitCode !== 0) {
+            throw new \RuntimeException(
+                Lang::t('chafa.command_failed', ['error' => "exit code $exitCode"])
+            );
+        }
+
+        return $stdout;
+    }
+
+    /**
+     * Path to a temp file containing $bytes, reusing a single per-process
+     * scratch file and skipping the write when its content is already current
+     * (matched by hash). Replaces a fresh tempnam()+write+unlink per frame.
+     *
+     * @throws \RuntimeException  if the scratch file cannot be created/written
+     */
+    private static function scratchFile(string $bytes): string
+    {
+        $hash = hash('xxh3', $bytes);
+
+        $scratch = self::$scratch;
+        if ($scratch !== null && is_file($scratch['path'])) {
+            if ($scratch['hash'] === $hash) {
+                return $scratch['path']; // already current — skip the rewrite
+            }
+            if (file_put_contents($scratch['path'], $bytes) === false) {
                 throw new \RuntimeException(Lang::t('image_source.temp_failed'));
             }
+            self::$scratch = ['path' => $scratch['path'], 'hash' => $hash];
 
-            $cmd[] = $tempFile;
+            return $scratch['path'];
+        }
 
-            $descriptorSpec = [1 => ['pipe', 'w']];
-            $process = @proc_open($cmd, $descriptorSpec, $pipes);
+        $path = tempnam(sys_get_temp_dir(), 'chafa');
+        if ($path === false) {
+            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+        }
+        if (file_put_contents($path, $bytes) === false) {
+            @unlink($path);
+            throw new \RuntimeException(Lang::t('image_source.temp_failed'));
+        }
+        self::$scratch = ['path' => $path, 'hash' => $hash];
 
-            if ($process === false) {
-                throw new \RuntimeException(Lang::t('chafa.not_found'));
-            }
+        // The file outlives each render (that is the point — it is reused), so
+        // clean it up when the process ends rather than per-call.
+        register_shutdown_function(static function () use ($path): void {
+            @unlink($path);
+        });
 
-            if (!is_resource($process)) {
-                throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'proc_open returned false']));
-            }
+        return $path;
+    }
 
-            $stdout = stream_get_contents($pipes[1]);
-            if ($stdout === false) {
-                $stdout = '';
-            }
+    /**
+     * @internal Test seam — the current reused scratch-file path, or null if
+     *           none has been created yet.
+     */
+    public static function currentScratchPath(): ?string
+    {
+        return self::$scratch['path'] ?? null;
+    }
 
-            fclose($pipes[1]);
-
-            $exitCode = proc_close($process);
-
-            if ($exitCode !== 0) {
-                throw new \RuntimeException(
-                    Lang::t('chafa.command_failed', ['error' => "exit code $exitCode"])
-                );
-            }
-
-            return $stdout;
-        } finally {
-            @unlink($tempFile);
+    /**
+     * @internal Test seam — drop and unlink the reused scratch file so the
+     *           next render() re-creates it. Never needed in production.
+     */
+    public static function resetScratch(): void
+    {
+        if (self::$scratch !== null) {
+            @unlink(self::$scratch['path']);
+            self::$scratch = null;
         }
     }
 
