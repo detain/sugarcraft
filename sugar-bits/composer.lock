@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2c1154381b9ebce75aedf9a66f68b09f",
+    "content-hash": "0dda8a3cd2f88ed7a8edb7314e63f3da",
     "packages": [
         {
             "name": "evenement/evenement",
@@ -715,10 +715,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "b1647ee3fef0810972e985fd65059f32418a2300"
+                "reference": "b4c8bc37272946862f83f140e9250a3bfc12b479"
             },
             "require": {
                 "php": "^8.3",
+                "react/stream": "^1.2",
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
@@ -1015,10 +1016,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-sprinkles",
-                "reference": "a90aa45201d382535e3a246e2366b5f6490aa685"
+                "reference": "0cddbfeef4c6d6cf5ec7f0734d9e8f1fb9b1ff31"
             },
             "require": {
                 "php": "^8.3",
+                "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-layout": "dev-master"
             },
@@ -1078,11 +1080,12 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-zone",
-                "reference": "36079e85311edf21bb0b26e803cf89780e87a5b3"
+                "reference": "f3b4a91fcae1d9f0557db86b8461db342a6a1883"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-mouse": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -2908,12 +2911,8 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-forms": 20,
-        "sugarcraft/candy-fuzzy": 20,
-        "sugarcraft/candy-layout": 20,
-        "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-sprinkles": 20,
         "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-zone": 20,
