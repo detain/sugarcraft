@@ -70,6 +70,16 @@ final class Program
     private ?Recorder $recorder = null;
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
+    /**
+     * Handlers displaced by signal subscriptions, keyed by signal number, so
+     * cancelling a signal subscription can restore whatever was installed
+     * before ours instead of leaking our handler.
+     *
+     * @var array<int, callable|int>
+     */
+    private array $prevSignalHandlers = [];
+    /** True once pcntl async signal delivery has been enabled (see installSignalHandlers()). */
+    private bool $asyncSignals = false;
     /** @var \Closure(\Throwable): void */
     private \Closure $exceptionHandler;
     private float $lastFrameDuration = 0.0;
@@ -102,7 +112,7 @@ final class Program
                 [$this->input, $this->output] = $opened;
             }
         }
-        $this->reader = new InputReader();
+        $this->reader = new InputReader($options->sanitizePaste);
         $this->renderer = new Renderer(
             $this->output,
             inline:   $options->inlineMode,
@@ -257,7 +267,11 @@ final class Program
         // Render tick.
         $tickInterval = 1.0 / max(1.0, $this->options->framerate);
         $tickTimer = $this->loop->addPeriodicTimer($tickInterval, function (): void {
-            if (function_exists('pcntl_signal_dispatch')) {
+            // Fallback signal pump for environments where async delivery is
+            // unavailable (or was declined). When async signals are enabled,
+            // handlers already fired and nothing is pending, so skip this to
+            // avoid a redundant dispatch.
+            if (!$this->asyncSignals && function_exists('pcntl_signal_dispatch')) {
                 pcntl_signal_dispatch();
             }
             if ($this->dirty) {
@@ -1058,6 +1072,17 @@ final class Program
         ) {
             return;
         }
+        // Deliver signals asynchronously — PHP dispatches the handler at the
+        // next safe VM point — rather than only when the render tick calls
+        // pcntl_signal_dispatch(). Without this, signal latency is bounded by
+        // the framerate: a 1fps program could sit on a SIGINT/SIGWINCH for up
+        // to a second. Once enabled nothing is left pending, so the (now
+        // fallback) timer-driven dispatch can't double-fire. Guarded for
+        // builds without this pcntl function.
+        if (function_exists('pcntl_async_signals')) {
+            pcntl_async_signals(true);
+            $this->asyncSignals = true;
+        }
         pcntl_signal(SIGINT, function (): void {
             $this->running = false;
             $this->loop->stop();
@@ -1135,9 +1160,13 @@ final class Program
             }
         }
         // Cancel subscriptions that are no longer wanted.
-        foreach ($this->activeSubscriptions as $id => [$timer, ]) {
+        foreach ($this->activeSubscriptions as $id => [$timer, $activeSub]) {
             if (!isset($wantedIds[$id])) {
-                $this->loop->cancelTimer($timer);
+                if ($activeSub->kind === Kind::Signal) {
+                    $this->cancelSignalSubscription($activeSub);
+                } else {
+                    $this->loop->cancelTimer($timer);
+                }
                 unset($this->activeSubscriptions[$id]);
             }
         }
@@ -1185,25 +1214,49 @@ final class Program
     /**
      * Install a signal handler for the given subscription.
      *
-     * @return \React\EventLoop\TimerInterface
+     * Signal subscriptions have no loop timer — they fire via `pcntl_signal`.
+     * Before installing our handler we record whatever handler is currently
+     * registered for the signal so {@see cancelSignalSubscription()} can
+     * restore it on cancel; returns null (there is no timer handle to cancel).
+     *
+     * @return null
      */
     private function installSignalSubscription(Subscription $sub): mixed
     {
         $signo = $sub->params['signo'] ?? 0;
-        $handler = function (int $signo) use ($sub): void {
-            $msg = ($sub->produce)();
-            if ($msg !== null) {
-                $this->dispatch($msg);
-            }
-        };
         if (function_exists('pcntl_signal')) {
+            // Remember the handler we're about to displace so cancel can put it
+            // back. Guard against clobbering it if the same signo is installed
+            // again before being cancelled (keep the ORIGINAL predecessor).
+            if (function_exists('pcntl_signal_get_handler') && !isset($this->prevSignalHandlers[$signo])) {
+                $this->prevSignalHandlers[$signo] = pcntl_signal_get_handler($signo);
+            }
+            $handler = function (int $signo) use ($sub): void {
+                $msg = ($sub->produce)();
+                if ($msg !== null) {
+                    $this->dispatch($msg);
+                }
+            };
             pcntl_signal($signo, $handler);
         }
-        // Return a no-op timer to satisfy the return type; signal handlers
-        // are managed via pcntl_signal directly.
-        return $this->loop->addPeriodicTimer(86400, static function (): void {
-            // No-op: signal handlers fire via pcntl_signal, not this timer.
-        });
+        return null;
+    }
+
+    /**
+     * Cancel a signal subscription by restoring the handler that was in place
+     * before {@see installSignalSubscription()} displaced it. Without this the
+     * subscription's handler stays wired to `pcntl_signal` for the process
+     * lifetime — the leak this method fixes.
+     */
+    private function cancelSignalSubscription(Subscription $sub): void
+    {
+        if (!function_exists('pcntl_signal')) {
+            return;
+        }
+        $signo = $sub->params['signo'] ?? 0;
+        $prev = $this->prevSignalHandlers[$signo] ?? (defined('SIG_DFL') ? SIG_DFL : 0);
+        pcntl_signal($signo, $prev);
+        unset($this->prevSignalHandlers[$signo]);
     }
 
     /**
@@ -1211,8 +1264,12 @@ final class Program
      */
     private function cancelAllSubscriptions(): void
     {
-        foreach ($this->activeSubscriptions as [$timer, ]) {
-            $this->loop->cancelTimer($timer);
+        foreach ($this->activeSubscriptions as [$timer, $activeSub]) {
+            if ($activeSub->kind === Kind::Signal) {
+                $this->cancelSignalSubscription($activeSub);
+            } else {
+                $this->loop->cancelTimer($timer);
+            }
         }
         $this->activeSubscriptions = [];
     }

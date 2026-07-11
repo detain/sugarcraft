@@ -333,14 +333,55 @@ final class InputReaderTest extends TestCase
     public function testBracketedPastePreservesNewlinesAndControl(): void
     {
         // Pasted content with embedded newline + CSI sequence should NOT
-        // be parsed as keys — the whole envelope is one PasteMsg.
+        // be parsed as keys — the whole envelope is one PasteMsg. Asserted
+        // against the raw opt-out reader so the CSI survives verbatim (the
+        // default-on sanitizer would strip it — see the sanitize tests below).
         $payload = "line1\nline2\x1b[31mred\x1b[0m";
-        $msgs    = (new InputReader())->parse("\x1b[200~" . $payload . "\x1b[201~");
+        $msgs    = (new InputReader(sanitizePaste: false))->parse("\x1b[200~" . $payload . "\x1b[201~");
         $this->assertCount(3, $msgs);
         $this->assertInstanceOf(PasteStartMsg::class, $msgs[0]);
         $this->assertInstanceOf(PasteEndMsg::class, $msgs[1]);
         $this->assertInstanceOf(PasteMsg::class, $msgs[2]);
         $this->assertSame($payload, $msgs[2]->content);
+    }
+
+    public function testBracketedPasteSanitizesOsc52ByDefault(): void
+    {
+        // Default-on (default-secure): an OSC-52 clipboard-write escape
+        // smuggled inside a paste must be neutralized before it reaches the
+        // model as a PasteMsg. Reverting the default to raw leaves the escape
+        // in $content and fails these assertions.
+        $osc52   = "\x1b]52;c;ZWxpdGU=\x07";
+        $payload = 'before' . $osc52 . 'after';
+        $msgs    = (new InputReader())->parse("\x1b[200~" . $payload . "\x1b[201~");
+        $this->assertCount(3, $msgs);
+        $paste = $msgs[2];
+        $this->assertInstanceOf(PasteMsg::class, $paste);
+        $this->assertStringNotContainsString("\x1b", $paste->content);
+        $this->assertStringNotContainsString('52;', $paste->content);
+        $this->assertSame('beforeafter', $paste->content);
+    }
+
+    public function testBracketedPasteKeepsTextTabsNewlinesUnderSanitize(): void
+    {
+        // Sanitize strips escapes/control bytes but keeps printable text,
+        // tabs, and newlines so ordinary multi-line pastes stay intact.
+        $msgs  = (new InputReader())->parse("\x1b[200~a\tb\nc\x1b[201~");
+        $paste = $msgs[2];
+        $this->assertInstanceOf(PasteMsg::class, $paste);
+        $this->assertSame("a\tb\nc", $paste->content);
+    }
+
+    public function testBracketedPasteRawUnderOptOut(): void
+    {
+        // The opt-out flag preserves the raw bytes verbatim for callers that
+        // deliberately need them (and sanitize themselves).
+        $osc52   = "\x1b]52;c;ZWxpdGU=\x07";
+        $payload = 'before' . $osc52 . 'after';
+        $msgs    = (new InputReader(sanitizePaste: false))->parse("\x1b[200~" . $payload . "\x1b[201~");
+        $paste   = $msgs[2];
+        $this->assertInstanceOf(PasteMsg::class, $paste);
+        $this->assertSame($payload, $paste->content);
     }
 
     public function testBracketedPasteSplitAcrossReads(): void

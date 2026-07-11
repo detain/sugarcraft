@@ -26,6 +26,7 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\PasteEndMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\PasteStartMsg;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * Stateful byte-stream parser. Feed it raw bytes via {@see parse()};
@@ -45,6 +46,18 @@ final class InputReader
     private string $buf = '';
     private bool $pasting = false;
     private string $pasteBuf = '';
+
+    /**
+     * @param bool $sanitizePaste When true (default), bracketed-paste payloads
+     *                            are run through {@see Sanitize::untrusted()}
+     *                            before being surfaced as a {@see PasteMsg}, so
+     *                            an embedded OSC-52 / control sequence can't
+     *                            reach the model or the terminal raw. Wired
+     *                            from {@see ProgramOptions::$sanitizePaste}.
+     */
+    public function __construct(private readonly bool $sanitizePaste = true)
+    {
+    }
 
     /**
      * @return list<Msg>
@@ -67,8 +80,13 @@ final class InputReader
                     break;
                 }
                 $this->pasteBuf .= substr($this->buf, $i, $end - $i);
+                // Paste content is attacker-influenced (whatever was on the
+                // clipboard); neutralize embedded escapes/control bytes by
+                // default so an OSC-52 clipboard write etc. can't reach the
+                // model raw. Opt out via ProgramOptions::$sanitizePaste.
+                $payload        = $this->sanitizePaste ? Sanitize::untrusted($this->pasteBuf) : $this->pasteBuf;
                 $msgs[]         = new PasteEndMsg();
-                $msgs[]         = new PasteMsg($this->pasteBuf);
+                $msgs[]         = new PasteMsg($payload);
                 $this->pasteBuf = '';
                 $this->pasting  = false;
                 $i = $end + strlen(self::PASTE_END);

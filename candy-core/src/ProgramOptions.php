@@ -140,6 +140,22 @@ final class ProgramOptions
          * @var ?\Closure(Model): ?Subscriptions
          */
         public readonly ?\Closure $subscriptions = null,
+        /**
+         * Sanitize bracketed-paste payloads before they reach the model as a
+         * {@see Msg\PasteMsg}. Defaults ON (default-secure).
+         *
+         * A terminal's bracketed-paste content is attacker-influenced — the
+         * user pastes whatever happens to be on the clipboard — so an embedded
+         * OSC-52 clipboard write or other terminal control sequence would
+         * otherwise flow verbatim into the model and, once echoed back to the
+         * screen, could hijack the real terminal (rewrite the clipboard, move
+         * the cursor, desync the frame-diff renderer). When true, paste text is
+         * routed through {@see Util\Sanitize::untrusted()}: every ANSI escape
+         * and C0/C1 control byte is stripped while printable text, tabs, and
+         * newlines survive. Set false only when the caller genuinely needs the
+         * raw bytes and sanitizes them itself.
+         */
+        public readonly bool $sanitizePaste = true,
     ) {
     }
 
