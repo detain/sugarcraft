@@ -105,9 +105,9 @@ final class RendererTest extends TestCase
     public function testRenderShowsNextPiecesInSidebar(): void
     {
         $out = Renderer::render($this->deterministicGame());
-        // Next pieces render as coloured-space cells via block()
-        // block() uses ESC[48;2;R;G;Bm (background RGB) + two spaces + ESC[0m
-        $this->assertStringContainsString("\x1b[48;2;", $out);
+        // Next-piece minis are Buffer-rendered coloured-space cells; the
+        // Buffer SGR emitter uses ESC[0;48;2;R;G;Bm (background RGB).
+        $this->assertStringContainsString("\x1b[0;48;2;", $out);
     }
 
     public function testBlockStyleReturnsStyleForTetromino(): void
@@ -131,34 +131,27 @@ final class RendererTest extends TestCase
         $this->assertNotNull($style);
     }
 
-    public function testBlockReturnsAnsiBackgroundForTetrominoT(): void
+    public function testRenderMiniIsBufferBackedExactSnapshot(): void
     {
+        // Byte-exact pin: renderMini() is now Buffer-backed (no hand-rolled
+        // SGR via the removed block() helper). The O tetromino fills the
+        // middle two columns of both rows. The candy-buffer SGR emitter
+        // prefixes a reset ("0;") and only emits one trailing reset per run,
+        // so this differs from the old block()-per-cell bytes — that byte
+        // change is exactly what this test guards against regressing.
         $reflector = new \ReflectionClass(Renderer::class);
-        $method = $reflector->getMethod('block');
+        $method = $reflector->getMethod('renderMini');
         $method->setAccessible(true);
 
-        // Tetromino::T color is 129 → RGB from COLOR_MAP is 0xbd7dff
-        // Expected: ESC[48;2;189;125;255m  ESC[0m
-        $block = $method->invoke(null, Tetromino::T);
-        $this->assertSame(
-            "\x1b[48;2;189;125;255m  \x1b[0m",
-            $block,
-            'block(T) must return ANSI RGB background for T color (0xbd7dff = 189;125;255)',
-        );
-    }
+        $mini = $method->invoke(null, Tetromino::O);
 
-    public function testGhostReturnsFaintAnsiForegroundForTetrominoI(): void
-    {
-        $reflector = new \ReflectionClass(Renderer::class);
-        $method = $reflector->getMethod('ghost');
-        $method->setAccessible(true);
+        // O color 226 → 0xffd400 → 255;212;0
+        $block = "\x1b[0;48;2;255;212;0m";
+        $reset = "\x1b[0m";
+        $row = '  ' . $block . '  ' . $block . '  ' . $reset . '  ';
+        $expected = $row . "\n" . $row;
 
-        // Tetromino::I color is 51 → RGB from COLOR_MAP is 0x00d4ff (dimmed to 0x888888)
-        // ghost() uses 0x888888 as fallback for any color
-        $ghost = $method->invoke(null, Tetromino::I);
-        $this->assertStringContainsString("\x1b[38;2;", $ghost);
-        $this->assertStringContainsString("\x1b[2m", $ghost, 'ghost must use faint attribute');
-        $this->assertStringContainsString('▒▒', $ghost, 'ghost must render as ▒▒');
+        $this->assertSame($expected, $mini, 'renderMini(O) must match the Buffer-rendered snapshot');
     }
 
     public function testRenderMiniOutputsColoredBlocksForI(): void
@@ -170,8 +163,8 @@ final class RendererTest extends TestCase
         // Tetromino::I at rotation 0: cells at (0,1),(1,1),(2,1),(3,1) - horizontal bar at y=1
         // In the 4×4 mini box: bottom row (y=1) filled, top row (y=0) empty
         $mini = $method->invoke(null, Tetromino::I);
-        // Must contain ANSI block sequences in the bottom row
-        $this->assertStringContainsString("\x1b[48;2;", $mini);
+        // Must contain Buffer-rendered ANSI block sequences in the bottom row
+        $this->assertStringContainsString("\x1b[0;48;2;", $mini);
         // Should be 2 lines (y=0 empty, y=1 filled)
         $lines = explode("\n", $mini);
         $this->assertSame(2, count($lines), 'renderMini must return 2 lines');

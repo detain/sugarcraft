@@ -36,7 +36,9 @@ if ($argc > 1) {
 
 $game = match ($mode) {
     'vs' => VsGame::start(),
-    default => Game::start(),
+    // Single-player enables lock delay so a grounded piece can still be
+    // nudged/rotated for a short window before it locks (W15 / SRS QoL).
+    default => Game::startWithLockDelay(),
 };
 
 $options = new ProgramOptions(useAltScreen: true);
