@@ -17,6 +17,19 @@ namespace SugarCraft\Reel\Subtitle;
 final class WebVtt
 {
     /**
+     * Upper bound on the number of cues parsed from a single track.
+     *
+     * A hostile (or accidentally huge) VTT/SRT payload could carry millions of
+     * cue blocks; parsing them all would sort and hold an unbounded array in
+     * memory (a cheap DoS against a media client that renders subtitles handed
+     * back by a server). Parsing stops once this many cues are collected — the
+     * excess is silently truncated so playback still starts. The ceiling is far
+     * above real-world tracks: one caption per second for ~2.8 hours is ~10k
+     * cues, so a legitimate subtitle file never hits it.
+     */
+    public const MAX_CUES = 10000;
+
+    /**
      * @param list<Cue> $cues
      */
     private function __construct(
@@ -48,6 +61,10 @@ final class WebVtt
 
         $cues = [];
         foreach (preg_split('/\n[ \t]*\n/', $text) ?: [] as $block) {
+            // DoS guard: stop once the cue cap is reached; the rest is truncated.
+            if (count($cues) >= self::MAX_CUES) {
+                break;
+            }
             $cue = self::parseBlock($block);
             if ($cue !== null) {
                 $cues[] = $cue;

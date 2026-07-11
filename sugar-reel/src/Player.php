@@ -664,7 +664,16 @@ final class Player implements Model
         // Buffer cell grid dimensions.
         $bufW = (int)ceil($w / $cellW);
         $bufH = (int)ceil($h / $cellH);
-        $buffer = Buffer::new($bufW, $bufH);
+
+        // Accumulate a flat row-major cell grid (index = cy*bufW + cx) and wrap
+        // it in a single Buffer::fromGrid() call below. The previous per-cell
+        // Buffer::withCellAt() loop copy-on-write duplicated the whole grid on
+        // every pixel — O(cells²) per frame; appending to a plain array and
+        // wrapping once is O(cells). Every cell is written exactly once (the
+        // loops cover the full bufW×bufH range), so the resulting Buffer is
+        // byte-identical to the old path.
+        /** @var list<Cell> $grid */
+        $grid = [];
 
         $bytes = $frame->bytes;
         $byteLen = strlen($bytes);
@@ -695,8 +704,7 @@ final class Player implements Model
 
                     $style = new Style($fg, $bg);
 
-                    $cell = Cell::new('▀', $style, null, 1);
-                    $buffer = $buffer->withCellAt($cx, $cy, $cell);
+                    $grid[] = Cell::new('▀', $style, null, 1);
                 }
             }
         } elseif ($mode === Mode::QuarterBlock) {
@@ -715,8 +723,7 @@ final class Player implements Model
                         self::pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0 + 1), // LR
                     ];
                     [$glyph, $fgInt, $bgInt] = self::quarterCell($quads);
-                    $cell = Cell::new($glyph, new Style($fgInt, $bgInt), null, 1);
-                    $buffer = $buffer->withCellAt($cx, $cy, $cell);
+                    $grid[] = Cell::new($glyph, new Style($fgInt, $bgInt), null, 1);
                 }
             }
         } else {
@@ -735,13 +742,12 @@ final class Player implements Model
                     $fg = self::rgbToStyleColor($r, $g, $b, $mode);
                     $style = $fg !== null ? new Style($fg) : null;
 
-                    $cell = Cell::new($ch, $style, null, 1);
-                    $buffer = $buffer->withCellAt($cx, $cy, $cell);
+                    $grid[] = Cell::new($ch, $style, null, 1);
                 }
             }
         }
 
-        return $buffer;
+        return Buffer::fromGrid($bufW, $bufH, $grid);
     }
 
     /**
