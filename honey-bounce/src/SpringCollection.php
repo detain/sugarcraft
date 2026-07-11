@@ -4,31 +4,118 @@ declare(strict_types=1);
 
 namespace SugarCraft\Bounce;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Manages multiple named spring instances.
  *
- * Provides a collection interface for tracking and updating multiple
- * springs simultaneously.
+ * Immutable: {@see withSpring()}, {@see without()} and {@see withTarget()}
+ * each return a NEW collection, matching {@see tick()}'s copy-on-write
+ * contract. The legacy in-place mutators — add()/remove()/setTarget() — are
+ * retained as deprecated shims for one release so existing callers keep
+ * working while migrating to the with*() API.
  */
 final class SpringCollection
 {
+    use Mutable;
+
     /** @var array<string, Spring> */
-    private array $springs = [];
+    private array $springs;
 
     /** @var array<string, float> */
-    private array $positions = [];
+    private array $positions;
 
     /** @var array<string, float> */
-    private array $velocities = [];
+    private array $velocities;
 
     /** @var array<string, float> */
-    private array $targets = [];
+    private array $targets;
 
     /**
-     * Add a spring to the collection.
+     * @param array<string, Spring> $springs
+     * @param array<string, float> $positions
+     * @param array<string, float> $velocities
+     * @param array<string, float> $targets
+     */
+    public function __construct(
+        array $springs = [],
+        array $positions = [],
+        array $velocities = [],
+        array $targets = []
+    ) {
+        $this->springs = $springs;
+        $this->positions = $positions;
+        $this->velocities = $velocities;
+        $this->targets = $targets;
+    }
+
+    /**
+     * Return a NEW collection with the given spring added (immutable).
+     */
+    public function withSpring(string $id, Spring $spring, float $position = 0.0, float $velocity = 0.0, float $target = 0.0): self
+    {
+        $springs = $this->springs;
+        $positions = $this->positions;
+        $velocities = $this->velocities;
+        $targets = $this->targets;
+
+        $springs[$id] = $spring;
+        $positions[$id] = $position;
+        $velocities[$id] = $velocity;
+        $targets[$id] = $target;
+
+        return $this->mutate([
+            'springs' => $springs,
+            'positions' => $positions,
+            'velocities' => $velocities,
+            'targets' => $targets,
+        ]);
+    }
+
+    /**
+     * Return a NEW collection with the named spring removed (immutable).
+     */
+    public function without(string $id): self
+    {
+        $springs = $this->springs;
+        $positions = $this->positions;
+        $velocities = $this->velocities;
+        $targets = $this->targets;
+
+        unset($springs[$id], $positions[$id], $velocities[$id], $targets[$id]);
+
+        return $this->mutate([
+            'springs' => $springs,
+            'positions' => $positions,
+            'velocities' => $velocities,
+            'targets' => $targets,
+        ]);
+    }
+
+    /**
+     * Return a NEW collection with the target for one spring changed (immutable).
+     */
+    public function withTarget(string $id, float $target): self
+    {
+        $targets = $this->targets;
+        $targets[$id] = $target;
+
+        return $this->mutate(['targets' => $targets]);
+    }
+
+    /**
+     * Add a spring to the collection (mutates in place).
+     *
+     * @deprecated Use {@see withSpring()}, which returns a new instance.
+     *             Retained one release for backward compatibility.
      */
     public function add(string $id, Spring $spring, float $position = 0.0, float $velocity = 0.0, float $target = 0.0): void
     {
+        @trigger_error(
+            'SpringCollection::add() is deprecated; use withSpring() which returns a new collection.',
+            E_USER_DEPRECATED,
+        );
+
         $this->springs[$id] = $spring;
         $this->positions[$id] = $position;
         $this->velocities[$id] = $velocity;
@@ -36,16 +123,40 @@ final class SpringCollection
     }
 
     /**
-     * Remove a spring from the collection by id.
+     * Remove a spring from the collection by id (mutates in place).
+     *
+     * @deprecated Use {@see without()}, which returns a new instance.
+     *             Retained one release for backward compatibility.
      */
     public function remove(string $id): void
     {
+        @trigger_error(
+            'SpringCollection::remove() is deprecated; use without() which returns a new collection.',
+            E_USER_DEPRECATED,
+        );
+
         unset(
             $this->springs[$id],
             $this->positions[$id],
             $this->velocities[$id],
             $this->targets[$id]
         );
+    }
+
+    /**
+     * Set the target for a specific spring (mutates in place).
+     *
+     * @deprecated Use {@see withTarget()}, which returns a new instance.
+     *             Retained one release for backward compatibility.
+     */
+    public function setTarget(string $id, float $target): void
+    {
+        @trigger_error(
+            'SpringCollection::setTarget() is deprecated; use withTarget() which returns a new collection.',
+            E_USER_DEPRECATED,
+        );
+
+        $this->targets[$id] = $target;
     }
 
     /**
@@ -71,36 +182,10 @@ final class SpringCollection
             $newVelocities[$id] = $vel;
         }
 
-        return $this->withState($newPositions, $newVelocities);
-    }
-
-    /**
-     * @param array<string, Spring> $springs
-     * @param array<string, float> $positions
-     * @param array<string, float> $velocities
-     * @param array<string, float> $targets
-     */
-    public function __construct(
-        array $springs = [],
-        array $positions = [],
-        array $velocities = [],
-        array $targets = []
-    ) {
-        $this->springs = $springs;
-        $this->positions = $positions;
-        $this->velocities = $velocities;
-        $this->targets = $targets;
-    }
-
-    /**
-     * Create a new collection with updated state (used by tick()).
-     *
-     * @param array<string, float> $positions
-     * @param array<string, float> $velocities
-     */
-    private function withState(array $positions, array $velocities): self
-    {
-        return new self($this->springs, $positions, $velocities, $this->targets);
+        return $this->mutate([
+            'positions' => $newPositions,
+            'velocities' => $newVelocities,
+        ]);
     }
 
     /**
@@ -127,14 +212,6 @@ final class SpringCollection
     public function all(): array
     {
         return $this->positions;
-    }
-
-    /**
-     * Set the target for a specific spring.
-     */
-    public function setTarget(string $id, float $target): void
-    {
-        $this->targets[$id] = $target;
     }
 
     /**

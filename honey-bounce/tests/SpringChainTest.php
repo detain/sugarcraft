@@ -111,4 +111,49 @@ final class SpringChainTest extends TestCase
         $this->assertFalse($complete);
         $this->assertInstanceOf(SpringChain::class, $newChain);
     }
+
+    /**
+     * Copy-on-write parity: a single tick must advance ONLY the active stage
+     * and leave every later stage at its initial position. This is what the
+     * clone-once refactor (replace one index instead of rebuilding the array)
+     * must preserve.
+     */
+    public function testTickAdvancesOnlyActiveStage(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $chain = SpringChain::new([
+            [$spring, 0.0, 0.0, 100.0],
+            [$spring, 0.0, 0.0, 50.0],
+        ]);
+
+        [, , $advanced] = $chain->tick();
+        $positions = $advanced->currentPositions();
+
+        $this->assertGreaterThan(0.0, $positions[0], 'active stage must advance');
+        $this->assertSame(0.0, $positions[1], 'inactive stage must stay at its initial position');
+    }
+
+    /**
+     * Parity: identical tick sequence yields identical positions run to run
+     * (guards the clone-once refactor against silent behavioural drift).
+     */
+    public function testTickIsDeterministic(): void
+    {
+        $build = static fn(): SpringChain => SpringChain::new([
+            [new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 100.0],
+            [new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 50.0],
+        ]);
+
+        $runOne = $build();
+        $runTwo = $build();
+        $posOne = [];
+        $posTwo = [];
+        for ($i = 0; $i < 200; $i++) {
+            [$posOne, , $runOne] = $runOne->tick();
+            [$posTwo, , $runTwo] = $runTwo->tick();
+        }
+
+        $this->assertSame($posOne, $posTwo);
+        $this->assertSame($runOne->activeStage(), $runTwo->activeStage());
+    }
 }
