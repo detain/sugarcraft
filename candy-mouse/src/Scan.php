@@ -52,6 +52,18 @@ final class Scan
         $len   = strlen($rendered);
         $i     = 0;
 
+        // Precompute every close-sentinel byte offset in one O(n) pass so the
+        // per-open-sentinel id-terminator lookup below is an O(log n) binary
+        // search instead of a fresh forward strpos rescan.  A render with many
+        // unmatched open sentinels would otherwise rescan to EOS for each one —
+        // O(n^2), a mild DoS on reflected/attacker-influenced text.
+        $closeAt = [];
+        $p = 0;
+        while (($p = strpos($rendered, Sentinel::CLOSE, $p)) !== false) {
+            $closeAt[] = $p;
+            $p += 3;
+        }
+
         while ($i < $len) {
             $b = $rendered[$i];
 
@@ -71,8 +83,8 @@ final class Scan
                     $isClose = ($i + 3 < $len) && ($rendered[$i + 3] === '/');
 
                     // Find the next U+E001 to locate the end of the id field.
-                    $idEnd = strpos($rendered, Sentinel::CLOSE, $i + 3);
-                    if ($idEnd === false) {
+                    $idEnd = self::firstCloseAtOrAfter($closeAt, $i + 3);
+                    if ($idEnd === -1) {
                         $i += 3;
                         continue;
                     }
@@ -105,7 +117,21 @@ final class Scan
                         continue;
                     }
 
-                    // Opening sentinel: record start position.
+                    // Opening sentinel: record start position.  A duplicate id
+                    // — one still open (a second open would clobber the first
+                    // zone's start, merging two zones into one wrong bounding
+                    // box) or one already closed earlier in this same render
+                    // (silent last-write-wins) — is a caller bug: the id can no
+                    // longer address a single zone.  Reject it rather than emit
+                    // a corrupt bbox, mirroring Mark::wrap()'s reject-on-invalid
+                    // contract.
+                    if (isset($this->open[$id]) || isset($this->zones[$id])) {
+                        throw new \InvalidArgumentException(
+                            'candy-mouse: duplicate zone id ' . var_export($id, true)
+                            . ' in scanned render — every zone id must be unique '
+                            . '(a repeated id would merge two zones into one wrong bounding box).'
+                        );
+                    }
                     $this->open[$id] = [$col, $row, $col, $row];
                     $i = $idEnd + 3;
                     continue;
@@ -159,6 +185,32 @@ final class Scan
         }
 
         return $this->zones;
+    }
+
+    /**
+     * Return the first close-sentinel offset in the ascending-sorted
+     * $positions that is >= $from, or -1 when none remain.
+     *
+     * The offsets are precomputed once per {@see parse()} call, so this
+     * binary search replaces the O(n) forward strpos rescan that ran for
+     * every open sentinel — bounding a many-unmatched-open render at
+     * O(n log n) instead of O(n^2).
+     *
+     * @param list<int> $positions
+     */
+    private static function firstCloseAtOrAfter(array $positions, int $from): int
+    {
+        $lo = 0;
+        $hi = count($positions);
+        while ($lo < $hi) {
+            $mid = ($lo + $hi) >> 1;
+            if ($positions[$mid] < $from) {
+                $lo = $mid + 1;
+            } else {
+                $hi = $mid;
+            }
+        }
+        return $lo < count($positions) ? $positions[$lo] : -1;
     }
 
     /**
