@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sprinkles;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Palettes;
 
 /**
  * Canonical theme palette — the single source of truth for terminal
@@ -92,19 +93,19 @@ final class Theme
     public static function dracula(): self
     {
         return new self(
-            foreground:  Color::hex('#f8f8f2'),
-            background:  Color::hex('#282a36'),
-            primary:     Color::hex('#bd93f9'),
-            secondary:   Color::hex('#50fa7b'),
-            accent:      Color::hex('#ff79c6'),
-            muted:       Color::hex('#6272a4'),
-            error:       Color::hex('#ff5555'),
-            warning:     Color::hex('#ffb86c'),
-            success:     Color::hex('#50fa7b'),
-            info:        Color::hex('#8be9fd'),
-            border:      Color::hex('#44475a'),
-            separator:   Color::hex('#383a46'),
-            cursor:      Color::hex('#f8f8f2'),
+            foreground:  Color::hex(Palettes::DRACULA['foreground']),
+            background:  Color::hex(Palettes::DRACULA['background']),
+            primary:     Color::hex(Palettes::DRACULA['purple']),
+            secondary:   Color::hex(Palettes::DRACULA['green']),
+            accent:      Color::hex(Palettes::DRACULA['pink']),
+            muted:       Color::hex(Palettes::DRACULA['comment']),
+            error:       Color::hex(Palettes::DRACULA['red']),
+            warning:     Color::hex(Palettes::DRACULA['orange']),
+            success:     Color::hex(Palettes::DRACULA['green']),
+            info:        Color::hex(Palettes::DRACULA['cyan']),
+            border:      Color::hex(Palettes::DRACULA['currentLine']),
+            separator:   Color::hex(Palettes::DRACULA['separator']),
+            cursor:      Color::hex(Palettes::DRACULA['foreground']),
         );
     }
 
@@ -132,19 +133,19 @@ final class Theme
     public static function oneDark(): self
     {
         return new self(
-            foreground:  Color::hex('#abb2bf'),
-            background:  Color::hex('#282c34'),
-            primary:      Color::hex('#61afef'),
-            secondary:    Color::hex('#98c379'),
-            accent:       Color::hex('#c678dd'),
-            muted:        Color::hex('#5c6370'),
-            error:        Color::hex('#e06c75'),
-            warning:      Color::hex('#e5c07b'),
-            success:     Color::hex('#98c379'),
-            info:        Color::hex('#56b6c2'),
-            border:       Color::hex('#3e4451'),
-            separator:    Color::hex('#2c313a'),
-            cursor:       Color::hex('#528bff'),
+            foreground:  Color::hex(Palettes::ONE_DARK['foreground']),
+            background:  Color::hex(Palettes::ONE_DARK['background']),
+            primary:      Color::hex(Palettes::ONE_DARK['blue']),
+            secondary:    Color::hex(Palettes::ONE_DARK['green']),
+            accent:       Color::hex(Palettes::ONE_DARK['magenta']),
+            muted:        Color::hex(Palettes::ONE_DARK['comment']),
+            error:        Color::hex(Palettes::ONE_DARK['red']),
+            warning:      Color::hex(Palettes::ONE_DARK['yellow']),
+            success:     Color::hex(Palettes::ONE_DARK['green']),
+            info:        Color::hex(Palettes::ONE_DARK['cyan']),
+            border:       Color::hex(Palettes::ONE_DARK['currentLine']),
+            separator:    Color::hex(Palettes::ONE_DARK['separator']),
+            cursor:       Color::hex(Palettes::ONE_DARK['cursor']),
         );
     }
 
@@ -152,19 +153,19 @@ final class Theme
     public static function githubDark(): self
     {
         return new self(
-            foreground:  Color::hex('#c9d1d9'),
-            background:   Color::hex('#0d1117'),
-            primary:      Color::hex('#58a6ff'),
-            secondary:    Color::hex('#3fb950'),
-            accent:       Color::hex('#f778ba'),
-            muted:        Color::hex('#8b949e'),
-            error:        Color::hex('#f85149'),
-            warning:      Color::hex('#d29922'),
-            success:      Color::hex('#3fb950'),
-            info:         Color::hex('#79c0ff'),
-            border:       Color::hex('#30363d'),
-            separator:   Color::hex('#161b22'),
-            cursor:      Color::hex('#58a6ff'),
+            foreground:  Color::hex(Palettes::GITHUB_DARK['foreground']),
+            background:   Color::hex(Palettes::GITHUB_DARK['background']),
+            primary:      Color::hex(Palettes::GITHUB_DARK['blue']),
+            secondary:    Color::hex(Palettes::GITHUB_DARK['green']),
+            accent:       Color::hex(Palettes::GITHUB_DARK['pink']),
+            muted:        Color::hex(Palettes::GITHUB_DARK['comment']),
+            error:        Color::hex(Palettes::GITHUB_DARK['red']),
+            warning:      Color::hex(Palettes::GITHUB_DARK['yellow']),
+            success:      Color::hex(Palettes::GITHUB_DARK['green']),
+            info:         Color::hex(Palettes::GITHUB_DARK['cyan']),
+            border:       Color::hex(Palettes::GITHUB_DARK['currentLine']),
+            separator:   Color::hex(Palettes::GITHUB_DARK['separator']),
+            cursor:      Color::hex(Palettes::GITHUB_DARK['blue']),
         );
     }
 
