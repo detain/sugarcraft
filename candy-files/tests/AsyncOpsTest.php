@@ -233,4 +233,30 @@ final class AsyncOpsTest extends TestCase
         $this->assertFileExists($dstDir . '/file.txt');
         $this->assertSame('nested', file_get_contents($dstDir . '/file.txt'));
     }
+
+    /**
+     * Depth cap on the async path: a directory nested deeper than
+     * MAX_COPY_DEPTH resolves false rather than recursing without bound.
+     * Revert the guard and this resolves true → the test fails.
+     */
+    public function testCopyAsyncStopsAtMaxDepth(): void
+    {
+        $depth = AsyncOps::MAX_COPY_DEPTH + 2;
+        $deepRoot = $this->tmpDir . '/deep';
+        $leaf = $deepRoot . str_repeat('/d', $depth);
+        $this->assertTrue(mkdir($leaf, 0755, true), 'setup: deep tree created');
+        file_put_contents($leaf . '/leaf.txt', 'bottom');
+
+        $promise = $this->ops->copyAsync($deepRoot, $this->tmpDir . '/deep-copy');
+
+        $resolved = null;
+        $promise->then(function (bool $result) use (&$resolved): void {
+            $resolved = $result;
+            Loop::stop();
+        });
+
+        Loop::run();
+
+        $this->assertFalse($resolved, 'copy past MAX_COPY_DEPTH must abort');
+    }
 }
