@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Heatmap;
 
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
@@ -59,6 +60,11 @@ final class Heatmap
     /** @param list<list<int|float>> $grid */
     public static function new(array $grid = [], int $width = 0, int $height = 0): self
     {
+        // Ingestion guard: a non-finite cell would defeat the value range
+        // scan in view() and index the colour palette out of bounds.
+        foreach ($grid as $row) {
+            Finite::assertAll($row);
+        }
         $rows = count($grid);
         $cols = $rows > 0 ? max(array_map('count', $grid)) : 0;
         return new self(
