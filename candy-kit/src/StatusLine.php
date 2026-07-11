@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kit;
 
+use SugarCraft\Kit\Internal\SafeText;
+
 /**
  * Render a single styled "status line" — a glyph + space + message.
  * Mirrors the typical fang/charm CLI presentation so success / error
@@ -42,9 +44,15 @@ final class StatusLine
         return self::format(self::GLYPH_PROMPT, $message, ($theme ?? Theme::ansi())->prompt);
     }
 
-    /** Apply $style to the leading glyph + space; the message stays plain. */
+    /**
+     * Apply $style to the leading glyph + space; the message stays plain.
+     *
+     * The caller message is neutralized via {@see SafeText::line()} before it
+     * reaches the terminal — it is interpolated raw into styled output, so an
+     * embedded escape sequence or control byte would otherwise inject.
+     */
     private static function format(string $glyph, string $message, \SugarCraft\Sprinkles\Style $style): string
     {
-        return $style->render($glyph) . ' ' . $message;
+        return $style->render($glyph) . ' ' . SafeText::line($message);
     }
 }

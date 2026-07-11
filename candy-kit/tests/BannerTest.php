@@ -51,4 +51,24 @@ final class BannerTest extends TestCase
         $out = Banner::title('hi', '', Theme::plain());
         $this->assertStringContainsString('│  hi  │', $out);
     }
+
+    /**
+     * The border+padding Style is rebuilt per call (the old process-lifetime
+     * static cache is gone). Two consecutive renders with DIFFERENT themes must
+     * each reflect their own theme — no cross-call carry-over — and a repeated
+     * same-theme render must stay byte-identical. This pins the invariant the
+     * cache removal protects: state cannot go stale between calls.
+     */
+    public function testThemeIsReflectedPerCallAndStable(): void
+    {
+        $plain = Banner::title('App', 'v1', Theme::plain());
+        $ansi  = Banner::title('App', 'v1', Theme::ansi());
+        // The ANSI theme colours the title with SGR; the plain theme does not.
+        $this->assertStringContainsString("\x1b[", $ansi, 'ansi theme must emit SGR');
+        $this->assertStringNotContainsString("\x1b[", $plain, 'plain theme must emit no SGR');
+        $this->assertNotSame($plain, $ansi, 'each call must reflect its own theme');
+
+        // A second plain render is byte-identical to the first (no drift).
+        $this->assertSame($plain, Banner::title('App', 'v1', Theme::plain()));
+    }
 }

@@ -59,4 +59,36 @@ final class HelpTextTest extends TestCase
         $this->assertNotFalse($abcPos);
         $this->assertSame($aPos, $abcPos);
     }
+
+    /**
+     * Security: usage, description, section titles, and row keys/descriptions
+     * are all caller-supplied and interpolated raw into the help page. Under
+     * the plain theme (no SGR of its own) any ESC / BEL in the output must have
+     * come from that text — assert every field is neutralized. The structural
+     * newlines HelpText emits itself are fine; only the injected escape and
+     * control bytes must go. (Revert the SafeText routing → leaks → fails.)
+     */
+    public function testCallerTextEscapeAndControlBytesNeutralized(): void
+    {
+        $evil = "x\x1b[2Jy\x1b]0;t\x07z";
+        $out  = HelpText::render(
+            usage: $evil,
+            sections: [$evil => [$evil => $evil]],
+            description: $evil,
+            theme: Theme::plain(),
+        );
+
+        $this->assertStringNotContainsString("\x1b", $out, 'ESC injection must be stripped');
+        $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+        $this->assertStringContainsString('xyz', $out, 'visible text survives');
+    }
+
+    /** renderRows() neutralizes control bytes in caller keys + descriptions. */
+    public function testRenderRowsNeutralizesControlBytes(): void
+    {
+        $out = HelpText::renderRows(["k\x1b[2J" => "d\x07esc"], Theme::plain());
+        $this->assertStringNotContainsString("\x1b", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringContainsString('desc', $out);
+    }
 }

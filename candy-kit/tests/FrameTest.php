@@ -168,6 +168,42 @@ final class FrameTest extends TestCase
         self::assertStringNotContainsString('38;2;100;116;139', $out);
     }
 
+    /**
+     * A frame shorter than its chrome cannot honour the "exactly $rows lines"
+     * contract: with $rows < OVERHEAD (6) there is no room for the border /
+     * title / two dividers / status, yet the old code emitted all 6 chrome
+     * lines regardless — overflowing the terminal and desyncing the diff
+     * renderer. render() must reject it instead.
+     *
+     * @dataProvider tooShortRows
+     */
+    public function testRowsBelowOverheadThrow(int $rows): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Frame::new()->render('body', 80, $rows);
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function tooShortRows(): iterable
+    {
+        yield 'zero'  => [0];
+        yield 'one'   => [1];
+        yield 'five'  => [5];
+    }
+
+    /** At exactly OVERHEAD rows the frame renders (all chrome, zero content). */
+    public function testExactlyOverheadRowsRenders(): void
+    {
+        $out = Frame::new()->withTitle('t')->withStatus('s')->render('body', 40, 6);
+        $lines = explode("\n", $out);
+        self::assertCount(6, $lines, 'a 6-row frame is exactly 6 lines');
+        foreach ($lines as $i => $line) {
+            self::assertSame(40, Width::string($line), "line $i must be exactly 40 cells");
+        }
+    }
+
     /** Truncating an over-wide styled line must preserve its foreground colour. */
     public function testStyledOverWideLineKeepsColor(): void
     {

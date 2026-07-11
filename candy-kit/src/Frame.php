@@ -92,11 +92,25 @@ final class Frame
     /**
      * Render the framed body at exactly $cols × $rows cells.
      *
-     * The returned string is always exactly $rows lines (for $rows >= the frame
-     * overhead) and every line is exactly $cols display cells wide.
+     * The returned string is always exactly $rows lines and every line is
+     * exactly $cols display cells wide.
+     *
+     * @throws \InvalidArgumentException when $rows < {@see OVERHEAD}: there is
+     *         no room for the border/title/divider/status chrome, so the frame
+     *         cannot honour its "exactly $rows lines" contract (it would emit
+     *         all OVERHEAD chrome lines regardless, overflowing the terminal
+     *         and desyncing the diff renderer). Callers must guarantee the
+     *         terminal is at least OVERHEAD rows tall before framing.
      */
     public function render(string $body, int $cols, int $rows): string
     {
+        if ($rows < self::OVERHEAD) {
+            throw new \InvalidArgumentException(
+                'Frame::render() needs at least ' . self::OVERHEAD
+                . ' rows for the border/title/divider/status chrome; got ' . $rows . '.'
+            );
+        }
+
         $inner = max(0, $cols - 2);
         $contentHeight = max(0, $rows - self::OVERHEAD);
 
