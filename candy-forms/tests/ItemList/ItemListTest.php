@@ -375,4 +375,18 @@ final class ItemListTest extends TestCase
         // banana / cherry / date are non-cursor on row 0 cursor.
         $this->assertStringContainsString('· banana', $view);
     }
+
+    public function testFilterHighlightRendersMatchIndicesInView(): void
+    {
+        // Enter filter mode with "an" - should highlight "an" in "banana".
+        $l = $this->focused();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'n'));
+        $view = $l->view();
+        // The view should contain "an" highlighted with ANSI REVERSE sequences.
+        // Structure: "> " + REVERSE + "an" + RESET + "ana" for "banana".
+        $this->assertStringContainsString("\x1b[7m", $view); // REVERSE on
+        $this->assertStringContainsString("\x1b[0m", $view); // RESET off
+    }
 }

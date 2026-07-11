@@ -527,13 +527,12 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-core",
-                "reference": "d400b0a062454887b52c008dc781542948ed50b1"
+                "reference": "0a6f36e494222c663c9d88c1b3e85d29e7c0bb39"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-pty": "dev-master"
             },
             "require-dev": {
@@ -715,7 +714,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "b4c8bc37272946862f83f140e9250a3bfc12b479"
+                "reference": "1dd21498e249f92df969b48a4e66e4c93b01e1ab"
             },
             "require": {
                 "php": "^8.3",
@@ -830,7 +829,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-mouse",
-                "reference": "c1cbe36293b71114bb8560d1ac60040afbc069a9"
+                "reference": "b71e99da86943f6fd9cd6852f428e07a4d1f2e07"
             },
             "require": {
                 "php": "^8.3",
@@ -886,13 +885,12 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-palette",
-                "reference": "c616ce65cdccba485e93beb78f059cab622328d4"
+                "reference": "61af11b379620cf719323f9c65ece0ff23b34bb6"
             },
             "require": {
                 "php": "^8.3",
                 "react/child-process": "^0.6",
-                "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpstan/phpstan": "^2.1",
@@ -946,7 +944,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-pty",
-                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
+                "reference": "d59307116864687e064091cc4a2cb439203d3cb7"
             },
             "require": {
                 "ext-ffi": "*",
@@ -1016,7 +1014,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-sprinkles",
-                "reference": "0cddbfeef4c6d6cf5ec7f0734d9e8f1fb9b1ff31"
+                "reference": "70a09253b2702fb8635fea0c1468f57245762404"
             },
             "require": {
                 "php": "^8.3",
@@ -1080,7 +1078,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-zone",
-                "reference": "f3b4a91fcae1d9f0557db86b8461db342a6a1883"
+                "reference": "e6f0200375c10e1b0b7cb5b8045ac7fb607ad6aa"
             },
             "require": {
                 "php": "^8.3",
@@ -1140,7 +1138,7 @@
             "dist": {
                 "type": "path",
                 "url": "../honey-bounce",
-                "reference": "dffd378129f02179e22d76a0bfab7e410d79b47d"
+                "reference": "b5f9014bf62d9d774642e0990ca4f1e675c0e6a6"
             },
             "require": {
                 "php": "^8.3",
@@ -2805,7 +2803,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-testing",
-                "reference": "f8fc95d3723ed891cc62546abfdc25c33a0f9121"
+                "reference": "b608cb74e996ca75cf161d281e6c1bcf3771d057"
             },
             "require": {
                 "php": "^8.3",
