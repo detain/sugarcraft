@@ -66,8 +66,10 @@ $reg->cardinality('http.requests');   // → int
 // Manually evict a label combination (e.g. after a session ends)
 $reg->deleteLabelValues('http.requests', ['route' => '/logout']);
 
-// Eviction is also called automatically — FIFO; the oldest entry
-// is removed when the limit is exceeded.
+// Eviction is also called automatically — FIFO; when the limit is
+// exceeded the oldest entry is dropped from the cardinality cache AND
+// its series is removed from the backend, so a tag flood cannot grow
+// backend memory without bound.
 ```
 
 ## Descriptor registration

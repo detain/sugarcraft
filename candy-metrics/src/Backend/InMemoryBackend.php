@@ -10,13 +10,19 @@ use SugarCraft\Metrics\Util;
 
 /**
  * In-memory accumulator. Counters add up, gauges hold the latest
- * value, histograms keep every sample. Mostly used for tests and
- * for fanning out to multiple "live" backends via
+ * value, histograms keep a bounded reservoir of samples. Mostly used
+ * for tests and for fanning out to multiple "live" backends via
  * {@see MultiBackend}.
  *
  * The bucket key is `name|tag1=v1|tag2=v2|...` with tags sorted
  * by key, so identical (name, tags) tuples accumulate into the
  * same bucket regardless of caller insertion order.
+ *
+ * Histograms are bounded per series by {@see $maxSamplesPerKey} via
+ * reservoir sampling (Algorithm R): a flood of `histogram()` calls on
+ * one key can never grow memory past the cap, closing an unbounded
+ * memory (DoS) hole while keeping a statistically representative
+ * sample of the full stream for quantile estimation.
  */
 final class InMemoryBackend implements Backend
 {
@@ -26,12 +32,30 @@ final class InMemoryBackend implements Backend
     private array $gauges = [];
     /** @var array<string,list<float>> */
     private array $histograms = [];
+    /**
+     * Total observations seen per histogram key (not just the stored
+     * count) — drives reservoir replacement once the cap is reached.
+     *
+     * @var array<string,int>
+     */
+    private array $histogramSeen = [];
     /** @var array<string,float> */
     private array $upDownCounters = [];
     /** @var array<string,float> */
     private array $asyncCounters = [];
     /** @var array<string,float> */
     private array $asyncGauges = [];
+
+    /**
+     * @param int $maxSamplesPerKey Upper bound on retained histogram samples
+     *                              per (name, tags) series. Must be >= 1.
+     */
+    public function __construct(private readonly int $maxSamplesPerKey = 4096)
+    {
+        if ($this->maxSamplesPerKey < 1) {
+            throw new \InvalidArgumentException('maxSamplesPerKey must be >= 1, got ' . $this->maxSamplesPerKey);
+        }
+    }
 
     public function counter(string $name, float $value, array $tags = []): void
     {
@@ -46,7 +70,24 @@ final class InMemoryBackend implements Backend
 
     public function histogram(string $name, float $value, array $tags = []): void
     {
-        $this->histograms[$this->key($name, $tags)][] = $value;
+        $key = $this->key($name, $tags);
+        $seen = ($this->histogramSeen[$key] ?? 0) + 1;
+        $this->histogramSeen[$key] = $seen;
+
+        if ($seen <= $this->maxSamplesPerKey) {
+            // Reservoir not yet full: keep every sample in arrival order.
+            $this->histograms[$key][] = $value;
+            return;
+        }
+
+        // Reservoir full: Algorithm R — replace a uniformly-random slot with
+        // probability maxSamplesPerKey/seen so the retained set stays a
+        // uniform random sample of the whole stream. Array length is pinned
+        // at the cap, so memory can't grow further under a sample flood.
+        $j = random_int(0, $seen - 1);
+        if ($j < $this->maxSamplesPerKey) {
+            $this->histograms[$key][$j] = $value;
+        }
     }
 
     public function upDownCounter(string $name, float $amount, array $tags = []): void
@@ -130,9 +171,16 @@ final class InMemoryBackend implements Backend
         $this->counters = [];
         $this->gauges = [];
         $this->histograms = [];
+        $this->histogramSeen = [];
         $this->upDownCounters = [];
         $this->asyncCounters = [];
         $this->asyncGauges = [];
+    }
+
+    /** Configured upper bound on retained histogram samples per series. */
+    public function maxSamplesPerKey(): int
+    {
+        return $this->maxSamplesPerKey;
     }
 
     /**
@@ -148,6 +196,7 @@ final class InMemoryBackend implements Backend
             $this->counters[$key],
             $this->gauges[$key],
             $this->histograms[$key],
+            $this->histogramSeen[$key],
             $this->upDownCounters[$key],
             $this->asyncCounters[$key],
             $this->asyncGauges[$key],
