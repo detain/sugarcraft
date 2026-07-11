@@ -10,6 +10,6 @@ declare(strict_types=1);
 
 return [
     'render.unknown_theme' => '알 수 없는 테마: {name}',
-];
     'render.theme_config_unreadable' => '테마 설정을 읽을 수 없습니다: {path}',
+    'render.theme_config_too_large' => '테마 설정이 {limit}바이트를 초과합니다: {path}',
 ];
