@@ -97,6 +97,32 @@ final class SpringTest extends TestCase
         $this->assertFalse(is_nan($vel));
     }
 
+    public function testSettledTrueAtRest(): void
+    {
+        // Exactly at target with zero velocity.
+        $this->assertTrue(Spring::settled(10.0, 0.0, 10.0));
+        // Just inside the default threshold (1e-4) on both axes.
+        $this->assertTrue(Spring::settled(10.00005, 0.00005, 10.0));
+    }
+
+    public function testSettledFalseInMotion(): void
+    {
+        // Both displacement and velocity clearly past threshold.
+        $this->assertFalse(Spring::settled(5.0, 2.0, 10.0));
+        // Velocity alone past threshold.
+        $this->assertFalse(Spring::settled(10.0, 0.5, 10.0));
+        // Displacement alone past threshold.
+        $this->assertFalse(Spring::settled(9.0, 0.0, 10.0));
+    }
+
+    public function testSettledRespectsCustomThreshold(): void
+    {
+        // 3e-4 displacement: settled under a looser 5e-4 band (SpringChain's),
+        // but not under the default 1e-4 band.
+        $this->assertFalse(Spring::settled(10.0003, 0.0, 10.0));
+        $this->assertTrue(Spring::settled(10.0003, 0.0, 10.0, 0.0005));
+    }
+
     /**
      * Snapshot test: critically damped spring at frame 30 reaches a
      * deterministic intermediate position. If the underlying math drifts the
