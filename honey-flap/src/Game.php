@@ -35,10 +35,18 @@ final class Game implements Model
 
     private const HIGH_SCORE_FILE = '.honey-flap/scores.json';
 
+    /** Upper bound on the retained high-score leaderboard. */
+    public const MAX_HIGH_SCORES = 10;
+
     /** @var \Closure(int): int */
     private \Closure $rand;
 
     private string $highScoreFilePath;
+
+    /** Raw config dir as supplied to the constructor — threaded through
+     *  {@see advance()} / {@see withBird()} so the persist target survives
+     *  every derived instance instead of silently reverting to the default. */
+    private ?string $configDir;
 
     /**
      * @param list<Pipe> $pipes
@@ -56,6 +64,7 @@ final class Game implements Model
         ?string $configDir = null,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
+        $this->configDir = $configDir;
         $this->highScoreFilePath = ($configDir ?? $this->getDefaultConfigDir()) . '/' . self::HIGH_SCORE_FILE;
     }
 
@@ -154,6 +163,12 @@ final class Game implements Model
         $scores = $this->highScores;
         $scores[] = $score;
         sort($scores, SORT_NUMERIC);
+        // Cap the leaderboard: the save file is re-read and re-appended
+        // across sessions, so an unbounded list would grow forever. Keep
+        // the top MAX_HIGH_SCORES (the tail after an ascending sort).
+        if (count($scores) > self::MAX_HIGH_SCORES) {
+            $scores = array_values(array_slice($scores, -self::MAX_HIGH_SCORES));
+        }
         return new self(
             bird: $this->bird,
             pipes: $this->pipes,
@@ -163,7 +178,7 @@ final class Game implements Model
             highScores: $scores,
             newRecord: true,
             rand: $this->rand,
-            configDir: null,
+            configDir: $this->configDir,
         );
     }
 
@@ -194,7 +209,7 @@ final class Game implements Model
                 return [$this, Cmd::quit()];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'r') {
-                return [self::start($this->rand), $this->init()];
+                return [self::start($this->rand, $this->configDir), $this->init()];
             }
             if ($this->crashed) {
                 return [$this, null];
@@ -212,20 +227,16 @@ final class Game implements Model
                 return [$this, null];
             }
             $next = $this->advance();
-            // Persist high score when game ends — off the synchronous update() path.
+            // Persist high score when game ends — off the synchronous update()
+            // path. The write itself lives in persistHighScores() (single
+            // source of truth); the Cmd wrapper only defers it off the render
+            // loop and swallows I/O errors so a full disk can't crash the game.
             if ($next->crashed) {
                 $updated = $next->withHighScore($next->score);
                 if ($updated->newRecord) {
-                    $path = $next->highScoreFilePath;
-                    $scores = $updated->highScores;
-                    $persistCmd = static function () use ($path, $scores): ?Msg {
+                    $persistCmd = static function () use ($updated): ?Msg {
                         try {
-                            $dir = dirname($path);
-                            if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
-                                return null;
-                            }
-                            $json = json_encode($scores, JSON_PRETTY_PRINT);
-                            @file_put_contents($path, $json);
+                            $updated->persistHighScores();
                         } catch (\Throwable) {
                             // Swallow: full disk / unwritable file must not crash the loop.
                         }
@@ -267,15 +278,15 @@ final class Game implements Model
             $pipes[] = PipeGenerator::makePipe($this->score, $this->rand);
         }
 
-        // Score = number of pipes the bird has passed in this tick.
-        // A pipe crossed the bird column if its PREVIOUS x was > BIRD_COL-1
-        // and its CURRENT x is <= BIRD_COL-1 (true crossing test).
+        // Score = number of pipes the bird passed this tick. Each pipe slid
+        // one column left (x+1 → x), so it just cleared the bird exactly when
+        // it lands on the column immediately left of the bird — x == BIRD_COL-1.
+        // (The earlier guard compared x+1 against BIRD_COL instead of BIRD_COL-1,
+        // an off-by-one that made the condition unsatisfiable, so the score was
+        // pinned at 0 for the entire game — and no high score could ever persist.)
         $score = $this->score;
         foreach ($pipes as $p) {
-            // Pipe moved from x+1 to x this tick (tick decrements by 1).
-            // It crossed BIRD_COL if (x+1) > BIRD_COL-1 && x <= BIRD_COL-1.
-            // Since x == BIRD_COL-1 after the tick means it just arrived.
-            if (($p->x + 1) > self::BIRD_COL && $p->x <= self::BIRD_COL - 1) {
+            if ($p->x === self::BIRD_COL - 1) {
                 $score++;
             }
         }
@@ -300,6 +311,7 @@ final class Game implements Model
             tickIndex: $tick,
             highScores: $this->highScores,
             rand: $this->rand,
+            configDir: $this->configDir,
         );
     }
 
@@ -313,6 +325,7 @@ final class Game implements Model
             tickIndex: $this->tickIndex,
             highScores: $this->highScores,
             rand: $this->rand,
+            configDir: $this->configDir,
         );
     }
 

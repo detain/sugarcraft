@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flap\Tests;
 
+use SugarCraft\Flap\Game;
 use SugarCraft\Flap\PipeGenerator;
 use PHPUnit\Framework\TestCase;
 
@@ -71,5 +72,28 @@ final class PipeGeneratorTest extends TestCase
         // gapY = 6 + 0 = 6
         $this->assertGreaterThanOrEqual(6, $pipe->gapY);
         $this->assertLessThanOrEqual(12, $pipe->gapY);
+    }
+
+    public function testMakePipePlacesGapAtUpperBoundWhenRandMaxes(): void
+    {
+        // rand returning its max drives gapY to the top of the allowed band —
+        // the branch the rand=0 case never exercises.
+        $rand = static fn(int $max): int => $max;
+        $pipe = PipeGenerator::makePipe(0, $rand);
+        // gapHeight 6 → halfGap 3 → minY = 6, maxY = 12, gapY = 6 + (12-6) = 12.
+        $this->assertSame(12, $pipe->gapY);
+    }
+
+    public function testMakePipeGapStaysInsidePlayfieldAcrossRandRange(): void
+    {
+        // For every rand offset across the band, the gap span (gapY ± halfGap)
+        // must clear both the ceiling (row 0) and the floor (row HEIGHT).
+        foreach ([0, 1, 2, 3, 6] as $offset) {
+            $rand = static fn(int $max): int => min($offset, $max);
+            $pipe = PipeGenerator::makePipe(0, $rand);
+            $halfGap = intdiv($pipe->gapHeight, 2);
+            $this->assertGreaterThanOrEqual(0, $pipe->gapY - $halfGap, 'gap top must stay below the ceiling');
+            $this->assertLessThan(Game::HEIGHT, $pipe->gapY + $halfGap, 'gap bottom must stay above the floor');
+        }
     }
 }
