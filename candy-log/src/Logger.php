@@ -171,29 +171,59 @@ final class Logger
         $this->log(Level::Fatal, $message, $context);
     }
 
-    // Formatted variants
+    /**
+     * Whether a message at $level would be emitted under the current minLevel.
+     *
+     * Lets callers (and the sprintf-formatting `*f` helpers below) skip
+     * building an expensive message that would only be discarded by the level
+     * filter. Mirrors the guard in {@see emit()}.
+     */
+    public function enabled(Level $level): bool
+    {
+        return $level->value >= $this->minLevel->value;
+    }
+
+    // Formatted variants. Each guards on enabled() BEFORE sprintf so a
+    // filtered-out call never pays the formatting cost (nor triggers argument
+    // side effects such as __toString()). `printf` is intentionally excluded —
+    // like `print`, it bypasses the level filter and must always render.
     public function debugf(string $format, array $context = [], ...$args): void
     {
+        if (!$this->enabled(Level::Debug)) {
+            return;
+        }
         $this->debug(\sprintf($format, ...$args), $context);
     }
 
     public function infof(string $format, array $context = [], ...$args): void
     {
+        if (!$this->enabled(Level::Info)) {
+            return;
+        }
         $this->info(\sprintf($format, ...$args), $context);
     }
 
     public function warnf(string $format, array $context = [], ...$args): void
     {
+        if (!$this->enabled(Level::Warn)) {
+            return;
+        }
         $this->warn(\sprintf($format, ...$args), $context);
     }
 
     public function errorf(string $format, array $context = [], ...$args): void
     {
+        if (!$this->enabled(Level::Error)) {
+            return;
+        }
         $this->error(\sprintf($format, ...$args), $context);
     }
 
     public function fatalf(string $format, array $context = [], ...$args): void
     {
+        if (!$this->enabled(Level::Fatal)) {
+            return;
+        }
         $this->fatal(\sprintf($format, ...$args), $context);
     }
 

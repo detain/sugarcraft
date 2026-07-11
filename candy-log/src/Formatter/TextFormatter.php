@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Log\Formatter;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Log\Formatter;
 use SugarCraft\Log\Level;
 use SugarCraft\Log\PartsOrder;
@@ -72,7 +73,7 @@ final class TextFormatter implements Formatter
                     ? ($this->useColors ? $this->styledCaller($caller) : "<{$caller}>")
                     : null,
 
-                PartsOrder::PART_MESSAGE => $message,
+                PartsOrder::PART_MESSAGE => $this->sanitize($message),
 
                 PartsOrder::PART_FIELDS => \count($context) > 0
                     ? $this->formatContext($context)
@@ -108,8 +109,9 @@ final class TextFormatter implements Formatter
     {
         $pairs = [];
         foreach ($context as $k => $v) {
-            $val = $this->formatValue($v);
-            $pair = "{$k}={$val}";
+            $key = $this->sanitize((string) $k);
+            $val = $this->sanitize($this->formatValue($v));
+            $pair = "{$key}={$val}";
             $pairs[] = $this->useColors
                 ? $this->styles->keyStyle('key')->render($pair)
                 : $pair;
@@ -120,6 +122,24 @@ final class TextFormatter implements Formatter
     private function formatValue(mixed $v): string
     {
         return ValueCoercion::stringify($v);
+    }
+
+    /**
+     * Neutralize log-injection and terminal-control-sequence injection in
+     * caller-supplied text.
+     *
+     * Untrusted message/context values can embed a raw newline to forge a
+     * second log line, or a raw ESC to smuggle SGR/CSI sequences that recolor
+     * or reposition the terminal. {@see Sanitize::untrusted()} strips ESC-based
+     * ANSI and lone C1/C0 bytes; the trailing str_replace flattens any
+     * surviving \n/\r/\t to a single space so one log call renders as exactly
+     * one physical line. The library's own coloring (added by Style::render
+     * around this value) is unaffected because it wraps the already-sanitized
+     * text.
+     */
+    private function sanitize(string $s): string
+    {
+        return \str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($s));
     }
 
     /**
