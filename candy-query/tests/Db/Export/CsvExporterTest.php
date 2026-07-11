@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Db\Export;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Export\CsvExporter;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 use SugarCraft\Query\Db\SqliteDatabase;
 
 /**
@@ -176,6 +178,23 @@ final class CsvExporterTest extends TestCase
         $this->assertSame('2,bob', $lines[2]);
     }
 
+    public function testImportCsvUsesPostgresQuotingForPostgresDriver(): void
+    {
+        // Identifier quoting for the INSERT must follow the connection driver;
+        // MySQL backticks are invalid in PostgreSQL.
+        $db = new CsvExporterFakePgDb();
+        $exporter = new CsvExporter($db);
+
+        $csvPath = tempnam(sys_get_temp_dir(), 'csv');
+        file_put_contents($csvPath, "id,name\n1,alice\n");
+        $exporter->importCsv($csvPath, 'users');
+        unlink($csvPath);
+
+        $this->assertStringContainsString('INSERT INTO "users" ("id","name")', $db->lastExec);
+        $this->assertStringNotContainsString('`users`', $db->lastExec);
+        $this->assertStringNotContainsString('`id`', $db->lastExec);
+    }
+
     public function testExportCsvGuardsTabAndCarriageReturn(): void
     {
         $csvPath = tempnam(sys_get_temp_dir(), 'csv');
@@ -225,5 +244,84 @@ final class CsvExporterTest extends TestCase
         $this->assertSame("has\nnewline", $row3[0]);
 
         unlink($csvPath);
+    }
+}
+
+/**
+ * Minimal PostgreSQL-flavored fake capturing the last exec()'d SQL so the test
+ * can assert driver-correct identifier quoting on the generated INSERT.
+ */
+final class CsvExporterFakePgDb implements DatabaseInterface
+{
+    public string $lastExec = '';
+
+    public function tables(): array
+    {
+        return ['users'];
+    }
+
+    public function rows(string $table, int $limit = 100): array
+    {
+        return [];
+    }
+
+    public function query(string $sql): array
+    {
+        return [['id' => 1, 'name' => 'x']];
+    }
+
+    public function exec(string $sql): int
+    {
+        $this->lastExec = $sql;
+        return 1;
+    }
+
+    public function lastInsertId(): string|int
+    {
+        return 0;
+    }
+
+    public function quote(string $value): string
+    {
+        return "'" . str_replace("'", "''", $value) . "'";
+    }
+
+    public function close(): void
+    {
+    }
+
+    public function serverVersion(): string
+    {
+        return 'PostgreSQL 16.2';
+    }
+
+    public function driverName(): string
+    {
+        return 'pgsql';
+    }
+
+    public function ping(): bool
+    {
+        return true;
+    }
+
+    public function databases(): array
+    {
+        return [];
+    }
+
+    public function prepare(string $sql): ?PreparedStatementInterface
+    {
+        return null;
+    }
+
+    public function dsn(): string
+    {
+        return '';
+    }
+
+    public function username(): string
+    {
+        return '';
     }
 }
