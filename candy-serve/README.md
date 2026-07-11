@@ -125,6 +125,21 @@ ssh -p 23231 user@your-server repo tree repo-name
 ssh -p 23231 user@your-server repo blob repo-name path/to/file.php -c -l
 ```
 
+### See also — SSH middleware (candy-wish)
+
+`SSH\SSHServer` is a `ForceCommand`-style git-shell gate: it parses a single
+`git-upload-pack`/`git-receive-pack <repo>` request, validates the repo name,
+and dispatches to `Git\UploadPack`/`Git\ReceivePack`. It does not implement the
+SSH wire protocol — it expects to run under the host's OpenSSH daemon via
+`ForceCommand`.
+
+For a general SSH middleware/session framework (middleware chain, `ForceCommand`
+supervisor, `Session`, transports), see the sibling
+[`candy-wish`](../candy-wish). Both run under host sshd; neither implements the
+SSH wire protocol itself. Their auth models differ deliberately: candy-serve
+does its own SSH public-key auth (`SSH\Auth` + `User`), while candy-wish trusts
+sshd and allowlists by username + key fingerprint.
+
 ## HTTP Smart Protocol
 
 CandyServe supports Git clone/fetch/push over HTTP using the smart protocol (not the dumb HTTP transport).
