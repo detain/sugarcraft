@@ -52,6 +52,13 @@ final class Model
     // Configuration
     // -------------------------------------------------------------------------
 
+    /**
+     * Upper bound for a single viewport dimension. Guards {@see bufferFromOutput()}
+     * — which allocates width×height cells — against a memory-exhaustion DoS from
+     * an absurd dimension. Far larger than any real terminal (a few thousand cells).
+     */
+    public const MAX_DIMENSION = 100000;
+
     public int $width  = 80;  // viewport width in cells
     public int $height = 24;  // viewport height in lines
     public int $cursorOffset = 5;  // gap between cursor and viewport edge
@@ -142,17 +149,43 @@ final class Model
 
     public function setWidth(int $width): self
     {
+        self::assertDimension($width, 'width');
         return $this->mutate(fn($m) => $m->width = $width);
     }
 
     public function setHeight(int $height): self
     {
+        self::assertDimension($height, 'height');
         return $this->mutate(fn($m) => $m->height = $height);
     }
 
     public function setViewport(int $width, int $height): self
     {
+        self::assertDimension($width, 'width');
+        self::assertDimension($height, 'height');
         return $this->mutate(fn($m) => [$m->width, $m->height] = [$width, $height]);
+    }
+
+    /**
+     * Reject an out-of-range viewport dimension.
+     *
+     * A negative dimension is invalid input; an absurdly large one would make
+     * {@see bufferFromOutput()} allocate width×height cells and exhaust memory
+     * (DoS). Zero is permitted — {@see lines()} rejects a zero viewport at
+     * render time with a RuntimeException, which existing callers rely on.
+     *
+     * @throws \InvalidArgumentException when $n is negative or above MAX_DIMENSION.
+     */
+    private static function assertDimension(int $n, string $name): void
+    {
+        if ($n < 0 || $n > self::MAX_DIMENSION) {
+            throw new \InvalidArgumentException(\sprintf(
+                '%s must be between 0 and %d, got %d.',
+                $name,
+                self::MAX_DIMENSION,
+                $n,
+            ));
+        }
     }
 
     public function setCursorOffset(int $n): self
@@ -177,11 +210,13 @@ final class Model
 
     public function setLineStyle(string $ansiStyle): self
     {
+        self::sgrCodes($ansiStyle); // reject non-SGR (escape-injection) input up front
         return $this->mutate(fn($m) => $m->lineStyle = $ansiStyle);
     }
 
     public function setCurrentStyle(string $ansiStyle): self
     {
+        self::sgrCodes($ansiStyle); // reject non-SGR (escape-injection) input up front
         return $this->mutate(fn($m) => $m->currentStyle = $ansiStyle);
     }
 
@@ -782,8 +817,41 @@ final class Model
         if ($style === '') {
             return $s;
         }
-        $codes = \trim($style, "\e\x1b[]m");
+        // Re-validate at the splice point: the public $lineStyle/$currentStyle
+        // properties can be assigned directly, bypassing the setters, so an
+        // injected OSC/APC/other escape must not reach the output stream.
+        $codes = self::sgrCodes($style);
+        if ($codes === '') {
+            return $s;
+        }
         return Ansi::CSI . $codes . 'm' . $s . Ansi::reset();
+    }
+
+    /**
+     * Validate an ANSI SGR style string and return its bare numeric parameters.
+     *
+     * The style may be wrapped (`"\e[1;31m"`) or bare (`"1;31"`); either form is
+     * stripped to the parameter bytes. Anything outside the SGR grammar
+     * (`[0-9;]`) is rejected so a caller-supplied style cannot smuggle an
+     * OSC/APC/other escape sequence into the emitted stream — a terminal-escape
+     * injection that could rewrite the title, run clipboard/hyperlink payloads,
+     * or corrupt the display.
+     *
+     * @throws \InvalidArgumentException when $style contains non-SGR bytes.
+     */
+    private static function sgrCodes(string $style): string
+    {
+        if ($style === '') {
+            return '';
+        }
+        $codes = \trim($style, "\e\x1b[]m");
+        if (\preg_match('/^[0-9;]*$/', $codes) !== 1) {
+            throw new \InvalidArgumentException(
+                'Style must contain only ANSI SGR parameters ([0-9;]); '
+                . 'escape or control sequences are not allowed.',
+            );
+        }
+        return $codes;
     }
 
     /** Compute printable (non-ANSI) cell width. */
