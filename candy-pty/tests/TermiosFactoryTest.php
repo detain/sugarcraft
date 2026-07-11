@@ -145,11 +145,12 @@ final class TermiosFactoryTest extends TestCase
                     $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
                 }
 
+                $saved = null;
                 try {
                     $termios = TermiosFactory::open($slaveFd);
 
                     $saved = $termios->current();
-                    $termios->restore();
+                    $saved->restore();
 
                     $raw = $termios->makeRaw();
                     $raw->apply();
@@ -184,7 +185,7 @@ final class TermiosFactoryTest extends TestCase
                         "Backend {$backend}: raw mode should have no CR from echo"
                     );
                 } finally {
-                    $termios->restore();
+                    $saved?->restore();
                     $libc->close($slaveFd);
                     $master->close();
                 }

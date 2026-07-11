@@ -185,7 +185,12 @@ final class PosixPump implements PumpContract
         while (\microtime(true) < $flushDeadline) {
             $tail = $master->read($opts->chunkBytes);
             if ($tail === null || $tail === '') {
-                if ($child !== null && $child->exited()) {
+                // Nothing to drain right now. Only sleep-and-retry while a
+                // live child could still emit tail bytes. If there is no
+                // child (stdin→master-only pump) or it has already exited,
+                // no more output is coming — return immediately instead of
+                // burning the whole flushDeadline in 20ms usleep() ticks.
+                if ($child === null || $child->exited()) {
                     break;
                 }
                 \usleep(20_000);
