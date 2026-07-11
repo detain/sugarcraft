@@ -5,12 +5,18 @@ declare(strict_types=1);
 namespace SugarCraft\Hermit;
 
 use SugarCraft\Hermit\Concerns\Visible;
+use SugarCraft\Sprinkles\Bar\StatusBar as BarStatusBar;
 
 /**
  * StatusBar — renders a single-line status message for the Hermit overlay.
  *
  * Used to display dynamic state information such as item counts,
  * selected file path, filter statistics, or other transient context.
+ *
+ * Rendering is delegated to the shared {@see BarStatusBar} primitive: the
+ * bracketed segments and the message become one left-anchored group joined
+ * by a space. This class keeps Hermit's map-based segment API (unique names,
+ * update-in-place) as a thin wrapper over that primitive.
  */
 final class StatusBar
 {
@@ -83,7 +89,7 @@ final class StatusBar
 
     /**
      * Render the status bar as a single line of text.
-     * Format: "[segment1: value] message [segment2: value]"
+     * Format: "[segment1: value] message"
      * When no message and no segments: returns empty string.
      */
     public function render(): string
@@ -101,6 +107,8 @@ final class StatusBar
             $parts[] = $this->message;
         }
 
-        return \implode(' ', $parts);
+        // Delegate the join to the shared primitive (default separator is a
+        // single space, no fixed width → natural concatenation).
+        return BarStatusBar::new()->left(...$parts)->render();
     }
 }
