@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kit;
 
+use SugarCraft\Kit\Internal\SafeText;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -32,14 +33,16 @@ final class HelpText
     ): string {
         $theme ??= Theme::ansi();
         $blocks = [];
+        // Caller-supplied usage/description/titles/rows are interpolated raw
+        // into the help page — neutralize escape/control injection on each.
         if ($usage !== '') {
-            $blocks[] = $theme->accent->render('USAGE') . "\n  " . $usage;
+            $blocks[] = $theme->accent->render('USAGE') . "\n  " . SafeText::line($usage);
         }
         if ($description !== '') {
-            $blocks[] = $description;
+            $blocks[] = SafeText::line($description);
         }
         foreach ($sections as $title => $rows) {
-            $blocks[] = $theme->accent->render(strtoupper($title)) . "\n"
+            $blocks[] = $theme->accent->render(strtoupper(SafeText::line((string) $title))) . "\n"
                       . self::renderRows($rows, $theme);
         }
         return implode("\n\n", $blocks);
@@ -56,14 +59,19 @@ final class HelpText
             return '';
         }
         $theme ??= Theme::ansi();
-        $maxKey = array_reduce(array_keys($rows), static fn (int $max, string $k): int
+        // Neutralize escape/control injection in caller keys + descriptions up
+        // front, so both the alignment measurement and the render operate on
+        // the sanitized strings. (array keys may be int-coerced — cast back.)
+        $keys  = array_map(static fn ($k): string => SafeText::line((string) $k), array_keys($rows));
+        $descs = array_map(static fn (string $d): string => SafeText::line($d), array_values($rows));
+        $maxKey = array_reduce($keys, static fn (int $max, string $k): int
             => max($max, mb_strlen($k, 'UTF-8')), 0);
         return implode("\n", array_map(
             static fn (string $key, string $desc) => '  ' . $theme->prompt->render(
                 $key . str_repeat(' ', max(0, $maxKey - mb_strlen($key, 'UTF-8')))
             ) . '  ' . $desc,
-            array_keys($rows),
-            array_values($rows),
+            $keys,
+            $descs,
         ));
     }
 }

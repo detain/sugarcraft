@@ -58,4 +58,29 @@ final class SectionTest extends TestCase
         // Theme::ansi()->muted is Style::new()->faint() which emits SGR 2 (faint).
         $this->assertStringContainsString("\x1b[2m", $out);
     }
+
+    /**
+     * Security: the caller label is interpolated raw into the header. Under the
+     * plain theme (no SGR of its own) any ESC / BEL in the output must have
+     * come from the label — assert they are neutralized for both header() and
+     * subHeader(). (Revert the SafeText routing → leaks → fails.)
+     */
+    public function testLabelEscapeAndControlBytesNeutralized(): void
+    {
+        $evil = "SET\x1b[2Jx\x1b]0;t\x07UP";
+        foreach ([
+            Section::header($evil, Theme::plain(), width: 40),
+            Section::subHeader($evil, Theme::plain(), width: 40),
+        ] as $out) {
+            $this->assertStringNotContainsString("\x1b", $out, 'ESC injection must be stripped');
+            $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+            $this->assertStringContainsString('SETxUP', $out);
+        }
+    }
+
+    /** Clean ASCII label renders byte-for-byte identically (no regression). */
+    public function testCleanLabelUnchanged(): void
+    {
+        $this->assertSame('─ A ─', Section::header('A', Theme::plain(), leftPad: 1, width: null));
+    }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kit;
 
+use SugarCraft\Kit\Internal\SafeText;
+
 /**
  * Render a numbered "stage" line — an arrow / marker glyph + step
  * number + message. Designed for build-script style output where
@@ -45,7 +47,7 @@ final class Stage
             : (string) $current;
         return $theme->accent->render($glyph)
              . ' ' . $theme->muted->render($count)
-             . ' ' . $message;
+             . ' ' . SafeText::line($message);
     }
 
     /**
@@ -65,7 +67,7 @@ final class Stage
         $theme ??= Theme::ansi();
         $glyph = $isLast ? '└─' : '├─';
         $pad   = str_repeat(' ', max(0, $indent));
-        return $pad . $theme->muted->render($glyph) . ' ' . $message;
+        return $pad . $theme->muted->render($glyph) . ' ' . SafeText::line($message);
     }
 
     /**
@@ -121,7 +123,7 @@ final class Stage
         $pad   = str_repeat(' ', max(0, $indent));
 
         return $pad . $theme->muted->render($glyph) . ' '
-             . $message . ' '
+             . SafeText::line($message) . ' '
              . $bar . $pct;
     }
 }

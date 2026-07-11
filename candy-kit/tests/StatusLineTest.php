@@ -51,4 +51,29 @@ final class StatusLineTest extends TestCase
         $this->assertSame(1, mb_strlen(StatusLine::GLYPH_WARN));
         $this->assertSame(1, mb_strlen(StatusLine::GLYPH_INFO));
     }
+
+    /**
+     * Security: caller messages are interpolated raw into styled output, so an
+     * embedded escape / control byte would inject into the terminal. The plain
+     * theme adds no SGR of its own, so any ESC / BEL in the output must have
+     * come from the message — assert they are neutralized. (Revert the
+     * SafeText routing in StatusLine::format() and this leaks → fails.)
+     */
+    public function testMessageEscapeAndControlBytesNeutralized(): void
+    {
+        $evil = "hi\x1b[2Jthere\x1b]0;pwned\x07tail";
+        $out  = StatusLine::error($evil, Theme::plain());
+
+        $this->assertStringNotContainsString("\x1b", $out, 'ESC injection must be stripped');
+        $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+        // The visible text survives; only the control bytes are removed.
+        $this->assertStringContainsString('hithere', $out);
+        $this->assertStringContainsString('tail', $out);
+    }
+
+    /** Clean ASCII messages render byte-for-byte identically (no regression). */
+    public function testCleanMessageUnchanged(): void
+    {
+        $this->assertSame('✓ Deployment complete', StatusLine::success('Deployment complete', Theme::plain()));
+    }
 }
