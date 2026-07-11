@@ -148,6 +148,15 @@ final class Table
     /** Max widthSolveCache entries; real UIs bounce between only a few widths. */
     private const WIDTH_SOLVE_CACHE_MAX = 8;
 
+    /**
+     * Iteration cap for computeTotalWidth()'s fixed-point solve. Percent
+     * columns are a fraction of the total width, but the total is the sum of
+     * the resolved widths — a mutual dependency. Convergent configs settle in a
+     * handful of passes; an over-subscribed Percent set (total > 100%) has no
+     * fixed point, so the loop clamps here rather than spinning forever.
+     */
+    private const WIDTH_CONVERGE_MAX = 16;
+
     /** Inner cell padding (characters on each side). Default 0 (flush). */
     private int $cellPadding = 0;
 
@@ -2414,25 +2423,35 @@ final class Table
             return $this->targetWidth;
         }
 
-        // Sum raw column widths as initial estimate
-        $total = 0;
+        // Borders: one char between each column.
+        $borderCount = \max(0, \count($this->columns) - 1);
+
+        // Seed the solve with the raw declared widths + inter-column gaps.
+        $width = $borderCount;
         foreach ($this->columns as $col) {
-            $total += $col->width;
+            $width += $col->width;
         }
 
-        // Borders: one char between each column
-        $total += \count($this->columns) - 1;
-
-        // Use computeColumnWidths to get accurate widths (accounts for Percent/Dynamic/Content)
-        // This ensures consistency between total width and actual column rendering widths
-        $computedWidths = $this->computeColumnWidths($total);
-        $computedTotal = 0;
-        foreach ($computedWidths as $w) {
-            $computedTotal += $w;
+        // Percent columns size themselves as a fraction of the TOTAL width, yet
+        // the total is the sum of the resolved widths — so a single pass leaves
+        // the reported total inconsistent with what the columns actually render
+        // (worst on mixed Percent + Dynamic/Content sets). Iterate
+        // computeColumnWidths() to a fixed point: once the resolved widths sum
+        // back to the width we fed in, both are self-consistent. The loop is
+        // bounded (WIDTH_CONVERGE_MAX) so an over-subscribed Percent set with no
+        // fixed point still terminates and clamps to the last estimate.
+        for ($i = 0; $i < self::WIDTH_CONVERGE_MAX; $i++) {
+            $computedWidths = $this->computeColumnWidths($width);
+            $next = $borderCount;
+            foreach ($computedWidths as $w) {
+                $next += $w;
+            }
+            if ($next === $width) {
+                return $width;
+            }
+            $width = $next;
         }
-        // Add border count to match rendering
-        $computedTotal += \count($this->columns) - 1;
 
-        return $computedTotal;
+        return $width;
     }
 }
