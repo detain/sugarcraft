@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flap\Tests;
 
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Flap\Bird;
 use SugarCraft\Flap\Game;
+use SugarCraft\Flap\Pipe;
 use SugarCraft\Flap\TickMsg;
 use PHPUnit\Framework\TestCase;
 
@@ -272,6 +275,125 @@ final class GameTest extends TestCase
         unlink($tmp . '/.honey-flap/scores.json');
         @rmdir($tmp . '/.honey-flap');
         @rmdir($tmp);
+    }
+
+    public function testPipeCollisionCrashesBird(): void
+    {
+        // Pipe one column right of the bird, gap far from the bird's row.
+        // After one tick it slides onto the bird's column and the bird —
+        // still mid-field, clear of both walls — collides with the wall.
+        $bird = Bird::spawn(Game::BIRD_COL, 9.0);
+        $pipe = new Pipe(Game::BIRD_COL + 1, gapY: 3, gapHeight: 3); // gap rows 2..4
+        $g = new Game(bird: $bird, pipes: [$pipe], highScores: []);
+
+        $next = $g->tickN(1);
+
+        $this->assertTrue($next->crashed);
+        // The crash was the pipe, not a wall: the bird row is in-bounds.
+        $this->assertGreaterThanOrEqual(0, $next->bird->row());
+        $this->assertLessThan(Game::HEIGHT, $next->bird->row());
+        // The colliding pipe now sits on the bird's column.
+        $this->assertSame(Game::BIRD_COL, $next->pipes[0]->x);
+    }
+
+    public function testTopWallCrashesBird(): void
+    {
+        // A flap from the ceiling carries the bird's rounded row above the top
+        // wall (row < 0), which crashes exactly like hitting the floor.
+        $bird = Bird::spawn(Game::BIRD_COL, 0.0)->flap();
+        $g = new Game(bird: $bird, pipes: [], highScores: []);
+
+        $next = $g->tickN(3);
+
+        $this->assertTrue($next->crashed);
+        $this->assertLessThan(0, $next->bird->row());
+    }
+
+    public function testScoreIncrementsWhenPipePassesBird(): void
+    {
+        // Pipe on the bird's column with a gap covering the bird's row, so the
+        // bird survives; the next tick slides it to BIRD_COL-1 (just past the
+        // bird), which scores exactly one point.
+        $bird = Bird::spawn(Game::BIRD_COL, 9.0);
+        $pipe = new Pipe(Game::BIRD_COL, gapY: 9, gapHeight: 6); // gap rows 6..12
+        $g = new Game(bird: $bird, pipes: [$pipe], score: 0, highScores: []);
+
+        $next = $g->tickN(1);
+
+        $this->assertFalse($next->crashed, 'bird is inside the gap and must survive');
+        $this->assertSame(1, $next->score);
+        $this->assertSame(Game::BIRD_COL - 1, $next->pipes[0]->x);
+    }
+
+    public function testWithHighScoreCapsLeaderboardAtMax(): void
+    {
+        // Ten existing scores; a new record must drop the lowest so the
+        // retained list never exceeds MAX_HIGH_SCORES.
+        $g = new Game(
+            bird: Game::start(static fn(int $max): int => 0)->bird,
+            pipes: [],
+            highScores: range(1, Game::MAX_HIGH_SCORES), // [1..10]
+        );
+
+        $g2 = $g->withHighScore(Game::MAX_HIGH_SCORES + 1); // 11 — a new record
+
+        $this->assertCount(Game::MAX_HIGH_SCORES, $g2->highScores());
+        $this->assertSame(range(2, Game::MAX_HIGH_SCORES + 1), $g2->highScores()); // 1 dropped
+        $this->assertTrue($g2->newRecord);
+    }
+
+    public function testGameOverWithNewHighScorePersistsToDisk(): void
+    {
+        // Drive update(TickMsg) to a game-over that sets a NEW high score and
+        // assert the persist Cmd wrote the leaderboard to the configured dir —
+        // then a fresh Game::start() reads it back. This is the load-bearing
+        // guard on update() calling persistHighScores(): revert that call and
+        // the file is never written, so this test fails.
+        $tmp = sys_get_temp_dir() . '/honey-flap-persist-' . uniqid();
+        mkdir($tmp, 0755, true);
+
+        try {
+            // Bird pre-ticked below the floor with downward momentum, so the
+            // very next advance() inside update() crashes the game.
+            $bird = Bird::spawn(Game::BIRD_COL, (float) Game::HEIGHT);
+            for ($i = 0; $i < 5; $i++) {
+                $bird = $bird->tick();
+            }
+            $g = new Game(
+                bird: $bird,
+                pipes: [],
+                score: 7,
+                crashed: false,
+                highScores: [],
+                configDir: $tmp,
+            );
+
+            [$updated, $cmd] = $g->update(new TickMsg());
+
+            $this->assertTrue($updated->crashed);
+            $this->assertSame(7, $updated->score);
+            $this->assertTrue($updated->newRecord);
+            $this->assertSame([7], $updated->highScores());
+            $this->assertNotNull($cmd);
+
+            // Execute the batched Cmd: it fans out into the tick + persist cmds.
+            $batch = $cmd();
+            $this->assertInstanceOf(BatchMsg::class, $batch);
+            foreach ($batch->cmds as $c) {
+                $c();
+            }
+
+            // The leaderboard was written to the configured dir …
+            $this->assertFileExists($tmp . '/.honey-flap/scores.json');
+            // … and a fresh game reads it back.
+            $reloaded = Game::start(static fn(int $max): int => 0, $tmp);
+            $this->assertSame([7], $reloaded->highScores());
+            $this->assertSame(7, $reloaded->highScore());
+        } finally {
+            @unlink($tmp . '/.honey-flap/scores.json');
+            @rmdir($tmp . '/.honey-flap');
+            @rmdir($tmp);
+        }
     }
 
     public function testUpdateWithUnwritableDirDoesNotThrow(): void

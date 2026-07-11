@@ -49,7 +49,21 @@ final class Bird
 
     public function tick(): self
     {
-        return new self($this->x, $this->body->update());
+        $advanced = $this->body->update();
+        // Clamp the fall speed to terminal velocity. Bird uses the Y-down
+        // convention (positive vy = falling), so an unbounded free fall would
+        // otherwise accumulate enough velocity to teleport the bird several
+        // rows in a single tick — skipping straight through a pipe's gap
+        // without a collision check ever landing on its column.
+        if ($advanced->velocity->y > Projectile::TERMINAL_GRAVITY) {
+            $advanced = new Projectile(
+                deltaTime:    $advanced->deltaTime,
+                position:     $advanced->position,
+                velocity:     new Vector($advanced->velocity->x, Projectile::TERMINAL_GRAVITY, $advanced->velocity->z),
+                acceleration: $advanced->acceleration,
+            );
+        }
+        return new self($this->x, $advanced);
     }
 
     public function flap(): self
