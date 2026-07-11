@@ -43,6 +43,11 @@ Anti-pattern: don't assume old-parser quirks were features — verify each fixtu
 ### 2026-07-04 — Schedule format for jobs (7.5)
 Pattern: `jobs.mirror_pull` accepts the robfig/cron subset soft-serve actually uses: `@every <go-duration>` (`30s`/`10m`/`8h`/`1h30m`) + `@hourly`/`@daily`/`@midnight`/`@weekly`/`@monthly`/`@yearly` aliases, modelled as a plain interval (`Jobs\Schedule`). Full 5-field cron throws `InvalidArgumentException` — better than silently never firing.
 
+### 2026-07-10 — candy-serve ↔ candy-wish SSH overlap: cross-link, defer unification (W10)
+Decision: DOCUMENT the overlap, do not re-architect (deferred). candy-serve's `SSH\SSHServer` (a `ForceCommand`-style git-shell gate) and candy-wish's middleware framework both serve commands over the host's OpenSSH daemon, but neither implements the SSH wire protocol and they keep DISTINCT auth models — candy-serve does its own SSH public-key auth (`SSH\Auth` + `User`); candy-wish trusts sshd and allowlists by username + key fingerprint.
+Rationale for deferring a rewrite: (a) the null/empty/whitespace-key auth-bypass was already fixed in `SSHServer::authenticate()` with regression coverage; (b) neither lib has a real SSH transport — both need host sshd; (c) `SSHServer` is not wired into the shipped daemon path (`bin/soft-serve` runs `GitDaemon`, not SSH), so rewriting it would be churn on unused code. Cross-linked both READMEs instead.
+Future consideration: unify onto a single candy-wish-middleware SSH convention IF the monorepo commits to it.
+
 ## Implemented (was deferred pre-1.0)
 
 - **6.1** ✅ 2026-07-04 — ReactPHP accept loop for GitDaemon, dual-mode via `serveAsync()` (blocking `socket_select()` loop unchanged as default).
