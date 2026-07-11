@@ -313,7 +313,10 @@ final class Decoder
                     $disposal = ($gcePacked >> 2) & 0x07;
                     $transparent = (bool) ($gcePacked & 0x01);
                     $transparentIndex = ord($bytes[$i + 6] ?? '');
-                    $delay = ord($bytes[$i + 4]) | (ord($bytes[$i + 5]) << 8);
+                    // Guard every byte read uniformly: a GIF truncated mid-GCE
+                    // must degrade gracefully, not emit "Uninitialized string
+                    // offset" warnings (which fail the suite under failOnWarning).
+                    $delay = ord($bytes[$i + 4] ?? '') | (ord($bytes[$i + 5] ?? '') << 8);
                     if ($delay > 0) {
                         $lastDelay = $delay;
                     }
