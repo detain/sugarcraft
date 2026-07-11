@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Chart;
 
+use SugarCraft\Charts\Support\Finite;
+
 /**
  * Axis auto-scaling — round a data maximum up to a "nice" round ceiling.
  *
@@ -34,6 +36,10 @@ final class NiceScale
      */
     public static function ceiling(float $max): float
     {
+        // Ingestion guard: NaN slips past `$max <= 0` (any comparison with
+        // NaN is false), so reject non-finite maxima before scaling.
+        Finite::assert($max);
+
         if ($max <= 0) {
             return self::FLOOR;
         }
