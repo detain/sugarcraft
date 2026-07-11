@@ -80,13 +80,30 @@ final class Subscriptions implements Subscription
     /**
      * Dispose all underlying subscriptions.
      *
+     * A throwing unsubscribe() on one subscription must not leak the rest:
+     * every subscription is disposed, then the FIRST caught exception is
+     * rethrown so the failure still surfaces to the caller.
+     *
      * @internal
      */
     public function disposeAll(): void
     {
-        foreach ($this->subscriptions as $subscription) {
-            $subscription->unsubscribe();
-        }
+        // Snapshot then clear up-front so the list is empty even if a
+        // subscription's unsubscribe() throws.
+        $subscriptions = $this->subscriptions;
         $this->subscriptions = [];
+
+        $firstError = null;
+        foreach ($subscriptions as $subscription) {
+            try {
+                $subscription->unsubscribe();
+            } catch (\Throwable $e) {
+                $firstError ??= $e;
+            }
+        }
+
+        if ($firstError !== null) {
+            throw $firstError;
+        }
     }
 }

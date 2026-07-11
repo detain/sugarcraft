@@ -74,10 +74,24 @@ final class AsyncOps
     /**
      * Retry a callable up to $attempts times with exponential backoff.
      *
+     * The attempt cap alone does not bound wall-clock: exponential backoff
+     * (2^n) can stretch a bounded attempt count into an unbounded wait, and a
+     * fleet of clients retrying in lockstep produces a thundering herd. Pass
+     * $maxTotalSeconds to cap total elapsed time across attempts, and $jitter
+     * to randomize each backoff. Both default to the historical behavior
+     * (no cap, no jitter).
+     *
      * @param callable(): PromiseInterface $operation  The operation to retry
      * @param int $attempts  Maximum number of attempts (must be >= 1)
      * @param float $baseBackoffSeconds  Initial backoff after a failure (seconds)
      * @param CancellationToken|null $token  Optional cancellation token to abort retries
+     * @param float|null $maxTotalSeconds  Optional wall-clock budget across all
+     *        attempts; once exceeded, retry aborts with the last failure. Null
+     *        (default) imposes no cap.
+     * @param float $jitter  Fractional randomization of each backoff in
+     *        [0, $jitter]; the delay lands in [backoff, backoff*(1+$jitter)].
+     *        0.0 (default) means no jitter (exactly the base backoff).
+     * @param LoopInterface|null $loop  Optional event loop; uses Loop::get() if null.
      * @return PromiseInterface
      */
     public static function retry(
@@ -85,6 +99,9 @@ final class AsyncOps
         int $attempts = 3,
         float $baseBackoffSeconds = 0.1,
         ?CancellationToken $token = null,
+        ?float $maxTotalSeconds = null,
+        float $jitter = 0.0,
+        ?LoopInterface $loop = null,
     ): PromiseInterface {
         if ($attempts < 1) {
             throw new \InvalidArgumentException('Attempts must be >= 1');
@@ -92,14 +109,30 @@ final class AsyncOps
         if ($baseBackoffSeconds <= 0) {
             throw new \InvalidArgumentException('Base backoff must be positive');
         }
+        if ($maxTotalSeconds !== null && $maxTotalSeconds <= 0) {
+            throw new \InvalidArgumentException('Max total seconds must be positive when set');
+        }
+        if ($jitter < 0) {
+            throw new \InvalidArgumentException('Jitter must be >= 0');
+        }
 
         $token ??= CancellationSource::new()->token();
 
-        return self::retryAttempt($operation, $attempts, $baseBackoffSeconds, $token, 1);
+        // Convert the relative budget to an absolute wall-clock deadline once,
+        // so recursive attempts share a single fixed cutoff.
+        $deadline = $maxTotalSeconds !== null ? microtime(true) + $maxTotalSeconds : null;
+
+        return self::retryAttempt($operation, $attempts, $baseBackoffSeconds, $token, 1, $loop, $jitter, $deadline);
     }
 
     /**
      * @internal  Recursive retry implementation.
+     *
+     * @param LoopInterface|null $loop  Event loop; defaults to Loop::get().
+     *        Accepting it (mirroring debounce()/throttle()) lets tests drive
+     *        retries with a mock loop instead of the global singleton.
+     * @param float $jitter  Fractional backoff randomization; see retry().
+     * @param float|null $deadline  Absolute microtime() cutoff, or null for none.
      */
     private static function retryAttempt(
         callable $operation,
@@ -107,7 +140,12 @@ final class AsyncOps
         float $backoff,
         CancellationToken $token,
         int $attempt,
+        ?LoopInterface $loop = null,
+        float $jitter = 0.0,
+        ?float $deadline = null,
     ): PromiseInterface {
+        $loop ??= \React\EventLoop\Loop::get();
+
         if ($token->isCancelled()) {
             return reject(new OperationCancelledException('Retry cancelled before attempt ' . $attempt));
         }
@@ -119,7 +157,7 @@ final class AsyncOps
         }
         return $operationPromise->then(
             static fn ($value) => $value,
-            static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt): PromiseInterface {
+            static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt, $loop, $jitter, $deadline): PromiseInterface {
                 if ($token->isCancelled()) {
                     return reject(new OperationCancelledException('Retry cancelled after attempt ' . $attempt));
                 }
@@ -128,13 +166,22 @@ final class AsyncOps
                     return reject($e);
                 }
 
-                // Schedule the next attempt with a future tick to avoid blocking the loop.
+                // Wall-clock DoS guard: stop retrying once the total budget is
+                // spent, even if attempts remain. Reject with the last failure.
+                if ($deadline !== null && microtime(true) >= $deadline) {
+                    return reject($e);
+                }
+
+                // Schedule the next attempt with a future tick to avoid blocking
+                // the loop. Jitter the delay to avoid a thundering herd; the base
+                // still doubles un-jittered to keep the exponential schedule.
+                $delay = self::jitteredBackoff($backoff, $jitter);
                 $deferred = new Deferred();
-                \React\EventLoop\Loop::get()->addTimer(
-                    $backoff,
-                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred): void {
+                $loop->addTimer(
+                    $delay,
+                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline): void {
                         try {
-                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1);
+                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1, $loop, $jitter, $deadline);
                             $next->then(
                                 static fn ($v) => $deferred->resolve($v),
                                 static fn ($e) => $deferred->reject($e),
@@ -147,6 +194,23 @@ final class AsyncOps
                 return $deferred->promise();
             },
         );
+    }
+
+    /**
+     * Apply randomized jitter to a backoff delay, spreading retries to avoid a
+     * thundering herd. Returns a delay in [$backoff, $backoff * (1 + $jitter)];
+     * with $jitter <= 0.0 the delay is exactly $backoff (BC default).
+     *
+     * Uses random_int() (CSPRNG-backed) rather than mt_rand()/rand() so it does
+     * not depend on — or perturb — global mt_srand() seed state.
+     */
+    private static function jitteredBackoff(float $backoff, float $jitter): float
+    {
+        if ($jitter <= 0.0) {
+            return $backoff;
+        }
+        $fraction = random_int(0, PHP_INT_MAX) / PHP_INT_MAX;
+        return $backoff + ($backoff * $jitter * $fraction);
     }
 
     /**
