@@ -14,9 +14,47 @@ namespace SugarCraft\Core\Util;
 final class Width
 {
     /**
+     * Bounded memo for {@see string()}, keyed by the exact input string.
+     *
+     * `string()` is the hottest util in the repo (called per grapheme, per
+     * cell, per frame). The computation is a pure function of `$s` — ANSI
+     * strip + grapheme split + per-cluster width — so its result can be
+     * memoized safely. Bounded to {@see MEMO_MAX} entries so a long-running
+     * session with an unbounded distinct-string working set can't leak.
+     *
+     * @var array<string, int>
+     */
+    private static array $memo = [];
+
+    /**
+     * Hard cap on {@see $memo} entries. When reached, the oldest half is
+     * dropped in one pass (amortized O(1) eviction) rather than one-shift-
+     * per-insert (O(n)); this keeps the memo a net win even when the
+     * working set of distinct strings exceeds the cap.
+     */
+    private const MEMO_MAX = 2048;
+
+    /**
      * Cell width of a string after stripping ANSI sequences.
      */
     public static function string(string $s): int
+    {
+        // Values are always non-negative ints (never null), so isset() is a
+        // correct and faster presence check than array_key_exists().
+        if (isset(self::$memo[$s])) {
+            return self::$memo[$s];
+        }
+        $width = self::compute($s);
+        if (\count(self::$memo) >= self::MEMO_MAX) {
+            self::$memo = \array_slice(self::$memo, self::MEMO_MAX >> 1, null, true);
+        }
+        return self::$memo[$s] = $width;
+    }
+
+    /**
+     * Uncached width computation backing {@see string()}.
+     */
+    private static function compute(string $s): int
     {
         $clean = Ansi::strip($s);
         if ($clean === '') {

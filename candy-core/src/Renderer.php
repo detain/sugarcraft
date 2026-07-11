@@ -50,6 +50,16 @@ final class Renderer
     /** @var array<string, list<Token>> token cache keyed by string */
     private array $tokenCache = [];
 
+    /**
+     * Hard cap on {@see $tokenCache} entries. A long-running program renders
+     * an unbounded number of distinct lines over its lifetime, so an
+     * uncapped cache is a slow memory leak. When the cap is reached the
+     * oldest half is dropped in one pass (amortized O(1) eviction); evicted
+     * lines are simply re-parsed on next sight to the identical token list,
+     * so output stays byte-identical — this only bounds memory.
+     */
+    private const TOKEN_CACHE_MAX = 2000;
+
     private ?Recorder $recorder = null;
 
     /** Shared parser for cell-diff repaints — avoids repeated allocation. */
@@ -342,6 +352,12 @@ final class Renderer
      */
     private function getTokens(string $s): array
     {
-        return $this->tokenCache[$s] ??= $this->parser->parse($s);
+        if (isset($this->tokenCache[$s])) {
+            return $this->tokenCache[$s];
+        }
+        if (\count($this->tokenCache) >= self::TOKEN_CACHE_MAX) {
+            $this->tokenCache = \array_slice($this->tokenCache, self::TOKEN_CACHE_MAX >> 1, null, true);
+        }
+        return $this->tokenCache[$s] = $this->parser->parse($s);
     }
 }
