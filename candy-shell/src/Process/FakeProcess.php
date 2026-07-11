@@ -17,6 +17,16 @@ final class FakeProcess implements Process
     public string $bufferedStdout = '';
     public string $bufferedStderr = '';
 
+    /**
+     * Record whether the captured streams were consumed. {@see \SugarCraft\Shell\Command\SpinCommand}
+     * only reads stdout()/stderr() inside its `--show-output`/`--show-error`
+     * branches, so these flags let tests assert those branches ran even though
+     * stderr is written to the real STDERR fd and can't be captured via
+     * CommandTester's display buffer.
+     */
+    public bool $stdoutRead = false;
+    public bool $stderrRead = false;
+
     public function pid(): int          { return 12345; }
     public function exited(): bool      { return $this->exitCode !== null; }
     public function wait(): int         { $this->closed = true; return $this->exitCode ?? 0; }
@@ -24,8 +34,8 @@ final class FakeProcess implements Process
     public function exitCode(): ?int    { return $this->exitCode; }
     public function terminate(): void  { $this->terminated = true; }
     public function close(): int      { $this->closed = true; return $this->exitCode ?? 0; }
-    public function stdout(): string    { return $this->bufferedStdout; }
-    public function stderr(): string    { return $this->bufferedStderr; }
+    public function stdout(): string    { $this->stdoutRead = true; return $this->bufferedStdout; }
+    public function stderr(): string    { $this->stderrRead = true; return $this->bufferedStderr; }
     public function stdoutBytes(): string { return $this->bufferedStdout; }
     public function stderrBytes(): string { return $this->bufferedStderr; }
 
