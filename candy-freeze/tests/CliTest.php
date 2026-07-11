@@ -153,4 +153,36 @@ final class CliTest extends TestCase
         $this->assertSame(0, $result['exitCode']);
         $this->assertStringContainsString('font-variant-ligatures="normal"', $result['stdout']);
     }
+
+    public function testExplicitLanguageHighlightsRawCode(): void
+    {
+        // Raw PHP with an explicit type flag → keywords picked up the accent.
+        $result = $this->runCli(['--no-window', '--no-shadow', '-t', 'php'], "return 0;\n");
+
+        $this->assertSame(0, $result['exitCode']);
+        // Dracula pink keyword surfaces as a <text fill> in the SVG.
+        $this->assertStringContainsString('fill="#ff79c6"', $result['stdout']);
+    }
+
+    public function testAnsiInputIsNotRecoloured(): void
+    {
+        // Input that already carries ANSI SGR must pass through untouched: the
+        // pre-styled green wins, and no keyword-highlight colour is injected.
+        $result = $this->runCli(['--no-window', '--no-shadow', '-t', 'php'], "\x1b[32mreturn\x1b[0m 0;\n");
+
+        $this->assertSame(0, $result['exitCode']);
+        // ANSI 32 = green #00cd00 is preserved …
+        $this->assertStringContainsString('fill="#00cd00"', $result['stdout']);
+        // … and the plaintext keyword colour was NOT applied on top.
+        $this->assertStringNotContainsString('fill="#ff79c6"', $result['stdout']);
+    }
+
+    public function testPlainTextInputIsNotHighlighted(): void
+    {
+        // Undetectable prose stays plain — no accent colours injected.
+        $result = $this->runCli(['--no-window', '--no-shadow'], "hello world\n");
+
+        $this->assertSame(0, $result['exitCode']);
+        $this->assertStringNotContainsString('fill="#ff79c6"', $result['stdout']);
+    }
 }
