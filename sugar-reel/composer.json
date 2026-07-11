@@ -70,13 +70,6 @@
         },
         {
             "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "../candy-palette",
             "options": {
                 "symlink": true
@@ -106,13 +99,6 @@
         {
             "type": "path",
             "url": "../candy-flip",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-layout",
             "options": {
                 "symlink": true
             }
