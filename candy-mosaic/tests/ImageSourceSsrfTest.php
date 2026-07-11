@@ -12,10 +12,13 @@ use SugarCraft\Mosaic\ImageSource;
  * redirect follower.
  *
  * The fetcher follows redirects manually (`max_redirects: 0`) and
- * re-validates the scheme of every hop, so a 3xx into a disallowed scheme
- * (file://, gopher://, …) cannot smuggle past the caller's allow-list.
- * These tests drive a real, ephemeral `php -S` server on 127.0.0.1 that
- * issues such redirects.
+ * re-validates BOTH the scheme AND the resolved host/IP of every hop, so a
+ * 3xx into a disallowed scheme (file://, gopher://, …) or into a private /
+ * cloud-metadata IP (169.254.169.254, …) cannot smuggle past the caller's
+ * guards. These tests drive a real, ephemeral `php -S` server on 127.0.0.1
+ * that issues such redirects. The loopback server host is explicitly
+ * allow-listed so the private-IP deny-list does not block the test harness
+ * itself.
  *
  * @covers \SugarCraft\Mosaic\ImageSource
  */
@@ -61,8 +64,13 @@ final class ImageSourceSsrfTest extends TestCase
     public function testFollowsSameSchemeRedirect(): void
     {
         // Regression guard: the manual follower must still follow a legitimate
-        // http -> http redirect all the way to the image.
-        $img = ImageSource::fromUrl("http://127.0.0.1:{$this->port}/redirect-ok");
+        // http -> http redirect all the way to the image. Loopback is
+        // allow-listed so the private-IP deny-list does not block it — and this
+        // doubles as proof the allow-list bypass works end-to-end.
+        $img = ImageSource::fromUrl(
+            "http://127.0.0.1:{$this->port}/redirect-ok",
+            allowedHosts: ['127.0.0.1'],
+        );
 
         $this->assertSame('image/png', $img->format);
         $this->assertSame(4, $img->width);
@@ -76,7 +84,10 @@ final class ImageSourceSsrfTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/scheme file is not in the allowed list/');
 
-        ImageSource::fromUrl("http://127.0.0.1:{$this->port}/redirect-file");
+        ImageSource::fromUrl(
+            "http://127.0.0.1:{$this->port}/redirect-file",
+            allowedHosts: ['127.0.0.1'],
+        );
     }
 
     public function testBlocksRedirectToDisallowedGopherScheme(): void
@@ -84,7 +95,25 @@ final class ImageSourceSsrfTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/scheme gopher is not in the allowed list/');
 
-        ImageSource::fromUrl("http://127.0.0.1:{$this->port}/redirect-gopher");
+        ImageSource::fromUrl(
+            "http://127.0.0.1:{$this->port}/redirect-gopher",
+            allowedHosts: ['127.0.0.1'],
+        );
+    }
+
+    public function testBlocksRedirectToMetadataIp(): void
+    {
+        // The #1325 fix was scheme-only: a same-scheme http -> http 302 into
+        // the cloud-metadata IP still reached it. The host/IP deny-list must
+        // reject the redirect target BEFORE fetching it, even though the first
+        // hop (loopback) is allow-listed.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('#blocked private/reserved address#');
+
+        ImageSource::fromUrl(
+            "http://127.0.0.1:{$this->port}/redirect-metadata",
+            allowedHosts: ['127.0.0.1'],
+        );
     }
 
     // ---- helpers --------------------------------------------------------
@@ -112,6 +141,9 @@ final class ImageSourceSsrfTest extends TestCase
                 return true;
             case '/redirect-gopher':
                 header('Location: gopher://127.0.0.1:70/x', true, 302);
+                return true;
+            case '/redirect-metadata':
+                header('Location: http://169.254.169.254/latest/meta-data/', true, 302);
                 return true;
             default:
                 http_response_code(404);

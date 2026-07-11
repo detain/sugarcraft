@@ -132,6 +132,39 @@ final class KittyOptions
         );
     }
 
+    /**
+     * Set the source display area in cells: the kitty `s=` (columns) and
+     * `v=` (rows) transmit params.
+     *
+     * These size the region the terminal maps the image onto. They were
+     * carried on every instance but had no setter, so the fields stayed 0 and
+     * `s=`/`v=` were never emitted; this is the seam that makes them settable.
+     *
+     * @param int $width   Cell columns (`s=`); 0 clears (terminal default).
+     * @param int $height  Cell rows (`v=`); 0 clears (terminal default).
+     * @throws \InvalidArgumentException  if either dimension is negative
+     */
+    public function withCellDimensions(int $width, int $height): self
+    {
+        if ($width < 0 || $height < 0) {
+            throw new \InvalidArgumentException(
+                "Cell dimensions must be non-negative, got {$width}×{$height}"
+            );
+        }
+
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $this->zIndex,
+            compress:   $this->compress,
+            cellWidth:  $width,
+            cellHeight: $height,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
+        );
+    }
+
     /** @internal */
     public function toArray(): array
     {
