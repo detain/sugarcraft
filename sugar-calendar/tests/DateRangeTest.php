@@ -120,4 +120,44 @@ final class DateRangeTest extends TestCase
         );
         $this->assertTrue($complete->isComplete());
     }
+
+    // -------------------------------------------------------------------------
+    // Inverted range (end < start) — characterises current behaviour so a
+    // future refactor cannot silently change it.
+    // -------------------------------------------------------------------------
+
+    public function testInvertedRangeContainsNothing(): void
+    {
+        // start (May 20) after end (May 10): the [start,end] test window is
+        // empty, so no date can satisfy both bounds.
+        $range = new DateRange(
+            new \DateTimeImmutable('2026-05-20'),
+            new \DateTimeImmutable('2026-05-10')
+        );
+
+        $this->assertFalse($range->contains(new \DateTimeImmutable('2026-05-15')),
+            'a date between the swapped bounds is not contained');
+        $this->assertFalse($range->contains(new \DateTimeImmutable('2026-05-10')));
+        $this->assertFalse($range->contains(new \DateTimeImmutable('2026-05-20')));
+    }
+
+    public function testInvertedRangeIsStillComplete(): void
+    {
+        $range = new DateRange(
+            new \DateTimeImmutable('2026-05-20'),
+            new \DateTimeImmutable('2026-05-10')
+        );
+        $this->assertTrue($range->isComplete());
+    }
+
+    public function testInvertedRangeDurationIsAbsolute(): void
+    {
+        // DateInterval::$days is always non-negative, so the span between the
+        // two endpoints is reported as an absolute day count regardless of order.
+        $range = new DateRange(
+            new \DateTimeImmutable('2026-05-20'),
+            new \DateTimeImmutable('2026-05-10')
+        );
+        $this->assertSame(10, $range->durationInDays());
+    }
 }
