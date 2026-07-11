@@ -92,4 +92,68 @@ final class NavigationTest extends TestCase
         $date = Navigation::gridIndexToDate(4, 1, 2026);
         $this->assertSame('2026-01-01', $date?->format('Y-m-d'));
     }
+
+    // -------------------------------------------------------------------------
+    // [SEC] Month/year validation — an out-of-range month must be REJECTED,
+    // never silently rolled into an adjacent period.
+    // -------------------------------------------------------------------------
+
+    public function testGridIndexToDateRejectsMonthAbove12(): void
+    {
+        // Regression: month 13 must throw, not silently produce Jan 2027
+        // (createFromFormat('!Y-m-d','2026-13-01') would yield 2027-01-01).
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Month must be in 1-12, got: 13');
+        Navigation::gridIndexToDate(0, 13, 2026);
+    }
+
+    public function testGridIndexToDateRejectsMonthBelow1(): void
+    {
+        // Regression: month 0 must throw, not silently produce Dec 2025.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Month must be in 1-12, got: 0');
+        Navigation::gridIndexToDate(0, 0, 2026);
+    }
+
+    public function testGridIndexToDateRejectsNonPositiveYear(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Year must be >= 1, got: 0');
+        Navigation::gridIndexToDate(0, 5, 0);
+    }
+
+    public function testGridIndexToDateMonth12IsAccepted(): void
+    {
+        // Boundary: month 12 is valid. Dec 2026 firstDow=2 (Tue), index 2 = Dec 1.
+        $date = Navigation::gridIndexToDate(2, 12, 2026);
+        $this->assertSame('2026-12-01', $date?->format('Y-m-d'));
+    }
+
+    // -------------------------------------------------------------------------
+    // Leap-year Feb 29 boundary.
+    // -------------------------------------------------------------------------
+
+    public function testGridIndexToDateLeapYearFeb29(): void
+    {
+        // Feb 2024 (leap): firstDow=4 (Thu), 29 days. Day 29 sits at index 32.
+        $date = Navigation::gridIndexToDate(32, 2, 2024);
+        $this->assertSame('2024-02-29', $date?->format('Y-m-d'),
+            'Feb 29 must render in a leap year');
+    }
+
+    public function testGridIndexToDateNonLeapYearHasNoFeb29(): void
+    {
+        // Feb 2026 (non-leap): firstDow=0 (Sun), 28 days. Index 28 maps to
+        // dayNum=29 which exceeds the 28-day month → null (no Feb 29).
+        $this->assertNull(Navigation::gridIndexToDate(28, 2, 2026),
+            'Feb 29 must not exist in a non-leap year');
+    }
+
+    public function testGridIndexToDateReturnsMidnight(): void
+    {
+        // The "!" format anchor zeroes the time-of-day so range/isToday
+        // comparisons are not skewed by an inherited wall clock.
+        $date = Navigation::gridIndexToDate(5, 5, 2026);
+        $this->assertSame('2026-05-01 00:00:00', $date?->format('Y-m-d H:i:s'));
+    }
 }

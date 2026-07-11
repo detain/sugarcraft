@@ -60,15 +60,6 @@ final class DatePicker
     /** Whether range selection mode is active. */
     private bool $rangeMode = false;
 
-    /** Cached month grid cells (6 weeks × 7 days). */
-    private ?array $cachedCells = null;
-
-    /** Cached rendered view string. */
-    private ?string $cachedView = null;
-
-    /** Whether the cached cells/view are valid. */
-    private bool $cacheValid = false;
-
     /** Styling (SGR ANSI codes). */
     private string $headerStyle       = '1;37';  // bold white
     private string $dayNameStyle      = '90';    // bright black
@@ -128,9 +119,7 @@ final class DatePicker
         } else {
             $clone->viewMonth--;
         }
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
     }
 
     public function GoToNextMonth(): self
@@ -142,27 +131,21 @@ final class DatePicker
         } else {
             $clone->viewMonth++;
         }
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
     }
 
     public function GoToPreviousYear(): self
     {
         $clone = clone $this;
         $clone->viewYear--;
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
     }
 
     public function GoToNextYear(): self
     {
         $clone = clone $this;
         $clone->viewYear++;
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
     }
 
     public function GoToToday(): self
@@ -171,9 +154,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewMonth = (int) $today->format('n');
         $clone->viewYear  = (int) $today->format('Y');
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
     }
 
     /**
@@ -183,9 +164,7 @@ final class DatePicker
     public function withToday(\DateTimeImmutable $today): self
     {
         $clone = clone $this;
-        $clone->today = $today;
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->today = $today;        return $clone;
     }
 
     /** Resolve the "today" reference: injected value or real now. */
@@ -199,9 +178,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewMonth = (int) $t->format('n');
         $clone->viewYear  = (int) $t->format('Y');
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -217,33 +194,25 @@ final class DatePicker
     public function MoveCursorLeft(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \max(0, $clone->cursorIndex - 1);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = \max(0, $clone->cursorIndex - 1);        return $clone;
     }
 
     public function MoveCursorRight(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \min(41, $clone->cursorIndex + 1);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = \min(41, $clone->cursorIndex + 1);        return $clone;
     }
 
     public function MoveCursorUp(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \max(0, $clone->cursorIndex - self::DAYS_IN_WEEK);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = \max(0, $clone->cursorIndex - self::DAYS_IN_WEEK);        return $clone;
     }
 
     public function MoveCursorDown(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \min(41, $clone->cursorIndex + self::DAYS_IN_WEEK);
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorIndex = \min(41, $clone->cursorIndex + self::DAYS_IN_WEEK);        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -259,9 +228,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->selecting = true;
-        $clone->selectedDate = $clone->dateAtCursor() ?? $clone->firstOfViewMonth();
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->selectedDate = $clone->dateAtCursor() ?? $clone->firstOfViewMonth();        return $clone;
     }
 
     /**
@@ -271,9 +238,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->selecting = false;
-        $clone->selectedDate = null;
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->selectedDate = null;        return $clone;
     }
 
     public function ToggleSelection(): self
@@ -292,9 +257,7 @@ final class DatePicker
         if (!$mode) {
             $clone->rangeStart = null;
             $clone->rangeEnd = null;
-        }
-        $clone->cacheValid = false;
-        return $clone;
+        }        return $clone;
     }
 
     public function rangeStart(): ?\DateTimeImmutable
@@ -337,23 +300,17 @@ final class DatePicker
             return $clone->MoveCursorDown();
         }
         if ($key === self::KEY_HOME) {
-            $clone->cursorIndex = 0;
-            $clone->cacheValid = false;
-            return $clone;
+            $clone->cursorIndex = 0;            return $clone;
         }
         if ($key === self::KEY_END) {
-            $clone->cursorIndex = 41;
-            $clone->cacheValid = false;
-            return $clone;
+            $clone->cursorIndex = 41;            return $clone;
         }
         if ($key === self::KEY_ENTER && $this->rangeMode) {
             return $this->handleRangeEnter($clone);
         }
         if ($key === self::KEY_ESCAPE && $this->rangeMode) {
             $clone->rangeStart = null;
-            $clone->rangeEnd = null;
-            $clone->cacheValid = false;
-            return $clone;
+            $clone->rangeEnd = null;            return $clone;
         }
 
         return $clone;
@@ -381,9 +338,7 @@ final class DatePicker
             // Both set — start fresh
             $clone->rangeStart = $date;
             $clone->rangeEnd = null;
-        }
-        $clone->cacheValid = false;
-        return $clone;
+        }        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -419,22 +374,13 @@ final class DatePicker
      * Get the date at the current cursor position, or null when the cursor
      * sits on an empty cell (before the 1st of the month or past the last
      * day in the 6×7 grid).
+     *
+     * Delegates to Navigation::gridIndexToDate() — the single source of truth
+     * for grid-index → date math (viewMonth is always 1-12, so it never throws).
      */
     public function dateAtCursor(): ?\DateTimeImmutable
     {
-        $firstOfMonth = $this->firstOfViewMonth();
-        if ($firstOfMonth === null) return null;
-
-        $firstDow    = (int) $firstOfMonth->format('w'); // 0=Sun
-        $daysInMonth = (int) $firstOfMonth->format('t');
-        $dayNum      = $this->cursorIndex - $firstDow + 1;
-
-        if ($dayNum < 1 || $dayNum > $daysInMonth) {
-            return null;
-        }
-
-        // dayNum=1 is the 1st itself, hence offset = dayNum - 1.
-        return $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
+        return Navigation::gridIndexToDate($this->cursorIndex, $this->viewMonth, $this->viewYear);
     }
 
     private function firstOfViewMonth(): ?\DateTimeImmutable
@@ -465,11 +411,6 @@ final class DatePicker
         $totalWidth = $width + $weekColWidth;
         $height = 9; // header + day-names + sep + 6 week rows
 
-        // Return cached view if valid and parameters match default
-        if ($this->cacheValid && $this->cachedView !== null && !$showWeekNumbers && $width === 21) {
-            return $this->cachedView;
-        }
-
         $buffer = Buffer::new($totalWidth, $height);
 
         // Row 0: header "May 2026" (left-aligned)
@@ -488,15 +429,11 @@ final class DatePicker
             $buffer = $buffer->withCellAt($col, 2, Cell::new('─'));
         }
 
-        // Rows 3-8: week rows — use cached cells when valid
-        $cells = ($this->cacheValid && $this->cachedCells !== null)
-            ? $this->cachedCells
-            : $this->buildCells();
-
-        // Update cells cache after computation if needed
-        if (!$this->cacheValid || $this->cachedCells === null) {
-            $this->cachedCells = $cells;
-        }
+        // Rows 3-8: week rows — rebuild the 42-cell grid on every render.
+        // View() is a pure query: it must not mutate $this (a memoised cache
+        // broke immutability, since two callers sharing an instance would see
+        // each other's writes). O(42) is negligible, so we recompute instead.
+        $cells = $this->buildCells();
 
         for ($week = 0; $week < 6; $week++) {
             $row = 3 + $week;
@@ -519,12 +456,6 @@ final class DatePicker
             }
         }
 
-        // Only cache the default-param view for subsequent calls with same params
-        if (!$showWeekNumbers && $width === 21) {
-            $this->cachedView = $buffer->toAnsi();
-            $this->cacheValid = true;
-        }
-
         return $buffer->toAnsi();
     }
 
@@ -544,7 +475,13 @@ final class DatePicker
             return '   ';
         }
         $firstDow = (int) $firstOfMonth->format('w'); // 0=Sun
-        $firstDayOfWeekRow = $firstOfMonth->modify('+' . (-$firstDow + $weekRow * 7) . ' days');
+        // %+d forces an explicit sign: for week row 0 the offset is negative
+        // (step back to the row's Sunday). String-concatenating "+" with a
+        // negative int yields the malformed "+-4 days", which PHP mis-parses
+        // as +4, shifting every week number a full week forward.
+        $firstDayOfWeekRow = $firstOfMonth->modify(
+            \sprintf('%+d days', -$firstDow + $weekRow * 7)
+        );
 
         // ISO week: Mon=1 … Sun=7, week 1 contains Jan 4
         $isoWeek = (int) $firstDayOfWeekRow->format('W');
@@ -559,45 +496,35 @@ final class DatePicker
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->headerStyle = $s;
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->headerStyle = $s;        return $clone;
     }
 
     public function WithTodayStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->todayStyle = $s;
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->todayStyle = $s;        return $clone;
     }
 
     public function WithSelectedStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->selectedStyle = $s;
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->selectedStyle = $s;        return $clone;
     }
 
     public function WithCursorStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->cursorStyle = $s;
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->cursorStyle = $s;        return $clone;
     }
 
     public function WithRangeStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->rangeStyle = $s;
-        $clone->cacheValid = false;
-        return $clone;
+        $clone->rangeStyle = $s;        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -846,10 +773,8 @@ final class DatePicker
 
     private function firstDayOffset(): int
     {
-        $firstOfMonth = \DateTimeImmutable::createFromFormat(
-            'Y-m-d', \sprintf('%04d-%02d-01', $this->viewYear, $this->viewMonth)
-        );
-        return $firstOfMonth !== false ? (int) $firstOfMonth->format('w') : 0;
+        $firstOfMonth = $this->firstOfViewMonth();
+        return $firstOfMonth !== null ? (int) $firstOfMonth->format('w') : 0;
     }
 
     /**
