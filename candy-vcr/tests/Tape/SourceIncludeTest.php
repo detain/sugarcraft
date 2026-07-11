@@ -182,4 +182,84 @@ final class SourceIncludeTest extends TestCase
             @rmdir($tmpDir);
         }
     }
+
+    public function testNonStrictSourceOutsideBaseDirWarnsInsteadOfSilentSkip(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/vcr-src-warn-escape-' . getmypid();
+        mkdir($tmpDir, 0755, true);
+        // A REAL file that resolves OUTSIDE the tape's base dir, so the
+        // confinement branch (not the unresolvable branch) fires.
+        $outside = sys_get_temp_dir() . '/vcr-escape-target-' . getmypid() . '.tape';
+        file_put_contents($outside, "Type \"ESCAPED\"\n");
+        $rel = '../' . basename($outside);
+        file_put_contents($tmpDir . '/main.tape', "Type \"START\"\nSource {$rel}\nType \"END\"\n");
+
+        try {
+            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $cassette = $this->compiler->compile($result['ast'], $tmpDir . '/main.tape');
+
+            // Still skipped (no ESCAPED events) ...
+            $inputEvents = array_filter($cassette->events, fn($e) => $e->kind === EventKind::Input);
+            $this->assertCount(8, $inputEvents);
+
+            // ... but the skip is no longer silent.
+            $warnings = $this->compiler->warnings();
+            $this->assertCount(1, $warnings);
+            $this->assertStringContainsString('escapes the tape directory', $warnings[0]);
+            $this->assertStringContainsString($rel, $warnings[0]);
+        } finally {
+            @unlink($tmpDir . '/main.tape');
+            @unlink($outside);
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testStrictSourceOutsideBaseDirRaisesParseError(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/vcr-src-strict-escape-' . getmypid();
+        mkdir($tmpDir, 0755, true);
+        $outside = sys_get_temp_dir() . '/vcr-escape-strict-target-' . getmypid() . '.tape';
+        file_put_contents($outside, "Type \"ESCAPED\"\n");
+        $rel = '../' . basename($outside);
+        file_put_contents($tmpDir . '/main.tape', "Type \"START\"\nSource {$rel}\nType \"END\"\n");
+
+        try {
+            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('escapes the tape directory');
+
+            $this->compiler->compile($result['ast'], $tmpDir . '/main.tape', true);
+        } finally {
+            @unlink($tmpDir . '/main.tape');
+            @unlink($outside);
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testNonStrictUnresolvableSourceWarnsInsteadOfSilentSkip(): void
+    {
+        $result = Compiler::parseSource("Type \"A\"\nSource missing.tape\nType \"C\"");
+        $cassette = $this->compiler->compile($result['ast'], '/nonexistent/main.tape');
+
+        // Skipped (only A + C) ...
+        $inputEvents = array_filter($cassette->events, fn($e) => $e->kind === EventKind::Input);
+        $this->assertCount(2, $inputEvents);
+
+        // ... with a recorded warning.
+        $warnings = $this->compiler->warnings();
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('could not be resolved or read', $warnings[0]);
+        $this->assertStringContainsString('missing.tape', $warnings[0]);
+    }
+
+    public function testStrictUnresolvableSourceRaisesParseError(): void
+    {
+        $result = Compiler::parseSource("Type \"A\"\nSource missing.tape\nType \"C\"");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('could not be resolved or read');
+
+        $this->compiler->compile($result['ast'], '/nonexistent/main.tape', true);
+    }
 }

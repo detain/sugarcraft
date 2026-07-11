@@ -170,6 +170,20 @@ final class TapeToGif
     }
 
     /**
+     * Non-fatal compiler diagnostics from the most recent {@see render()} —
+     * currently unresolvable / out-of-base `Source` includes that were skipped
+     * under non-strict mode. The CLI surfaces these to stderr so a dropped
+     * include is never silent. Empty after a clean render or a strict run
+     * (strict mode throws on the first such problem instead).
+     *
+     * @return list<string>
+     */
+    public function warnings(): array
+    {
+        return $this->compiler->warnings();
+    }
+
+    /**
      * Encode the GIF to a unique temp file in the destination directory, then
      * atomically rename it into place.
      *
