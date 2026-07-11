@@ -15,6 +15,20 @@ namespace SugarCraft\Buffer;
  * empty "continuation" cell (rune '', width 0) — callers are
  * responsible for creating and placing it.
  *
+ * CONTROL-BYTE CONTRACT (security-relevant): a Cell rune is stored and
+ * emitted VERBATIM — {@see Buffer::toAnsi()} and the diff encoder write
+ * $rune straight to the terminal wire with no escaping. Unlike
+ * {@see Hyperlink}, which rejects C0/DEL at construction, Cell does NOT
+ * validate its rune: a rune is expected to be a single DISPLAY grapheme,
+ * and a raw C0 control (\x00-\x1f) or DEL (\x7f) written as a rune would
+ * be injected verbatim into the output stream. THE CALLER is responsible
+ * for stripping/replacing control bytes before building cells from
+ * untrusted text — escape sequences belong to the parser, never a cell.
+ * A hard reject was evaluated and deferred: multiple foundation
+ * consumers (candy-lister, sugar-crush, sugar-table) legitimately splat
+ * pre-rendered strings char-by-char into runes and rely on the
+ * pass-through behaviour, so validation has to live at those call sites.
+ *
  * Cell is a readonly value object: rebuild via new rather than with*().
  *
  * Mirrors charmbracelet/lipgloss's Cell and the charmbracelet/vte
@@ -25,7 +39,9 @@ namespace SugarCraft\Buffer;
 final class Cell implements \JsonSerializable
 {
     /**
-     * @param string      $rune   Displayed grapheme(s) — empty string for continuation cells
+     * @param string      $rune   Displayed grapheme(s) — empty string for continuation cells.
+     *                            Stored verbatim and emitted unescaped; the caller must strip
+     *                            C0/DEL control bytes from untrusted text (see class docblock).
      * @param Style|null $style  Per-cell style or null for defaults
      * @param Hyperlink|null $link OSC 8 hyperlink or null
      * @param int         $width  Display width in cells (1 or 2; 0 for continuation)
@@ -58,7 +74,13 @@ final class Cell implements \JsonSerializable
         return new self('', null, null, 0);
     }
 
-    /** Displayed grapheme(s). */
+    /**
+     * Displayed grapheme(s), returned verbatim.
+     *
+     * The value is emitted unescaped by {@see Buffer::toAnsi()} / the diff
+     * encoder, so callers rendering untrusted text must have stripped
+     * C0/DEL control bytes before the cell was built (see class docblock).
+     */
     public function rune(): string { return $this->rune; }
 
     /** Per-cell style (or null for default rendering). */

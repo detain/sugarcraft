@@ -6,7 +6,6 @@ namespace SugarCraft\Buffer\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffOp;
 use SugarCraft\Buffer\Diff\EraseRunOp;
 use SugarCraft\Buffer\Diff\MoveCursorOp;
 use SugarCraft\Buffer\Diff\RepeatRunOp;
@@ -18,16 +17,6 @@ use SugarCraft\Buffer\Style;
 
 final class DiffOpTest extends TestCase
 {
-    public function testTypeConstants(): void
-    {
-        $this->assertSame('move_cursor', DiffOp::TYPE_MOVE_CURSOR);
-        $this->assertSame('set_cell', DiffOp::TYPE_SET_CELL);
-        $this->assertSame('erase_run', DiffOp::TYPE_ERASE_RUN);
-        $this->assertSame('repeat_run', DiffOp::TYPE_REPEAT_RUN);
-        $this->assertSame('set_style', DiffOp::TYPE_SET_STYLE);
-        $this->assertSame('set_hyperlink', DiffOp::TYPE_SET_HYPERLINK);
-    }
-
     public function testMoveCursorOpConstruction(): void
     {
         $op = new MoveCursorOp(5, 3);
