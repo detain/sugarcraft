@@ -147,4 +147,67 @@ final class SanitizeTest extends TestCase
         $rendered = Renderer::ansi()->withHyperlinks(true)->render($input);
         $this->assertStringContainsString("https://example.com/a?b=1#c", $rendered);
     }
+
+    /**
+     * Per-node granularity (load-bearing): raw HTML is emitted verbatim to
+     * the terminal, so its control bytes are stripped UNCONDITIONALLY — even
+     * with withSanitize(false), which only relaxes the general text pipeline.
+     * Revert renderHtmlBlock to gate the strip on $this->sanitize and this
+     * test fails (the injected OSC/CSI/BEL leak straight to the terminal).
+     */
+    public function testHtmlBlockControlsStrippedEvenWhenSanitizeOff(): void
+    {
+        $input = "<div>\x1b[31msecret\x1b]0;pwn\x07\x1b[0m</div>";
+        $rendered = Renderer::plain()->withSanitize(false)->render($input);
+        $this->assertStringNotContainsString("\x1b", $rendered);
+        $this->assertStringNotContainsString("\x07", $rendered);
+        // Payload text survives as inert characters — proves the bytes were
+        // neutralised, not that the whole block was dropped.
+        $this->assertStringContainsString('secret', $rendered);
+    }
+
+    /**
+     * Companion to {@see testHtmlBlockControlsStrippedEvenWhenSanitizeOff}
+     * for inline HTML: an ESC hidden inside a tag attribute (which lands in
+     * the HtmlInline node's literal, not an adjacent Text node) is stripped
+     * regardless of the sanitize toggle. Revert renderHtmlSpan's strip →
+     * this fails.
+     */
+    public function testHtmlInlineControlsStrippedEvenWhenSanitizeOff(): void
+    {
+        $input = "text <span title=\"\x1b[31m\x1b]0;x\x07\">y</span> end";
+        $rendered = Renderer::plain()->withSanitize(false)->render($input);
+        $this->assertStringNotContainsString("\x1b", $rendered);
+        $this->assertStringNotContainsString("\x07", $rendered);
+    }
+
+    /**
+     * Narrowness guard: the always-on raw-HTML strip must NOT bleed into the
+     * general text pipeline. With withSanitize(false), plain-text control
+     * bytes still pass through (the documented behaviour for trusted input),
+     * proving the HTML strip is per-node, not a global force-strip. This is
+     * the contrast that keeps the two HTML tests above meaningful.
+     */
+    public function testSanitizeOffStillLeaksPlainTextControls(): void
+    {
+        $input = "before \x1b[31mtext\x1b[0m after";
+        $rendered = Renderer::plain()->withSanitize(false)->render($input);
+        $this->assertStringContainsString("\x1b[31m", $rendered);
+    }
+
+    /**
+     * Emoji shortcodes expand on the raw source BEFORE parsing; the
+     * sanitizer runs AFTER expansion (not before), so control bytes riding
+     * alongside — or, for a future shortcode, produced by — the expansion are
+     * stripped rather than carried into the terminal, while the emoji itself
+     * survives. Guards the expand-then-sanitize ordering in render().
+     */
+    public function testEmojiExpansionSanitizedAfterExpansion(): void
+    {
+        $input = ":fire:\x1b[31mX\x1b]0;pwn\x07";
+        $rendered = Renderer::plain()->withEmoji(true)->render($input);
+        $this->assertStringContainsString('🔥', $rendered);
+        $this->assertStringNotContainsString("\x1b", $rendered);
+        $this->assertStringNotContainsString("\x07", $rendered);
+    }
 }

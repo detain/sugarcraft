@@ -65,7 +65,14 @@ final class Renderer
     private const EMOJI_SHORTCODE_PATTERN = '/:([a-z0-9_+-]+):/i';
 
     public readonly Theme $theme;
-    private readonly MarkdownParser $parser;
+    /**
+     * CommonMark parser, built lazily on first {@see render()} and cached
+     * on the instance. Left null by the constructor so the chainable
+     * `with*()` builders (which spin up a fresh instance via {@see copy()})
+     * do NOT rebuild the parser/Environment on every call — only an actual
+     * render pays that cost, once per instance.
+     */
+    private ?MarkdownParser $parser = null;
     private readonly ?int $wrapWidth;
     private readonly bool $emitHyperlinks;
     private readonly ?string $baseUrl;
@@ -104,15 +111,29 @@ final class Renderer
         $this->expandEmoji = $expandEmoji;
         $this->sanitize = $sanitize;
         $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
+    }
 
-        $env = new Environment();
-        $env->addExtension(new CommonMarkCoreExtension());
-        $env->addExtension(new TableExtension());
-        $env->addExtension(new TaskListExtension());
-        $env->addExtension(new StrikethroughExtension());
-        $env->addExtension(new AutolinkExtension());
-        $env->addExtension(new DescriptionListExtension());
-        $this->parser = new MarkdownParser($env);
+    /**
+     * Lazily build (and memoise) the CommonMark parser. Deferring
+     * construction out of `__construct()` means the `with*()` builders no
+     * longer rebuild the whole Environment + extension set on every call —
+     * the parser is assembled exactly once, on the first render of an
+     * instance. Extension set is identical to the previous eager build, so
+     * render output is byte-for-byte unchanged.
+     */
+    private function parser(): MarkdownParser
+    {
+        if ($this->parser === null) {
+            $env = new Environment();
+            $env->addExtension(new CommonMarkCoreExtension());
+            $env->addExtension(new TableExtension());
+            $env->addExtension(new TaskListExtension());
+            $env->addExtension(new StrikethroughExtension());
+            $env->addExtension(new AutolinkExtension());
+            $env->addExtension(new DescriptionListExtension());
+            $this->parser = new MarkdownParser($env);
+        }
+        return $this->parser;
     }
 
     public static function ansi(): self  { return new self(Theme::ansi());  }
@@ -251,6 +272,12 @@ final class Renderer
      * input where control characters must be preserved. Mirrors the
      * TUI render invariant that renderer output contains only intended
      * SGR escapes, not raw ANSI controls from the source document.
+     *
+     * This toggle governs only the general text pipeline (paragraph text,
+     * inline/fenced/indented code). Raw HTML nodes and link/image URLs are
+     * ALWAYS control-stripped regardless of this flag — those channels emit
+     * source bytes verbatim into the terminal, so disabling the general
+     * sanitizer must not re-open them as an injection vector.
      */
     public function withSanitize(bool $on = true): self
     {
@@ -303,6 +330,14 @@ final class Renderer
     {
         if ($this->expandEmoji) {
             $markdown = self::expandEmojiShortcodes($markdown);
+            // Strip control bytes AFTER expansion (not before), so a shortcode
+            // whose replacement smuggles in C0/ESC bytes cannot slip an escape
+            // sequence past the sanitizer. Gated on $sanitize to honour
+            // withSanitize(false); scoped to the emoji path so ordinary
+            // rendering (default: emoji off) is byte-for-byte unchanged.
+            if ($this->sanitize) {
+                $markdown = self::stripControls($markdown);
+            }
         }
 
         // Lazy-initialize block stack with root Document context.
@@ -312,7 +347,7 @@ final class Renderer
             $this->styleSheet = StyleSheet::base();
         }
 
-        $document = $this->parser->parse($markdown);
+        $document = $this->parser()->parse($markdown);
         $this->blockStack->push(new BlockContext(
             BlockKind::Document,
             depth: 0,
@@ -566,20 +601,22 @@ final class Renderer
 
     private function renderHtmlBlock(HtmlBlock $node): string
     {
-        $literal = rtrim($node->getLiteral(), "\n");
-        if ($this->sanitize) {
-            $literal = self::stripControls($literal);
-        }
+        // Raw HTML is emitted verbatim into the terminal, so it is the most
+        // direct terminal-injection vector. Strip C0/ESC UNCONDITIONALLY —
+        // per-node granularity, decoupled from withSanitize(false), which
+        // only governs the general text pipeline. A caller disabling the
+        // sanitizer to preserve intentional controls in trusted text must
+        // never thereby re-open a raw-HTML escape channel.
+        $literal = self::stripControls(rtrim($node->getLiteral(), "\n"));
         $style = $this->theme->htmlBlock ?? \SugarCraft\Sprinkles\Style::new();
         return $style->render($literal) . "\n\n";
     }
 
     private function renderHtmlSpan(HtmlInline $node): string
     {
-        $literal = $node->getLiteral();
-        if ($this->sanitize) {
-            $literal = self::stripControls($literal);
-        }
+        // See renderHtmlBlock: raw inline HTML is always control-stripped,
+        // independent of the withSanitize() toggle.
+        $literal = self::stripControls($node->getLiteral());
         $style = $this->theme->htmlSpan ?? \SugarCraft\Sprinkles\Style::new();
         return $style->render($literal);
     }
