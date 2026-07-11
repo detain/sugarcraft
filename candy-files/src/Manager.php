@@ -594,9 +594,38 @@ final class Manager implements Model
         return @rename($src, $dst);
     }
 
-    /** Recursively copy a directory */
-    private function copyDir(string $src, string $dst): bool
+    /**
+     * Maximum directory-nesting depth for a single recursive copy.
+     *
+     * Bounds runaway recursion — copying a directory into its own subtree,
+     * or a hardlink/bind-mount cycle — before it can exhaust the call stack
+     * or flood the filesystem (DoS). Real directory trees are shallow;
+     * nothing legitimate comes close to this.
+     */
+    public const MAX_COPY_DEPTH = 256;
+
+    /**
+     * Recursively copy a directory.
+     *
+     * Guards against filesystem cycles two ways: a visited set of
+     * realpath()-resolved source directories (catches a directory that
+     * resolves back onto one already entered) and a hard depth cap. Either
+     * trips to `false` — the same error convention copy() uses everywhere.
+     *
+     * @param array<string,true> $visited realpath()s already entered this copy
+     */
+    private function copyDir(string $src, string $dst, array &$visited = [], int $depth = 0): bool
     {
+        if ($depth > self::MAX_COPY_DEPTH) {
+            return false;
+        }
+        $real = realpath($src);
+        if ($real !== false) {
+            if (isset($visited[$real])) {
+                return false; // cycle: this real directory was already entered
+            }
+            $visited[$real] = true;
+        }
         if (!@mkdir($dst, 0755, true) && !is_dir($dst)) {
             return false;
         }
@@ -610,7 +639,7 @@ final class Manager implements Model
             if (is_link($srcPath)) {
                 @symlink(readlink($srcPath), $dstPath);
             } elseif (is_dir($srcPath)) {
-                if (!$this->copyDir($srcPath, $dstPath)) {
+                if (!$this->copyDir($srcPath, $dstPath, $visited, $depth + 1)) {
                     return false;
                 }
             } else {

@@ -36,10 +36,12 @@ final class ManagerCopyTest extends TestCase
                 continue;
             }
             $full = $path . '/' . $item;
-            if (is_dir($full)) {
-                $this->removeDir($full);
-            } else {
+            // is_link check first: never recurse through a symlinked dir
+            // (a self-referencing link would otherwise loop / delete its target).
+            if (is_link($full) || !is_dir($full)) {
                 @unlink($full);
+            } else {
+                $this->removeDir($full);
             }
         }
         @rmdir($path);
@@ -152,5 +154,51 @@ final class ManagerCopyTest extends TestCase
         $this->assertFileExists($dstDir . '/file.txt');
         $this->assertFileExists($dstDir . '/subdir/nested.txt');
         $this->assertSame('content', file_get_contents($dstDir . '/file.txt'));
+    }
+
+    /**
+     * Depth cap: a directory nested deeper than MAX_COPY_DEPTH must abort
+     * with false rather than recurse without bound. Without the cap a
+     * copy-into-self or hardlink/bind cycle would exhaust the stack / flood
+     * the disk. Revert the guard and this returns true → the test fails.
+     */
+    public function testCopyDirStopsAtMaxDepth(): void
+    {
+        // One mkdir builds the whole chain; go two levels past the cap so
+        // the recursion is forced to trip.
+        $depth = Manager::MAX_COPY_DEPTH + 2;
+        $deepRoot = $this->tmpDir . '/deep';
+        $leaf = $deepRoot . str_repeat('/d', $depth);
+        $this->assertTrue(mkdir($leaf, 0755, true), 'setup: deep tree created');
+        file_put_contents($leaf . '/leaf.txt', 'bottom');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        $result = $m->copy($deepRoot, $this->tmpDir . '/deep-copy');
+
+        $this->assertFalse($result, 'copy past MAX_COPY_DEPTH must abort');
+    }
+
+    /**
+     * A directory containing a symlink that points back at itself (or a
+     * parent) must not send copyDir into infinite recursion. The symlink is
+     * copied as a symlink, never followed, and the copy completes.
+     */
+    public function testCopyDirHandlesSelfReferencingSymlink(): void
+    {
+        $base = $this->tmpDir . '/loopy';
+        mkdir($base, 0755, true);
+        file_put_contents($base . '/real.txt', 'data');
+        if (@symlink($base, $base . '/self') === false) {
+            $this->markTestSkipped('symlinks not supported on this filesystem');
+        }
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        $dst = $this->tmpDir . '/loopy-copy';
+        $result = $m->copy($base, $dst);
+
+        $this->assertTrue($result, 'self-referencing symlink must not break the copy');
+        $this->assertFileExists($dst . '/real.txt');
+        // The loop entry is preserved as a symlink, not recursed into.
+        $this->assertTrue(is_link($dst . '/self'), 'symlink copied as a link, not followed');
     }
 }
