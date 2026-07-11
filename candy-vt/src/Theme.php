@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt;
 
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Vt\Theme\TokyoNight;
 use SugarCraft\Vt\Theme\TokyoNightLight;
 use SugarCraft\Vt\Theme\TokyoNightStorm;
@@ -119,15 +120,21 @@ final class Theme
             defaultFg: 7,
             defaultBg: 0,
             palette: [
+                // slot 0: candy-vt's own darker bg (0x21222c), intentionally NOT
+                // the Dracula named `background` (#282a36) — stays lib-local.
                 0x21222c,
-                0xff5555,
-                0x50fa7b,
-                0xf1fa8c,
-                0x6272a4,
-                0xff79c6,
-                0x8be9fd,
-                0xf8f8f2,
-                0x6272a4,
+                // slots 1-8: the seven Dracula named colours candy-vt overlaps —
+                // re-sourced from candy-core's Palettes SSOT (string→int).
+                hexdec(ltrim(Palettes::DRACULA['red'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['green'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['yellow'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['pink'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['cyan'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['foreground'], '#')),
+                hexdec(ltrim(Palettes::DRACULA['comment'], '#')),
+                // slots 9-15: bright ANSI variants absent from the Dracula named
+                // set — intentionally stay lib-local.
                 0xff6e6e,
                 0x69ff94,
                 0xffffa5,
