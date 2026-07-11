@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\LineChart;
 use SugarCraft\Charts\Chart\Chart;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
@@ -95,12 +96,14 @@ final class LineChart extends Chart
     /** @param list<int|float> $data */
     public static function new(array $data = [], int $width = 40, int $height = 8): self
     {
+        Finite::assertAll($data);
         return new self(array_values($data), $width, $height, null, null, '*');
     }
 
     /** @param list<int|float> $data */
     public function withData(array $data): self
     {
+        Finite::assertAll($data);
         return $this->lineChartCopy(data: array_values($data));
     }
 
@@ -185,6 +188,7 @@ final class LineChart extends Chart
      */
     public function withDataset(string $name, array $values): self
     {
+        Finite::assertAll($values);
         $sets = $this->datasets;
         $sets[$name] = array_values($values);
 
@@ -355,6 +359,7 @@ final class LineChart extends Chart
      */
     public function push(float $value): self
     {
+        Finite::assert($value);
         $window = $this->width > 0 ? $this->width : 1;
         $data = $this->data;
         $data[] = $value;
