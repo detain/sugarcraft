@@ -10,6 +10,7 @@ use SugarCraft\Buffer\Style;
 use SugarCraft\Buffer\Region;
 use SugarCraft\Buffer\Position as BufferPosition;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -230,6 +231,37 @@ final class Toast
         $clone = clone $this;
         $alert = (new Alert($resolvedType, $message, $expiresAt, null, $actions ?? []))->withProgress($progress);
         if ($expiresAt === null && $clone->duration !== null) {
+            $alert = $alert->withExpiry($clone->duration);
+        }
+
+        if ($clone->maxConcurrent !== null && \count($clone->queue) >= $clone->maxConcurrent) {
+            if ($clone->overflow === Overflow::DropNewest) {
+                return $clone;
+            }
+            if ($clone->overflow === Overflow::DropOldest) {
+                \array_shift($clone->queue);
+            }
+        }
+
+        $clone->queue[] = $alert;
+        return $clone;
+    }
+
+    /**
+     * Enqueue a pre-built (optionally styled) Alert.
+     *
+     * Companion to {@see alert()} for callers that construct an Alert
+     * directly — e.g. to attach background/foreground/border colours via
+     * {@see Alert::withBackgroundColor()} / {@see Alert::withForegroundColor()}
+     * / {@see Alert::withBorderColor()}. Honours the configured duration
+     * (when the alert carries no expiry of its own) and the
+     * maxConcurrent/overflow policy, exactly like {@see alert()}.
+     */
+    public function push(Alert $alert): self
+    {
+        $clone = clone $this;
+
+        if ($alert->expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
 
@@ -582,7 +614,87 @@ final class Toast
             $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row]);
         }
 
+        // Additive: overlay optional per-alert bg/fg/border colours. When
+        // all three are null (the default) this pass is skipped and the
+        // buffer stays byte-identical to the plain render path.
+        if ($alert->backgroundColor !== null
+            || $alert->foregroundColor !== null
+            || $alert->borderColor !== null) {
+            $buf = $this->applyAlertColors($buf, $alert, $lines);
+        }
+
         return $buf;
+    }
+
+    /**
+     * Overlay a queued Alert's optional bg/fg/border colours onto its
+     * freshly laid-out buffer.
+     *
+     * Every box cell gains the background fill; box-drawing glyphs
+     * (╭ ─ ╮ │ ╰ ╯) take the border colour; remaining interior text takes
+     * the foreground colour. Cells that already carry a colour — the
+     * severity-coloured icon and any inline-SGR message spans — keep it.
+     * Mirrors the styled toast box rendered by sugar-dash's Toast::render().
+     *
+     * @param list<string> $lines The rendered alert rows, used to bound the
+     *                            styled columns to each row's box width so a
+     *                            narrower box never bleeds fill into the
+     *                            trailing blank cells of a wider buffer.
+     */
+    private function applyAlertColors(Buffer $buf, Alert $alert, array $lines): Buffer
+    {
+        static $borderGlyphs = ['╭' => true, '─' => true, '╮' => true, '│' => true, '╰' => true, '╯' => true];
+
+        $bg     = $alert->backgroundColor !== null ? $this->colorToRgb($alert->backgroundColor) : null;
+        $fg     = $alert->foregroundColor !== null ? $this->colorToRgb($alert->foregroundColor) : null;
+        $border = $alert->borderColor !== null ? $this->colorToRgb($alert->borderColor) : null;
+
+        $height   = $buf->height();
+        $bufWidth = $buf->width();
+        $lineCount = \count($lines);
+
+        for ($row = 0; $row < $height && $row < $lineCount; $row++) {
+            $cols = \min($bufWidth, Width::string($lines[$row]));
+            for ($col = 0; $col < $cols; $col++) {
+                $cell = $buf->cellAt($col, $row);
+                if ($cell->width === 0) {
+                    continue;  // wide-char continuation — toAnsi() skips it
+                }
+
+                $existing = $cell->style();
+                $newFg = $existing?->fg();
+                $attrs = $existing?->attrs() ?? 0;
+
+                if (isset($borderGlyphs[$cell->rune()])) {
+                    if ($border !== null) {
+                        $newFg = $border;
+                    }
+                } elseif ($newFg === null && $fg !== null) {
+                    // Plain interior text/padding — icon and inline-styled
+                    // cells (non-null fg) keep their own colour.
+                    $newFg = $fg;
+                }
+
+                $newBg = $bg ?? $existing?->bg();
+
+                $buf = $buf->withCellAt(
+                    $col,
+                    $row,
+                    new Cell($cell->rune(), new Style($newFg, $newBg, $attrs), $cell->link(), $cell->width),
+                );
+            }
+        }
+
+        return $buf;
+    }
+
+    /**
+     * Pack a candy-core {@see Color} into a 24-bit 0xRRGGBB int, the shape
+     * candy-buffer's {@see Style} stores fg/bg colours in.
+     */
+    private function colorToRgb(Color $color): int
+    {
+        return ($color->r << 16) | ($color->g << 8) | $color->b;
     }
 
     /**
