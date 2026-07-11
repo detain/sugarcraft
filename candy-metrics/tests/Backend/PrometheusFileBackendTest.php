@@ -159,4 +159,37 @@ final class PrometheusFileBackendTest extends TestCase
         // Sample line must still be present.
         $this->assertStringContainsString('hits 5', $content);
     }
+
+    public function testDestructorSwallowsFlushFailure(): void
+    {
+        // Make flush() fail *cleanly* (no PHP warning): point the backend at a
+        // path that is actually a non-empty directory, so the atomic rename()
+        // over it fails. rename() is @-suppressed, so failOnWarning stays
+        // satisfied while flush() still throws a RuntimeException.
+        $dir = sys_get_temp_dir() . '/candy-metrics-dir-' . uniqid();
+        mkdir($dir);
+        file_put_contents($dir . '/keep', 'x'); // non-empty → rename-over fails everywhere
+
+        try {
+            $b = new PrometheusFileBackend($dir);
+            $b->counter('hits', 1); // mark dirty so flush() actually attempts the rename
+
+            // Explicit flush surfaces the failure as a RuntimeException...
+            $threw = false;
+            try {
+                $b->flush();
+            } catch (\RuntimeException) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, 'explicit flush() must surface the rename failure');
+
+            // ...but dropping the last reference (triggering __destruct) must not.
+            unset($b);
+            $this->assertTrue(true, 'destructor completed without throwing');
+        } finally {
+            @unlink($dir . '/keep');
+            @unlink($dir . '.tmp');
+            @rmdir($dir);
+        }
+    }
 }
