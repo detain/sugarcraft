@@ -6,6 +6,7 @@ namespace SugarCraft\Shine;
 
 use SugarCraft\Shine\Lang;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -421,15 +422,17 @@ final class Theme
      */
     public static function dracula(): self
     {
-        $bg   = Color::hex('#282a36');
-        $fg   = Color::hex('#f8f8f2');
-        $pink = Color::hex('#ff79c6');
-        $purp = Color::hex('#bd93f9');
-        $cyan = Color::hex('#8be9fd');
-        $green= Color::hex('#50fa7b');
-        $org  = Color::hex('#ffb86c');
-        $yel  = Color::hex('#f1fa8c');
-        $com  = Color::hex('#6272a4');
+        // Named hex sourced from candy-core Palettes SSOT (byte-identical to
+        // the former inline literals; see ThemeTest drift guard).
+        $bg   = Color::hex(Palettes::DRACULA['background']);
+        $fg   = Color::hex(Palettes::DRACULA['foreground']);
+        $pink = Color::hex(Palettes::DRACULA['pink']);
+        $purp = Color::hex(Palettes::DRACULA['purple']);
+        $cyan = Color::hex(Palettes::DRACULA['cyan']);
+        $green= Color::hex(Palettes::DRACULA['green']);
+        $org  = Color::hex(Palettes::DRACULA['orange']);
+        $yel  = Color::hex(Palettes::DRACULA['yellow']);
+        $com  = Color::hex(Palettes::DRACULA['comment']);
 
         return new self(
             heading1:   Style::new()->bold()->foreground($pink),
