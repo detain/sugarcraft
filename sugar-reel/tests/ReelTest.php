@@ -36,6 +36,97 @@ final class ReelTest extends TestCase
         Reel::openUrl('/tmp/local.mp4');
     }
 
+    // -------------------------------------------------------------------------
+    // SSRF: openUrl() host allowlist (openUrl second arg + withAllowedHosts())
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox openUrl() with an allowlist REJECTS a non-allowlisted host (SSRF guard)
+     *
+     * Load-bearing: revert the allowlist branch and the non-allowlisted host is
+     * accepted instead of rejected — this test then fails.
+     */
+    public function testOpenUrlWithAllowlistRejectsNonAllowlistedHost(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Remote host not in allowlist');
+        Reel::openUrl('https://evil.example/media/stream', ['trusted.example']);
+    }
+
+    /**
+     * @testdox openUrl() with an allowlist ACCEPTS an allowlisted host and records it
+     */
+    public function testOpenUrlWithAllowlistAcceptsAllowlistedHost(): void
+    {
+        $reel = Reel::openUrl('https://trusted.example/media/stream', ['trusted.example']);
+        $this->assertSame('https://trusted.example/media/stream', $reel->path());
+        $this->assertSame(['trusted.example'], $reel->allowedHosts());
+    }
+
+    /**
+     * @testdox openUrl() host allowlist matching is case-insensitive
+     */
+    public function testOpenUrlAllowlistIsCaseInsensitive(): void
+    {
+        $reel = Reel::openUrl('https://TRUSTED.Example/s.mkv', ['trusted.example']);
+        $this->assertSame('https://TRUSTED.Example/s.mkv', $reel->path());
+    }
+
+    /**
+     * @testdox openUrl() without an allowlist stays unrestricted (allowedHosts() null)
+     */
+    public function testOpenUrlWithoutAllowlistIsUnrestricted(): void
+    {
+        // Unset allowlist preserves the prior behavior: any http(s) host accepted.
+        $reel = Reel::openUrl('https://anything.example/s.mkv');
+        $this->assertSame('https://anything.example/s.mkv', $reel->path());
+        $this->assertNull($reel->allowedHosts());
+    }
+
+    /**
+     * @testdox withAllowedHosts() re-validates an already-bound remote URL and rejects a bad host
+     *
+     * Load-bearing: revert assertHostAllowed in withAllowedHosts() and the bound
+     * bad-host URL is accepted — this test then fails.
+     */
+    public function testWithAllowedHostsRejectsBoundRemoteBadHost(): void
+    {
+        $reel = Reel::openUrl('https://evil.example/s.mkv');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Remote host not in allowlist');
+        $reel->withAllowedHosts(['trusted.example']);
+    }
+
+    /**
+     * @testdox withAllowedHosts() accepts a bound remote URL whose host is allowlisted
+     */
+    public function testWithAllowedHostsAcceptsBoundRemoteGoodHost(): void
+    {
+        $reel = Reel::openUrl('https://trusted.example/s.mkv')->withAllowedHosts(['trusted.example']);
+        $this->assertSame(['trusted.example'], $reel->allowedHosts());
+        $this->assertSame('https://trusted.example/s.mkv', $reel->path());
+    }
+
+    /**
+     * @testdox withAllowedHosts() on a local (non-remote) source just records the list
+     */
+    public function testWithAllowedHostsOnLocalSourceRecordsList(): void
+    {
+        // No remote URL bound → nothing to validate, the list is simply stored.
+        $reel = Reel::open('/tmp/x.mp4')->withAllowedHosts(['trusted.example']);
+        $this->assertSame(['trusted.example'], $reel->allowedHosts());
+        $this->assertNotSame($reel, Reel::open('/tmp/x.mp4'));
+    }
+
+    /**
+     * @testdox allowedHosts() defaults to null
+     */
+    public function testAllowedHostsDefaultsToNull(): void
+    {
+        $this->assertNull(Reel::new()->allowedHosts());
+        $this->assertNull(Reel::open('/tmp/x.mp4')->allowedHosts());
+    }
+
     /**
      * @testdox an openUrl() source is configurable just like open() (immutable with*)
      */

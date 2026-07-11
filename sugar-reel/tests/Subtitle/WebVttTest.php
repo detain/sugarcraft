@@ -134,6 +134,47 @@ final class WebVttTest extends TestCase
         self::assertTrue(WebVtt::parse("WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n")->isEmpty(), 'empty text dropped');
     }
 
+    /**
+     * DoS guard: a track with more than MAX_CUES cues is truncated at the cap.
+     *
+     * Load-bearing: remove the `count($cues) >= MAX_CUES` break in parse() and
+     * the cue count becomes unbounded (MAX_CUES + overflow) — this test fails.
+     */
+    public function testCueCountIsCappedAtMaxCues(): void
+    {
+        $cap = WebVtt::MAX_CUES;
+        $overflow = 25;
+
+        // Build a VTT with cap + overflow well-formed cues.
+        $sb = "WEBVTT\n\n";
+        for ($i = 0; $i < $cap + $overflow; $i++) {
+            $start = sprintf('%02d:%02d:%02d.000', intdiv($i, 3600), intdiv($i % 3600, 60), $i % 60);
+            $end   = sprintf('%02d:%02d:%02d.000', intdiv($i + 1, 3600), intdiv(($i + 1) % 3600, 60), ($i + 1) % 60);
+            $sb .= "{$start} --> {$end}\nLine {$i}\n\n";
+        }
+
+        $vtt = WebVtt::parse($sb);
+
+        self::assertCount($cap, $vtt->cues(), 'cue count must be capped at MAX_CUES');
+    }
+
+    /**
+     * @testdox a track at exactly MAX_CUES is kept in full (cap is inclusive)
+     */
+    public function testTrackAtExactlyMaxCuesIsKept(): void
+    {
+        $cap = WebVtt::MAX_CUES;
+
+        $sb = "WEBVTT\n\n";
+        for ($i = 0; $i < $cap; $i++) {
+            $start = sprintf('%02d:%02d:%02d.000', intdiv($i, 3600), intdiv($i % 3600, 60), $i % 60);
+            $end   = sprintf('%02d:%02d:%02d.000', intdiv($i + 1, 3600), intdiv(($i + 1) % 3600, 60), ($i + 1) % 60);
+            $sb .= "{$start} --> {$end}\nLine {$i}\n\n";
+        }
+
+        self::assertCount($cap, WebVtt::parse($sb)->cues());
+    }
+
     public function testCueContains(): void
     {
         $cue = new Cue(5.0, 10.0, 'x');
