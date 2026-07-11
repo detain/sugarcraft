@@ -22,6 +22,7 @@ foreach ([__DIR__ . '/../vendor/autoload.php', $root . '/vendor/autoload.php'] a
     }
 }
 
+use SugarCraft\Freeze\CodeHighlighter;
 use SugarCraft\Freeze\Lang;
 use SugarCraft\Freeze\LanguageDetector;
 use SugarCraft\Freeze\PngRenderer;
@@ -141,10 +142,18 @@ if ($text === false || $text === null) {
     exit(1);
 }
 
-// Detect language for syntax highlighting (future use with Chroma).
+// Detect the language, then apply plaintext syntax highlighting — but only for
+// raw source. If the input already carries its own ANSI SGR (e.g. captured
+// terminal output) we pass it through untouched so pre-styled colours win and
+// the render stays byte-identical. Unrecognised / plain-text languages tokenise
+// to a single Plain span, so CodeHighlighter::highlight() returns the input
+// unchanged; the `!== 'text'` guard just skips the needless tokenise pass.
 $detectedLang = LanguageDetector::detect($text);
 if ($language === null) {
     $language = $detectedLang;
+}
+if (strpos($text, "\x1b") === false && $language !== 'text' && $language !== '') {
+    $text = CodeHighlighter::forTheme($theme)->highlight($text, $language);
 }
 
 if ($format === 'png') {
