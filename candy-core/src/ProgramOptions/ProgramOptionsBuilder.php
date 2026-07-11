@@ -46,6 +46,7 @@ final class ProgramOptionsBuilder
     private bool $withoutSignalHandler = false;
     private ?Termios $termios = null;
     private ?\Closure $subscriptions = null;
+    private bool $sanitizePaste = true;
 
     public function withUseAltScreen(bool $useAltScreen): self
     {
@@ -196,6 +197,12 @@ final class ProgramOptionsBuilder
         return $this;
     }
 
+    public function withSanitizePaste(bool $sanitizePaste): self
+    {
+        $this->sanitizePaste = $sanitizePaste;
+        return $this;
+    }
+
     /**
      * Build the {@see ProgramOptions} instance.
      */
@@ -225,6 +232,7 @@ final class ProgramOptionsBuilder
             withoutSignalHandler: $this->withoutSignalHandler,
             termios: $this->termios,
             subscriptions: $this->subscriptions,
+            sanitizePaste: $this->sanitizePaste,
         );
     }
 }
