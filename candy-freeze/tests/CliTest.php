@@ -20,7 +20,7 @@ final class CliTest extends TestCase
         }
     }
 
-    private function runCli(array $args, ?string $stdin = null): array
+    private function runCli(array $args, ?string $stdin = null, ?string $cwd = null): array
     {
         $cmd = [self::$phpBinary, self::$binPath, ...$args];
 
@@ -30,7 +30,7 @@ final class CliTest extends TestCase
             2 => ['pipe', 'w'],
         ];
 
-        $handle = proc_open($cmd, $desc, $pipes);
+        $handle = proc_open($cmd, $desc, $pipes, $cwd);
 
         try {
             if ($stdin !== null) {
@@ -82,7 +82,9 @@ final class CliTest extends TestCase
         file_put_contents($tmp, "world\n");
 
         try {
-            $result = $this->runCli(['--no-window', '--no-shadow', $tmp]);
+            // $tmp lives in the system temp dir, outside the CWD, so the path
+            // guard requires the --unsafe-paths opt-out.
+            $result = $this->runCli(['--no-window', '--no-shadow', '--unsafe-paths', $tmp]);
 
             $this->assertSame(0, $result['exitCode']);
             $this->assertStringStartsWith('<?xml', $result['stdout']);
@@ -114,7 +116,8 @@ final class CliTest extends TestCase
         $tmp = sys_get_temp_dir() . '/candyfreeze_out_' . uniqid() . '.svg';
 
         try {
-            $result = $this->runCli(['--no-window', '--no-shadow', '-o', $tmp], "test\n");
+            // Temp-dir output is outside the CWD → needs --unsafe-paths.
+            $result = $this->runCli(['--no-window', '--no-shadow', '--unsafe-paths', '-o', $tmp], "test\n");
 
             $this->assertSame(0, $result['exitCode']);
             $this->assertSame('', $result['stdout']);
@@ -131,7 +134,8 @@ final class CliTest extends TestCase
 
     public function testWriteFailureExitsOne(): void
     {
-        $result = $this->runCli(['--no-window', '--no-shadow', '-o', '/nonexistent-dir-xyz/candyfreeze.svg'], "test\n");
+        // --unsafe-paths bypasses confinement so the write itself is what fails.
+        $result = $this->runCli(['--no-window', '--no-shadow', '--unsafe-paths', '-o', '/nonexistent-dir-xyz/candyfreeze.svg'], "test\n");
 
         $this->assertSame(1, $result['exitCode']);
         $this->assertStringContainsString('failed to write', $result['stderr']);
@@ -184,5 +188,141 @@ final class CliTest extends TestCase
 
         $this->assertSame(0, $result['exitCode']);
         $this->assertStringNotContainsString('fill="#ff79c6"', $result['stdout']);
+    }
+
+    // -------------------------------------------------------------------------
+    // Path confinement (--unsafe-paths opt-out) + font signature validation
+    // -------------------------------------------------------------------------
+
+    public function testInputInsideCwdResolves(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/in.txt', "hello\n");
+            // Relative path, run with the temp dir as CWD → confined, allowed.
+            $result = $this->runCli(['--no-window', '--no-shadow', 'in.txt'], null, $dir);
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringStartsWith('<?xml', $result['stdout']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testInputOutsideCwdRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        try {
+            file_put_contents($outside . '/secret.txt', "secret\n");
+            $result = $this->runCli(['--no-window', '--no-shadow', $outside . '/secret.txt'], null, $dir);
+
+            $this->assertSame(2, $result['exitCode']);
+            $this->assertStringContainsString('outside the current working directory', $result['stderr']);
+            $this->assertSame('', $result['stdout']);
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testTraversalInputRejectedExitsTwo(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        try {
+            file_put_contents($outside . '/secret.txt', "secret\n");
+            // A ../ escape resolves outside the CWD and must be rejected.
+            $relative = '../' . basename($outside) . '/secret.txt';
+            $result = $this->runCli(['--no-window', '--no-shadow', $relative], null, $dir);
+
+            $this->assertSame(2, $result['exitCode']);
+            $this->assertStringContainsString('outside the current working directory', $result['stderr']);
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testUnsafePathsBypassesConfinement(): void
+    {
+        $dir     = $this->makeTempDir();
+        $outside = $this->makeTempDir();
+        try {
+            file_put_contents($outside . '/data.txt', "data\n");
+            $result = $this->runCli(
+                ['--no-window', '--no-shadow', '--unsafe-paths', $outside . '/data.txt'],
+                null,
+                $dir,
+            );
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringStartsWith('<?xml', $result['stdout']);
+        } finally {
+            $this->rmTree($dir);
+            $this->rmTree($outside);
+        }
+    }
+
+    public function testFontWithValidMagicIsEmbedded(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/in.txt', "x\n");
+            file_put_contents($dir . '/good.ttf', "\x00\x01\x00\x00rest-of-a-truetype-file");
+            $result = $this->runCli(
+                ['--no-window', '--no-shadow', '--font', 'good.ttf', 'in.txt'],
+                null,
+                $dir,
+            );
+
+            $this->assertSame(0, $result['exitCode'], $result['stderr']);
+            $this->assertStringContainsString('data:font/ttf;base64,', $result['stdout']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    public function testFontWithInvalidMagicRejectedExitsTwo(): void
+    {
+        $dir = $this->makeTempDir();
+        try {
+            file_put_contents($dir . '/in.txt', "x\n");
+            file_put_contents($dir . '/bad.ttf', 'this is definitely not a font');
+            $result = $this->runCli(
+                ['--no-window', '--no-shadow', '--font', 'bad.ttf', 'in.txt'],
+                null,
+                $dir,
+            );
+
+            $this->assertSame(2, $result['exitCode']);
+            $this->assertStringContainsString('not a valid font file', $result['stderr']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
+    private function makeTempDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/candyfreeze_cwd_' . uniqid('', true);
+        if (!mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new \RuntimeException('Could not create temp dir: ' . $dir);
+        }
+        return $dir;
+    }
+
+    private function rmTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) ? $this->rmTree($path) : @unlink($path);
+        }
+        @rmdir($dir);
     }
 }
