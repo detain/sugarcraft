@@ -88,7 +88,8 @@ final class ToastTest extends TestCase
         $rendered = $toast->render();
 
         $this->assertStringContainsString('Success!', $rendered);
-        $this->assertStringContainsString('✓', $rendered);
+        // Icon is now supplied by the sugar-toast engine (U+2714 heavy check).
+        $this->assertStringContainsString('✔', $rendered);
     }
 
     public function testWarningFactory(): void
@@ -145,14 +146,16 @@ final class ToastTest extends TestCase
         $this->assertStringContainsString('★', $rendered);
     }
 
-    public function testDefaultToastNoIcon(): void
+    public function testDefaultToastRendersInfoIcon(): void
     {
         $toast = Toast::new('Message');
         $rendered = $toast->render();
 
-        // Default toast has no icon
-        $this->assertStringNotContainsString('ℹ', $rendered);
-        $this->assertStringNotContainsString('✓', $rendered);
+        // Rendering now flows through the sugar-toast engine, which always
+        // draws a severity icon; the neutral default maps to the Info type,
+        // never the warning/error/success severities.
+        $this->assertStringContainsString('ℹ', $rendered);
+        $this->assertStringNotContainsString('✔', $rendered);
         $this->assertStringNotContainsString('⚠', $rendered);
         $this->assertStringNotContainsString('✖', $rendered);
     }
@@ -167,8 +170,8 @@ final class ToastTest extends TestCase
             ->withBackgroundColor(Color::ansi(9));
         $rendered = $toast->render();
 
-        // Background color uses 24-bit bg code
-        $this->assertMatchesRegularExpression('/\x1b\[4/', $rendered);
+        // Background color uses a 24-bit truecolor bg SGR (48;2;r;g;b).
+        $this->assertStringContainsString('48;2;', $rendered);
     }
 
     public function testForegroundColorAddsAnsiCodes(): void
@@ -177,7 +180,8 @@ final class ToastTest extends TestCase
             ->withForegroundColor(Color::ansi(7));
         $rendered = $toast->render();
 
-        $this->assertMatchesRegularExpression('/\x1b\[3/', $rendered);
+        // Foreground color uses a 24-bit truecolor fg SGR (38;2;r;g;b).
+        $this->assertStringContainsString('38;2;', $rendered);
     }
 
     public function testBorderColorAddsAnsiCodes(): void
@@ -210,13 +214,10 @@ final class ToastTest extends TestCase
 
         $lines = explode("\n", $rendered);
         foreach ($lines as $line) {
-            if (str_contains($line, '─')) {
-                continue; // Skip border lines
-            }
-            if ($line !== '' && !ctype_space($line)) {
-                // Content should be within max width minus padding
-                $this->assertLessThanOrEqual(22, mb_strlen($line, 'UTF-8'));
-            }
+            // Strip the per-cell SGR escapes so the assertion measures the
+            // visible cell width of the box, not the styled byte length.
+            $visible = preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+            $this->assertLessThanOrEqual(20, mb_strlen($visible, 'UTF-8'));
         }
     }
 

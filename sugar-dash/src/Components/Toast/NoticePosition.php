@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Components\Toast;
 
+use SugarCraft\Toast\Position as ToastPosition;
+
 /**
  * Positioning options for toast notifications on screen.
  */
@@ -73,5 +75,30 @@ enum NoticePosition: string
     public function isAnchor(): bool
     {
         return $this === self::Anchor;
+    }
+
+    /**
+     * Map onto the sugar-toast {@see ToastPosition} used by the shared engine.
+     *
+     * The six corner/edge positions map 1:1; the vertically-centred edges fold
+     * onto the engine's Middle* variants. `Anchor` (positioned relative to an
+     * element) has no sugar-toast equivalent, so it falls back to TopRight —
+     * the conventional floating-toast corner.
+     */
+    public function toToastPosition(): ToastPosition
+    {
+        return match ($this) {
+            self::TopLeft      => ToastPosition::TopLeft,
+            self::TopCenter    => ToastPosition::TopCenter,
+            self::TopRight     => ToastPosition::TopRight,
+            self::BottomLeft   => ToastPosition::BottomLeft,
+            self::BottomCenter => ToastPosition::BottomCenter,
+            self::BottomRight  => ToastPosition::BottomRight,
+            self::CenterLeft   => ToastPosition::MiddleLeft,
+            self::CenterRight  => ToastPosition::MiddleRight,
+            self::Center       => ToastPosition::MiddleCenter,
+            // No engine equivalent for an element-anchored toast.
+            self::Anchor       => ToastPosition::TopRight,
+        };
     }
 }

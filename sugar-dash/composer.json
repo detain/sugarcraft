@@ -38,7 +38,8 @@
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-pty": "@dev"
+        "sugarcraft/candy-pty": "@dev",
+        "sugarcraft/sugar-toast": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
@@ -114,6 +115,13 @@
         {
             "type": "path",
             "url": "../candy-input",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../sugar-toast",
             "options": {
                 "symlink": true
             }

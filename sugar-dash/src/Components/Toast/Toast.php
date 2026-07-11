@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Components\Toast;
 
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Core\Util\Width;
+use SugarCraft\Toast\Alert;
+use SugarCraft\Toast\Position as ToastPosition;
+use SugarCraft\Toast\Toast as ToastEngine;
+use SugarCraft\Toast\ToastType;
 
 /**
  * A toast / notification component.
@@ -18,8 +19,15 @@ use SugarCraft\Core\Util\Width;
  * - Auto-dismiss timer display (visual only)
  * - Customizable icon and colors
  *
- * Mirrors the toast concept from typical UI toolkits but adapted
- * to PHP with wither-style immutable setters.
+ * Rendering is delegated to the shared sugar-toast engine
+ * ({@see \SugarCraft\Toast\Toast}) so sugar-dash no longer reimplements its
+ * own box drawing: a per-type {@see \SugarCraft\Toast\Alert} carries the
+ * background/foreground/border colours (sugar-toast PR #1289) and the engine
+ * composites the styled box, which this class trims to the box itself.
+ *
+ * The public vocabulary — {@see Notification}, {@see Level},
+ * {@see NoticePosition} — stays stable; only the rendered bytes change (the
+ * engine draws its own severity icon and per-cell layout).
  *
  * Adapter: `fromNotification()` / `fromQueue()` bridge Notification DTOs
  * into styled toast output.
@@ -37,50 +45,62 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
         private readonly ?Color $borderColor = null,
         private readonly string $icon = '',
         private readonly int $maxWidth = 60,
+        // Severity fed to the sugar-toast engine; drives the drawn icon and
+        // icon colour. The neutral default maps to Info.
+        private readonly ToastType $type = ToastType::Info,
     ) {}
 
     /**
      * Bridge a Notification DTO into a styled Toast.
+     *
+     * Maps the sugar-dash {@see Level} onto the sugar-toast {@see ToastType}
+     * (both share the same string values) and applies the per-level palette.
      */
     public static function fromNotification(Notification $notification): self
     {
+        $type = self::typeForLevel($notification->level);
+
         return match ($notification->level) {
-            Level::Info => (new self(
+            Level::Info => new self(
                 message: $notification->message,
                 title: $notification->title,
                 backgroundColor: Color::hex('#1E3A5F'),
                 foregroundColor: Color::hex('#E5E7EB'),
                 borderColor: Color::hex('#3B82F6'),
-                icon: Level::Info->icon(),
+                icon: '',
                 maxWidth: 60,
-            )),
-            Level::Warning => (new self(
+                type: $type,
+            ),
+            Level::Warning => new self(
                 message: $notification->message,
                 title: $notification->title,
                 backgroundColor: Color::hex('#451A03'),
                 foregroundColor: Color::hex('#FEF3C7'),
                 borderColor: Color::hex('#F59E0B'),
-                icon: Level::Warning->icon(),
+                icon: '',
                 maxWidth: 60,
-            )),
-            Level::Error => (new self(
+                type: $type,
+            ),
+            Level::Error => new self(
                 message: $notification->message,
                 title: $notification->title,
                 backgroundColor: Color::hex('#450A0A'),
                 foregroundColor: Color::hex('#FEE2E2'),
                 borderColor: Color::hex('#EF4444'),
-                icon: Level::Error->icon(),
+                icon: '',
                 maxWidth: 60,
-            )),
-            Level::Success => (new self(
+                type: $type,
+            ),
+            Level::Success => new self(
                 message: $notification->message,
                 title: $notification->title,
                 backgroundColor: Color::hex('#052E16'),
                 foregroundColor: Color::hex('#DCFCE7'),
                 borderColor: Color::hex('#22C55E'),
-                icon: Level::Success->icon(),
+                icon: '',
                 maxWidth: 60,
-            )),
+                type: $type,
+            ),
         };
     }
 
@@ -97,9 +117,21 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
+     * Map a sugar-dash {@see Level} onto the sugar-toast {@see ToastType}.
+     *
+     * The two enums are string-backed with identical case values
+     * (info/warning/error/success), so the mapping is a value lookup.
+     */
+    public static function typeForLevel(Level $level): ToastType
+    {
+        return ToastType::from($level->value);
+    }
+
+    /**
      * Create a new toast with default styling.
      *
-     * Default: dark background, white text.
+     * Default: dark background, white text. Rendered through the sugar-toast
+     * engine, which draws the neutral Info severity icon.
      */
     public static function new(string $message): self
     {
@@ -111,6 +143,7 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: Color::hex('#374151'),
             icon: '',
             maxWidth: 60,
+            type: ToastType::Info,
         );
     }
 
@@ -125,8 +158,9 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             backgroundColor: Color::hex('#1E3A5F'),
             foregroundColor: Color::hex('#E5E7EB'),
             borderColor: Color::hex('#3B82F6'),
-            icon: 'ℹ',
+            icon: '',
             maxWidth: 60,
+            type: ToastType::Info,
         );
     }
 
@@ -141,8 +175,9 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             backgroundColor: Color::hex('#052E16'),
             foregroundColor: Color::hex('#DCFCE7'),
             borderColor: Color::hex('#22C55E'),
-            icon: '✓',
+            icon: '',
             maxWidth: 60,
+            type: ToastType::Success,
         );
     }
 
@@ -157,8 +192,9 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             backgroundColor: Color::hex('#451A03'),
             foregroundColor: Color::hex('#FEF3C7'),
             borderColor: Color::hex('#F59E0B'),
-            icon: '⚠',
+            icon: '',
             maxWidth: 60,
+            type: ToastType::Warning,
         );
     }
 
@@ -173,8 +209,9 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             backgroundColor: Color::hex('#450A0A'),
             foregroundColor: Color::hex('#FEE2E2'),
             borderColor: Color::hex('#EF4444'),
-            icon: '✖',
+            icon: '',
             maxWidth: 60,
+            type: ToastType::Error,
         );
     }
 
@@ -190,122 +227,104 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Render the toast as a string.
+     * Render the toast as a string via the sugar-toast engine.
      */
     public function render(): string
+    {
+        return implode("\n", $this->renderLines());
+    }
+
+    /**
+     * Render the styled box to its exact lines through the sugar-toast engine.
+     *
+     * @return list<string>
+     */
+    private function renderLines(): array
     {
         $useWidth = min($this->width ?? $this->maxWidth, $this->maxWidth);
         $useWidth = max($useWidth, 10);
 
-        $contentWidth = $useWidth - 4; // -4 for padding and borders
+        // The engine's Alert has no title field, so a title becomes the first
+        // paragraph (its own wrapped line via the "\n" break the engine's
+        // word-wrap honours). A custom icon is folded into the body because
+        // the engine draws only its own severity icon.
+        $iconPrefix = $this->icon !== '' ? $this->icon . ' ' : '';
+        $body = $this->title !== null
+            ? $iconPrefix . $this->title . "\n" . $this->message
+            : $iconPrefix . $this->message;
 
-        $result = '';
+        $alert = (new Alert($this->type, $body))
+            ->withBackgroundColor($this->backgroundColor)
+            ->withForegroundColor($this->foregroundColor)
+            ->withBorderColor($this->borderColor);
 
-        // Apply background and foreground colors
-        if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
-        }
-        if ($this->foregroundColor !== null) {
-            $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
-        }
+        $engine = ToastEngine::new($useWidth)
+            ->withMinWidth(0)
+            ->withPosition(ToastPosition::TopLeft)
+            ->push($alert);
 
-        // Top border
-        if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
-        }
-        $result .= '╭' . str_repeat('─', $useWidth - 2) . '╮' . "\n";
+        // Probe the box height: render into a viewport tall enough to hold any
+        // wrap (the body length bounds the line count) and count the non-blank
+        // rows, discarding the filler the compositor pads beneath a
+        // TopLeft-anchored box.
+        $bound = mb_strlen($body, 'UTF-8') + 4;
+        $height = self::boxHeight($engine->View('', $useWidth, $bound));
 
-        // Icon and title line (if title is set)
-        if ($this->title !== null) {
-            $iconStr = $this->icon !== '' ? $this->icon . ' ' : '';
-            $titleLine = $iconStr . $this->title;
-            $paddedTitle = $this->padLine($titleLine, $contentWidth);
-            $result .= '│ ' . $paddedTitle . ' │' . "\n";
-
-            // Message line
-            $messageLines = $this->wrapText($this->message, $contentWidth);
-            foreach ($messageLines as $msgLine) {
-                $paddedMsg = $this->padLine($msgLine, $contentWidth);
-                $result .= '│ ' . $paddedMsg . ' │' . "\n";
-            }
-        } else {
-            // Just message, possibly with icon
-            $iconStr = $this->icon !== '' ? $this->icon . ' ' : '';
-            $fullMessage = $iconStr . $this->message;
-            $messageLines = $this->wrapText($fullMessage, $contentWidth);
-
-            foreach ($messageLines as $msgLine) {
-                $paddedMsg = $this->padLine($msgLine, $contentWidth);
-                $result .= '│ ' . $paddedMsg . ' │' . "\n";
-            }
-        }
-
-        // Bottom border
-        if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
-        }
-        $result .= '╰' . str_repeat('─', $useWidth - 2) . '╯';
-
-        // Reset ANSI
-        $result .= Ansi::reset();
-
-        return $result;
+        // Re-render at the exact height so no filler rows are emitted and the
+        // trailing SGR reset lands on the bottom border, then collapse the
+        // per-cell SGR the engine emits (its color pass rebuilds a fresh Style
+        // per cell, defeating the buffer's identity-based SGR coalescing).
+        return explode("\n", self::coalesceSgr($engine->View('', $useWidth, $height)));
     }
 
     /**
-     * Pad a line to the given width.
+     * Count the box rows in a composited render, ignoring the blank filler
+     * rows padded beneath a TopLeft-anchored box.
      */
-    private function padLine(string $line, int $width): string
+    private static function boxHeight(string $rendered): int
     {
-        $lineWidth = Width::string($line);
-        if ($lineWidth >= $width) {
-            return $line;
+        $last = 0;
+        foreach (explode("\n", $rendered) as $i => $line) {
+            $visible = preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+            if ($visible !== '' && !ctype_space($visible)) {
+                $last = $i;
+            }
         }
-        return $line . str_repeat(' ', $width - $lineWidth);
+        return $last + 1;
     }
 
     /**
-     * Wrap text to fit within a given width.
+     * Collapse runs of identical SGR escapes.
      *
-     * @return list<string>
+     * The buffer serialiser only coalesces adjacent cells that share the same
+     * Style *instance*; the engine's colour overlay assigns a freshly built
+     * Style to every cell, so identical styling re-emits a full escape per
+     * character. Dropping each SGR that repeats the currently-active one is a
+     * visual no-op that restores contiguous text runs.
      */
-    private function wrapText(string $text, int $width): array
+    private static function coalesceSgr(string $s): string
     {
-        if ($width <= 0) {
-            return [$text];
+        $parts = preg_split('/(\x1b\[[0-9;]*m)/', $s, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($parts === false) {
+            return $s;
         }
 
-        if ($text === '') {
-            return [''];
-        }
-
-        $result = [];
-        $words = preg_split('/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $currentLine = '';
-        $currentWidth = 0;
-
-        foreach ($words as $word) {
-            $wordWidth = Width::string($word);
-
-            if ($currentWidth > 0 && $currentWidth + 1 + $wordWidth > $width) {
-                $result[] = $currentLine;
-                $currentLine = $word;
-                $currentWidth = $wordWidth;
-            } else {
-                if ($currentLine !== '') {
-                    $currentLine .= ' ';
-                    $currentWidth++;
-                }
-                $currentLine .= $word;
-                $currentWidth += $wordWidth;
+        $out = '';
+        $active = null;
+        foreach ($parts as $part) {
+            if ($part === '') {
+                continue;
             }
+            if (preg_match('/^\x1b\[[0-9;]*m$/', $part) === 1) {
+                if ($part === $active) {
+                    continue;
+                }
+                $active = $part;
+            }
+            $out .= $part;
         }
 
-        if ($currentLine !== '') {
-            $result[] = $currentLine;
-        }
-
-        return $result === [] ? [''] : $result;
+        return $out;
     }
 
     /**
@@ -316,22 +335,9 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
     public function getInnerSize(): array
     {
         $useWidth = min($this->width ?? $this->maxWidth, $this->maxWidth);
-        $contentWidth = $useWidth - 4;
+        $useWidth = max($useWidth, 10);
 
-        // Height: top border + content lines + bottom border
-        $lineCount = 1; // top border
-
-        if ($this->title !== null) {
-            $lineCount++; // title line
-            $lineCount += count($this->wrapText($this->message, $contentWidth));
-        } else {
-            $iconStr = $this->icon !== '' ? $this->icon . ' ' : '';
-            $lineCount += count($this->wrapText($iconStr . $this->message, $contentWidth));
-        }
-
-        $lineCount++; // bottom border
-
-        return [$useWidth, $lineCount];
+        return [$useWidth, count($this->renderLines())];
     }
 
     // ─── Withers ──────────────────────────────────────────────────
@@ -349,6 +355,7 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $this->borderColor,
             icon: $this->icon,
             maxWidth: $this->maxWidth,
+            type: $this->type,
         );
     }
 
@@ -365,6 +372,7 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $this->borderColor,
             icon: $this->icon,
             maxWidth: $this->maxWidth,
+            type: $this->type,
         );
     }
 
@@ -381,6 +389,7 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $this->borderColor,
             icon: $this->icon,
             maxWidth: $this->maxWidth,
+            type: $this->type,
         );
     }
 
@@ -397,6 +406,7 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $this->borderColor,
             icon: $this->icon,
             maxWidth: $this->maxWidth,
+            type: $this->type,
         );
     }
 
@@ -413,11 +423,14 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $color,
             icon: $this->icon,
             maxWidth: $this->maxWidth,
+            type: $this->type,
         );
     }
 
     /**
      * Set the icon.
+     *
+     * Folded into the message body ahead of the engine's own severity icon.
      */
     public function withIcon(string $icon): self
     {
@@ -429,6 +442,7 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $this->borderColor,
             icon: $icon,
             maxWidth: $this->maxWidth,
+            type: $this->type,
         );
     }
 
@@ -445,6 +459,7 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $this->borderColor,
             icon: $this->icon,
             maxWidth: $maxWidth,
+            type: $this->type,
         );
     }
 }
