@@ -318,4 +318,79 @@ final class SubscriptionsReconcileTest extends TestCase
 
         $this->assertInstanceOf(\SugarCraft\Core\Msg\QuitMsg::class, $msg);
     }
+
+    private function nullModel(): \SugarCraft\Core\Model
+    {
+        return new class () implements \SugarCraft\Core\Model {
+            use SubscriptionCapable;
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
+        };
+    }
+
+    /**
+     * Cancelling a signal subscription must restore the handler that was
+     * installed before it — not leave the subscription's handler wired up
+     * (the leak) and not lose the predecessor. Reverting the prev-handler
+     * tracking makes cancel restore SIG_DFL instead of the sentinel and fails.
+     */
+    public function testSignalSubscriptionCancelRestoresPreviousHandler(): void
+    {
+        if (!function_exists('pcntl_signal')
+            || !function_exists('pcntl_signal_get_handler')
+            || !defined('SIGUSR1')
+        ) {
+            $this->markTestSkipped('pcntl signal introspection not available');
+        }
+
+        // A sentinel handler installed BEFORE the subscription.
+        $sentinel = static function (): void {
+        };
+        pcntl_signal(SIGUSR1, $sentinel);
+        $this->assertSame($sentinel, pcntl_signal_get_handler(SIGUSR1));
+
+        [$in, $out, $writer] = $this->pipes();
+        $program = new Program($this->nullModel(), new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            input: $in,
+            output: $out,
+            loop: new StreamSelectLoop(),
+        ));
+
+        $reconcile = new \ReflectionMethod(Program::class, 'reconcileSubscriptions');
+        $reconcile->setAccessible(true);
+
+        // Install a signal subscription → our handler displaces the sentinel.
+        $withSig = (new Subscriptions())->withSignal('usr1', SIGUSR1, static fn () => null);
+        $reconcile->invoke($program, $withSig);
+        $this->assertNotSame(
+            $sentinel,
+            pcntl_signal_get_handler(SIGUSR1),
+            'the subscription handler should be installed',
+        );
+
+        // Reconcile to an empty set (cancel) → the sentinel must come back.
+        $reconcile->invoke($program, new Subscriptions());
+        $this->assertSame(
+            $sentinel,
+            pcntl_signal_get_handler(SIGUSR1),
+            'the previous handler must be restored on cancel',
+        );
+
+        pcntl_signal(SIGUSR1, SIG_DFL);
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
 }
