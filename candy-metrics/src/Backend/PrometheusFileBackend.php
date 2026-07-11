@@ -244,13 +244,16 @@ final class PrometheusFileBackend implements Backend
             $body .= "{$name}_sum{$labels} " . self::fmt($h['sum']) . "\n";
         }
 
-        // Snapshot dirty keys before clearing, so non-dirty loop can skip them.
-        $dirtyCounterKeys = array_keys($this->dirtyCounters);
-        $dirtyGaugeKeys = array_keys($this->dirtyGauges);
-        $dirtyHistogramKeys = array_keys($this->dirtyHistograms);
-        $dirtyUpDownCounterKeys = array_keys($this->dirtyUpDownCounters);
-        $dirtyAsyncCounterKeys = array_keys($this->dirtyAsyncCounters);
-        $dirtyAsyncGaugeKeys = array_keys($this->dirtyAsyncGauges);
+        // Snapshot dirty flag maps before clearing, so the non-dirty loops can
+        // skip already-emitted keys with an O(1) isset() lookup instead of an
+        // O(n) in_array() scan over an array_keys() list — the maps are already
+        // keyed by the storage key, so no rebuild is needed.
+        $dirtyCounterMap = $this->dirtyCounters;
+        $dirtyGaugeMap = $this->dirtyGauges;
+        $dirtyHistogramMap = $this->dirtyHistograms;
+        $dirtyUpDownCounterMap = $this->dirtyUpDownCounters;
+        $dirtyAsyncCounterMap = $this->dirtyAsyncCounters;
+        $dirtyAsyncGaugeMap = $this->dirtyAsyncGauges;
 
         // Clear dirty flags now that we've processed them.
         $this->dirtyCounters = [];
@@ -264,42 +267,42 @@ final class PrometheusFileBackend implements Backend
         // Prometheus textfile collector sees complete data. Emit all non-dirty metrics
         // that were not already covered by the dirty iterations above.
         foreach ($this->counters as $key => $val) {
-            if (in_array($key, $dirtyCounterKeys, true)) {
+            if (isset($dirtyCounterMap[$key])) {
                 continue;
             }
             [$name, $labels] = self::splitKey($key);
             $body .= $emitType($name, 'counter') . $this->emitMetricLine($name, $labels, $val, 'counter');
         }
         foreach ($this->upDownCounters as $key => $val) {
-            if (in_array($key, $dirtyUpDownCounterKeys, true)) {
+            if (isset($dirtyUpDownCounterMap[$key])) {
                 continue;
             }
             [$name, $labels] = self::splitKey($key);
             $body .= $emitType($name, 'gauge') . $this->emitMetricLine($name, $labels, $val, 'gauge');
         }
         foreach ($this->asyncCounters as $key => $val) {
-            if (in_array($key, $dirtyAsyncCounterKeys, true)) {
+            if (isset($dirtyAsyncCounterMap[$key])) {
                 continue;
             }
             [$name, $labels] = self::splitKey($key);
             $body .= $emitType($name, 'counter') . $this->emitMetricLine($name, $labels, $val, 'counter');
         }
         foreach ($this->asyncGauges as $key => $val) {
-            if (in_array($key, $dirtyAsyncGaugeKeys, true)) {
+            if (isset($dirtyAsyncGaugeMap[$key])) {
                 continue;
             }
             [$name, $labels] = self::splitKey($key);
             $body .= $emitType($name, 'gauge') . $this->emitMetricLine($name, $labels, $val, 'gauge');
         }
         foreach ($this->gauges as $key => $val) {
-            if (in_array($key, $dirtyGaugeKeys, true)) {
+            if (isset($dirtyGaugeMap[$key])) {
                 continue;
             }
             [$name, $labels] = self::splitKey($key);
             $body .= $emitType($name, 'gauge') . $this->emitMetricLine($name, $labels, $val, 'gauge');
         }
         foreach ($this->histograms as $key => $h) {
-            if (in_array($key, $dirtyHistogramKeys, true)) {
+            if (isset($dirtyHistogramMap[$key])) {
                 continue;
             }
             [$name, $labels] = self::splitKey($key);

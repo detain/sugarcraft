@@ -26,6 +26,14 @@ use SugarCraft\Wish\Session;
  */
 final class SessionMetrics implements Middleware
 {
+    /**
+     * Upper bound on the length of a session-derived tag value.
+     * `user`/`term` come from attacker-controlled SSH env (`USER`/`TERM`),
+     * so an unbounded value would explode label cardinality and bloat
+     * backend/registry memory.
+     */
+    private const MAX_TAG_LENGTH = 64;
+
     /** @var (callable(Session): array<string,string>)|null */
     private $extraTags;
 
@@ -41,7 +49,10 @@ final class SessionMetrics implements Middleware
 
     public function handle(Context $ctx, Session $session, callable $next)
     {
-        $tags = ['user' => $session->user, 'term' => $session->term];
+        $tags = [
+            'user' => self::normalizeTag($session->user),
+            'term' => self::normalizeTag($session->term),
+        ];
         if ($this->extraTags !== null) {
             $tags = array_merge($tags, ($this->extraTags)($session));
         }
@@ -77,5 +88,24 @@ final class SessionMetrics implements Middleware
                 }
             }
         }
+    }
+
+    /**
+     * Clamp an attacker-controlled tag value to a safe charset and length.
+     *
+     * `=` and `|` are the separators the cardinality tracker uses to build
+     * its per-metric tag key, so a hostile value containing them could
+     * collide/corrupt key accounting; newlines and control bytes could
+     * inject into line-oriented backends (Prometheus textfile). Everything
+     * outside `[A-Za-z0-9._:@/-]` collapses to `_`, then the result is
+     * capped so a single session can't blow up cardinality or memory.
+     */
+    private static function normalizeTag(string $value): string
+    {
+        $clean = preg_replace('/[^A-Za-z0-9._:@\/-]/', '_', $value) ?? '';
+        if (strlen($clean) > self::MAX_TAG_LENGTH) {
+            $clean = substr($clean, 0, self::MAX_TAG_LENGTH);
+        }
+        return $clean;
     }
 }

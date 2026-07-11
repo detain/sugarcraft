@@ -40,6 +40,13 @@ final class Registry
     /** @var array<string,string> */
     private readonly array $defaultTags;
 
+    /**
+     * Precomputed cardinality key for {@see $defaultTags}, so the common
+     * `$tags === []` emit path skips re-sorting/joining the default tags
+     * on every call.
+     */
+    private readonly string $defaultTagsKey;
+
     /** @var array<string, Descriptor> */
     private array $descriptors = [];
 
@@ -67,6 +74,7 @@ final class Registry
         int $cardinalityLimit = 10000,
     ) {
         $this->defaultTags = $defaultTags;
+        $this->defaultTagsKey = Util::tagKey($defaultTags);
         $this->cardinalityLimit = $cardinalityLimit;
     }
 
@@ -272,8 +280,15 @@ final class Registry
      */
     private function trackCardinality(string $name, array $tags): void
     {
-        $merged = $this->mergeTags($tags);
-        $key = $this->tagKey($merged);
+        // Fast path for the no-tags emit: reuse the precomputed default key
+        // instead of re-sorting/joining the default tags every call.
+        if ($tags === []) {
+            $merged = $this->defaultTags;
+            $key = $this->defaultTagsKey;
+        } else {
+            $merged = array_merge($this->defaultTags, $tags);
+            $key = $this->tagKey($merged);
+        }
         if (isset($this->labelValueCache[$name][$key])) {
             return;
         }
