@@ -11,13 +11,9 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:area-average-downsample]** When downsampling a source image to a target cell grid, use area averaging: for each target cell with integer bounds `(x..x+cw, y..y+ch)`, sum all source pixels in that region (skip transparent pixels via alpha < 128) and divide by the sum of non-transparent weights. Clamp bounds to source image dimensions to handle edge cells cleanly. Prefer area average over nearest-neighbor to avoid aliasing artifacts.
 
-- **[pattern:floyd-steinberg-dithering]** Floyd-Steinberg error diffusion uses fractions 7/16 (right), 3/16 (bottom-left), 5/16 (bottom), 1/16 (bottom-right). The source image must remain immutable — diffuse errors into a separate float buffer rather than mutating pixels in-place. When mapping to a palette, use Euclidean distance `(rΔ²+gΔ²+bΔ²)` to find the nearest color; pre-build a color-to-palette-index lookup for speed.
-
 - **[pattern:local-color-table-per-frame]** GIF89a per-frame local color table (LCT) is stored in the Image Descriptor block that precedes each frame's LZW data. The `hasLct` flag in the Image Descriptor indicates whether a local color table follows; if set, the LCT size (3 × 2^bits) bytes follows immediately. When reassembling single-frame payloads for `imagecreatefromstring()`, copy the frame's LCT and restore it in the same position.
 
 - **[pattern:gce-transparency-disposal]** GIF89a GCE block carries a transparent-color index flag (bit 7 of disposal method byte). The disposal method constants are: 0=none, 1=keep, 2=restore-bg, 3=restore-prev. When rendering a cell whose pixel is the transparent index, emit null rather than a Cell with the transparent color — the disposal pass (rendered after each frame) handles restoring the background or previous content.
-
-- **[pattern:weakmap-frame-cache]** {@see WeakMap} keyed by object identity is ideal for memoizing per-frame rendered output. Use `offsetExists`/`offsetGet`/`offsetSet` rather than the WeakMap directly for compatibility. Entries are dropped automatically when the Frame is garbage-collected, avoiding memory pressure in long-running players.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 

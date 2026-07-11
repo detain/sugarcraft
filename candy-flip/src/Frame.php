@@ -19,7 +19,8 @@ final class Frame
      *   0 = none (no disposal, leave composite as-is)
      *   1 = keep  (do not dispose, leave the frame in place)
      *   2 = restore-bg (restore to background/transparent fill)
-     *   3 = restore-prev (restore to previous — unsupported; treated as NONE)
+     *   3 = restore-prev (restore the canvas to its pre-frame snapshot;
+     *       implemented by {@see Decoder} via DISPOSAL_PREVIOUS compositing)
      */
     public const DISPOSAL_NONE        = 0;
     public const DISPOSAL_KEEP        = 1;
