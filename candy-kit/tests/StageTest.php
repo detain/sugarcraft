@@ -74,4 +74,30 @@ final class StageTest extends TestCase
         $frame = mb_substr($out, -1);
         $this->assertContains($frame, $spinnerFrames, 'trailing glyph must be a spinner frame');
     }
+
+    /**
+     * Security: the caller message is interpolated raw into stage output.
+     * Under the plain theme (no SGR of its own) any ESC / BEL in the rendered
+     * line must have come from the message — assert they are neutralized in
+     * all three render paths. (Revert the SafeText routing → leaks → fails.)
+     */
+    public function testMessageEscapeAndControlBytesNeutralized(): void
+    {
+        $evil = "run\x1b[2Jx\x1b]0;t\x07end";
+        foreach ([
+            Stage::step(1, 2, $evil, Theme::plain()),
+            Stage::subStep($evil, Theme::plain()),
+            Stage::subStepWithProgress($evil, 3, 10, Theme::plain()),
+        ] as $out) {
+            $this->assertStringNotContainsString("\x1b", $out, 'ESC injection must be stripped');
+            $this->assertStringNotContainsString("\x07", $out, 'BEL must be stripped');
+            $this->assertStringContainsString('runx', $out);
+        }
+    }
+
+    /** Clean ASCII messages render byte-for-byte identically (no regression). */
+    public function testCleanMessageUnchanged(): void
+    {
+        $this->assertSame('▸ 2/5 building', Stage::step(2, 5, 'building', Theme::plain()));
+    }
 }
