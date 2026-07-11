@@ -20,6 +20,14 @@ namespace SugarCraft\Mosaic;
 final class Animation
 {
     /**
+     * Upper bound on frame count. A decoder handed a hostile GIF/APNG could
+     * otherwise declare millions of frames and exhaust memory before a single
+     * frame renders. 10 000 frames is far beyond any legitimate terminal
+     * animation while capping the worst case.
+     */
+    public const MAX_FRAMES = 10_000;
+
+    /**
      * @param list<ImageSource> $frames   Ordered frames, non-empty
      * @param list<int>        $delaysMs  Per-frame delay in milliseconds, same length as $frames
      */
@@ -35,6 +43,28 @@ final class Animation
                 'frameCount'  => count($this->frames),
                 'delayCount'  => count($this->delaysMs),
             ]));
+        }
+        if (count($this->frames) > self::MAX_FRAMES) {
+            throw new \InvalidArgumentException(Lang::t('animation.too_many_frames', [
+                'max'   => self::MAX_FRAMES,
+                'count' => count($this->frames),
+            ]));
+        }
+        // Decompression-bomb guard per frame: a frame built by bypassing the
+        // ImageSource factories (e.g. `new ImageSource(...)` directly) could
+        // still declare oversized dimensions, so re-check against the same
+        // pixel ceiling the factories enforce.
+        foreach ($this->frames as $index => $frame) {
+            if ($frame->width > 0 && $frame->height > 0
+                && $frame->width * $frame->height > ImageSource::MAX_PIXELS
+            ) {
+                throw new \InvalidArgumentException(Lang::t('animation.frame_too_large', [
+                    'index'  => $index,
+                    'width'  => $frame->width,
+                    'height' => $frame->height,
+                    'max'    => ImageSource::MAX_PIXELS,
+                ]));
+            }
         }
     }
 

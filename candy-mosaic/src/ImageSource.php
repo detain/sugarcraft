@@ -17,17 +17,68 @@ use function React\Promise\reject;
 final class ImageSource
 {
     /**
+     * Default decompression-bomb ceiling: reject images whose declared
+     * pixel count (width × height) exceeds this before GD allocates the
+     * full buffer. 50 megapixels comfortably covers legitimate posters/
+     * screenshots while blocking a 64000×64000 "bomb" that would demand
+     * ~12 GiB of truecolor pixel memory. Override per-call via the
+     * factory `$maxPixels` argument or {@see self::withMaxPixels()}.
+     */
+    public const MAX_PIXELS = 50_000_000;
+
+    /**
      * @param string $bytes    Raw image bytes (PNG/JPEG/GIF)
      * @param string $format   MIME type: 'image/png', 'image/jpeg', 'image/gif'
      * @param int    $width    Pixel width
      * @param int    $height   Pixel height
+     * @param int    $maxPixels  Decompression-bomb ceiling carried forward
+     *                           into crop()/resize() re-decodes; <= 0 disables.
      */
     public function __construct(
         public readonly string $bytes,
         public readonly string $format,
         public readonly int $width,
         public readonly int $height,
+        public readonly int $maxPixels = self::MAX_PIXELS,
     ) {}
+
+    /**
+     * Reject an image whose declared pixel count exceeds the ceiling.
+     *
+     * Called with dimensions read from the header (getimagesize) BEFORE any
+     * `imagecreatefrom*`, so a decompression bomb is refused before GD ever
+     * allocates the pixel buffer. A ceiling of <= 0 disables the check.
+     *
+     * @throws \InvalidArgumentException  if width × height exceeds $maxPixels
+     */
+    private static function guardPixelCount(int $width, int $height, int $maxPixels): void
+    {
+        if ($maxPixels > 0 && $width > 0 && $height > 0 && $width * $height > $maxPixels) {
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.too_large', [
+                    'width'  => $width,
+                    'height' => $height,
+                    'max'    => $maxPixels,
+                ]),
+            );
+        }
+    }
+
+    /**
+     * Return a copy with a different decompression-bomb pixel ceiling.
+     *
+     * Re-validates the already-decoded dimensions against the new ceiling so
+     * lowering it below the current image size fails fast, and threads the
+     * ceiling into subsequent crop()/resize() re-decodes.
+     *
+     * @throws \InvalidArgumentException  if the current dimensions exceed $maxPixels
+     */
+    public function withMaxPixels(int $maxPixels): self
+    {
+        self::guardPixelCount($this->width, $this->height, $maxPixels);
+
+        return new self($this->bytes, $this->format, $this->width, $this->height, $maxPixels);
+    }
 
     /**
      * Load from a file on disk.
@@ -35,7 +86,7 @@ final class ImageSource
      * @throws \InvalidArgumentException  if the file does not exist or is not a supported image
      * @throws \RuntimeException          if ext-gd is not available
      */
-    public static function fromFile(string $path): self
+    public static function fromFile(string $path, int $maxPixels = self::MAX_PIXELS): self
     {
         if (!is_file($path)) {
             throw new \InvalidArgumentException(Lang::t('image_source.file_not_found', ['path' => $path]));
@@ -54,6 +105,11 @@ final class ImageSource
         if ($info === false) {
             throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => $path]));
         }
+
+        // Decompression-bomb guard: getimagesize() reads only the header, so
+        // reject an oversized image here before imagecreatefrom* allocates
+        // the full truecolor pixel buffer.
+        self::guardPixelCount((int) $info[0], (int) $info[1], $maxPixels);
 
         $format = match ($info['mime']) {
             'image/png'  => 'image/png',
@@ -84,7 +140,7 @@ final class ImageSource
         $height = imagesy($img);
         imagedestroy($img);
 
-        return new self($bytes, $format, $width, $height);
+        return new self($bytes, $format, $width, $height, $maxPixels);
     }
 
     /**
@@ -103,13 +159,22 @@ final class ImageSource
      * @throws \InvalidArgumentException  if the bytes are not a supported image
      * @throws \RuntimeException          if ext-gd is not available
      */
-    public static function fromString(string $bytes): self
+    public static function fromString(string $bytes, int $maxPixels = self::MAX_PIXELS): self
     {
         if (!extension_loaded('gd')) {
             throw new \RuntimeException(Lang::t('image_source.no_gd'));
         }
 
         $format = self::detectImageFormat($bytes);
+
+        // Decompression-bomb guard: read dimensions from the header (no full
+        // decode) and reject oversized images BEFORE imagecreatefromstring
+        // allocates the pixel buffer. For inputs getimagesizefromstring cannot
+        // size, fall through and let GD validate/reject via the decode below.
+        $info = @getimagesizefromstring($bytes);
+        if ($info !== false) {
+            self::guardPixelCount((int) $info[0], (int) $info[1], $maxPixels);
+        }
 
         // Validate the bytes are a supported image and read dimensions.
         $img = @imagecreatefromstring($bytes);
@@ -129,7 +194,7 @@ final class ImageSource
         $height = imagesy($img);
         imagedestroy($img);
 
-        return new self($bytes, $format, $width, $height);
+        return new self($bytes, $format, $width, $height, $maxPixels);
     }
 
     /**
@@ -177,7 +242,7 @@ final class ImageSource
      *                            or 'image/gif'. Required because GD cannot
      *                            re-detect format from a resource.
      */
-    public static function fromGd(\GdImage $resource, string $format): self
+    public static function fromGd(\GdImage $resource, string $format, int $maxPixels = self::MAX_PIXELS): self
     {
         if (!imageistruecolor($resource)) {
             imagepalettetotruecolor($resource);
@@ -185,6 +250,7 @@ final class ImageSource
 
         $width  = imagesx($resource);
         $height = imagesy($resource);
+        self::guardPixelCount($width, $height, $maxPixels);
 
         // Some GD builds write to output buffer and return bool|int rather
         // than returning the encoded bytes as a string.  Use a temp file to
@@ -207,7 +273,7 @@ final class ImageSource
             fclose($tmp);
         }
 
-        return new self($bytes, $format, $width, $height);
+        return new self($bytes, $format, $width, $height, $maxPixels);
     }
 
     /**
@@ -218,26 +284,36 @@ final class ImageSource
      * Redirects are followed. This blocks the calling thread; for the
      * event loop use {@see ImageSource::fromUrlAsync()} instead.
      *
-     * Security: like {@see ImageSource::fromFile()}, the trust decision for
-     * the source is the caller's. Because every PHP scheme is honoured and
-     * redirects are followed, passing an untrusted/user-influenced URL exposes
-     * local-file reads (`file:///etc/passwd`) and SSRF (e.g. cloud metadata at
-     * `http://169.254.169.254/…`, possibly reached via a redirect). Only pass
-     * URLs you control or have validated against an allow-list.
+     * Security: the initial scheme is validated against $allowedSchemes, and
+     * every redirect hop is re-validated against the SAME list (redirects are
+     * followed manually with `max_redirects: 0`), so a 3xx to `file://`,
+     * `gopher://`, or another disallowed scheme cannot smuggle past the
+     * allow-list. The trust decision for the source host is still the
+     * caller's: an allowed-scheme redirect to a private/link-local host (e.g.
+     * cloud metadata at `http://169.254.169.254/…`) is not blocked by scheme
+     * validation alone. Only pass URLs you control or have validated.
      *
      * @param string $url     Absolute URL (http/https/file/data).
      * @param array<string,string>|list<string> $headers  Optional request
      *               headers, either associative ('Authorization' => 'Bearer x')
      *               or pre-formatted lines ('Authorization: Bearer x').
+     * @param array<string>|null $allowedSchemes  Enforced on the initial URL
+     *               AND on every redirect target; null opts out of validation.
+     * @param int $maxPixels  Decompression-bomb ceiling; see {@see self::MAX_PIXELS}.
      * @throws \InvalidArgumentException  if the URL cannot be fetched, a header
-     *                                    contains CR/LF, or the payload is not
-     *                                    a supported image
+     *                                    contains CR/LF, a redirect targets a
+     *                                    disallowed scheme, or the payload is
+     *                                    not a supported image
      * @throws \RuntimeException          if ext-gd is not available
      */
-    public static function fromUrl(string $url, ?array $headers = null, ?array $allowedSchemes = ['http', 'https']): self
-    {
+    public static function fromUrl(
+        string $url,
+        ?array $headers = null,
+        ?array $allowedSchemes = ['http', 'https'],
+        int $maxPixels = self::MAX_PIXELS,
+    ): self {
         self::validateUrlScheme($url, $allowedSchemes);
-        return self::fromString(self::fetchUrlSync($url, $headers));
+        return self::fromString(self::fetchUrlSync($url, $headers, $allowedSchemes), $maxPixels);
     }
 
     /**
@@ -289,6 +365,7 @@ final class ImageSource
         ?array $headers = null,
         ?Browser $browser = null,
         ?array $allowedSchemes = ['http', 'https'],
+        int $maxPixels = self::MAX_PIXELS,
     ): PromiseInterface {
         self::validateUrlScheme($url, $allowedSchemes);
 
@@ -300,7 +377,7 @@ final class ImageSource
         }
 
         return $browser->get($url, $headers ?? [])->then(
-            static function ($response): self {
+            static function ($response) use ($maxPixels): self {
                 // The default Browser rejects 4xx/5xx itself, but a caller may
                 // inject one with withRejectErrorResponse(false); guard the
                 // status here so the "rejects on non-2xx" contract always holds
@@ -312,46 +389,191 @@ final class ImageSource
                     );
                 }
 
-                return self::fromString((string) $response->getBody());
+                return self::fromString((string) $response->getBody(), $maxPixels);
             },
         );
     }
 
+    /** Maximum redirect hops followed by {@see self::fetchUrlSync()}. */
+    private const MAX_REDIRECTS = 5;
+
     /**
      * Fetch raw bytes from a URL synchronously via PHP stream wrappers.
      *
+     * SSRF hardening: redirects are followed MANUALLY (`max_redirects: 0`) so
+     * each hop's scheme is re-validated against $allowedSchemes. The native
+     * `follow_location` would honour a 3xx into `file://`/`gopher://` without
+     * re-checking, letting an attacker-controlled redirect escape the caller's
+     * allow-list; following by hand closes that hole.
+     *
      * @param array<string,string>|list<string>|null $headers
-     * @throws \InvalidArgumentException  if the fetch fails or returns empty
+     * @param array<string>|null $allowedSchemes  Re-validated on every hop.
+     * @throws \InvalidArgumentException  if the fetch fails, a redirect targets
+     *                                    a disallowed scheme, the redirect chain
+     *                                    is too long, or the response is empty
      */
-    private static function fetchUrlSync(string $url, ?array $headers): string
+    private static function fetchUrlSync(string $url, ?array $headers, ?array $allowedSchemes = null): string
     {
-        $http = [
-            'method'          => 'GET',
-            'timeout'         => 30,
-            'follow_location' => 1,
-            'max_redirects'   => 5,
-            'ignore_errors'   => false,
-        ];
-        if ($headers !== null && $headers !== []) {
-            $http['header'] = self::formatHeaders($headers);
+        $headerLines = ($headers !== null && $headers !== []) ? self::formatHeaders($headers) : null;
+        $current     = $url;
+
+        for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
+            // Re-validate the scheme on every hop — the initial URL and each
+            // redirect target — so a 3xx cannot smuggle a disallowed scheme in.
+            self::validateUrlScheme($current, $allowedSchemes);
+
+            $http = [
+                'method'          => 'GET',
+                'timeout'         => 30,
+                'follow_location' => 0,
+                'max_redirects'   => 0,
+                // Read 3xx/4xx bodies+headers instead of returning false, so we
+                // can inspect the status line and follow redirects ourselves.
+                'ignore_errors'   => true,
+            ];
+            if ($headerLines !== null) {
+                $http['header'] = $headerLines;
+            }
+
+            $context = stream_context_create(['http' => $http]);
+
+            error_clear_last();
+            // Reset before the call: the HTTP wrapper overwrites this magic
+            // local for http(s), but a non-HTTP hop (file://, data://) leaves
+            // it untouched — clearing it stops a prior hop's status/headers
+            // from leaking into this one.
+            $http_response_header = null;
+            $bytes = @file_get_contents($current, false, $context);
+            // $http_response_header is populated in local scope by the HTTP
+            // wrapper; stays null for non-HTTP schemes (file://, data://).
+            $responseHeaders = $http_response_header;
+
+            if ($bytes === false) {
+                $reason = error_get_last()['message'] ?? null;
+                throw new \InvalidArgumentException(
+                    Lang::t('image_source.url_fetch_failed', ['url' => $current])
+                    . ($reason !== null ? ' (' . $reason . ')' : ''),
+                );
+            }
+
+            $status = $responseHeaders !== null ? self::parseHttpStatus($responseHeaders) : null;
+
+            // Non-HTTP scheme (or a wrapper that reports no status): the bytes
+            // ARE the payload.
+            if ($status === null) {
+                if ($bytes === '') {
+                    throw new \InvalidArgumentException(
+                        Lang::t('image_source.url_fetch_failed', ['url' => $current]),
+                    );
+                }
+
+                return $bytes;
+            }
+
+            if ($status >= 300 && $status < 400) {
+                $location = self::headerValue((array) $responseHeaders, 'Location');
+                if ($location === null || $location === '') {
+                    throw new \InvalidArgumentException(
+                        Lang::t('image_source.redirect_no_location', ['url' => $current]),
+                    );
+                }
+                $current = self::resolveRedirectUrl($current, $location);
+                continue;
+            }
+
+            if ($status < 200 || $status >= 300) {
+                throw new \InvalidArgumentException(
+                    Lang::t('image_source.url_bad_status', ['status' => $status]),
+                );
+            }
+
+            if ($bytes === '') {
+                throw new \InvalidArgumentException(
+                    Lang::t('image_source.url_fetch_failed', ['url' => $current]),
+                );
+            }
+
+            return $bytes;
         }
 
-        $context = stream_context_create(['http' => $http]);
+        throw new \InvalidArgumentException(
+            Lang::t('image_source.too_many_redirects', ['url' => $url]),
+        );
+    }
 
-        error_clear_last();
-        $bytes = @file_get_contents($url, false, $context);
-
-        if ($bytes === false || $bytes === '') {
-            // Surface the underlying cause (DNS failure, refused, 404, timeout)
-            // that the @-suppression otherwise hides, for debuggability.
-            $reason = error_get_last()['message'] ?? null;
-            throw new \InvalidArgumentException(
-                Lang::t('image_source.url_fetch_failed', ['url' => $url])
-                . ($reason !== null ? ' (' . $reason . ')' : ''),
-            );
+    /**
+     * Extract the numeric HTTP status from a raw response-header list.
+     *
+     * @param list<string> $headers  The $http_response_header value.
+     * @return int|null  The last status line's code, or null if none present.
+     */
+    private static function parseHttpStatus(array $headers): ?int
+    {
+        $status = null;
+        foreach ($headers as $line) {
+            if (preg_match('#^HTTP/\d(?:\.\d)?\s+(\d{3})#', $line, $m) === 1) {
+                $status = (int) $m[1];
+            }
         }
 
-        return $bytes;
+        return $status;
+    }
+
+    /**
+     * Case-insensitively read the last value of a header from a raw list.
+     *
+     * @param list<string> $headers
+     */
+    private static function headerValue(array $headers, string $name): ?string
+    {
+        $needle = strtolower($name) . ':';
+        $value  = null;
+        foreach ($headers as $line) {
+            if (str_starts_with(strtolower($line), $needle)) {
+                $value = trim(substr($line, strlen($needle)));
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * Resolve a (possibly relative) redirect Location against the base URL.
+     *
+     * Handles absolute URLs, scheme-relative (`//host/…`), absolute paths
+     * (`/…`), and document-relative paths so the resolved target can be
+     * scheme-re-validated before the next hop.
+     */
+    private static function resolveRedirectUrl(string $base, string $location): string
+    {
+        $location = trim($location);
+
+        // Absolute URL carrying its own scheme.
+        if (parse_url($location, PHP_URL_SCHEME) !== null) {
+            return $location;
+        }
+
+        $parts = parse_url($base);
+        if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
+            return $location;
+        }
+        $origin = $parts['scheme'] . '://' . $parts['host']
+            . (isset($parts['port']) ? ':' . $parts['port'] : '');
+
+        // Scheme-relative: //host/path
+        if (str_starts_with($location, '//')) {
+            return $parts['scheme'] . ':' . $location;
+        }
+        // Absolute path.
+        if (str_starts_with($location, '/')) {
+            return $origin . $location;
+        }
+        // Document-relative path.
+        $path = $parts['path'] ?? '/';
+        $slash = strrpos($path, '/');
+        $dir = $slash === false ? '/' : substr($path, 0, $slash + 1);
+
+        return $origin . $dir . $location;
     }
 
     /**
@@ -423,7 +645,7 @@ final class ImageSource
         }
 
         try {
-            return $this->fromGd($cropped, $this->format);
+            return $this->fromGd($cropped, $this->format, $this->maxPixels);
         } finally {
             imagedestroy($cropped);
         }
@@ -465,7 +687,7 @@ final class ImageSource
         imagedestroy($src);
 
         try {
-            return $this->fromGd($dst, $this->format);
+            return $this->fromGd($dst, $this->format, $this->maxPixels);
         } finally {
             imagedestroy($dst);
         }

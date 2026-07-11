@@ -97,4 +97,30 @@ final class AnimationTest extends TestCase
         $this->expectException(\OutOfRangeException::class);
         $anim->withFrame(-1, $this->frames[0], 100);
     }
+
+    // ---- resource-exhaustion guards ------------------------------------
+
+    public function testConstructorRejectsOversizedFrame(): void
+    {
+        // A frame built by bypassing the ImageSource factories can still
+        // declare oversized dimensions; the per-frame pixel guard must catch it.
+        $huge = new ImageSource('x', 'image/png', 10000, 10000);  // 100M px > 50M cap
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/exceed the maximum/');
+
+        Animation::fixed([$huge], 100);
+    }
+
+    public function testConstructorRejectsTooManyFrames(): void
+    {
+        // array_fill reuses one object reference, so this is cheap despite the count.
+        $frames  = array_fill(0, Animation::MAX_FRAMES + 1, $this->frames[0]);
+        $delays  = array_fill(0, Animation::MAX_FRAMES + 1, 100);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/exceeds the maximum of \d+ frames/');
+
+        new Animation($frames, $delays);
+    }
 }

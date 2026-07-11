@@ -21,6 +21,9 @@ return [
     'image_source.url_http_missing'  => 'Async URL loading requires react/http. Install it with: composer require react/http',
     'image_source.header_crlf'       => 'Request header names and values must not contain CR or LF characters',
     'image_source.url_invalid_scheme'=> 'URL scheme {scheme} is not in the allowed list: {allowed}',
+    'image_source.too_large'         => 'Image dimensions {width}×{height} exceed the maximum of {max} pixels',
+    'image_source.redirect_no_location' => 'Redirect response from {url} is missing a Location header',
+    'image_source.too_many_redirects'   => 'Too many redirects while fetching image from URL: {url}',
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',
@@ -48,4 +51,6 @@ return [
     'animation.empty'                 => 'Animation requires at least one frame',
     'animation.delay_count_mismatch'  => 'Frame count ({frameCount}) and delay count ({delayCount}) must match',
     'animation.index_out_of_range'    => 'Frame index {index} is out of range for this animation',
+    'animation.too_many_frames'       => 'Animation exceeds the maximum of {max} frames (got {count})',
+    'animation.frame_too_large'       => 'Animation frame {index} dimensions {width}×{height} exceed the maximum of {max} pixels',
 ];
