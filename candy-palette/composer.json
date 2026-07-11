@@ -27,8 +27,7 @@
     "require": {
         "php": "^8.3",
         "react/child-process": "^0.6",
-        "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master"
+        "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.1",
@@ -51,20 +50,6 @@
         {
             "type": "path",
             "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-layout",
             "options": {
                 "symlink": true
             }
