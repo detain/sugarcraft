@@ -119,6 +119,59 @@ final class AutoBackupTest extends TestCase
         $this->assertSame(0, $count);
     }
 
+    /**
+     * SEC/data-loss: a backup dir that cannot be created must throw, not
+     * silently return 0. Regression guard for the `@mkdir(...) ... return 0`
+     * swallow. Uses a regular file as the parent so mkdir fails even as root.
+     */
+    public function testRotateThrowsWhenBackupDirCannotBeCreated(): void
+    {
+        $blocker = $this->dataDir . '/blocker-file';
+        file_put_contents($blocker, 'x');
+        // Nesting under a regular file makes mkdir(recursive) fail regardless of uid.
+        $backup = new AutoBackup($blocker . '/nested/backup', [$this->dataDir]);
+
+        // Swallow the low-level mkdir E_WARNING so failOnWarning stays green;
+        // the RuntimeException is the contract under test.
+        set_error_handler(static fn (): bool => true);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $backup->rotate(30);
+        } finally {
+            restore_error_handler();
+        }
+    }
+
+    /**
+     * SEC/data-loss: a failed copy of an aged file must throw, not silently
+     * skip. Regression guard for the `@copy(...)` swallow. A pre-existing
+     * directory at the exact destination path makes copy() fail even as root.
+     */
+    public function testRotateThrowsWhenCopyFails(): void
+    {
+        $mtime = time() - (40 * 86400);
+        $file = $this->dataDir . '/2024-01-15.jsonl';
+        file_put_contents($file, '{"time":1}');
+        touch($file, $mtime);
+
+        mkdir($this->backupDir, 0755, true);
+        // rotate() builds this deterministic dest path; make it a directory so
+        // copy() cannot write a file there.
+        $dest = $this->backupDir . '/' . basename($this->dataDir) . '_' . basename($file) . '.' . date('Y-m-d', $mtime);
+        mkdir($dest, 0755, true);
+
+        $backup = new AutoBackup($this->backupDir, [$this->dataDir]);
+
+        set_error_handler(static fn (): bool => true);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $backup->rotate(30);
+        } finally {
+            restore_error_handler();
+            @rmdir($dest);
+        }
+    }
+
     public function testRotateSkipsVanishedFile(): void
     {
         // Create a file then remove it before rotate processes it
