@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
+use SugarCraft\Sprinkles\Bar\Segment;
+use SugarCraft\Sprinkles\Bar\StatusBar as BarStatusBar;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * @see Renderer
@@ -277,5 +281,104 @@ final class RendererTest extends TestCase
         $output = Renderer::render($app);
 
         $this->assertStringContainsString('Processing...', $output);
+    }
+
+    // =========================================================================
+    // Renderer::statusBar() migration onto Sprinkles\Bar\StatusBar
+    //
+    // The live status bar was migrated off a hand-rolled string concat onto the
+    // shared SugarCraft\Sprinkles\Bar\StatusBar primitive (the same one behind
+    // sugar-dash / candy-hermit). These tests lock BOTH facets: (1) byte-parity
+    // with the previous hand-rolled output for every populated case, and (2)
+    // that the bytes are genuinely produced by the primitive with the expected
+    // segment structure — so the migration is real, not just visually equal.
+    // =========================================================================
+
+    /** Invoke the private static statusBar() for exact-byte assertions. */
+    private static function statusBar(App $app): string
+    {
+        $m = new \ReflectionMethod(Renderer::class, 'statusBar');
+        $m->setAccessible(true);
+
+        return (string) $m->invoke(null, $app);
+    }
+
+    /**
+     * Status case: byte-identical to the pre-migration hand-rolled template
+     * `" $provider | $model | [Tab] Switch Pane | $status"` with the crush
+     * colours. Reverting to the hand-rolled concat would keep this green only
+     * because the migration reproduces the exact same bytes — which is the point.
+     */
+    public function testStatusBarStatusCaseIsByteIdenticalToLegacy(): void
+    {
+        $app = App::new($this->provider, 'test-model')->withStatus('Working');
+
+        $legacy = ' '
+            . Style::new()->foreground(Color::hex('#9ece6a'))->render('TestProvider')
+            . ' | ' . Style::new()->foreground(Color::hex('#e0af68'))->render('test-model')
+            . ' | [Tab] Switch Pane | '
+            . Style::new()->foreground(Color::hex('#9ece6a'))->render('Working');
+
+        $this->assertSame($legacy, self::statusBar($app));
+    }
+
+    /**
+     * Error case: byte-identical to the legacy template, error styled red+bold
+     * and taking precedence over any status.
+     */
+    public function testStatusBarErrorCaseIsByteIdenticalToLegacy(): void
+    {
+        $app = App::new($this->provider, 'test-model')->withError('Boom')->withStatus('ignored');
+
+        $legacy = ' '
+            . Style::new()->foreground(Color::hex('#9ece6a'))->render('TestProvider')
+            . ' | ' . Style::new()->foreground(Color::hex('#e0af68'))->render('test-model')
+            . ' | [Tab] Switch Pane | '
+            . Style::new()->foreground(Color::hex('#f7768e'))->bold()->render('error: Boom');
+
+        $this->assertSame($legacy, self::statusBar($app));
+        $this->assertStringNotContainsString('ignored', self::statusBar($app));
+    }
+
+    /**
+     * Proves the migration is real: the live bytes are exactly what the shared
+     * primitive emits for the crush segment set (leading-space cap, `' | '`
+     * separator, per-segment colours, `[Tab] Switch Pane` hint segment).
+     */
+    public function testStatusBarBytesAreProducedByTheSprinklesPrimitive(): void
+    {
+        $app = App::new($this->provider, 'test-model')->withStatus('Working');
+
+        $expected = BarStatusBar::new()
+            ->separator(' | ')
+            ->caps(' ', '')
+            ->left(
+                Segment::of('TestProvider', Style::new()->foreground(Color::hex('#9ece6a'))),
+                Segment::of('test-model', Style::new()->foreground(Color::hex('#e0af68'))),
+                Segment::of('[Tab] Switch Pane'),
+                Segment::of('Working', Style::new()->foreground(Color::hex('#9ece6a'))),
+            )
+            ->render();
+
+        $this->assertSame($expected, self::statusBar($app));
+    }
+
+    /**
+     * The one intentional divergence: with neither error nor status, the
+     * primitive skips the empty final segment, so the legacy template's trailing
+     * dangling `' | '` (an empty status slot) is dropped. The visible bytes are
+     * otherwise identical — the bar just ends at `[Tab] Switch Pane`.
+     */
+    public function testStatusBarDefaultCaseDropsLegacyTrailingSeparator(): void
+    {
+        $app = App::new($this->provider, 'test-model');
+
+        $legacy = ' '
+            . Style::new()->foreground(Color::hex('#9ece6a'))->render('TestProvider')
+            . ' | ' . Style::new()->foreground(Color::hex('#e0af68'))->render('test-model')
+            . ' | [Tab] Switch Pane | ';
+
+        // New output == legacy minus the trailing 3-byte ' | ' dangling separator.
+        $this->assertSame(substr($legacy, 0, -3), self::statusBar($app));
     }
 }
