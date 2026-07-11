@@ -67,6 +67,13 @@ final class AnimationDriver implements Model
             return [$this, null];
         }
 
+        // Paused: swallow the tick without advancing the frame or scheduling
+        // the next one. Without this, a tick still in flight when the driver
+        // is paused (via withPaused(true)) would silently resume playback.
+        if ($this->paused) {
+            return [$this, null];
+        }
+
         $nextIndex = ($this->index + 1) % $this->animation->frameCount();
 
         return [

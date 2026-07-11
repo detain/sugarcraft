@@ -104,6 +104,25 @@ final class AnimationDriverTest extends TestCase
         $this->assertNotNull($cmd);
     }
 
+    public function testUpdateFrameTickIgnoredWhenPaused(): void
+    {
+        $driver = new AnimationDriver(
+            animation:  $this->animation,
+            renderer:   $this->renderer,
+            cellWidth:  4,
+            cellHeight: 2,
+            index:      2,
+            paused:    true,
+        );
+
+        // A tick still in flight when paused must NOT advance the frame or
+        // schedule another tick (silent un-pausing regression).
+        [$next, $cmd] = $driver->update(new FrameTickMsg());
+
+        $this->assertSame(2, $next->index);
+        $this->assertNull($cmd);
+    }
+
     public function testUpdateIgnoresUnknownMessage(): void
     {
         $driver = new AnimationDriver(
