@@ -8,6 +8,14 @@ namespace SugarCraft\Buffer;
  * A rectangular sub-region of a Buffer, identified by its top-left
  * {@see Position} and dimensions.
  *
+ * Dimensions must be non-negative. A zero-area region (0×N or N×0) is
+ * explicitly allowed and behaves as a no-op in {@see Buffer::fill()} /
+ * {@see Buffer::copy()} — the fill/copy loops simply run zero iterations.
+ * A NEGATIVE width or height is rejected at construction: previously such
+ * a region was silently accepted and then quietly produced no output
+ * (the `$dx < $width` loop guard was false immediately), masking the
+ * caller's arithmetic bug instead of surfacing it.
+ *
  * Note: zero-width or zero-height regions are edge cases — a cell at
  * the origin is contained only if the region has positive dimensions.
  * See {@see contains()} for the zero-size boundary behaviour.
@@ -16,11 +24,20 @@ namespace SugarCraft\Buffer;
  */
 final class Region implements \JsonSerializable
 {
+    /**
+     * @throws \InvalidArgumentException when $width or $height is negative
+     */
     public function __construct(
         public readonly Position $origin,
         public readonly int $width,
         public readonly int $height,
-    ) {}
+    ) {
+        if ($width < 0 || $height < 0) {
+            throw new \InvalidArgumentException(
+                "Region dimensions must not be negative: {$width}x{$height}"
+            );
+        }
+    }
 
     public static function new(Position $origin, int $width, int $height): self
     {
