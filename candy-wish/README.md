@@ -55,6 +55,14 @@ The pre-PTY-upgrade architecture: middleware run inline in the supervisor, and t
 - **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Subprocess overhead per connection (~50-200ms PHP cold start), but full PTY semantics.
 - **`HostSshdTransport`** when your TUI is a SugarCraft `Program` and you want zero subprocess overhead, or when you have an inline-STDIN-reading middleware (banner-style). No subprocess, but no controlling-terminal isolation.
 
+## See also — Git serving (candy-serve)
+
+CandyWish is a general SSH middleware/session framework. For serving Git
+repositories specifically — a `git://` daemon, the HTTP smart protocol, and a
+`ForceCommand`-style SSH git-shell gate — see the sibling
+[`candy-serve`](../candy-serve). Both libraries run under the host's OpenSSH
+daemon; neither implements the SSH wire protocol itself.
+
 ## Quickstart
 
 ### 1. Configure sshd
