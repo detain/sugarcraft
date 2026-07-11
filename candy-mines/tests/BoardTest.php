@@ -80,6 +80,52 @@ final class BoardTest extends TestCase
         $this->assertFalse($b->cell(1, 1)->flagged);
     }
 
+    public function testFlagCountTrackedIncrementally(): void
+    {
+        $b = Board::blank(5, 5, 3);
+        $this->assertSame(0, $b->flagCount());
+        // The O(1) counter is exposed as a readonly field — asserting it
+        // directly fails if flagCount() reverts to a per-call grid scan.
+        $this->assertSame(0, $b->flaggedCount);
+
+        $b = $b->toggleFlag(1, 1)->toggleFlag(2, 2);
+        $this->assertSame(2, $b->flagCount());
+        $this->assertSame(2, $b->flaggedCount);
+
+        $b = $b->toggleFlag(1, 1);   // unflag
+        $this->assertSame(1, $b->flagCount());
+        $this->assertSame(1, $b->flaggedCount);
+    }
+
+    public function testFlagCountSurvivesSerializeRoundTrip(): void
+    {
+        $b = Board::blank(5, 5, 3)->toggleFlag(0, 0)->toggleFlag(4, 4);
+        $restored = Board::unserialize($b->serialize());
+        $this->assertSame(2, $restored->flagCount());
+        $this->assertSame(2, $restored->flaggedCount);
+    }
+
+    public function testDenseBoardPlacesAllMinesWithSafeFirstClick(): void
+    {
+        // 3×3 with 8 mines: the full 3×3 safe zone around a centre click would
+        // leave zero candidates. The fallback must still place all 8 mines and
+        // keep the clicked cell safe — before the fix, array_slice() silently
+        // placed zero mines.
+        $rand = static fn(int $max): int => 0;
+        $b = Board::blank(3, 3, 8)->reveal(1, 1, $rand);
+
+        $mines = 0;
+        foreach ($b->rows() as $row) {
+            foreach ($row as $c) {
+                if ($c->mine) {
+                    $mines++;
+                }
+            }
+        }
+        $this->assertSame(8, $mines, 'all requested mines must be placed');
+        $this->assertFalse($b->cell(1, 1)->mine, 'first-clicked cell must never be a mine');
+    }
+
     public function testFlaggedCellCannotReveal(): void
     {
         $rand = static fn(int $max): int => 0;

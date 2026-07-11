@@ -15,14 +15,20 @@
 
 Minesweeper on the SugarCraft stack — port of [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep). Customisable board, recursive flood-fill, win / lose detection, vim-style movement.
 
-Difficulty presets are available via `Game::withDifficulty(Difficulty::$LEVEL)` — `EASY` (9×9, 10 mines), `MEDIUM` (16×16, 40 mines), `EXPERT` (30×16, 99 mines).
+Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::EASY` (9×9, 10 mines), `Difficulty::MEDIUM` (16×16, 40 mines), `Difficulty::EXPERT` (30×16, 99 mines).
 
 ## Run it
 
 ```bash
 composer install
-./bin/candy-mines [width] [height] [mines]   # defaults: 10 10 12
+./bin/candy-mines                            # default 10×10, 12 mines
+./bin/candy-mines [width] [height] [mines]   # custom board (validated: 2–50 per side, 1..w×h−9 mines)
+./bin/candy-mines --easy | --medium | --expert
 ```
+
+Custom board arguments are validated through `CustomDifficulty::fromInput()`: each side must be 2–50 and the mine count must leave a safe 3×3 first-click area (`1 ≤ mines ≤ width × height − 9`). Out-of-range values exit with an error rather than starting a broken game.
+
+**Stats persistence** is opt-in. Set `CANDY_MINES_STATS=/path/to/stats.json` and each completed game's outcome (games, wins, best time per preset) is recorded there via `DifficultyStats`, surviving across sessions. Without the env var the game stays entirely in-memory.
 
 ## Keys
 
@@ -43,7 +49,7 @@ Five pure-state classes plus the runtime Model, renderer, UI helper, and persist
 |-------------------------|----------------------------------------------------------------------------------------------------|
 | `Cell`                  | Value object — mine / revealed / flagged / adjacent count                                          |
 | `Board`                 | The grid + every transition (reveal, flag, flood-fill, chord). Win detection is O(1) via `revealedCount` counter. Serialises to versioned JSON for mid-game save/load. |
-| `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`)             |
+| `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`). Records the result into `Stats` on the win/lose transition; persists via `DifficultyStats` when an opt-in stats path is configured. |
 | `Stats`                 | Immutable difficulty stats — games, wins, best time per preset                                    |
 | `DifficultyStats`       | Atomic JSON persistence wrapper (tmp+rename, Homestead pattern)                                   |
 | `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9). Throws i18n-aware `InvalidArgumentException` on constraint violation. |
