@@ -25,20 +25,23 @@ final class Attachment
 
     /**
      * Create from a file path.
+     *
+     * The file is read eagerly here: an unreadable or missing path fails
+     * immediately with a {@see \RuntimeException} rather than producing an
+     * attachment whose content silently reads back as 0 bytes at send time.
+     *
+     * @throws \RuntimeException if the file cannot be read
      */
     public static function fromPath(string $path, string $filename = null): self
     {
         $name = $filename ?? \basename($path);
         $mime = self::detectMimeType($path);
-        // Suppress warning when file doesn't exist - return null content
-        $prev = \error_reporting(E_ALL & ~\E_WARNING);
-        $content = @\file_get_contents($path);
-        \error_reporting($prev);
+        $content = self::readFileOrThrow($path);
 
         return new self(
             filename:  $name,
             path:      $path,
-            content:   $content !== false ? $content : null,
+            content:   $content,
             mimeType:  $mime,
             encoding:  'base64',
             cid:       null,
@@ -78,15 +81,12 @@ final class Attachment
         }
 
         $mime = self::detectMimeType($path);
-        // Suppress warning when file doesn't exist - store null and throw on getContent()
-        $prev = \error_reporting(E_ALL & ~\E_WARNING);
-        $content = @\file_get_contents($path);
-        \error_reporting($prev);
+        $content = self::readFileOrThrow($path);
 
         return new self(
             filename:  $name,
             path:      $path,
-            content:   $content !== false ? $content : null,
+            content:   $content,
             mimeType:  $mime,
             encoding:  'base64',
             cid:       $cid,
@@ -145,6 +145,28 @@ final class Attachment
         $this->mimeType  = $mimeType;
         $this->encoding  = $encoding;
         $this->cid       = $cid;
+    }
+
+    /**
+     * Read a file eagerly, throwing on failure.
+     *
+     * A swallowed read failure would let a missing or unreadable path become
+     * a silent 0-byte attachment that only surfaces (or ships empty) later at
+     * send time; failing here keeps the error at the point the caller can
+     * still handle it. The warning is suppressed so the thrown exception is
+     * the single, clean failure signal.
+     *
+     * @throws \RuntimeException if the file cannot be read
+     */
+    private static function readFileOrThrow(string $path): string
+    {
+        $prev = \error_reporting(E_ALL & ~\E_WARNING);
+        $content = @\file_get_contents($path);
+        \error_reporting($prev);
+        if ($content === false) {
+            throw new \RuntimeException(Lang::t('attachment.unreadable', ['path' => $path]));
+        }
+        return $content;
     }
 
     private static function detectMimeType(string $path): string

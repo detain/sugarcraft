@@ -20,18 +20,34 @@ final class AttachmentEdgeTest extends TestCase
 
     public function testGetContentReturnsEmptyStringWhenNeitherContentNorPath(): void
     {
-        // This happens when fromPath fails to read file
+        // An explicitly empty in-memory attachment reads back as empty bytes.
         $att = Attachment::fromContent('', 'empty.txt', 'text/plain');
         $this->assertSame('', $att->getContent());
     }
 
     public function testUnreadablePathThrows(): void
     {
-        // Using a path that doesn't exist - should throw RuntimeException
-        $att = Attachment::fromPath('/nonexistent/path/file.txt');
+        // fromPath() must fail eagerly on a missing/unreadable path rather than
+        // deferring to a silent 0-byte attachment. Regression guard for the
+        // @-suppressed-read bug: revert the fix and fromPath() returns an
+        // attachment with null content instead of throwing, failing this test.
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('not readable');
-        $att->getContent();
+        Attachment::fromPath('/nonexistent/path/file.txt');
+    }
+
+    public function testFromPathReadsBytesEagerly(): void
+    {
+        // A readable file still attaches, and its bytes are captured eagerly
+        // (content populated at construction, not lazily on getContent()).
+        $path = self::tempFile('real bytes');
+        try {
+            $att = Attachment::fromPath($path);
+            $this->assertSame('real bytes', $att->content);
+            $this->assertSame('real bytes', $att->getContent());
+        } finally {
+            @\unlink($path);
+        }
     }
 
     public function testFromPathWithUnknownExtensionFallsBackToOctetStream(): void
@@ -48,13 +64,13 @@ final class AttachmentEdgeTest extends TestCase
         $this->assertSame('application/json', $att->mimeType);
     }
 
-    public function testInlineAttachmentGetContentThrowsOnUnreadable(): void
+    public function testInlineUnreadablePathThrows(): void
     {
-        // Using a path that doesn't exist - should throw RuntimeException on getContent()
-        $att = Attachment::inline('/nonexistent/path/img.png', 'img-cid-123@example.com');
+        // inline() shares fromPath()'s eager-read contract: a missing file
+        // fails at construction, never becoming a silent 0-byte inline part.
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('not readable');
-        $att->getContent();
+        Attachment::inline('/nonexistent/path/img.png', 'img-cid-123@example.com');
     }
 
     public function testInlineAttachmentRejectsInvalidCid(): void
@@ -67,13 +83,30 @@ final class AttachmentEdgeTest extends TestCase
 
     public function testInlineAttachmentAcceptsValidCidWithCidPrefix(): void
     {
-        $att = Attachment::inline('/tmp/img.png', 'cid:img-cid-123@example.com');
-        $this->assertSame('cid:img-cid-123@example.com', $att->cid);
+        $path = self::tempFile("\x89PNG");
+        try {
+            $att = Attachment::inline($path, 'cid:img-cid-123@example.com');
+            $this->assertSame('cid:img-cid-123@example.com', $att->cid);
+        } finally {
+            @\unlink($path);
+        }
     }
 
     public function testInlineAttachmentAcceptsValidCidWithoutCidPrefix(): void
     {
-        $att = Attachment::inline('/tmp/img.png', 'img-cid-123@example.com');
-        $this->assertSame('img-cid-123@example.com', $att->cid);
+        $path = self::tempFile("\x89PNG");
+        try {
+            $att = Attachment::inline($path, 'img-cid-123@example.com');
+            $this->assertSame('img-cid-123@example.com', $att->cid);
+        } finally {
+            @\unlink($path);
+        }
+    }
+
+    private static function tempFile(string $bytes): string
+    {
+        $path = \tempnam(\sys_get_temp_dir(), 'sp-att-');
+        \file_put_contents($path, $bytes);
+        return $path;
     }
 }
