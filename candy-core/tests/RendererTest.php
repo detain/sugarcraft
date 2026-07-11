@@ -306,6 +306,39 @@ final class RendererTest extends TestCase
         }
         $this->assertStringContainsString(Ansi::syncEnd(), ShortWriteStream::$captured);
     }
+
+    /**
+     * The per-renderer token cache must never grow past its cap — an uncapped
+     * cache is a slow leak over a long-running program that renders unbounded
+     * distinct lines. Bounding must stay output-transparent: an evicted line
+     * re-parses to the identical token list. Reverting the cap makes the cache
+     * unbounded and fails the size assertion.
+     */
+    public function testTokenCacheStaysBoundedAndReturnsIdenticalTokens(): void
+    {
+        [$out, $r] = $this->make();
+
+        $getTokens = new \ReflectionMethod(Renderer::class, 'getTokens');
+        $getTokens->setAccessible(true);
+        $cacheProp = new \ReflectionProperty(Renderer::class, 'tokenCache');
+        $cacheProp->setAccessible(true);
+        $cap = (new \ReflectionClassConstant(Renderer::class, 'TOKEN_CACHE_MAX'))->getValue();
+        $this->assertIsInt($cap);
+
+        // Independent parser: the reference token list, computed without
+        // touching the renderer's cache.
+        $refParser = new \SugarCraft\Core\Util\Parser();
+
+        for ($i = 0; $i < $cap + 300; $i++) {
+            $line   = "line-$i \x1b[31mX\x1b[0m";
+            $tokens = $getTokens->invoke($r, $line);
+            // Cached (or re-parsed) tokens must equal a fresh parse.
+            $this->assertEquals($refParser->parse($line), $tokens);
+        }
+
+        $this->assertLessThanOrEqual($cap, \count($cacheProp->getValue($r)), 'token cache must stay bounded');
+        fclose($out);
+    }
 }
 
 /**

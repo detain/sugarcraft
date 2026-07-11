@@ -181,4 +181,44 @@ final class WidthTest extends TestCase
         $out = Width::truncateMiddle('abcdef', 1, '...');
         $this->assertLessThanOrEqual(1, Width::string($out));
     }
+
+    public function testStringMemoRepeatedInputReturnsIdentical(): void
+    {
+        $s = "\x1b[31mhello 日本\x1b[0m";
+        $first  = Width::string($s);       // cold: computes + memoizes
+        $second = Width::string($s);       // warm: memo hit
+        $this->assertSame($first, $second);
+        // "hello" (5) + " " (1) + 日 (2) + 本 (2) = 10.
+        $this->assertSame(10, $second);
+    }
+
+    /**
+     * The static memo behind {@see Width::string()} must never grow past its
+     * cap, and every result (fresh, memo-hit, or evicted-and-recomputed) must
+     * equal the uncached width. Reverting the cap makes the memo unbounded and
+     * fails the size assertion.
+     */
+    public function testStringMemoStaysBoundedAndCorrect(): void
+    {
+        $memoProp = new \ReflectionProperty(Width::class, 'memo');
+        $memoProp->setAccessible(true);
+        $memoProp->setValue(null, []); // clean baseline for a precise size check
+
+        $cap = (new \ReflectionClassConstant(Width::class, 'MEMO_MAX'))->getValue();
+        $this->assertIsInt($cap);
+
+        // Feed more distinct strings than the cap; each is pure ASCII so its
+        // display width equals its byte length.
+        for ($i = 0; $i < $cap + 500; $i++) {
+            $s = 'row-' . $i;
+            $this->assertSame(\strlen($s), Width::string($s));
+        }
+
+        $memo = $memoProp->getValue();
+        $this->assertIsArray($memo);
+        $this->assertGreaterThan(0, \count($memo), 'memo should be populated');
+        $this->assertLessThanOrEqual($cap, \count($memo), 'memo must stay bounded');
+
+        $memoProp->setValue(null, []); // don't leak state into sibling tests
+    }
 }
