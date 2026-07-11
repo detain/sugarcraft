@@ -20,7 +20,15 @@ foreach ($autoloadCandidates as $autoload) {
 
 $input = '';
 if (!empty($argv[1])) {
-    $input = (string) @file_get_contents($argv[1]);
+    // Reject stream wrappers (php://, data://, http://, …) — a file-path argument
+    // must not be coerced into fetching a URL or evaluating a wrapper. is_file()
+    // is false for every wrapper scheme and for non-existent paths. The '@' is
+    // dropped so a genuine read error (e.g. unreadable file) surfaces as a warning.
+    if (!is_file($argv[1])) {
+        fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => (string) $argv[1]]) . "\n");
+        exit(1);
+    }
+    $input = (string) file_get_contents($argv[1]);
 } elseif (!stream_isatty(STDIN)) {
     $input = (string) stream_get_contents(STDIN);
 }
