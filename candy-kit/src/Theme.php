@@ -6,6 +6,7 @@ namespace SugarCraft\Kit;
 
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Palettes;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -159,17 +160,25 @@ final class Theme
         );
     }
 
-    /** Dracula palette. */
+    /**
+     * Dracula palette — hex literals re-sourced from candy-core's
+     * {@see Palettes::DRACULA} single-source-of-truth so they no longer
+     * drift as they are hand-copied around the monorepo.
+     *
+     * `accent` binds Dracula's `pink` (matching candy-sprinkles' accent
+     * slot), not `purple`; before W5 it had diverged to `purple` #bd93f9.
+     */
     public static function dracula(): self
     {
+        $p = Palettes::DRACULA;
         return new self(
-            success: Style::new()->bold()->foreground(Color::hex('#50fa7b')),
-            error:   Style::new()->bold()->foreground(Color::hex('#ff5555')),
-            warn:    Style::new()->bold()->foreground(Color::hex('#f1fa8c')),
-            info:    Style::new()->bold()->foreground(Color::hex('#8be9fd')),
-            prompt:  Style::new()->bold()->foreground(Color::hex('#ff79c6')),
-            accent:  Style::new()->bold()->foreground(Color::hex('#bd93f9')),
-            muted:   Style::new()->foreground(Color::hex('#6272a4')),
+            success: Style::new()->bold()->foreground(Color::hex($p['green'])),
+            error:   Style::new()->bold()->foreground(Color::hex($p['red'])),
+            warn:    Style::new()->bold()->foreground(Color::hex($p['yellow'])),
+            info:    Style::new()->bold()->foreground(Color::hex($p['cyan'])),
+            prompt:  Style::new()->bold()->foreground(Color::hex($p['pink'])),
+            accent:  Style::new()->bold()->foreground(Color::hex($p['pink'])),
+            muted:   Style::new()->foreground(Color::hex($p['comment'])),
         );
     }
 
