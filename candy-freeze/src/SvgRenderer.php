@@ -88,6 +88,28 @@ final class SvgRenderer
     }
 
     /**
+     * Map a font blob's leading magic bytes to its `@font-face` src MIME type,
+     * or null when the bytes match no known font signature. Prevents the
+     * embedded `src` from advertising the wrong type (previously hardcoded to
+     * `font/ttf` regardless of the actual format).
+     *
+     *  - `\x00\x01\x00\x00` / `true` / `ttcf` → TrueType (`font/ttf`)
+     *  - `OTTO`                                → OpenType/CFF (`font/otf`)
+     *  - `wOFF`                                → WOFF   (`font/woff`)
+     *  - `wOF2`                                → WOFF2  (`font/woff2`)
+     */
+    public static function sniffFontMime(string $data): ?string
+    {
+        return match (substr($data, 0, 4)) {
+            "\x00\x01\x00\x00", 'true', 'ttcf' => 'font/ttf',
+            'OTTO'                             => 'font/otf',
+            'wOFF'                             => 'font/woff',
+            'wOF2'                             => 'font/woff2',
+            default                            => null,
+        };
+    }
+
+    /**
      * Highlight a range of lines with a background colour.
      *
      * @param int $start 1-based start line (inclusive)
@@ -149,7 +171,7 @@ final class SvgRenderer
             $fontData = file_get_contents($this->fontPath);
             if ($fontData !== false) {
                 $base64 = base64_encode($fontData);
-                $mime = 'font/ttf';
+                $mime = self::sniffFontMime($fontData) ?? 'font/ttf';
                 $defs .= '  <style type="text/css"><![CDATA[' . "\n"
                      . '    @font-face { font-family: "embedded"; src: url(data:' . $mime . ';base64,' . $base64 . '); }' . "\n"
                      . '  ]]></style>' . "\n";
