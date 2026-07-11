@@ -55,6 +55,56 @@ final class FontEmbedLineHighlightTest extends TestCase
         $this->assertStringNotContainsString('@font-face', $svg);
     }
 
+    /** @return array<string, array{0:string, 1:?string}> */
+    public static function fontMagicProvider(): array
+    {
+        return [
+            'ttf'      => ["\x00\x01\x00\x00rest", 'font/ttf'],
+            'ttf-true' => ['truerest',            'font/ttf'],
+            'ttc'      => ['ttcfrest',            'font/ttf'],
+            'otf'      => ['OTTOrest',            'font/otf'],
+            'woff'     => ['wOFFrest',            'font/woff'],
+            'woff2'    => ['wOF2rest',            'font/woff2'],
+            'non-font' => ['fake font data',      null],
+            'empty'    => ['',                     null],
+        ];
+    }
+
+    /** @dataProvider fontMagicProvider */
+    public function testSniffFontMimeMapsMagicBytes(string $blob, ?string $expected): void
+    {
+        $this->assertSame($expected, SvgRenderer::sniffFontMime($blob));
+    }
+
+    public function testEmbeddedFontEmitsTtfMimeForTrueTypeMagic(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'font_');
+        file_put_contents($tmp, "\x00\x01\x00\x00the rest of a truetype file");
+
+        try {
+            $svg = SvgRenderer::dark()->withFont($tmp)->withWindow(false)->render("x\n");
+            $this->assertStringContainsString('src: url(data:font/ttf;base64,', $svg);
+            $this->assertStringNotContainsString('data:font/woff2;base64,', $svg);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testEmbeddedFontEmitsWoff2MimeForWoff2Magic(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'font_');
+        file_put_contents($tmp, 'wOF2the rest of a woff2 file');
+
+        try {
+            $svg = SvgRenderer::dark()->withFont($tmp)->withWindow(false)->render("x\n");
+            // Regression: MIME was hardcoded to font/ttf regardless of format.
+            $this->assertStringContainsString('src: url(data:font/woff2;base64,', $svg);
+            $this->assertStringNotContainsString('data:font/ttf;base64,', $svg);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
     public function testEmbeddedFontOverridesFontFamilyInOutput(): void
     {
         $tmp = tempnam(sys_get_temp_dir(), 'font_');

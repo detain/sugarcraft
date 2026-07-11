@@ -15,9 +15,10 @@ return [
     'cli.unknown_format'      => "candyfreeze: unknown format '{format}'. Known: svg, png",
     'cli.gd_required'         => 'candyfreeze: ext-gd is required for PNG output',
     'cli.font_not_found'      => "candyfreeze: font file not found: '{path}'",
+    'cli.font_invalid'        => "candyfreeze: '{path}' is not a valid font file (expected TTF, OTF, WOFF or WOFF2)",
     'cli.bad_highlight'       => "candyfreeze: invalid highlight format '{format}'. Use start:end (e.g. 3:7) or start:end:#color (e.g. 3:7:#fffbe6)",
     'cli.read_failed'          => 'candyfreeze: failed to read input',
-    'cli.path_outside_cwd'    => 'candyfreeze: input path is outside the current working directory',
+    'cli.path_outside_cwd'    => "candyfreeze: path '{path}' is outside the current working directory (use --unsafe-paths to allow)",
     'cli.write_failed'        => "candyfreeze: failed to write '{path}'",
     'cli.usage'               => <<<'USAGE'
 candyfreeze - render code or terminal output to an SVG screenshot
@@ -36,7 +37,8 @@ Options:
   --border-radius <n>     Corner radius (default: 8)
   --window-style <style>  Window style: macos, windows-terminal, iterm, hyper, none (default: macos)
   --ligatures             Enable ligatures (font-variant-ligatures: normal)
-  --font <path>           Path to a TTF font file to embed in the SVG
+  --font <path>           Path to a TTF/OTF/WOFF/WOFF2 font file to embed in the SVG
+  --unsafe-paths          Allow input/--font/--output paths outside the CWD
   --highlight <start:end[:color]>
                           Highlight lines start:end with optional color (default color: #fffbe6)
   --format <svg|png>      Output format (default: svg)
