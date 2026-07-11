@@ -87,6 +87,17 @@ final readonly class PosterCard
      * {@see $title} — e.g. a fuzzy-highlighted search result. The escapes are
      * preserved and the title cell is padded to the correct visible width. The
      * plain {@see $title} is kept for identity/sort.
+     *
+     * TRUST BOUNDARY — the styled title is NOT sanitised. Where the plain
+     * {@see $title} is run through {@see stripC0()} in {@see render()} to
+     * neutralise cursor-move / clear-screen / ESC bytes from untrusted DB text,
+     * a styled title is emitted verbatim (only ANSI-aware *truncated*, never
+     * stripped) — stripping C0 would destroy the very SGR escapes it exists to
+     * carry. The CALLER therefore owns that escaping: pass ONLY styling you
+     * produced yourself over already-safe text (e.g. a candy-fuzzy highlight of
+     * a sanitised title), NEVER raw untrusted / DB-sourced bytes. When the
+     * source is untrusted, leave this unset and rely on the plain
+     * {@see $title} — that is the sanitised path.
      */
     public function withStyledTitle(string $ansi): self
     {
@@ -108,24 +119,11 @@ final readonly class PosterCard
         $width = max(4, $width);
         $posterHeight = max(1, $posterHeight);
 
-        // Split on any line ending — a poster is produced by an external renderer
-        // (e.g. candy-mosaic) and a stale cache entry or a different platform may
-        // join rows with CRLF or a lone CR rather than LF. Exploding on "\n" alone
-        // would leave a trailing "\r" on every row; once stitched side by side and
-        // printed, those embedded carriage returns yank the cursor to column 0 and
-        // collapse the whole rail to a single visible line. Splitting on every
-        // separator (and normalising the row count below) keeps the tile exactly
-        // $posterHeight rows tall regardless of how the poster bytes were encoded.
-        if ($this->posterImage !== null && $this->imageId !== null) {
-            // Overlay mode: reserve the poster area with blank cells and drop a
-            // one-cell marker at the top-left; the runtime paints the graphics
-            // bytes there on top of the text frame.
-            $lines = self::imageRows($this->imageId, $width, $posterHeight);
-        } else {
-            $lines = $this->poster !== null
-                ? self::posterRows($this->poster, $width, $posterHeight)
-                : array_fill(0, $posterHeight, str_repeat('░', $width));
-        }
+        // Poster/image body rows are memoized (see bodyRows()): they depend only
+        // on the card's immutable content and the geometry, never on $focused, so
+        // the per-row Width::string() work is done once and reused across frames.
+        // Copy-on-write means the append below never mutates the cached array.
+        $lines = $this->bodyRows($width, $posterHeight);
 
         $marker = $focused ? '▸' : ' ';
         // Plain titles are DB-sourced; strip C0 controls to prevent terminal
@@ -141,6 +139,92 @@ final readonly class PosterCard
         }
 
         return implode("\n", $lines);
+    }
+
+    /** Cap on the shared fitted-body memo before oldest-half eviction kicks in. */
+    private const FIT_CACHE_CAP = 2048;
+
+    /**
+     * The poster/image/placeholder body rows for this card at the given
+     * geometry — the render hot path, memoized process-wide.
+     *
+     * {@see posterRows()} runs an ANSI-strip + grapheme-cluster
+     * {@see Width::string()} pass per row (via {@see fitWidth()}), and a grid or
+     * rail re-renders every visible cell every frame with most cells — and every
+     * unloaded skeleton — repeating verbatim, so that per-row cost recurs on
+     * every frame. Keying the fitted rows by content + geometry turns it into a
+     * one-time cost. The key includes the poster bytes' length + hash so a
+     * different poster (even one re-encoded CRLF→LF) can never collide onto a
+     * stale body; the memo is therefore byte-preserving by construction. Bounded
+     * to {@see FIT_CACHE_CAP}, evicting the oldest half when full — the working
+     * set is the on-screen cards, which are re-inserted on the next frame.
+     *
+     * @return list<string>
+     */
+    private function bodyRows(int $width, int $posterHeight): array
+    {
+        if ($this->posterImage !== null && $this->imageId !== null) {
+            $key = 'i|' . $this->imageId . '|' . $width . '|' . $posterHeight;
+        } elseif ($this->poster !== null) {
+            $key = 'p|' . $width . '|' . $posterHeight . '|' . strlen($this->poster) . '|' . md5($this->poster);
+        } else {
+            $key = 's|' . $width . '|' . $posterHeight;
+        }
+
+        $cache = &self::fitCacheRef();
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
+        if ($this->posterImage !== null && $this->imageId !== null) {
+            // Overlay mode: reserve the poster area with blank cells and drop a
+            // one-cell marker at the top-left; the runtime paints the graphics
+            // bytes there on top of the text frame.
+            $lines = self::imageRows($this->imageId, $width, $posterHeight);
+        } elseif ($this->poster !== null) {
+            $lines = self::posterRows($this->poster, $width, $posterHeight);
+        } else {
+            $lines = array_fill(0, $posterHeight, str_repeat('░', $width));
+        }
+
+        if (count($cache) >= self::FIT_CACHE_CAP) {
+            $cache = array_slice($cache, self::FIT_CACHE_CAP >> 1, null, true);
+        }
+        $cache[$key] = $lines;
+
+        return $lines;
+    }
+
+    /**
+     * Reference to the process-wide fitted-body memo. A `readonly class` forbids
+     * mutable static *properties*, so the shared array lives in a by-reference
+     * method-static instead — semantically one process-wide cache, just the only
+     * form PHP permits mutable shared state to take inside a readonly class.
+     *
+     * @return array<string, list<string>>
+     */
+    private static function &fitCacheRef(): array
+    {
+        static $cache = [];
+
+        return $cache;
+    }
+
+    /**
+     * Drop the shared fitted-body memo, returning how many entries were cleared.
+     * Rendering populates it lazily and it is self-bounding ({@see FIT_CACHE_CAP});
+     * a long-lived program that churns through many distinct posters can call
+     * this to reclaim the memory eagerly (e.g. on a result-set reset). Purely an
+     * optimization — clearing only costs the next render its fit work again and
+     * never changes a single output byte.
+     */
+    public static function clearFitCache(): int
+    {
+        $cache = &self::fitCacheRef();
+        $count = count($cache);
+        $cache = [];
+
+        return $count;
     }
 
     /**
