@@ -12,6 +12,8 @@ return [
     // Git errors
     'git.spawn_failed' => 'git: failed to spawn',
     'git.error'        => 'git: {stderr}',
+    'git.timeout'      => 'git: command timed out after {seconds}s',
+    'git.unsafe_path'  => 'git: unsafe worktree path: {path}',
 
     // CLI errors
     'cli.not_a_repo'   => 'sugar-stash: not a git repository (no .git in {cwd})',
