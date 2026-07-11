@@ -25,17 +25,61 @@ namespace SugarCraft\Focus;
 final class FocusRing implements \IteratorAggregate, \JsonSerializable
 {
     /**
-     * @param list<string>            $ids       registered region ids, in traversal order
-     * @param int                     $index     focused position into $ids, or -1 when empty
-     * @param array<string, true>     $disabled  set of disabled region ids
+     * Positions into $ids of the enabled regions, in ascending order. Cached so
+     * the hot-path traversal ({@see next()}/{@see previous()}) never rebuilds it
+     * per keystroke; maintained incrementally by every mutator that touches $ids
+     * or $disabled (register/unregister/enable/disable), and recomputed only when
+     * the order changes wholesale ({@see reorder()}) or a caller omits it.
+     *
+     * @var list<int>
+     */
+    private readonly array $enabledPositions;
+
+    /**
+     * @param list<string>            $ids               registered region ids, in traversal order
+     * @param int                     $index             focused position into $ids, or -1 when empty
+     * @param array<string, true>     $disabled          set of disabled region ids
+     * @param list<int>|null          $enabledPositions  precomputed enabled positions; null recomputes them
      */
     private function __construct(
         private readonly array $ids,
         private readonly int $index,
         private readonly array $disabled = [],
+        ?array $enabledPositions = null,
     ) {
         // Invariant: empty ring => index -1; non-empty ring => index in [0, count)
         assert($ids === [] ? $index === -1 : ($index >= 0 && $index < count($ids)), 'FocusRing focus index out of range for ids');
+
+        $this->enabledPositions = $enabledPositions ?? self::computeEnabledPositions($ids, $disabled);
+
+        // A supplied enabledPositions is trusted on the hot path (asserts are
+        // stripped in production); in dev/tests this guards every mutator's
+        // incremental maintenance against the freshly-computed truth.
+        assert(
+            $this->enabledPositions === self::computeEnabledPositions($ids, $disabled),
+            'FocusRing enabledPositions out of sync with ids/disabled',
+        );
+    }
+
+    /**
+     * The positions into $ids whose region is not disabled, ascending. Kept in
+     * one place so the constructor's recompute path and the incremental
+     * maintenance below agree byte-for-byte.
+     *
+     * @param list<string>        $ids
+     * @param array<string, true> $disabled
+     * @return list<int>
+     */
+    private static function computeEnabledPositions(array $ids, array $disabled): array
+    {
+        $positions = [];
+        foreach ($ids as $i => $id) {
+            if (!isset($disabled[$id])) {
+                $positions[] = $i;
+            }
+        }
+
+        return $positions;
     }
 
     /** An empty ring with nothing registered or focused. */
@@ -97,6 +141,10 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
             return $this;
         }
 
+        // The new region lands at the current end and is always enabled, so its
+        // position is the old count and appends to the (ascending) enabled list.
+        $newPos = count($this->ids);
+
         $ids = $this->ids;
         $ids[] = $id;
 
@@ -104,7 +152,10 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         $disabled = $this->disabled;
         unset($disabled[$id]);
 
-        return new self($ids, $this->index === -1 ? 0 : $this->index, $disabled);
+        $enabledPositions = $this->enabledPositions;
+        $enabledPositions[] = $newPos;
+
+        return new self($ids, $this->index === -1 ? 0 : $this->index, $disabled, $enabledPositions);
     }
 
     /**
@@ -140,7 +191,18 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         $disabled = $this->disabled;
         unset($disabled[$id]);
 
-        return new self($ids, $index, $disabled);
+        // Drop the removed slot from the enabled list and shift everything that
+        // sat after it left by one, mirroring array_splice() on $ids.
+        $enabledPositions = [];
+        foreach ($this->enabledPositions as $p) {
+            if ($p < $pos) {
+                $enabledPositions[] = $p;
+            } elseif ($p > $pos) {
+                $enabledPositions[] = $p - 1;
+            }
+        }
+
+        return new self($ids, $index, $disabled, $enabledPositions);
     }
 
     /**
@@ -154,7 +216,8 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
             return $this;
         }
 
-        return new self($this->ids, $pos, $this->disabled);
+        // Only $index moves; $ids and $disabled are untouched, so the cache carries over.
+        return new self($this->ids, $pos, $this->disabled, $this->enabledPositions);
     }
 
     /**
@@ -210,13 +273,8 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
             return $this;
         }
 
-        // Collect enabled positions
-        $enabledPositions = [];
-        foreach ($this->ids as $i => $id) {
-            if (!isset($this->disabled[$id])) {
-                $enabledPositions[] = $i;
-            }
-        }
+        // Enabled positions are maintained incrementally — no per-keystroke rebuild.
+        $enabledPositions = $this->enabledPositions;
 
         // All-disabled: noOp
         if ($enabledPositions === []) {
@@ -236,7 +294,7 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
             for ($offset = 1; $offset <= $total; $offset++) {
                 $candidate = ($this->index + $offset) % $total;
                 if (!isset($this->disabled[$this->ids[$candidate]])) {
-                    return new self($this->ids, $candidate, $this->disabled);
+                    return new self($this->ids, $candidate, $this->disabled, $enabledPositions);
                 }
             }
             return $this; // Should not reach: we have ≥2 enabled, one must be findable
@@ -245,7 +303,7 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         // Wrap-around to next enabled
         $nextIdx = ($currentEnabledIdx + 1) % count($enabledPositions);
 
-        return new self($this->ids, $enabledPositions[$nextIdx], $this->disabled);
+        return new self($this->ids, $enabledPositions[$nextIdx], $this->disabled, $enabledPositions);
     }
 
     /** Move focus to the previous enabled region (Shift-Tab), wrapping. Disabled regions are skipped. Disabling the focused region does not move focus; it is left in place and the next traversal carries it off. */
@@ -255,13 +313,8 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
             return $this;
         }
 
-        // Collect enabled positions
-        $enabledPositions = [];
-        foreach ($this->ids as $i => $id) {
-            if (!isset($this->disabled[$id])) {
-                $enabledPositions[] = $i;
-            }
-        }
+        // Enabled positions are maintained incrementally — no per-keystroke rebuild.
+        $enabledPositions = $this->enabledPositions;
 
         // All-disabled: noOp
         if ($enabledPositions === []) {
@@ -280,7 +333,7 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
             for ($offset = 1; $offset <= $total; $offset++) {
                 $candidate = ($this->index - $offset + $total) % $total;
                 if (!isset($this->disabled[$this->ids[$candidate]])) {
-                    return new self($this->ids, $candidate, $this->disabled);
+                    return new self($this->ids, $candidate, $this->disabled, $enabledPositions);
                 }
             }
             return $this;
@@ -289,7 +342,7 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         // Wrap-around to previous enabled
         $prevIdx = ($currentEnabledIdx - 1 + count($enabledPositions)) % count($enabledPositions);
 
-        return new self($this->ids, $enabledPositions[$prevIdx], $this->disabled);
+        return new self($this->ids, $enabledPositions[$prevIdx], $this->disabled, $enabledPositions);
     }
 
     /** Disable a region so next()/previous() skip over it. Disabling the currently focused region does not move focus — it is a pure metadata change so disable() never causes surprising focus jumps. */
@@ -302,7 +355,15 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         $disabled = $this->disabled;
         $disabled[$id] = true;
 
-        return new self($this->ids, $this->index, $disabled);
+        // The id was registered-and-enabled (guarded above), so its position is
+        // in the cache; drop it while preserving ascending order.
+        $pos = array_search($id, $this->ids, true);
+        $enabledPositions = array_values(array_filter(
+            $this->enabledPositions,
+            static fn (int $p): bool => $p !== $pos,
+        ));
+
+        return new self($this->ids, $this->index, $disabled, $enabledPositions);
     }
 
     /** Re-enable a previously disabled region. A no-op if the id is not registered or is already enabled. */
@@ -315,7 +376,13 @@ final class FocusRing implements \IteratorAggregate, \JsonSerializable
         $disabled = $this->disabled;
         unset($disabled[$id]);
 
-        return new self($this->ids, $this->index, $disabled);
+        // Re-insert the newly enabled position, restoring ascending order.
+        $pos = array_search($id, $this->ids, true);
+        $enabledPositions = $this->enabledPositions;
+        $enabledPositions[] = $pos;
+        sort($enabledPositions);
+
+        return new self($this->ids, $this->index, $disabled, $enabledPositions);
     }
 
     /** @return bool true when the region is registered and not disabled */
