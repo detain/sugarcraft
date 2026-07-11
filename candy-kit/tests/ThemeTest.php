@@ -7,6 +7,7 @@ namespace SugarCraft\Kit\Tests;
 use SugarCraft\Kit\Theme;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Palettes;
 use PHPUnit\Framework\TestCase;
 
 final class ThemeTest extends TestCase
@@ -42,6 +43,55 @@ final class ThemeTest extends TestCase
     public function testDraculaThemeEmitsColour(): void
     {
         $this->assertStringContainsString("\x1b[", Theme::dracula()->success->render('x'));
+    }
+
+    public function testDraculaAccentIsPinkFromPalettes(): void
+    {
+        // W5 fix: candy-kit's dracula accent had diverged to purple #bd93f9.
+        // It is now re-sourced from candy-core's Palettes SSOT and bound to
+        // Dracula's `pink` (#ff79c6 → SGR 38;2;255;121;198), matching the
+        // canonical candy-sprinkles accent slot.
+        $this->assertSame('#ff79c6', Palettes::DRACULA['pink']);
+        $this->assertStringContainsString(
+            '38;2;255;121;198',
+            Theme::dracula()->accent->render('x'),
+            'dracula accent must be Palettes::DRACULA[pink] (#ff79c6), not purple #bd93f9',
+        );
+        // After the fix accent == prompt (both pink); the old purple #bd93f9
+        // no longer appears anywhere in candy-kit's dracula palette.
+        $this->assertSame(
+            Theme::dracula()->prompt->render('x'),
+            Theme::dracula()->accent->render('x'),
+        );
+        $this->assertStringNotContainsString(
+            '38;2;189;147;249', // purple #bd93f9 — the pre-W5 diverged accent
+            Theme::dracula()->accent->render('x'),
+        );
+    }
+
+    public function testDraculaSlotsSourcedFromPalettes(): void
+    {
+        // Parity: every migrated slot renders the truecolor SGR derived from
+        // its candy-core Palettes hex, so the two stay locked together.
+        $p = Palettes::DRACULA;
+        $map = [
+            'success' => $p['green'],
+            'error'   => $p['red'],
+            'warn'    => $p['yellow'],
+            'info'    => $p['cyan'],
+            'prompt'  => $p['pink'],
+            'accent'  => $p['pink'],
+            'muted'   => $p['comment'],
+        ];
+        $theme = Theme::dracula();
+        foreach ($map as $slot => $hex) {
+            [$r, $g, $b] = sscanf($hex, '#%02x%02x%02x');
+            $this->assertStringContainsString(
+                "38;2;{$r};{$g};{$b}",
+                $theme->{$slot}->render('x'),
+                "dracula {$slot} must render Palettes hex {$hex}",
+            );
+        }
     }
 
     public function testNordThemeEmitsColour(): void
