@@ -23,14 +23,47 @@ use SugarCraft\Tick\Export\CsvExporter;
 use SugarCraft\Tick\Export\IcalExporter;
 use SugarCraft\Tick\Export\JsonExporter;
 use SugarCraft\Tick\Heartbeat;
+use SugarCraft\Tick\Ignore\SugarTrackIgnore;
 use SugarCraft\Tick\Lang;
 use SugarCraft\Tick\Report\GapsReport;
+use SugarCraft\Tick\Storage\SqliteBackend;
 use SugarCraft\Tick\Store;
 
 $argv = $argv ?? [];
-$cmd = $argv[1] ?? 'dashboard';
+
+// Pull the global `--backend=<file|sqlite>` option out of argv so it can appear
+// anywhere on the command line; everything else stays positional.
+$backend = 'file';
+$positional = [];
+foreach (array_slice($argv, 1) as $arg) {
+    if (str_starts_with($arg, '--backend=')) {
+        $backend = substr($arg, strlen('--backend='));
+        continue;
+    }
+    $positional[] = $arg;
+}
+if (!in_array($backend, ['file', 'sqlite'], true)) {
+    fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
+    exit(1);
+}
+
+$cmd = $positional[0] ?? 'dashboard';
 
 $store = new Store(getenv('SUGARTICK_DIR') ?: Store::defaultDir());
+$dbPath = $store->dir . '/sugar-tick.db';
+
+// Lazily open the SQLite backend, ensuring the data dir exists first and failing
+// loudly (rather than fataling) when the sqlite3 extension is absent.
+$sqlite = static function () use ($store, $dbPath): SqliteBackend {
+    if (!extension_loaded('sqlite3')) {
+        fwrite(STDERR, Lang::t('cli.backend_unavailable') . "\n");
+        exit(1);
+    }
+    if (!is_dir($store->dir)) {
+        @mkdir($store->dir, 0755, true);
+    }
+    return new SqliteBackend($dbPath);
+};
 
 // Show usage for help flags or unknown commands
 if ($cmd === 'help' || $cmd === '--help' || $cmd === '-h') {
@@ -40,17 +73,43 @@ if ($cmd === 'help' || $cmd === '--help' || $cmd === '-h') {
 
 if ($cmd === 'push') {
     // sugar-tick push <project> <language> <file> [duration]
-    $project  = $argv[2] ?? null;
-    $language = $argv[3] ?? null;
-    $file     = $argv[4] ?? null;
+    $project  = $positional[1] ?? null;
+    $language = $positional[2] ?? null;
+    $file     = $positional[3] ?? null;
     if ($project === null || $language === null || $file === null) {
         fwrite(STDERR, Lang::t('cli.push_missing_args') . "\n");
         fwrite(STDERR, Lang::t('cli.push_usage') . "\n");
         exit(1);
     }
-    $duration = (int)($argv[5] ?? 60);
+
+    // Honour a `.sugartrackignore` (from the current dir or the tracked file's
+    // dir) so opted-out paths never make it into the activity log.
+    $ignore = new SugarTrackIgnore([]);
+    $cwd = getcwd();
+    $candidates = [];
+    if ($cwd !== false) {
+        $candidates[] = $cwd . '/.sugartrackignore';
+    }
+    $candidates[] = dirname($file) . '/.sugartrackignore';
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            $ignore = SugarTrackIgnore::load($candidate);
+            break;
+        }
+    }
+    if ($ignore->isIgnored($file)) {
+        fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => $file]) . "\n");
+        exit(0);
+    }
+
+    $duration = (int)($positional[4] ?? 60);
     $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
-    $store->append(new Heartbeat(time(), $project, $language, $file, $duration));
+    $hb = new Heartbeat(time(), $project, $language, $file, $duration);
+    if ($backend === 'sqlite') {
+        $sqlite()->insert($hb);
+    } else {
+        $store->append($hb);
+    }
     fwrite(STDOUT, Lang::t('cli.tick_pushed', [
         'project'  => $project,
         'language' => $language,
@@ -59,10 +118,49 @@ if ($cmd === 'push') {
     exit(0);
 }
 
+if ($cmd === 'milestone') {
+    // sugar-tick milestone <add|list> [name] [description]
+    // Milestones live only in the SQLite backend.
+    $sub = $positional[1] ?? null;
+
+    if ($sub === 'add') {
+        $name = $positional[2] ?? null;
+        if ($name === null) {
+            fwrite(STDERR, Lang::t('cli.milestone_missing_args') . "\n");
+            fwrite(STDERR, Lang::t('cli.milestone_usage') . "\n");
+            exit(1);
+        }
+        $description = (string)($positional[3] ?? '');
+        $sqlite()->insertMilestone($name, time(), $description);
+        fwrite(STDOUT, Lang::t('cli.milestone_added', ['name' => $name]) . "\n");
+        exit(0);
+    }
+
+    if ($sub === 'list') {
+        $milestones = $sqlite()->milestones();
+        if ($milestones === []) {
+            fwrite(STDOUT, Lang::t('cli.milestone_list_empty') . "\n");
+            exit(0);
+        }
+        fwrite(STDOUT, Lang::t('cli.milestone_list_header') . "\n");
+        foreach ($milestones as $m) {
+            fwrite(STDOUT, Lang::t('cli.milestone_entry', [
+                'date'        => date('Y-m-d', $m->time),
+                'name'        => $m->name,
+                'description' => $m->description,
+            ]) . "\n");
+        }
+        exit(0);
+    }
+
+    fwrite(STDERR, Lang::t('cli.milestone_usage') . "\n");
+    exit(1);
+}
+
 if ($cmd === 'export') {
-    $format = $argv[2] ?? null;
+    $format = $positional[1] ?? null;
     // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
-    $days = isset($argv[3]) ? Store::clampRangeDays((int)$argv[3]) : 7;
+    $days = isset($positional[2]) ? Store::clampRangeDays((int)$positional[2]) : 7;
 
     if ($format === null || !in_array($format, ['csv', 'json', 'ics'], true)) {
         fwrite(STDERR, Lang::t('cli.export_invalid_format') . "\n");
@@ -72,7 +170,12 @@ if ($cmd === 'export') {
 
     $endDay = new \DateTimeImmutable('today');
     $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
-    $beats = $store->loadRange($fromDay, $endDay);
+    $beats = $backend === 'sqlite'
+        ? $sqlite()->query(
+            (int) $fromDay->setTime(0, 0)->getTimestamp(),
+            (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
+        )
+        : $store->loadRange($fromDay, $endDay);
 
     $exporter = match ($format) {
         'csv' => new CsvExporter(),
@@ -85,11 +188,16 @@ if ($cmd === 'export') {
 
 if ($cmd === 'gaps') {
     // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
-    $days = isset($argv[2]) ? Store::clampRangeDays((int)$argv[2]) : 7;
+    $days = isset($positional[1]) ? Store::clampRangeDays((int)$positional[1]) : 7;
 
     $endDay = new \DateTimeImmutable('today');
     $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
-    $beats = $store->loadRange($fromDay, $endDay);
+    $beats = $backend === 'sqlite'
+        ? $sqlite()->query(
+            (int) $fromDay->setTime(0, 0)->getTimestamp(),
+            (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
+        )
+        : $store->loadRange($fromDay, $endDay);
 
     $report = new GapsReport($beats);
     $gaps = $report->gaps();
