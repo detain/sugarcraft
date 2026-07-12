@@ -100,6 +100,29 @@ final class Style
         private readonly string $marginChar  = ' ',
     ) {}
 
+    /**
+     * Memoized content-independent SGR (the opening escape derived solely
+     * from this style's own text attributes — fg/bg/bold/italic/…). Because
+     * Style is immutable, that sequence never changes for a given instance,
+     * so {@see buildContentSgr()} derives it once and reuses it across the
+     * repeated render() calls of a per-frame loop. `with*()`/`inherit()`
+     * build a fresh instance via `new self(...)`, which leaves this at its
+     * null default (forcing a recompute for the new attributes); `copy()`'s
+     * clone carries a still-valid memo because the copy is byte-identical.
+     * `null` = not yet computed; `''` is a valid computed (empty) result.
+     */
+    private ?string $contentSgrMemo = null;
+
+    /**
+     * Memoized content-independent border SGR bundle — the opening/closing
+     * escape for each side (top/right/bottom/left) plus the title escape,
+     * resolved from the border colours + profile only. Same immutability
+     * guarantee as {@see $contentSgrMemo}.
+     *
+     * @var array{string,string,string,string,string,string,string,string,string,string}|null
+     */
+    private ?array $borderSgrMemo = null;
+
     public static function new(): self
     {
         return new self();
@@ -967,6 +990,13 @@ final class Style
         $lines = $content === '' ? [''] : explode("\n", $content);
 
         // 2. Inner width: explicit, else max line width.
+        //
+        // In the auto-width branch, capture each line's display width while
+        // scanning for the maximum and hand those widths to halign() so it
+        // does not re-measure every line a second time. The cache is voided
+        // (null) whenever a later step re-truncates the lines, in which case
+        // halign() measures afresh — keeping output byte-identical.
+        $lineWidths = null;
         if ($this->width !== null) {
             $innerWidth = $this->width;
             // Preserve inline ANSI escapes when callers pass pre-styled
@@ -974,18 +1004,32 @@ final class Style
             $lines = array_map(static fn(string $l) => Width::truncateAnsi($l, $innerWidth), $lines);
         } else {
             $innerWidth = 0;
+            $lineWidths = [];
             foreach ($lines as $l) {
-                $innerWidth = max($innerWidth, Width::string($l));
+                $w = Width::string($l);
+                $lineWidths[] = $w;
+                if ($w > $innerWidth) {
+                    $innerWidth = $w;
+                }
             }
         }
         // MaxWidth caps innerWidth without padding shorter lines.
         if ($this->maxWidth !== null && $innerWidth > $this->maxWidth) {
             $innerWidth = $this->maxWidth;
             $lines = array_map(static fn(string $l) => Width::truncateAnsi($l, $innerWidth), $lines);
+            $lineWidths = null; // lines re-truncated → cached widths are stale
         }
 
         // 3. Horizontal alignment within innerWidth.
-        $lines = array_map(fn(string $l) => $this->halign($l, $innerWidth), $lines);
+        if ($lineWidths !== null) {
+            $lines = array_map(
+                fn(string $l, int $w) => $this->halign($l, $innerWidth, $w),
+                $lines,
+                $lineWidths,
+            );
+        } else {
+            $lines = array_map(fn(string $l) => $this->halign($l, $innerWidth), $lines);
+        }
 
         // 4. Padding (styled — only if colorWhitespace).
         $padCh = $this->paddingChar !== '' ? $this->paddingChar : ' ';
@@ -1129,9 +1173,12 @@ final class Style
         fwrite($stream, $this->sprint(...$content));
     }
 
-    private function halign(string $line, int $innerWidth): string
+    private function halign(string $line, int $innerWidth, ?int $width = null): string
     {
-        $w = Width::string($line);
+        // $width, when supplied by the caller, is this exact line's display
+        // width already measured during the inner-width scan — reuse it to
+        // avoid a second Width::string() pass.
+        $w = $width ?? Width::string($line);
         $extra = $innerWidth - $w;
         if ($extra <= 0) {
             return $line;
@@ -1189,29 +1236,19 @@ final class Style
         $b = $this->border;
         [$top, $right, $bottom, $left] = $sides;
 
-        // Resolve per-side colours, falling back to the default
-        // borderForeground / borderBackground.
-        $sideSgr = function (int $sideIdx): array {
-            $fg = $this->borderSideFg[$sideIdx] ?? $this->borderFg;
-            $bg = $this->borderSideBg[$sideIdx] ?? $this->borderBg;
-            $sgr = '';
-            if ($fg !== null) $sgr .= $fg->toFg($this->profile);
-            if ($bg !== null) $sgr .= $bg->toBg($this->profile);
-            $reset = $sgr === '' ? '' : Ansi::reset();
-            return [$sgr, $reset];
-        };
-
-        [$topSgr,    $topReset]    = $sideSgr(0);
-        [$rightSgr,  $rightReset]  = $sideSgr(1);
-        [$bottomSgr, $bottomReset] = $sideSgr(2);
-        [$leftSgr,   $leftReset]   = $sideSgr(3);
+        // Per-side + title border colours depend only on this immutable
+        // style's border attributes + profile (never on the content), so
+        // they are resolved once and cached — the former inline
+        // per-side-closure computation ran on every render.
+        [
+            $topSgr,    $topReset,
+            $rightSgr,  $rightReset,
+            $bottomSgr, $bottomReset,
+            $leftSgr,   $leftReset,
+            $titleSgr,  $titleReset,
+        ] = $this->borderSgr();
 
         $titles = $b->getTitles();
-        $titleSgr = '';
-        if ($this->borderFg !== null) {
-            $titleSgr = $this->borderFg->toFg($this->profile);
-        }
-        $titleReset = $titleSgr !== '' ? Ansi::reset() : '';
 
         $out = [];
         if ($top) {
@@ -1403,6 +1440,9 @@ final class Style
 
     private function buildContentSgr(): string
     {
+        if ($this->contentSgrMemo !== null) {
+            return $this->contentSgrMemo;
+        }
         $codes = [];
         if ($this->bold)      $codes[] = Ansi::BOLD;
         if ($this->faint)     $codes[] = Ansi::FAINT;
@@ -1434,7 +1474,7 @@ final class Style
         if ($this->underline && $this->underlineColor !== null) {
             $sgr .= $this->underlineColor->toUnderline($this->profile);
         }
-        return $sgr;
+        return $this->contentSgrMemo = $sgr;
     }
 
     private function buildBorderSgr(): string
@@ -1443,6 +1483,47 @@ final class Style
         if ($this->borderFg !== null) $sgr .= $this->borderFg->toFg($this->profile);
         if ($this->borderBg !== null) $sgr .= $this->borderBg->toBg($this->profile);
         return $sgr;
+    }
+
+    /**
+     * Content-independent border SGR bundle, memoized per immutable
+     * instance. Resolves each side's opening/closing escape (applying any
+     * per-side colour override on top of the default border fg/bg) plus the
+     * title escape. Depends only on the border colours + profile, so the
+     * per-frame render loop no longer re-derives these on every applyBorder()
+     * call. Byte-identical to the former inline computation.
+     *
+     * @return array{string,string,string,string,string,string,string,string,string,string}
+     */
+    private function borderSgr(): array
+    {
+        if ($this->borderSgrMemo !== null) {
+            return $this->borderSgrMemo;
+        }
+        $side = function (int $sideIdx): array {
+            $fg = $this->borderSideFg[$sideIdx] ?? $this->borderFg;
+            $bg = $this->borderSideBg[$sideIdx] ?? $this->borderBg;
+            $sgr = '';
+            if ($fg !== null) $sgr .= $fg->toFg($this->profile);
+            if ($bg !== null) $sgr .= $bg->toBg($this->profile);
+            $reset = $sgr === '' ? '' : Ansi::reset();
+            return [$sgr, $reset];
+        };
+        [$topSgr,    $topReset]    = $side(0);
+        [$rightSgr,  $rightReset]  = $side(1);
+        [$bottomSgr, $bottomReset] = $side(2);
+        [$leftSgr,   $leftReset]   = $side(3);
+
+        $titleSgr = $this->borderFg !== null ? $this->borderFg->toFg($this->profile) : '';
+        $titleReset = $titleSgr !== '' ? Ansi::reset() : '';
+
+        return $this->borderSgrMemo = [
+            $topSgr,    $topReset,
+            $rightSgr,  $rightReset,
+            $bottomSgr, $bottomReset,
+            $leftSgr,   $leftReset,
+            $titleSgr,  $titleReset,
+        ];
     }
 
     /**
