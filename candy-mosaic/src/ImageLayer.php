@@ -2,11 +2,14 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Core;
+namespace SugarCraft\Mosaic;
+
+use SugarCraft\Core\ImageOverlay;
+use SugarCraft\Core\ImagePlacement;
 
 /**
  * A per-frame registry that turns pixel-graphics blobs into tiling-safe cell
- * blocks and collects them for a {@see View}'s image layer.
+ * blocks and collects them for a {@see \SugarCraft\Core\View}'s image layer.
  *
  * This is the turnkey half of the image-overlay feature (the other half being
  * {@see ImageOverlay}, which the runtime drives). An app that wants real images
@@ -54,9 +57,9 @@ final class ImageLayer
 
     /**
      * The accumulated image layer (id → {@see ImagePlacement}) to hand to a
-     * {@see View}. The runtime paints only the markers a given frame actually
-     * contains, so over-registering (e.g. images scrolled out of view) is
-     * harmless.
+     * {@see \SugarCraft\Core\View}. The runtime paints only the markers a given
+     * frame actually contains, so over-registering (e.g. images scrolled out of
+     * view) is harmless.
      *
      * @return array<int, ImagePlacement>
      */
