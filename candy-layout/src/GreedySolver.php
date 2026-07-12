@@ -27,9 +27,43 @@ use SugarCraft\Layout\Region;
  *  5. If no Fill/Max, slack goes to Min constraints proportionally.
  *  6. Apply Max clamp pass; reclaimed space redistributed to Fill > Min > others.
  *  7. If total reserved > area, truncate proportionally and warn.
+ *
+ * ── boxer-compat mode ──────────────────────────────────────────────────────
+ * The default behaviour (floor split, rounding remainder handed to the FIRST
+ * region, proportional overflow truncation) diverges on three axes from
+ * sugar-boxer's hand-rolled distribute()/distributeFlex(). {@see compat()}
+ * (or the granular {@see withRoundSplit()}/{@see withRemainderToLast()}/
+ * {@see withoutOverflowTruncation()} toggles) flips exactly those three so a
+ * consumer can reproduce sugar-boxer's distribution byte-for-byte:
+ *   1. round() instead of floor() for Percentage/Ratio proportional sizes;
+ *   2. the rounding remainder is handed to the LAST region (or LAST Fill/Max)
+ *      instead of the first;
+ *   3. on overflow, each region keeps its full base size (layout runs
+ *      off-grid) instead of being truncated proportionally.
+ * These flags are immutable+fluent and default OFF, so the default solver is
+ * unchanged. This exists only to let sugar-boxer retire its duplicated solver
+ * (plan_missing.md W12) with golden parity.
  */
 final class GreedySolver implements LayoutSolver
 {
+    /**
+     * @param bool $roundSplit        round() (not floor()) Percentage/Ratio sizes — sugar-boxer distribute().
+     * @param bool $remainderToLast   hand the rounding remainder to the LAST region/Fill/Max, not the first.
+     * @param bool $truncateOverflow  proportionally shrink regions when demand exceeds the area (default);
+     *                                sugar-boxer keeps each region at full base size (pass false).
+     *
+     * Public (not private) because candy-sprinkles' SolverFactory and
+     * CassowarySolver already construct this via `new GreedySolver()`; the
+     * defaults preserve that legacy zero-arg call byte-for-byte. Prefer the
+     * ::new()/::greedy()/::compat() factories for new code.
+     */
+    public function __construct(
+        public readonly bool $roundSplit = false,
+        public readonly bool $remainderToLast = false,
+        public readonly bool $truncateOverflow = true,
+    ) {
+    }
+
     /**
      * Default factory — matches LayoutSolver convention.
      */
@@ -52,36 +86,82 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * Instance solve — satisfies {@see LayoutSolver}.
+     * sugar-boxer parity mode: round-split + remainder-to-last + non-truncating
+     * overflow. Opt-in seam for retiring sugar-boxer's duplicated distribute()
+     * /distributeFlex() (plan_missing.md W12) without regressing its goldens.
      */
-    public function solve(Region $region, Direction $dir, array $constraints): array
+    public static function compat(): self
     {
-        return self::solveStatic($region, $constraints, $dir);
+        return new self(roundSplit: true, remainderToLast: true, truncateOverflow: false);
     }
 
     /**
-     * Static solver — kept for golden-test parity with candy-sprinkles.
-     *
-     * @param Constraint[] $constraints
-     * @return Region[]
+     * Round Percentage/Ratio proportional sizes with round() instead of floor().
      */
-    public static function solveStatic(Region $area, array $constraints, Direction $dir): array
+    public function withRoundSplit(bool $on = true): self
+    {
+        return new self($on, $this->remainderToLast, $this->truncateOverflow);
+    }
+
+    /**
+     * Hand the rounding remainder to the LAST region (or LAST Fill/Max) instead
+     * of the first.
+     */
+    public function withRemainderToLast(bool $on = true): self
+    {
+        return new self($this->roundSplit, $on, $this->truncateOverflow);
+    }
+
+    /**
+     * Keep each region at its full base size on overflow (layout runs off-grid)
+     * instead of truncating proportionally.
+     */
+    public function withoutOverflowTruncation(): self
+    {
+        return new self($this->roundSplit, $this->remainderToLast, false);
+    }
+
+    /**
+     * Re-enable (or disable) proportional overflow truncation.
+     */
+    public function withOverflowTruncation(bool $on = true): self
+    {
+        return new self($this->roundSplit, $this->remainderToLast, $on);
+    }
+
+    /**
+     * Instance solve — satisfies {@see LayoutSolver}.
+     */
+    public function solve(Region $region, Direction $dir, array $constraints): array
     {
         if ($constraints === []) {
             return [];
         }
 
         if ($dir === Direction::Horizontal) {
-            return self::solveHorizontal($area, $constraints);
+            return $this->solveHorizontal($region, $constraints);
         }
-        return self::solveVertical($area, $constraints);
+        return $this->solveVertical($region, $constraints);
+    }
+
+    /**
+     * Static solver — kept for golden-test parity with candy-sprinkles. Always
+     * uses the DEFAULT (floor / remainder-first / truncating) behaviour; the
+     * boxer-compat toggles are reachable only via an instance.
+     *
+     * @param Constraint[] $constraints
+     * @return Region[]
+     */
+    public static function solveStatic(Region $area, array $constraints, Direction $dir): array
+    {
+        return (new self())->solve($area, $dir, $constraints);
     }
 
     /**
      * @param Constraint[] $constraints
      * @return Region[]
      */
-    private static function solveHorizontal(Region $area, array $constraints): array
+    private function solveHorizontal(Region $area, array $constraints): array
     {
         $totalWidth = $area->width;
         $height = $area->height;
@@ -98,11 +178,16 @@ final class GreedySolver implements LayoutSolver
                 $rawSizes[] = $c->n;
                 $reservedFixed += $c->n;
             } elseif ($c instanceof Percentage) {
-                $size = (int) floor($totalWidth * $c->n / 100);
+                // boxer-compat rounds (distribute() uses round()); default floors.
+                $size = $this->roundSplit
+                    ? (int) round($totalWidth * $c->n / 100)
+                    : (int) floor($totalWidth * $c->n / 100);
                 $rawSizes[] = $size;
                 $reservedFixed += $size;
             } elseif ($c instanceof Ratio) {
-                $size = (int) floor($totalWidth * $c->numerator / $c->denominator);
+                $size = $this->roundSplit
+                    ? (int) round($totalWidth * $c->numerator / $c->denominator)
+                    : (int) floor($totalWidth * $c->numerator / $c->denominator);
                 $rawSizes[] = $size;
                 $reservedFixed += $size;
             } elseif ($c instanceof Min) {
@@ -124,11 +209,19 @@ final class GreedySolver implements LayoutSolver
 
         // Step 2: handle overflow — total exceeds area
         if ($totalReserved > $totalWidth) {
-            // Truncate proportionally
-            $scale = $totalWidth / $totalReserved;
-            foreach ($rawSizes as $i => $size) {
-                $rawSizes[$i] = (int) floor($size * $scale);
+            if ($this->truncateOverflow) {
+                // Truncate proportionally
+                $scale = $totalWidth / $totalReserved;
+                foreach ($rawSizes as $i => $size) {
+                    $rawSizes[$i] = (int) floor($size * $scale);
+                }
             }
+            // boxer-compat (truncateOverflow=false): leave every region at its
+            // full base size and let the layout run off-grid — sugar-boxer's
+            // distribute()/distributeFlex() never shrink fixed children, and
+            // truncating them here is what regressed sugar-boxer's
+            // testFixedPanelsOverflowDegradeGracefully. No slack distribution
+            // runs in the overflow branch either way.
         } else {
             // Step 3: distribute slack
             $slack = $totalWidth - $reservedFixed - $reservedMinSum;
@@ -179,15 +272,26 @@ final class GreedySolver implements LayoutSolver
                         }
                     }
 
-                    // Rounding reclamation: pure Percentage/Ratio layouts lose pixels
-                    // to floor(). Distribute leftover round-robin to Percentage/Ratio
-                    // entries only (ratatui "give remainder to earlier segments first").
-                    // Min/Length are exact values and must not be inflated.
-                    // Guard: only correct genuine floor rounding (small diff <= 2),
-                    // not large shortfalls that represent intentional slack.
                     $used = array_sum($rawSizes);
                     $diff = $totalWidth - $used;
-                    if ($diff > 0 && $diff <= 2) {
+                    if ($this->remainderToLast) {
+                        // boxer-compat: the LAST region absorbs the entire
+                        // remainder, mirroring sugar-boxer distribute() where the
+                        // final child = span - sum(others). The remainder can be
+                        // negative (round() over-allocated); clamp the resulting
+                        // width to >= 0 so Region stays non-negative.
+                        if ($diff !== 0 && $totalCount > 0) {
+                            $lastIdx = $totalCount - 1;
+                            $rawSizes[$lastIdx] = max(0, $rawSizes[$lastIdx] + $diff);
+                        }
+                    } elseif ($diff > 0 && $diff <= 2) {
+                        // Rounding reclamation: pure Percentage/Ratio layouts lose
+                        // pixels to floor(). Distribute leftover round-robin to
+                        // Percentage/Ratio entries only (ratatui "give remainder to
+                        // earlier segments first"). Min/Length are exact values and
+                        // must not be inflated. Guard: only correct genuine floor
+                        // rounding (small diff <= 2), not large shortfalls that
+                        // represent intentional slack.
                         for ($i = 0; $i < $totalCount && $diff > 0; $i++) {
                             $c = $constraints[$i];
                             if ($c instanceof Percentage || $c instanceof Ratio) {
@@ -203,6 +307,9 @@ final class GreedySolver implements LayoutSolver
                 // one cell when several Fills compete (e.g. 3 fills lose up to
                 // 2 cells), so adding a fixed ±1 under-corrects and the sizes
                 // fail to tile the region — assign the full $diff instead.
+                // boxer-compat scans from the LAST Fill/Max instead of the first
+                // (sugar-boxer distributeFlex() lets the final flex child absorb
+                // the remainder).
                 if ($totalDistWeight > 0) {
                     $usedWidth = 0;
                     foreach ($rawSizes as $s) {
@@ -210,7 +317,11 @@ final class GreedySolver implements LayoutSolver
                     }
                     $diff = $totalWidth - $usedWidth;
                     if ($diff !== 0) {
-                        for ($i = 0; $i < $totalCount && $diff !== 0; $i++) {
+                        $order = range(0, $totalCount - 1);
+                        if ($this->remainderToLast) {
+                            $order = array_reverse($order);
+                        }
+                        foreach ($order as $i) {
                             if ($constraints[$i] instanceof Fill) {
                                 $rawSizes[$i] += $diff;
                                 $diff = 0;
@@ -219,7 +330,7 @@ final class GreedySolver implements LayoutSolver
                         }
                         // If no Fill, try Max
                         if ($diff !== 0) {
-                            for ($i = 0; $i < $totalCount && $diff !== 0; $i++) {
+                            foreach ($order as $i) {
                                 if ($constraints[$i] instanceof Max) {
                                     $rawSizes[$i] += $diff;
                                     $diff = 0;
@@ -233,7 +344,7 @@ final class GreedySolver implements LayoutSolver
         }
 
         // Step 4: apply Max clamp pass — clamp overages, redistribute reclaimed space
-        $rawSizes = self::applyMaxClamp($constraints, $rawSizes);
+        $rawSizes = $this->applyMaxClamp($constraints, $rawSizes);
 
         // Step 5: build output Rects
         $x = $area->x;
@@ -252,7 +363,7 @@ final class GreedySolver implements LayoutSolver
      * @param int[] $rawSizes
      * @return int[]
      */
-    private static function applyMaxClamp(array $constraints, array $rawSizes): array
+    private function applyMaxClamp(array $constraints, array $rawSizes): array
     {
         $hasMax = false;
         foreach ($constraints as $c) {
@@ -368,15 +479,15 @@ final class GreedySolver implements LayoutSolver
      * @param Constraint[] $constraints
      * @return Region[]
      */
-    private static function solveVertical(Region $area, array $constraints): array
+    private function solveVertical(Region $area, array $constraints): array
     {
         $totalHeight = $area->height;
         $width = $area->width;
 
         // Flip area to use horizontal solver on the "other" dimension.
-        // Origin must be 0,0 — the flip-back at line 326 re-adds $area->x/$area->y.
+        // Origin must be 0,0 — the flip-back below re-adds $area->x/$area->y.
         $fakeArea = new Region(0, 0, $totalHeight, $width);
-        $hRects = self::solveHorizontal($fakeArea, $constraints);
+        $hRects = $this->solveHorizontal($fakeArea, $constraints);
 
         // Flip x/y and width/height back to original orientation
         $rects = [];
