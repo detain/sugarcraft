@@ -12,12 +12,19 @@ declare(strict_types=1);
  * that chrome from a single source of truth (docs/MATCHUPS.md + the slug)
  * and merges it with the genuinely hand-authored per-lib body content.
  *
+ * It also OWNS the homepage's library/app counts: on every default run it patches
+ * docs/index.html so the ~8 count tokens (meta/og/JSON-LD descriptions, hero prose,
+ * the two .stat numerals, the two section headings) always equal the authoritative
+ * MATCHUPS split (39 libraries / 19 apps), the same numbers the lib-page breadcrumbs
+ * carry — killing the drift class where the homepage and the detail pages disagreed.
+ *
  * Modes:
  *   php tools/gen-docs.php --extract    Rebuild the data store (docs/_data/<slug>.json
  *                                       + docs/_data/<slug>.body.html) from the current pages.
- *   php tools/gen-docs.php              Regenerate every docs/lib/<slug>.html from the data store.
- *   php tools/gen-docs.php --check      Generate in-memory and fail (exit 1) if any page on
- *                                       disk differs — an idempotence / drift guard for CI.
+ *   php tools/gen-docs.php              Regenerate every docs/lib/<slug>.html from the data store
+ *                                       and patch docs/index.html's counts to the MATCHUPS split.
+ *   php tools/gen-docs.php --check      Generate/patch in-memory and fail (exit 1) if any page or
+ *                                       the index.html counts on disk differ — a CI drift guard.
  *
  * Data model per slug:
  *   DERIVED   (never stored) — package, canonical/og:url/og:image, icon, source/packagist/
@@ -48,6 +55,7 @@ $docs    = $root . '/docs';
 $libDir  = $docs . '/lib';
 $dataDir = $docs . '/_data';
 $matchups = $docs . '/MATCHUPS.md';
+$index    = $docs . '/index.html';
 
 $mode = $argv[1] ?? '';
 if (!in_array($mode, ['', '--extract', '--check'], true)) {
@@ -96,16 +104,36 @@ foreach ($slugs as $slug) {
     $written++;
 }
 
+// index.html count patch — the generator OWNS the homepage's library/app counts
+// so they can never drift from the authoritative MATCHUPS split. Every count
+// token (meta/og/JSON-LD descriptions, the hero prose, the two .stat numerals,
+// and the two section <h2> headings) is rewritten from the computed $nLib/$nApp.
+// The patch is idempotent: it matches count POSITIONS, not specific values, so a
+// second run is a no-op and --check catches any hand-edit that reintroduces drift.
+if (is_file($index)) {
+    $currentIndex = (string) file_get_contents($index);
+    $patchedIndex = patch_index_counts($currentIndex, $nLib, $nApp);
+    if ($mode === '--check') {
+        if ($currentIndex !== $patchedIndex) {
+            fwrite(STDERR, "drift: index.html counts differ from computed $nLib/$nApp\n");
+            $drift++;
+        }
+    } elseif ($currentIndex !== $patchedIndex) {
+        file_put_contents($index, $patchedIndex);
+        $written++;
+    }
+}
+
 if ($mode === '--check') {
     if ($drift > 0) {
         fwrite(STDERR, "$drift page(s) out of sync — run: php tools/gen-docs.php\n");
         exit(1);
     }
-    fwrite(STDOUT, "ok: all " . count($slugs) . " pages match generated output\n");
+    fwrite(STDOUT, "ok: all " . count($slugs) . " pages + index.html counts match generated output\n");
     exit(0);
 }
 
-fwrite(STDOUT, "generated $written page(s) (libraries: $nLib, apps: $nApp)\n");
+fwrite(STDOUT, "generated $written file(s) (libraries: $nLib, apps: $nApp)\n");
 exit(0);
 
 // ---------------------------------------------------------------------------
@@ -280,15 +308,15 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         ? (string) $meta['prefixOverride']
         : build_prefix($slug, (string) $meta['title'], (string) $meta['description'], (string) $meta['ogTitle'], (string) $meta['ogDescription']);
 
-    // Breadcrumb intentionally omits a lib/app COUNT: the authoritative split
-    // (MATCHUPS 39/19) disagrees with index.html's legacy copy (36/22) and its
-    // tile set (38 libs — candy-async has a MATCHUPS row but no tile), so asserting
-    // a number here would introduce a fresh cross-page inconsistency. The TYPE
-    // (library vs app) is still MATCHUPS-derived; only the count is dropped until
-    // the classification is reconciled site-wide.
+    // Breadcrumb carries the authoritative MATCHUPS split (39 libraries / 19
+    // apps). The count is DERIVED from $nLib/$nApp (never hardcoded), and the
+    // same generator run patches index.html's counts to match (see
+    // patch_index_counts below), so the lib pages and the homepage can no longer
+    // drift apart on the number.
     $plural = $type === 'app' ? 'apps' : 'libraries';
+    $count  = $type === 'app' ? $nApp : $nLib;
     $breadcrumb = '<p style="color: var(--ink-2); margin: 0 0 16px 0;">'
-        . '<a href="../#' . $plural . '">← All ' . $plural . '</a></p>';
+        . '<a href="../#' . $plural . '">← All ' . $count . ' ' . $plural . '</a></p>';
 
     $h2 = $meta['emoji'] !== '' ? $meta['emoji'] . ' ' . $name : $name;
 
@@ -441,6 +469,108 @@ function normalize_port_label(string $meta): string
         },
         $meta
     ) ?? $meta;
+}
+
+// ---------------------------------------------------------------------------
+// index.html count patch
+// ---------------------------------------------------------------------------
+
+/**
+ * Rewrite every library/app COUNT token on the homepage from the computed
+ * $nLib/$nApp so index.html can never drift from the authoritative MATCHUPS
+ * split. The generator is the single owner of these numbers.
+ *
+ * Every replacement matches the count POSITION (surrounding literal text), not
+ * the current value, so this is idempotent — a second pass produces byte-for-byte
+ * the same output, which is what makes --check a reliable drift guard. Both the
+ * numeral forms (meta description, og:description, JSON-LD, the .stat spans, the
+ * "(N packages)" totals) and the spelled-out forms (hero prose, the two section
+ * <h2> headings) are driven from the same counts.
+ */
+function patch_index_counts(string $html, int $nLib, int $nApp): string
+{
+    $nTotal = $nLib + $nApp;
+    $wLib   = number_to_words($nLib);
+    $wApp   = number_to_words($nApp);
+    $wTotal = number_to_words($nTotal);
+
+    // Numeral "<lib> libraries and <app> apps" — meta description, og:description, JSON-LD.
+    $html = preg_replace(
+        '#\d+( libraries and )\d+( apps)#',
+        $nLib . '${1}' . $nApp . '${2}',
+        $html
+    ) ?? $html;
+
+    // Numeral "(<total> packages)" total — meta description + JSON-LD.
+    $html = preg_replace(
+        '#\(\d+ packages\)#',
+        '(' . $nTotal . ' packages)',
+        $html
+    ) ?? $html;
+
+    // Hero prose, spelled out: "… ecosystem — <lib>\n libraries and <app> apps
+    // (<total> packages total)". The interior whitespace group is preserved verbatim.
+    $html = preg_replace_callback(
+        '#(TUI ecosystem — )[a-z-]+(\s+libraries and )[a-z-]+( apps \()[a-z-]+( packages total\))#',
+        static fn (array $m): string => $m[1] . $wLib . $m[2] . $wApp . $m[3] . $wTotal . $m[4],
+        $html
+    ) ?? $html;
+
+    // Hero .stat numerals.
+    $html = preg_replace(
+        '#(<span class="num">)\d+(</span><span class="label">libraries</span>)#',
+        '${1}' . $nLib . '${2}',
+        $html
+    ) ?? $html;
+    $html = preg_replace(
+        '#(<span class="num">)\d+(</span><span class="label">apps</span>)#',
+        '${1}' . $nApp . '${2}',
+        $html
+    ) ?? $html;
+
+    // Section headings, spelled out + capitalized.
+    $html = preg_replace(
+        '#<h2>[A-Z][a-z-]+( libraries, one ecosystem\.</h2>)#',
+        '<h2>' . ucfirst($wLib) . '${1}',
+        $html
+    ) ?? $html;
+    $html = preg_replace(
+        '#<h2>[A-Z][a-z-]+( apps built on the stack\.</h2>)#',
+        '<h2>' . ucfirst($wApp) . '${1}',
+        $html
+    ) ?? $html;
+
+    return $html;
+}
+
+/**
+ * Spell out an integer 0-999 in lowercase English (hyphenated, e.g. 39 →
+ * "thirty-nine"). Used for the homepage's prose/heading count tokens; ucfirst()
+ * capitalizes where a heading needs it. Falls back to the decimal string outside
+ * the covered range (the counts are ~58, well inside it).
+ */
+function number_to_words(int $n): string
+{
+    if ($n < 0 || $n > 999) {
+        return (string) $n;
+    }
+    $ones = [
+        'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+        'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+        'seventeen', 'eighteen', 'nineteen',
+    ];
+    $tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    if ($n < 20) {
+        return $ones[$n];
+    }
+    if ($n < 100) {
+        $t = $tens[intdiv($n, 10)];
+        $o = $n % 10;
+        return $o === 0 ? $t : $t . '-' . $ones[$o];
+    }
+    $h = $ones[intdiv($n, 100)] . ' hundred';
+    $r = $n % 100;
+    return $r === 0 ? $h : $h . ' ' . number_to_words($r);
 }
 
 // ---------------------------------------------------------------------------
