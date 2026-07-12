@@ -1,0 +1,11 @@
+{
+    "title": "SugarBoxer — SugarCraft",
+    "description": "SugarBoxer: Box-drawing layout engine for terminal UIs. PHP port of treilik/bubbleboxer.",
+    "ogTitle": "SugarBoxer — SugarCraft",
+    "ogDescription": "Box-drawing layout engine for terminal UIs. Port of treilik/bubbleboxer.",
+    "emoji": "",
+    "displayName": "SugarBoxer",
+    "tagline": "Box-drawing layout engine for terminal UIs",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/treilik/bubbleboxer\" style=\"color: inherit;\">treilik/bubbleboxer</a></span>\n          <span class=\"tag-chip\">layout</span><span class=\"tag-chip\">box</span><span class=\"tag-chip\">border</span><span class=\"tag-chip\">ui</span>"
+}

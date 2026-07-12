@@ -1,0 +1,111 @@
+<p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Info, Success, Warning, Error types. Auto-dismiss, ESC-to-close, and stacked multi-toast support.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-toast</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Toast\{Toast, ToastType, Position};
+
+$toast = Toast::new(50)  // max width 50
+    -&gt;withPosition(Position::MiddleRight)
+    -&gt;withAllowEscToClose(true);
+
+$toast = $toast-&gt;alert(ToastType::Success, 'File saved!');
+$toast = $toast-&gt;alert(ToastType::Error, 'Connection failed');
+
+$bg = str_repeat("background content\n", 20);
+echo $toast-&gt;view($bg);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Four types</strong><span>Info, Success, Warning, Error — each with a distinct symbol and color.</span></div>
+            <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight.</span></div>
+            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration; null for persistent (never expires).</span></div>
+            <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or ASCII.</span></div>
+            <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
+            <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar (0–100%) beneath the message body.</span></div>
+            <div class="feature"><strong>Action buttons</strong><span>Clickable [Label] buttons with closure callbacks attached to an alert.</span></div>
+            <div class="feature"><strong>History log</strong><span>Immutable record of every dismissed alert via getHistory().</span></div>
+            <div class="feature"><strong>Animations</strong><span>withAnimationDuration() fade stub (CubicBezier deferred to future phase).</span></div>
+
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-toast">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-toast/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-toast/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/DaltonSW/bubbleup">DaltonSW/bubbleup</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Toast</td><td>new(int $maxWidth = 50)</td><td>Factory — max width in cells</td></tr>
+<tr><td>Toast</td><td>withPosition(Position)</td><td>Set screen position (9 positions)</td></tr>
+<tr><td>Toast</td><td>withDuration(?float $seconds)</td><td>Auto-dismiss after N seconds (null to disable)</td></tr>
+<tr><td>Toast</td><td>withAllowEscToClose(bool)</td><td>Allow Escape key to dismiss active alert</td></tr>
+<tr><td>Toast</td><td>withMaxWidth(int)</td><td>Set maximum alert width in cells</td></tr>
+<tr><td>Toast</td><td>withMinWidth(int)</td><td>Set minimum alert width in cells</td></tr>
+<tr><td>Toast</td><td>withSymbolSet(SymbolSet)</td><td>NerdFont, Unicode, or ASCII symbol sets</td></tr>
+<tr><td>Toast</td><td>withMaxConcurrent(?int)</td><td>Cap concurrent alerts (<code>null</code> = unlimited)</td></tr>
+<tr><td>Toast</td><td>withOverflow(Overflow)</td><td>Strategy when cap exceeded: DropOldest, DropNewest, Enqueue</td></tr>
+<tr><td>Toast</td><td>withAnimationDuration(float)</td><td>Fade animation duration in seconds (stub; CubicBezier deferred)</td></tr>
+<tr><td>Toast</td><td>alert(ToastType|string, string, ?float $expiresAt)</td><td>Add alert; string type = case-insensitive lookup; <code>null</code> expiry = never auto-dismisses</td></tr>
+<tr><td>Toast</td><td>progressToast(ToastType|string, string, float $progress, ?float $expiresAt)</td><td>Add alert with progress bar (0.0–1.0, clamped); same expiry semantics as alert()</td></tr>
+<tr><td>Toast</td><td>error(string), warning(string), info(string), success(string)</td><td>Convenience alert helpers</td></tr>
+<tr><td>Toast</td><td>hasActiveAlert(): bool</td><td>Returns true if non-expired alerts are queued</td></tr>
+<tr><td>Toast</td><td>dismiss(), clear(), pruneExpired()</td><td>Manage alert lifecycle; dismiss() records non-expired alerts to history</td></tr>
+<tr><td>Toast</td><td>getHistory(): list&lt;Alert&gt;</td><td>Return all dismissed alerts recorded since last dismiss()</td></tr>
+<tr><td>Toast</td><td>view(string $background, int $w, int $h): string</td><td>Render toast layer over background view</td></tr>
+<tr><td>Alert</td><td>withProgress(float)</td><td>Attach progress bar (0.0–1.0, clamped)</td></tr>
+<tr><td>Alert</td><td>withActions(list&lt;Action&gt;)</td><td>Attach action buttons</td></tr>
+<tr><td>Alert</td><td>isExpired(): bool</td><td>Check expiry</td></tr>
+<tr><td>Alert</td><td>withExpiry(float $duration)</td><td>Set expiry from now</td></tr>
+<tr><td>Action</td><td>make(string $label, \Closure(): void $callback)</td><td>Factory</td></tr>
+<tr><td>Action</td><td>$label: non-empty-string</td><td>User-visible button label (readonly)</td></tr>
+<tr><td>Action</td><td>$callback: \Closure(): void</td><td>Invoked when action is triggered (readonly)</td></tr>
+<tr><td>HistoryLog</td><td>push(Alert): self</td><td>Append alert, return new immutable log</td></tr>
+<tr><td>HistoryLog</td><td>all(): list&lt;Alert&gt;</td><td>Return all recorded alerts</td></tr>
+<tr><td>HistoryLog</td><td>count(): int</td><td>Number of recorded entries</td></tr>
+<tr><td>ToastType</td><td>Info, Success, Warning, Error</td><td>Toast type constants</td></tr>
+<tr><td>ToastType</td><td>label()</td><td>Translated label via Lang::t() (i18n-aware)</td></tr>
+<tr><td>Position</td><td>TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight</td><td>9 screen positions</td></tr>
+<tr><td>Overflow</td><td>DropOldest, DropNewest, Enqueue</td><td>Overflow strategy when maxConcurrent is exceeded</td></tr>
+<tr><td>SymbolSet</td><td>NerdFont, Unicode, ASCII</td><td>Symbol set for alert icons</td></tr>
+<tr><td>Lang</td><td>t(key, params)</td><td>Translate a string: 'dismiss', 'count', 'type.*'</td></tr>
+</table>
+
+    <h3 style="margin-top: 32px;">Internationalization</h3>
+    <p>User-facing strings use <code>SugarCraft\Toast\Lang::t()</code>. All keys are in <code>lang/en.php</code> under the <code>toast</code> namespace.</p>
+    <table class="api-table">
+<tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
+<tr><td>type.info / type.warning / type.error / type.success</td><td>Info / Warning / Error / Success</td><td>—</td></tr>
+<tr><td>dismiss</td><td>Press any key to dismiss</td><td>—</td></tr>
+<tr><td>count</td><td>{count} notification(s)</td><td>{count}</td></tr>
+</table>
+    <p>To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/types.gif" alt="All toast types">
+                <h3>All toast types</h3>
+                <span class="demo-caption">Info / Success / Warning / Error rendered side-by-side.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/basic.gif" alt="Basic toast">
+                <h3>Basic toast</h3>
+                <span class="demo-caption">A single Info toast — title, body, dismiss timer.</span>
+            </div>
+        </div>
+    </div>
+</section>

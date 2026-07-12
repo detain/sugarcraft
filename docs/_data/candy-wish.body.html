@@ -1,0 +1,135 @@
+<p class="lede" style="margin-top: 28px;">Build TUIs anyone can <code>ssh user@host</code> to run. Leans on the host's OpenSSH daemon (ForceCommand) rather than re-implementing the SSH wire protocol. sshd handles auth, ciphers, host keys, fail2ban, audit logs.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-wish</code></pre>
+
+    <h3 style="margin-top: 32px;">Two transports</h3>
+    <p>What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction:</p>
+    <ul>
+      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="candy-pty.html">candy-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the candy-pty master. Terminal middleware: <code>Spawn</code>.</li>
+      <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Quickstart — in-process bash</h3>
+    <pre class="code"><code>// /opt/wish/server.php — invoked by sshd ForceCommand
+require '/opt/wish/vendor/autoload.php';
+
+use SugarCraft\Wish\Server;
+use SugarCraft\Wish\Middleware\{Logger, Auth, RateLimit, Spawn};
+use SugarCraft\Wish\Session;
+
+Server::new()
+    -&gt;use(new Logger('/var/log/wish.jsonl'))
+    -&gt;use(new Auth(users: ['alice', 'bob']))
+    -&gt;use(new Spawn(fn (Session $s) =&gt; [
+        'cmd' =&gt; ['/bin/bash', '-l'],
+        'env' =&gt; [
+            'TERM' =&gt; $s-&gt;term, 'USER' =&gt; $s-&gt;user, 'HOME' =&gt; "/home/{$s-&gt;user}",
+            'PATH' =&gt; '/usr/local/bin:/usr/bin:/bin',
+        ],
+    ]))
+    -&gt;serve();</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart — host-sshd legacy</h3>
+    <pre class="code"><code>use SugarCraft\Wish\Transport\HostSshdTransport;
+use SugarCraft\Wish\Middleware\BubbleTea;
+
+Server::new()
+    -&gt;withTransport(new HostSshdTransport())
+    -&gt;use(new Logger('/var/log/wish.jsonl'))
+    -&gt;use(new Auth(users: ['alice', 'bob']))
+    -&gt;use(new BubbleTea(fn($session) =&gt; new MyApp($session)))
+    -&gt;serve();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>InProcessTransport (default)</strong><span>candy-pty supervisor — allocates a PTY, spawns child with controllingTerminal:true, pumps bytes, forwards SIGWINCH. Lets you mount any cmd / shell / editor.</span></div>
+      <div class="feature"><strong>HostSshdTransport (legacy)</strong><span>Pre-PTY-upgrade behaviour. Middleware run inline against sshd's PTY directly. Zero subprocess overhead.</span></div>
+      <div class="feature"><strong>Spawn middleware (InProcess only)</strong><span>Terminal — produces cmd[] from Session via factory. Drives runChild() on the active transport.</span></div>
+      <div class="feature"><strong>BubbleTea middleware (HostSshd only)</strong><span>Terminal — mounts a SugarCraft Program inline reading STDIN/STDOUT. Transport-aware: throws clearly under InProcess.</span></div>
+      <div class="feature"><strong>Logger / Auth / RateLimit</strong><span>Transport-agnostic. Same composition surface under either mode.</span></div>
+      <div class="feature"><strong>Custom middleware</strong><span>Anything implementing <code>Middleware::handle(Context $ctx, Session $session, callable $next): void</code>.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-wish">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-wish/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-wish/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/wish">wish</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Server</td><td>new()</td><td>Create a new SSH server</td></tr>
+<tr><td>Server</td><td>use(Middleware)</td><td>Add middleware to the pipeline</td></tr>
+<tr><td>Server</td><td>withTransport(Transport)</td><td>Override the active transport (default: InProcessTransport)</td></tr>
+<tr><td>Server</td><td>withKeepalive(int)</td><td>Add keepalive middleware with the given interval</td></tr>
+<tr><td>Server</td><td>serve(?Session)</td><td>Start the server (builds root Context automatically)</td></tr>
+<tr><td>Context</td><td>background()</td><td>Root context — never done, not cancelable</td></tr>
+<tr><td>Context</td><td>withValue(string $k, mixed $v)</td><td>Return a new context with $k → $v attached</td></tr>
+<tr><td>Context</td><td>withDeadline(DateTimeImmutable)</td><td>Return a new cancelable context that is done when deadline passes</td></tr>
+<tr><td>Context</td><td>withCancelable()</td><td>Return a new cancelable context (call cancel() to trigger)</td></tr>
+<tr><td>Context</td><td>cancel(?Throwable)</td><td>Mark the context as cancelled</td></tr>
+<tr><td>Context</td><td>done(): bool</td><td>True when cancelled or deadline-exceeded</td></tr>
+<tr><td>Context</td><td>err(): ?Throwable</td><td>CancellationException, DeadlineExceededException, or null</td></tr>
+<tr><td>Context</td><td>value(string $k): mixed</td><td>Walk parent chain looking for $k; null if not found</td></tr>
+<tr><td>Session</td><td>user, term, cols, rows, clientHost, clientPort, serverHost, serverPort, tty, command, lang, sessionId, authMethod, keyFingerprint, clientVersion, serverVersion</td><td>Session metadata (sessionId/authMethod/keyFingerprint/clientVersion/serverVersion populated by withProtocolMetadata() after SSH handshake)</td></tr>
+<tr><td>Session</td><td>withProtocolMetadata(string $sessionId, string $authMethod, ?string $keyFingerprint, string $clientVersion, string $serverVersion): self</td><td>Return a new Session with protocol-handshake metadata attached (called by transports after SSH handshake)</td></tr>
+<tr><td>Session</td><td>isInteractive(): bool</td><td>True when a TTY is attached</td></tr>
+<tr><td>Session</td><td>toLogContext(): array</td><td>Array of session fields for logging</td></tr>
+<tr><td>Middleware</td><td>handle(Context, Session, callable): void|PromiseInterface</td><td>All middleware receive Context first, Session second; may return void (sync) or PromiseInterface (async — transport awaits before continuing chain)</td></tr>
+<tr><td>AsyncMiddleware</td><td>extends Middleware</td><td>Abstract base for promise-returning middleware — override handleAsync() to perform async I/O (LDAP, OAuth, database auth); 30-second timeout enforced via await()</td></tr>
+<tr><td>Spawn</td><td>new(callable)</td><td>Terminal middleware for subprocess spawning (InProcess only)</td></tr>
+<tr><td>BubbleTea</td><td>new(callable)</td><td>Terminal middleware for Program mount (HostSshd only)</td></tr>
+<tr><td>Auth</td><td>new(array $users, array $keyFingerprints)</td><td>Username and/or key allowlist middleware</td></tr>
+<tr><td>PasswordAuth</td><td>new(callable, ?resource)</td><td>Validates (user, password) against callback; reads `SSH_PASSWORD` env var</td></tr>
+<tr><td>CertificateAuth</td><td>new(callable, bool $required, ?resource)</td><td>Validates X.509 cert from `SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars</td></tr>
+<tr><td>AuthMethods</td><td>new(list&lt;string&gt;, ?resource)</td><td>Advertises auth methods via `SSH_AUTH_METHODS` STDOUT banner; stores list in Context</td></tr>
+<tr><td>KeyboardInteractive</td><td>new(list&lt;array{prompt:string,echo?:bool}&gt;, ?callable, ?resources)</td><td>Challenge-response prompts (RFC 4256); reads responses from STDIN</td></tr>
+<tr><td>Subsystem</td><td>new()</td><td>Terminal — parses <code>subsystem &lt;name&gt;</code> from <code>Session::command</code>, dispatches to registered SubsystemHandler; non-subsystem requests pass through to <code>$next</code></td></tr>
+<tr><td>SubsystemHandler</td><td>handle(Context, Session): void</td><td>Interface — implement to handle a named subsystem request</td></tr>
+<tr><td>SftpStub</td><td>new()</td><td>Example <code>SubsystemHandler</code> impl — stub demonstrating wiring; not a real SFTP server</td></tr>
+<tr><td>RateLimit</td><td>new(string $statePath, int $burst, float $ratePerSec)</td><td>Per-IP token-bucket rate limiter</td></tr>
+<tr><td>Logger</td><td>new(string|resource|null)</td><td>JSON one-line logger to file or stderr</td></tr>
+<tr><td>Keepalive</td><td>new(int $intervalSeconds)</td><td>Sends SSH keepalive messages at the given interval</td></tr>
+<tr><td>InProcessTransport</td><td>new(?PtySystem, ?ChannelHandler)</td><td>Default transport — PTY supervisor + candy-pty; optional custom ChannelHandler</td></tr>
+<tr><td>HostSshdTransport</td><td>new()</td><td>Legacy transport — inline middleware, Program on STDIN/STDOUT</td></tr>
+<tr><td>ChannelHandler</td><td>handlePtyReq / handleWindowChange / handleShell / handleExec / handleSignal / handleEnv / handleBreak</td><td>Interface for custom channel-level message handling (InProcessTransport only)</td></tr>
+<tr><td>ChannelMsg</td><td>abstract base</td><td>Base for all SSH channel messages (RFC 4254)</td></tr>
+<tr><td>DefaultChannelHandler</td><td>new(?ChildSpawner, ?Session)</td><td>Default impl — tracks PTY dims, env vars, drives ChildSpawner on shell/exec</td></tr>
+<tr><td>PtyReqMsg</td><td>wantPty, term, cols, rows, widthPx, heightPx</td><td>PTY allocation request</td></tr>
+<tr><td>WindowChangeMsg</td><td>cols, rows, widthPx, heightPx</td><td>Terminal resize (SIGWINCH equivalent)</td></tr>
+<tr><td>ShellMsg</td><td>wantShell, subsystem</td><td>Login-shell request</td></tr>
+<tr><td>ExecMsg</td><td>command</td><td>Exec request — raw command string</td></tr>
+<tr><td>SignalMsg</td><td>signalName</td><td>Signal delivery (SIGINT, SIGTERM, etc.)</td></tr>
+<tr><td>EnvMsg</td><td>name, value</td><td>Environment variable request</td></tr>
+<tr><td>BreakMsg</td><td>(empty)</td><td>Break request</td></tr>
+<tr><td>CancellationException</td><td>extends RuntimeException</td><td>Thrown when Context is cancelled</td></tr>
+<tr><td>DeadlineExceededException</td><td>extends RuntimeException</td><td>Thrown when Context deadline passes</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-wish/.vhs/showcase.gif" alt="Middleware pipeline">
+                <h3>Middleware pipeline</h3>
+                <span class="demo-caption">Logger → RateLimit → hello against a synthetic Session.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-wish/.vhs/spawn-bash.gif" alt="Spawn bash">
+                <h3>Spawn bash (in-process)</h3>
+                <span class="demo-caption">InProcessTransport spawning <code>/bin/bash -l</code> via candy-pty. Inner shell runs <code>echo</code> / <code>uname</code> / <code>stty size</code> / <code>exit</code>.</span>
+            </div>
+        </div>
+    </div>
+</section>

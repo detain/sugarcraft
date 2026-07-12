@@ -1,0 +1,11 @@
+{
+    "title": "CandyPalette — SugarCraft",
+    "description": "CandyPalette: Terminal color profile detection + ANSI conversion. PHP port of charmbracelet/colorprofile.",
+    "ogTitle": "CandyPalette — SugarCraft",
+    "ogDescription": "Terminal color profile detection + ANSI conversion. Port of charmbracelet/colorprofile.",
+    "emoji": "",
+    "displayName": "CandyPalette",
+    "tagline": "Terminal color profile detection + ANSI conversion",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/colorprofile\" style=\"color: inherit;\">charmbracelet/colorprofile</a></span>\n          <span class=\"tag-chip\">color</span><span class=\"tag-chip\">terminal</span><span class=\"tag-chip\">output</span>"
+}

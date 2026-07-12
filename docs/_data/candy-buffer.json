@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyBuffer",
+    "description": "CandyBuffer: Cell-grid value objects for terminal rendering — Buffer and Cell as immutable, fluent data model.",
+    "ogTitle": "SugarCraft — CandyBuffer",
+    "ogDescription": "Buffer (2-D cell grid) and Cell value objects — the shared foundation for terminal rendering across the SugarCraft ecosystem.",
+    "emoji": "🍬",
+    "displayName": "CandyBuffer",
+    "tagline": "Cell-grid value objects for terminal rendering",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/vte\" style=\"color: inherit;\">charmbracelet/vte</a></span>\n          <span class=\"tag-chip\">buffer</span>\n          <span class=\"tag-chip\">cell-grid</span>\n          <span class=\"tag-chip\">leaf-package</span>"
+}

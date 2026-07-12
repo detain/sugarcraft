@@ -1,0 +1,11 @@
+{
+    "title": "CandyZone — SugarCraft",
+    "description": "CandyZone: Mouse-zone tracker for clickable UIs. PHP port of bubblezone.",
+    "ogTitle": "CandyZone — SugarCraft",
+    "ogDescription": "Mouse-zone tracker for clickable UIs. Port of bubblezone.",
+    "emoji": "🎯",
+    "displayName": "CandyZone",
+    "tagline": "Mouse-zone tracker for clickable UIs",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/lrstanley/bubblezone\" style=\"color: inherit;\">bubblezone</a></span>\n          <span class=\"tag-chip\">mouse</span>\n          <span class=\"tag-chip\">hit-testing</span>\n          <span class=\"tag-chip\">regions</span>"
+}

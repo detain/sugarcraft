@@ -1,0 +1,11 @@
+{
+    "title": "SugarDash — SugarCraft",
+    "description": "SugarDash: Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. PHP port of charmbracelet/bubble-grid.",
+    "ogTitle": "SugarDash — SugarCraft",
+    "ogDescription": "Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more.",
+    "emoji": "",
+    "displayName": "SugarDash",
+    "tagline": "Dashboard TUI library — grid layouts, panels, and more",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/bubble-grid\" style=\"color: inherit;\">charmbracelet/bubble-grid</a></span>\n          <span class=\"tag-chip\">dashboard</span><span class=\"tag-chip\">layout</span><span class=\"tag-chip\">grid</span><span class=\"tag-chip\">panel</span>"
+}

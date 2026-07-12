@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarGallery",
+    "description": "SugarGallery: poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed PosterGrid with owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile.",
+    "ogTitle": "SugarCraft — SugarGallery",
+    "ogDescription": "Browse-grid widgets for media TUIs: a 2-D virtualized PosterGrid that holds only the cards on screen (sparse, absolute-indexed) and emits a need-range window for owner-driven paging, a Rail carousel, and a renderer-agnostic PosterCard. Immutable.",
+    "emoji": "",
+    "displayName": "SugarGallery",
+    "tagline": "Poster grids & rails for media TUIs — virtualized PosterGrid, Rail carousel, PosterCard",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">original — no upstream parallel</span>\n          <span class=\"tag-chip\">grid</span>\n          <span class=\"tag-chip\">gallery</span>\n          <span class=\"tag-chip\">virtualization</span>\n          <span class=\"tag-chip\">media</span>"
+}

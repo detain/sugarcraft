@@ -1,0 +1,11 @@
+{
+    "title": "SugarCrush — SugarCraft",
+    "description": "SugarCrush: terminal AI coding agent. 7 LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions. PHP port of crush.",
+    "ogTitle": "SugarCrush — SugarCraft",
+    "ogDescription": "Terminal AI coding agent — 7 providers, tools, skills, hooks, agents, MCP. PHP port of crush.",
+    "emoji": "🤖",
+    "displayName": "SugarCrush",
+    "tagline": "Terminal AI coding agent",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/crush\" style=\"color: inherit;\">crush</a></span>\n          <span class=\"tag-chip\">ai</span>\n          <span class=\"tag-chip\">chat</span>\n          <span class=\"tag-chip\">anthropic</span>\n          <span class=\"tag-chip\">openai</span>\n          <span class=\"tag-chip\">ollama</span>"
+}

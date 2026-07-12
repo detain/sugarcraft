@@ -1,0 +1,101 @@
+<p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a candy-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="candy-vt.html">CandyVt</a>).</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-vcr</code></pre>
+
+    <h3 style="margin-top: 32px;">Record</h3>
+    <pre class="code"><code>use SugarCraft\Core\Program;
+use SugarCraft\Vcr\Recorder;
+
+(new Program($model))
+    -&gt;withRecorder(Recorder::open('/tmp/session.cas'))
+    -&gt;run();
+// cassette is closed automatically when the loop ends.</code></pre>
+
+    <h3 style="margin-top: 32px;">Replay</h3>
+    <pre class="code"><code>use SugarCraft\Vcr\Player;
+use SugarCraft\Vcr\Assert\ScreenAssertion;
+
+$player = Player::open('/tmp/session.cas');
+$result = $player-&gt;play(
+    programFactory: fn ($input, $output, $loop) =&gt; new Program(
+        new MyModel(),
+        new ProgramOptions(input: $input, output: $output, loop: $loop, …),
+    ),
+    assertion: new ScreenAssertion(80, 24),
+);
+if (!$result-&gt;ok) {
+    echo $result-&gt;diffSummary();
+    exit(1);
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">Cassette format</h3>
+    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/master/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Use <code>Recorder::withFormat(new RelativeFormat())</code> to record in delta-time mode for deterministic, edit-friendly cassettes.</p>
+
+    <h3 style="margin-top: 32px;">CLI</h3>
+    <pre class="code"><code>vendor/bin/candy-vcr inspect session.cas               # list events
+vendor/bin/candy-vcr replay  session.cas --speed=realtime  # stream to stdout
+vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff
+vendor/bin/candy-vcr record  --output session.cas -- bash -c 'echo hi'  # record a PTY session</code></pre>
+
+    <h4 style="margin-top: 20px;"><code>record</code> subcommand</h4>
+    <p>The <code>record</code> subcommand spawns a PTY session and captures all I/O to a cassette file:</p>
+    <pre class="code"><code>vendor/bin/candy-vcr record --output session.cas --cols 132 --rows 40 -- bash -l
+vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello'   # non-interactive, no Ctrl+C wiring
+vendor/bin/candy-vcr record --shell                          # spawn $SHELL -l
+vendor/bin/candy-vcr record --env -- bash -c 'echo hi'         # capture filtered host env
+vendor/bin/candy-vcr record --env-regex='/(SECRET|TOKEN)/i' -- bash -c 'echo hi'  # custom filter
+vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # ⚠️ DANGEROUS — no filtering
+vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh  # compress idle gaps > 1s (asciinema-style)</code></pre>
+
+    <h4 style="margin-top: 20px;"><code>replay</code> subcommand</h4>
+    <p>Stream a cassette's recorded output to stdout with optional timing control:</p>
+    <pre class="code"><code>vendor/bin/candy-vcr replay  session.cas --speed=realtime          # honour recorded cadence
+vendor/bin/candy-vcr replay  session.cas --idle-trim=1.0              # clamp gaps > 1s during replay
+vendor/bin/candy-vcr replay  session.cas --no-trim                     # use original (uncompressed) timestamps</code></pre>
+    <p style="margin-top: 8px;"><strong>⚠️ <code>--env-allow-secrets</code></strong> disables all secret-key filtering. The cassette will contain credentials verbatim — only use in fully isolated, trusted environments and never share the resulting cassette.</p>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Cassette format</strong><span>JSONL (absolute <code>t</code>) or RelativeFormat (delta <code>dt</code>, asciinema v3 style), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object; <code>Player::open()</code> auto-detects format.</span></div>
+      <div class="feature"><strong>Recorder hook</strong><span><code>Program::withRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
+      <div class="feature"><strong>Msg serializers</strong><span>19 builtin Msg types (KeyMsg, MouseMsg×4, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are candy-vt CSI I/O focus events that round-trip through VCR.</span></div>
+      <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
+      <div class="feature"><strong>ByteAssertion</strong><span>Strict byte-equality with hex+printable diff window starting at the first divergence offset.</span></div>
+      <div class="feature"><strong>ScreenAssertion</strong><span>Cell-grid equality via <a href="candy-vt.html">CandyVt</a>. Tolerates ANSI-level reordering (redundant SGR, equivalent cursor moves, partial vs full repaints) — the recommended choice for round-trip tests.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Bug repro from user reports</strong> — user runs <code>--record bug.cas</code>, ships the cassette, maintainer replays locally.</li>
+      <li><strong>Regression tests in CI</strong> — record a known-good session, replay against the current build, fail the build on cell-grid divergence.</li>
+      <li><strong>Demos &amp; documentation</strong> — alternative to VHS for headless / scriptable recordings; runs in the PHP unit-test process, no Docker.</li>
+      <li><strong>Fuzzing seeds</strong> — record real sessions, mutate Msgs, replay to find edge cases.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-vcr">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vcr/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vcr/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/vcr">charmbracelet/x/vcr</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Recorder</td><td>open(path)</td><td>Open cassette for recording</td></tr>
+<tr><td>Recorder</td><td>withFormat(format)</td><td>Select timestamp encoding (e.g. <code>new RelativeFormat()</code> for delta-time)</td></tr>
+<tr><td>Recorder</td><td>close()</td><td>Close and finalize cassette</td></tr>
+<tr><td>Player</td><td>open(path)</td><td>Open cassette for replay</td></tr>
+<tr><td>Player</td><td>withIdleTrim(?float $seconds)</td><td>Fluent idle-gap threshold for SPEED_REALTIME playback (clamp pauses > N seconds)</td></tr>
+<tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
+<tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>
+<tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality assertion</td></tr>
+<tr><td>RelativeFormat</td><td>new()</td><td>Delta-time (<code>dt</code>) format — asciinema v3 compatible; easier manual editing</td></tr>
+<tr><td>Cassette</td><td>events()</td><td>Iterate recorded events</td></tr>
+</table>
+  </div>
+</section>

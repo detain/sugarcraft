@@ -1,0 +1,208 @@
+<p class="lede" style="margin-top: 28px;">13 subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-shell</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code># Apply styling.
+candyshell style --foreground "#ff5f87" --bold "Hello, candy!"
+
+# Pick one item.
+choice=$(candyshell choose Pizza Burger Salad)
+
+# Read a single line.
+name=$(candyshell input --placeholder "Your name?")
+
+# Confirm a destructive action.
+candyshell confirm "Really delete $file?" &amp;&amp; rm "$file"
+
+# Show a spinner while running a command.
+candyshell spin --title "Building..." -- make build
+
+# Fuzzy-filter a list.
+git branch | candyshell filter</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>style</strong><span>Apply Sprinkles styling to argv (or stdin) and print.</span></div>
+      <div class="feature"><strong>choose</strong><span>Pick one item from a list; prints the selection to stdout.</span></div>
+      <div class="feature"><strong>confirm</strong><span>Yes/no — exit code 0 on yes, 1 on no.</span></div>
+      <div class="feature"><strong>filter</strong><span>Fuzzy-filter over stdin lines.</span></div>
+      <div class="feature"><strong>input / write</strong><span>Single-line / multi-line text input.</span></div>
+      <div class="feature"><strong>file</strong><span>File picker — print the selected path.</span></div>
+      <div class="feature"><strong>format</strong><span>Render Markdown via CandyShine.</span></div>
+      <div class="feature"><strong>pager</strong><span>Scroll long input through a SugarBits Viewport.</span></div>
+      <div class="feature"><strong>spin</strong><span>Show a spinner while running an external command.</span></div>
+      <div class="feature"><strong>table</strong><span>Render a CSV / TSV table with rounded borders.</span></div>
+      <div class="feature"><strong>log</strong><span>Leveled logging output (debug / info / warn / error / fatal).</span></div>
+      <div class="feature"><strong>join</strong><span>Concatenate styled strings horizontally / vertically.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Auto-discovery</h3>
+    <p>CandyShell uses PHP attributes to auto-discover commands at runtime. Mark any class extending <code>Symfony\Component\Console\Command\Command</code> with <code>#[Command]</code> and it will be picked up by <code>Application::scan()</code>:</p>
+    <pre class="code"><code>use SugarCraft\Shell\Attribute\Command;
+use SugarCraft\Shell\Attribute\Flag;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+#[Command(name: 'mycmd', description: 'Does something useful.', descriptionSection: 'Longer help text.')]
+final class MyCommand extends Command
+{
+    #[Flag(name: 'format', short: 'f', description: 'Output format.', enum: FormatType::class)]
+    protected function configure(): void
+    {
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $format = $input->getOption('format');
+        // ...
+        return self::SUCCESS;
+    }
+}
+
+enum FormatType: string
+{
+    case Json = 'json';
+    case Yaml = 'yaml';
+}</code></pre>
+    <p>Register the namespace in your bootstrap:</p>
+    <pre class="code"><code>$app = new \SugarCraft\Shell\Application();
+$app->scan('My\\Namespace\\');  // discovers all #[Command] classes
+$app->run();</code></pre>
+
+    <h3 style="margin-top: 40px;">New attribute types (step 06.05)</h3>
+    <table class="api-table">
+    <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
+    <tr><td><code>Command</code></td><td><code>SugarCraft\Shell\Attribute\Command</code></td><td>#[Attribute] for auto-registering commands</td></tr>
+    <tr><td><code>Flag</code></td><td><code>SugarCraft\Shell\Attribute\Flag</code></td><td>#[Attribute] for declarative CLI options</td></tr>
+    <tr><td><code>ValueEnum</code></td><td><code>SugarCraft\Shell\Attribute\ValueEnum</code></td><td>Constrained enum for flag values</td></tr>
+    <tr><td><code>CommandScanner</code></td><td><code>SugarCraft\Shell\Discovery\CommandScanner</code></td><td>Namespace scanner for #[Command] classes</td></tr>
+    <tr><td><code>Application::scan()</code></td><td><code>SugarCraft\Shell\Application</code></td><td>Opt-in discovery method</td></tr>
+    </table>
+
+    <h3 style="margin-top: 40px;">Enhanced help (step 06.06)</h3>
+    <table class="api-table">
+    <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
+    <tr><td><code>Alias</code></td><td><code>SugarCraft\Shell\Attribute\Alias</code></td><td>#[Attribute] registering CLI command aliases</td></tr>
+    <tr><td><code>Example</code></td><td><code>SugarCraft\Shell\Attribute\Example</code></td><td>#[Attribute] adding example usage to help output</td></tr>
+    <tr><td><code>HelpFormatter</code></td><td><code>SugarCraft\Shell\Help\HelpFormatter</code></td><td>Renders enhanced help from #[Alias]/#[Example] attributes</td></tr>
+    <tr><td><code>TypoSuggester</code></td><td><code>SugarCraft\Shell\Help\TypoSuggester</code></td><td>Levenshtein distance ≤ 2 typo suggestions for unknown commands</td></tr>
+    </table>
+
+    <h3 style="margin-top: 40px;">Shell completions + version (step 06.07)</h3>
+    <table class="api-table">
+    <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
+    <tr><td><code>BashCompletion</code></td><td><code>SugarCraft\Shell\Completion\BashCompletion</code></td><td>Bash completion script generator</td></tr>
+    <tr><td><code>ZshCompletion</code></td><td><code>SugarCraft\Shell\Completion\ZshCompletion</code></td><td>Zsh completion script generator</td></tr>
+    <tr><td><code>FishCompletion</code></td><td><code>SugarCraft\Shell\Completion\FishCompletion</code></td><td>Fish completion script generator</td></tr>
+    <tr><td><code>CompletionCommand</code></td><td><code>SugarCraft\Shell\CompletionCommand</code></td><td>Built-in <code>completion [--shell bash|zsh|fish]</code> subcommand</td></tr>
+    <tr><td><code>Application::versionFromComposer()</code></td><td><code>SugarCraft\Shell\Application</code></td><td>Reads version from root composer.json</td></tr>
+    </table>
+    <p>CandyShell also respects <code>CANDYSHELL_*</code> env var fallbacks — prefix any option name with <code>CANDYSHELL_</code> in uppercase to set it when no explicit CLI flag is provided.</p>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-shell">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-shell/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-shell/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/gum">gum</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">CLI Commands</h3>
+<table class="api-table">
+<tr><th>Command</th><th>Description</th></tr>
+<tr><td>completion</td><td>Emit shell completion script (bash · zsh · fish)</td></tr>
+<tr><td>style</td><td>Apply Sprinkles styling to text</td></tr>
+<tr><td>choose</td><td>Pick one item from a list</td></tr>
+<tr><td>confirm</td><td>Yes/no confirmation</td></tr>
+<tr><td>filter</td><td>Fuzzy-filter stdin lines</td></tr>
+<tr><td>input</td><td>Read single-line text input</td></tr>
+<tr><td>write</td><td>Read multi-line text input</td></tr>
+<tr><td>file</td><td>File picker</td></tr>
+<tr><td>format</td><td>Render Markdown</td></tr>
+<tr><td>pager</td><td>Scroll long content</td></tr>
+<tr><td>spin</td><td>Show spinner during command</td></tr>
+<tr><td>table</td><td>Render CSV/TSV table</td></tr>
+<tr><td>log</td><td>Leveled logging</td></tr>
+<tr><td>join</td><td>Join styled strings</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/choose.gif" alt="choose">
+                <h3>choose</h3>
+                <span class="demo-caption">Pick one item from a list.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/confirm.gif" alt="confirm">
+                <h3>confirm</h3>
+                <span class="demo-caption">Yes/no with exit-code semantics.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/input.gif" alt="input">
+                <h3>input</h3>
+                <span class="demo-caption">Read a single line.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/write.gif" alt="write">
+                <h3>write</h3>
+                <span class="demo-caption">Multi-line text editor.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/file.gif" alt="file">
+                <h3>file</h3>
+                <span class="demo-caption">Pick a file path.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/filter.gif" alt="filter">
+                <h3>filter</h3>
+                <span class="demo-caption">Fuzzy filter over stdin.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/format.gif" alt="format">
+                <h3>format</h3>
+                <span class="demo-caption">Render Markdown via CandyShine.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/style.gif" alt="style">
+                <h3>style</h3>
+                <span class="demo-caption">Apply foreground / bold to argv.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/table.gif" alt="table">
+                <h3>table</h3>
+                <span class="demo-caption">Render CSV with rounded borders.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/pager.gif" alt="pager">
+                <h3>pager</h3>
+                <span class="demo-caption">Scroll long input.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/log.gif" alt="log">
+                <h3>log</h3>
+                <span class="demo-caption">Leveled logging output.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/spin.gif" alt="spin">
+                <h3>spin</h3>
+                <span class="demo-caption">Spinner while running a command.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/join.gif" alt="join">
+                <h3>join</h3>
+                <span class="demo-caption">Concatenate styled chunks.</span>
+            </div>
+        </div>
+    </div>
+</section>

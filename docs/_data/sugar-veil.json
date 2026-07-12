@@ -1,0 +1,11 @@
+{
+    "title": "SugarVeil — SugarCraft",
+    "description": "SugarVeil: Terminal overlay compositor. PHP port of rmhubbert/bubbletea-overlay.",
+    "ogTitle": "SugarVeil — SugarCraft",
+    "ogDescription": "Terminal overlay compositor. Port of rmhubbert/bubbletea-overlay.",
+    "emoji": "",
+    "displayName": "SugarVeil",
+    "tagline": "Terminal overlay compositor",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/rmhubbert/bubbletea-overlay\" style=\"color: inherit;\">rmhubbert/bubbletea-overlay</a></span>\n          <span class=\"tag-chip\">overlay</span><span class=\"tag-chip\">teardown</span><span class=\"tag-chip\">ui</span>"
+}

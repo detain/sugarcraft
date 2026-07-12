@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyLayout",
+    "description": "CandyLayout: Constraint-based layout solver — Cassowary simplex + greedy 5-phase fallback for terminal grid layouts.",
+    "ogTitle": "SugarCraft — CandyLayout",
+    "ogDescription": "Two solvers behind a LayoutSolver interface: CassowarySolver (simplex-based, optimal) and GreedySolver (deterministic 5-phase fallback). Swap without touching call-sites.",
+    "emoji": "🍬",
+    "displayName": "CandyLayout",
+    "tagline": "Constraint-based layout solver for terminal grids",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/ratatui/ratatui\" style=\"color: inherit;\">ratatui/ratatui</a></span>\n          <span class=\"tag-chip\">layout</span>\n          <span class=\"tag-chip\">constraint-solver</span>\n          <span class=\"tag-chip\">foundation-package</span>"
+}
