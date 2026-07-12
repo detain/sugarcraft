@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Tick\Storage;
 
 use SugarCraft\Tick\Heartbeat;
+use SugarCraft\Tick\Milestone;
 
 /**
  * SQLite-backed heartbeat + milestone store.
@@ -76,18 +77,18 @@ final class SqliteBackend
     }
 
     /**
-     * @return list<array{name: string, time: int, description: string}>
+     * @return list<Milestone>
      */
     public function milestones(): array
     {
         $result = $this->db->query('SELECT name, time, description FROM milestones ORDER BY time ASC');
         $rows = [];
         while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
-            $rows[] = [
-                'name' => (string) $row['name'],
-                'time' => (int) $row['time'],
-                'description' => (string) $row['description'],
-            ];
+            $rows[] = new Milestone(
+                (string) $row['name'],
+                (int) $row['time'],
+                (string) $row['description'],
+            );
         }
         return $rows;
     }
