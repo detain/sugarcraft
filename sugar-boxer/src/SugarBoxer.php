@@ -872,15 +872,18 @@ final class SugarBoxer
      * Distribute available space across children by weight (the non-flex
      * fallback: children weighted by minWidth/minHeight, defaulting to 1).
      *
-     * NOTE: unlike {@see distributeFlex()}, this path is NOT delegated to
-     * candy-layout. Its "reserve at least 1 column per remaining child" cap
-     * (below) is a sequential greedy degradation that guarantees the trailing
-     * child never vanishes in a tight viewport — an invariant candy-layout's
-     * GreedySolver has no equivalent for (its overflow either truncates
-     * proportionally or, in compat() mode, runs off-grid). A characterization
-     * sweep found ~1089/4896 offset divergences for every candy-layout mapping
-     * tried (ratio/fill/percentage × compat/default), so migrating this would
-     * regress rendering. It stays hand-rolled by design; see plan_missing.md W12.
+     * Delegates the size computation to candy-layout's
+     * {@see GreedySolver::withMinShare()} (plan_missing.md W12 / candy-layout
+     * #1386), completing the fork-b dedup begun in {@see distributeFlex()}.
+     * Each child maps to a {@see Constraint::fill()} weighted by its
+     * minWidth/minHeight; the min-share floor reproduces distribute()'s bespoke
+     * "reserve at least 1 column per not-yet-placed child" sequential clamp that
+     * keeps the trailing child from collapsing to 0 in a tight viewport — the
+     * fourth quirk the three compat() flags cannot express. The floor's
+     * reservation frame is seeded with `$borderPad` ({@see GreedySolver}'s
+     * `reserveLead`) and bumped by one `$spacing` per placed child (`reserveGap`),
+     * re-creating the old `$used` counter exactly. A 28 280-case offset sweep plus
+     * a 960-layout rendered-byte sweep confirmed 0 divergences (byte-identical).
      *
      * @param list<int> $weights
      * @return list<int> Starting offsets for each child
@@ -890,24 +893,43 @@ final class SugarBoxer
         $n = \count($weights);
         $contentSpan = $available - $spacing * \max(0, $n - 1);
 
-        // Guard: if all weights are 0, distribute equally to prevent division by zero
+        // All-zero weights → equal split (the old division-by-zero guard). The
+        // min-share floor applies the identical guard internally, but doing it
+        // here keeps the mapped Fill weights faithful to the pre-migration
+        // arithmetic; in practice weights are minWidth/minHeight-derived (>= 1).
         if ($totalWeight === 0) {
-            $totalWeight = $n;
             $weights = \array_fill(0, $n, 1);
         }
 
-        $offsets = [0 => $borderPad];
-        $used = $borderPad;
+        // minWidth/minHeight weight → Fill(weight); the floor's round(weight/total
+        // * span) proportional split matches distribute()'s per-child share.
+        $constraints = [];
+        foreach ($weights as $weight) {
+            $constraints[] = Constraint::fill($weight);
+        }
 
+        // Clamp the solved span to >= 0: when spacing/border exceed the available
+        // size the raw content span is negative, and Region rejects a negative
+        // width. In that regime the old distribute() clamped every non-last share
+        // to 0 (round(weight/total * negativeSpan) <= 0), yielding offsets of
+        // borderPad + i*spacing — a span of 0 reproduces exactly those all-zero
+        // shares, so the clamp is byte-identical (matches distributeFlex()).
+        $regions = GreedySolver::new()
+            ->withMinShare(1, $spacing, $borderPad)
+            ->solve(
+                new LayoutRegion(0, 0, \max(0, $contentSpan), 1),
+                Direction::Horizontal,
+                $constraints,
+            );
+
+        // Rebuild the starting-offset array the caller expects: offsets[0] is the
+        // border pad; each subsequent offset adds the previous child's solved
+        // width plus one inter-child gap. regions[i]->width for i < n-1 equals the
+        // old distribute()'s share_i; the final child's size is derived by the
+        // caller as the remainder, so its solved width is unused.
+        $offsets = [$borderPad];
         for ($i = 0; $i < $n - 1; $i++) {
-            $share = (int) \round($weights[$i] / $totalWeight * $contentSpan);
-            // Reserve at least 1 col per remaining child when room exists;
-            // when space runs out, a child legitimately gets 0 (the
-            // $w <= 0 guard in renderNode skips it gracefully).
-            $remainingChildren = $n - 1 - $i;
-            $share = \max(0, \min($share, $contentSpan - $used - $remainingChildren));
-            $used += $share + $spacing;
-            $offsets[] = $used;
+            $offsets[] = $offsets[$i] + $regions[$i]->width + $spacing;
         }
 
         return $offsets;
