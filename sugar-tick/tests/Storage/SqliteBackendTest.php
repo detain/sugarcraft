@@ -6,6 +6,7 @@ namespace SugarCraft\Tick\Tests\Storage;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Tick\Heartbeat;
+use SugarCraft\Tick\Milestone;
 use SugarCraft\Tick\Storage\SqliteBackend;
 
 final class SqliteBackendTest extends TestCase
@@ -87,9 +88,11 @@ final class SqliteBackendTest extends TestCase
 
         $milestones = $this->backend->milestones();
         $this->assertCount(1, $milestones);
-        $this->assertSame('v1.0 shipped', $milestones[0]['name']);
-        $this->assertSame(1719000000, $milestones[0]['time']);
-        $this->assertSame('First stable release', $milestones[0]['description']);
+        // milestones() now hydrates Milestone value objects rather than raw arrays.
+        $this->assertInstanceOf(Milestone::class, $milestones[0]);
+        $this->assertSame('v1.0 shipped', $milestones[0]->name);
+        $this->assertSame(1719000000, $milestones[0]->time);
+        $this->assertSame('First stable release', $milestones[0]->description);
     }
 
     public function testMilestonesOrderedByTime(): void
@@ -100,8 +103,9 @@ final class SqliteBackendTest extends TestCase
 
         $milestones = $this->backend->milestones();
         $this->assertCount(3, $milestones);
-        $this->assertSame('earlier', $milestones[0]['name']);
-        $this->assertSame('middle', $milestones[1]['name']);
-        $this->assertSame('later', $milestones[2]['name']);
+        $this->assertContainsOnlyInstancesOf(Milestone::class, $milestones);
+        $this->assertSame('earlier', $milestones[0]->name);
+        $this->assertSame('middle', $milestones[1]->name);
+        $this->assertSame('later', $milestones[2]->name);
     }
 }
