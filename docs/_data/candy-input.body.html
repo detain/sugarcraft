@@ -1,0 +1,92 @@
+<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Reentrant and fuzz-friendly. Unblocks sugar-readline migration to real-TTY input (step-21).</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-input:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Input\EscapeDecoder;
+use SugarCraft\Input\Driver\StreamInputDriver;
+use SugarCraft\Input\Event\KeyEvent;
+use SugarCraft\Input\Event\MouseEvent;
+
+$decoder = new EscapeDecoder();
+$driver  = new StreamInputDriver(STDIN);
+
+while (true) {
+    $event = $driver->read();
+    if ($event === null) continue; // non-blocking empty or EOF
+
+    match (true) {
+        $event instanceof KeyEvent  => handleKey($event),
+        $event instanceof MouseEvent => handleMouse($event),
+        default                      => handleOther($event),
+    };
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">EscapeDecoder</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
+      <div class="feature"><strong>remainder(): string</strong><span>Get unconsumed bytes that couldn't yet form a complete sequence.</span></div>
+      <div class="feature"><strong>reset(): void</strong><span>Clear the partial-sequence buffer.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">InputDriver</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>read(): ?Event</strong><span>Return the next Event, or null on EOF / non-blocking empty.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Event types</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>KeyEvent</strong><span>key, modifiers, raw — plain keys, F1-F12, arrows, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Ctrl+letter</span></div>
+      <div class="feature"><strong>MouseEvent</strong><span>x, y, button, action, modifiers — SGR 1006: press, release, drag, scroll</span></div>
+      <div class="feature"><strong>FocusEvent</strong><span>gained — terminal window focus gained/lost (DECSET 1004)</span></div>
+      <div class="feature"><strong>PasteEvent</strong><span>content — bracketed paste (CSI 200~ … CSI 201~), capped at 1 MiB</span></div>
+      <div class="feature"><strong>ResizeEvent</strong><span>cols, rows — terminal resize</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">KeyModifier</h3>
+    <p>Bitmask flags: <code>Shift</code>, <code>Ctrl</code>, <code>Alt</code>, <code>Meta</code>, <code>Super</code>, <code>Hyper</code>, <code>CapsLock</code>, <code>NumLock</code>. Combine with bitwise OR.</p>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Real-TTY input for sugar-readline</strong> — decode raw bytes instead of symbolic key names.</li>
+      <li><strong>Interactive TUI programs</strong> — keyboard and mouse input without depending on a specific runtime.</li>
+      <li><strong>Kitty keyboard protocol</strong> — disambiguation flags via CSI <code>?u</code>, including key release events.</li>
+      <li><strong>Safe paste handling</strong> — bracketed paste with 1 MiB cap prevents OOM from hostile input.</li>
+      <li><strong>Foundation for any input-consuming lib</strong> — EscapeDecoder is leaf (no sugarcraft deps).</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-input">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-input/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-input/tree/main/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>EscapeDecoder</td><td>decode(string $bytes): list&lt;Event&gt;</td><td>Decode byte buffer, buffer partials</td></tr>
+<tr><td>EscapeDecoder</td><td>remainder(): string</td><td>Get unconsumed bytes</td></tr>
+<tr><td>EscapeDecoder</td><td>reset(): void</td><td>Clear partial buffer</td></tr>
+<tr><td>StreamInputDriver</td><td>read(): ?Event</td><td>Next event from stream, or null</td></tr>
+<tr><td>KeyEvent</td><td>key: string</td><td>Symbolic key name</td></tr>
+<tr><td>KeyEvent</td><td>modifiers: KeyModifier</td><td>Modifier bitmask</td></tr>
+<tr><td>KeyEvent</td><td>raw: string</td><td>Raw bytes that produced this event</td></tr>
+<tr><td>MouseEvent</td><td>x, y: int</td><td>Column and row (1-based)</td></tr>
+<tr><td>MouseEvent</td><td>button: int</td><td>Button index (0=left, 1=middle, 2=right)</td></tr>
+<tr><td>MouseEvent</td><td>action: string</td><td>press | release | drag | scroll</td></tr>
+<tr><td>FocusEvent</td><td>gained: bool</td><td>True if focus gained, false if lost</td></tr>
+<tr><td>PasteEvent</td><td>content: string</td><td>Pasted content (max 1 MiB)</td></tr>
+<tr><td>ResizeEvent</td><td>cols, rows: int</td><td>New terminal dimensions</td></tr>
+<tr><td>KeyModifier</td><td>none(): self</td><td>No modifiers</td></tr>
+<tr><td>KeyModifier</td><td>shift(): self</td><td>Shift modifier</td></tr>
+<tr><td>KeyModifier</td><td>ctrl(): self</td><td>Ctrl modifier</td></tr>
+<tr><td>KeyModifier</td><td>alt(): self</td><td>Alt modifier</td></tr>
+<tr><td>KeyModifier</td><td>includes(int $flag): bool</td><td>Check if flag is set</td></tr>
+<tr><td>KeyModifier</td><td>value(): int</td><td>Raw bitmask value</td></tr>
+</table>
+  </div>
+</section>

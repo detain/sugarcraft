@@ -8,7 +8,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 - `PROJECT_NAMES.md` — naming rulebook + prefix cheat sheet
 - `LOCALES.md` — i18n locale codes
 - `CALIBER_LEARNINGS.md` (root + per-lib) — accumulated patterns/gotchas
-- `docs/index.html` · `docs/lib/<slug>.html` — public site tiles
+- `docs/index.html` — public site tiles · `docs/lib/<slug>.html` — per-lib pages **generated** by `tools/gen-docs.php` from `docs/_data/<slug>.{json,body.html}` (never hand-edit)
 - `scripts/affected-libs.php` — dynamic CI matrix · `tools/check-path-repos.php` — closure checker
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `codecov.yml`, `.php-cs-fixer.dist.php`
 
@@ -44,7 +44,7 @@ cd candy-core && composer install && vendor/bin/phpunit
 
 ## Adding a lib — checklist
 
-`<slug>/composer.json`+`phpunit.xml`+`README.md`+`CALIBER_LEARNINGS.md`+`src/<Class>.php` · root `composer.json` (require + repositories) · `MATCHUPS.md` · `PROJECT_NAMES.md` · root `README.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` · `codecov.yml`. `ci.yml` auto-discovers via `scripts/affected-libs.php` — only edit `WINDOWS_LIBS`/`MACOS_LIBS` for OS-specific runners.
+`<slug>/composer.json`+`phpunit.xml`+`README.md`+`CALIBER_LEARNINGS.md`+`src/<Class>.php` · root `composer.json` (require + repositories) · `MATCHUPS.md` · `PROJECT_NAMES.md` · root `README.md` · `docs/index.html` · `docs/_data/<slug>.json`+`docs/_data/<slug>.body.html` then `php tools/gen-docs.php` (regenerates `docs/lib/<slug>.html` — do NOT hand-edit the page) · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` · `codecov.yml`. `ci.yml` auto-discovers via `scripts/affected-libs.php` — only edit `WINDOWS_LIBS`/`MACOS_LIBS` for OS-specific runners.
 
 ## PR workflow
 

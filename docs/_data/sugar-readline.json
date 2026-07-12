@@ -1,0 +1,11 @@
+{
+    "title": "SugarReadline — SugarCraft",
+    "description": "SugarReadline: Interactive prompts — text, confirm, select, multi-select, textarea. PHP port of erikgeiser/promptkit.",
+    "ogTitle": "SugarReadline — SugarCraft",
+    "ogDescription": "Interactive prompts — text, confirm, select, multi-select, textarea. Port of erikgeiser/promptkit.",
+    "emoji": "",
+    "displayName": "SugarReadline",
+    "tagline": "Interactive prompts — text, confirm, select, multi-select, textarea",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/erikgeiser/promptkit\" style=\"color: inherit;\">erikgeiser/promptkit</a></span>\n          <span class=\"tag-chip\">prompt</span><span class=\"tag-chip\">input</span><span class=\"tag-chip\">readline</span><span class=\"tag-chip\">interactive</span>"
+}

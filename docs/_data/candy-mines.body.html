@@ -1,0 +1,81 @@
+<p class="lede" style="margin-top: 28px;">Customisable board (width / height / mine count), recursive zero-flood-fill, win / lose detection. Pure-state Board class so every reveal is unit-testable without touching the runtime.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-mines</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>./bin/candy-mines              # 10×10, 12 mines (defaults)
+./bin/candy-mines 16 16 40     # custom board
+
+// Programmatic:
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Mines\Game;
+
+(new Program(Game::start(width: 16, height: 16, mines: 40),
+             new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>First-click safety</strong><span>Mines aren't placed until the first reveal, with the clicked cell's 3×3 neighbourhood excluded — every game gets a non-trivial flood-fill on click 1.</span></div>
+      <div class="feature"><strong>Recursive flood fill</strong><span>Zero-adjacency cells reveal their neighbours transitively, exactly like the original.</span></div>
+      <div class="feature"><strong>Vim-style movement</strong><span><code>hjkl</code> alongside arrows; cursor clamps at board edges.</span></div>
+      <div class="feature"><strong>Flag toggle</strong><span><code>f</code> flags / unflags the cursor cell; flagged cells can't be revealed by accident.</span></div>
+      <div class="feature"><strong>Chord click</strong><span><code>c</code> or middle-click on a satisfied number reveals all unflagged neighbours — mirrors classic left+right chord behaviour.</span></div>
+      <div class="feature"><strong>Sub-second timer</strong><span>Game timer uses <code>microtime(true)</code> for millisecond precision; frozen on win/lose and stored in stats.</span></div>
+      <div class="feature"><strong>Best-time persistence</strong><span><code>DifficultyStats</code> persists games/wins/best time per difficulty to JSON atomically (tmp+rename) so crashes never corrupt the record.</span></div>
+      <div class="feature"><strong>Win + lose detection</strong><span><code>isWon</code> = every non-mine revealed; <code>exploded</code> = at least one mine was clicked. O(1) via <code>revealedCount</code> — no grid scan on each move.</span></div>
+      <div class="feature"><strong>Restart key</strong><span><code>r</code> reseeds with a fresh layout, preserving the chosen board size.</span></div>
+      <div class="feature"><strong>Save / restore mid-game</strong><span><code>Board::serialize()</code> emits versioned JSON; <code>Board::unserialize()</code> reconstructs the exact board state for mid-game suspend/resume.</span></div>
+      <div class="feature"><strong>Custom difficulty</strong><span><code>Ui\CustomDifficulty</code> validates rows (2–50), cols (2–50), mines (1 to rows×cols−9) with i18n-aware error messages.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-mines">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mines/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mines/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/maxpaulus43/go-sweep">go-sweep</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Game</td><td>start(width, height, mines)</td><td>Start a new game</td></tr>
+<tr><td>Game</td><td>withDifficulty(d)</td><td>Start with a preset difficulty</td></tr>
+<tr><td>Game</td><td>elapsed()</td><td>Elapsed time in seconds (sub-second precision)</td></tr>
+<tr><td>Game</td><td>recordResult(elapsed)</td><td>Record win/loss and update stats</td></tr>
+<tr><td>Board</td><td>new(width, height, mines)</td><td>Create game board</td></tr>
+<tr><td>Board</td><td>cell(x, y)</td><td>Get cell at position</td></tr>
+<tr><td>Board</td><td>chord(x, y)</td><td>Chord-click — reveal safe neighbours of a satisfied number</td></tr>
+<tr><td>Board</td><td>serialize()</td><td>Emit versioned JSON string ({v:1, w, h, m, p, e, r, c}) for mid-game save</td></tr>
+<tr><td>Board</td><td>unserialize(data)</td><td>Reconstruct a Board from a serialize() payload</td></tr>
+<tr><td>Ui\CustomDifficulty</td><td>fromInput(rows, cols, mines)</td><td>Validate custom board dimensions; throws with i18n key on violation</td></tr>
+<tr><td>Ui\CustomDifficulty</td><td>defaults()</td><td>Factory — 9×9, 10 mines</td></tr>
+<tr><td>DifficultyStats</td><td>load(path)</td><td>Load stats from atomic JSON file (null if absent)</td></tr>
+<tr><td>DifficultyStats</td><td>save(path)</td><td>Persist stats atomically (tmp+rename)</td></tr>
+<tr><td>DifficultyStats</td><td>withGame(d, won, time)</td><td>Return new DifficultyStats with the game recorded</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mines/.vhs/play.gif" alt="Play">
+                <h3>Play</h3>
+                <span class="demo-caption">Cursor walk, flood-fill reveal, flag plant.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mines/.vhs/flagging.gif" alt="Flagging">
+                <h3>Flagging</h3>
+                <span class="demo-caption">f key toggles a flag on the cursor cell to mark suspected mines.</span>
+            </div>
+        </div>
+    </div>
+</section>

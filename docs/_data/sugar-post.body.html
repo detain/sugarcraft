@@ -1,0 +1,66 @@
+<p class="lede" style="margin-top: 28px;">Email builder and sender. SMTP transport, Resend API transport, attachment support, HTML + plain-text multipart, and a fluent interface.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-post</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Post\{Email, SmtpTransport, Attachment};
+
+$email = (new Email())
+    -&gt;from('noreply@example.com')
+    -&gt;to('user@example.com')
+    -&gt;subject('Deployment complete')
+    -&gt;text('Your app was deployed successfully.')
+    -&gt;html('&lt;p&gt;Your app was deployed &lt;strong&gt;successfully&lt;/strong&gt;.&lt;/p&gt;')
+    -&gt;attach(Attachment::fromPath('/tmp/build.zip', 'build.zip'));
+
+$transport = new SmtpTransport('smtp.example.com', 587);
+$transport-&gt;send($email);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>SMTP transport</strong><span>TCP connection with TLS, auth (plain/login), and batching.</span></div>
+            <div class="feature"><strong>Resend transport</strong><span>API-based sending via Resend.com — no SMTP needed.</span></div>
+            <div class="feature"><strong>Attachments</strong><span>Local files, memory content, custom MIME types.</span></div>
+            <div class="feature"><strong>HTML + Text</strong><span>Multipart/alternative email bodies.</span></div>
+            
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-post">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-post/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-post/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/skate">charmbracelet/skate</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Email</td><td>new()</td><td>Create email</td></tr>
+<tr><td>Email</td><td>from(addr), to(addr), subject(text)</td><td>Set email fields</td></tr>
+<tr><td>Email</td><td>text(body), html(body)</td><td>Set body content</td></tr>
+<tr><td>Email</td><td>attach(attachment)</td><td>Add attachment</td></tr>
+<tr><td>SmtpTransport</td><td>new(host, port)</td><td>Create SMTP transport</td></tr>
+<tr><td>SmtpTransport</td><td>send(email)</td><td>Send email</td></tr>
+<tr><td>Attachment</td><td>fromPath(path, name)</td><td>Create from file</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-post/.vhs/showcase.gif" alt="Email DTOs + transports">
+                <h3>Email DTOs + transports</h3>
+                <span class="demo-caption">Plain + multipart Email values, transport surface listed.</span>
+            </div>
+        </div>
+    </div>
+</section>

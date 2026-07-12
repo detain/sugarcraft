@@ -1,0 +1,11 @@
+{
+    "title": "SugarWishlist — SugarCraft",
+    "description": "SugarWishlist: TUI directory of SSH endpoints. PHP port of wishlist.",
+    "ogTitle": "SugarWishlist — SugarCraft",
+    "ogDescription": "TUI directory of SSH endpoints. Port of wishlist.",
+    "emoji": "🎫",
+    "displayName": "SugarWishlist",
+    "tagline": "TUI directory of SSH endpoints",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/wishlist\" style=\"color: inherit;\">wishlist</a></span>\n          <span class=\"tag-chip\">ssh</span>\n          <span class=\"tag-chip\">launcher</span>\n          <span class=\"tag-chip\">yaml-config</span>"
+}

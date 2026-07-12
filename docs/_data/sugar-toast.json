@@ -1,0 +1,11 @@
+{
+    "title": "SugarToast — SugarCraft",
+    "description": "SugarToast: Floating notification overlays. PHP port of DaltonSW/bubbleup.",
+    "ogTitle": "SugarToast — SugarCraft",
+    "ogDescription": "Floating notification overlays. Port of DaltonSW/bubbleup.",
+    "emoji": "",
+    "displayName": "SugarToast",
+    "tagline": "Floating notification overlays",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/DaltonSW/bubbleup\" style=\"color: inherit;\">DaltonSW/bubbleup</a></span>\n          <span class=\"tag-chip\">notification</span><span class=\"tag-chip\">toast</span><span class=\"tag-chip\">alert</span><span class=\"tag-chip\">overlay</span>"
+}

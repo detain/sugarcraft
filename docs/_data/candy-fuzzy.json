@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyFuzzy",
+    "description": "CandyFuzzy: Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Extracted from candy-forms; unblocks filter-highlighting UI across the ecosystem.",
+    "ogTitle": "SugarCraft — CandyFuzzy",
+    "ogDescription": "Fuzzy string matcher that returns which characters matched and their score. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style). Enables filter-highlighting UIs impossible with score-only matchers.",
+    "emoji": "",
+    "displayName": "CandyFuzzy",
+    "tagline": "Fuzzy string matching with scored matched indices",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">foundation-package</span>\n          <span class=\"tag-chip\">fuzzy</span>\n          <span class=\"tag-chip\">filter</span>"
+}

@@ -1,0 +1,345 @@
+<p class="lede" style="margin-top: 28px;">Composer-installable multi-driver SQL TUI: connect to SQLite, MySQL, or PostgreSQL, browse tables, peek at row data, run ad-hoc queries, and explore a full MySQL-Workbench-style admin dashboard — all on the SugarCraft stack. SQLite-first; MySQL and PostgreSQL drivers plus a Performance Dashboard, Server Status, Variables, Connections, Reports, and Performance Schema Setup ship as of v1.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-query</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code># SQLite via bare path (inferred as Flavor::Sqlite)
+bin/candy-query app.sqlite
+
+# Any DSN — MySQL, PostgreSQL, SQLite, SQLSRV
+bin/candy-query --dsn mysql://user:pass@localhost:3306/dbname
+
+// Or wire it up programmatically:
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Query\App;
+use SugarCraft\Query\Db\ConnectionFactory;
+
+$pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
+(new Program(App::start($pdo), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Tables pane</strong><span>Lists every <code>type IN (table, view)</code> in <code>sqlite_master</code> excluding <code>sqlite_*</code> internals.</span></div>
+      <div class="feature"><strong>Rows pane</strong><span>First 100 rows of the selected table, with header row + reverse-video cursor.</span></div>
+      <div class="feature"><strong>Query pane</strong><span>Ad-hoc SQL editor — Ctrl+R runs, errors stash to a status line instead of crashing.</span></div>
+      <div class="feature"><strong>Tab / Backspace / Space</strong><span>Pane cycle, character delete, and space typing all respect the focused pane.</span></div>
+      <div class="feature"><strong>Cursor clamping</strong><span>Lists never let the cursor escape their bounds; switching panes preserves per-pane positions.</span></div>
+      <div class="feature"><strong>PDO under the hood</strong><span><code>:memory:</code> driving in tests covers the full transition surface without fixture files.</span></div>
+      <div class="feature"><strong>SchemaBrowser</strong><span>Strategy pattern for schema introspection — delegates to driver-specific <code>SchemaProviderInterface</code> (<code>SqliteSchemaProvider</code>, <code>MysqlSchemaProvider</code>, <code>PostgresSchemaProvider</code>) based on <code>Flavor</code>. Returns immutable <code>SchemaTable</code>/<code>SchemaColumn</code>/<code>SchemaIndex</code>/<code>SchemaForeignKey</code> value objects.</span></div>
+      <div class="feature"><strong>ResultPager</strong><span>Cursor-based pagination for SQL result sets. Immutable + fluent: <code>nextPage()</code>, <code>prevPage()</code>, <code>goToPage()</code>, <code>withPageSize()</code>. Default page size 25.</span></div>
+      <div class="feature"><strong>CellEditor</strong><span>Cell-level UPDATE by primary-key identity. <code>updateCell()</code>, <code>updateRow()</code>, <code>readCell()</code> — all safely quoted, all return rows affected.</span></div>
+      <div class="feature"><strong>SnippetStore</strong><span>File-backed JSON store for named SQL snippets. <code>load()</code>/<code>add()</code>/<code>flush()</code>/<code>find()</code>/<code>search()</code>/<code>delete()</code> — immutable + fluent, persists to <code>/tmp/candy-query-snippets.json</code>.</span></div>
+      <div class="feature"><strong>Exporters (CsvExporter, SqlExporter)</strong><span>Driver-agnostic export to CSV and SQL INSERT. CsvExporter produces RFC-4180 CSV via <code>fputcsv()</code> with formula-injection guard (<code>=+-@\t\r</code> prefixed with <code>'</code>) on headers and cells. SqlExporter emits INSERT statements only (no CREATE TABLE — not driver-neutral). Both use <code>SELECT * LIMIT 0/1</code> for column detection; exporting an empty table produces a blank file.</span></div>
+      <div class="feature"><strong>ConnectionConfig</strong><span>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Password never echoed.</span></div>
+      <div class="feature"><strong>ConnectionFactory</strong><span>Static factory: <code>fromDsn()</code>, <code>fromConfig()</code>, <code>fromArgv()</code>. Builds configured PDO connections.</span></div>
+      <div class="feature"><strong>Flavor</strong><span>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code>. Identifies the database server flavor. <code>Flavor::detectFromDriver()</code> detects flavor from a PDO driver name + optional version string; <code>Flavor::detectFromVersionString()</code> refines MySQL to MariaDB/Percona using the version comment.</span></div>
+      <div class="feature"><strong>Version</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast(Version)</code> compares versions safely.</span></div>
+      <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI coloured tree; <code>toArray()</code> returns JSON-serialisable structure.</span></div>
+      <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
+      <div class="feature"><strong>ConnectionsPage</strong><span>Processlist browser with keyboard navigation (<code>j/k/↑/↓</code>), detail tab cycling (<code>Tab</code>/<code>1</code>/<code>2</code>/<code>3</code>), hide-sleeping filter (<code>f</code>), and async refresh (<code>r</code>) via <code>Cmd::send()</code>. Memoized <code>cachedFilteredProcesslist</code> avoids 2–3× DB fetch per render. Mirrors <code>charmbracelet/lazysql</code> connections page.</span></div>
+      <div class="feature"><strong>ConnectionFilters</strong><span>Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate (0.5–30s). All fields are readonly; paired <code>$Set</code> sentinels for nullability.</span></div>
+      <div class="feature"><strong>ConnectionCounters</strong><span>Connection metrics from <code>SHOW GLOBAL STATUS</code>: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes <code>connectionUsageRatio()</code> lazily (0.0–1.0); <code>isConnectionUsageCritical()</code> returns true ≥80%.</span></div>
+      <div class="feature"><strong>ConnectionDetailTabs</strong><span>Three detail tabs (Details/Attributes/MDL) per processlist thread. Details from <code>performance_schema.threads</code>; Attributes from <code>session_connect_attrs</code>; MDL from <code>performance_schema.metadata_locks</code> with fallback to <code>information_schema.metadata_lock_info</code>. Returns <code>null</code> on permission errors (1142/1146/1227).</span></div>
+      <div class="feature"><strong>ReportsPage</strong><span>Performance Reports admin page: left category/report tree + right sortable/exportable grid. <code>validate()</code> only loads <code>Catalog</code> (file I/O) — no DB queries on the render path. Navigation keys: <code>h/l</code> (prev/next category, wrap-around), <code>[/]</code> (prev/next report within category), <code>,/.</code> (prev/next column index). All navigation triggers async report loading via <code>loadCurrentReport()</code>. <code>selectedColumnIndex</code> tracks focused column for future per-column unit cycling; <code>[c]</code> is currently a global unit toggle. Footer keybindings: <code>[j/k] nav rows  [h/l] category  [/] report  [c] unit toggle  [q] quit</code>.</span></div>
+      <div class="feature"><strong>ReportRunner</strong><span>Executes <code>SELECT * FROM sys.&lt;view&gt;</code> for performance report views. Uses prepared statements with backtick-quoted view names. <code>run()</code> applies time/byte unit formatting via <code>UnitFormatter</code>; <code>runRaw()</code> returns unformatted values. Availability gating via <code>AvailabilityChecker::isViewAvailable()</code> before executing.</span></div>
+      <div class="feature"><strong>AvailabilityChecker</strong><span>Checks sys schema view availability via <code>SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'</code>. Caches result in-memory after first fetch. <code>discoverViews()</code> catches <code>\Throwable</code> (not just <code>\PDOException</code>) because React/cached connections can surface non-PDO error types. <code>isViewAvailable()</code>, <code>availableFromCatalog()</code>, <code>missingFromCatalog()</code> for filtering.</span></div>
+      <div class="feature"><strong>Reports\Catalog</strong><span>Loads <code>data/sys_reports.json</code> and provides <code>get()</code>, <code>all()</code>, <code>byCategory()</code>, <code>categories()</code>. Categories are sorted by a curated <code>CATEGORY_ORDER</code> constant (problems first, matching MySQL Workbench Appendix B) rather than alphabetically; unknown categories fall through to alphabetical ordering. Column type parsing uses <code>ColumnType::tryFrom()</code> instead of <code>ColumnType::from()</code> to gracefully handle unknown type strings (returns <code>null</code> instead of throwing <code>ValueError</code>). Unknown types fall back to <code>ColumnType::String</code>.</span></div>
+      <div class="feature"><strong>VariablesPage</strong><span>Dual-tab (Status/System) variable browser with category tree, search filtering, and inline edit. <code>[e]</code> opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to preview the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write guard: setting a variable to its current value is a no-op — the dialog stays in input phase. Static (non-dynamic) variables show error 1238 ("requires server restart") at the confirm phase rather than silently refusing at the entry point. All state transitions return new immutable instances. Keybindings: <code>[j/k]</code> nav, <code>[w]</code> rw filter, <code>[s]</code> search, <code>[tab]</code> toggle tab, <code>[e]</code> edit (dynamic vars only), <code>[q]</code> quit. Mirrors <code>charmbracelet/lazysql</code> VariablesPage.</span></div>
+       <div class="feature"><strong>VariableEditor</strong><span>Inline editor for MySQL variables via <code>SET GLOBAL</code> / <code>SET PERSIST</code> / <code>SET PERSIST_ONLY</code> / <code>RESET PERSIST</code> (all MySQL 8.0+). Uses prepared statements with backtick-quoted variable names (from catalog) and <code>?</code> placeholders for values — value interpolation is injection-safe. Press [p] in the edit dialog to cycle through GLOBAL → PERSIST → PERSIST_ONLY modes; error 1238 prompts to use PERSIST_ONLY. Error codes surfaced: 1142 (no privilege), 1227 (access denied), 1238 (variable is not dynamic), 3680 (persisted_variables restriction). Mirrors <code>mysql-workbench wb_admin_variable_editor</code>.</span></div>
+       <div class="feature"><strong>VariableMetadata</strong><span>Immutable descriptor for a single MySQL system variable: name, description, editable flag, dynamic flag, and group memberships. <code>editable</code> = can be set at all (SET GLOBAL / SET PERSIST); <code>dynamic</code> = runtime-changeable without restart (static vars like <code>innodb_log_file_size</code> accept SET GLOBAL but error 1238). Constructed from <code>data/variable_metadata.json</code> (1563 entries, 67 groups).</span></div>
+       <div class="feature"><strong>Catalog</strong><span>Variable metadata catalog loaded from <code>data/variable_metadata.json</code> (1563 variables, 67 groups). Provides <code>get()</code>, <code>all()</code>, <code>byGroup()</code>, <code>groups()</code>, <code>isEditable()</code>, <code>isDynamic()</code>. <code>isDynamic()</code> returns false for static variables (e.g. <code>innodb_log_file_size</code>) — used by VariablesPage to gate inline editing so static vars hit error 1238 rather than silently declining. <code>VariableMetadata</code> carries both <code>editable</code> (can be set at all) and <code>dynamic</code> (runtime-changeable without restart). Missing metadata is non-fatal — the VariablesPage renders without categories or <code>[rw]</code> indicators.</span></div>
+      <div class="feature"><strong>AdminProviderInterface</strong><span>Flavor-agnostic interface for admin operations: <code>dashboard()</code>, <code>connections()</code>, <code>serverInfo()</code>. Implemented by <code>MysqlAdminProvider</code> (MySQL) and <code>PostgresAdminProvider</code> (PostgreSQL via <code>pg_stat_database</code>, <code>pg_settings</code>, <code>pg_stat_activity</code>).</span></div>
+      <div class="feature"><strong>MysqlAdminProvider</strong><span><code>AdminProviderInterface</code> via <code>SHOW GLOBAL STATUS</code>, <code>SHOW GLOBAL VARIABLES</code>, <code>SHOW ENGINE INNODB STATUS</code>, <code>SHOW PROCESSLIST</code>, and <code>SHOW REPLICA STATUS</code> (graceful 1227 handling).</span></div>
+      <div class="feature"><strong>PostgresAdminProvider</strong><span><code>AdminProviderInterface</code> via <code>pg_stat_database</code>, <code>pg_settings</code>, <code>pg_stat_activity</code>. Dashboard/connections implemented via <code>PostgresWidgetCatalog</code>; <code>serverInfo()</code> maps pg_stat_database fields. Graceful degradation on permission errors (returns null/stub for inaccessible panels).</span></div>
+      <div class="feature"><strong>ServerStatusPage</strong><span>2-column admin page: left panel shows server info (host, socket, port, version, uptime + running-since), Features, Directories, SSL, Replication (<code>SHOW REPLICA STATUS</code> for MySQL 8+ / <code>SHOW SLAVE STATUS</code> for MySQL 5.x/MariaDB, graceful 1227 handling), and Firewall (AWS RDS); right panel shows <code>SidebarGaugeSet</code> with five sampled gauges (Connections, Traffic, Key Efficiency, QPS, InnoDB). <code>r</code> refreshes; <code>q</code> quits.</span></div>
+       <div class="feature"><strong>ServerStatusSnapshotAdapter</strong><span>Adapter wrapping <code>ServerContextInterface</code> to satisfy <code>StatusSnapshotProviderInterface</code>, enabling <code>Sampler</code> to compute per-second rate deltas across poll cycles for the Traffic gauge. Caches the last snapshot internally; <code>currentSnapshot()</code> delegates to <code>$this->context->statusVariables()</code>. Created in <code>App::adminPage()</code> alongside the <code>Sampler</code> and passed to <code>ServerStatusPage::new()</code>.</span></div>
+       <div class="feature"><strong>SidebarGaugeSet</strong><span>Collection of 5 gauges: Connections (<code>threads_connected/max_connections</code>), Traffic (sampled per-second bytes rate via <code>Sampler</code> using <code>Bytes_received</code>/<code>Bytes_sent</code> deltas, baseline-corrected against 10MB/s), Key Efficiency (<code>Key_reads / (Key_reads + Key_read_requests)</code>), QPS (<code>Questions/Uptime</code>), and InnoDB Buffer Pool utilization. No CPU gauge — MySQL provides no CPU status variable; the prior gauge was a mislabeled connections ratio. Sampler advances on each <code>withRefresh()</code> call via <code>poll()</code>. <code>r</code> key triggers <code>withRefresh()</code> to rebuild the gauge set and advance sampler state.</span></div>
+       <div class="feature"><strong>ReconnectManager</strong><span>Detects MySQL errors 2002/2003/2013 (connection lost). Stores <code>ConnectionConfig</code>, retries via <code>attemptReconnect()</code>, throws <code>ReconnectException</code> on failure.</span></div>
+      <div class="feature"><strong>StatementTimeout</strong><span>Wall-clock timeout on <code>PDOStatement::execute()</code> via <code>pcntl_alarm()</code>. Gracefully degrades when pcntl is unavailable. Cancels query via <code>KILL CONNECTION_ID()</code> on timeout, throws <code>StatementTimeoutException</code>.</span></div>
+        <div class="feature"><strong>PerfSchemaPage</strong><span>Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Uses <code>EasySetupDetector</code> (wired via <code>EasySetupDetector::fromContext($context)</code>) for four-state detection: <code>fully</code> (all consumers enabled AND all instruments enabled+timed; TIMED-off → <code>custom</code>), <code>default</code> (matches Appendix C profile), <code>custom</code> (user-modified), <code>disabled</code> (PS inaccessible). State shown as a colour-coded badge in the header (green/yellow/blue/red). Falls back to <code>detectSetupState()</code> (instrument data only, less accurate) when no detector is wired. Version gating: <code>setup_actors</code> skipped on &lt;5.6; <code>setup_objects.ENABLED</code> column omitted on &lt;5.6.3; timers from <code>setup_timers</code> (mutable) on &lt;8.0 and <code>performance_timers</code> (read-only) on ≥8.0. Threads tab shows INSTRUMENTED status from <code>performance_schema.threads</code>. Instruments tab renders an indented tree with group nodes showing tri-state badges (<code>[x]</code>/<code>[~]</code>/<code>[ ]</code>). Read-only mode when <code>PROCESS</code> privilege is absent (tested via no-op UPDATE). Keybindings: j/k nav, Space/Enter toggle, Tab switch tabs, c commit, r revert, 1/2/3 Easy Setup, q quit. Mirrors <code>mysql-workbench wb_admin_performance_schema</code>.</span></div>
+       <div class="feature"><strong>EasySetupDetector</strong><span>Four-state PS setup detector using COUNT/SUM queries against <code>setup_instruments</code> and <code>setup_consumers</code>. Returns <code>fully</code>, <code>default</code>, <code>custom</code>, or <code>disabled</code>. Guard: <code>enabledPercentage() &lt; 100</code> prevents <code>fully</code> even when detailed counts appear zero (ambiguous with limited data). <code>isFullyDisabled()</code> exists but is NOT wired to <code>detect()</code> — available for future use. Version-gated defaults (Appendix C): 5.6 vs 5.7 instruments are identical; 5.7 adds <code>statements_digest</code> to consumers. Excludes <code>memory/%</code> from all calculations. Graceful degradation on PDOException (privilege/access/connection errors). Factory: <code>::new(db, ?version)</code>, <code>::fromContext(context)</code>. Mirrors <code>mysql-workbench wb_admin_performance_schema easy_setup_detector</code>.</span></div>
+       <div class="feature"><strong>EasySetup</strong><span>PS easy-setup SQL toggle statements and Appendix C default sets. Provides <code>enableStatements()</code> (all instruments+consumers to YES/YES), <code>disableStatements()</code> (all to NO/NO), <code>resetToDefaultStatements()</code> (applies version-appropriate defaults). Default instruments (5.6/5.7): <code>wait/io/file/%</code>, <code>wait/io/table/%</code>, <code>wait/lock/table/sql/handler</code>, <code>statement/%</code>, <code>idle</code>. Default consumers (5.6): four; (5.7+): adds <code>statements_digest</code>. Version-aware — <code>defaultInstruments()</code>/<code>defaultConsumers()</code> return the correct set. <code>memory/%</code> excluded from all operations. Factory: <code>::new(?version)</code>, <code>::fromContext(context)</code>. Mirrors <code>mysql-workbench wb_admin_performance_schema easy_setup</code>.</span></div>
+      <div class="feature"><strong>SetupTimers</strong><span>Mutable model for a PS timer entry. On MySQL &lt;8.0, loaded from <code>performance_schema.setup_timers</code> and editable via <code>withTimerName()</code>; <code>isDirty()</code> tracks unsaved changes; <code>commitStatements()</code> generates <code>UPDATE setup_timers SET TIMER_NAME=? WHERE NAME=?</code>. On MySQL ≥8.0, loaded from <code>performance_schema.performance_timers</code> as clean (read-only) instances — <code>commitStatements()</code> returns <code>[]</code>. Uses the <code>Mutable</code> trait for immutable-with* semantics.</span></div>
+       <div class="feature"><strong>SetupThreads</strong><span>Mutable model for a PS thread entry carrying the <code>INSTRUMENTED</code> flag from <code>performance_schema.threads</code>. <code>withInstrumented(bool)</code> returns a new instance with dirty tracking; <code>isDirty()</code> reports unsaved changes; <code>instrumentedFragment()</code> generates a <code>THREAD_ID=N AND INSTRUMENTED='YES'/'NO'</code> SQL fragment for CommitPlanner's batch UPDATE (STEP 5.3 wiring). Read-only by default (<code>instrumented=true</code>, <code>dirty=false</code> on initial load).</span></div>
+       <div class="feature"><strong>CommitPlanner</strong><span>Generates SQL statements to commit PS configuration changes. All statements are fully parameterized — returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code> tuples with all values bound as <code>?</code> placeholders, none interpolated. Instruments use anchored RLIKE (<code>^name$</code>, regex-escaped via <code>preg_quote()</code>) bucketed by (enabled, timed); Consumers use <code>UPDATE ... IN(?..)</code> with bound names; Actors and Objects use keyed INSERT/UPDATE/DELETE with all values bound. <code>isDirty()</code> scans all tracked models. SetupTimers/SetupThreads commit wiring deferred to STEP 5.3.</span></div>
+        <div class="feature"><strong>InstrumentTree</strong><span>Hierarchical view of PS instruments organized by name path (e.g. <code>wait/io/file/sql/binlog</code> → 5-level tree). Tracks aggregate enabled/timed state of each subtree via tri-state values: <code>1</code>=all-enabled, <code>0</code>=mixed, <code>-1</code>=all-disabled. Provides <code>setChildrenEnabled(bool)</code> / <code>setChildrenTimed(bool)</code> cascade methods that recursively mark all instruments in a subtree with the same state and return the modified list. <code>pathDepth()</code> returns the number of path segments (root=0, <code>wait</code>=1, <code>wait/io</code>=2) for indent calculation. <code>flattenTree()</code> (in PerfSchemaPage) emits <code>[nodeOrInstrument, depth, isGroup]</code> triples for renderer consumption. Mirrors <code>mysql-workbench wb_admin_performance_schema instrument_tree</code>.</span></div>
+      <div class="feature"><strong>Restart detection + Sampler</strong><span><code>Sampler</code> records uptime at construction via <code>registerUptime()</code> and compares uptime snapshots across polls to detect MySQL restarts, resetting stale cached state before it becomes stale. <code>StatusPoller</code> uses this to guard against stale data after a server restart. Additionally, <code>Sampler</code> computes per-second rate deltas (Bytes_received, Bytes_sent, etc.) from two status snapshots, used by <code>SidebarGaugeSet</code> for baseline-corrected Traffic gauge ratios. Advance via <code>poll()</code> on each refresh cycle.</span></div>
+      <div class="feature"><strong>Alerting</strong><span>Stateless <code>AlertManager</code> evaluates metrics against <code>AlertThresholds</code> presets (<code>::default()</code>, <code>::strict()</code>). <code>Alert</code> value objects carry severity, metric, value, and threshold. <code>AlertNotifier</code> dispatches toasts via <code>sugar-toast</code> with mute-safe degradation when no factory is available. Maps <code>Severity::Critical → ToastType::Error</code>, <code>Warning → Warning</code>, <code>Info → Info</code>.</span></div>
+      <div class="feature"><strong>Query History (optional)</strong><span>Opt-in SQLite persistence via <code>SqliteHistoryStore</code> (WAL mode, auto-pruned at 1000 entries). <code>HistoryRecorder</code> implements <code>StatusSnapshotProviderInterface</code> for passive recording in the polling loop. <code>HistoryQuery</code> computes <code>queriesPerSecond()</code>, <code>averageDuration()</code>, <code>errorRate()</code>, and <code>topQueries()</code> over time ranges.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-query">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-query/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-query/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/jorgerojas26/lazysql">lazysql</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Database ⚠️</td><td>—</td><td><strong>Deprecated</strong> thin alias to <code>SqliteDatabase</code>. Use <code>DatabaseInterface</code> instead.</td></tr>
+<tr><td>MysqlDatabase</td><td>—</td><td><code>DatabaseInterface</code> implementation via PDO <code>mysql</code>. Implements <code>serverVersion()</code>, <code>driverName()</code>, <code>ping()</code>, <code>databases()</code>.</td></tr>
+<tr><td>PostgresDatabase</td><td>—</td><td><code>DatabaseInterface</code> implementation via PDO <code>pgsql</code>. Implements <code>serverVersion()</code>, <code>driverName()</code>, <code>ping()</code>, <code>databases()</code>.</td></tr>
+<tr><td>DatabaseInterface</td><td>serverVersion()</td><td>Get database server version</td></tr>
+<tr><td>DatabaseInterface</td><td>driverName()</td><td>Get driver name (e.g., sqlite, mysql)</td></tr>
+<tr><td>DatabaseInterface</td><td>ping()</td><td>Check connection is alive</td></tr>
+<tr><td>DatabaseInterface</td><td>databases()</td><td>List available databases</td></tr>
+<tr><td>DatabaseInterface</td><td>tables()</td><td>List all tables</td></tr>
+<tr><td>DatabaseInterface</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
+<tr><td>DatabaseInterface</td><td>query(sql)</td><td>Execute SQL query; returns <code>list&lt;array&gt;|null</code> — null signals a reconnectable connection error (2002/2003/2013), empty array means no rows</td></tr>
+<tr><td>DatabaseInterface</td><td>prepare(sql)</td><td>Prepare SQL; returns <code>PreparedStatementInterface|null</code> — driver-neutral statement wrapper</td></tr>
+<tr><td>PreparedStatementInterface</td><td>execute(params?)</td><td>Execute with bound params; returns bool</td></tr>
+<tr><td>PreparedStatementInterface</td><td>fetch()</td><td>Fetch next row; returns <code>array&lt;string,mixed&gt;|false</code></td></tr>
+<tr><td>PreparedStatementInterface</td><td>fetchAll()</td><td>Fetch all rows; returns <code>list&lt;array&lt;string,mixed&gt;&gt;</code></td></tr>
+<tr><td>PreparedStatementInterface</td><td>rowCount()</td><td>Rows affected by last query</td></tr>
+<tr><td>PreparedStatementInterface</td><td>closeCursor()</td><td>Close cursor, enabling re-execution</td></tr>
+<tr><td>PdoPreparedStatement</td><td>—</td><td><code>PreparedStatementInterface</code> via PDOStatement. All database implementations (<code>MysqlDatabase</code>, <code>PostgresDatabase</code>, <code>SqliteDatabase</code>) wrap their <code>PDOStatement</code> in this before returning from <code>prepare()</code>.</td></tr>
+<tr><td>App</td><td>start(database, ?Flavor $flavor = Flavor::Sqlite)</td><td>Create the app model</td></tr>
+<tr><td>SchemaBrowser</td><td>refresh()</td><td>Load schema via driver-specific SchemaProviderInterface</td></tr>
+<tr><td>SchemaBrowser</td><td>forFlavor(flavor, pdo)</td><td>Create browser with explicit Flavor (static factory)</td></tr>
+<tr><td>SchemaProviderInterface</td><td>tables(pdo)</td><td>List all tables/views</td></tr>
+<tr><td>SchemaProviderInterface</td><td>columns(pdo, table)</td><td>Get columns for a table</td></tr>
+<tr><td>SchemaProviderInterface</td><td>indexes(pdo, table)</td><td>Get indexes for a table</td></tr>
+<tr><td>SchemaProviderInterface</td><td>foreignKeys(pdo, table)</td><td>Get foreign keys for a table</td></tr>
+<tr><td>SqliteSchemaProvider</td><td>—</td><td>SchemaProviderInterface via PRAGMA queries</td></tr>
+<tr><td>MysqlSchemaProvider</td><td>—</td><td>SchemaProviderInterface via INFORMATION_SCHEMA</td></tr>
+<tr><td>PostgresSchemaProvider</td><td>—</td><td>SchemaProviderInterface via pg_catalog</td></tr>
+<tr><td>SchemaBrowser</td><td>dropTable(name)</td><td>DROP table and re-refresh</td></tr>
+<tr><td>SchemaTable</td><td>column(name)</td><td>Find a column by name</td></tr>
+<tr><td>ResultPager</td><td>page()</td><td>Rows on current page</td></tr>
+<tr><td>ResultPager</td><td>nextPage() / prevPage() / goToPage(n)</td><td>Navigate pages (all return new instance)</td></tr>
+<tr><td>ResultPager</td><td>withPageSize(n)</td><td>Change page size (returns new instance)</td></tr>
+<tr><td>ResultPager</td><td>hasNextPage() / hasPrevPage()</td><td>Check navigation availability</td></tr>
+<tr><td>CellEditor</td><td>updateCell(rowId, column, newValue)</td><td>Update one cell, return rows affected</td></tr>
+<tr><td>CellEditor</td><td>updateRow(rowId, cells)</td><td>Update multiple cells in one row</td></tr>
+<tr><td>CellEditor</td><td>readCell(rowId, column)</td><td>Read current cell value</td></tr>
+<tr><td>SnippetStore</td><td>load(path)</td><td>Load snippets from JSON file (default /tmp/candy-query-snippets.json)</td></tr>
+<tr><td>SnippetStore</td><td>add(name, sql, description)</td><td>Add or replace a snippet, return new store</td></tr>
+<tr><td>SnippetStore</td><td>flush()</td><td>Persist current snippets to disk</td></tr>
+<tr><td>SnippetStore</td><td>find(name)</td><td>Look up snippet by exact name</td></tr>
+<tr><td>SnippetStore</td><td>search(term)</td><td>Case-insensitive substring search on name and SQL</td></tr>
+<tr><td>SnippetStore</td><td>delete(name)</td><td>Remove snippet by name, return new store</td></tr>
+<tr><td>ExplainView</td><td>run(pdo, sql)</td><td>Execute EXPLAIN via driver-specific ExplainProviderInterface</td></tr>
+<tr><td>ExplainView</td><td>forFlavor(flavor, pdo)</td><td>Create view with explicit Flavor (static factory)</td></tr>
+<tr><td>ExplainProviderInterface</td><td>explain(pdo, sql)</td><td>Execute EXPLAIN and return explain rows</td></tr>
+<tr><td>SqliteExplainProvider</td><td>—</td><td>ExplainProviderInterface via EXPLAIN QUERY PLAN</td></tr>
+<tr><td>MysqlExplainProvider</td><td>—</td><td>ExplainProviderInterface via EXPLAIN</td></tr>
+<tr><td>PostgresExplainProvider</td><td>—</td><td>ExplainProviderInterface via EXPLAIN (ANALYZE, FORMAT JSON)</td></tr>
+<tr><td>AdminProviderInterface</td><td>dashboard()</td><td>Return admin dashboard data (server info, features)</td></tr>
+<tr><td>AdminProviderInterface</td><td>connections()</td><td>Return active connections list</td></tr>
+<tr><td>AdminProviderInterface</td><td>serverInfo()</td><td>Return server information (version, uptime, config)</td></tr>
+<tr><td>MysqlAdminProvider</td><td>—</td><td>AdminProviderInterface via SHOW GLOBAL STATUS/VARIABLES, SHOW ENGINE INNODB STATUS, SHOW PROCESSLIST, SHOW REPLICA STATUS</td></tr>
+<tr><td>ConnectionsPage</td><td>new(context, maxConnections?)</td><td>Factory creating fully-wired instance with ProcesslistProvider, ConnectionActions, ConnectionDetailTabs, ConnectionCounters</td></tr>
+<tr><td>ConnectionsPage</td><td>update(Msg)</td><td>Handle keyboard: j/k/↑/↓ navigate, Tab/1/2/3 cycle tabs, f toggle filter, r refresh. Returns [newPage, ?Closure]. Mirrors charmbracelet/lazysql.</td></tr>
+<tr><td>ConnectionsPage</td><td>getTable()</td><td>Get the sugar-table Table with columns: Id, User, Host, DB, Command, Time, State, Info</td></tr>
+<tr><td>ConnectionsPage</td><td>filters() / counters() / detailTab() / selectedThread()</td><td>Read current filter state, counters, active detail tab, and selected process thread</td></tr>
+<tr><td>ConnectionFilters</td><td>new()</td><td>Default filters: no hiding, no auto-refresh</td></tr>
+<tr><td>ConnectionFilters</td><td>withHideSleeping(bool) / withHideBackground(bool) / withSkipFullInfo(bool) / withRefreshRate(float|null)</td><td>Fluent filter setters — all return new immutable instance</td></tr>
+<tr><td>ConnectionCounters</td><td>fromSnapshot(snapshot, maxConnections)</td><td>Factory from StatusSnapshot: reads Threads_*, Connections, Aborted_* variables</td></tr>
+<tr><td>ConnectionCounters</td><td>connectionUsageRatio()</td><td>Lazy-computed ratio (0.0–1.0) of threads_connected / max_connections</td></tr>
+<tr><td>ConnectionCounters</td><td>isConnectionUsageCritical()</td><td>True when usage ≥80% (red threshold)</td></tr>
+<tr><td>ConnectionDetailTabs</td><td>getDetails(processId)</td><td>Basic thread info from performance_schema.threads — returns null on 1142/1146/1227</td></tr>
+<tr><td>ConnectionDetailTabs</td><td>getAttributes(processId)</td><td>Session connect attrs from performance_schema.session_connect_attrs — returns null if no attrs or access denied</td></tr>
+<tr><td>ConnectionDetailTabs</td><td>getMdlLocks(processId)</td><td>Metadata locks from performance_schema.metadata_locks (primary) with fallback to information_schema.metadata_lock_info</td></tr>
+<tr><td>ConnectionDetailTabs</td><td>getThreadStack(processId)</td><td>Stack dump via sys.ps_thread_stack() — returns null if sys schema unavailable</td></tr>
+<tr><td>ConnectionDetailTabs</td><td>getExplain(processId)</td><td>Runs EXPLAIN on the selected thread's current query — returns null if no query or explain fails</td></tr>
+<tr><td>PostgresAdminProvider</td><td>—</td><td>AdminProviderInterface via pg_stat_database, pg_settings, pg_stat_activity. Dashboard/connections via PostgresWidgetCatalog; graceful null on permission errors (1142/1146).</td></tr>
+<tr><td>ReportsPage</td><td>new(context, ?db)</td><td>Factory. validate() only loads Catalog (file I/O) — no blocking db->query() on render path. report queries routed through AdminQueryCache async.</td></tr>
+<tr><td>ReportsPage</td><td>update(Msg)</td><td>Handles ReloadReportMsg (triggers loadCurrentReport), j/k navigate, r refresh, x export, c unit toggle, q quit.</td></tr>
+<tr><td>ReportsPage</td><td>exportToCsv()</td><td>Export current report as RFC-4180 CSV string via CsvExporter::exportReportResultsToString(). Returns '' if no report loaded.</td></tr>
+<tr><td>ReportRunner</td><td>run(viewName, ?limit)</td><td>Execute SELECT * FROM sys.&lt;view&gt; with unit formatting. Throws \InvalidArgumentException if view not in catalog, \RuntimeException if view not available on server.</td></tr>
+<tr><td>ReportRunner</td><td>runRaw(viewName, ?limit)</td><td>Execute report without unit formatting — returns raw numeric values for sorting/calculation.</td></tr>
+<tr><td>ReportRunner</td><td>canRun(viewName)</td><td>True if report exists in catalog and its view is available on this server.</td></tr>
+<tr><td>AvailabilityChecker</td><td>discoverViews()</td><td>Runs SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'. Caches result. Catches \Throwable (not just \PDOException) because React/cached connections can surface non-PDO errors.</td></tr>
+<tr><td>AvailabilityChecker</td><td>sysSchemaExists()</td><td>True if sys schema is accessible (runs discoverViews() internally).</td></tr>
+<tr><td>AvailabilityChecker</td><td>isViewAvailable(viewName)</td><td>True if the named sys schema view exists on this server.</td></tr>
+<tr><td>AvailabilityChecker</td><td>availableFromCatalog(catalog)</td><td>Return catalog reports whose views exist on this server.</td></tr>
+<tr><td>AvailabilityChecker</td><td>missingFromCatalog(catalog)</td><td>Return catalog reports whose views are missing on this server.</td></tr>
+<tr><td>AvailabilityChecker</td><td>reset()</td><td>Clear cached view list — force re-discovery on next call.</td></tr>
+<tr><td>ReloadReportMsg</td><td>—</td><td>Dispatched by App after AdminDataLoadedMsg. ReportsPage handles this in update() to queue the report query via AdminQueryCache for the next tick.</td></tr>
+<tr><td>VariablesPage</td><td>new(context, ?catalog, ?editor)</td><td>Factory. Optional Catalog (eagerly loaded variable metadata) and VariableEditor enable category tree, [rw] indicators, and inline editing. Missing catalog/editor is non-fatal — page renders without those features.</td></tr>
+<tr><td>VariablesPage</td><td>update(Msg)</td><td>Handles keyboard: j/k navigate rows, w toggle rw filter, s focus search, tab toggle Status/System, e open edit dialog (dynamic vars only), q quit. When edit dialog is active, delegates to updateDialog(). Returns [newPage, ?Closure]. All with*() methods return new immutable instances.</td></tr>
+<tr><td>VariableEditor</td><td>edit(variableName, newValue)</td><td>Execute SET GLOBAL via prepared statement. Backtick-escapes variable name (from catalog), uses ? placeholder for value. Returns ['success' => bool, 'errorCode' => ?int, 'errorMessage' => ?string]. Error 1238 = variable not dynamic; 1142/1227 = privilege; 3680 = persisted_variables restriction.</td></tr>
+<tr><td>VariableEditor</td><td>persist(variableName, newValue)</td><td>Execute SET PERSIST (MySQL 8.0+) — sets the variable globally and writes to mysqld-auto.cnf. Version-gated. Uses prepared statement with backtick-quoted name.</td></tr>
+<tr><td>VariableEditor</td><td>persistOnly(variableName, newValue)</td><td>Execute SET PERSIST_ONLY (MySQL 8.0+) — writes to mysqld-auto.cnf without affecting the running value. Use for static variables (error 1238). Version-gated.</td></tr>
+<tr><td>VariableEditor</td><td>resetPersist(?variableName)</td><td>Execute RESET PERSIST [x] (MySQL 8.0+). Without argument clears all persisted vars. With argument removes only that variable. No isEditable() check (it removes, not sets). Version-gated.</td></tr>
+<tr><td>VariableEditor</td><td>getEditPreview(variableName, newValue, mode='global')</td><td>Return a preview string of the SET statement that would be executed. mode is 'global'|'persist'|'persist_only' (e.g. <code>SET PERSIST `max_connections` = '200'</code>).</td></tr>
+<tr><td>VariableEditor</td><td>isEditable(variableName)</td><td>True if the variable has editable=true in the metadata catalog. Returns false when catalog is absent (safer default).</td></tr>
+<tr><td>VariableMetadata</td><td>isDynamic()</td><td>True if the variable has Dynamic=true in metadata (can be changed at runtime via SET GLOBAL). Non-dynamic variables hit MySQL error 1238.</td></tr>
+<tr><td>VariableMetadata</td><td>inGroup(group)</td><td>True if the variable belongs to the given group name.</td></tr>
+<tr><td>Catalog</td><td>load()</td><td>Load variable metadata from data/variable_metadata.json. Throws \RuntimeException on corrupt/missing file.</td></tr>
+<tr><td>Catalog</td><td>get(variableName)</td><td>Return VariableMetadata for a variable, or null if not in catalog.</td></tr>
+<tr><td>Catalog</td><td>all()</td><td>Return all VariableMetadata entries keyed by variable name.</td></tr>
+<tr><td>Catalog</td><td>groups()</td><td>Return sorted list of all group names in the catalog.</td></tr>
+<tr><td>Catalog</td><td>isEditable(variableName)</td><td>True if variable exists in catalog and VariableMetadata.editable is true.</td></tr>
+<tr><td>Catalog</td><td>isDynamic(variableName)</td><td>True if variable exists in catalog and VariableMetadata.isDynamic() is true.</td></tr>
+<tr><td>ExplainView</td><td>render()</td><td>Render plan as ANSI-coloured string</td></tr>
+      <tr><td>ExplainView</td><td>toArray()</td><td>Return JSON-serialisable plan rows (depth, tag, detail, indent)</td></tr>
+<tr><td>ConnectionActions</td><td>setInstrumentation(bool $enabled, int|string $threadId)</td><td>Enable/disable performance_schema instrumentation per-thread via UPDATE performance_schema.threads SET INSTRUMENTED=?. Requires MySQL 8.0+; returns false on permission errors.</td></tr>
+<tr><td>ConnectionActions</td><td>kill(int|string $threadId, bool $isBackground)</td><td>KILL a thread (disconnect). Refuses to kill background threads (no user or NULL user). MySQL's KILL does not accept placeholders; ID is int-cast directly (injection-safe). Returns true on success, false on refusal or error.</td></tr>
+<tr><td>ConnectionActions</td><td>killQuery(int|string $threadId, bool $isBackground)</td><td>KILL QUERY a thread (cancel statement, keep connection). Refuses to kill query on background threads. MySQL's KILL QUERY does not accept placeholders; ID is int-cast directly (injection-safe). Returns true on success, false on refusal or error.</td></tr>
+<tr><td>ConnectionDetailTabs</td><td>getExplain(processId)</td><td>Runs EXPLAIN on the selected thread's current query. Accepts single SELECT statements only — rejects multi-statement queries (containing ;) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) before running. Returns null if no query, explain fails, or query is not a single SELECT.</td></tr>
+<tr><td>ConnectionConfig</td><td>—</td><td>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn</td></tr>
+<tr><td>ConnectionFactory</td><td>fromDsn(dsn)</td><td>Parse DSN string via <code>parse_url()</code> (mysql/pgsql) or regex (sqlite) and build a <code>ConnectionConfig</code>. Handles URL-encoded passwords, passwordless users, and IPv6 hosts. The <code>?ssl-mode=</code> query param is parsed and stored in <code>ConnectionConfig.sslMode</code>; SSL is applied as PDO driver options in <code>MysqlDatabase::connect()</code>, not embedded in the DSN string. Examples: <code>mysql://u:p%40ss@[::1]:3306/db</code>, <code>mysql://root@localhost/db</code>.</td></tr>
+<tr><td>ConnectionFactory</td><td>fromConfig(config)</td><td>Build PDO from ConnectionConfig value object</td></tr>
+<tr><td>ConnectionFactory</td><td>fromArgv()</td><td>Build PDO from CLI args (--db-driver, --db-host, --db-port, --db-user, --db-pass, --db-name, --db-ssl-mode)</td></tr>
+<tr><td>Flavor</td><td>detectFromDriver(driver, version?, versionComment?)</td><td>Detect flavor from PDO driver name ('mysql', 'pgsql', 'sqlite') + optional version string. Uses <code>detectFromVersionString()</code> for MySQL refinement. Ensures mysql/pgsql never falls back to SQLite for an unparseable version.</td></tr>
+<tr><td>Version</td><td>isAtLeast(Version)</td><td>Compare version strings (handles MariaDB 5.5.5- prefix)</td></tr>
+<tr><td>ResultTable</td><td>fromRows(rows)</td><td>Factory from a list of associative row arrays</td></tr>
+<tr><td>ResultTable</td><td>scrollLeft() / scrollRight()</td><td>Scroll viewport by one column</td></tr>
+<tr><td>ResultTable</td><td>withVisibleWidth(n) / withJsonPretty(bool) / withNullToken(s)</td><td>Fluent configuration builders</td></tr>
+<tr><td>ResultTable</td><td>render() / renderPlain()</td><td>Render ANSI string or plain text</td></tr>
+<tr><td>CsvExporter</td><td>exportCsv(path, table)</td><td>Export a table to a CSV file (RFC-4180, formula guard on headers+values, driver-neutral column detection via LIMIT 0/LIMIT 1)</td></tr>
+<tr><td>CsvExporter</td><td>exportReportResults(path, columns, rows)</td><td>Write a result set to a CSV file with formula guard</td></tr>
+<tr><td>CsvExporter</td><td>exportReportResultsToString(columns, rows)</td><td>Return a result set as an RFC-4180 CSV string (used by ReportsPage [x] export)</td></tr>
+<tr><td>CsvExporter</td><td>importCsv(path, table)</td><td>Import a CSV file into a table (backtick-quoted columns, safe VALUES)</td></tr>
+<tr><td>SqlExporter</td><td>exportSql(path)</td><td>Dump all tables as INSERT statements to a SQL file. No CREATE TABLE (not driver-neutral). Uses LIMIT 1 for column detection.</td></tr>
+<tr><td>ReconnectManager</td><td>shouldReconnect(pdoException)</td><td>Check if error code is 2002/2003/2013</td></tr>
+<tr><td>ReconnectManager</td><td>attemptReconnect(callable)</td><td>Retry connection using stored ConnectionConfig</td></tr>
+<tr><td>ReconnectManager</td><td>setConnectionConfig(config) / lastConnectionConfig()</td><td>Store/retrieve connection config for reconnection</td></tr>
+<tr><td>ReconnectException</td><td>—</td><td>Thrown when reconnection fails after MySQL connection error</td></tr>
+<tr><td>StatementTimeout</td><td>execute(stmt, values)</td><td>Execute with wall-clock timeout via pcntl_alarm()</td></tr>
+<tr><td>StatementTimeout</td><td>didTimeout()</td><td>Check if last execution timed out</td></tr>
+<tr><td>StatementTimeoutException</td><td>—</td><td>Thrown when statement exceeds timeout and is cancelled</td></tr>
+<tr><td>Severity</td><td>toToastType()</td><td>Map to ToastType: Info→Info, Warning→Warning, Critical→Error</td></tr>
+<tr><td>Alert</td><td>warning() / critical() / info()</td><td>Factory helpers for alert creation</td></tr>
+<tr><td>Alert</td><td>isCritical() / isWarning() / isInfo()</td><td>Severity predicates</td></tr>
+<tr><td>Alert</td><td>toToastMessage()</td><td>Format as "metric: message (X% > Y%)"</td></tr>
+<tr><td>AlertThresholds</td><td>new() / default() / strict()</td><td>Factory presets: bare, 60%/80%, 50%/70%</td></tr>
+<tr><td>AlertThresholds</td><td>connectionWarningThreshold() / connectionCriticalThreshold()</td><td>Connection usage ratio thresholds</td></tr>
+<tr><td>AlertThresholds</td><td>withConnectionWarningThreshold() / withConnectionCriticalThreshold()</td><td>Fluent threshold setters (0.0–1.0)</td></tr>
+<tr><td>AlertThresholds</td><td>abortedRateThreshold() / withAbortedRateThreshold()</td><td>Aborted connection rate threshold</td></tr>
+<tr><td>AlertThresholds</td><td>slowQueryThreshold() / withSlowQueryThreshold()</td><td>Slow query time threshold in seconds</td></tr>
+<tr><td>AlertThresholds</td><td>threadRunningThreshold() / withThreadRunningThreshold()</td><td>Thread running ratio threshold</td></tr>
+<tr><td>AlertThresholds</td><td>connectionErrorsThreshold() / withConnectionErrorsThreshold()</td><td>Absolute connection error count threshold</td></tr>
+<tr><td>AlertThresholds</td><td>watchedMetrics() / withWatchedMetrics() / watches()</td><td>Filter which metrics are actively watched</td></tr>
+<tr><td>AlertThresholds</td><td>toastEnabled() / withToastEnabled() / toastPosition() / toastDuration()</td><td>Toast notification settings</td></tr>
+<tr><td>AlertNotifier</td><td>new() / withDefaults()</td><td>Factory (muted by default when no factory provided)</td></tr>
+<tr><td>AlertNotifier</td><td>notify(Alert) / notifyWarning() / notifyCritical() / notifyInfo()</td><td>Send notifications (all return new instance)</td></tr>
+<tr><td>AlertNotifier</td><td>withMuted() / isMuted()</td><td>Mute state control</td></tr>
+<tr><td>AlertNotifier</td><td>withToastFactory()</td><td>Late-bind toast factory</td></tr>
+<tr><td>AlertNotifier</td><td>view(background, width, height)</td><td>Compose toast over viewport string</td></tr>
+<tr><td>AlertNotifier</td><td>toast() / hasActiveAlert()</td><td>Direct toast access and state query</td></tr>
+<tr><td>AlertManager</td><td>new()</td><td>Fresh manager with default thresholds</td></tr>
+<tr><td>AlertManager</td><td>withThresholds() / withNotifier()</td><td>Attach threshold config and notifier</td></tr>
+<tr><td>AlertManager</td><td>checkConnectionUsage(ConnectionCounters)</td><td>Evaluate connection counters, return array&lt;string, Alert&gt;</td></tr>
+<tr><td>AlertManager</td><td>checkAllMetrics(statusVars, serverVars)</td><td>Evaluate SHOW GLOBAL STATUS/VARIABLES, return array&lt;string, Alert&gt;</td></tr>
+<tr><td>AlertManager</td><td>checkAndDispatch(ConnectionCounters)</td><td>Combined check + notify, returns ['alerts', 'notifier']</td></tr>
+<tr><td>HistoryStoreInterface</td><td>save(entry)</td><td>Persist a history entry (query, duration_ms, rows_affected, error, ts)</td></tr>
+<tr><td>HistoryStoreInterface</td><td>query(from, to, limit)</td><td>Retrieve history entries within time range</td></tr>
+<tr><td>HistoryStoreInterface</td><td>prune(before)</td><td>Delete entries older than given DateTimeImmutable</td></tr>
+<tr><td>HistoryStoreInterface</td><td>count()</td><td>Return total number of stored entries</td></tr>
+<tr><td>SqliteHistoryStore</td><td>open(path)</td><td>Open or create SQLite file with WAL mode</td></tr>
+<tr><td>SqliteHistoryStore</td><td>—</td><td>HistoryStoreInterface via SQLite. Schema: id, query, duration_ms, rows_affected, error, ts. Auto-prunes at 1000 entries on save().</td></tr>
+<tr><td>HistoryRecorder</td><td>provideStatusSnapshot(previous)</td><td>Implements StatusSnapshotProviderInterface. Calls store->save() when invoked by polling loop.</td></tr>
+<tr><td>HistoryQuery</td><td>queriesPerSecond(from, to)</td><td>Compute QPS over a time range</td></tr>
+<tr><td>HistoryQuery</td><td>averageDuration(from, to)</td><td>Compute mean execution time in ms over a time range</td></tr>
+<tr><td>HistoryQuery</td><td>errorRate(from, to)</td><td>Compute fraction of queries that resulted in error</td></tr>
+<tr><td>HistoryQuery</td><td>topQueries(limit)</td><td>Return most-frequent queries with counts</td></tr>
+<tr><td>PerfSchemaPage</td><td>new(context, ?detector, ?commitPlanner)</td><td>Factory. Validates PS accessibility via <code>SELECT COUNT(*) FROM performance_schema.setup_instruments</code>. 7 tabs: Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options.</td></tr>
+<tr><td>PerfSchemaPage</td><td>update(Msg)</td><td>Handles keyboard: j/k nav rows, Space/Enter toggle, Tab/Shift+Tab switch tabs, c commit (when dirty), r revert (when dirty), 1/2/3 Easy Setup, q quit. Returns [newPage, ?Closure].</td></tr>
+<tr><td>PerfSchemaPage</td><td>instruments() / consumers() / actors() / objects() / threads() / timers()</td><td>Read current tab's model list.</td></tr>
+<tr><td>PerfSchemaPage</td><td>activeTab() / selectedRowIndex() / isReadOnly() / setupState()</td><td>Read page state: active tab name, cursor index, privilege status, detected PS setup state (fully/default/custom/disabled).</td></tr>
+<tr><td>SetupTimers</td><td>new(name, timerName)</td><td>Factory.</td></tr>
+<tr><td>SetupTimers</td><td>withTimerName(timerName)</td><td>Return new instance with updated timer. Marks dirty and sets changeType to <code>CHANGE_UPDATE</code>. No-op when timer name is unchanged.</td></tr>
+<tr><td>SetupTimers</td><td>isDirty()</td><td>True if timer has been modified since load.</td></tr>
+<tr><td>SetupTimers</td><td>getChangeType()</td><td>Returns <code>CHANGE_UPDATE</code> or <code>CHANGE_NONE</code>.</td></tr>
+<tr><td>SetupTimers</td><td>commitStatements()</td><td>Returns <code>['UPDATE performance_schema.setup_timers SET TIMER_NAME='NANOSECOND' WHERE NAME='wait'']</code> when dirty and changeType is <code>CHANGE_UPDATE</code>. Returns <code>[]</code> otherwise (including on MySQL ≥8.0 where instances are clean from performance_timers).</td></tr>
+<tr><td>SetupTimers</td><td>nameUpper() / isCycle()</td><td>Helpers: timer name in uppercase, true if CYCLE timer.</td></tr>
+<tr><td>SetupThreads</td><td>new(threadId, name, type, ?processlistId, ?processlistUser, ?processlistCommand, ?processlistInfo, instrumented=true)</td><td>Factory. <code>instrumented</code> defaults to <code>true</code>.</td></tr>
+<tr><td>SetupThreads</td><td>withInstrumented(bool)</td><td>Return new instance with updated INSTRUMENTED flag. Marks dirty. No-op when state is unchanged.</td></tr>
+<tr><td>SetupThreads</td><td>isDirty()</td><td>True if thread's INSTRUMENTED state has been modified.</td></tr>
+<tr><td>SetupThreads</td><td>isForeground() / isBackground() / hasProcesslist()</td><td>Type predicates.</td></tr>
+<tr><td>SetupThreads</td><td>instrumentedFragment()</td><td>Returns SQL fragment: <code>THREAD_ID = 123 AND INSTRUMENTED = 'YES'</code> (or <code>'NO'</code>). Used by CommitPlanner to build a batch UPDATE ... WHERE IN() clause.</td></tr>
+<tr><td>SetupThreads</td><td>commitStatements()</td><td>Returns <code>[]</code> — individual threads delegate to CommitPlanner for the batch IN() update. Stub for interface compatibility.</td></tr>
+<tr><td>CommitPlanner</td><td>new(instruments, consumers, actors, objects)</td><td>Factory. Takes arrays of dirty-tracking model instances.</td></tr>
+<tr><td>CommitPlanner</td><td>commitAll()</td><td>Generate all SQL statements for dirty instruments (anchored RLIKE), consumers (IN), actors (INSERT/UPDATE/DELETE), and objects (INSERT/UPDATE/DELETE). Returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code> — fully parameterized with <code>?</code> placeholders and bound values, no string interpolation. Returns <code>[]</code> when nothing is dirty. SetupTimers/SetupThreads wiring deferred to STEP 5.3.</td></tr>
+<tr><td>CommitPlanner</td><td>commitInstruments()</td><td>Group dirty instruments by (enabled, timed) bucket; emit one <code>UPDATE ... WHERE NAME RLIKE '^...$'</code> per bucket. Pattern is anchored (<code>^name$</code>) and regex-escaped via <code>preg_quote()</code>; metacharacters like <code>.</code> <code>/</code> <code>(</code> <code>)</code> are matched literally. Returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code>.</td></tr>
+<tr><td>CommitPlanner</td><td>commitConsumers()</td><td>Group dirty consumers by enabled state; emit one <code>UPDATE ... WHERE NAME IN (?,?,...)</code> per group. All names bound as <code>?</code> placeholders. Returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code>.</td></tr>
+<tr><td>CommitPlanner</td><td>commitActors()</td><td>Emit parameterized INSERT/UPDATE/DELETE for actors based on <code>getChangeType()</code>. All string values (HOST, USER, ROLE, ENABLED) bound as <code>?</code>. Returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code>.</td></tr>
+<tr><td>CommitPlanner</td><td>commitObjects()</td><td>Emit parameterized INSERT/UPDATE/DELETE for objects based on <code>getChangeType()</code>. All string values (OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, ENABLED, TIMED) bound as <code>?</code>. Returns <code>list&lt;array{sql:string, params:list&lt;mixed&gt;}&gt;</code>.</td></tr>
+<tr><td>CommitPlanner</td><td>isDirty()</td><td>True if any tracked model is dirty.</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--surface);">
+    <div class="container">
+        <h2>Smoke Testing.</h2>
+        <p class="lede">Manual verification checklist — CI runs unit tests against fakes; these steps validate end-to-end behavior against real database servers.</p>
+
+        <h3>SQLite smoke (browser regression)</h3>
+        <p>No live server needed. Tests the TUI layer and async cache with an in-memory SQLite connection.</p>
+        <ol>
+            <li><code>php bin/candy-query --dsn sqlite:///tmp/smoke_test.db</code> — launches; table list populates within 1 second.</li>
+            <li>Press <kbd>Tab</kbd> to cycle panes — Schema Browser, Query Editor, History, Results all render without crash.</li>
+            <li>Press <kbd>n</kbd> in Schema Browser — new table dialog opens; confirm/cancel works.</li>
+            <li>Press <kbd>e</kbd> in table list — rows load with spinner; second tick shows rows (async cache).</li>
+            <li>Press <kbd>r</kbd> in Query Editor — run a <code>SELECT 1</code>; result grid renders correctly.</li>
+            <li>Press <kbd>x</kbd> in Results pane — CSV export produces valid RFC-4180 output (no trailing space padding, formula guard active).</li>
+            <li>Press <kbd>q</kbd> — clean exit; no segfault or panic.</li>
+        </ol>
+
+        <h3>MySQL smoke (admin pages + round-trips)</h3>
+        <p>Requires a scratch MySQL 5.6+ instance. Validates all 7 admin panes, version gating, and write round-trips.</p>
+        <ol>
+            <li><code>php bin/candy-query --dsn mysql://user:pass@localhost:3306/testdb</code> — connects; status bar shows MySQL version.</li>
+            <li>Admin pages reachable via number keys (1–7):
+                <ul>
+                    <li><kbd>1</kbd> Server Status — sidebar gauges (Connections, Traffic, Key Efficiency, QPS, InnoDB) render with live rate calculations; restart detection badge works.</li>
+                    <li><kbd>2</kbd> Process List — PS path active when <code>performance_schema = ON</code>; KILL button kills a test connection cleanly; KILL QUERY aborts a running query.</li>
+                    <li><kbd>3</kbd> Connections — connection list loads; ConnectionActions (kill, killQuery, setInstrumentation) all respond.</li>
+                    <li><kbd>4</kbd> Variables — [e] opens edit dialog for dynamic vars; [p] cycles GLOBAL/PERSIST/PERSIST_ONLY modes; error 1238 surfaces for static vars; SET PERSIST_ONLY commits successfully on MySQL 8+.</li>
+                    <li><kbd>5</kbd> Performance Schema — Easy Setup badge shows (fully/default/custom/disabled); all 7 tabs navigate; [c] commits dirty changes; on MySQL 5.5, actors tab is empty (version gate).</li>
+                    <li><kbd>6</kbd> Reports — category tree loads from catalog; [h]/[l] cycle categories; [ ] cycle reports; report executes and renders with unit toggle [c]; [x] exports CSV.</li>
+                    <li><kbd>7</kbd> Dashboard — widgets render with real values; alert toasts fire once on breach entry (not every tick); history recorder responds to poll loop.</li>
+                </ul>
+            </li>
+            <li>Variables edit round-trip: <kbd>4</kbd> → pick <code>wait_timeout</code> → [e] → change value → [Enter] confirm → verify variable updated via <code>SHOW GLOBAL VARIABLES LIKE 'wait_timeout'</code>.</li>
+            <li>PS instrument commit round-trip: <kbd>5</kbd> → Instruments tab → Space toggles a row → [c] commits → verify via <code>SELECT * FROM performance_schema.setup_instruments WHERE NAME = '...'</code>.</li>
+            <li>CSV export round-trip: <kbd>6</kbd> → navigate to a report → [x] → save to /tmp/export.csv → verify file is valid RFC-4180 CSV (no trailing spaces, formula cells prefixed with <code>'</code>).</li>
+            <li>Replica panel (MySQL 5.7.6+): connect to a replica → <kbd>1</kbd> → Server Status → replica card shows configured/not-configured state; [g] opens GTID mode selector; [c] cycles modes; Enter commits <code>SET @@GLOBAL.GTID_MODE = ...</code>.</li>
+        </ol>
+
+        <h3>PostgreSQL smoke</h3>
+        <p>Requires a scratch PostgreSQL 10+ instance. Validates PostgresWidgetCatalog and pg_stat_database aggregation.</p>
+        <ol>
+            <li><code>php bin/candy-query --dsn pgsql://user:pass@localhost:5432/testdb</code> — connects; status bar shows PostgreSQL version.</li>
+            <li>Widgets show pg_stat_database-backed values (not empty/not stub).</li>
+            <li>shared_buffers shows byte value (scaled from 8KB block count × 8192).</li>
+        </ol>
+
+        <h3>Known limitations (documented, not fixed in this audit)</h3>
+        <ul>
+            <li><code>hasStoredPrograms()</code> in ServerStatusPage renders via a sync <code>information_schema.ROUTINES</code> query. Low-overhead on typical servers; worth monitoring on routine-heavy schemas.</li>
+            <li>GTID mode cycling uses <code>array_search</code> strict comparison — current enum value is shown verbatim; cycling starts at index 0 on mismatch. MySQL normalizes GTID_MODE to uppercase so this is academic.</li>
+            <li>CSV export for empty tables produces a blank file (LIMIT 0/LIMIT 1 column detection requires at least one row).</li>
+            <li>AlertNotifier is <code>final</code> — spy injection via <code>ReflectionProperty::setValue()</code> blocked by PHP typed-property enforcement. Dedup behavioral test deferred.</li>
+        </ul>
+    </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-query/.vhs/play.gif" alt="Play">
+                <h3>Play</h3>
+                <span class="demo-caption">Browse tables, load rows, run an ad-hoc query.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-query/.vhs/query-history.gif" alt="Query history">
+                <h3>Query history</h3>
+                <span class="demo-caption">↑↓ cycles through history, Ctrl+F favorites a query.</span>
+            </div>
+        </div>
+    </div>
+</section>

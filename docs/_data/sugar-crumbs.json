@@ -1,0 +1,11 @@
+{
+    "title": "SugarCrumbs — SugarCraft",
+    "description": "SugarCrumbs: Navigation breadcrumbs for terminal UIs. PHP port of KevM/bubbleo.",
+    "ogTitle": "SugarCrumbs — SugarCraft",
+    "ogDescription": "Navigation breadcrumbs for terminal UIs. Port of KevM/bubbleo.",
+    "emoji": "",
+    "displayName": "SugarCrumbs",
+    "tagline": "Navigation breadcrumbs for terminal UIs",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/KevM/bubbleo\" style=\"color: inherit;\">KevM/bubbleo</a></span>\n          <span class=\"tag-chip\">navigation</span><span class=\"tag-chip\">breadcrumb</span><span class=\"tag-chip\">routing</span>"
+}

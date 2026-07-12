@@ -1,0 +1,11 @@
+{
+    "title": "CandyQuery — SugarCraft",
+    "description": "CandyQuery: Terminal SQLite browser. PHP port of lazysql.",
+    "ogTitle": "CandyQuery — SugarCraft",
+    "ogDescription": "Terminal SQLite browser. Port of lazysql.",
+    "emoji": "🔎",
+    "displayName": "CandyQuery",
+    "tagline": "Terminal SQLite browser",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/jorgerojas26/lazysql\" style=\"color: inherit;\">lazysql</a></span>\n          <span class=\"tag-chip\">sql</span>\n          <span class=\"tag-chip\">sqlite</span>\n          <span class=\"tag-chip\">tui</span>\n          <span class=\"tag-chip\">pdo</span>"
+}

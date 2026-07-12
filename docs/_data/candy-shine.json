@@ -1,0 +1,11 @@
+{
+    "title": "CandyShine — SugarCraft",
+    "description": "CandyShine: Markdown → ANSI renderer. PHP port of glamour.",
+    "ogTitle": "CandyShine — SugarCraft",
+    "ogDescription": "Markdown → ANSI renderer. Port of glamour.",
+    "emoji": "🌟",
+    "displayName": "CandyShine",
+    "tagline": "Markdown → ANSI renderer",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/glamour\" style=\"color: inherit;\">glamour</a></span>\n          <span class=\"tag-chip\">markdown</span>\n          <span class=\"tag-chip\">ansi</span>\n          <span class=\"tag-chip\">renderer</span>\n          <span class=\"tag-chip\">themes</span>"
+}

@@ -1,0 +1,11 @@
+{
+    "title": "CandyServe — SugarCraft",
+    "description": "CandyServe: Self-hostable Git server over SSH + Git + HTTP. PHP port of charmbracelet/soft-serve.",
+    "ogTitle": "CandyServe — SugarCraft",
+    "ogDescription": "Self-hostable Git server over SSH + Git + HTTP. Port of charmbracelet/soft-serve.",
+    "emoji": "",
+    "displayName": "CandyServe",
+    "tagline": "Self-hostable Git server over SSH + Git + HTTP",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/soft-serve\" style=\"color: inherit;\">charmbracelet/soft-serve</a></span>\n          <span class=\"tag-chip\">git</span><span class=\"tag-chip\">server</span><span class=\"tag-chip\">ssh</span><span class=\"tag-chip\">self-hosted</span>"
+}

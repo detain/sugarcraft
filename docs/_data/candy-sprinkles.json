@@ -1,0 +1,11 @@
+{
+    "title": "CandySprinkles — SugarCraft",
+    "description": "CandySprinkles: Declarative styling + layout. PHP port of lipgloss.",
+    "ogTitle": "CandySprinkles — SugarCraft",
+    "ogDescription": "Declarative styling + layout. Port of lipgloss.",
+    "emoji": "✨",
+    "displayName": "CandySprinkles",
+    "tagline": "Declarative styling + layout",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/lipgloss\" style=\"color: inherit;\">lipgloss</a></span>\n          <span class=\"tag-chip\">styling</span>\n          <span class=\"tag-chip\">layout</span>\n          <span class=\"tag-chip\">borders</span>\n          <span class=\"tag-chip\">tables</span>\n          <span class=\"tag-chip\">trees</span>"
+}

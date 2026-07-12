@@ -1,0 +1,11 @@
+{
+    "title": "SugarPost — SugarCraft",
+    "description": "SugarPost: Email sending — SMTP, API transports, attachments. PHP port of charmbracelet/skate.",
+    "ogTitle": "SugarPost — SugarCraft",
+    "ogDescription": "Email sending — SMTP, API transports, attachments. Port of charmbracelet/skate.",
+    "emoji": "",
+    "displayName": "SugarPost",
+    "tagline": "Email sending — SMTP, API transports, attachments",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/skate\" style=\"color: inherit;\">charmbracelet/skate</a></span>\n          <span class=\"tag-chip\">email</span><span class=\"tag-chip\">mail</span><span class=\"tag-chip\">smtp</span><span class=\"tag-chip\">attachment</span>"
+}

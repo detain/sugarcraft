@@ -1,0 +1,11 @@
+{
+    "title": "SugarPrompt — SugarCraft",
+    "description": "SugarPrompt: Interactive forms — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker. PHP port of huh.",
+    "ogTitle": "SugarPrompt — SugarCraft",
+    "ogDescription": "Interactive forms — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker. Port of huh.",
+    "emoji": "💬",
+    "displayName": "SugarPrompt",
+    "tagline": "Interactive forms — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/huh\" style=\"color: inherit;\">huh</a></span>\n          <span class=\"tag-chip\">forms</span>\n          <span class=\"tag-chip\">wizards</span>\n          <span class=\"tag-chip\">validation</span>"
+}

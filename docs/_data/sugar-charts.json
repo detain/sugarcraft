@@ -1,0 +1,11 @@
+{
+    "title": "SugarCharts — SugarCraft",
+    "description": "SugarCharts: Terminal charts for SugarCraft. PHP port of ntcharts.",
+    "ogTitle": "SugarCharts — SugarCraft",
+    "ogDescription": "Terminal charts for SugarCraft. Port of ntcharts.",
+    "emoji": "📊",
+    "displayName": "SugarCharts",
+    "tagline": "Terminal charts for SugarCraft",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/NimbleMarkets/ntcharts\" style=\"color: inherit;\">ntcharts</a></span>\n          <span class=\"tag-chip\">charts</span>\n          <span class=\"tag-chip\">sparkline</span>\n          <span class=\"tag-chip\">heatmap</span>\n          <span class=\"tag-chip\">sixel</span>\n          <span class=\"tag-chip\">kitty</span>\n          <span class=\"tag-chip\">iterm2</span>"
+}

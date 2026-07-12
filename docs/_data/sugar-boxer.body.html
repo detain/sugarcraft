@@ -1,0 +1,96 @@
+<p class="lede" style="margin-top: 28px;">Compose terminal layouts with horizontal and vertical panels. Attach borders, set individual widths/heights, and nest arbitrarily deep.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-boxer</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Boxer\SugarBoxer;
+use SugarCraft\Sprinkles\{Align, Border};
+
+$boxer = SugarBoxer::new();
+
+$layout = $boxer-&gt;vertical(
+    $boxer-&gt;horizontal(
+        $boxer-&gt;leaf('Left panel'),
+        $boxer-&gt;leaf('Right panel'),
+    ),
+    $boxer-&gt;leaf('Bottom bar'),
+);
+
+echo $boxer-&gt;render($layout, 60, 20);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>H/V panels</strong><span>Row and column composition with weighted sizing.</span></div>
+            <div class="feature"><strong>Borders</strong><span>Pre-attached or custom borders per panel.</span></div>
+            <div class="feature"><strong>Nested layouts</strong><span>Arbitrarily deep nesting — grids within grids.</span></div>
+            <div class="feature"><strong>Word-wrap</strong><span>Content-aware panel sizing.</span></div>
+            <div class="feature"><strong>ANSI-aware</strong><span>Styled content places by visible columns; no escape mis-width or colour bleed.</span></div>
+            <div class="feature"><strong>Flex / grow</strong><span>withFlex/withGrow children fill leftover space — fixed header/status, filling content.</span></div>
+
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-boxer">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-boxer/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-boxer/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/treilik/bubbleboxer">treilik/bubbleboxer</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>SugarBoxer</td><td>new()</td><td>Create a boxer instance</td></tr>
+<tr><td>SugarBoxer</td><td>leaf(string)</td><td>Leaf node with string content</td></tr>
+<tr><td>SugarBoxer</td><td>horizontal(Node ...)</td><td>Horizontal (row) layout</td></tr>
+<tr><td>SugarBoxer</td><td>vertical(Node ...)</td><td>Vertical (column) layout</td></tr>
+<tr><td>SugarBoxer</td><td>noBorder(Node)</td><td>Flat layout without separators</td></tr>
+<tr><td>SugarBoxer</td><td>render(Node, int $width, int $height)</td><td>Render to ANSI string</td></tr>
+<tr><td>Node</td><td>leaf(string)</td><td>Static leaf constructor</td></tr>
+<tr><td>Node</td><td>horizontal(Node ...)</td><td>Static horizontal constructor</td></tr>
+<tr><td>Node</td><td>vertical(Node ...)</td><td>Static vertical constructor</td></tr>
+<tr><td>Node</td><td>noBorder(Node)</td><td>Static no-border constructor</td></tr>
+<tr><td>Node</td><td>withMinWidth(int)</td><td>Minimum width hint</td></tr>
+<tr><td>Node</td><td>withMaxWidth(int)</td><td>Maximum width hint</td></tr>
+<tr><td>Node</td><td>withMinHeight(int)</td><td>Minimum height hint</td></tr>
+<tr><td>Node</td><td>withMaxHeight(int)</td><td>Maximum height hint</td></tr>
+<tr><td>Node</td><td>withPadding(int)</td><td>Inner padding (cells)</td></tr>
+<tr><td>Node</td><td>withBorder(bool)</td><td>Show/hide box border</td></tr>
+<tr><td>Node</td><td>withSpacing(int)</td><td>Gap between children (cells)</td></tr>
+<tr><td>Node</td><td>withBorderStyle(?Border)</td><td>Border char set from candy-sprinkles</td></tr>
+<tr><td>Node</td><td>withStyle(?Style)</td><td>Style (color, attributes) from candy-sprinkles</td></tr>
+<tr><td>Node</td><td>withTitle(string)</td><td>Box title text</td></tr>
+<tr><td>Node</td><td>withMargin(int $top, ...)</td><td>Outer margin (top/right/bottom/left)</td></tr>
+<tr><td>Node</td><td>withAlignH(Align)</td><td>Horizontal text alignment</td></tr>
+<tr><td>Node</td><td>withAlignV(VAlign)</td><td>Vertical text alignment</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-boxer/.vhs/borders.gif" alt="Border styles">
+                <h3>Border styles</h3>
+                <span class="demo-caption">No-border, padded, single-line, double-line layouts.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-boxer/.vhs/basic.gif" alt="Basic compose">
+                <h3>Basic compose</h3>
+                <span class="demo-caption">Horizontal + vertical panels with weighted sizing.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-boxer/.vhs/nested.gif" alt="Nested grids">
+                <h3>Nested grids</h3>
+                <span class="demo-caption">A grid-of-grids — header / body / footer with sidebars.</span>
+            </div>
+        </div>
+    </div>
+</section>
