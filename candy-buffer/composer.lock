@@ -8,6 +8,53 @@
     "packages": [],
     "packages-dev": [
         {
+            "name": "evenement/evenement",
+            "version": "v3.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/igorw/evenement.git",
+                "reference": "0a16b0d71ab13284339abb99d9d2bd813640efbc"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/igorw/evenement/zipball/0a16b0d71ab13284339abb99d9d2bd813640efbc",
+                "reference": "0a16b0d71ab13284339abb99d9d2bd813640efbc",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9 || ^6"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Evenement\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Igor Wiedler",
+                    "email": "igor@wiedler.ch"
+                }
+            ],
+            "description": "Événement is a very simple event dispatching library for PHP",
+            "keywords": [
+                "event-dispatcher",
+                "event-emitter"
+            ],
+            "support": {
+                "issues": "https://github.com/igorw/evenement/issues",
+                "source": "https://github.com/igorw/evenement/tree/v3.0.2"
+            },
+            "time": "2023-08-08T05:53:35+00:00"
+        },
+        {
             "name": "myclabs/deep-copy",
             "version": "1.13.4",
             "source": {
@@ -800,6 +847,84 @@
                 }
             ],
             "time": "2025-08-19T18:57:03+00:00"
+        },
+        {
+            "name": "react/stream",
+            "version": "v1.4.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/stream.git",
+                "reference": "1e5b0acb8fe55143b5b426817155190eb6f5b18d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/stream/zipball/1e5b0acb8fe55143b5b426817155190eb6f5b18d",
+                "reference": "1e5b0acb8fe55143b5b426817155190eb6f5b18d",
+                "shasum": ""
+            },
+            "require": {
+                "evenement/evenement": "^3.0 || ^2.0 || ^1.0",
+                "php": ">=5.3.8",
+                "react/event-loop": "^1.2"
+            },
+            "require-dev": {
+                "clue/stream-filter": "~1.2",
+                "phpunit/phpunit": "^9.6 || ^5.7 || ^4.8.36"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\Stream\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@clue.engineering",
+                    "homepage": "https://clue.engineering/"
+                },
+                {
+                    "name": "Cees-Jan Kiewiet",
+                    "email": "reactphp@ceesjankiewiet.nl",
+                    "homepage": "https://wyrihaximus.net/"
+                },
+                {
+                    "name": "Jan Sorgalla",
+                    "email": "jsorgalla@gmail.com",
+                    "homepage": "https://sorgalla.com/"
+                },
+                {
+                    "name": "Chris Boden",
+                    "email": "cboden@gmail.com",
+                    "homepage": "https://cboden.dev/"
+                }
+            ],
+            "description": "Event-driven readable and writable streams for non-blocking I/O in ReactPHP",
+            "keywords": [
+                "event-driven",
+                "io",
+                "non-blocking",
+                "pipe",
+                "reactphp",
+                "readable",
+                "stream",
+                "writable"
+            ],
+            "support": {
+                "issues": "https://github.com/reactphp/stream/issues",
+                "source": "https://github.com/reactphp/stream/tree/v1.4.0"
+            },
+            "funding": [
+                {
+                    "url": "https://opencollective.com/reactphp",
+                    "type": "open_collective"
+                }
+            ],
+            "time": "2024-06-11T12:45:25+00:00"
         },
         {
             "name": "sebastian/cli-parser",
@@ -1760,12 +1885,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-ansi.git",
-                "reference": "e83648c33b6b1eb4f67ccb792cb88f088b8f4a50"
+                "reference": "060650a4fa0e5150a2c895e75563c1d277eef00f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-ansi/zipball/e83648c33b6b1eb4f67ccb792cb88f088b8f4a50",
-                "reference": "e83648c33b6b1eb4f67ccb792cb88f088b8f4a50",
+                "url": "https://api.github.com/repos/sugarcraft/candy-ansi/zipball/060650a4fa0e5150a2c895e75563c1d277eef00f",
+                "reference": "060650a4fa0e5150a2c895e75563c1d277eef00f",
                 "shasum": ""
             },
             "require": {
@@ -1809,65 +1934,7 @@
                 "issues": "https://github.com/sugarcraft/candy-ansi/issues",
                 "source": "https://github.com/sugarcraft/candy-ansi"
             },
-            "time": "2026-07-01T08:18:28+00:00"
-        },
-        {
-            "name": "sugarcraft/candy-async",
-            "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sugarcraft/candy-async.git",
-                "reference": "5750543c5c85341ed064f4e887604b489d323335"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-async/zipball/5750543c5c85341ed064f4e887604b489d323335",
-                "reference": "5750543c5c85341ed064f4e887604b489d323335",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.3",
-                "react/event-loop": "^1.6",
-                "react/promise": "^3.3",
-                "sugarcraft/candy-core": "dev-master"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "default-branch": true,
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Async\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Joe Huss",
-                    "email": "detain@interserver.net",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
-            "homepage": "https://github.com/sugarcraft/candy-async",
-            "keywords": [
-                "async",
-                "cancellation",
-                "event-loop",
-                "promise",
-                "reactphp",
-                "sugarcraft"
-            ],
-            "support": {
-                "docs": "https://github.com/sugarcraft/candy-async/blob/master/README.md",
-                "issues": "https://github.com/sugarcraft/candy-async/issues",
-                "source": "https://github.com/sugarcraft/candy-async"
-            },
-            "time": "2026-07-04T22:42:44+00:00"
+            "time": "2026-07-12T11:02:54+00:00"
         },
         {
             "name": "sugarcraft/candy-core",
@@ -1875,19 +1942,18 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-core.git",
-                "reference": "44a724255e082a72eff0055dd55391ecf0c31e47"
+                "reference": "16bc8a4112e8af6a63584dcca5e8c26d692659bc"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-core/zipball/44a724255e082a72eff0055dd55391ecf0c31e47",
-                "reference": "44a724255e082a72eff0055dd55391ecf0c31e47",
+                "url": "https://api.github.com/repos/sugarcraft/candy-core/zipball/16bc8a4112e8af6a63584dcca5e8c26d692659bc",
+                "reference": "16bc8a4112e8af6a63584dcca5e8c26d692659bc",
                 "shasum": ""
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
-                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-pty": "dev-master"
             },
             "require-dev": {
@@ -1933,7 +1999,7 @@
                 "issues": "https://github.com/sugarcraft/candy-core/issues",
                 "source": "https://github.com/sugarcraft/candy-core"
             },
-            "time": "2026-07-09T14:40:42+00:00"
+            "time": "2026-07-12T15:21:48+00:00"
         },
         {
             "name": "sugarcraft/candy-input",
@@ -1941,16 +2007,17 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-input.git",
-                "reference": "cee8ab4b3ebad01abf2f8eff852d137283973075"
+                "reference": "112ea059f551d78c74611709563af99b5745c965"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/cee8ab4b3ebad01abf2f8eff852d137283973075",
-                "reference": "cee8ab4b3ebad01abf2f8eff852d137283973075",
+                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/112ea059f551d78c74611709563af99b5745c965",
+                "reference": "112ea059f551d78c74611709563af99b5745c965",
                 "shasum": ""
             },
             "require": {
                 "php": "^8.3",
+                "react/stream": "^1.2",
                 "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
@@ -1992,7 +2059,7 @@
                 "issues": "https://github.com/sugarcraft/candy-input/issues",
                 "source": "https://github.com/sugarcraft/candy-input"
             },
-            "time": "2026-07-04T22:42:44+00:00"
+            "time": "2026-07-12T00:35:04+00:00"
         },
         {
             "name": "sugarcraft/candy-pty",
@@ -2000,12 +2067,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "5a994acf803a3eb24e30fbdab56457df91c03f22"
+                "reference": "ed799b0d40db419c4d9ec8b21cb90b5c69aac388"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/5a994acf803a3eb24e30fbdab56457df91c03f22",
-                "reference": "5a994acf803a3eb24e30fbdab56457df91c03f22",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/ed799b0d40db419c4d9ec8b21cb90b5c69aac388",
+                "reference": "ed799b0d40db419c4d9ec8b21cb90b5c69aac388",
                 "shasum": ""
             },
             "require": {
@@ -2062,7 +2129,7 @@
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
                 "source": "https://github.com/sugarcraft/candy-pty"
             },
-            "time": "2026-07-04T22:42:44+00:00"
+            "time": "2026-07-11T21:18:43+00:00"
         },
         {
             "name": "theseer/tokenizer",

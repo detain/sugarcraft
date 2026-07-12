@@ -484,7 +484,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "b4c8bc37272946862f83f140e9250a3bfc12b479"
+                "reference": "1dd21498e249f92df969b48a4e66e4c93b01e1ab"
             },
             "require": {
                 "php": "^8.3",
@@ -544,7 +544,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-palette",
-                "reference": "7b796eee0bd34e56ca954c2255e8947e8a8bdd53"
+                "reference": "61af11b379620cf719323f9c65ece0ff23b34bb6"
             },
             "require": {
                 "php": "^8.3",
@@ -603,7 +603,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-pty",
-                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
+                "reference": "d59307116864687e064091cc4a2cb439203d3cb7"
             },
             "require": {
                 "ext-ffi": "*",

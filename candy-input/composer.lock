@@ -409,7 +409,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-pty",
-                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
+                "reference": "d59307116864687e064091cc4a2cb439203d3cb7"
             },
             "require": {
                 "ext-ffi": "*",

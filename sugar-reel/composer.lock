@@ -539,7 +539,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-flip",
-                "reference": "2fa03262420c6e509c10863a7236138426b41fd8"
+                "reference": "e725b1eafebbe6e10ac7e0504c82abce1e228187"
             },
             "require": {
                 "ext-gd": "*",
@@ -583,7 +583,6 @@
                 "gif",
                 "gifterm",
                 "sugarcraft",
-                "sugarcraft",
                 "tui"
             ],
             "support": {
@@ -602,7 +601,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "b4c8bc37272946862f83f140e9250a3bfc12b479"
+                "reference": "1dd21498e249f92df969b48a4e66e4c93b01e1ab"
             },
             "require": {
                 "php": "^8.3",
@@ -729,7 +728,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-palette",
-                "reference": "7b796eee0bd34e56ca954c2255e8947e8a8bdd53"
+                "reference": "61af11b379620cf719323f9c65ece0ff23b34bb6"
             },
             "require": {
                 "php": "^8.3",
@@ -788,7 +787,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-pty",
-                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
+                "reference": "d59307116864687e064091cc4a2cb439203d3cb7"
             },
             "require": {
                 "ext-ffi": "*",
@@ -2462,7 +2461,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-testing",
-                "reference": "f8fc95d3723ed891cc62546abfdc25c33a0f9121"
+                "reference": "b608cb74e996ca75cf161d281e6c1bcf3771d057"
             },
             "require": {
                 "php": "^8.3",

@@ -339,12 +339,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-buffer.git",
-                "reference": "253187cb398f6d576bb00d70c079dcaadfcb4129"
+                "reference": "defae7c48258f3cd749992fc5be8cfb8fb828f35"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-buffer/zipball/253187cb398f6d576bb00d70c079dcaadfcb4129",
-                "reference": "253187cb398f6d576bb00d70c079dcaadfcb4129",
+                "url": "https://api.github.com/repos/sugarcraft/candy-buffer/zipball/defae7c48258f3cd749992fc5be8cfb8fb828f35",
+                "reference": "defae7c48258f3cd749992fc5be8cfb8fb828f35",
                 "shasum": ""
             },
             "require": {
@@ -386,7 +386,7 @@
                 "issues": "https://github.com/sugarcraft/candy-buffer/issues",
                 "source": "https://github.com/sugarcraft/candy-buffer/tree/master"
             },
-            "time": "2026-07-09T17:26:08+00:00"
+            "time": "2026-07-11T23:00:08+00:00"
         },
         {
             "name": "sugarcraft/candy-core",
@@ -635,7 +635,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-pty",
-                "reference": "c5feb23dedf7ff4b266d43386832784c17abfb55"
+                "reference": "d59307116864687e064091cc4a2cb439203d3cb7"
             },
             "require": {
                 "ext-ffi": "*",
@@ -705,7 +705,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-sprinkles",
-                "reference": "0cddbfeef4c6d6cf5ec7f0734d9e8f1fb9b1ff31"
+                "reference": "70a09253b2702fb8635fea0c1468f57245762404"
             },
             "require": {
                 "php": "^8.3",
