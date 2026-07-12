@@ -54,6 +54,18 @@ final class Compiler
     private ?int $fontSize = null;
     private ?string $fontFamily = null;
 
+    /**
+     * Shell requested by a `Set Shell "<shell>"` directive. Null (default) means
+     * the tape renders in the byte-identical echo path — keystrokes are rasterized
+     * as typed characters and no subprocess runs. A non-null value opts the render
+     * into exec mode ({@see \SugarCraft\Vcr\Render\FrameStream}), where the typed
+     * commands are written to a real PTY and the program's output is captured into
+     * the frames — mirroring charmbracelet/vhs `Set Shell`. Kept as a render-time
+     * accessor ({@see shell()}) rather than a serialized header field, matching the
+     * existing {@see outputPath()} idiom for compile-resolved, render-only values.
+     */
+    private ?string $shell = null;
+
     private float $currentTime = 0.0;
 
     /** @var list<Event> */
@@ -155,6 +167,17 @@ final class Compiler
     }
 
     /**
+     * Shell requested by the tape's `Set Shell "<shell>"` directive, or null when
+     * the tape sets none. A non-null value opts the render into exec mode (real
+     * PTY + captured program output); null keeps the byte-identical echo path.
+     * Reflects the most recent compile() call. Mirrors charmbracelet/vhs Set Shell.
+     */
+    public function shell(): ?string
+    {
+        return $this->shell;
+    }
+
+    /**
      * Glyph cell size in pixels for a given font size, used both here (to derive
      * the terminal grid from the pixel image dimensions) and by
      * {@see \SugarCraft\Vcr\Encode\TapeToGif} (to size the rasterizer canvas). Kept
@@ -207,6 +230,7 @@ final class Compiler
         $this->playbackSpeed = null;
         $this->fontSize = null;
         $this->fontFamily = null;
+        $this->shell = null;
         $this->currentTime = 0.0;
         $this->events = [];
         $this->outputPath = null;
@@ -266,6 +290,10 @@ final class Compiler
             'PlaybackSpeed' => $this->playbackSpeed = $node->value !== '' ? (float) $node->value : null,
             'FontSize' => $this->fontSize = (int) $node->value,
             'FontFamily' => $this->fontFamily = trim($node->value, '"\' '),
+            // Opt-in exec mode: the tape's typed commands run in this shell and the
+            // program's real output is captured into the frames. Absence keeps the
+            // byte-identical echo path. Mirrors charmbracelet/vhs `Set Shell`.
+            'Shell' => $this->shell = trim($node->value, '"\' '),
             // Padding and Margin are accepted but not enforced (documented no-ops)
             default => null,
         };

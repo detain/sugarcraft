@@ -414,6 +414,12 @@ vendor/bin/candy-vcr render-tape demo.tape --encoder php
 # Strict mode — fail on unknown directives
 vendor/bin/candy-vcr render-tape demo.tape --strict
 
+# Exec mode — actually RUN the typed commands and capture the program's
+# output into the GIF (real vhs-style program demos, not just keystrokes).
+# Opt in via `Set Shell "sh"` inside the tape, or on the CLI:
+vendor/bin/candy-vcr render-tape demo.tape --shell sh
+vendor/bin/candy-vcr render-tape demo.tape --exec        # default shell ($SHELL/sh)
+
 # Batch render all .tape files in a directory
 vendor/bin/candy-vcr render-batch demos/
 
@@ -435,7 +441,39 @@ vendor/bin/candy-vcr render-batch demos/ -o output-gifs/
 | `--backend` | `-b` | Rasterizer backend: `gd` (default) or `imagick` |
 | `--encoder` | `-e` | GIF encoder: `ffmpeg` (default) or `php` |
 | `--strict` | | Error on unknown directives instead of skipping |
+| `--shell` | | Execute the typed commands in this shell under a real PTY and capture the program's output (exec mode). Overrides the tape's `Set Shell`. |
+| `--exec` | | Enable exec mode with a default shell (`$SHELL` or `/bin/sh`) when the tape sets no `Set Shell` |
 | `--dry-run` | | Print the compiled event stream as JSONL to stdout; no GIF is written |
+
+##### Exec mode — rendering program output (`Set Shell`)
+
+By default `render-tape` rasterizes the *keystrokes* a tape types — it
+never runs them, so it cannot render a demo of a program's output. Exec
+mode changes that: the tape's `Type`/`Enter`/`Ctrl+…` input is written to
+a **real PTY-hosted shell**, and the program's output is captured back
+into the frames on the tape clock (a `Sleep Ns` after `Enter` becomes the
+real read window during which output streams in) — the same model
+`charmbracelet/vhs` uses. This makes candy-vcr a drop-in `vhs`
+replacement for program-output demos.
+
+Enable it three ways, in precedence order: the CLI `--shell=<sh>`
+(operator override) → the tape's own `Set Shell "<sh>"` directive →
+`--exec` (default shell). **Absence of all three keeps the byte-identical
+echo path** — tapes with no shell render exactly as before.
+
+```tape
+Set Shell "sh"
+Type "php examples/spinner.php"
+Enter
+Sleep 3s
+```
+
+Exec mode needs a working PTY layer (ext-ffi + a readable/writable
+`/dev/ptmx` on POSIX). When a shell is requested but the PTY layer is
+unavailable, the render logs a warning and transparently falls back to
+echo mode instead of failing — so FFI-less hosts still render shell-less
+tapes. The spawned shell is interactive (`-i`) but **not** a login shell,
+so renders stay reproducible (no host-specific profile/MOTD noise).
 
 `--dry-run` runs Lexer → Parser → Compiler but skips the Renderer →
 Rasterizer → Encoder. The first stdout line is the compiled header
@@ -571,6 +609,7 @@ allowlist; unknown keys raise a `ParseError`:
 | `FontFamily` | TTF family name (resolved by `FontLoader`). |
 | `Padding` / `Margin` | Reserved for the rasterizer; accepted but not yet enforced. |
 | `PlaybackSpeed` | Speed multiplier (e.g. 2.0 = 2x speed, 0.5 = half speed). Applied in FrameStream during rendering. |
+| `Shell` | Opt into exec mode: run the typed commands in this shell under a real PTY and capture the program output into the frames (see [Exec mode](#exec-mode--rendering-program-output-set-shell)). Surfaced via `Compiler::shell()`; absence keeps the byte-identical echo path. |
 
 ```php
 // AST nodes (under SugarCraft\Vcr\Tape\Ast):
