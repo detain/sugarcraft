@@ -81,7 +81,7 @@ final class RenderBatchReuseTest extends TestCase
         $tape = $tempDir . '/x.tape';
         file_put_contents(
             $tape,
-            "Set Theme \"TokyoNight\"\nSet Width 20\nSet Height 5\nType \"x\"\nSleep 50ms\n",
+            "Set Theme \"TokyoNight\"\nSet Width 700\nSet Height 240\nType \"x\"\nSleep 50ms\n",
         );
 
         try {

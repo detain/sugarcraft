@@ -37,6 +37,15 @@ final readonly class CassetteHeader
      *   default theme.
      * @param float|null $playbackSpeed Speed multiplier (e.g. 2.0 = 2x speed, 0.5 = half speed).
      *   Defaults to null (not set) for backward compatibility with older cassettes.
+     * @param int|null $widthPx Output image WIDTH in pixels, as requested by a VHS-style
+     *   `Set Width <px>` directive (VHS default 1200). The terminal grid `cols` above is
+     *   DERIVED from this via the font cell width — pixels are NOT terminal columns. Null
+     *   for cassettes with no pixel-dim concept (e.g. the PTY recorder, which sets
+     *   `cols`/`rows` directly). Carried on the header so {@see \SugarCraft\Vcr\Tape\Decompiler}
+     *   can regenerate the original `Set Width` directive losslessly (deriving `cols` back
+     *   from pixels is not invertible).
+     * @param int|null $heightPx Output image HEIGHT in pixels (VHS `Set Height`, default 600).
+     *   `rows` is derived from this via the font cell height. See {@see $widthPx}.
      */
     public function __construct(
         public int $version,
@@ -51,12 +60,20 @@ final readonly class CassetteHeader
         public ?float $playbackSpeed = null,
         public ?int $fontSize = null,
         public ?string $fontFamily = null,
+        public ?int $widthPx = null,
+        public ?int $heightPx = null,
     ) {
         if ($version < 1) {
             throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");
         }
         if ($cols <= 0 || $rows <= 0) {
             throw new \InvalidArgumentException("CassetteHeader dimensions must be positive, got {$cols}x{$rows}");
+        }
+        if ($widthPx !== null && $widthPx < 1) {
+            throw new \InvalidArgumentException("CassetteHeader widthPx must be >= 1 when set, got {$widthPx}");
+        }
+        if ($heightPx !== null && $heightPx < 1) {
+            throw new \InvalidArgumentException("CassetteHeader heightPx must be >= 1 when set, got {$heightPx}");
         }
         if ($timestampMode !== self::TIMESTAMP_MODE_ABSOLUTE && $timestampMode !== self::TIMESTAMP_MODE_RELATIVE) {
             throw new \InvalidArgumentException(

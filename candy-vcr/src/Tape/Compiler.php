@@ -33,9 +33,20 @@ use SugarCraft\Vcr\Tape\Ast\WaitDirective;
  */
 final class Compiler
 {
+    /**
+     * VHS output-image defaults. `Set Width`/`Set Height` are PIXEL dimensions of
+     * the rendered image (NOT terminal columns/rows); the terminal grid is derived
+     * from them via the font cell size. Match charmbracelet/vhs defaults so a tape
+     * that omits `Set Width`/`Set Height`/`Set FontSize` renders at the same size a
+     * real `vhs` render would (1200x600 image, 22px font).
+     */
+    public const DEFAULT_WIDTH_PX = 1200;
+    public const DEFAULT_HEIGHT_PX = 600;
+    public const DEFAULT_FONT_SIZE = 22;
+
     private float $typingSpeed = 50.0;
-    private int $cols = 80;
-    private int $rows = 24;
+    private int $widthPx = self::DEFAULT_WIDTH_PX;
+    private int $heightPx = self::DEFAULT_HEIGHT_PX;
     private string $theme = 'TokyoNight';
     /** @var array<string, string> */
     private array $env = [];
@@ -100,11 +111,20 @@ final class Compiler
             $this->compileNode($node);
         }
 
+        // Derive the terminal grid from the pixel image dimensions and the font
+        // cell size, matching VHS: `Set Width`/`Set Height` are IMAGE pixels, and
+        // the number of columns/rows is (image size / cell size). Resolved once,
+        // after all directives are seen, so `Set FontSize` ordering vs
+        // `Set Width`/`Set Height` in the tape does not matter.
+        [$cellW, $cellH] = self::cellMetrics($this->fontSize ?? self::DEFAULT_FONT_SIZE);
+        $cols = max(1, intdiv($this->widthPx, $cellW));
+        $rows = max(1, intdiv($this->heightPx, $cellH));
+
         $header = new CassetteHeader(
             version: CassetteHeader::CURRENT_VERSION,
             createdAt: date('c'),
-            cols: $this->cols,
-            rows: $this->rows,
+            cols: $cols,
+            rows: $rows,
             runtime: 'SugarCraft/Vcr',
             timestampMode: CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
             env: $this->env,
@@ -113,6 +133,8 @@ final class Compiler
             playbackSpeed: $this->playbackSpeed,
             fontSize: $this->fontSize,
             fontFamily: $this->fontFamily,
+            widthPx: $this->widthPx,
+            heightPx: $this->heightPx,
         );
 
         return new Cassette($header, $this->events);
@@ -130,6 +152,24 @@ final class Compiler
     public function outputPath(): ?string
     {
         return $this->outputPath;
+    }
+
+    /**
+     * Glyph cell size in pixels for a given font size, used both here (to derive
+     * the terminal grid from the pixel image dimensions) and by
+     * {@see \SugarCraft\Vcr\Encode\TapeToGif} (to size the rasterizer canvas). Kept
+     * as the single source of truth so the compiled grid and the rendered canvas
+     * always agree — otherwise `cols * cellW` would not line up with the requested
+     * `Set Width` pixels.
+     *
+     * @return array{0: int, 1: int} [cellW, cellH] in pixels, each >= 1.
+     */
+    public static function cellMetrics(int $fontSize): array
+    {
+        $cellW = max(1, (int) floor($fontSize * 0.6));
+        $cellH = max(1, $fontSize * 2);
+
+        return [$cellW, $cellH];
     }
 
     /**
@@ -160,8 +200,8 @@ final class Compiler
     private function reset(): void
     {
         $this->typingSpeed = 50.0;
-        $this->cols = 80;
-        $this->rows = 24;
+        $this->widthPx = self::DEFAULT_WIDTH_PX;
+        $this->heightPx = self::DEFAULT_HEIGHT_PX;
         $this->theme = 'TokyoNight';
         $this->env = [];
         $this->playbackSpeed = null;
@@ -217,8 +257,10 @@ final class Compiler
     private function compileSet(SetDirective $node): void
     {
         match ($node->key) {
-            'Width' => $this->cols = (int) $node->value,
-            'Height' => $this->rows = (int) $node->value,
+            // VHS semantics: Width/Height are the OUTPUT IMAGE size in PIXELS, not
+            // terminal columns/rows. The grid is derived from these in compile().
+            'Width' => $this->widthPx = max(1, (int) $node->value),
+            'Height' => $this->heightPx = max(1, (int) $node->value),
             'Theme' => $this->theme = trim($node->value, '"\' '),
             'TypingSpeed' => $this->typingSpeed = $this->parseTypingSpeed($node->value),
             'PlaybackSpeed' => $this->playbackSpeed = $node->value !== '' ? (float) $node->value : null,
