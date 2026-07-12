@@ -30,6 +30,8 @@ final class RenderTapeCommand extends Command
             ->addOption('backend', 'b', InputOption::VALUE_OPTIONAL, 'Rasterizer backend: gd|imagick (default: gd)', 'gd')
             ->addOption('encoder', 'e', InputOption::VALUE_OPTIONAL, 'GIF encoder: ffmpeg|php (default: ffmpeg)', 'ffmpeg')
             ->addOption('strict', null, InputOption::VALUE_NONE, 'Error on unknown directives instead of skipping')
+            ->addOption('shell', null, InputOption::VALUE_REQUIRED, 'Execute typed commands in this shell under a real PTY and capture the program output (exec mode). Overrides the tape\'s Set Shell.')
+            ->addOption('exec', null, InputOption::VALUE_NONE, 'Enable exec mode with a default shell ($SHELL or /bin/sh) when the tape sets no Set Shell')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Print the compiled event stream as JSONL instead of writing a GIF');
     }
 
@@ -54,6 +56,10 @@ final class RenderTapeCommand extends Command
 
         $strict = (bool) $input->getOption('strict');
         $dryRun = (bool) $input->getOption('dry-run');
+
+        $shellOpt = $input->getOption('shell');
+        $shell = is_string($shellOpt) && $shellOpt !== '' ? $shellOpt : null;
+        $exec = (bool) $input->getOption('exec');
 
         $themeOpt = $input->getOption('theme');
         $themeName = is_string($themeOpt) ? $themeOpt : 'TokyoNight';
@@ -85,6 +91,8 @@ final class RenderTapeCommand extends Command
                 'theme' => $themeName,
                 'fontFamily' => $fontFamily,
                 'strict' => $strict,
+                'shell' => $shell,
+                'exec' => $exec,
             ]);
         } catch (\Throwable $e) {
             $output->writeln("<error>Failed: {$e->getMessage()}</error>");
