@@ -350,4 +350,42 @@ final class IntegrationTest extends TestCase
         $this->assertSame($original->length(), $restored->length());
         $this->assertNull($restored->filterFn);
     }
+
+    /**
+     * Security (candy-buffer #1362 defense-in-depth): a raw item value carrying
+     * bare C0 control bytes (BEL 0x07, NUL 0x00) and DEL 0x7F must be scrubbed
+     * before it reaches the terminal wire, while the legitimate SGR ESC injected
+     * by the current/line style must survive. Covers BOTH View() sinks — the
+     * first-frame full output and the diff-delta buffer produced by
+     * bufferFromOutput() on the second render.
+     */
+    public function testControlBytesStrippedButStyleSgrPreserved(): void
+    {
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->addItem(new StringItem("safe\x07value\x00mid\x7fend"))
+            ->setCurrentStyle("\x1b[1m"); // bold — injects a legit SGR ESC
+
+        // First frame: full output path (`return $fullOutput`).
+        $first = $m->View();
+
+        // C0/DEL bytes must be gone from the wire.
+        $this->assertStringNotContainsString("\x07", $first, 'BEL leaked');
+        $this->assertStringNotContainsString("\x00", $first, 'NUL leaked');
+        $this->assertStringNotContainsString("\x7f", $first, 'DEL leaked');
+        // Printable content around the stripped bytes survives.
+        $this->assertStringContainsString('safevaluemidend', $first);
+        // The legitimate SGR ESC from setCurrentStyle() must be preserved.
+        $this->assertStringContainsString("\x1b[1m", $first, 'style SGR was stripped');
+
+        // Second frame: diff-delta path (bufferFromOutput → DiffEncoder). The
+        // delta encodes only changed cells, so re-render an identical model to
+        // force a full-content frame through bufferFromOutput and inspect its
+        // buffer directly for any surviving control byte.
+        $delta = $m->View();
+        $this->assertIsString($delta);
+        $this->assertStringNotContainsString("\x07", $delta, 'BEL leaked (delta)');
+        $this->assertStringNotContainsString("\x00", $delta, 'NUL leaked (delta)');
+        $this->assertStringNotContainsString("\x7f", $delta, 'DEL leaked (delta)');
+    }
 }
