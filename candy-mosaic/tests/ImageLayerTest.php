@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Core\Tests;
+namespace SugarCraft\Mosaic\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Core\ImageLayer;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\ImagePlacement;
+use SugarCraft\Mosaic\ImageLayer;
 
 final class ImageLayerTest extends TestCase
 {
