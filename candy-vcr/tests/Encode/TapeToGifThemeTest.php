@@ -35,9 +35,13 @@ final class TapeToGifThemeTest extends TestCase
 
         $tape = $tapeDir . '/tn.tape';
         $gif = $tapeDir . '/tn.gif';
+        // Set Width/Height are VHS OUTPUT-IMAGE PIXELS (not terminal cells): at
+        // FontSize 14 (cellW 8, cellH 28) a 700x240 image is an ~87x8 grid, so the
+        // far-right sample below lands on an empty, theme-background cell well past
+        // the single "X" glyph.
         file_put_contents(
             $tape,
-            "Set Theme \"TokyoNight\"\nSet FontSize 14\nSet Width 20\nSet Height 5\nType \"X\"\nEnter\nSleep 100ms\n",
+            "Set Theme \"TokyoNight\"\nSet FontSize 14\nSet Width 700\nSet Height 240\nType \"X\"\nEnter\nSleep 100ms\n",
         );
 
         try {

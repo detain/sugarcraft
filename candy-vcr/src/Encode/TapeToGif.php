@@ -80,8 +80,12 @@ final class TapeToGif
         $cassette = $this->compiler->compile($ast, $tapePath, $strict);
 
         // Prefer font settings from the cassette header (Set FontSize/FontFamily
-        // directives in the tape) over CLI defaults.
-        $fontSize = $cassette->header->fontSize ?? (int) ($options['fontSize'] ?? 14);
+        // directives in the tape) over CLI defaults. The default matches the
+        // Compiler's DEFAULT_FONT_SIZE (VHS 22px) so the cell metrics used to size
+        // this canvas agree with the ones used to derive the grid — otherwise
+        // cols * cellW would not reconstitute the requested Set Width pixels.
+        $fontSize = $cassette->header->fontSize
+            ?? (int) ($options['fontSize'] ?? Compiler::DEFAULT_FONT_SIZE);
         $fontFamily = $cassette->header->fontFamily ?? $options['fontFamily'] ?? 'JetBrainsMono';
 
         $themeName = $cassette->header->theme ?? $cliTheme ?? 'TokyoNight';
@@ -93,8 +97,10 @@ final class TapeToGif
 
         $frameStream = $this->renderer->render($player, $terminal, $fps);
 
-        $cellW = max(1, (int) floor($fontSize * 0.6));
-        $cellH = max(1, $fontSize * 2);
+        // Same cell metrics the Compiler used to derive cols/rows, so the canvas
+        // (cols * cellW) x (rows * cellH) lands within one cell of the tape's
+        // requested Set Width x Set Height pixel image.
+        [$cellW, $cellH] = Compiler::cellMetrics($fontSize);
 
         $tempDir = $this->createTempDir();
         $pngPaths = [];

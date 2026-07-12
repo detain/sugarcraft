@@ -30,7 +30,7 @@ final class RenderBatchRecursiveTest extends TestCase
 
         $aTape = $root . '/a.tape';
         $bTape = $sub . '/b.tape';
-        $tapeBody = "Set Theme \"TokyoNight\"\nSet Width 20\nSet Height 5\nType \"x\"\nEnter\nSleep 50ms\n";
+        $tapeBody = "Set Theme \"TokyoNight\"\nSet Width 700\nSet Height 240\nType \"x\"\nEnter\nSleep 50ms\n";
         file_put_contents($aTape, $tapeBody);
         file_put_contents($bTape, $tapeBody);
 

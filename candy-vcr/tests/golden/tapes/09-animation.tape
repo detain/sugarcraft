@@ -1,8 +1,8 @@
 # Golden 09: multi-frame animation — staggered typed chars across distinct frames
 Set Theme "TokyoNight"
 Set FontSize 14
-Set Width 80
-Set Height 24
+Set Width 700
+Set Height 240
 Set TypingSpeed 200ms
 Type "frame1"
 Sleep 200ms

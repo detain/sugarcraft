@@ -9,6 +9,7 @@ use SugarCraft\Vcr\Encode\FfmpegGifEncoder;
 use SugarCraft\Vcr\Encode\GifEncoder;
 use SugarCraft\Vcr\Encode\PhpGifEncoder;
 use SugarCraft\Vcr\Encode\TapeToGif;
+use SugarCraft\Vcr\Tape\Compiler;
 
 /**
  * Tests for TapeToGif pipeline.
@@ -137,6 +138,53 @@ final class TapeToGifTest extends TestCase
         }
     }
 
+    /**
+     * Regression for the Set Width/Height pixel-vs-cell bug: a
+     * `Set Width 700 / Set Height 240` tape must render a GIF whose pixel
+     * dimensions land within one font cell of 700x240 — NOT a 700x240-CELL
+     * terminal, which at cellW 8 / cellH 28 would have produced a 5600x6720px
+     * monster GIF.
+     *
+     * Revert-proof: restoring `'Width' => $this->cols = (int) $node->value` in
+     * Compiler::compileSet() makes the GIF ~5600px wide and fails the ceiling
+     * assertion below.
+     */
+    public function testRenderHonorsPixelDimensions(): void
+    {
+        $tapeDir = sys_get_temp_dir() . '/vcr-pxdim-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($tapeDir, 0700, true);
+        $tapePath = $tapeDir . '/px.tape';
+        $outputPath = $tapeDir . '/px.gif';
+        file_put_contents(
+            $tapePath,
+            "Set Theme \"TokyoNight\"\nSet FontSize 14\nSet Width 700\nSet Height 240\nType \"X\"\n",
+        );
+
+        try {
+            TapeToGif::create(['encoder' => 'php'])->render($tapePath, $outputPath, ['encoder' => 'php']);
+
+            $size = getimagesize($outputPath);
+            $this->assertNotFalse($size, 'produced file is not a valid image');
+            [$w, $h] = $size;
+
+            [$cellW, $cellH] = Compiler::cellMetrics(14);
+
+            // Within one cell below the requested pixel image (floor rounding).
+            $this->assertGreaterThan(700 - $cellW, $w, "width {$w} too far below 700");
+            $this->assertLessThanOrEqual(700, $w, "width {$w} exceeds requested 700");
+            $this->assertGreaterThan(240 - $cellH, $h, "height {$h} too far below 240");
+            $this->assertLessThanOrEqual(240, $h, "height {$h} exceeds requested 240");
+
+            // Hard ceiling: the buggy cols=700/rows=240 reading yielded ~5600x6720.
+            $this->assertLessThan(1000, $w, 'Width px was misread as the column count');
+            $this->assertLessThan(1000, $h, 'Height px was misread as the row count');
+        } finally {
+            @unlink($tapePath);
+            @unlink($outputPath);
+            @rmdir($tapeDir);
+        }
+    }
+
     public function testRenderThrowsForNonexistentTape(): void
     {
         $tapeToGif = TapeToGif::create();
@@ -207,7 +255,7 @@ final class TapeToGifTest extends TestCase
         $screenshotPath = $tmpDir . '/shot.png';
 
         // Create a minimal tape that outputs something then takes a screenshot
-        $tapeContent = "Set Theme TokyoNight\nSet Width 80\nSet Height 24\nType \"X\"\nScreenshot {$screenshotPath}\n";
+        $tapeContent = "Set Theme TokyoNight\nSet FontSize 14\nSet Width 700\nSet Height 300\nType \"X\"\nScreenshot {$screenshotPath}\n";
         file_put_contents($tapePath, $tapeContent);
 
         try {
@@ -244,7 +292,7 @@ final class TapeToGifTest extends TestCase
         $tapePath = $tmpDir . '/test.tape';
         $screenshotPath = $tmpDir . '/shot.png';
 
-        $tapeContent = "Set Theme TokyoNight\nSet Width 80\nSet Height 24\nType \"X\"\nScreenshot {$screenshotPath}\n";
+        $tapeContent = "Set Theme TokyoNight\nSet FontSize 14\nSet Width 700\nSet Height 300\nType \"X\"\nScreenshot {$screenshotPath}\n";
         file_put_contents($tapePath, $tapeContent);
 
         try {
