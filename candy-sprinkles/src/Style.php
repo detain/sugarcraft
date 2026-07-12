@@ -1477,14 +1477,6 @@ final class Style
         return $this->contentSgrMemo = $sgr;
     }
 
-    private function buildBorderSgr(): string
-    {
-        $sgr = '';
-        if ($this->borderFg !== null) $sgr .= $this->borderFg->toFg($this->profile);
-        if ($this->borderBg !== null) $sgr .= $this->borderBg->toBg($this->profile);
-        return $sgr;
-    }
-
     /**
      * Content-independent border SGR bundle, memoized per immutable
      * instance. Resolves each side's opening/closing escape (applying any
