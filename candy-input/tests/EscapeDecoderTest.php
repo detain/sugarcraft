@@ -6,6 +6,7 @@ namespace SugarCraft\Input\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Input\EscapeDecoder;
+use SugarCraft\Input\EscapeDecoderOptions;
 use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;
 use SugarCraft\Input\Event\FocusEvent;
@@ -1265,5 +1266,130 @@ final class EscapeDecoderTest extends TestCase
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
         $this->assertSame("\xc3\xa9", $events[1]->key);
         $this->assertSame('', $this->decoder->remainder());
+    }
+
+    // ─── EscapeDecoderOptions protocol gating ────────────────────────────────
+
+    /**
+     * The documented `new EscapeDecoder($options)` construction must be
+     * accepted (a bare ctor previously made the docblock example a lie).
+     */
+    public function testConstructsWithOptions(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions());
+        $events = $decoder->decode('a');
+        $this->assertCount(1, $events);
+        $this->assertSame('a', $events[0]->key);
+    }
+
+    /**
+     * Default construction (no options) preserves current behavior: every
+     * protocol stays enabled, so a mouse sequence still decodes to a MouseEvent.
+     */
+    public function testDefaultOptionsPreserveAllProtocols(): void
+    {
+        $decoder = new EscapeDecoder();
+        $mouse = $decoder->decode("\x1b[<0;10;5M");
+        $this->assertCount(1, $mouse);
+        $this->assertInstanceOf(MouseEvent::class, $mouse[0]);
+
+        $focus = $decoder->decode("\x1b[I");
+        $this->assertCount(1, $focus);
+        $this->assertInstanceOf(FocusEvent::class, $focus[0]);
+
+        $paste = $decoder->decode("\x1b[200~hi\x1b[201~");
+        $this->assertCount(1, $paste);
+        $this->assertInstanceOf(PasteEvent::class, $paste[0]);
+
+        $kitty = $decoder->decode("\x1b[?97;1u");
+        $this->assertCount(1, $kitty);
+        $this->assertInstanceOf(KeyEvent::class, $kitty[0]);
+        $this->assertSame('a', $kitty[0]->key);
+    }
+
+    /**
+     * Load-bearing: mouse disabled → an SGR mouse sequence is NOT decoded as a
+     * MouseEvent. It is structurally consumed (final byte M) and emits nothing,
+     * leaving no remainder. Revert the enableMouse gate → a MouseEvent is
+     * produced → this fails.
+     */
+    public function testMouseDisabledSuppressesMouseEvent(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableMouse: false));
+        $events = $decoder->decode("\x1b[<0;10;5M");
+        $this->assertSame([], $events);
+        $this->assertSame('', $decoder->remainder());
+    }
+
+    /**
+     * Mouse disabled must not disturb ordinary keys sharing the chunk: the
+     * mouse sequence is dropped, the trailing 'z' survives.
+     */
+    public function testMouseDisabledStillDecodesSurroundingKeys(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableMouse: false));
+        $events = $decoder->decode("\x1b[<0;10;5Mz");
+        $this->assertCount(1, $events);
+        $this->assertSame('z', $events[0]->key);
+        $this->assertSame('', $decoder->remainder());
+    }
+
+    /**
+     * Load-bearing: focus disabled → CSI I / CSI O emit no FocusEvent.
+     */
+    public function testFocusDisabledSuppressesFocusEvent(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableFocus: false));
+        $this->assertSame([], $decoder->decode("\x1b[I"));
+        $this->assertSame([], $decoder->decode("\x1b[O"));
+        $this->assertSame('', $decoder->remainder());
+    }
+
+    /**
+     * Load-bearing: kitty disabled → CSI ?…u emits no KeyEvent and is consumed.
+     */
+    public function testKittyDisabledSuppressesKeyEvent(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableKitty: false));
+        $events = $decoder->decode("\x1b[?97;1u");
+        $this->assertSame([], $events);
+        $this->assertSame('', $decoder->remainder());
+    }
+
+    /**
+     * Load-bearing: paste disabled → the bracketed-paste markers are not
+     * sentinels, so no PasteEvent is emitted. The markers are consumed as
+     * ordinary CSI sequences and only the literal in-between key(s) survive.
+     */
+    public function testPasteDisabledSuppressesPasteEvent(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enablePaste: false));
+        $events = $decoder->decode("\x1b[200~a\x1b[201~");
+        foreach ($events as $e) {
+            $this->assertNotInstanceOf(PasteEvent::class, $e);
+        }
+        // The 200~/201~ markers are dropped; the literal 'a' between them remains.
+        $this->assertCount(1, $events);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertSame('', $decoder->remainder());
+    }
+
+    /**
+     * Disabling one protocol leaves the others intact: mouse off, but focus /
+     * kitty / paste still decode normally.
+     */
+    public function testSelectiveDisableLeavesOthersEnabled(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableMouse: false));
+
+        $this->assertSame([], $decoder->decode("\x1b[<0;10;5M"));
+
+        $focus = $decoder->decode("\x1b[I");
+        $this->assertCount(1, $focus);
+        $this->assertInstanceOf(FocusEvent::class, $focus[0]);
+
+        $paste = $decoder->decode("\x1b[200~hi\x1b[201~");
+        $this->assertCount(1, $paste);
+        $this->assertInstanceOf(PasteEvent::class, $paste[0]);
     }
 }

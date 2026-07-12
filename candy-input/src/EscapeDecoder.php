@@ -54,6 +54,20 @@ final class EscapeDecoder
     /** Whether we are currently inside a bracketed paste */
     private bool $inPaste = false;
 
+    /** Protocol toggles gating mouse / kitty / focus / paste parsing. */
+    private readonly EscapeDecoderOptions $options;
+
+    /**
+     * @param EscapeDecoderOptions|null $options Protocol filtering; null enables
+     *   every protocol (the default), so a no-arg construction is unchanged.
+     *   A disabled protocol's sequences are still structurally consumed (kept in
+     *   byte-sync) but emit no event.
+     */
+    public function __construct(?EscapeDecoderOptions $options = null)
+    {
+        $this->options = $options ?? new EscapeDecoderOptions();
+    }
+
     /**
      * Decode a byte buffer into 0+ Events.
      *
@@ -78,8 +92,10 @@ final class EscapeDecoder
             return $this->handlePasteStream($stream);
         }
 
-        // Check for paste start anywhere in stream
-        $pasteStartPos = strpos($stream, self::PASTE_START);
+        // Check for paste start anywhere in stream (only when paste parsing is
+        // enabled; otherwise the markers fall through as ordinary — and ignored —
+        // CSI sequences below).
+        $pasteStartPos = $this->options->enablePaste ? strpos($stream, self::PASTE_START) : false;
         if ($pasteStartPos !== false) {
             // Decode any bytes before the paste start normally
             $prefix = substr($stream, 0, $pasteStartPos);
@@ -332,21 +348,25 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => "\x1b["];
         }
 
-        // SGR 1006 mouse: CSI < Pb ; x ; y M|m
-        if ($afterCsi[0] === '<') {
+        // SGR 1006 mouse: CSI < Pb ; x ; y M|m. When mouse parsing is disabled
+        // the sequence flows through to handleCsiKey(), which consumes it as an
+        // unrecognized CSI (final byte M|m) and emits nothing.
+        if ($afterCsi[0] === '<' && $this->options->enableMouse) {
             return $this->handleSgrMouse(substr($afterCsi, 1));
         }
 
-        // Focus events: CSI I (gained) or CSI O (lost)
-        if ($afterCsi === 'I') {
+        // Focus events: CSI I (gained) or CSI O (lost). Disabled → consumed as an
+        // unrecognized CSI below.
+        if ($this->options->enableFocus && $afterCsi === 'I') {
             return ['events' => [new FocusEvent(true)], 'remaining' => ''];
         }
-        if ($afterCsi === 'O') {
+        if ($this->options->enableFocus && $afterCsi === 'O') {
             return ['events' => [new FocusEvent(false)], 'remaining' => ''];
         }
 
-        // Kitty keyboard protocol: CSI ? Pm ; Ps u
-        if (str_starts_with($afterCsi, '?')) {
+        // Kitty keyboard protocol: CSI ? Pm ; Ps u. Disabled → consumed as an
+        // unrecognized CSI below (final byte u).
+        if ($this->options->enableKitty && str_starts_with($afterCsi, '?')) {
             $result = $this->handleKitty(substr($afterCsi, 1));
             if ($result['events'] !== []) {
                 return $result;
@@ -482,7 +502,9 @@ final class EscapeDecoder
         // Bracketed paste markers (CSI 200~ / CSI 201~) are handled by decode()
         // as paste sentinels, never as key events. A bare marker only reaches
         // here split across chunks; buffer it so the paste path picks it up.
-        if ($csi === '200~' || $csi === '201~') {
+        // When paste parsing is disabled the markers are not sentinels, so we let
+        // them fall through and be consumed as ordinary (ignored) CSI sequences.
+        if ($this->options->enablePaste && ($csi === '200~' || $csi === '201~')) {
             return ['events' => [], 'remaining' => "\x1b[" . $csi];
         }
 
