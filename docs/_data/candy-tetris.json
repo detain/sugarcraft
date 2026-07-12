@@ -1,0 +1,11 @@
+{
+    "title": "CandyTetris — SugarCraft",
+    "description": "CandyTetris: Tetris on the SugarCraft stack. PHP port of tetrigo.",
+    "ogTitle": "CandyTetris — SugarCraft",
+    "ogDescription": "Tetris on the SugarCraft stack. Port of tetrigo.",
+    "emoji": "🎮",
+    "displayName": "CandyTetris",
+    "tagline": "Tetris on the SugarCraft stack",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/Broderick-Westrope/tetrigo\" style=\"color: inherit;\">tetrigo</a></span>\n          <span class=\"tag-chip\">game</span>\n          <span class=\"tag-chip\">tetris</span>\n          <span class=\"tag-chip\">srs</span>\n          <span class=\"tag-chip\">deterministic</span>"
+}

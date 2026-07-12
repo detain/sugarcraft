@@ -32,7 +32,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 39 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-pty.png" alt="CandyPty">
@@ -40,7 +40,7 @@
         <h2>🖥️ CandyPty</h2>
         <p class="detail-sub">Pseudo-terminal primitive — open / spawn / read / write / resize</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/xpty" style="color: inherit;">x/xpty</a></span>
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/xpty" style="color: inherit;">charmbracelet/x/xpty</a></span>
           <span class="tag-chip">linux + macos</span>
           <span class="tag-chip">ext-ffi</span>
           <span class="tag-chip">posix_openpt</span>
@@ -49,6 +49,7 @@
         </div>
       </div>
     </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-pty"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-pty" alt="CandyPty code coverage" loading="lazy"></a></p>
 
     <p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile.</p>
 
@@ -135,7 +136,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-pty">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-pty/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-pty/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/tree/master/examples">Runnable examples</a></li>
       <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a> (Go upstream)</li>
     </ul>
 

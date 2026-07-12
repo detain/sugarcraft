@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyPty",
+    "description": "CandyPty: pseudo-terminal primitive — open / spawn / read / write / resize. PHP port of charmbracelet/x/xpty (Linux + macOS).",
+    "ogTitle": "SugarCraft — CandyPty",
+    "ogDescription": "Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.",
+    "emoji": "🖥️",
+    "displayName": "CandyPty",
+    "tagline": "Pseudo-terminal primitive — open / spawn / read / write / resize",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/x/tree/main/xpty\" style=\"color: inherit;\">x/xpty</a></span>\n          <span class=\"tag-chip\">linux + macos</span>\n          <span class=\"tag-chip\">ext-ffi</span>\n          <span class=\"tag-chip\">posix_openpt</span>\n          <span class=\"tag-chip\">tiocswinsz</span>\n          <span class=\"tag-chip\">sigwinch</span>"
+}

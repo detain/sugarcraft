@@ -32,7 +32,7 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 39 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-vcr.png" alt="CandyVcr">
@@ -40,7 +40,7 @@
         <h2>📼 CandyVcr</h2>
         <p class="detail-sub">Record + replay candy-core sessions</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/vcr" style="color: inherit;">x/vcr</a></span>
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/vcr" style="color: inherit;">charmbracelet/x/vcr</a></span>
           <span class="tag-chip">cassettes</span>
           <span class="tag-chip">jsonl + yaml</span>
           <span class="tag-chip">replay</span>
@@ -49,6 +49,7 @@
         </div>
       </div>
     </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-vcr"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-vcr" alt="CandyVcr code coverage" loading="lazy"></a></p>
 
     <p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a candy-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="candy-vt.html">CandyVt</a>).</p>
 
@@ -129,7 +130,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-vcr">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-vcr/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-vcr/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vcr/tree/master/examples">Runnable examples</a></li>
       <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/vcr">charmbracelet/x/vcr</a> (Go upstream)</li>
     </ul>
 

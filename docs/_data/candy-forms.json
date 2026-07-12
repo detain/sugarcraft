@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyForms",
+    "description": "CandyForms: Foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.",
+    "ogTitle": "SugarCraft — CandyForms",
+    "ogDescription": "Foundation lib for form and input primitives — the raw component implementations that sugar-bits and sugar-prompt re-export.",
+    "emoji": "🍬",
+    "displayName": "CandyForms",
+    "tagline": "Foundation lib for form and input primitives",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip\">foundation</span>\n          <span class=\"tag-chip\">forms</span>\n          <span class=\"tag-chip\">inputs</span>\n          <span class=\"tag-chip\">leaf-package</span>"
+}

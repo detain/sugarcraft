@@ -32,10 +32,10 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 39 libraries</a></p>
 
     <div class="detail-header">
-      <img class="detail-icon" src="../img/icons/candy-focus.png" alt="CandyFocus" onerror="this.style.display='none'">
+      <img class="detail-icon" src="../img/icons/candy-focus.png" alt="CandyFocus">
       <div>
         <h2>CandyFocus</h2>
         <p class="detail-sub">Focus-ring state machine — ordered focusable regions with Tab/Shift-Tab traversal</p>
@@ -47,6 +47,7 @@
         </div>
       </div>
     </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-focus"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-focus" alt="CandyFocus code coverage" loading="lazy"></a></p>
 
     <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any candy-core model without pulling in dependencies. Original SugarCraft component — no 1:1 upstream; inspired by focus-traversal in charmbracelet/bubbles and sugar-dash's FocusManager.</p>
 
@@ -98,7 +99,7 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-focus">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-focus/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-focus/tree/main/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-focus/tree/master/tests">Test suite</a></li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -131,7 +132,7 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/candy-focus">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
-            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/candy-focus/issues">Issues</a>
         </div>
     </div>

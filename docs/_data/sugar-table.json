@@ -1,0 +1,11 @@
+{
+    "title": "SugarTable — SugarCraft",
+    "description": "SugarTable: Full-featured interactive data table. PHP port of Evertras/bubble-table.",
+    "ogTitle": "SugarTable — SugarCraft",
+    "ogDescription": "Full-featured interactive data table. Port of Evertras/bubble-table.",
+    "emoji": "",
+    "displayName": "SugarTable",
+    "tagline": "Full-featured interactive data table",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/Evertras/bubble-table\" style=\"color: inherit;\">Evertras/bubble-table</a></span>\n          <span class=\"tag-chip\">table</span><span class=\"tag-chip\">data</span><span class=\"tag-chip\">grid</span><span class=\"tag-chip\">interactive</span>"
+}

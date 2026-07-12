@@ -1,0 +1,63 @@
+<p class="lede" style="margin-top: 28px;">Stack overlay views on top of a base TUI. Each overlay renders independently and the compositor handles z-ordering, positioning, and teardown.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-veil</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Veil\Veil;
+use SugarCraft\Sprinkles\Style;
+
+$veil = new Veil();
+$veil = $veil-&gt;push($modalView, Position::Center);
+$veil = $veil-&gt;push($tooltip, Position::TopRight);
+
+echo $veil-&gt;render($baseView);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Stack management</strong><span>Push / pop overlays. Z-order handled automatically.</span></div>
+            <div class="feature"><strong>Positioning</strong><span>Center, Top, Bottom, Left, Right, or absolute coordinates.</span></div>
+            <div class="feature"><strong>Teardown</strong><span>Per-overlay completion callbacks on removal.</span></div>
+            
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-veil">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-veil/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-veil/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/rmhubbert/bubbletea-overlay">rmhubbert/bubbletea-overlay</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Veil</td><td>new()</td><td>Create a new veil</td></tr>
+<tr><td>Veil</td><td>push(view, position)</td><td>Push overlay onto stack</td></tr>
+<tr><td>Veil</td><td>pop()</td><td>Pop top overlay</td></tr>
+<tr><td>Veil</td><td>render(baseView)</td><td>Composite all overlays</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-veil/.vhs/basic.gif" alt="Modal overlay">
+                <h3>Modal overlay</h3>
+                <span class="demo-caption">Modal pinned over a background frame.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-veil/.vhs/multiple.gif" alt="Multiple overlays">
+                <h3>Multiple overlays</h3>
+                <span class="demo-caption">Stacked overlays composited in z-order.</span>
+            </div>
+        </div>
+    </div>
+</section>

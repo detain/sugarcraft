@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyAsync",
+    "description": "CandyAsync: Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle).",
+    "ogTitle": "SugarCraft — CandyAsync",
+    "ogDescription": "Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). Foundation for ReactPHP usage across the ecosystem.",
+    "emoji": "🍬",
+    "displayName": "CandyAsync",
+    "tagline": "Shared async vocabulary for ReactPHP",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">pioneering (no upstream)</span>\n          <span class=\"tag-chip\">async</span>\n          <span class=\"tag-chip\">cancellation</span>\n          <span class=\"tag-chip\">reactphp</span>\n          <span class=\"tag-chip\">foundation</span>"
+}

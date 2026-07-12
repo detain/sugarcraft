@@ -1,0 +1,69 @@
+<p class="lede" style="margin-top: 28px;">Foundation lib for form and input primitives — the raw component implementations that <code>sugar-bits</code> and <code>sugar-prompt</code> re-export. Extracted out of those two leaf libs so the form/prompt engine can ship as a single standalone dependency.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-forms</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Form;
+use SugarCraft\Forms\Validator\Required;
+
+$form = Form::new(
+    Input::new('name')
+        ->withTitle('What is your name?')
+        ->withValidator(new Required())
+);
+
+echo $form->view();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Input primitives</strong><span>TextInput, TextArea, ItemList, Viewport, FilePicker, Cursor, Scrollbar, Spinner.</span></div>
+      <div class="feature"><strong>Form engine</strong><span>Field interface + Field{Input, Text, Confirm, Select, MultiSelect, Note, FilePicker}, Form, Group, KeyMap, Theme.</span></div>
+      <div class="feature"><strong>Validators</strong><span>Required, Email, MinLength, MaxLength, Pattern — pluggable validator interface.</span></div>
+      <div class="feature"><strong>Fuzzy matching</strong><span>Fuzzy\FuzzyMatcher with Smith-Waterman algorithm for filter-as-you-type in Select/MultiSelect.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Standalone form primitives</strong> — when you want the raw inputs without sugar-bits or sugar-prompt overhead.</li>
+      <li><strong>Custom form engines</strong> — build your own form system on top of the Field interface.</li>
+      <li><strong>Spinner and progress components</strong> — standalone spinner now lives here, was previously in sugar-bits.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-forms">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-forms/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-forms/tree/main/examples">Runnable examples</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Form</td><td>new(Field[])</td><td>Create a new form with fields</td></tr>
+<tr><td>Field\Input</td><td>new(string)</td><td>Create a text input field</td></tr>
+<tr><td>Field\Confirm</td><td>new(string)</td><td>Create a confirmation field</td></tr>
+<tr><td>Field\Select</td><td>new(string, Options)</td><td>Create a select field</td></tr>
+<tr><td>Validator\Required</td><td>validate(mixed)</td><td>Check value is not empty</td></tr>
+<tr><td>Validator\Email</td><td>validate(mixed)</td><td>Check valid email format</td></tr>
+<tr><td>Spinner\Spinner</td><td>new(Style)</td><td>Create a spinner with style</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-forms/.vhs/demo.gif" alt="CandyForms demo">
+                <h3>Form primitives</h3>
+                <span class="demo-caption">TextInput, TextArea, Select and more — the foundation components.</span>
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,11 @@
+{
+    "title": "SugarSkate — SugarCraft",
+    "description": "SugarSkate: In-memory key/value store with multiple backends. PHP port of charmbracelet/skate.",
+    "ogTitle": "SugarSkate — SugarCraft",
+    "ogDescription": "In-memory key/value store with multiple backends. Port of charmbracelet/skate.",
+    "emoji": "",
+    "displayName": "SugarSkate",
+    "tagline": "In-memory key/value store with multiple backends",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/skate\" style=\"color: inherit;\">charmbracelet/skate</a></span>\n          <span class=\"tag-chip\">store</span><span class=\"tag-chip\">key-value</span><span class=\"tag-chip\">cache</span><span class=\"tag-chip\">database</span>"
+}

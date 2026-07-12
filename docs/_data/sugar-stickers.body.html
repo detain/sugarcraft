@@ -1,0 +1,88 @@
+<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, justify, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the sugar-bits SSOT.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-stickers</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Stickers\Flex\{FlexBox, FlexItem};
+use SugarCraft\Stickers\Table\{Table, Column};
+
+$flex = FlexBox::row(
+    FlexItem::new('LEFT')-&gt;withRatio(1),
+    FlexItem::new('RIGHT')-&gt;withRatio(2),
+)-&gt;withGap(2);
+
+$table = (new Table())
+    -&gt;addColumn(Column::make('Name', 20))
+    -&gt;addRow(['Alice'])
+    -&gt;addRow(['Bob'])
+    -&gt;sortBy(0, true);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Justify: SpaceBetween, Center, Start, End. Align: Center, Start, End, Stretch.</span></div>
+            <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle), filter by text, cursor navigation, per-column style.</span></div>
+            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes sugar-bits Viewport (SSOT). Keyboard nav, mouse wheel, smooth scroll, scrollbar. Sticky headers/footers deferred.</span></div>
+            <div class="feature"><strong>Scrollbar</strong><span>Scrollbar composes sugar-bits Scrollbar (SSOT). Vertical/horizontal, configurable thumb/track chars.</span></div>
+            <div class="feature"><strong>Immutability</strong><span>All builders return new instances.</span></div>
+            
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-stickers">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-stickers/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-stickers/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/76creates/stickers">76creates/stickers</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>FlexBox</td><td>row(...items)</td><td>Create horizontal flexbox</td></tr>
+<tr><td>FlexBox</td><td>column(...items)</td><td>Create vertical flexbox</td></tr>
+<tr><td>FlexBox</td><td>withGap(pixels)</td><td>Set gap between items</td></tr>
+<tr><td>FlexItem</td><td>new(content)</td><td>Create flex item</td></tr>
+<tr><td>FlexItem</td><td>withRatio(n)</td><td>Set size ratio</td></tr>
+<tr><td>Table</td><td>new()</td><td>Create table</td></tr>
+<tr><td>Table</td><td>addColumn(col)</td><td>Add table column</td></tr>
+<tr><td>Table</td><td>addRow(cells)</td><td>Add table row</td></tr>
+<tr><td>Table</td><td>sortBy(col, asc)</td><td>Sort by column</td></tr>
+<tr><td>Viewport</td><td>new(w, h)</td><td>Create viewport (80×24 default)</td></tr>
+<tr><td>Viewport</td><td>withContent(str, w, h)</td><td>Create with string content</td></tr>
+<tr><td>Viewport</td><td>withScrollbar(bool)</td><td>Toggle scrollbar display</td></tr>
+<tr><td>Viewport</td><td>lineUp/Down(n)</td><td>Scroll by n lines</td></tr>
+<tr><td>Viewport</td><td>gotoTop/Bottom()</td><td>Jump to start/end</td></tr>
+<tr><td>Scrollbar</td><td>vertical()</td><td>Vertical scrollbar</td></tr>
+<tr><td>Scrollbar</td><td>horizontal()</td><td>Horizontal scrollbar</td></tr>
+<tr><td>Scrollbar</td><td>view(state, height)</td><td>Render scrollbar</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-stickers/.vhs/flexbox.gif" alt="FlexBox row + column">
+                <h3>FlexBox row + column</h3>
+                <span class="demo-caption">Ratio 1:2:1 row + column with gap=1.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-stickers/.vhs/sort-filter.gif" alt="Sort + filter table">
+                <h3>Sort + filter table</h3>
+                <span class="demo-caption">Sortable + filterable table with per-column align.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-stickers/.vhs/table.gif" alt="Static table">
+                <h3>Static table</h3>
+                <span class="demo-caption">Static table render with zebra rows.</span>
+            </div>
+        </div>
+    </div>
+</section>

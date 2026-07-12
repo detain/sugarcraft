@@ -1,0 +1,119 @@
+<p class="lede" style="margin-top: 28px;">Fuzzy-search overlay — type to filter a list, arrow keys to select, Enter to confirm. Ships as a model wrapper that composes into any bubbletea program. Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-hermit</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart — plain strings</h3>
+    <pre class="code"><code>use SugarCraft\Hermit\Hermit;
+
+$hermit = Hermit::new(
+    items: ['Ruby', 'PHP', 'Go', 'Rust', 'Python'],
+)->setPrompt('Choose language: ');</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart — numbered items + history</h3>
+    <pre class="code"><code>use SugarCraft\Hermit\Hermit;
+use SugarCraft\Hermit\FilteredItem;
+use SugarCraft\Hermit\History\FileHistory;
+
+$items = [
+    new FilteredItem(1, 'apple'),
+    new FilteredItem(2, 'banana'),
+    new FilteredItem(3, 'cherry'),
+];
+
+$hermit = Hermit::new($items)
+    ->setFilterFn(fn($item) => $item->number() > 0)
+    ->setPrompt('> ');
+
+// Persist selections
+$history = new FileHistory('/tmp/hermit.jsonl');
+$history->append($hermit->selected());
+$allItems = $history->all();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Fuzzy matching</strong><span>Anchor-aware substring filter on item text as you type.</span></div>
+            <div class="feature"><strong>Hermit model</strong><span>Full bubbletea Model with init / update / view.</span></div>
+            <div class="feature"><strong>Configurable</strong><span>Custom formatter, prompt, match highlight style, window size.</span></div>
+            <div class="feature"><strong>Item interface</strong><span>Structured Item objects with number() + value() instead of raw strings.</span></div>
+            <div class="feature"><strong>Custom filter predicates</strong><span>setFilterFn() applies arbitrary Closure(Item): bool logic.</span></div>
+            <div class="feature"><strong>Persistent history</strong><span>FileHistory stores items as JSONL lines, one item per line.</span></div>
+            <div class="feature"><strong>Border &amp; Style</strong><span>withBorder() / withStyle() compose candy-sprinkles Border and Style objects.</span></div>
+            <div class="feature"><strong>HelpBar / StatusBar</strong><span>Keyboard-shortcut summary and status message rendered below the overlay.</span></div>
+            <div class="feature"><strong>SIGWINCH resize</strong><span>withOnResize() + attachSigwinch() forward terminal resize events via SignalForwarder.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-hermit">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-hermit/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-hermit/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/Genekkion/theHermit">Genekkion/theHermit</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Hermit</td><td>new(array $items, ?Closure $itemFormatter)</td><td>Create fuzzy finder (items: string[] or Item[])</td></tr>
+<tr><td>Hermit</td><td>withItems(array $items)</td><td>Replace items and reset filter state</td></tr>
+<tr><td>Hermit</td><td>setPrompt(string)</td><td>Set filter prompt string</td></tr>
+<tr><td>Hermit</td><td>setFilterFn(Closure)</td><td>Set custom filter predicate: Closure(Item): bool</td></tr>
+<tr><td>Hermit</td><td>setItemFormatter(Closure)</td><td>Set item formatter: Closure(item, isSelected): string</td></tr>
+<tr><td>Hermit</td><td>setMatchStyle(string)</td><td>Set ANSI SGR codes for match highlighting</td></tr>
+<tr><td>Hermit</td><td>setWindowHeight(int)</td><td>Set visible item window height</td></tr>
+<tr><td>Hermit</td><td>setWindowWidth(int)</td><td>Set overlay width (0 = auto)</td></tr>
+<tr><td>Hermit</td><td>setOffset(int $x, int $y)</td><td>Position overlay and show</td></tr>
+<tr><td>Hermit</td><td>show() / hide()</td><td>Show or hide the overlay</td></tr>
+<tr><td>Hermit</td><td>type(string) / backspace() / clear()</td><td>Modify filter text</td></tr>
+<tr><td>Hermit</td><td>cursorUp/Down/Top/Bottom()</td><td>Navigate item cursor</td></tr>
+<tr><td>Hermit</td><td>selected()</td><td>Get currently selected Item</td></tr>
+<tr><td>Hermit</td><td>items() / itemCount() / allCount()</td><td>Query filtered/all item state</td></tr>
+<tr><td>Hermit</td><td>withBorder(?Border)</td><td>Apply candy-sprinkles Border to overlay window</td></tr>
+<tr><td>Hermit</td><td>withStyle(?Style)</td><td>Apply candy-sprinkles Style to overlay window</td></tr>
+<tr><td>Hermit</td><td>withHelpBar(?HelpBar)</td><td>Attach keyboard-shortcut summary below filter list</td></tr>
+<tr><td>Hermit</td><td>withStatusBar(?StatusBar)</td><td>Attach status message line at overlay bottom</td></tr>
+<tr><td>Hermit</td><td>withOnResize(Closure)</td><td>Register callback invoked on SIGWINCH (cols, rows)</td></tr>
+<tr><td>Hermit</td><td>attachSigwinch()</td><td>Install SIGWINCH handler via SignalForwarder (requires ext-pcntl)</td></tr>
+<tr><td>Hermit</td><td>border() / style() / helpBar() / statusBar()</td><td>Query attached border, style, help bar, status bar</td></tr>
+<tr><td>Hermit</td><td>View(string $backgroundView)</td><td>Render composited overlay over background</td></tr>
+<tr><td>HelpBar</td><td>new(array $shortcuts, bool $visible)</td><td>Create help bar with key→description pairs</td></tr>
+<tr><td>HelpBar</td><td>withShortcut(key, desc) / withoutShortcut(key)</td><td>Add/remove shortcut entry</td></tr>
+<tr><td>HelpBar</td><td>show() / hide() / isVisible()</td><td>Control visibility</td></tr>
+<tr><td>HelpBar</td><td>render()</td><td>Render as "key: desc │ key: desc ..." string</td></tr>
+<tr><td>StatusBar</td><td>new(string $message, bool $visible)</td><td>Create status bar with message</td></tr>
+<tr><td>StatusBar</td><td>withMessage(string) / withNoMessage()</td><td>Set or clear primary message</td></tr>
+<tr><td>StatusBar</td><td>withSegment(name, value) / withoutSegment(name)</td><td>Add/remove named segment</td></tr>
+<tr><td>StatusBar</td><td>show() / hide() / isVisible()</td><td>Control visibility</td></tr>
+<tr><td>StatusBar</td><td>render()</td><td>Render as "[name: value] message" string</td></tr>
+<tr><td>Item</td><td>interface number(), value()</td><td>Contract for filterable items</td></tr>
+<tr><td>FilteredItem</td><td>new(int $number, string $value)</td><td>Numbered Item implementation</td></tr>
+<tr><td>FileHistory</td><td>new(string $path)</td><td>Open/create JSONL history file</td></tr>
+<tr><td>FileHistory</td><td>append(Item)</td><td>Append item as JSON line</td></tr>
+<tr><td>FileHistory</td><td>all()</td><td>Read all items from history</td></tr>
+<tr><td>FileHistory</td><td>clear() / path()</td><td>Clear history or get file path</td></tr>
+<tr><td>Model</td><td>interface update(Hermit, string), view(Hermit)</td><td>Bubble-Tea embedding contract</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-hermit/.vhs/basic.gif" alt="Background + overlay">
+                <h3>Background + overlay</h3>
+                <span class="demo-caption">Hermit overlay over a sample background, four filter states.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-hermit/.vhs/interaction.gif" alt="Filter interaction">
+                <h3>Filter interaction</h3>
+                <span class="demo-caption">Filter narrowing the candidate list as you type.</span>
+            </div>
+        </div>
+    </div>
+</section>

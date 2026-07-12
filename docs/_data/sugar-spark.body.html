@@ -1,0 +1,62 @@
+<p class="lede" style="margin-top: 28px;">Pipe styled output through SugarSpark and each escape becomes a labelled line. Decodes SGR / CSI / OSC / DCS / APC / SS3, DEC private modes, kitty keyboard protocol, synchronized output, unicode grapheme mode.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-spark</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>$ printf '\e[31mhello\e[0m world\n' | sugarspark
+ESC[31m  SGR foreground red
+hello
+ESC[0m   SGR reset
+ world
+
+$ printf '\e]0;new title\e\\' | sugarspark
+ESC]0;new title  set window title to "new title"
+
+$ printf '\e[?2026h' | sugarspark
+ESC[?2026h  enable synchronized output</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>SGR</strong><span>Foreground / background (16 / 256 / 24-bit truecolor) + bold / italic / underline / blink / reverse / strike / faint.</span></div>
+      <div class="feature"><strong>CSI</strong><span>Cursor moves, erase, scroll region (DECSTBM), insert/delete line/char, DECSCUSR cursor shape, DECRQM/DECRPM mode query.</span></div>
+      <div class="feature"><strong>OSC</strong><span>Title (0/2), icon (1), palette (4), cwd (7), hyperlink (8).</span></div>
+      <div class="feature"><strong>DEC private</strong><span>Cursor visibility, mouse modes (1000/1002/1003/1006/1015), focus reporting, alt screen, bracketed paste, sync output (2026).</span></div>
+      <div class="feature"><strong>Kitty keyboard</strong><span>Query / push / pop progressive enhancement levels.</span></div>
+      <div class="feature"><strong>Library mode</strong><span><code>Inspector::parse(\$bytes)</code> yields <code>Segment</code> values you can iterate.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-spark">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-spark/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-spark/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/sequin">sequin</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Inspector</td><td>parse(bytes)</td><td>Parse ANSI bytes into segments</td></tr>
+<tr><td>Segment</td><td>type</td><td>Segment type (SGR, CSI, OSC, etc.)</td></tr>
+<tr><td>Segment</td><td>content</td><td>Segment content</td></tr>
+<tr><td>Segment</td><td>description()</td><td>Human-readable description</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spark/.vhs/inspect.gif" alt="Inspect">
+                <h3>Inspect</h3>
+                <span class="demo-caption">Annotating SGR / OSC / DCS / APC streams in real time.</span>
+            </div>
+        </div>
+    </div>
+</section>

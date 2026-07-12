@@ -1,0 +1,64 @@
+<p class="lede" style="margin-top: 28px;">Month-grid date picker with keyboard navigation, min/max date constraints, locale-aware day names, and a fully-rendered ANSI view.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-calendar</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Calendar\DatePicker;
+
+$picker = DatePicker::new(new \DateTimeImmutable('2026-01-01'));
+$picker = $picker-&gt;withMinDate(new \DateTimeImmutable('2025-01-01'));
+$picker = $picker-&gt;withMaxDate(new \DateTimeImmutable('2027-12-31'));
+
+echo $picker-&gt;view();  // renders month grid</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Month grid</strong><span>Full month view with day letters, today highlight, cursor.</span></div>
+            <div class="feature"><strong>Keyboard nav</strong><span>Arrow keys, Enter to select, Esc to cancel.</span></div>
+            <div class="feature"><strong>Min / Max constraints</strong><span>Restrict selectable date range.</span></div>
+            <div class="feature"><strong>Locale support</strong><span>Custom day/month names via configuration.</span></div>
+            
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-calendar">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-calendar/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-calendar/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/EthanEFung/bubble-datepicker">EthanEFung/bubble-datepicker</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>DatePicker</td><td>new(date)</td><td>Create date picker</td></tr>
+<tr><td>DatePicker</td><td>withMinDate(date)</td><td>Set minimum selectable date</td></tr>
+<tr><td>DatePicker</td><td>withMaxDate(date)</td><td>Set maximum selectable date</td></tr>
+<tr><td>DatePicker</td><td>view()</td><td>Render calendar view</td></tr>
+<tr><td>DatePicker</td><td>selected()</td><td>Get selected date</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-calendar/.vhs/basic.gif" alt="May / June 2026">
+                <h3>May / June 2026</h3>
+                <span class="demo-caption">Month-grid datepicker with cursor and selected day.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-calendar/.vhs/constraints.gif" alt="Min / max constraints">
+                <h3>Min / max constraints</h3>
+                <span class="demo-caption">Same picker bounded between two dates.</span>
+            </div>
+        </div>
+    </div>
+</section>

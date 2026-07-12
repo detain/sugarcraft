@@ -1,0 +1,11 @@
+{
+    "title": "SugarGlow — SugarCraft",
+    "description": "SugarGlow: Markdown CLI viewer + pager. PHP port of glow.",
+    "ogTitle": "SugarGlow — SugarCraft",
+    "ogDescription": "Markdown CLI viewer + pager. Port of glow.",
+    "emoji": "📖",
+    "displayName": "SugarGlow",
+    "tagline": "Markdown CLI viewer + pager",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/glow\" style=\"color: inherit;\">glow</a></span>\n          <span class=\"tag-chip\">markdown</span>\n          <span class=\"tag-chip\">viewer</span>\n          <span class=\"tag-chip\">pager</span>"
+}

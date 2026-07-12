@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyTesting",
+    "description": "CandyTesting: Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
+    "ogTitle": "SugarCraft — CandyTesting",
+    "ogDescription": "ProgramSimulator drives a Program with scripted input; captures model/view/cmds. Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals. TapeRecorder emits VHS .tape files.",
+    "emoji": "🍬",
+    "displayName": "CandyTesting",
+    "tagline": "Test harness for TEA programs",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">pioneering (no upstream)</span>\n          <span class=\"tag-chip\">testing</span>\n          <span class=\"tag-chip\">tea</span>\n          <span class=\"tag-chip\">foundation-package</span>"
+}

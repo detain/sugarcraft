@@ -1,0 +1,84 @@
+<p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul-Williams VT500 state machine that mirrors charmbracelet/x/ansi/parser.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-vt</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Vt\Terminal\Terminal;
+
+$term = Terminal::create(cols: 80, rows: 24);
+$term-&gt;feed("\x1b[1;31mHello\x1b[0m world");
+
+$screen = $term-&gt;screen();
+$screen-&gt;cell(0, 0)-&gt;grapheme;       // 'H'
+$screen-&gt;cell(0, 0)-&gt;sgr-&gt;bold;      // true
+$screen-&gt;cell(0, 0)-&gt;foreground();   // 16-color red
+
+$term-&gt;feed("\x1b]2;Demo\x07");
+$term-&gt;windowTitle();                 // 'Demo'
+
+$term-&gt;feed("\x1b[?1049h");
+$term-&gt;mode()-&gt;altScreen;             // true</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine. Direct port of charmbracelet/x/ansi/parser. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
+      <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg; bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles; SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed); BCE (CSI ?12 h) — erase fills inherit current background color.</span></div>
+      <div class="feature"><strong>Cursor + erase + scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
+      <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 synchronized output (batch queue + flush on disable), 7 auto-wrap (DECAWM).</span></div>
+      <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write/read events.</span></div>
+      <div class="feature"><strong>Width-aware + combining</strong><span>CJK + most emoji take 2 cells with a continuation marker. Zero-width combining marks (U+0300–U+036F) attach to the preceding cell via <code>Cell::$combining</code> so composed graphemes render correctly in a single column.</span></div>
+      <div class="feature"><strong>Scrollback buffer</strong><span>Ring buffer (default 1000 rows) captures scrolled-off content. Access via <code>Screen::scrollback()</code>. Configure size with <code>Terminal::withScrollbackSize()</code>. Erased by <code>CSI 3 J</code>.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Snapshot tests</strong> — drive any TUI's <code>view()</code> through CandyVt and assert on cell-grid state instead of raw byte strings.</li>
+      <li><strong>Recording &amp; replay</strong> — capture <code>feed()</code> input and replay deterministically.</li>
+      <li><strong>Headless SSH sessions</strong> — pair with <code>candy-wish</code> to run TUIs without a real PTY.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-vt">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vt/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vt/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Terminal</td><td>create(cols, rows)</td><td>Create a virtual terminal</td></tr>
+<tr><td>Terminal</td><td>feed(bytes)</td><td>Feed ANSI bytes to terminal</td></tr>
+<tr><td>Terminal</td><td>screen()</td><td>Get current cell grid</td></tr>
+<tr><td>Terminal</td><td>cursor()</td><td>Get cursor position</td></tr>
+<tr><td>Terminal</td><td>mode()</td><td>Get terminal mode state (includes autoWrap)</td></tr>
+<tr><td>Terminal</td><td>windowTitle()</td><td>Get window title from OSC</td></tr>
+<tr><td>Terminal</td><td>withScrollbackSize(n)</td><td>New terminal with scrollback buffer size N</td></tr>
+<tr><td>Screen</td><td>cell(col, row)</td><td>Get cell at position</td></tr>
+<tr><td>Screen</td><td>scrollback()</td><td>Get scrollback buffer (ring buffer of scrolled-off rows)</td></tr>
+<tr><td>Cell</td><td>grapheme, sgr, combining, foreground(), background()</td><td>Cell content, style, and combining marks</td></tr>
+<tr><td>Cell</td><td>withCombining(string)</td><td>New cell with additional combining marks appended</td></tr>
+<tr><td>Mode</td><td>autoWrap, syncUpdate, withAutoWrap(bool)</td><td>DECAWM auto-wrap and synchronized-output (DEC 2026) state</td></tr>
+<tr><td>Sgr</td><td>underlineStyle, withUnderlineStyle(UnderlineStyle)</td><td>SGR underline style (None/Single/Double/Curly/Dotted/Dashed)</td></tr>
+<tr><td>UnderlineStyle</td><td>None / Single / Double / Curly / Dotted / Dashed</td><td>Enum — CSI 4:N map (4:0–4:5)</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vt/.vhs/snapshot-demo.gif" alt="Feed and screenshot">
+                <h3>Feed and screenshot</h3>
+                <span class="demo-caption">An ANSI byte stream feeds into a Terminal; the cell grid prints back as a screenshot, with window title, cursor position, and hyperlink span.</span>
+            </div>
+        </div>
+    </div>
+</section>
