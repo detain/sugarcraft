@@ -34,6 +34,8 @@ PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning=
 
 PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR), cell-grid (`SugarCraft\Vt\Terminal`), behaviour (`update()` → `[Model,?Cmd]`), coercion (clamp edge cases). Stream-write: slice deltas with `ftell`/`fseek`/`stream_get_contents`, never `ftruncate;rewind;` (canonical `candy-core/tests/RendererTest.php`). FFI tests gate on `requirePtySyscalls()`. `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, golden-file + tape-recorder helpers for TEA programs.
 
+**Façade = alias smoke-test only.** A façade lib that re-exports a canonical class via `class_alias` (e.g. `sugar-bits`/`sugar-prompt` → `SugarCraft\Forms\*`, `candy-lister`'s `ScoringProfile` → `SugarCraft\Fuzzy\*`) must NOT copy the canonical lib's full test suite under its own namespace — that re-tests identical code and drifts. Ship ONE `AliasesTest`/`AliasResolutionTest` asserting each alias symbol resolves to its canonical FQN, plus tests only for genuinely lib-local behaviour the façade adds. (See #1275/#1312/#1314 which deleted ~4300 LOC of duplicated façade tests.)
+
 ```sh
 cd candy-core && composer install && vendor/bin/phpunit
 ```
