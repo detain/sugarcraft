@@ -10,6 +10,7 @@ use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Lister\Lang;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -716,7 +717,17 @@ final class Model
             return [''];
         }
 
-        $rawLines = $this->hardWrap(Ansi::strip((string) $item->value), $contentWidth);
+        // Defense-in-depth (candy-buffer #1362): Cell::new() does NOT strip
+        // control bytes — its contract is "caller sanitizes". Ansi::strip()
+        // alone removes only ESC-initiated sequences, so bare C0 (NUL/BEL/BS/
+        // VT/FF/SO-US) and DEL from the untrusted item value would flow through
+        // renderItem() into BOTH View() sinks: the first-frame `return
+        // $fullOutput` and the diff-delta cells built by bufferFromOutput().
+        // Sanitize::untrusted() is the single choke point that neutralizes C0/
+        // DEL (and C1) here at the source so both paths inherit clean content.
+        // The legitimate SGR ESC is injected LATER by applyStyle(), after this
+        // point, and therefore survives — item-value ANSI is stripped by design.
+        $rawLines = $this->hardWrap(Sanitize::untrusted((string) $item->value), $contentWidth);
         if ($this->wrap > 0 && \count($rawLines) > $this->wrap) {
             $rawLines = \array_slice($rawLines, 0, $this->wrap);
         }
