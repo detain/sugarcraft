@@ -584,6 +584,17 @@ final class ImageSource
      * supplied and the package is not installed, the returned promise rejects
      * with a clear instruction rather than fataling.
      *
+     * Security (host / SSRF): mirrors the synchronous {@see self::fromUrl()}.
+     * `React\Http\Browser` follows 3xx redirects INTERNALLY by default, which
+     * would chase a `Location` into `169.254.169.254` (cloud metadata) or an
+     * RFC-1918 host WITHOUT re-checking it — the async SSRF hole left open by
+     * the sync-only guard. The Browser's built-in follower is therefore
+     * disabled here and redirects are followed by hand, running
+     * {@see self::guardHostNotPrivate()} on the initial URL AND every redirect
+     * hop (each host resolved to ALL of its addresses, defeating DNS-rebinding)
+     * before the request goes out. A host in $allowedHosts bypasses the
+     * deny-list, matching the sync path's opt-in seam.
+     *
      * @param string $url     Absolute http(s) URL.
      * @param array<string,string> $headers  Optional request headers. Must be
      *               associative ('Authorization' => 'Bearer x') — unlike the
@@ -591,7 +602,12 @@ final class ImageSource
      *               forwards them straight to Browser::get().
      * @param Browser|null $browser  Optional pre-configured ReactPHP Browser
      *               (e.g. with a shared connector/timeout); one is created on
-     *               the default loop when omitted.
+     *               the default loop when omitted. Its redirect handling is
+     *               overridden regardless, so per-hop host-guarding holds.
+     * @param array<string>|null $allowedHosts  Hosts permitted to bypass the
+     *               private/reserved-IP deny-list, matched case-insensitively
+     *               on the initial URL AND every redirect hop. null (default)
+     *               allow-lists nothing, so every private host is blocked.
      * @return PromiseInterface<self>
      */
     public static function fromUrlAsync(
@@ -600,7 +616,10 @@ final class ImageSource
         ?Browser $browser = null,
         ?array $allowedSchemes = ['http', 'https'],
         int $maxPixels = self::MAX_PIXELS,
+        ?array $allowedHosts = null,
     ): PromiseInterface {
+        // Validate the initial scheme synchronously (unchanged contract); the
+        // recursive fetch re-validates the scheme AND host-guards every hop.
         self::validateUrlScheme($url, $allowedSchemes);
 
         if ($browser === null) {
@@ -610,13 +629,93 @@ final class ImageSource
             $browser = new Browser();
         }
 
+        // Disable the Browser's built-in redirect follower: it would chase a
+        // 3xx Location internally, bypassing guardHostNotPrivate() on the
+        // redirect target (the async SSRF hole). We follow by hand below,
+        // host-guarding each hop before it is fetched.
+        $browser = $browser->withFollowRedirects(false);
+
+        return self::fetchUrlAsyncGuarded(
+            $browser,
+            $url,
+            $headers,
+            $allowedSchemes,
+            $allowedHosts,
+            $maxPixels,
+            0,
+        );
+    }
+
+    /**
+     * Recursively fetch $url on the event loop, host-guarding every hop and
+     * following redirects by hand — the async mirror of {@see self::fetchUrlSync()}.
+     *
+     * The caller has disabled the Browser's internal redirect follower, so a
+     * 3xx resolves here with its `Location` intact: each hop re-validates the
+     * scheme, runs the private/reserved-IP deny-list on the resolved host, and
+     * only then follows — up to {@see self::MAX_REDIRECTS} hops. A pre-flight
+     * guard failure rejects the returned promise rather than throwing.
+     *
+     * @param array<string,string>|null $headers
+     * @param array<string>|null $allowedSchemes  Re-validated on every hop.
+     * @param array<string>|null $allowedHosts    Bypass the deny-list for these
+     *                                    hosts; re-checked on every hop.
+     * @return PromiseInterface<self>
+     */
+    private static function fetchUrlAsyncGuarded(
+        Browser $browser,
+        string $url,
+        ?array $headers,
+        ?array $allowedSchemes,
+        ?array $allowedHosts,
+        int $maxPixels,
+        int $hop,
+    ): PromiseInterface {
+        // SSRF / cloud-metadata guard BEFORE the request goes out — on the
+        // initial URL AND every redirect target — so an http://169.254.169.254/
+        // hop is refused, not requested. Fail closed as a rejected promise.
+        try {
+            self::validateUrlScheme($url, $allowedSchemes);
+            self::guardHostNotPrivate($url, $allowedHosts);
+        } catch (\Throwable $e) {
+            return reject($e);
+        }
+
         return $browser->get($url, $headers ?? [])->then(
-            static function ($response) use ($maxPixels): self {
+            static function ($response) use ($browser, $url, $headers, $allowedSchemes, $allowedHosts, $maxPixels, $hop): mixed {
+                $status = $response->getStatusCode();
+
+                if ($status >= 300 && $status < 400) {
+                    if ($hop >= self::MAX_REDIRECTS) {
+                        throw new \InvalidArgumentException(
+                            Lang::t('image_source.too_many_redirects', ['url' => $url]),
+                        );
+                    }
+                    $location = $response->getHeaderLine('Location');
+                    if ($location === '') {
+                        throw new \InvalidArgumentException(
+                            Lang::t('image_source.redirect_no_location', ['url' => $url]),
+                        );
+                    }
+                    $next = self::resolveRedirectUrl($url, $location);
+
+                    // Recurse — the next hop re-guards scheme + host before it
+                    // is fetched. Returning a promise chains it into this one.
+                    return self::fetchUrlAsyncGuarded(
+                        $browser,
+                        $next,
+                        $headers,
+                        $allowedSchemes,
+                        $allowedHosts,
+                        $maxPixels,
+                        $hop + 1,
+                    );
+                }
+
                 // The default Browser rejects 4xx/5xx itself, but a caller may
                 // inject one with withRejectErrorResponse(false); guard the
                 // status here so the "rejects on non-2xx" contract always holds
                 // rather than feeding an error page to the GD decoder.
-                $status = $response->getStatusCode();
                 if ($status < 200 || $status >= 300) {
                     throw new \RuntimeException(
                         Lang::t('image_source.url_bad_status', ['status' => $status]),
