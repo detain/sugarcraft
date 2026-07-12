@@ -172,6 +172,19 @@ jobs:
           fi
           echo "OK: no stale sugarcraft blob/main links under docs/"
 
+  # Every catalog icon must exist identically in both media/icons/ (canonical,
+  # consumed by the org-repo sync) and docs/img/icons/ (served by the public
+  # site). A lib added to one dir but not the other renders a broken tile, so
+  # this step fails the build when the two basename sets diverge. Cheap — one
+  # diff, no PHP/composer needed.
+  icon-sync:
+    name: 'Icon media↔docs parity'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: icon media↔docs basename parity
+        run: diff <(ls media/icons | sort) <(ls docs/img/icons | sort)
+
   # Unified test matrix — every (php, lib) tuple comes from build-matrix, which
   # auto-discovers libs from filesystem (any dir with composer.json + phpunit.xml)
   # and scopes to libs affected by the change-set via the reverse-dep graph.
