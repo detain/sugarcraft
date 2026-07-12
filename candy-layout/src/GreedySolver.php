@@ -43,6 +43,23 @@ use SugarCraft\Layout\Region;
  * These flags are immutable+fluent and default OFF, so the default solver is
  * unchanged. This exists only to let sugar-boxer retire its duplicated solver
  * (plan_missing.md W12) with golden parity.
+ *
+ * ── min-share floor ─────────────────────────────────────────────────────────
+ * sugar-boxer's NON-flex distribute() carries a FOURTH quirk the three flags
+ * above do not cover: a bespoke "reserve ≥1 column per not-yet-placed child"
+ * SEQUENTIAL clamp that guarantees the trailing region never collapses to 0 in
+ * a tight viewport. {@see withMinShare()} reproduces it exactly. When the floor
+ * is on (minShare > 0) the solver takes a dedicated proportional path over Fill
+ * weights: each region gets `round(weight/total * span)` cells, clamped so at
+ * least `minShare` cell(s) remain for every region still unplaced, with the
+ * last region absorbing the remainder — so this mode is inherently round-split +
+ * remainder-to-last and the compat() flags are moot while it is engaged. The
+ * `reserveGap`/`reserveLead` args re-create distribute()'s absolute-position
+ * reservation frame (its `$used` counter is seeded with the border pad and
+ * accumulates one inter-child gap per placed child), which is the only way to
+ * stay byte-identical when spacing/border make the clamp bind. Default 0 → OFF,
+ * so the default solver is unchanged. A 11 124-case sweep against distribute()
+ * found 0 divergences (plan_missing.md W12).
  */
 final class GreedySolver implements LayoutSolver
 {
@@ -51,6 +68,12 @@ final class GreedySolver implements LayoutSolver
      * @param bool $remainderToLast   hand the rounding remainder to the LAST region/Fill/Max, not the first.
      * @param bool $truncateOverflow  proportionally shrink regions when demand exceeds the area (default);
      *                                sugar-boxer keeps each region at full base size (pass false).
+     * @param int  $minShare          0 = OFF (default). >0 engages the sequential min-share floor over Fill
+     *                                weights, reserving this many cell(s) for every not-yet-placed region.
+     * @param int  $reserveGap        extra cells reserved per ALREADY-placed region — models an inter-region
+     *                                gap that lives outside the solved content span (sugar-boxer spacing).
+     * @param int  $reserveLead       fixed cells reserved before the first region — models a leading margin
+     *                                outside the content span (sugar-boxer border pad).
      *
      * Public (not private) because candy-sprinkles' SolverFactory and
      * CassowarySolver already construct this via `new GreedySolver()`; the
@@ -61,7 +84,16 @@ final class GreedySolver implements LayoutSolver
         public readonly bool $roundSplit = false,
         public readonly bool $remainderToLast = false,
         public readonly bool $truncateOverflow = true,
+        public readonly int $minShare = 0,
+        public readonly int $reserveGap = 0,
+        public readonly int $reserveLead = 0,
     ) {
+        if ($minShare < 0 || $reserveGap < 0 || $reserveLead < 0) {
+            throw new \InvalidArgumentException(
+                'min-share floor parameters must be non-negative; '
+                . "got minShare={$minShare}, reserveGap={$reserveGap}, reserveLead={$reserveLead}"
+            );
+        }
     }
 
     /**
@@ -100,7 +132,7 @@ final class GreedySolver implements LayoutSolver
      */
     public function withRoundSplit(bool $on = true): self
     {
-        return new self($on, $this->remainderToLast, $this->truncateOverflow);
+        return new self($on, $this->remainderToLast, $this->truncateOverflow, $this->minShare, $this->reserveGap, $this->reserveLead);
     }
 
     /**
@@ -109,7 +141,7 @@ final class GreedySolver implements LayoutSolver
      */
     public function withRemainderToLast(bool $on = true): self
     {
-        return new self($this->roundSplit, $on, $this->truncateOverflow);
+        return new self($this->roundSplit, $on, $this->truncateOverflow, $this->minShare, $this->reserveGap, $this->reserveLead);
     }
 
     /**
@@ -118,7 +150,7 @@ final class GreedySolver implements LayoutSolver
      */
     public function withoutOverflowTruncation(): self
     {
-        return new self($this->roundSplit, $this->remainderToLast, false);
+        return new self($this->roundSplit, $this->remainderToLast, false, $this->minShare, $this->reserveGap, $this->reserveLead);
     }
 
     /**
@@ -126,7 +158,29 @@ final class GreedySolver implements LayoutSolver
      */
     public function withOverflowTruncation(bool $on = true): self
     {
-        return new self($this->roundSplit, $this->remainderToLast, $on);
+        return new self($this->roundSplit, $this->remainderToLast, $on, $this->minShare, $this->reserveGap, $this->reserveLead);
+    }
+
+    /**
+     * Engage the sequential min-share floor: split the region proportionally
+     * across its Fill weights while reserving at least `$cells` cell(s) for every
+     * region NOT yet placed, so the trailing region never collapses to 0 in a
+     * tight viewport. This is the opt-in seam that lets sugar-boxer retire its
+     * hand-rolled NON-flex distribute() (plan_missing.md W12) with byte parity —
+     * the fourth quirk compat()'s three flags cannot express.
+     *
+     * The floor path is inherently round-split + remainder-to-last, so it does
+     * not need (and ignores) the compat() flags. Pass `$reserveGap`/`$reserveLead`
+     * to re-create distribute()'s absolute-position reservation frame: sugar-boxer
+     * seeds its running offset with the border pad ($reserveLead) and adds one
+     * inter-child spacing per placed child ($reserveGap). With both 0 the floor
+     * reserves purely in the content frame.
+     *
+     * `$cells = 0` disables the floor (restores the default solver path).
+     */
+    public function withMinShare(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0): self
+    {
+        return new self($this->roundSplit, $this->remainderToLast, $this->truncateOverflow, $cells, $reserveGap, $reserveLead);
     }
 
     /**
@@ -163,6 +217,14 @@ final class GreedySolver implements LayoutSolver
      */
     private function solveHorizontal(Region $area, array $constraints): array
     {
+        // Min-share floor short-circuits the whole greedy pipeline: it is a
+        // self-contained sequential proportional split (see solveMinShare) that
+        // reproduces sugar-boxer's distribute(). Only engaged when opted in
+        // (minShare > 0), so the default solver below is untouched.
+        if ($this->minShare > 0) {
+            return $this->solveMinShare($area, $constraints);
+        }
+
         $totalWidth = $area->width;
         $height = $area->height;
 
@@ -351,6 +413,76 @@ final class GreedySolver implements LayoutSolver
         $rects = [];
         foreach ($rawSizes as $width) {
             $rects[] = new Region($x, $area->y, $width, $height);
+            $x += $width;
+        }
+        return $rects;
+    }
+
+    /**
+     * Sequential min-share floor — reproduces sugar-boxer's NON-flex
+     * distribute() byte-for-byte (plan_missing.md W12).
+     *
+     * Walks the constraints left→right, giving each region its rounded
+     * proportional share of the span (`round(weight/total * span)`) but clamping
+     * that share so at least `minShare` cell(s) survive for EVERY region still to
+     * be placed — the reservation that keeps the trailing region from collapsing
+     * to 0 in a tight viewport. The final region absorbs the remainder. The
+     * clamp is measured against a running offset seeded with `reserveLead` and
+     * bumped by `reserveGap` per placed region, which re-creates the
+     * absolute-position frame distribute()'s `$used` counter uses (border pad +
+     * one inter-child gap per placed child) so spacing/border tight cases stay
+     * byte-identical.
+     *
+     * Only Fill constraints participate: distribute() is a purely proportional
+     * split (children weighted by minWidth, defaulting to 1 → Fill(weight)); any
+     * other constraint type is unsupported here and rejected loudly rather than
+     * silently mis-sized.
+     *
+     * @param Constraint[] $constraints
+     * @return Region[]
+     */
+    private function solveMinShare(Region $area, array $constraints): array
+    {
+        $span = $area->width;
+        $n = count($constraints);
+
+        $weights = [];
+        foreach ($constraints as $c) {
+            if (!$c instanceof Fill) {
+                throw new \InvalidArgumentException(
+                    'Min-share floor supports only Fill constraints (proportional split); got ' . $c::class
+                );
+            }
+            $weights[] = $c->weight;
+        }
+
+        $totalWeight = array_sum($weights);
+        if ($totalWeight === 0) {
+            // Every Fill weight is 0 → equal split (mirrors distribute()'s
+            // "all weights 0 → distribute equally" division-by-zero guard).
+            $totalWeight = $n;
+            $weights = array_fill(0, $n, 1);
+        }
+
+        $sizes = [];
+        $used = $this->reserveLead;
+        for ($i = 0; $i < $n - 1; $i++) {
+            $share = (int) round($weights[$i] / $totalWeight * $span);
+            $remaining = $n - 1 - $i; // regions still to place, incl. the last
+            $cap = $span - $used - $remaining * $this->minShare;
+            $share = max(0, min($share, $cap));
+            $sizes[] = $share;
+            $used += $share + $this->reserveGap;
+        }
+        // Last region takes the remainder; clamp ≥ 0 for Region's invariant
+        // (distribute() never emits a negative trailing size, so this only
+        // guards a degenerate span).
+        $sizes[] = max(0, $span - array_sum($sizes));
+
+        $x = $area->x;
+        $rects = [];
+        foreach ($sizes as $width) {
+            $rects[] = new Region($x, $area->y, $width, $area->height);
             $x += $width;
         }
         return $rects;
