@@ -1,0 +1,76 @@
+<p class="lede" style="margin-top: 28px;">Detect the terminal's color capability (ANSI / ANSI256 / TrueColor), convert between formats, and write StandardColors compatible with the Charm ecosystem.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-palette</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Palette\Palette;
+
+$profile = Palette::detect();
+echo $profile-&gt;type();   // "truecolor" | "256" | "ansi"
+
+$hex = Palette::fromHex('#ff6b6b')-&gt;toProfile($profile)-&gt;ansi();
+$rgb = Palette::fromHex('#ff6b6b')-&gt;rgb();  // [255, 107, 107]</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Profile detection</strong><span>Auto-detect TrueColor / ANSI256 / ANSI via environment + terminfo.</span></div>
+            <div class="feature"><strong>Format conversion</strong><span>Hex ↔ RGB ↔ ANSI ↔ ANSI256. Convert any color to the terminal's capability.</span></div>
+            <div class="feature"><strong>StandardColors</strong><span>16 ANSI standard colors with hex equivalents.</span></div>
+            <div class="feature"><strong>ProfileWriter</strong><span>Output ANSI escape sequences to set the terminal profile.</span></div>
+            
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-palette">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-palette/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-palette/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/colorprofile">charmbracelet/colorprofile</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Palette</td><td>detect()</td><td>Detect terminal color profile</td></tr>
+<tr><td>Palette</td><td>fromHex(hex)</td><td>Create color from hex</td></tr>
+<tr><td>Palette</td><td>fromRgb(r, g, b)</td><td>Create color from RGB</td></tr>
+<tr><td>Palette</td><td>toProfile(profile)</td><td>Convert to profile</td></tr>
+<tr><td>Palette</td><td>ansi(), ansi256(), truecolor()</td><td>Output as ANSI format</td></tr>
+<tr><td>StandardColors</td><td>black(), red(), green()...</td><td>16 ANSI standard colors</td></tr>
+<tr><td>ProfileWriter</td><td>write(profile)</td><td>Output terminal profile</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-palette/.vhs/detect.gif" alt="Profile detection">
+                <h3>Profile detection</h3>
+                <span class="demo-caption">Resolved Ascii / ANSI / ANSI256 / TrueColor profile.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-palette/.vhs/standard-colors.gif" alt="Standard colours">
+                <h3>Standard colours</h3>
+                <span class="demo-caption">The 16 ANSI standard colours rendered as a swatch.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-palette/.vhs/convert.gif" alt="Conversion">
+                <h3>Conversion</h3>
+                <span class="demo-caption">TrueColor → ANSI256 → ANSI degradation steps.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-palette/.vhs/degrade.gif" alt="Degrade">
+                <h3>Degrade</h3>
+                <span class="demo-caption">Same hex degraded for each output profile.</span>
+            </div>
+        </div>
+    </div>
+</section>

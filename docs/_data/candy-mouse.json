@@ -1,0 +1,11 @@
+{
+    "title": "CandyMouse — SugarCraft",
+    "description": "CandyMouse: Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker.",
+    "ogTitle": "CandyMouse — SugarCraft",
+    "ogDescription": "Self-contained Mark/Scan/Get mouse hit-testing. No external Manager wiring needed.",
+    "emoji": "🎯",
+    "displayName": "CandyMouse",
+    "tagline": "Self-contained Mark/Scan/Get mouse hit-testing",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/lrstanley/bubblezone\" style=\"color: inherit;\">bubblezone</a></span>\n          <span class=\"tag-chip\">mouse</span>\n          <span class=\"tag-chip\">hit-testing</span>\n          <span class=\"tag-chip\">zone-click-track</span>"
+}

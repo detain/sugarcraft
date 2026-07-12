@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyFocus",
+    "description": "CandyFocus: dependency-free focus ring — an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal for full-window TUI layouts.",
+    "ogTitle": "SugarCraft — CandyFocus",
+    "ogDescription": "Focus-ring state machine for full-window TUIs: register each focusable region, map Tab to next() and Shift-Tab to previous(), and accent-border the region current() returns. Immutable, dependency-free.",
+    "emoji": "",
+    "displayName": "CandyFocus",
+    "tagline": "Focus-ring state machine — ordered focusable regions with Tab/Shift-Tab traversal",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">original — no upstream parallel</span>\n          <span class=\"tag-chip\">focus</span>\n          <span class=\"tag-chip\">layout</span>\n          <span class=\"tag-chip\">navigation</span>"
+}

@@ -1,0 +1,11 @@
+{
+    "title": "CandyMold — SugarCraft",
+    "description": "CandyMold: Starter skeleton for SugarCraft apps. PHP port of bubbletea-app-template.",
+    "ogTitle": "CandyMold — SugarCraft",
+    "ogDescription": "Starter skeleton for SugarCraft apps. Port of bubbletea-app-template.",
+    "emoji": "🧪",
+    "displayName": "CandyMold",
+    "tagline": "Starter skeleton for SugarCraft apps",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/bubbletea-app-template\" style=\"color: inherit;\">bubbletea-app-template</a></span>\n          <span class=\"tag-chip\">starter</span>\n          <span class=\"tag-chip\">skeleton</span>\n          <span class=\"tag-chip\">create-project</span>"
+}

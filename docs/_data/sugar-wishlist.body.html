@@ -1,0 +1,69 @@
+<p class="lede" style="margin-top: 28px;">Launch <code>wishlist</code>, pick a host, hit Enter — the current process is replaced with <code>ssh</code> connecting to it. Reads YAML or JSON; supports identity files, ssh options, ProxyJump.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-wishlist</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code># ~/.config/wishlist.yml
+- name: production
+  host: prod.example.com
+  port: 2222
+  user: deploy
+  identity_file: ~/.ssh/prod-deploy
+
+- name: staging
+  host: stage.example.com
+  user: deploy
+
+- name: jumpbox
+  host: bastion.example.com
+  options:
+    - ServerAliveInterval=30
+    - ProxyJump=gw.example.com</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Config discovery</strong><span><code>--config</code> ▸ <code>~/.config/wishlist.yml</code> ▸ <code>~/.config/wishlist.yaml</code> ▸ <code>~/.config/wishlist.json</code> ▸ <code>./wishlist.{yml,yaml,json}</code>.</span></div>
+      <div class="feature"><strong>YAML schema</strong><span>name, host, port, user, identity_file, options[].</span></div>
+      <div class="feature"><strong>Type-filter</strong><span>Type to fuzzy-narrow the list.</span></div>
+      <div class="feature"><strong>ProxyJump / Options</strong><span>Pass any ssh option through the entry's <code>options</code> array.</span></div>
+      <div class="feature"><strong>pcntl_exec</strong><span>Replaces the wishlist process — no double-shell — so signals + exit codes propagate cleanly.</span></div>
+      <div class="feature"><strong>Composer-installable</strong><span>Single binary at <code>vendor/bin/wishlist</code>.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-wishlist">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-wishlist/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-wishlist/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/wishlist">wishlist</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Endpoint</td><td>new(name, host)</td><td>Create SSH endpoint</td></tr>
+<tr><td>Endpoint</td><td>withPort(port)</td><td>Set SSH port</td></tr>
+<tr><td>Endpoint</td><td>withUser(user)</td><td>Set SSH user</td></tr>
+<tr><td>Endpoint</td><td>withIdentityFile(path)</td><td>Set identity file</td></tr>
+<tr><td>Config</td><td>load(path)</td><td>Load endpoints from YAML</td></tr>
+<tr><td>App</td><td>start(endpoints)</td><td>Create the app model</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-wishlist/.vhs/picker.gif" alt="Picker">
+                <h3>Picker</h3>
+                <span class="demo-caption">Type-filtered SSH endpoint picker — Enter to launch.</span>
+            </div>
+        </div>
+    </div>
+</section>

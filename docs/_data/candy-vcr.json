@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyVcr",
+    "description": "CandyVcr: record + replay candy-core terminal sessions. PHP port of charmbracelet/x/vcr.",
+    "ogTitle": "SugarCraft — CandyVcr",
+    "ogDescription": "Record + replay candy-core sessions — JSONL/YAML cassettes, byte + cell-grid assertions, CLI.",
+    "emoji": "📼",
+    "displayName": "CandyVcr",
+    "tagline": "Record + replay candy-core sessions",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/x/tree/main/vcr\" style=\"color: inherit;\">x/vcr</a></span>\n          <span class=\"tag-chip\">cassettes</span>\n          <span class=\"tag-chip\">jsonl + yaml</span>\n          <span class=\"tag-chip\">replay</span>\n          <span class=\"tag-chip\">cell-grid assert</span>\n          <span class=\"tag-chip\">cli</span>"
+}

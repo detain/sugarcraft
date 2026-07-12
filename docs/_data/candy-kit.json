@@ -1,0 +1,11 @@
+{
+    "title": "CandyKit — SugarCraft",
+    "description": "CandyKit: CLI presentation helpers. PHP port of fang.",
+    "ogTitle": "CandyKit — SugarCraft",
+    "ogDescription": "CLI presentation helpers. Port of fang.",
+    "emoji": "🎁",
+    "displayName": "CandyKit",
+    "tagline": "CLI presentation helpers",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/fang\" style=\"color: inherit;\">fang</a></span>\n          <span class=\"tag-chip\">cli</span>\n          <span class=\"tag-chip\">presentation</span>\n          <span class=\"tag-chip\">library-only</span>"
+}

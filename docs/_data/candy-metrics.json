@@ -1,0 +1,11 @@
+{
+    "title": "CandyMetrics — SugarCraft",
+    "description": "CandyMetrics: Telemetry primitives + CandyWish session middleware. PHP port of promwish.",
+    "ogTitle": "CandyMetrics — SugarCraft",
+    "ogDescription": "Telemetry primitives + CandyWish session middleware. Port of promwish.",
+    "emoji": "📈",
+    "displayName": "CandyMetrics",
+    "tagline": "Telemetry primitives + CandyWish session middleware",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/promwish\" style=\"color: inherit;\">promwish</a></span>\n          <span class=\"tag-chip\">metrics</span>\n          <span class=\"tag-chip\">telemetry</span>\n          <span class=\"tag-chip\">statsd</span>\n          <span class=\"tag-chip\">prometheus</span>"
+}

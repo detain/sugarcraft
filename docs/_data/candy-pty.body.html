@@ -1,0 +1,115 @@
+<p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-pty</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.1+ with <code>ext-ffi</code>. <code>ext-pcntl</code> is optional — the lib polls <code>waitpid()</code> when pcntl is absent and SignalForwarder degrades to a no-op.</p>
+
+    <h3 style="margin-top: 32px;">Open + spawn + drain</h3>
+    <pre class="code"><code>use SugarCraft\Pty\Pty;
+
+$pty   = Pty::open();
+$child = $pty-&gt;spawn(
+    ['/bin/bash', '-c', 'echo $TERM; date'],
+    ['TERM' =&gt; 'xterm-256color'],
+    100, 30,                              // cols × rows
+);
+
+$pty-&gt;setBlocking(false);
+$out = '';
+while (!$child-&gt;exited()) {
+    $chunk = $pty-&gt;read(4096, 0.05);     // 50ms timeout
+    if ($chunk === null || $chunk === '') continue;
+    $out .= $chunk;
+}
+$exit = $child-&gt;wait();
+$pty-&gt;close();</code></pre>
+
+    <h3 style="margin-top: 32px;">Resize forwarding</h3>
+    <pre class="code"><code>use SugarCraft\Pty\SignalForwarder;
+use SugarCraft\Core\Util\Tty;
+
+SignalForwarder::attachSigwinch(
+    $pty,
+    fn () =&gt; Tty::size(),                // [cols =&gt; N, rows =&gt; N]
+);
+// Now every host SIGWINCH triggers $pty-&gt;resize($cols, $rows).
+
+// For raw /dev/tty fds (no MasterPty object):
+$ttyFd = \SugarCraft\Pty\Libc::lib()-&gt;open('/dev/tty', 0x0002); // O_RDWR
+SignalForwarder::attachSigwinchToFd(
+    $ttyFd,
+    fn () =&gt; Tty::size(),
+    fn (int $cols, int $rows) =&gt; null,  // optional post-resize callback
+);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Pty::open()</strong><span>Allocates a master/slave pair. On macOS: <code>openpty(3)</code> first (single call), falls back to <code>posix_openpt</code> + <code>grantpt</code> + <code>unlockpt</code> + <code>ptsname_r</code> on -1. On Linux: the quartet directly (openpty lives in libutil.so.1 on most distros). Failures close the master fd before throwing — callers never get a half-open Pty.</span></div>
+      <div class="feature"><strong>spawn(cmd, env, cols, rows, controllingTerminal?)</strong><span>Wires the slave path to <code>proc_open</code>'s <code>[0,1,2]</code> descriptor slots and resizes via TIOCSWINSZ before the child starts. Pass <code>controllingTerminal: true</code> to route through <code>bin/pty-shim.php</code> for Ctrl+C → SIGINT delivery (requires ext-pcntl). Returns a <code>Child</code> with pid + idempotent <code>wait()</code> + non-blocking <code>exited()</code>.</span></div>
+      <div class="feature"><strong>read / write / setBlocking</strong><span><code>read($len, $timeout)</code> returns <code>null</code> on timeout, <code>''</code> on EOF, bytes otherwise. Non-blocking + <code>stream_select</code> with EINTR retry. <code>write</code> returns bytes actually written.</span></div>
+      <div class="feature"><strong>resize() / size()</strong><span>TIOCSWINSZ on the master fd; <code>size()</code> reads back via TIOCGWINSZ. Platform-aware constants for Linux + macOS.</span></div>
+      <div class="feature"><strong>SignalForwarder</strong><span>Wires host SIGWINCH → <code>Pty::resize()</code> via a caller-supplied size provider, plus optional SIGCHLD reaper. Defaults <code>pcntl_async_signals(true)</code>; falls back cleanly when pcntl is missing.</span></div>
+      <div class="feature"><strong>waitpid fast-path</strong><span><code>Child::exited()</code> and <code>Child::wait()</code> use a <code>waitpid(pid, &status, WNOHANG)</code> FFI call as the first exit probe — sub-ms detection instead of the 10 ms <code>proc_get_status</code> poll. If FFI is unavailable, falls back to <code>proc_get_status</code> transparently. Signal-terminated exit codes follow the Unix convention: <code>128 + signal_number</code>.</span></div>
+      <div class="feature"><strong>ControllingTerminal::claim()</strong><span>Static method: <code>setsid()</code> + <code>ioctl(fd, TIOCSCTTY, 0)</code> to claim a fd as the session's controlling terminal. Used by the <code>controllingTerminal: true</code> shim path; callable directly from FFI-heavy code that needs the same effect without the PHP shim overhead. Throws <code>PtyException</code> on failure.</span></div>
+      <div class="feature"><strong>PosixPump + PumpOptions</strong><span>Byte pump with <code>onIdle</code> (idle tick), <code>onSigwinch</code> (dimension change), <code>onChildExit</code> (child exit), and <code>recorder</code> (session tap) callbacks. Wire via <code>PumpOptions::withOnIdle()</code> / <code>withOnSigwinch()</code> / <code>withOnChildExit()</code> / <code>withRecorder()</code>.</span></div>
+      <div class="feature"><strong>SUGARCRAFT_LIBC override</strong><span>Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Override via env var for musl, Alpine, or custom sysroots.</span></div>
+      <div class="feature"><strong>SUGARCRAFT_PTY_BACKEND</strong><span>Selects the PTY backend. Recognised values: <code>posix-ffi</code> (default on POSIX), <code>auto</code> (same as unset), <code>sidecar</code> or <code>pecl</code> (throw <code>UnsupportedPlatformException</code> — deferred to phase 12). Unrecognised values throw <code>InvalidArgumentException</code>. See the <a href="https://github.com/sugarcraft/candy-pty/blob/master/README.md#backend-selection">full backend selection table</a> in the README.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>In-process SSH session hosting</strong> — drives <a href="candy-wish.html">CandyWish</a> away from depending on host sshd; spawn the user's shell directly inside the SSH server process with full PTY control.</li>
+      <li><strong>Recorded TUI sessions</strong> — pair with <a href="candy-vcr.html">CandyVcr</a> to capture both the input bytes (typed into the master) and the rendered output (read back from the master).</li>
+      <li><strong>Test harnesses for ANSI-emitting CLIs</strong> — spawn the binary under test in a controlled PTY, pump fixture input, assert on the captured output via <a href="candy-vt.html">CandyVt</a>'s cell-grid.</li>
+      <li><strong>VHS-style demo recorders</strong> — run a script in a PTY, capture the byte stream + winsize, replay later.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Controlling terminal (Ctrl+C, job control)</h3>
+    <p>Pass <code>controllingTerminal: true</code> to <code>spawn()</code> when you need <code>Ctrl+C</code> typed at the master to deliver <code>SIGINT</code> to the child — required for interactive shells (<code>bash -i</code>), editors (<code>vim</code>, <code>less</code>), and anything else that uses tty-driven job control.</p>
+    <pre class="code"><code>$child = $pty-&gt;spawn(
+    ['/bin/bash', '-i'],
+    env: [...],
+    controllingTerminal: true,    // claim slave as the child's ctty
+);
+$pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></pre>
+    <p>Routes the spawn through <code>bin/pty-shim.php</code>, which does <code>setsid()</code> + <code>ioctl(0, TIOCSCTTY, 0)</code> + <code>pcntl_exec()</code> between <code>proc_open</code> and the actual cmd. Requires <code>ext-pcntl</code>. Costs ~5-50 ms of shim startup per spawn — opt-in because non-interactive spawns don't benefit.</p>
+
+    <h3 style="margin-top: 40px;">Known limitations</h3>
+    <ul>
+      <li><strong>Linux + macOS only.</strong> Windows ConPTY is a separate port and not in scope for this lib.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-pty">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Pty</td><td>open()</td><td>Allocate master/slave PTY pair</td></tr>
+<tr><td>Pty</td><td>spawn(cmd, env, cols, rows)</td><td>Spawn child process with PTY</td></tr>
+<tr><td>Pty</td><td>read(len, timeout)</td><td>Read bytes from PTY</td></tr>
+<tr><td>Pty</td><td>write(data)</td><td>Write bytes to PTY</td></tr>
+<tr><td>Pty</td><td>resize(cols, rows)</td><td>Resize terminal window</td></tr>
+<tr><td>Pty</td><td>size()</td><td>Get current terminal size</td></tr>
+<tr><td>Pty</td><td>close()</td><td>Close the PTY</td></tr>
+<tr><td>SignalForwarder</td><td>attachSigwinch(pty, provider)</td><td>Forward SIGWINCH to PTY resize</td></tr>
+<tr><td>SignalForwarder</td><td>attachSigwinchToFd(fd, provider, onResize?)</td><td>Forward SIGWINCH to raw /dev/tty fd via TIOCSWINSZ</td></tr>
+<tr><td>PosixPump</td><td>run(master, stdin, stdout, child?, opts?)</td><td>Run byte pump with optional PumpOptions callbacks</td></tr>
+<tr><td>PumpOptions</td><td>withOnIdle(fn)</td><td>Register idle-tick callback (fires every stream_select timeout)</td></tr>
+<tr><td>PumpOptions</td><td>withOnSigwinch(fn(cols, rows))</td><td>Register SIGWINCH callback (fires on terminal resize)</td></tr>
+<tr><td>PumpOptions</td><td>withOnChildExit(fn(code))</td><td>Register child-exit callback</td></tr>
+<tr><td>PumpOptions</td><td>withRecorder(recorder)</td><td>Attach session recorder (tee stdin/master bytes)</td></tr>
+<tr><td>PumpOptions</td><td>sshDefault()</td><td>SSH-session-tuned preset — matches values hardcoded in InProcessTransport</td></tr>
+<tr><td>Child</td><td>pid</td><td>Child process ID</td></tr>
+<tr><td>Child</td><td>exited(), wait()</td><td>Check/await child exit</td></tr>
+<tr><td>ControllingTerminal</td><td>claim(fd)</td><td>Claim a fd as controlling terminal via setsid() + ioctl(TIOCSCTTY)</td></tr>
+</table>
+  </div>
+</section>

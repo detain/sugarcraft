@@ -1,0 +1,11 @@
+{
+    "title": "CandyFreeze — SugarCraft",
+    "description": "CandyFreeze: Code → SVG screenshot generator. PHP port of freeze.",
+    "ogTitle": "CandyFreeze — SugarCraft",
+    "ogDescription": "Code → SVG screenshot generator. Port of freeze.",
+    "emoji": "📸",
+    "displayName": "CandyFreeze",
+    "tagline": "Code → SVG screenshot generator",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/freeze\" style=\"color: inherit;\">freeze</a></span>\n          <span class=\"tag-chip\">svg</span>\n          <span class=\"tag-chip\">screenshots</span>\n          <span class=\"tag-chip\">no-gd</span>\n          <span class=\"tag-chip\">ansi</span>"
+}

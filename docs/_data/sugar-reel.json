@@ -1,0 +1,11 @@
+{
+    "title": "SugarReel — SugarCraft",
+    "description": "SugarReel: Terminal video player — mp4/gif → ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2. PHP port of tplay/glyph/video-to-ascii.",
+    "ogTitle": "SugarReel — SugarCraft",
+    "ogDescription": "Terminal video player — mp4/gif → ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2. PHP port of tplay/glyph/video-to-ascii.",
+    "emoji": "🎬",
+    "displayName": "SugarReel",
+    "tagline": "Terminal video player",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">no single upstream</span>\n          <span class=\"tag-chip\">mp4</span>\n          <span class=\"tag-chip\">gif</span>\n          <span class=\"tag-chip\">ascii</span>\n          <span class=\"tag-chip\">sixel</span>\n          <span class=\"tag-chip\">kitty</span>\n          <span class=\"tag-chip\">iterm2</span>\n          <span class=\"tag-chip\">ffmpeg</span>\n          <span class=\"tag-chip\">ext-gd</span>"
+}

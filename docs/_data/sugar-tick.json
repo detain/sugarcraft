@@ -1,0 +1,11 @@
+{
+    "title": "SugarTick — SugarCraft",
+    "description": "SugarTick: Privacy-first coding-time tracker. PHP port of TakaTime.",
+    "ogTitle": "SugarTick — SugarCraft",
+    "ogDescription": "Privacy-first coding-time tracker. Port of TakaTime.",
+    "emoji": "⏰",
+    "displayName": "SugarTick",
+    "tagline": "Privacy-first coding-time tracker",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/Rtarun3606k/TakaTime\" style=\"color: inherit;\">TakaTime</a></span>\n          <span class=\"tag-chip\">time-tracking</span>\n          <span class=\"tag-chip\">wakatime</span>\n          <span class=\"tag-chip\">jsonl</span>\n          <span class=\"tag-chip\">dashboard</span>"
+}

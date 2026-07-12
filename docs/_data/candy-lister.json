@@ -1,0 +1,11 @@
+{
+    "title": "CandyLister — SugarCraft",
+    "description": "CandyLister: Tree / list view with box-drawing prefixes + cursor nav. PHP port of treilik/bubblelister.",
+    "ogTitle": "CandyLister — SugarCraft",
+    "ogDescription": "Tree / list view with box-drawing prefixes + cursor nav. Port of treilik/bubblelister.",
+    "emoji": "",
+    "displayName": "CandyLister",
+    "tagline": "Tree / list view with box-drawing prefixes + cursor nav",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/treilik/bubblelister\" style=\"color: inherit;\">treilik/bubblelister</a></span>\n          <span class=\"tag-chip\">tree</span><span class=\"tag-chip\">list</span><span class=\"tag-chip\">view</span><span class=\"tag-chip\">navigation</span>"
+}

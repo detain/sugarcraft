@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — CandyInput",
+    "description": "CandyInput: Terminal escape sequence decoder — keys, Kitty keyboard protocol, SGR 1006 mouse, focus, bracketed paste. The missing input layer for PHP TUI.",
+    "ogTitle": "SugarCraft — CandyInput",
+    "ogDescription": "EscapeDecoder consumes raw TTY bytes and emits typed Events. Supports legacy keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Pioneering for PHP TUI.",
+    "emoji": "🍬",
+    "displayName": "CandyInput",
+    "tagline": "Terminal escape sequence decoder",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">pioneering (no upstream)</span>\n          <span class=\"tag-chip\">input</span>\n          <span class=\"tag-chip\">foundation-package</span>"
+}

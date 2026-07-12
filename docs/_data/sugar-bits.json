@@ -1,0 +1,11 @@
+{
+    "title": "SugarBits — SugarCraft",
+    "description": "SugarBits: Fifteen pre-built TUI components. PHP port of bubbles.",
+    "ogTitle": "SugarBits — SugarCraft",
+    "ogDescription": "Fifteen pre-built TUI components. Port of bubbles.",
+    "emoji": "🧁",
+    "displayName": "SugarBits",
+    "tagline": "Fifteen pre-built TUI components",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/bubbles\" style=\"color: inherit;\">bubbles</a></span>\n          <span class=\"tag-chip\">components</span>\n          <span class=\"tag-chip\">widgets</span>\n          <span class=\"tag-chip\">forms</span>\n          <span class=\"tag-chip\">input</span>"
+}

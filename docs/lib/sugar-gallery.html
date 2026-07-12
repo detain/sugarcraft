@@ -32,10 +32,10 @@
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All 39 libraries</a></p>
 
     <div class="detail-header">
-      <img class="detail-icon" src="../img/icons/sugar-gallery.png" alt="SugarGallery" onerror="this.style.display='none'">
+      <img class="detail-icon" src="../img/icons/sugar-gallery.png" alt="SugarGallery">
       <div>
         <h2>SugarGallery</h2>
         <p class="detail-sub">Poster grids & rails for media TUIs — virtualized PosterGrid, Rail carousel, PosterCard</p>
@@ -48,6 +48,7 @@
         </div>
       </div>
     </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-gallery"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-gallery" alt="SugarGallery code coverage" loading="lazy"></a></p>
 
     <p class="lede" style="margin-top: 28px;">Browse-row widgets for media terminal UIs: a 2-D virtualized <strong>PosterGrid</strong> for large libraries, a horizontal <strong>Rail</strong> carousel for browse rows, and a single <strong>PosterCard</strong> tile. The grid is <em>sparse</em> — it knows the total item count up front but holds only the cards that have been fetched, keyed by their <strong>absolute index</strong>, so a 50,000-item library renders as cheaply as a 50-item one; missing indices draw as skeletons and only the rows inside the viewport are ever rendered. Paging is owner-driven: after every cursor move the owner reads <code>visibleRange()</code> (the absolute-index window now on screen — the terminal analogue of the web grid's <code>need-range</code> event) and splices the covering page back in with <code>withItems()</code>. The widgets are <strong>renderer-agnostic</strong>: a card holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. <a href="candy-mosaic.html">candy-mosaic</a>), so this lib pulls in no image decoder. Original SugarCraft component — no 1:1 upstream; inspired by charmbracelet/bubbles' list/viewport and the phlix web media grid.</p>
 
@@ -126,7 +127,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-gallery">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-gallery/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-gallery/tree/main/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-gallery/tree/master/tests">Test suite</a></li>
     </ul>
 
     <h3 style="margin-top: 32px;">Dependencies</h3>
@@ -182,7 +183,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-gallery">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
-            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/sugar-gallery/issues">Issues</a>
         </div>
     </div>

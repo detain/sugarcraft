@@ -1,0 +1,11 @@
+{
+    "title": "CandyMines — SugarCraft",
+    "description": "CandyMines: Minesweeper on the SugarCraft stack. PHP port of go-sweep.",
+    "ogTitle": "CandyMines — SugarCraft",
+    "ogDescription": "Minesweeper on the SugarCraft stack. Port of go-sweep.",
+    "emoji": "💣",
+    "displayName": "CandyMines",
+    "tagline": "Minesweeper on the SugarCraft stack",
+    "phpVersion": "8.1+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/maxpaulus43/go-sweep\" style=\"color: inherit;\">go-sweep</a></span>\n          <span class=\"tag-chip\">game</span>\n          <span class=\"tag-chip\">minesweeper</span>\n          <span class=\"tag-chip\">sugarcraft</span>\n          <span class=\"tag-chip\">deterministic-rng</span>"
+}
