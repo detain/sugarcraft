@@ -8,7 +8,7 @@ A comprehensive TUI component library for PHP 8.3+, ported from the Charmbracele
 composer require sugarcraft/sugar-dash
 ```
 
-## Namespace Structure (13 Namespaces)
+## Namespace Structure (12 Namespaces)
 
 | Namespace | Description |
 |-----------|-------------|
@@ -20,7 +20,6 @@ composer require sugarcraft/sugar-dash
 | `Registry\` | Registry pattern for modules |
 | `Plugin\` | Plugin system with JSON protocol |
 | `Modules\` | Built-in modules (Clock, System, Weather, etc.) |
-| `Events\` | Input/event plumbing (Event, KeyEvent, MouseEvent, FocusEvent, etc.) |
 | `Keys\` | Key registry and mappings |
 | `Position\` | ANSI-aware geometry helpers |
 | `Output\` | Extracted helpers (truncate, render bar) |
@@ -380,20 +379,6 @@ composer require sugarcraft/sugar-dash
 | `Diff` | Diff view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/diff.gif) |
 
 ---
-
-## Events Namespace (Input/Event Plumbing)
-
-| Type | Description | Key Properties |
-|------|-------------|----------------|
-| `Event` | Base event class |
-| `EventHandler` | Event handler callback |
-| `EventDispatcher` | Event dispatcher |
-| `FocusEvent` | Focus event |
-| `KeyEvent` | Keyboard event |
-| `MouseEvent` | Mouse event |
-| `PasteEvent` | Paste event |
-| `ResizeEvent` | Resize event |
-| `Focus` | Focus state management |
 
 ## Keys Namespace (Key Registry)
 
