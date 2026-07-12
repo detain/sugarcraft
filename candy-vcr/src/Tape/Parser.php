@@ -39,6 +39,7 @@ final readonly class Parser
         'Padding' => true,
         'Margin' => true,
         'PlaybackSpeed' => true,
+        'Shell' => true,
     ];
 
     /**

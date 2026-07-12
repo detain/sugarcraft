@@ -58,7 +58,15 @@ final class TapeToGif
      *   backend?: 'gd'|'imagick',
      *   encoder?: 'ffmpeg'|'php',
      *   strict?: bool,
+     *   shell?: string|null,
+     *   exec?: bool,
      * } $options
+     *
+     * The `shell` / `exec` options opt the render into exec mode (real PTY +
+     * captured program output). Precedence: an explicit `shell` (CLI `--shell`)
+     * wins, else the tape's own `Set Shell` directive, else — when `exec` is set —
+     * a default shell (`$SHELL` or `/bin/sh`). When none of these is present the
+     * render uses the byte-identical echo path, unchanged.
      *
      * @return string The resolved output path the GIF was written to. When
      *   $outputPath is null the tape's own confined `Output <path>` directive
@@ -95,7 +103,12 @@ final class TapeToGif
         $terminal = Terminal::new($cassette->header->cols, $cassette->header->rows, $theme);
         $player = new Player($cassette);
 
-        $frameStream = $this->renderer->render($player, $terminal, $fps);
+        // Resolve the shell for exec mode. Explicit CLI --shell wins, else the
+        // tape's own `Set Shell`, else a default shell when --exec was passed.
+        // Null ⇒ the byte-identical echo path (the goldens' path), unchanged.
+        $shell = $this->resolveShell($options);
+
+        $frameStream = $this->renderer->render($player, $terminal, $fps, $shell);
 
         // Same cell metrics the Compiler used to derive cols/rows, so the canvas
         // (cols * cellW) x (rows * cellH) lands within one cell of the tape's
@@ -334,6 +347,50 @@ final class TapeToGif
             ];
             $frameStream->pendingScreenshotPath = null;
         }
+    }
+
+    /**
+     * Resolve the effective shell for exec mode from the render options and the
+     * compiled tape. Returns null to keep the byte-identical echo path.
+     *
+     * Precedence:
+     *   1. `$options['shell']` — an explicit CLI `--shell=<sh>` (operator override).
+     *   2. The tape's own `Set Shell "<sh>"` directive ({@see Compiler::shell()}).
+     *   3. A default shell (`$SHELL` or `/bin/sh`) when `$options['exec']` is set
+     *      but neither of the above supplied one.
+     *
+     * @param array<string, mixed> $options
+     */
+    private function resolveShell(array $options): ?string
+    {
+        $cliShell = $options['shell'] ?? null;
+        if (is_string($cliShell) && trim($cliShell) !== '') {
+            return trim($cliShell);
+        }
+
+        $tapeShell = $this->compiler->shell();
+        if ($tapeShell !== null && trim($tapeShell) !== '') {
+            return trim($tapeShell);
+        }
+
+        if (($options['exec'] ?? false) === true) {
+            return $this->defaultShell();
+        }
+
+        return null;
+    }
+
+    /**
+     * The default shell used by `--exec` when no explicit shell was given:
+     * honour `$SHELL` when it points at an executable, else `/bin/sh`.
+     */
+    private function defaultShell(): string
+    {
+        $shell = (string) (getenv('SHELL') ?: '');
+        if ($shell !== '' && is_executable($shell)) {
+            return $shell;
+        }
+        return '/bin/sh';
     }
 
     private function resolveTheme(string $name, bool $strict = false): Theme
