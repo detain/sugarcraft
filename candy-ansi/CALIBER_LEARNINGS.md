@@ -61,3 +61,28 @@ forking its own copy). Four changes, all inside candy-ansi:
 **Gotcha:** CSI final bytes are `0x40`–`0x7E`, so `@` (0x40), `s`, `u`, `b` are
 all valid finals the state machine dispatches — no Transitions-table change
 needed to reach the new handler methods.
+
+## 2026-07-12 — deadcode: deleted inert `CsiHandlerImpl` stub (step-12 never landed)
+
+The de-fork (W1, PRs #1262/#1263) put the REAL grid-mutating CSI impl in
+`candy-vt` (`SugarCraft\Vt\Parser\CsiHandlerImpl`), wired through candy-ansi's
+`HandlerAdapter`. candy-ansi's own `SugarCraft\Ansi\Parser\CsiHandlerImpl` was
+only ever the "step-12 pending" placeholder: **all 30 methods no-op**,
+`gridRows()`/`gridCols()` return `0`, and its test was 30 `assertTrue(true)`
+smoke assertions. Grep confirmed **zero real consumers** — the only references
+were the class's own file + its own test, and every dependent (candy-pty,
+sugar-spark, candy-freeze) implements the `Handler` interface, while candy-vt
+supplies its own `CsiHandler` implementation. So both files were deleted.
+
+- **The `CsiHandler` interface stays** — it is the contract `HandlerAdapter`
+  type-hints (`__construct(private CsiHandler $csi, ...)`) and that
+  `HandlerAdapterTest` exercises via `createMock(CsiHandler::class)`. candy-ansi
+  intentionally ships the interface + adapter with **no concrete in-repo
+  implementer**; emulator front-ends (candy-vt) provide the real one. This
+  supersedes the W1 note above that called `CsiHandlerImpl` "the only in-repo
+  implementer".
+- **`OscHandlerImpl` was NOT deleted** — unlike the CSI stub it is *not* inert:
+  #1262 gave `hyperlink()` real storage behaviour (records the active OSC-8
+  link, exposed via `hyperlinkUri()`/`hyperlinkId()`), and `OscHandlerImplTest`
+  asserts that behaviour for real. Precision matters here: the two `*Impl`
+  files diverged in #1262 — CSI stayed inert, OSC gained behaviour.
