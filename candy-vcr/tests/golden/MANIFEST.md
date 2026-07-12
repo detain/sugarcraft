@@ -12,6 +12,14 @@ font (`JetBrainsMono` resolved by `FontLoader`), `fps = 30.0`, and
 `fontSize = 14`. Dimensions / theme / typing speed all come from inside
 the tape via `Set` directives — no CLI overrides. Equivalent to:
 
+Note: `Set Width`/`Set Height` are the OUTPUT IMAGE size in PIXELS (VHS
+semantics), not terminal columns/rows. The terminal grid is derived as
+`floor(px / cell)` using the font cell size (at `FontSize 14`: cellW 8,
+cellH 28), so `Set Width 700 / Set Height 240` yields an ~87x8 grid and a
+~696x224px GIF. `Set FontSize` is kept explicit in every tape so the cell
+metrics (and thus grid + image size) are independent of the compiler's
+`DEFAULT_FONT_SIZE` (VHS 22).
+
 ```sh
 php bin/candy-vcr render-tape tests/golden/tapes/<name>.tape \
     -o tests/golden/<name>.<encoder>.gif --encoder <encoder>
@@ -36,7 +44,7 @@ php scripts/refresh-goldens.php --dry-run # report diffs only
 | `05-ctrl-sequence.tape`       | Ctrl-sequence — `Ctrl+C` and `Ctrl+D`      |
 | `06-arrow-keys.tape`          | Arrow keys — `Up`/`Down`/`Left`/`Right`    |
 | `07-cjk-wide.tape`            | Wide CJK type — `Type "日本語"`              |
-| `08-custom-dims.tape`         | Custom `Set Width 100` / `Set Height 12`   |
+| `08-custom-dims.tape`         | Custom `Set Width 500` / `Set Height 200`  |
 | `09-animation.tape`           | Multi-frame animation (staggered typing)   |
 | `10-idle-rich.tape`           | Idle-rich — `Type` / long `Sleep` / `Type` |
 

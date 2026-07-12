@@ -566,7 +566,7 @@ allowlist; unknown keys raise a `ParseError`:
 |---------|--------|
 | `Theme` | Theme name (`TokyoNight`, `TokyoNightLight`, `TokyoNightStorm`, `Dracula`, `SolarizedDark`). Stored on `CassetteHeader::$theme`. |
 | `FontSize` | Default rasterizer font size in pixels (`Renderer` default 14). |
-| `Width` / `Height` | Initial terminal cols / rows (stored on the header). |
+| `Width` / `Height` | Output IMAGE size in PIXELS (VHS semantics; defaults 1200 / 600). Stored on `CassetteHeader::$widthPx` / `$heightPx`; the terminal `cols` / `rows` are DERIVED from these via the font cell size. |
 | `TypingSpeed` | Inter-character delay for `Type` runs. Accepts `<n>ms` / `<n>s` / `<n>m`. |
 | `FontFamily` | TTF family name (resolved by `FontLoader`). |
 | `Padding` / `Margin` | Reserved for the rasterizer; accepted but not yet enforced. |

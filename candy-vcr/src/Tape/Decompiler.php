@@ -55,8 +55,6 @@ final class Decompiler
     public const SLEEP_THRESHOLD_SECONDS = 0.1;
 
     private const DEFAULT_THEME = 'TokyoNight';
-    private const DEFAULT_COLS = 80;
-    private const DEFAULT_ROWS = 24;
     private const DEFAULT_TYPING_SPEED_MS = 50.0;
 
     public function decompile(Cassette $cassette): string
@@ -86,12 +84,19 @@ final class Decompiler
             $lines[] = 'Set Theme "' . $this->escapeQuoted($theme) . '"';
         }
 
-        if ($header->cols !== self::DEFAULT_COLS) {
-            $lines[] = 'Set Width ' . $header->cols;
+        // Emit the ORIGINAL pixel dimensions (Set Width/Height are VHS image
+        // pixels, not terminal cols/rows). The compiler derives cols/rows from
+        // these, which is not invertible, so we round-trip the pixel values the
+        // header carried. Cassettes without a pixel-dim concept (widthPx/heightPx
+        // null, e.g. the PTY recorder) emit no Set Width/Height directive.
+        $widthPx = $header->widthPx;
+        if ($widthPx !== null && $widthPx !== Compiler::DEFAULT_WIDTH_PX) {
+            $lines[] = 'Set Width ' . $widthPx;
         }
 
-        if ($header->rows !== self::DEFAULT_ROWS) {
-            $lines[] = 'Set Height ' . $header->rows;
+        $heightPx = $header->heightPx;
+        if ($heightPx !== null && $heightPx !== Compiler::DEFAULT_HEIGHT_PX) {
+            $lines[] = 'Set Height ' . $heightPx;
         }
 
         $typingSpeed = $header->typingSpeed;
