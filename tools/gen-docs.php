@@ -280,10 +280,15 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         ? (string) $meta['prefixOverride']
         : build_prefix($slug, (string) $meta['title'], (string) $meta['description'], (string) $meta['ogTitle'], (string) $meta['ogDescription']);
 
+    // Breadcrumb intentionally omits a lib/app COUNT: the authoritative split
+    // (MATCHUPS 39/19) disagrees with index.html's legacy copy (36/22) and its
+    // tile set (38 libs — candy-async has a MATCHUPS row but no tile), so asserting
+    // a number here would introduce a fresh cross-page inconsistency. The TYPE
+    // (library vs app) is still MATCHUPS-derived; only the count is dropped until
+    // the classification is reconciled site-wide.
     $plural = $type === 'app' ? 'apps' : 'libraries';
-    $count  = $type === 'app' ? $nApp : $nLib;
     $breadcrumb = '<p style="color: var(--ink-2); margin: 0 0 16px 0;">'
-        . '<a href="../#' . $plural . '">← All ' . $count . ' ' . $plural . '</a></p>';
+        . '<a href="../#' . $plural . '">← All ' . $plural . '</a></p>';
 
     $h2 = $meta['emoji'] !== '' ? $meta['emoji'] . ' ' . $name : $name;
 
