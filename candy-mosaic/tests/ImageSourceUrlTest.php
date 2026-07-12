@@ -138,7 +138,10 @@ final class ImageSourceUrlTest extends TestCase
         $this->startServer();
 
         $img = $this->await(
-            ImageSource::fromUrlAsync("http://127.0.0.1:{$this->port}/poster.png"),
+            ImageSource::fromUrlAsync(
+                "http://127.0.0.1:{$this->port}/poster.png",
+                allowedHosts: ['127.0.0.1'],
+            ),
         );
 
         $this->assertInstanceOf(ImageSource::class, $img);
@@ -154,6 +157,7 @@ final class ImageSourceUrlTest extends TestCase
         $img = $this->await(ImageSource::fromUrlAsync(
             "http://127.0.0.1:{$this->port}/poster.png",
             ['X-Phlix-Test' => 'hello'],
+            allowedHosts: ['127.0.0.1'],
         ));
 
         $this->assertInstanceOf(ImageSource::class, $img);
@@ -168,6 +172,7 @@ final class ImageSourceUrlTest extends TestCase
             "http://127.0.0.1:{$this->port}/poster.png",
             null,
             new Browser(),
+            allowedHosts: ['127.0.0.1'],
         ));
 
         $this->assertSame(4, $img->width);
@@ -178,7 +183,10 @@ final class ImageSourceUrlTest extends TestCase
         $this->startServer();
 
         $img = $this->await(
-            ImageSource::fromUrlAsync("http://127.0.0.1:{$this->port}/redirect"),
+            ImageSource::fromUrlAsync(
+                "http://127.0.0.1:{$this->port}/redirect",
+                allowedHosts: ['127.0.0.1'],
+            ),
         );
 
         $this->assertInstanceOf(ImageSource::class, $img);
@@ -191,7 +199,10 @@ final class ImageSourceUrlTest extends TestCase
 
         $this->expectException(\Throwable::class);
 
-        $this->await(ImageSource::fromUrlAsync("http://127.0.0.1:{$this->port}/missing"));
+        $this->await(ImageSource::fromUrlAsync(
+            "http://127.0.0.1:{$this->port}/missing",
+            allowedHosts: ['127.0.0.1'],
+        ));
     }
 
     public function testFromUrlAsyncRejectsOnConnectionRefused(): void
@@ -203,7 +214,10 @@ final class ImageSourceUrlTest extends TestCase
 
         $this->expectException(\Throwable::class);
 
-        $this->await(ImageSource::fromUrlAsync("http://127.0.0.1:{$port}/poster.png"));
+        $this->await(ImageSource::fromUrlAsync(
+            "http://127.0.0.1:{$port}/poster.png",
+            allowedHosts: ['127.0.0.1'],
+        ));
     }
 
     public function testFromUrlAsyncRejectsOnNonImagePayload(): void
@@ -212,7 +226,10 @@ final class ImageSourceUrlTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
 
-        $this->await(ImageSource::fromUrlAsync("http://127.0.0.1:{$this->port}/text"));
+        $this->await(ImageSource::fromUrlAsync(
+            "http://127.0.0.1:{$this->port}/text",
+            allowedHosts: ['127.0.0.1'],
+        ));
     }
 
     // ---- helpers --------------------------------------------------------
