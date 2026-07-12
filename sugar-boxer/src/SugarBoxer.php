@@ -8,6 +8,10 @@ use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Layout\Constraint\Constraint;
+use SugarCraft\Layout\Direction;
+use SugarCraft\Layout\GreedySolver;
+use SugarCraft\Layout\Region as LayoutRegion;
 use SugarCraft\Sprinkles\Align;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -55,6 +59,17 @@ final class SugarBoxer
 
     /** @var int|null Previous render height for resize detection */
     private ?int $prevHeight = null;
+
+    /**
+     * candy-layout's constraint solver in sugar-boxer parity mode. The flex
+     * distribution (fixed siblings take their natural size, flex children share
+     * the leftover by weight) is exactly what candy-layout's GreedySolver models;
+     * {@see GreedySolver::compat()} flips its three divergent axes (round-split,
+     * remainder-to-last, non-truncating overflow) so it reproduces
+     * {@see distributeFlex()} byte-for-byte. Immutable + stateless → shared.
+     */
+    private readonly GreedySolver $flexSolver;
+
     /**
      * Create a new SugarBoxer instance.
      */
@@ -66,6 +81,7 @@ final class SugarBoxer
     public function __construct()
     {
         $this->sgrPrefixCache = new \WeakMap();
+        $this->flexSolver = GreedySolver::compat();
     }
 
     // -------------------------------------------------------------------------
@@ -853,7 +869,18 @@ final class SugarBoxer
     // -------------------------------------------------------------------------
 
     /**
-     * Distribute available space across children by weight.
+     * Distribute available space across children by weight (the non-flex
+     * fallback: children weighted by minWidth/minHeight, defaulting to 1).
+     *
+     * NOTE: unlike {@see distributeFlex()}, this path is NOT delegated to
+     * candy-layout. Its "reserve at least 1 column per remaining child" cap
+     * (below) is a sequential greedy degradation that guarantees the trailing
+     * child never vanishes in a tight viewport — an invariant candy-layout's
+     * GreedySolver has no equivalent for (its overflow either truncates
+     * proportionally or, in compat() mode, runs off-grid). A characterization
+     * sweep found ~1089/4896 offset divergences for every candy-layout mapping
+     * tried (ratio/fill/percentage × compat/default), so migrating this would
+     * regress rendering. It stays hand-rolled by design; see plan_missing.md W12.
      *
      * @param list<int> $weights
      * @return list<int> Starting offsets for each child
@@ -907,6 +934,16 @@ final class SugarBoxer
      * shape as {@see distribute()} (the caller derives the final child's size as
      * the remainder, which equals its computed size because the sizes sum exact).
      *
+     * Delegates the actual size computation to candy-layout's
+     * {@see GreedySolver::compat()} (plan_missing.md W12 / candy-layout #1372): a
+     * fixed child maps to a Length reserving its natural size, a flex child to a
+     * Fill weighted by its flex weight. compat() mode makes candy-layout's greedy
+     * solver reproduce this hand-rolled distribution byte-for-byte — the three
+     * axes it flips (round-split, remainder-to-the-last Fill, and NON-truncating
+     * overflow so fixed children keep their full base and the layout runs off-grid
+     * rather than being shrunk) are precisely sugar-boxer's flex semantics. A
+     * 3456-layout characterization sweep confirmed 0 offset divergences.
+     *
      * @param list<int> $bases   natural size per child (ignored for flex children)
      * @param list<int> $flexes  flex weight per child (0 = fixed)
      * @return list<int>
@@ -917,36 +954,29 @@ final class SugarBoxer
         $gaps    = $spacing * \max(0, $n - 1);
         $content = \max(0, $available - $gaps);
 
-        $totalFlex = \array_sum($flexes);
-        $fixedSum  = 0;
-        $lastFlex  = -1;
+        // Fixed → Length(base) (clamped ≥ 0: Length rejects negatives, matching the
+        // old max(0, $bases[$i])); flex → Fill(weight). The gaps are excluded from
+        // the solved span and re-inserted below, exactly as the old arithmetic did.
+        $constraints = [];
         foreach ($flexes as $i => $f) {
-            if ($f > 0) {
-                $lastFlex = $i;
-            } else {
-                $fixedSum += \max(0, $bases[$i]);
-            }
-        }
-        $remaining = \max(0, $content - $fixedSum);
-
-        $sizes     = [];
-        $allocated = 0;
-        foreach ($flexes as $i => $f) {
-            if ($f <= 0) {
-                $sizes[$i] = \max(0, $bases[$i]);
-            } elseif ($i === $lastFlex) {
-                $sizes[$i] = $remaining - $allocated; // absorb the rounding remainder
-            } else {
-                // $totalFlex >= 1 here: distributeFlex only runs when a flex child exists.
-                $share      = (int) \floor($f / $totalFlex * $remaining);
-                $sizes[$i]  = $share;
-                $allocated += $share;
-            }
+            $constraints[] = $f > 0
+                ? Constraint::fill($f)
+                : Constraint::length(\max(0, $bases[$i]));
         }
 
+        $regions = $this->flexSolver->solve(
+            new LayoutRegion(0, 0, $content, 1),
+            Direction::Horizontal,
+            $constraints,
+        );
+
+        // Rebuild the starting-offset array the caller expects: offsets[0] is the
+        // border pad; each subsequent offset adds the previous child's solved width
+        // plus one inter-child gap. The final child's size is derived by the caller
+        // as the remainder (w - b - offsets[last]), so its solved width is unused.
         $offsets = [$borderPad];
         for ($i = 0; $i < $n - 1; $i++) {
-            $offsets[] = $offsets[$i] + $sizes[$i] + $spacing;
+            $offsets[] = $offsets[$i] + $regions[$i]->width + $spacing;
         }
 
         return $offsets;
