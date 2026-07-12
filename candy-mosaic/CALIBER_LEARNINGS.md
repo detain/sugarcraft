@@ -91,3 +91,4 @@ Accumulated patterns and gotchas specific to this library.
    continues to completion internally. Implementing cancellation would require
    cooperative cancellation tokens passed through the render chain. This is
    a known limitation for long-running renders (large GIFs, high-res images).
+ - **[ImageLayer lives here now]** `SugarCraft\Mosaic\ImageLayer` (the turnkey per-frame image-registry helper) was extracted from candy-core into candy-mosaic. It reaches back into candy-core for the runtime overlay-contract via `use SugarCraft\Core\ImageOverlay;` + `use SugarCraft\Core\ImagePlacement;` — those two classes INTENTIONALLY stay in candy-core (driven by `Program::renderFrame()` / `View::$images`); moving them here would circular-dep against candy-core, which candy-mosaic already requires. This one-way `candy-mosaic → candy-core` edge is the intended direction.
