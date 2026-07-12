@@ -186,6 +186,124 @@ def write_targets(img, slug: str):
         img.save(p, "PNG", optimize=True)
 
 
+# ---------------------------------------------------------------------------
+# Offline badge fallback — deterministic Pillow monogram tiles.
+#
+# The FLUX path above needs a CUDA GPU plus a multi-GB model download, so it
+# cannot run in CI or an offline sandbox. `--badges` renders a reproducible
+# rounded-square monogram badge per slug using only Pillow: the Candy-/Sugar-/
+# Honey- prefix selects a hue family and a hash of the remainder jitters the
+# hue, so every lib gets a distinct-but-on-brand accent. Use it to backfill a
+# real (KB-range, non-stub) icon for a lib still awaiting bespoke kawaii art.
+# ---------------------------------------------------------------------------
+_HUE_FAMILY = {
+    "candy": 336.0,   # rose / pink   — foundation/system libs
+    "sugar": 275.0,   # violet        — components / data / apps
+    "honey":  40.0,   # amber / gold  — math / physics
+    "super": 210.0,   # hero blue     — showcase apps
+}
+_BRAND_HUE = 200.0    # sugarcraft brand fallback
+
+
+def _slug_accent(slug: str):
+    """Deterministic (hue, sat, val) for a slug's badge, keyed by prefix family."""
+    import hashlib
+    prefix = slug.split("-", 1)[0]
+    base = _HUE_FAMILY.get(prefix, _BRAND_HUE)
+    tail = slug.split("-", 1)[1] if "-" in slug else slug
+    h = int(hashlib.sha1(tail.encode()).hexdigest(), 16)
+    hue = (base + ((h % 57) - 28)) % 360           # +/-28 deg jitter within family
+    sat = 0.58 + (h >> 8 & 0xFF) / 255.0 * 0.14    # 0.58 .. 0.72
+    return hue, sat, 0.90
+
+
+def _hsv_rgb(h, s, v):
+    import colorsys
+    r, g, b = colorsys.hsv_to_rgb((h % 360) / 360.0, s, v)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
+def _badge_font(px: int):
+    from PIL import ImageFont
+    for path in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                 "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"):
+        try:
+            return ImageFont.truetype(path, px)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def render_badge(slug: str, size: int = TARGET_SIZE):
+    """Glossy rounded-square monogram badge for `slug` (RGB, white background)."""
+    from PIL import Image, ImageChops, ImageDraw
+
+    ss = 4                                    # supersample for crisp anti-aliasing
+    s = size * ss
+    hue, sat, val = _slug_accent(slug)
+    top = _hsv_rgb(hue, max(0.0, sat - 0.16), min(1.0, val + 0.08))
+    bot = _hsv_rgb(hue, sat, val * 0.80)
+
+    img = Image.new("RGB", (s, s), (255, 255, 255))
+
+    # vertical gloss gradient (light top -> saturated bottom)
+    grad = Image.new("RGB", (1, s))
+    gpx = grad.load()
+    for y in range(s):
+        t = y / (s - 1)
+        gpx[0, y] = tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3))
+    grad = grad.resize((s, s))
+
+    margin = int(s * 0.085)
+    radius = int(s * 0.235)
+    mask = Image.new("L", (s, s), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [margin, margin, s - margin, s - margin], radius=radius, fill=255)
+    img.paste(grad, (0, 0), mask)
+
+    # soft glossy highlight across the top half, clipped to the badge
+    hl = Image.new("L", (s, s), 0)
+    ImageDraw.Draw(hl).ellipse(
+        [margin, margin - int(s * 0.10), s - margin, int(s * 0.52)], fill=70)
+    img.paste(Image.new("RGB", (s, s), (255, 255, 255)), (0, 0),
+              ImageChops.multiply(hl, mask))
+
+    draw = ImageDraw.Draw(img, "RGBA")
+    tail = slug.split("-", 1)[1] if "-" in slug else slug
+    letter = tail[0].upper()
+    big = _badge_font(int(s * 0.44))
+    small = _badge_font(int(s * 0.115))
+    cx = s // 2
+    off = int(s * 0.006)
+    draw.text((cx + off, int(s * 0.44) + off), letter, font=big,
+              fill=(0, 0, 0, 60), anchor="mm")
+    draw.text((cx, int(s * 0.44)), letter, font=big,
+              fill=(255, 255, 255, 255), anchor="mm")
+    draw.text((cx, int(s * 0.78)), tail, font=small,
+              fill=(255, 255, 255, 235), anchor="mm")
+
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def run_badges(args):
+    """Offline badge path: no torch, no network — deterministic Pillow tiles."""
+    if args.only:
+        slugs = [s.strip() for s in args.only.split(",") if s.strip()]
+    else:
+        slugs = list(SUBJECTS)
+    if args.skip_existing:
+        slugs = [s for s in slugs
+                 if not (ROOT / "media" / "icons" / f"{s}.png").exists()]
+    if not slugs:
+        print("nothing to do.")
+        return
+    print(f"badge mode : {len(slugs)} icon(s) at {args.size}x{args.size}")
+    for slug in slugs:
+        img = render_badge(slug, args.size)
+        write_targets(img, slug)
+        print(f"  {slug:24s} {img.size[0]}x{img.size[1]}  ok")
+
+
 def load_pipe(model_id: str, dtype, device: str, cpu_offload: bool):
     """Load and configure a FluxPipeline."""
     from diffusers import FluxPipeline
@@ -265,7 +383,15 @@ def main():
                     help="offload T5/VAE to CPU; cuts VRAM at the cost of speed")
     ap.add_argument("--dry-run", action="store_true",
                     help="print plan, don't load model or generate")
+    ap.add_argument("--badges", action="store_true",
+                    help="offline mode: render deterministic Pillow monogram "
+                         "badges (no GPU/network). --only names the slugs; "
+                         "they need not appear in SUBJECTS.")
     args = ap.parse_args()
+
+    if args.badges:
+        run_badges(args)
+        return
 
     model_id, steps, guidance = MODELS[args.model]
 
