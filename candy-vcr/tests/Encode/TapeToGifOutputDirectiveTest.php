@@ -46,7 +46,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
 
     public function testTapeOutputDirectiveIsHonoredWhenNoExplicitOutput(): void
     {
-        $tape = $this->writeTape("Output custom.gif\nSet Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+        $tape = $this->writeTape("Output custom.gif\nSet Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
 
@@ -60,7 +60,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
 
     public function testExplicitCallerOutputWinsOverTapeDirective(): void
     {
-        $tape = $this->writeTape("Output custom.gif\nSet Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+        $tape = $this->writeTape("Output custom.gif\nSet Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
         $explicit = $this->dir . '/explicit.gif';
 
         $written = TapeToGif::create(['encoder' => 'php'])->render($tape, $explicit, ['encoder' => 'php']);
@@ -74,7 +74,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
     {
         // A parent-directory escape must be ignored; the render falls back to
         // the tape name with a `.gif` extension and never writes outside dir.
-        $tape = $this->writeTape("Output ../evil.gif\nSet Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+        $tape = $this->writeTape("Output ../evil.gif\nSet Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
         $escapeTarget = dirname($this->dir) . '/evil.gif';
         $this->assertFileDoesNotExist($escapeTarget);
 
@@ -102,7 +102,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
             $this->markTestSkipped('symlink() not available on this platform');
         }
 
-        $tape = $this->writeTape("Set Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+        $tape = $this->writeTape("Set Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
             $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
@@ -132,7 +132,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
             $this->markTestSkipped('symlink() not available on this platform');
         }
 
-        $tape = $this->writeTape("Set Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+        $tape = $this->writeTape("Set Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
             $written = TapeToGif::create(['encoder' => 'php'])->render($tape, $explicit, ['encoder' => 'php']);
@@ -168,7 +168,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
             $this->markTestSkipped('hard link() not available on this platform/filesystem');
         }
 
-        $tape = $this->writeTape("Set Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+        $tape = $this->writeTape("Set Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
             $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);
@@ -199,7 +199,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
             $this->markTestSkipped('symlink() not available on this platform');
         }
 
-        $tape = $this->writeTape("Output out.gif\nSet Width 20\nSet Height 3\nType \"hi\"\nSleep 200ms\n");
+        $tape = $this->writeTape("Output out.gif\nSet Width 700\nSet Height 200\nType \"hi\"\nSleep 200ms\n");
 
         try {
             $written = TapeToGif::create(['encoder' => 'php'])->render($tape, null, ['encoder' => 'php']);

@@ -137,20 +137,29 @@ final class CompilerTest extends TestCase
         $this->assertSame("\x1a", $cassette->events[0]->payload['b']);
     }
 
-    public function testSetWidthSetsCols(): void
+    public function testSetWidthStoresPixelsAndDerivesCols(): void
     {
+        // VHS semantics: `Set Width 800` is an 800px-wide IMAGE, not an 800-column
+        // terminal. The pixel width is preserved on the header and the grid is
+        // derived from it via the font cell width (fontSize 22 default → cellW 13).
         $result = Compiler::parseSource('Set Width 800');
         $cassette = $this->compiler->compile($result['ast'], '/test.tape');
 
-        $this->assertSame(800, $cassette->header->cols);
+        $this->assertSame(800, $cassette->header->widthPx);
+        [$cellW] = Compiler::cellMetrics(Compiler::DEFAULT_FONT_SIZE);
+        $this->assertSame(intdiv(800, $cellW), $cassette->header->cols);
+        $this->assertNotSame(800, $cassette->header->cols, 'pixels must not be read as columns');
     }
 
-    public function testSetHeightSetsRows(): void
+    public function testSetHeightStoresPixelsAndDerivesRows(): void
     {
         $result = Compiler::parseSource('Set Height 600');
         $cassette = $this->compiler->compile($result['ast'], '/test.tape');
 
-        $this->assertSame(600, $cassette->header->rows);
+        $this->assertSame(600, $cassette->header->heightPx);
+        [, $cellH] = Compiler::cellMetrics(Compiler::DEFAULT_FONT_SIZE);
+        $this->assertSame(intdiv(600, $cellH), $cassette->header->rows);
+        $this->assertNotSame(600, $cassette->header->rows, 'pixels must not be read as rows');
     }
 
     public function testSetThemeSetsTheme(): void
@@ -166,8 +175,12 @@ final class CompilerTest extends TestCase
         $result = Compiler::parseSource('');
         $cassette = $this->compiler->compile($result['ast'], '/test.tape');
 
-        $this->assertSame(80, $cassette->header->cols);
-        $this->assertSame(24, $cassette->header->rows);
+        // A tape with no Set Width/Height/FontSize defaults to VHS's 1200x600 image
+        // at 22px, deriving a 92x13 grid.
+        $this->assertSame(Compiler::DEFAULT_WIDTH_PX, $cassette->header->widthPx);
+        $this->assertSame(Compiler::DEFAULT_HEIGHT_PX, $cassette->header->heightPx);
+        $this->assertSame(92, $cassette->header->cols);
+        $this->assertSame(13, $cassette->header->rows);
     }
 
     public function testEnvSetsEnvironmentVariable(): void
@@ -233,9 +246,42 @@ TAPE;
 
         $cassette = $this->compiler->compile($result['ast'], '/test.tape');
 
-        $this->assertSame(700, $cassette->header->cols);
-        $this->assertSame(220, $cassette->header->rows);
+        // 700x220 image at FontSize 16 (cellW 9, cellH 32) → 77x6 grid.
+        $this->assertSame(700, $cassette->header->widthPx);
+        $this->assertSame(220, $cassette->header->heightPx);
+        $this->assertSame(77, $cassette->header->cols);
+        $this->assertSame(6, $cassette->header->rows);
         $this->assertGreaterThan(3, $cassette->eventCount());
+    }
+
+    /**
+     * Regression: `Set Width`/`Set Height` are VHS OUTPUT-IMAGE pixels, not the
+     * terminal column/row count. The buggy compiler set `cols = 700`, `rows = 240`,
+     * which produced a 700x240-CELL terminal and (at cellW 8, cellH 28) a
+     * 5600x6720px GIF. The fix derives a ~87x8 grid so the rendered image lands
+     * near the requested 700x240 pixels.
+     *
+     * Revert-proof: restoring `'Width' => $this->cols = (int) $node->value` in
+     * Compiler::compileSet() makes cols == 700 and fails this test.
+     */
+    public function testSetWidthHeightAreImagePixelsNotGridCells(): void
+    {
+        $result = Compiler::parseSource("Set FontSize 14\nSet Width 700\nSet Height 240");
+        $cassette = $this->compiler->compile($result['ast'], '/test.tape');
+        $header = $cassette->header;
+
+        [$cellW, $cellH] = Compiler::cellMetrics(14);
+
+        $this->assertSame(700, $header->widthPx);
+        $this->assertSame(240, $header->heightPx);
+        $this->assertSame(intdiv(700, $cellW), $header->cols);   // 87
+        $this->assertSame(intdiv(240, $cellH), $header->rows);   // 8
+        $this->assertNotSame(700, $header->cols, 'Width px must not become the column count');
+        $this->assertNotSame(240, $header->rows, 'Height px must not become the row count');
+
+        // The derived canvas must land within one cell of the requested pixels.
+        $this->assertLessThanOrEqual($cellW, 700 - $header->cols * $cellW);
+        $this->assertLessThanOrEqual($cellH, 240 - $header->rows * $cellH);
     }
 
     public function testParseErrorIsSkippedInCompilation(): void

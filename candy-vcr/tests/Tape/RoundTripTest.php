@@ -76,8 +76,8 @@ final class RoundTripTest extends TestCase
     {
         $source = <<<TAPE
 Set Theme "Dracula"
-Set Width 100
-Set Height 30
+Set Width 800
+Set Height 400
 Env CANDY_VCR_DEMO "1"
 Type "echo hi"
 Enter
@@ -127,7 +127,9 @@ TAPE;
 
         $second = $this->compile($intermediate);
         $this->assertSame('Dracula', $second->header->theme);
-        $this->assertSame(132, $second->header->cols);
+        // Set Width is a pixel dimension; it round-trips as the pixel width, not
+        // as the derived column count.
+        $this->assertSame(132, $second->header->widthPx);
     }
 
     public function testSpaceBetweenWordsFoldsIntoTypeGroup(): void

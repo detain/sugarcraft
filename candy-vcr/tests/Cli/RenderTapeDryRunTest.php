@@ -45,7 +45,9 @@ final class RenderTapeDryRunTest extends TestCase
         $header = $headerLine['_header'];
         $this->assertIsArray($header);
         $this->assertSame('Dracula', $header['theme'] ?? null);
-        $this->assertSame(80, $header['cols'] ?? null);
+        // No Set Width/FontSize in the tape → VHS default 1200px image at 22px
+        // font derives a 92-column grid.
+        $this->assertSame(92, $header['cols'] ?? null);
 
         foreach (array_slice($lines, 1) as $line) {
             $row = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
