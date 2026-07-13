@@ -1,0 +1,14 @@
+---
+description: ReactPHP async + candy-query non-blocking view() conventions
+globs: "candy-query/src/**,**/src/**/Async*.php,**/src/**/Cmd.php"
+alwaysApply: false
+---
+
+# Async / ReactPHP conventions
+
+- Runtime is the ReactPHP event loop (`candy-core` `Program`). `candy-async` provides `CancellationToken`, `Subscription`, `AsyncOps` (`withTimeout`/`retry`/`debounce`/`throttle`).
+- `view()` MUST stay non-blocking — never run a sync DB query on the render/keystroke path. Route data through `candy-query`'s `AdminQueryCache` + `AsyncCachedConnection` and refresh via `Cmd::promise`/poll ticks.
+- `candy-query` DB is async on the loop: `react/mysql` + `voryx/pgasync` (NOT amphp). `Cmd::promise` takes no trailing `()`.
+- `Database::query()` returns `array|null` — `null` = reconnectable error (2002/2003/2013); guard before iterating.
+- Subscriptions pump is on by default: `Program` calls `model->subscriptions()` (required for admin polling).
+- External CLIs via arg-array to `proc_open`, never a shell string; every flag through `escapeshellarg((string)($field ?? ''))`, blank included.
