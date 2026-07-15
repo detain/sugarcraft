@@ -2,8 +2,8 @@
 name: tea-snapshot-test
 description: Writes PHPUnit 10 tests for SugarCraft TEA libs in the four project modes — snapshot byte (view()→raw SGR), cell-grid (SugarCraft\Vt\Terminal / Buffer), behaviour (update()→[Model,?Cmd]), and coercion (clamp/throw edges) — plus golden-file and program-driving helpers from candy-testing (Assertions::assertGoldenAnsi/assertCellGrid/assertViewIdempotent, ProgramSimulator, ScriptedInput). Use when the user says 'write a test', 'add snapshot test', 'add golden test', 'test this Model', 'test update()', or 'test view() output' for any candy-*/sugar-*/honey-* lib. Do NOT use to duplicate a canonical lib's suite into a class_alias façade lib (ship a single AliasesTest asserting each alias resolves to its canonical FQN instead), and do NOT use for non-TUI plain-PHP unit tests that have no view()/update()/Model.
 paths:
-  - **/tests/**/*Test.php
-  - **/*Test.php
+  - "**/tests/**/*Test.php"
+  - "**/*Test.php"
   - candy-testing/src/**
 ---
 # TEA Snapshot Test

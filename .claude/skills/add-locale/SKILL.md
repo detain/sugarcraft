@@ -2,7 +2,7 @@
 name: add-locale
 description: Adds a translation file at `<slug>/lang/<code>.php` by copying the library's `en.php` and translating only the values while preserving every array key and `{placeholder}` token verbatim; locale codes come from `LOCALES.md`. Use when the user says 'add <language> translation', 'translate <lib> to <code>', 'add Japanese/French/etc. locale', or 'add es.php to sugar-charts'. Do NOT use to edit `en.php` (it is the source of truth), to first-time-wire `Lang::t()` into a lib that has no `lang/` directory yet, or to change the base `SugarCraft\Core\I18n\Lang`/`T` machinery.
 paths:
-  - */lang/*.php
+  - "*/lang/*.php"
   - LOCALES.md
 ---
 # Add a locale translation

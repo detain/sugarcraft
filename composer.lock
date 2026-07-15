@@ -62,16 +62,16 @@
         },
         {
             "name": "aws/aws-sdk-php",
-            "version": "3.388.4",
+            "version": "3.388.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/aws/aws-sdk-php.git",
-                "reference": "a4614092693b5f81b04ad7bdc9fbdc58df3dc27c"
+                "reference": "b89b2b0e0741900c9e25d12302ed8300fa50f22b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/a4614092693b5f81b04ad7bdc9fbdc58df3dc27c",
-                "reference": "a4614092693b5f81b04ad7bdc9fbdc58df3dc27c",
+                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/b89b2b0e0741900c9e25d12302ed8300fa50f22b",
+                "reference": "b89b2b0e0741900c9e25d12302ed8300fa50f22b",
                 "shasum": ""
             },
             "require": {
@@ -153,9 +153,9 @@
             "support": {
                 "forum": "https://github.com/aws/aws-sdk-php/discussions",
                 "issues": "https://github.com/aws/aws-sdk-php/issues",
-                "source": "https://github.com/aws/aws-sdk-php/tree/3.388.4"
+                "source": "https://github.com/aws/aws-sdk-php/tree/3.388.6"
             },
-            "time": "2026-07-10T18:10:31+00:00"
+            "time": "2026-07-14T18:07:03+00:00"
         },
         {
             "name": "brick/math",
@@ -468,16 +468,16 @@
         },
         {
             "name": "google/cloud-ai-platform",
-            "version": "v1.60.1",
+            "version": "v1.62.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/google-cloud-php-ai-platform.git",
-                "reference": "16415ca56f0e13056ff15d2ef41c5585b5b315fb"
+                "reference": "d9b703a813ecc985745a9330ce37064fced4bd37"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/google-cloud-php-ai-platform/zipball/16415ca56f0e13056ff15d2ef41c5585b5b315fb",
-                "reference": "16415ca56f0e13056ff15d2ef41c5585b5b315fb",
+                "url": "https://api.github.com/repos/googleapis/google-cloud-php-ai-platform/zipball/d9b703a813ecc985745a9330ce37064fced4bd37",
+                "reference": "d9b703a813ecc985745a9330ce37064fced4bd37",
                 "shasum": ""
             },
             "require": {
@@ -512,9 +512,9 @@
             ],
             "description": "Google Cloud Ai Platform Client for PHP",
             "support": {
-                "source": "https://github.com/googleapis/google-cloud-php-ai-platform/tree/v1.60.1"
+                "source": "https://github.com/googleapis/google-cloud-php-ai-platform/tree/v1.62.0"
             },
-            "time": "2026-06-17T23:07:32+00:00"
+            "time": "2026-07-13T21:56:45+00:00"
         },
         {
             "name": "google/common-protos",
@@ -818,22 +818,22 @@
         },
         {
             "name": "guzzlehttp/guzzle",
-            "version": "7.14.0",
+            "version": "7.14.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/guzzle.git",
-                "reference": "aef242412e13128b5049864867bb49fc37dd39de"
+                "reference": "fa88c57803501ad0770f5cddb1e60525d49da9a1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/aef242412e13128b5049864867bb49fc37dd39de",
-                "reference": "aef242412e13128b5049864867bb49fc37dd39de",
+                "url": "https://api.github.com/repos/guzzle/guzzle/zipball/fa88c57803501ad0770f5cddb1e60525d49da9a1",
+                "reference": "fa88c57803501ad0770f5cddb1e60525d49da9a1",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
                 "guzzlehttp/promises": "^2.5.1",
-                "guzzlehttp/psr7": "^2.12.4",
+                "guzzlehttp/psr7": "^2.12.5",
                 "php": "^7.2.5 || ^8.0",
                 "psr/http-client": "^1.0",
                 "symfony/deprecation-contracts": "^2.5 || ^3.0",
@@ -926,7 +926,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/guzzle/issues",
-                "source": "https://github.com/guzzle/guzzle/tree/7.14.0"
+                "source": "https://github.com/guzzle/guzzle/tree/7.14.2"
             },
             "funding": [
                 {
@@ -942,7 +942,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-08T22:54:09+00:00"
+            "time": "2026-07-14T18:15:01+00:00"
         },
         {
             "name": "guzzlehttp/promises",
@@ -1030,16 +1030,16 @@
         },
         {
             "name": "guzzlehttp/psr7",
-            "version": "2.12.4",
+            "version": "2.12.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/psr7.git",
-                "reference": "51e27f9e2b332ab3e72f4520d5ff4f3c68c3577c"
+                "reference": "9365d578a9fd1552ad6ca9c3cb530708526feb09"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/psr7/zipball/51e27f9e2b332ab3e72f4520d5ff4f3c68c3577c",
-                "reference": "51e27f9e2b332ab3e72f4520d5ff4f3c68c3577c",
+                "url": "https://api.github.com/repos/guzzle/psr7/zipball/9365d578a9fd1552ad6ca9c3cb530708526feb09",
+                "reference": "9365d578a9fd1552ad6ca9c3cb530708526feb09",
                 "shasum": ""
             },
             "require": {
@@ -1129,7 +1129,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/psr7/issues",
-                "source": "https://github.com/guzzle/psr7/tree/2.12.4"
+                "source": "https://github.com/guzzle/psr7/tree/2.12.5"
             },
             "funding": [
                 {
@@ -1145,7 +1145,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-08T15:56:20+00:00"
+            "time": "2026-07-13T01:27:20+00:00"
         },
         {
             "name": "league/commonmark",
@@ -3522,12 +3522,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-focus.git",
-                "reference": "11f063829a4a1f0db908bd657a611fb3b119413b"
+                "reference": "f35b653fec27a8199dc8869506fb332c429814d5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-focus/zipball/11f063829a4a1f0db908bd657a611fb3b119413b",
-                "reference": "11f063829a4a1f0db908bd657a611fb3b119413b",
+                "url": "https://api.github.com/repos/sugarcraft/candy-focus/zipball/f35b653fec27a8199dc8869506fb332c429814d5",
+                "reference": "f35b653fec27a8199dc8869506fb332c429814d5",
                 "shasum": ""
             },
             "require": {
@@ -3573,7 +3573,7 @@
                 "source": "https://github.com/sugarcraft/candy-focus",
                 "docs": "https://sugarcraft.github.io/lib/candy-focus.html"
             },
-            "time": "2026-07-12T16:00:36+00:00"
+            "time": "2026-07-12T22:06:20+00:00"
         },
         {
             "name": "sugarcraft/candy-forms",
@@ -3821,12 +3821,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-input.git",
-                "reference": "112ea059f551d78c74611709563af99b5745c965"
+                "reference": "2a6307e9c88b58c6e8a6476c0a82b5ebc22afbd1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/112ea059f551d78c74611709563af99b5745c965",
-                "reference": "112ea059f551d78c74611709563af99b5745c965",
+                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/2a6307e9c88b58c6e8a6476c0a82b5ebc22afbd1",
+                "reference": "2a6307e9c88b58c6e8a6476c0a82b5ebc22afbd1",
                 "shasum": ""
             },
             "require": {
@@ -3873,7 +3873,7 @@
                 "issues": "https://github.com/sugarcraft/candy-input/issues",
                 "source": "https://github.com/sugarcraft/candy-input"
             },
-            "time": "2026-07-12T00:35:04+00:00"
+            "time": "2026-07-12T18:05:37+00:00"
         },
         {
             "name": "sugarcraft/candy-kit",
@@ -5857,12 +5857,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/sugar-gallery.git",
-                "reference": "1a2e52ec068c0cceff81775a327a6f2d513e754c"
+                "reference": "d1ede8d433a1b9dabf298fafb0af20dd58cdc055"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/sugar-gallery/zipball/1a2e52ec068c0cceff81775a327a6f2d513e754c",
-                "reference": "1a2e52ec068c0cceff81775a327a6f2d513e754c",
+                "url": "https://api.github.com/repos/sugarcraft/sugar-gallery/zipball/d1ede8d433a1b9dabf298fafb0af20dd58cdc055",
+                "reference": "d1ede8d433a1b9dabf298fafb0af20dd58cdc055",
                 "shasum": ""
             },
             "require": {
@@ -5909,7 +5909,7 @@
                 "issues": "https://github.com/sugarcraft/sugar-gallery/issues",
                 "source": "https://github.com/sugarcraft/sugar-gallery"
             },
-            "time": "2026-07-12T15:21:48+00:00"
+            "time": "2026-07-12T22:06:20+00:00"
         },
         {
             "name": "sugarcraft/sugar-glow",

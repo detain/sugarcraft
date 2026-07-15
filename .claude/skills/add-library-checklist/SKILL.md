@@ -2,8 +2,8 @@
 name: add-library-checklist
 description: Scaffolds a new SugarCraft monorepo port end-to-end across every touchpoint: creates <slug>/composer.json + phpunit.xml + README.md + CALIBER_LEARNINGS.md + src/<Class>.php, then wires it into root composer.json (require + repositories[]), docs/MATCHUPS.md, PROJECT_NAMES.md, root README.md table, docs/index.html tiles, docs/_data/<slug>.{json,body.html} → tools/gen-docs.php, media/icons/<slug>.png, .github/workflows/vhs.yml matrix, and codecov.yml (flag + component). Use when the user says 'add a library', 'port <upstream>', 'scaffold lib <slug>', 'new candy-/sugar-/honey- lib', 'create SugarX'. Do NOT use to edit an existing lib's metadata (use direct Edit), add a feature to an existing lib (follow that lib's CALIBER_LEARNINGS.md), rename a lib, or add a plain sugarcraft dep to an existing lib (use path-repo-closure).
 paths:
-  - */composer.json
-  - */phpunit.xml
+  - "*/composer.json"
+  - "*/phpunit.xml"
   - docs/_data/*
   - codecov.yml
   - .github/workflows/vhs.yml
