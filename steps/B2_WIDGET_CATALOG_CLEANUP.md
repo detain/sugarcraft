@@ -11,6 +11,7 @@ Verify WidgetCatalog entries match MySQL Workbench expressions exactly, and clea
 - Connections: raw `Threads_connected`
 
 ### MySQL Panel (pre-8.0 vs 8.0)
+
 - pre-8.0: DDL expression includes `Com_alter_db_upgrade`
 - post-8.0: DDL expression includes role commands (`Com_create_role`, `Com_drop_role`, `Com_alter_user_default_role`)
 

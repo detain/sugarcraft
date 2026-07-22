@@ -1,6 +1,7 @@
 # charmbracelet/winget-pkgs
 
 ## Metadata
+
 - **URL**: https://github.com/charmbracelet/winget-pkgs
 - **Actual Repository**: microsoft/winget-pkgs (this is the Windows Package Manager community repository; the URL in your task references charmbracelet tooling manifests within this repo)
 - **Language**: YAML manifest files + PowerShell tooling
@@ -9,6 +10,7 @@
 - **Description**: The Windows Package Manager community repository containing manifest files for publishing packages to WinGet. These manifests are YAML files that describe how to install and upgrade software on Windows via the `winget` command-line package manager.
 
 ## Feature List
+
 - **Multi-file Manifest Structure**: Each package version requires three YAML files:
   - `version.yaml` - Package identifier, version, default locale
   - `installer.yaml` - Installer URL, SHA256 checksum, architecture, installation type
@@ -22,6 +24,7 @@
 - **Package Versioning Support**: Supports semantic versioning and date-based versions
 
 ## Notable Algorithms / Named Patterns
+
 - **YAML Manifest Schema Validation**: JSON Schema-based validation for manifests (e.g., `https://aka.ms/winget-manifest.version.1.12.0.schema.json`)
 - **Multi-file Manifest Pattern**: Separate files for version, installer, and locale metadata
 - **Portable Command Alias**: For portable executables, specifies the command alias to add to PATH
@@ -30,6 +33,7 @@
 - **SHA256 Checksum Validation**: All installers validated via SHA256 hash
 
 ## Strengths
+
 - **Community-driven**: Open contribution model for packaging Windows software
 - **Automated Validation**: CI/CD pipelines validate manifests before merge
 - **Clear Structure**: Well-documented YAML schema with JSON schema validation
@@ -39,6 +43,7 @@
 - **Well-organized**: Alphabetical directory structure by publisher makes navigation easy
 
 ## Weaknesses
+
 - **YAML-only Artifacts**: Not source code - these are package metadata only
 - **Windows-centric**: Only relevant for Windows Package Manager users
 - **Complex Submission Process**: One package version per PR, specific file naming conventions

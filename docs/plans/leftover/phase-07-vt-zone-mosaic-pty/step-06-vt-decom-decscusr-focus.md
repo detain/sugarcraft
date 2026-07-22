@@ -18,6 +18,7 @@ Three small mode-handler additions:
 ## Files
 
 **Modify:**
+
 - `candy-vt/src/Mode/Mode.php` — add `$originMode`, `$cursorShape`
   (enum), `$reportFocusEvents` fields with immutable withers.
 - `candy-vt/src/Handler/{CursorHandler,ModeParser,SgrHandler}.php`

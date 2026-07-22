@@ -12,6 +12,7 @@ fidelity than HalfBlockRenderer for terminals without Sixel/Kitty.
 ## Files
 
 **Create:**
+
 - `candy-mosaic/src/Renderer/QuarterBlockRenderer.php` — implements
   `Renderer`. For each pair of cells (2 cols × 2 rows of pixels per
   cell), look up the corresponding glyph in a 16-entry table.

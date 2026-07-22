@@ -5,6 +5,7 @@
 Ratatui is a mature Rust TUI library (~19,600 stars, 26M+ downloads) that provides terminal UI building blocks including widgets, layout, and styling. Originally forked from the abandoned `tui-rs` in 2023, it has evolved into a modular workspace architecture in v0.30.0. The project maintains active development with 124 releases and 260+ contributors.
 
 **Key Repository URLs:**
+
 - Main: https://github.com/ratatui/ratatui
 - Website: https://ratatui.rs
 - Third-party widgets showcase: https://ratatui.rs/showcase/third-party-widgets/
@@ -25,6 +26,7 @@ Ratatui underwent its most significant architectural change in v0.30.0 (December
 This modularization enables widget libraries to depend on `ratatui-core` for stability rather than updating on every Ratatui release.
 
 ### Key Statistics
+
 - Stars: ~19,600
 - Downloads: 26.3M+ on crates.io
 - Forks: 624+
@@ -89,6 +91,7 @@ From the first-stage analysis, the following gaps were identified:
 **Use Case**: Loading a 300KB Python file for syntax highlighting: full load = 509ms, visible-only (40 lines) = 8ms. The difference is 60x for processing time.
 
 **Maintainer Response**: Exposing current internals is concerning because:
+
 - The implementation is "difficult to reason about" and "fragile"
 - Blessing it would make future improvements harder
 - A better wrapping API is needed that supports:
@@ -144,6 +147,7 @@ terminal.swap_buffers();
 **Status**: Open since October 2024, marked "Status: Design Needed"
 
 **Discussion**: Maintainers suggested this might be better as a separate crate (tui-widgets) rather than in ratatui core, given:
+
 - Many configuration options for checkbox/radio behavior
 - Lower quality bar and faster iteration in separate crate
 - Similar to how tui-checkbox exists as standalone
@@ -161,6 +165,7 @@ terminal.swap_buffers();
 **Solution**: Split into ratatui-core, ratatui-widgets, ratatui-backend-* crates. Widget libraries can now depend on ratatui-core 0.1 and be compatible with all ratatui versions using that core version.
 
 **Key Architectural Decision**: WidgetRef remains in main ratatui crate (not ratatui-core) because:
+
 - Core should be stable - no frequent updates
 - WidgetRef abstractions aren't yet fully locked down
 - Naming and exact behavior still being worked out
@@ -175,11 +180,13 @@ terminal.swap_buffers();
 **Problem**: Layout cache was added for no_std/embedded environments but should now be standard. The question is whether to remove the feature flag entirely.
 
 **Arguments for removing feature flag**:
+
 - Layout cache is essential for embedded (otherwise CPU time goes to layout engine)
 - Performance impact noticeable even on desktop
 - Confusing for users who disable default-features and wonder why performance is terrible
 
 **Arguments against**:
+
 - Someone might want to disable for niche platforms
 - Future layout engine optimizations might make cache unnecessary
 - Possible to support programmatically disabling cache (setting size to 0)
@@ -195,11 +202,13 @@ terminal.swap_buffers();
 **Problem**: 15k items in a Table causes 1-2 second render lag when scrolling.
 
 **Root Causes**:
+
 1. Conversion to vec in Table construction happens every frame
 2. `text().height()` called for every item even if not visible
 3. All items (even off-screen) create Spans, Lines, and Styles that get thrown away
 
 **Performance Approaches**:
+
 - **Dirty flag rendering**: Only render when state changes (50%→1% CPU improvement)
 - **Virtual scrolling**: Only render visible items + buffer
 - **Pre-wrapping with textwrap**: Cache wrapped text based on width
@@ -215,6 +224,7 @@ terminal.swap_buffers();
 **Problem**: When using ratatui_image or external rendering pipelines that write directly to terminal, the diff algorithm doesn't know content changed, causing overlay rendering issues.
 
 **Solution Approaches Considered**:
+
 1. `Terminal::set_skip_diff(bool)` - Simple but coarse
 2. `Cell::set_force(bool)` parallel to `set_skip()` - Fine-grained
 3. Pre-computed symbol width cache for Cell - Avoids unicode_width calls during diff
@@ -289,6 +299,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 **Discussion #1930**: No built-in click event support. Required for widgets like buttons, checkboxes.
 
 **Challenges**:
+
 1. Widgets don't have identifiers for hit-testing
 2. Rendering doesn't track location information
 3. Multi-item widgets (List, Table) need internal position mapping
@@ -302,6 +313,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 ### Render Context Parameter
 
 **Issue #1044**: Request to pass a `Context` instead of just `Buffer` to render methods, enabling:
+
 - Frame count access
 - Theme/palette information
 - Cursor positioning
@@ -343,6 +355,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 **Change**: Full no_std compatibility for embedded targets.
 
 **Key Changes**:
+
 - `Backend` trait gained associated `Error` type (，不再 hardcoding `std::io::Error`)
 - `clear_region` method required
 - Feature flags propagate to dependencies
@@ -382,6 +395,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 **Summary**: Monolithic crate → workspace with ratatui-core, ratatui-widgets, backends.
 
 **Migration Impact**:
+
 - App developers: Continue using `ratatui` facade, no changes needed
 - Widget library authors: Can now depend on `ratatui-core` for stability
 
@@ -396,6 +410,7 @@ The layout cache was default-enabled but became opt-in in ratatui-core with defa
 **Before 0.30**: Widgets consumed self, StatefulWidget added mutable state. No good way to box widgets.
 
 **After 0.30**: 
+
 - `impl Widget for &W` allows borrowing widgets
 - `WidgetRef` enables dynamic dispatch
 - `StatefulWidgetRef` for stateful dynamic dispatch
@@ -455,6 +470,7 @@ loop {
 **Early Optimization**: Layout was "very heavy on allocations and clones" per PR #22.
 
 **Solutions Applied**:
+
 - Slice reference instead of Vec for constraints
 - ahash for faster hashing
 - Static storage for small constraint counts
@@ -469,6 +485,7 @@ loop {
 **Problem**: O(N) algorithms for selecting visible rows, cloning entire row collections on update.
 
 **Solutions**:
+
 1. Pre-compute text heights
 2. Virtual scrolling - only render visible + buffer
 3. Debounce input events (20ms)
@@ -487,6 +504,7 @@ loop {
 **Proposal**: Use 4-byte `EmbeddedStr` instead of `CompactString`.
 
 **Result**: 
+
 - Doubling of framerate in embedded
 - Memory reduced from 120KB to 90KB
 - 30% faster animation
@@ -544,6 +562,7 @@ loop {
 **Maintainer Response**: "This library existed in stasis for a long time. When it suddenly starts dropping breaking changes on a regular basis, it's annoying."
 
 **Real Impact**: Lines rename in 0.20.0 caused downstream issues:
+
 - `cargo install` failures for apps depending on old versions
 - Direct downstream developers need to update
 
@@ -560,6 +579,7 @@ loop {
 **Issue #1725**: Proposal to remove StatefulWidget in favor of `impl Widget for &mut SomeWidget`.
 
 **Community Pushback**:
+
 - Lifetime complexity
 - Can't reuse state across widgets
 - Forces widget storage in app state
@@ -573,6 +593,7 @@ loop {
 ### Type Inference Issues with Into Traits
 
 **Migration Issue**: When methods changed to accept `Into<T>` or `IntoIterator`, type inference broke for:
+
 - Empty containers: `Table::new(vec![])` fails - use `Table::default()`
 - Empty string ambiguous with generic Into
 - Collect before constructor vs iterator directly
@@ -758,6 +779,7 @@ impl Component {
 **Pattern**: When unsure about API, encourage community to experiment externally before committing to core.
 
 **Examples**:
+
 - tui-tabview (TabbedContent)
 - tui-checkbox (Checkbox/Radio)
 - ratatui-interact (Focus/Mouse)
@@ -771,6 +793,7 @@ impl Component {
 **Quoted**: "On the maintainer's end, new features and more flexibility are likely at the top of the priority list. Until this library settles down into a stable set of features, it's hard to justify re-writing the existing features/APIs if all you'll get is better performance."
 
 **Requirements for perf PRs**:
+
 - Demonstrate actual problem with measurements
 - Show carrying cost of performance code is justified
 - Benchmark tests that show the problem
@@ -808,6 +831,7 @@ impl Component {
 **Maintainer Hesitation**: Current implementation is "difficult to reason about" and "fragile." Blessing it would make future improvements harder.
 
 **Direction**: Better to design a proper wrapping API that supports:
+
 - Wrapping on Line/Text (not just Paragraph)
 - Direct access to wrapped output
 - Partial/viewport-based wrapping
@@ -918,6 +942,7 @@ impl Component {
 ### Modular Architecture Enables Ecosystem
 
 **Lesson**: Splitting into ratatui-core (stable) + ratatui-widgets (evolving) + backends (stable) enabled:
+
 - Widget libraries depend on stable core
 - Less frequent breaking changes for ecosystem
 - Faster iteration on widgets without core churn
@@ -950,6 +975,7 @@ sugar-* (user-facing components)
 **Evidence**: Performance issues (#1338, #1004, #1855) emerged from users hitting them in production.
 
 **SugarCraft Implementation**: Design candy-core for performance from start:
+
 - Dirty flag rendering as primary pattern
 - Layout caching enabled by default
 - Virtual scrolling built into List/Table base
@@ -1017,6 +1043,7 @@ sugar-* (user-facing components)
 ### Third-Party Ecosystem Growth
 
 **Observation**: Active third-party ecosystem around Ratatui:
+
 - 3700+ crates using Ratatui
 - 15+ showcase third-party widgets
 - Multiple framework wrappers (Python via PyO3)
@@ -1030,6 +1057,7 @@ sugar-* (user-facing components)
 ### Performance-Conscious Users
 
 **Observation**: Many issues relate to performance:
+
 - Buffer diffing optimization
 - Layout caching
 - Virtual scrolling

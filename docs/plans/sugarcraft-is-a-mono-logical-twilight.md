@@ -205,10 +205,12 @@ Apply verification findings. Loop B→C→D→E if anything still fails.
 
 ```sh
 # 1. Pre-commit Caliber sync (CLAUDE.md "Before Committing")
+
 grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"
 # If hook-active: commit normally. If no-hook: run `caliber refresh && git add CLAUDE.md .claude/ .cursor/ .cursorrules .github/copilot-instructions.md .github/instructions/ AGENTS.md CALIBER_LEARNINGS.md .agents/ .opencode/ 2>/dev/null`.
 
 # 2. Branch + commit (author Joe Huss <detain@interserver.net>)
+
 git checkout -b ai/<slug>-<short>      # e.g. ai/candy-pty-contracts
 git add <specific files — NOT -A>
 git commit -m "$(cat <<'EOF'
@@ -220,13 +222,16 @@ EOF
 )"
 
 # 3. Push + PR + merge + pull (TOKEN MUST BE UNSET)
+
 git push -u origin HEAD
 unset GITHUB_TOKEN && gh pr create --title "<lib>: <step title> (PTY plan <phase>.<n>)" --body "$(cat <<'EOF'
 ## Summary
+
 - <what changed>
 - <why>
 
 ## Test plan
+
 - [x] `cd <lib> && vendor/bin/phpunit` — N tests passing
 - [x] Consumer regression: candy-core / candy-shell / candy-wish / candy-vcr suites green
 - [x] README + CALIBER_LEARNINGS updated
@@ -670,6 +675,7 @@ Only if P0–P5 land on time. Each item is one step (one PR).
 The current `candy-vcr` only records sessions attached as a library to a `SugarCraft\Core\Program` (API-mode capture). A Shirley-style recorder closes the gap so users can record **any** terminal program — `bash`, `vim`, `htop`, `python -i`, an external CLI under test — without that program needing to know about SugarCraft.
 
 **Phase P6.5 acceptance:**
+
 - `candy-vcr record -- bash -c 'echo hello; sleep 0.2; echo world'` → cassette → replay reproduces the session.
 - `candy-vcr record -- vim /tmp/scratch.txt` round-trips through `candy-vt::Terminal` screen-assertion.
 - Recording overhead ≤2% wall-clock on `time bash -c 'seq 100000'`.

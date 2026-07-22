@@ -11,13 +11,16 @@ Error / Success), default dismiss prompts, "X notifications" counters.
 ## Files
 
 **Create:**
+
 - `sugar-toast/lang/en.php`.
 - `sugar-toast/src/Lang.php`.
 
 **Modify:**
+
 - Every file under `sugar-toast/src/` using English literals.
 
 **Tests:**
+
 - `sugar-toast/tests/LangCoverageTest.php`.
 
 ## Acceptance

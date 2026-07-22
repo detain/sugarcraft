@@ -57,12 +57,14 @@ private static function buildInternal(): string
 **Severity:** High
 
 **Conditions for Success:**
+
 - No concurrent construction issues in threaded environments
 - Static `$table` is guaranteed to be initialized exactly once
 - `PHPStan level 9` passes with no new errors
 - Existing tests in `ParserTest.php` continue to pass
 
 **Investigation Notes:**
+
 - `Transitions::get()` at line 35-37 uses `self::$table ??= self::build()`
 - The `build()` method at line 50-238 constructs a 4096-byte string
 - All 15 states × 256 bytes = 4096 entries, each packing `(action << 4) | state` into one byte
@@ -103,11 +105,13 @@ private static array $bgIndexMap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
 **Severity:** High
 
 **Conditions for Success:**
+
 - `Theme::fgIndex()` and `Theme::bgIndex()` return correct values
 - No double-initialization in concurrent scenarios
 - `ThemeTest.php` passes
 
 **Investigation Notes:**
+
 - `fgIndexMap` and `bgIndexMap` are declared at lines 32 and 35
 - `buildAnsiMaps()` at line 295 guards with `if (self::$fgIndexMap !== [])` — but this is NOT atomic with the subsequent assignments
 - Both arrays are identity maps (0→0, 1→1, ... 15→15) as shown at lines 301-306
@@ -157,6 +161,7 @@ public function set(int $row, int $col, Cell $cell): void
 **Severity:** High
 
 **Conditions for Success:**
+
 - `CellGrid` tests pass (no `set()` fluent chaining assertions)
 - All callers of `CellGrid::set()` are updated (those using fluent chaining must be fixed)
 - `CsiHandlerImpl::printChar()` at line 66 uses `set()` but doesn't chain — verified safe
@@ -165,6 +170,7 @@ public function set(int $row, int $col, Cell $cell): void
 - `CsiHandlerImpl::scrollUpOne()` at lines 378-379 uses `set()` — verified safe
 
 **Investigation Notes:**
+
 - `CellGrid::set()` at lines 66-79
 - `CellGrid::resize()` at lines 86-103 creates a new instance via `new self($cols, $rows)` but then mutates `$clone->grid` directly (line 100) — this is actually the correct immutable pattern for `resize()` since it returns a new instance, but the inconsistency with `set()` is worth noting (issue #22 as well)
 - `CellGrid` has a `clear()` method at line 81 that correctly returns `new self($this->cols, $this->rows)`
@@ -199,10 +205,12 @@ $t = str_repeat(self::pack(Action::None->value, $g), self::SIZE);
 **Severity:** Medium
 
 **Conditions for Success:**
+
 - `phpstan` passes with no new warnings about `$g`
 - Existing `ParserTest.php` tests pass
 
 **Investigation Notes:**
+
 - Line 52: `$g = State::Ground->value;` — assigns Ground state value
 - Line 53: `$t = str_repeat(self::pack(Action::None->value, $g), self::SIZE);` — `$g` is used here to initialize the entire table with "None" action, Ground state
 - `$g` is used at line 75: `$setMany($state, [0x18, 0x1A, 0x99, 0x9A], Action::Execute->value, $g);` — passes Ground state as next state
@@ -255,12 +263,14 @@ $bgEqual = Color::equalsOrBothNull($this->background(), $other->background());
 **Severity:** Medium
 
 **Conditions for Success:**
+
 - `ColorTest.php` passes (add test for `equalsOrBothNull`)
 - `SgrTest.php` passes
 - `CellTest.php` passes
 - No behavior change — only refactoring
 
 **Investigation Notes:**
+
 - `Sgr::equals()` at lines 235-289 in `src/Sgr/Sgr.php` — color comparison at lines 268-288
 - `Cell::equals()` at lines 81-130 in `src/Cell/Cell.php` — color comparison at lines 96-114
 - `Color::equals()` at line 73 in `src/Color/Color.php` — simple kind+value comparison
@@ -282,6 +292,7 @@ Looking at the code:
 - `ScreenHandler::leaveAltScreen()` (line 487) restores `$this->savedCursor` (which carries its own `visible`) without updating `$mode->cursorVisible`
 
 **Fix Options (choose one):**
+
 - **Option A:** In `enterAltScreen()` and `leaveAltScreen()`, also sync the cursor's visible state to `$mode->cursorVisible`
 - **Option B:** Add a comment noting that `$mode->cursorVisible` is derived from `$cursor->visible` and should only be updated via `ModeHandler::setCursorVisible()`
 - **Option C:** Remove `$mode->cursorVisible` and derive it from `$cursor->visible` when needed (changes the `Mode` API)
@@ -306,11 +317,13 @@ $this->mode = $this->mode->withCursorVisible($this->cursor->visible); // ADD THI
 **Severity:** High
 
 **Conditions for Success:**
+
 - After any `enterAltScreen()`/`leaveAltScreen()`/`enterAltScreenNoSave()`/`leaveAltScreenNoSave()`/`enterAltScreenCursorOnly()`/`leaveAltScreenCursorOnly()` — `$handler->mode->cursorVisible === $handler->cursor->visible`
 - After any `ModeHandler::setCursorVisible()` call — same invariant holds
 - `ScreenHandlerTest.php` passes
 
 **Investigation Notes:**
+
 - `ScreenHandler` line 36: `public Cursor $cursor;`
 - `ScreenHandler` line 38: `public Mode $mode;` — both are `public` for test access
 - `ModeHandler::setCursorVisible()` at lines 71-75 writes to both simultaneously
@@ -348,10 +361,12 @@ public function focusEvents(): array
 **Severity:** Missing Feature (API)
 
 **Conditions for Success:**
+
 - `FocusEventTest.php` (existing) passes
 - New test: `Terminal::focusEvents()` returns accumulated focus events after CSI I/O sequences
 
 **Investigation Notes:**
+
 - `ScreenHandler::$focusEvents` is declared at line 55 as `public array $focusEvents = []`
 - Focus events are appended at lines 186 (FocusInMsg) and 190 (FocusOutMsg) in `csiDispatch()`
 - `FocusInMsg` and `FocusOutMsg` are value objects in `src/Msg/`
@@ -384,11 +399,13 @@ public function clear(): void
 **Severity:** Missing Feature (API)
 
 **Conditions for Success:**
+
 - `ScrollbackTest.php` (existing) passes
 - New test: `Scrollback::clear()` empties the buffer, `count()` returns 0, `all()` returns `[]`
 - Existing scrollback functionality (push, at, all, count) still works after clear
 
 **Investigation Notes:**
+
 - `Scrollback` constructor at line 32 initializes `$rows` with `array_fill(0, $maxSize, null)`
 - `push()` at lines 46-58 manages the ring buffer logic
 - `all()` at lines 65-82 iterates from oldest to newest
@@ -421,10 +438,12 @@ public function flush(): void
 **Severity:** Missing Feature (API)
 
 **Conditions for Success:**
+
 - `TerminalTest.php` passes (existing tests)
 - New test: After feeding partial OSC sequence and calling `flush()`, the title is captured
 
 **Investigation Notes:**
+
 - `Terminal\Terminal::flush()` at `src/Terminal/Terminal.php:74-77` calls `$this->parser->flush()`
 - `Parser::flush()` at `src/Parser/Parser.php:65-77` dispatches any in-flight OSC/DCS states
 - Root `Terminal` at `src/Terminal.php` has `feed(string $bytes)` at line 65 but no `flush()`
@@ -482,10 +501,12 @@ public function disableAltScreen(): self
 **Severity:** High (API Parity)
 
 **Conditions for Success:**
+
 - `TerminalTest.php` passes (throws exceptions as expected)
 - Documentation clarifies that vcr path doesn't support alt screen
 
 **Investigation Notes:**
+
 - Root `Terminal` at `src/Terminal.php` has no alt-screen methods
 - Full `Terminal\Terminal` at `src/Terminal/Terminal.php:205-217` has `enableAltScreen()` and `disableAltScreen()`
 - Root `Terminal` uses `CsiHandlerImpl` which has no alt screen support
@@ -529,10 +550,12 @@ public function resize(int $cols, int $rows): void
 **Severity:** High
 
 **Conditions for Success:**
+
 - `TerminalTest.php` (or a new test) verifies that resize in alt mode preserves saved buffer dimensions
 - Existing resize tests still pass
 
 **Investigation Notes:**
+
 - `Terminal::resize()` at `src/Terminal/Terminal.php:118-124`
 - `ScreenHandler::$savedBuffer` is `private ?Buffer` at line 63
 - `Buffer::resize()` at `src/Buffer/Buffer.php:48-62` already returns a new instance — it can be used directly
@@ -563,10 +586,12 @@ Note: `applySgrParam()` at line 183 receives `$params` and passes `$params[$i]` 
 **Severity:** Medium
 
 **Conditions for Success:**
+
 - `CsiHandlerImplTest.php` passes
 - No behavior change — identical values
 
 **Investigation Notes:**
+
 - Line 170: `$p = (int) $params[$i];` — already casting to int
 - The `params` in `csiDispatch` come from `Parser::$params` which are built via `param()` method at `Parser.php:168-196` — they are already integers
 - `array_values(array_map('intval', $params))` at line 175 rebuilds the array
@@ -649,10 +674,12 @@ public function diff(self $other): array
 **Severity:** Medium
 
 **Conditions for Success:**
+
 - `ScreenTest.php` passes (existing `diff()` tests)
 - New test: diff of different-sized screens produces same results as before
 
 **Investigation Notes:**
+
 - `Screen::diff()` at lines 56-73
 - `Screen::cell()` at lines 43-49 returns `Cell::empty()` for out-of-bounds coordinates
 - Extra rows/cols in either screen should show as "changed" (from content to empty or empty to content)
@@ -692,10 +719,12 @@ private static function computeCubePalette(): array
 **Severity:** Low
 
 **Conditions for Success:**
+
 - `ThemeTest.php` passes
 - New test: verify same cube palette returned across multiple theme instantiations
 
 **Investigation Notes:**
+
 - `cubePalette()` at lines 62-73 generates 216 colors (6×6×6)
 - `defaultPalette()` at line 56 calls `self::cubePalette()` 
 - Each factory (tokyoNight at line 112, dracula at line 138, etc.) also calls `self::cubePalette()` in the palette array
@@ -782,10 +811,12 @@ private function scrollUpOne(): void
 **Severity:** Low
 
 **Conditions for Success:**
+
 - `CsiHandlerImplTest.php` passes (scroll-related tests)
 - Performance: benchmark before/after for large scroll operations
 
 **Investigation Notes:**
+
 - `scrollUpOne()` at lines 370-386 in `src/Parser/CsiHandlerImpl.php`
 - `CellGrid::get()` at lines 58-64 — returns `Cell::empty()` for OOB
 - `CellGrid::set()` at lines 66-79 — mutates in place (see issue #1)
@@ -828,6 +859,7 @@ public function printChar(string $rune): void
 **Severity:** Low
 
 **Conditions for Success:**
+
 - Code readability improvement — no functional change
 - Existing tests pass
 
@@ -862,6 +894,7 @@ public function __clone(): void
 **Severity:** Low
 
 **Conditions for Success:**
+
 - Code readability improvement
 - No functional change
 
@@ -894,6 +927,7 @@ public function oscDispatch(string $data): void
 **Severity:** Medium
 
 **Conditions for Success:**
+
 - No functional change
 - `OscHandlerImplTest.php` passes
 
@@ -926,6 +960,7 @@ Both classes now have consistent `new()` factory — the only factory method.
 **Severity:** Low
 
 **Conditions for Success:**
+
 - All callers updated (search for `Terminal::create(` in codebase)
 - Existing tests pass
 
@@ -957,6 +992,7 @@ public function dcsDispatch(int $final, array $params, int $prefix, int $interme
 **Severity:** Missing Feature (Scope)
 
 **Conditions for Success:**
+
 - No functional change — just documentation
 
 ---
@@ -987,6 +1023,7 @@ public function feed(string $bytes): void
 **Severity:** Async Pattern Improvement
 
 **Conditions for Success:**
+
 - No functional change
 
 ---
@@ -1049,11 +1086,13 @@ Then in `Theme.php` and `Cell.php`, remove the duplicate definitions and referen
 **Severity:** Duplication (Maintenance)
 
 **Conditions for Success:**
+
 - All references to `Cell::ATTR_*` and `Theme::ATTR_*` updated to use `Attr::*`
 - Existing tests pass
 - `phpstan` passes
 
 **Investigation Notes:**
+
 - `Theme` at line 18-22 defines: `ATTR_BOLD = 1`, `ATTR_ITALIC = 2`, `ATTR_UNDERLINE = 4`, `ATTR_INVERSE = 8`, `ATTR_STRIKETHROUGH = 16`
 - Root `Cell.php` at lines 17-21 defines identical constants
 - `Cell/Cell.php` at lines 17-21 also defines them (for full path)
@@ -1090,11 +1129,13 @@ But it's not in `require`, so `candy-async` is only available for development/te
 **Severity:** Compatibility
 
 **Conditions for Success:**
+
 - `composer validate` passes
 - `composer update` succeeds
 - No version conflicts introduced
 
 **Investigation Notes:**
+
 - `composer.json` shows `candy-async` is already in the path repositories (lines 82-86) but NOT in `require` (lines 27-31)
 - `candy-async` IS in `require-dev` of `candy-testing`
 
@@ -1139,6 +1180,7 @@ default => [
 **Severity:** Low
 
 **Conditions for Success:**
+
 - No change to default behavior (still silent)
 - Debug mode can be enabled via environment variable
 - Existing `SgrHandlerTest.php` passes
@@ -1181,6 +1223,7 @@ public function reset(): void
 **Severity:** Medium
 
 **Conditions for Success:**
+
 - No functional change
 - Developers understand the discard-on-reset behavior
 
@@ -1221,6 +1264,7 @@ if ($this->mode->reportFocusEvents) {
 **Severity:** Async Pattern Improvement
 
 **Conditions for Success:**
+
 - Backward compatible — callback is optional (null by default)
 - Existing tests pass
 - New test: callback is invoked when focus events fire
@@ -1287,6 +1331,7 @@ The key improvement is using a static boolean guard in `build()` as shown in Pha
 **Severity:** Compatibility
 
 **Conditions for Success:**
+
 - No functional change
 - Developers understand which Cell class to use in which context
 

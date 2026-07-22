@@ -24,6 +24,7 @@ If zero hits outside `candy-shell/` itself → safe to delete.
 ## Files
 
 **Modify:**
+
 - `candy-shell/src/Process/Process.php` — either:
   - Delete and `use SugarCraft\\Pty\\Contract\\Process` at every call
     site (preferred), OR
@@ -31,10 +32,12 @@ If zero hits outside `candy-shell/` itself → safe to delete.
     if signatures diverged.
 
 **Delete (if grep clean):**
+
 - `candy-shell/src/Process/RealProcess.php` and update its callers to
   `use SugarCraft\\Pty\\Posix\\PosixProcess` directly.
 
 **Modify (if grep dirty):**
+
 - Keep `RealProcess.php` as `final class RealProcess extends PosixProcess {}`
   with `@deprecated`. Document in `candy-shell/CALIBER_LEARNINGS.md`.
 

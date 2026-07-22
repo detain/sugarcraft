@@ -20,6 +20,7 @@
 ## 1. BUGS & EDGE CASES
 
 ### Issue 1: AI Rotation Bug (HIGH)
+
 **Location:** `Game.php:309`  
 **Severity:** HIGH  
 **Description:** In `applyAiMove()`, when `$rotDelta === 0` (no rotation needed), the loop `for ($i = 0; $i < $rotDelta; $i++)` executes `rotated(1)` once, incorrectly rotating the piece by 90° clockwise even when no rotation was requested.
@@ -35,6 +36,7 @@ for ($i = 0; $i < $rotDelta; $i++) {  // $rotDelta=0 → loop runs once due to b
 ---
 
 ### Issue 2: AI Doesn't Apply Wall Kicks (MEDIUM)
+
 **Location:** `Game.php:305-321` (`applyAiMove`)  
 **Severity:** MEDIUM  
 **Description:** `applyAiMove()` uses naive `rotated()` for rotation, then applies x-shift. It never tries SRS wall kick offsets. The human player path via `tryRotate()` properly tests all wall kicks via `rotationsWithKicks()`. If the naive rotation fails at the AI's chosen x-position, the piece is used as-is without trying wall kicks that might make it valid.
@@ -58,6 +60,7 @@ Compare to `tryRotate()` at `Game.php:241` which iterates through `rotationsWith
 ---
 
 ### Issue 3: Garbage Overflow Check Off-By-One (MEDIUM)
+
 **Location:** `Game.php:482-495` (`addGarbageRows`)  
 **Severity:** MEDIUM  
 **Description:** The top-out detection loop only checks rows `[0, count-1]` but adding `count` rows displaces content from row `count` as well. Row `count` could contain locked content that gets pushed into the visible area but is never checked.
@@ -78,6 +81,7 @@ For example, `addGarbageRows(2)` checks rows 0 and 1, but the content originally
 ---
 
 ### Issue 4: Computer Decision Tracking Not Reset on Lock (LOW)
+
 **Location:** `VsGame.php:146-165` (`advanceComputer`)  
 **Severity:** LOW  
 **Description:** `computerDecisionFor` is updated to `$currentKind` (the NEW piece just spawned) at line 158, but this happens inside `advanceComputer()` which is called after `lockAndSpawn()` already produced a new game state with a new piece. This causes:
@@ -93,6 +97,7 @@ This causes wasted computation (computing a move for a piece, then immediately c
 ---
 
 ### Issue 5: Lock Delay Re-arm on Rotation (LOW)
+
 **Location:** `Game.php:248-250`  
 **Severity:** LOW  
 **Description:** Standard SRS only re-arms lock delay on successful translation (left/right/down). This implementation also re-arms on successful rotation. This is an intentional deviation from SRS, but worth documenting. The behavior may surprise players familiar with standard Tetris.
@@ -104,6 +109,7 @@ This causes wasted computation (computing a move for a piece, then immediately c
 ## 2. PERFORMANCE PROBLEMS
 
 ### Issue 6: Redundant `dropPiece()` Call in Renderer (LOW)
+
 **Location:** `Renderer.php:78` and `Renderer.php:74-78`  
 **Severity:** LOW  
 **Description:** In `renderBoard()`, `dropPiece()` is called to compute the ghost position. This is computed fresh on every render call. While not incorrect, it could be cached in the Game state if render performance becomes a concern.
@@ -117,6 +123,7 @@ $ghost = $game->board->dropPiece($piece);  // Computed fresh every render
 ---
 
 ### Issue 7: Unnecessary Array Creation in `range()` (LOW)
+
 **Location:** `Computer.php:39`  
 **Severity:** LOW  
 **Description:** Uses `range(0, 3)` which creates an array `[0, 1, 2, 3]`, when a simple `for` loop would avoid the allocation.
@@ -136,6 +143,7 @@ foreach (range(0, 3) as $rotations) {  // Creates [0,1,2,3] array
 ## 3. MEMORY LEAKS
 
 **No memory leaks detected.**  
+
 - All classes are properly immutable (Piece returns new instances, Game uses `mutate()`, Board creates new instances)
 - Closures capture by value, not reference
 - No stream/file handle usage
@@ -153,6 +161,7 @@ This is a pure game logic library with no external input, file operations, or ne
 ## 5. COMPLEXITY / CODE QUALITY
 
 ### Issue 8: `VsRenderer::renderSidebar()` Creates Card Closure Per Call (LOW)
+
 **Location:** `VsRenderer.php:119-123`  
 **Severity:** LOW  
 **Description:** The `$card` closure is recreated on every `renderSidebar()` call. While not a correctness issue, creating the closure repeatedly is slightly inefficient.
@@ -170,6 +179,7 @@ $card = static fn(string $body): string => Style::new()
 ---
 
 ### Issue 9: Computer Color Shifting is Naive (LOW)
+
 **Location:** `VsRenderer.php:157`  
 **Severity:** LOW  
 **Description:** Uses `($kind->color() + 150) % 256` which is a simple modulo color wheel shift. This doesn't reliably produce a "magenta" hue for all colors and may produce similar colors for adjacent hues. For example, color 51 (I piece cyan) becomes 201, but color 196 (Z piece red) becomes 86.

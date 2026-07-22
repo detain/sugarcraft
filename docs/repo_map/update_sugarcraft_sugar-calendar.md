@@ -3,6 +3,7 @@
 SugarCalendar is a 🟢 v1-ready PHP port of EthanEFung/bubble-datepicker (Go) — an interactive month-grid date picker with keyboard navigation, date range selection, locale day names, event store architecture, and pure ANSI rendering. The package occupies the date-picker niche in SugarCraft's component library as a building block for higher-level widgets (DateSelect with input field, DateTimePicker with time component).
 
 **Biggest opportunity areas:**
+
 1. Mouse interaction support (no external TUI framework dependency)
 2. Min/max date constraints (frequently requested in upstream ecosystems)
 3. Focus zones (three-tier HeaderMonth/HeaderYear/Calendar like upstream Go)
@@ -10,6 +11,7 @@ SugarCalendar is a 🟢 v1-ready PHP port of EthanEFung/bubble-datepicker (Go) �
 5. Time picker and DateTime picker variants
 
 **Biggest missing capabilities:**
+
 1. Mouse interaction (keyboard-only)
 2. Min/max date constraints
 3. Focus zone navigation system (HeaderMonth → HeaderYear → Calendar)
@@ -78,6 +80,7 @@ private bool $rangeMode;
 ## Calendar Grid Algorithm
 
 42-cell grid (6 weeks × 7 days). First day offset calculated via `firstDayOffset()`:
+
 - Iterates all 42 cells
 - Day number relative to month: `$dayNum = $i - $firstDow + 1`
 - Empty cells for days outside current month
@@ -126,6 +129,7 @@ private bool $rangeMode;
 ## Critical
 
 ### 1. Min/Max Date Constraints
+
 **Title:** Date Constraint System
 **Description:** No way to limit selectable dates to a range (e.g., booking system only allows dates 30 days out)
 **Why it matters:** Fundamental date picker capability for real-world applications (reservations, scheduling, date ranges for reports)
@@ -140,33 +144,40 @@ Enforcement in `dateAtCursor()` and `SelectDate()` returning null or clamping.
 **Expected impact:** High — enables real-world use cases
 
 ### 2. Event Store Integration with Rendering
+
 **Title:** Wire EventStore to Per-Day Styling
 **Description:** EventStore exists but `buildCells()` doesn't use it to style days with events
 **Why it matters:** Would enable calendar views with event markers (like Google Calendar dots)
 **Source repo:** `ratatui/ratatui.md` — DateStyler trait for day-by-day custom styling; `textualize_textual.md` — event markers on dates
 **Implementation ideas:**
+
 - Define `DayStylerInterface` or `DateStyler` trait
 - Consult EventStore in `buildCells()` for event presence
 - Apply distinct style for days with events (e.g., underlined or colored)
+
 **Estimated complexity:** Medium — requires designing styling interface + integration
 **Expected impact:** Medium — enables calendar + event integration
 
 ## High Value
 
 ### 3. Mouse Interaction
+
 **Title:** Click-to-Select Date Picker
 **Description:** No mouse support — keyboard navigation only
 **Why it matters:** Modern UX expects clickable calendars; upstream Go has no mouse either, but textualize Python and ratatui Rust support it
 **Source repo:** `lrstanley_bubblezone.md` — zone-based mouse tracking with zero-width ANSI markers; `charmbracelet_bubbletea.md` — mouse event types (Click, Release, Wheel, Motion)
 **Implementation ideas:**
+
 - Use bubblezone's zero-width ANSI marker pattern for zone tracking
 - Map mouse clicks to cursor position via coordinate calculation
 - Track zone bounds via state-machine scanner over rendered output
 - `candy-zone` equivalent for mouse zone hit detection
+
 **Estimated complexity:** High — requires zone tracking architecture separate from DatePicker
 **Expected impact:** High — modern UX expectation
 
 ### 4. Focus Zone Navigation
+
 **Title:** Three-Tier Focus System
 **Description:** Upstream Go has HeaderMonth → HeaderYear → Calendar focus zones navigated via Tab; sugar-calendar has flat cursor model
 **Why it matters:** Upstream design enables vim-like navigation where arrows change behavior based on focus (month scroll vs year scroll vs day selection)
@@ -181,73 +192,91 @@ public function Blur(): self
 **Expected impact:** Medium — power user enhancement
 
 ### 5. Vim Key Bindings
+
 **Title:** Complete Vim Navigation
 **Description:** `handleKey()` only routes arrow keys + home/end; vim keys h/j/k/l/g/G defined as constants but not wired
 **Why it matters:** vim keybindings are standard for power users; upstream Go implements them fully
 **Source repo:** `EthanEFung_bubble-datepicker.md` — vim-style hjkl + arrows both supported
 **Implementation ideas:**
+
 - Wire h/j/k/l/g/G in `handleKey()` matching Navigation constants
 - Ensure vim keys route to same cursor movement logic as arrows
+
 **Estimated complexity:** Low — add 6 key cases to handleKey()
 **Expected impact:** Medium — power user UX
 
 ## Medium Priority
 
 ### 6. Time Picker Variant
+
 **Title:** DateTimePicker Component
 **Description:** Date-only picker; no time selection (hour/minute)
 **Why it matters:** Upstream textualize Python has TimePicker, DurationPicker
 **Source repo:** `textualize_textual.md` — TimePicker, DateTimePicker, DurationPicker widgets
 **Implementation ideas:**
+
 - Create `DateTimePicker` that composes DatePicker + time input
 - Or separate `TimePicker` component with hour/minute grid
+
 **Estimated complexity:** High — new component required
 **Expected impact:** Medium — common use case
 
 ### 7. Compound Widget (Input + Dropdown)
+
 **Title:** DateSelect Input Component
 **Description:** Input field that reveals calendar dropdown on focus
 **Why it matters:** Upstream textualize has DateSelect; web-like date input pattern
 **Source repo:** `textualize_textual.md` — DateSelect combines Input + dropdown calendar
 **Implementation ideas:**
+
 - Compose DatePicker with text input in sugar-prompt style
 - Reveal calendar on input focus
 - Validate typed dates against constraints
+
 **Estimated complexity:** High — composition of multiple components
 **Expected impact:** Medium — common web pattern
 
 ### 8. DateRange Improvements
+
 **Title:** Visual Range Highlighting
 **Description:** Current range styling only highlights start/end; doesn't show filled range between
 **Why it matters:** Better visual feedback for selected range
 **Source repo:** `textualize_textual.md` — DateRangePicker shows filled range
 **Implementation ideas:**
+
 - Style every cell between rangeStart and rangeEnd with rangeStyle
 - Current implementation only styles the two endpoint cells
+
 **Estimated complexity:** Low — modify buildCells() range logic
 **Expected impact:** Medium — visual UX improvement
 
 ## Low Priority
 
 ### 9. Custom Day Formatter
+
 **Title:** Per-Day Content Customization
 **Description:** No way to customize day cell content (e.g., show event count, holiday name)
 **Why it matters:** Calendar apps need rich day content beyond just the number
 **Source repo:** `ratatui_ratatui.md` — Calendar widget with DateStyler trait
 **Implementation ideas:**
+
 - `WithDayFormatter(callable)` that transforms day number → string
 - Enables event dots, holiday labels, etc.
+
 **Estimated complexity:** Low — add formatter callback + apply in buildCells()
 **Expected impact:** Low — specialized use case
 
 ### 10. Week Number Column
+
 **Title:** ISO Week Numbers
 **Description:** No option to show ISO week numbers alongside days
 **Why it matters:** International calendars use week numbers (ISO 8601)
 **Source repo:** `ratatui_ratatui.md` — Calendar::Monthly has `show_month()`, `show_weekday()`
 **Implementation ideas:**
+
 - Add `WithWeekNumbers(bool)` style option
 - Render ISO week number in first column
+
 **Estimated complexity:** Low — 1 style flag + column rendering
 **Expected impact:** Low — internationalization niche
 
@@ -272,16 +301,19 @@ for ($i = 0; $i < 42; $i++) {
 ```
 
 **External approach (ratatui):**
+
 - Uses buffer-based diffing (only changed cells re-rendered)
 - Widget trait pattern for custom rendering logic
 - DateStyler trait enables per-day style customization without modifying core
 
 **Why external is better:**
+
 - Separation of rendering logic from calendar state
 - Enables reusable calendar widgets with custom day styling
 - Better performance for large calendars (only update changed regions)
 
 **Tradeoffs:**
+
 - ratatui's approach requires trait system + widget framework
 - sugar-calendar's inline approach is simpler for pure PHP
 
@@ -310,6 +342,7 @@ interface DayStylerInterface
 ```
 
 Enables:
+
 - Custom day styling without modifying DatePicker core
 - Event markers, holiday highlights, availability states
 - DI-friendly composition
@@ -328,6 +361,7 @@ enum Focus {
 ```
 
 Arrow key behavior changes based on focus zone:
+
 - HeaderMonth: up/down → prev/next month
 - HeaderYear: up/down → prev/next year  
 - Calendar: up/down → week navigation
@@ -335,6 +369,7 @@ Arrow key behavior changes based on focus zone:
 ## 3. Wire EventStore to buildCells()
 
 EventStore should influence per-day rendering:
+
 - Days with events get distinct style
 - Enables calendar-with-events use case
 
@@ -519,6 +554,7 @@ Zone tracking needs integration tests.
 ## 5. Property-Based Tests for Cursor Clamping
 
 Use PHPStan or custom property testing for edge cases:
+
 - February leap year
 - Months with 28/29/30/31 days
 - Year boundary transitions
@@ -574,6 +610,7 @@ Calendar heatmap for data visualization:
 **PR #1500: Declarative View API (v2)** (`docs/repo_map/pr_charmbracelet_bubbletea.md`)
 
 Bubble Tea v2 shifted from imperative commands to declarative View properties. Key lessons:
+
 - Declarative > imperative for terminal state
 - View struct fields as single source of truth
 - Eliminates race conditions between commands and rendering
@@ -658,6 +695,7 @@ ratatui's Calendar widget uses a `DateStyler` trait enabling custom per-day styl
 SugarCalendar is a well-architected PHP port that meaningfully enhances its upstream Go source through immutable patterns, date range selection, and localization support. The pure ANSI renderer design is strategically sound — it decouples the calendar from any specific TUI framework, making it composable with both candy-core and standalone use.
 
 **Key differentiators from upstream:**
+
 1. Immutable + fluent architecture (every method returns clones)
 2. Date range selection (not in upstream Go)
 3. Localization framework with completeness testing
@@ -665,11 +703,13 @@ SugarCalendar is a well-architected PHP port that meaningfully enhances its upst
 5. Pure ANSI renderer (no TUI framework dependency)
 
 **Strategic positioning:**
+
 - The package is 🟢 v1 ready for core date selection and navigation
 - Its pure renderer approach makes it an ideal building block for higher-level widgets
 - DateRange value object and EventStore architecture are strong foundations for future extension
 
 **Critical gaps to address:**
+
 1. **Min/max constraints** — enables real-world scheduling/booking use cases
 2. **Mouse interaction** — modern UX expectation, requires zone tracking architecture
 3. **Event store → rendering wire** — unlocks calendar-with-events use case

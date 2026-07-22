@@ -18,6 +18,7 @@ with Core's `Model`. Keep the old array-state contract alive as
 ## Files
 
 **Modify:**
+
 - `sugar-dash/src/Module/Module.php` — interface signatures change:
   - `update(Msg $msg): array` returning `[Module, ?Cmd]` (was
     `array $state, mixed $msg`).
@@ -29,12 +30,14 @@ with Core's `Model`. Keep the old array-state contract alive as
   default `init() = null`, `minSize() = [30, 4]`.
 
 **Create:**
+
 - `sugar-dash/src/Module/LegacyModule.php` — old-style contract.
   Marked `@deprecated since v0.x, use Module`.
 - `sugar-dash/src/Module/LegacyModuleAdapter.php` — wraps a LegacyModule
   so the registry can host both.
 
 **Modify (built-in modules in `sugar-dash/src/Modules/`):**
+
 - `Clock/ClockModule.php`, `System/SystemModule.php`,
   `Greeting/GreetingModule.php`, `Uptime/UptimeModule.php`,
   `Generic/GenericModule.php` — rewrite each to return
@@ -42,6 +45,7 @@ with Core's `Model`. Keep the old array-state contract alive as
   CLAUDE.md immutability rule.
 
 **Modify:**
+
 - `sugar-dash/src/Registry/Registry.php` — accept both `Module` and
   `LegacyModule` (auto-wrap legacy via the adapter).
 

@@ -1,14 +1,23 @@
 # sugar-spark: ANSI Escape-Sequence Inspector
 
 ## Metadata
+
 - **Type:** PHP TUI Library (SugarCraft monorepo)
+
 - **Upstream:** [charmbracelet/sequin](https://github.com/charmbracelet/sequin) (Go, 804 stars)
+
 - **Status:** 🟢 v1 ready
+
 - **Location:** `sugar-spark/`
+
 - **Package:** `sugarcraft/sugar-spark`
+
 - **Namespace:** `SugarCraft\Spark`
+
 - **PHP:** ^8.3
+
 - **License:** MIT
+
 - **CI:** GitHub Actions + Codecov
 
 ---
@@ -18,9 +27,11 @@
 sugar-spark is a PHP port of `charmbracelet/sequin` — a human-readable ANSI escape-sequence inspector/debugger for TUI development. Pipe styled terminal output through it and each escape sequence becomes a labelled, descriptive line. It serves as the SugarCraft ecosystem's dedicated **ANSI debugging tool**.
 
 ### Purpose
+
 When building TUI applications, developers often struggle to understand what ANSI escape sequences their code actually generates. sugar-spark decodes raw bytes into human-readable descriptions (e.g., `\x1b[31m` → `ESC[31m  SGR foreground red`).
 
 ### Quick Start
+
 ```php
 use SugarCraft\Spark\Inspector;
 
@@ -54,14 +65,22 @@ $ printf '\e[31mhello\e[0m world\n' | sugarspark
 The parsing uses a **manual byte-by-byte loop** rather than a state machine. The approach (lines 38-174 of `Inspector.php`):
 
 1. Accumulate plain text into `$textBuf`
+
 2. When `\x1b` (ESC) encountered, detect sequence type by next byte:
    - `[` → CSI (Control Sequence Introducer)
+
    - `]` → OSC (Operating System Command)
+
    - `O` → SS3 (Single Shift 3)
+
    - `P` → DCS (Device Control String)
+
    - `_` → APC (Application Program Command)
+
    - Other → Two-byte ESC sequence
+
 3. Scan forward for sequence terminator
+
 4. Flush text buffer, emit SequenceSegment with human-readable label
 
 ```php
@@ -148,8 +167,11 @@ return match ($final) {
 
 Key CSI sub-handlers:
 - **SGR** (`'m'`) — `describeSgr()` handles 38;2;r;g;b (truecolor), 38;5;n (256-color), 4:N (underline styles)
+
 - **DEC private modes** (`'?2026h'`, `'?2004h'`, etc.) — via `decPrivateName()` match
+
 - **Kitty keyboard** (`'?u'`, `'>5u'`, `'<3u'`) — `describeCsi()` lines 245-256
+
 - **Cursor shape** (`'2 q'`) — lines 231-243
 
 ### 3.3 SGR Handler (describeSgr)
@@ -173,13 +195,21 @@ private static function describeSgr(string $params): string
 
 From `Inspector.php` lines 449-479. Handles OSC commands 0-112 including:
 - **0, 2** — window title
+
 - **1** — icon name
+
 - **4** — palette
+
 - **7** — cwd (file:// URL)
+
 - **8** — hyperlink (URI parsing)
+
 - **9** — iTerm2 notifications / progress bars
+
 - **10, 11, 12** — terminal foreground/background/cursor color
+
 - **52** — clipboard (base64)
+
 - **110, 111, 112** — reset colors
 
 ### 3.5 C0/C1 Control Code Support
@@ -224,14 +254,18 @@ $segs = $inspector->finish();               // Flushes trailing text
 
 The streaming approach (lines 54-73 of `StreamingInspector.php`):
 1. Accumulate text in `$textBuf` until sequence or finish
+
 2. When sequence complete, flush text + yield sequence
+
 3. Return incomplete array if more data needed
 
 ### 4.4 Sequence Label Generation
 
 The `describe()` methods produce human-readable labels:
 - `SequenceSegment::describe()` → `printable($bytes) . '  ' . $label`
+
 - `TextSegment::describe()` → verbatim text
+
 - `SequenceSegment::printable()` → replaces `\x1b` with `ESC` token
 
 ### 4.5 JSON Output Format
@@ -257,7 +291,9 @@ Output:
 
 sugar-spark uses SugarCraft's centralized i18n system:
 - `Lang.php` extends `SugarCraft\Core\I18n\Lang`
+
 - Namespace: `'spark'`
+
 - Translation files in `lang/`
 
 Currently ships with 16 locales:
@@ -302,7 +338,9 @@ $ sequin -- some command
 
 sugar-spark can only inspect:
 1. Explicit strings passed to `parse()`/`report()`
+
 2. File contents read via CLI argument
+
 3. Stdin piped data
 
 It cannot execute a command and inspect its live output because PHP lacks a native PTY library in the monorepo (though `candy-pty` may eventually provide this).
@@ -389,7 +427,9 @@ From `repo_map/sugarcraft_candy-vt.md` section 10.2:
 ### 8.3 Parsing Approach Differences
 
 - **Go sequin** → Uses `charmbracelet/x/ansi` state-machine parser with handler dispatch maps
+
 - **sugar-spark** → Manual byte-by-byte loop with explicit sequence detection
+
 - **candy-vt** → Paul Williams VT500 state machine directly ported from `charmbracelet/x/ansi/parser`
 
 sugar-spark does NOT use candy-vt for parsing — it implements its own lightweight parser optimized for explanation rather than emulation.
@@ -411,12 +451,15 @@ Location: `bin/sugarspark` (33 lines)
 
 ```bash
 # From file
+
 $ sugarspark dump.txt
 
 # From stdin
+
 $ printf '\e[31mred\e[0m' | sugarspark
 
 # Usage (when no input)
+
 $ sugarspark
 usage: sugarspark [file]
   or:  cmd | sugarspark
@@ -426,6 +469,7 @@ usage: sugarspark [file]
 
 ```bash
 #!/usr/bin/env bash
+
 # Demonstrates various sequence types
 
 echo "── SGR (foreground colours) ────────────────────"
@@ -499,14 +543,19 @@ printf '\e_candyzone:S:btn:ok\e\\OK\e_candyzone:E:btn:ok\e\\' | sugarspark
 Two features not present in Go sequin:
 
 1. **StreamingInspector** — Incremental/chunked parsing for live terminal output inspection
+
 2. **JSON output** — Machine-readable format for tooling integration
 
 ### 10.4 Missing from sugar-spark
 
 1. **PTY execution** — Cannot run commands and inspect output
+
 2. **Raw mode** — No syntax highlighting
+
 3. **Theme support** — No colorized output
+
 4. **Golden file tests** — No snapshot testing infrastructure
+
 5. **State machine parser** — Manual parsing is harder to extend
 
 ---
@@ -517,14 +566,20 @@ Location: `.vhs/inspect.tape` and `.vhs/inspect.gif`
 
 The demo runs `./examples/inspect.sh` showing:
 - SGR foreground colors
+
 - DEC private modes (synchronized output, unicode mode, focus reporting)
+
 - OSC clipboard write
+
 - OSC 8 hyperlink
+
 - DCS XTVERSION reply
+
 - APC CandyZone markers
 
 ```bash
 # Dimensions: 900x620, FontSize 13, TokyoNight theme
+
 Type "./examples/inspect.sh"
 Enter
 Sleep 5s
@@ -537,27 +592,41 @@ Sleep 5s
 ### 12.1 What sugar-spark Does Well
 
 1. **Comprehensive sequence coverage** — Handles CSI, OSC, DCS, APC, SS3, C0/C1, and two-byte ESC
+
 2. **Detailed SGR descriptions** — Full color (basic/256/truecolor) and underline styles
+
 3. **Robust fallback** — Unknown sequences get generic labels, nothing silently swallowed
+
 4. **Streaming support** — Unique incremental parsing for chunked input
+
 5. **JSON output** — Machine-readable format for tooling
+
 6. **i18n ready** — 16 locales via SugarCraft i18n system
+
 7. **Clean API** — `parse()`, `report()`, `reportAsJson()` are simple, composable
 
 ### 12.2 Architectural Strengths
 
 1. **Lightweight** — No external dependencies beyond candy-core
+
 2. **Pure PHP** — No FFI, no native extensions required
+
 3. **Immutable segments** — `readonly` properties, `final` classes
+
 4. **Testable** — 116 unit tests covering all major paths
+
 5. **Well-documented** — Docblocks on all public methods
 
 ### 12.3 Opportunities for Enhancement
 
 1. **State machine parser** — Port from `charmbracelet/x/ansi/parser` for robustness
+
 2. **PTY execution** — Integrate with `candy-pty` when available
+
 3. **Golden file tests** — Add snapshot tests for regression prevention
+
 4. **Theme/colorized output** — Optional syntax highlighting mode
+
 5. **Extended handler registry** — Make parsing extensible without modifying core
 
 ---

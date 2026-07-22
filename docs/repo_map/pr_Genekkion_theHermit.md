@@ -74,23 +74,27 @@ From first-pass analysis:
 Since there are no issues, recurring pain points cannot be empirically determined. However, from code analysis of the **revamp branch** (PR #2), we can infer architectural pain points the **author themselves** identified:
 
 ### Pain Point 1: Rigid Monolithic `list` Package
+
 - **Original code**: Single `list/` package with all concerns (model, views, misc, item) tightly coupled
 - **Evidence**: The revamp splits into `modal/`, `shared/`, `utils/`, and `title/` subpackages
 - **Strategic lesson**: SugarCraft should use per-lib separation with clear dependency boundaries
 
 ### Pain Point 2: ANSI Width Calculation Scattered Throughout
+
 - **Original approach**: ANSI escape code handling repeated in view rendering (`list/views.go`)
 - **Revamp approach**: New `utils/width.go` with centralized `SplitColumns()` function
 - **Evidence**: The revamp branch shows commit messages like "measure width" and explicit width utility extraction
 - **Strategic lesson**: SugarCraft's `candy-shine` should provide first-class ANSI-aware width utilities
 
 ### Pain Point 3: No Caching Strategy
+
 - **Original code**: Recalculates padding and view composition on every render
 - **Revamp approach**: Introduces `ViewCache` struct with `hash maphash.Hash` for dirty-checking parent/child modifications
 - **Evidence**: `modal/model.go:36-48` shows `ViewCache` with `parentModified/childModified` flags
 - **Strategic lesson**: SugarCraft overlay components need intelligent caching to avoid per-frame recomputation
 
 ### Pain Point 4: Missing Error Handling
+
 - **Original code**: No explicit error types or validation
 - **Revamp approach**: New `modal/errors.go` with `ErrMissingParent`, `ErrMissingChild`
 - **Strategic lesson**: SugarCraft should define explicit error types per lib
@@ -262,24 +266,28 @@ However, the **revamp itself represents a breaking migration**:
 From code archaeology of the original implementation:
 
 ### 1. Cursor Clamping (`list/misc.go:64`)
+
 ```go
 model.cursor = max(min(cursor, len(model.items)-1), 0)
 ```
 **Insight**: Clean bounds enforcement in a single expression — avoids conditional branches.
 
 ### 2. ANSI-Aware Width Calculation (`list/views.go:24`)
+
 ```go
 lipgloss.Width(stringBuilder.String())
 ```
 **Insight**: Use the lipgloss library's width calculation instead of naive `utf8.RuneCountInString()` — handles ANSI codes correctly.
 
 ### 3. Offset-Based Pagination (`list/views.go:109`)
+
 ```go
 items = model.items[model.offset : model.offset+model.height-1]
 ```
 **Insight**: Simple windowed view of a larger dataset — no full re-render of off-screen items.
 
 ### 4. Centered Overlay Positioning (`list/views.go:279-280`)
+
 ```go
 midPoint1 := model.windowHeight/2 - model.height/2 + 1
 midPoint2 := midPoint1 + model.height
@@ -328,6 +336,7 @@ The only insight is from the **original README's TODO list**:
 ### 1. Overlay Rendering on Live Backgrounds
 
 **Problem**: When rendering an overlay (modal, list, quick-fix) on top of a continuously updating background view, you must:
+
 - Preserve the background view's live updates
 - Only "damage" the region occupied by the overlay
 - Correctly handle ANSI escape codes in both overlay and background
@@ -452,6 +461,7 @@ For a 60fps TUI, this is prohibitively expensive for complex views.
 The original implementation mixed ANSI width calculation into view rendering functions. The revamp extracts this into `utils/width.go` with `SplitColumns()` as a reusable utility.
 
 **SugarCraft should**: Create a `Terminal` utility class that handles:
+
 - ANSI code detection and stripping
 - Visual width calculation
 - Character-level string operations
@@ -528,6 +538,7 @@ The Hermit (original) is a quick-fix list overlay. The Hermit (revamp) is a gene
 The Hermit's `utils/width.go` contains portable ANSI-aware string manipulation functions.
 
 **SugarCraft could**:
+
 1. Extract these into `candy-shine` as terminal utilities
 2. Make them available to all SugarCraft components
 3. Document them as the canonical way to handle ANSI-aware text operations
@@ -539,6 +550,7 @@ The Hermit's `utils/width.go` contains portable ANSI-aware string manipulation f
 The `ViewCache` pattern in the revamp is a generic optimization applicable to any SugarCraft component that renders on top of live backgrounds.
 
 **SugarCraft could**:
+
 1. Create a `RenderCache` trait/interface
 2. Provide maphash-based fingerprinting utilities
 3. Document caching strategies for TUI performance
@@ -579,6 +591,7 @@ The `ViewCache` pattern in the revamp is a generic optimization applicable to an
 **Why**: The Hermit's revamp shows the maintainer recognized that list-specific overlays are limiting. A generic modal system is more powerful.
 
 **How**: Use the revamp's `modal.Model` as the reference architecture:
+
 - Parent/child model composition
 - ViewCache with dirty-checking
 - Functional options for configuration

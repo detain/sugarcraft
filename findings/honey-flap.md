@@ -9,6 +9,7 @@
 ## HIGH Severity
 
 ### 1. Collision and Scoring Frame Mismatch (Off-by-One in Visual Feedback)
+
 **Location:** `src/Game.php:273` (scoring), `src/Pipe.php:33` (collision)
 
 Scoring fires at pipe x=7 when bird is at x=8 (`($p->x + 1) > 7 && $p->x <= 7` evaluates true at x=7). Collision fires at pipe x=8. Score increments one frame before the pipe visually appears to touch the bird.
@@ -21,6 +22,7 @@ if ($p->x === self::BIRD_COL - 1) { $score++; }
 ---
 
 ### 2. Type Hint on `$rand` Property Too Broad
+
 **Location:** `src/Game.php:38`
 
 ```php
@@ -36,6 +38,7 @@ Typed as `\Closure` but docblock specifies `\Closure(int): int`. Allows injectio
 ## MEDIUM Severity
 
 ### 3. Style Object Allocation in Hot Render Loop
+
 **Location:** `src/Renderer.php:28-31`, `src/Renderer.php:66-79`
 
 `cellGlyph()` creates 4-5 new `Style` objects per cell. For 60×18 playfield = 1,080 cells × ~4 Style objects = ~4,320 allocations per frame at 30fps ≈ 129,600 allocations/second.
@@ -51,6 +54,7 @@ public static function init(): void {
 ---
 
 ### 4. High Score Persistence Not Atomic
+
 **Location:** `src/Game.php:165-176`
 
 `file_put_contents()` writes directly. If process crashes mid-write, scores file can be corrupted.
@@ -65,6 +69,7 @@ rename($tempPath, $this->highScoreFilePath);
 ---
 
 ### 5. `tickN()` Test Helper Bypasses Crash Gate
+
 **Location:** `src/Game.php:315-322`
 
 `tickN()` calls `advance()` directly, which continues updating bird position even after crash. Bird can fall to negative rows.
@@ -76,6 +81,7 @@ rename($tempPath, $this->highScoreFilePath);
 ## LOW Severity
 
 ### 6. Config Directory Path With Trailing Slash Creates Double Slash
+
 **Location:** `src/Game.php:58`
 
 ```php
@@ -89,6 +95,7 @@ If `$configDir` has trailing slash, result has `//`.
 ---
 
 ### 7. `rand()` Accessor Exposes Closure Reference
+
 **Location:** `src/Game.php:119-122`
 
 Returns `$this->rand` directly. Callers can invoke with arbitrary args.
@@ -98,6 +105,7 @@ Returns `$this->rand` directly. Callers can invoke with arbitrary args.
 ---
 
 ### 8. `json_decode()` Without Error Checking
+
 **Location:** `src/Game.php:87`
 
 No `JSON_THROW_ON_ERROR`. Specific JSON error messages lost.
@@ -112,6 +120,7 @@ $decoded = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
 ## PHP 8.3/8.4 Compatibility
 
 ### 9. First-Class Callable Syntax Not Used
+
 **Location:** `src/Game.php:179-181`, `src/Game.php:230-233`
 
 Using `static fn() => new TickMsg()` instead of PHP 8.3's `TickMsg::new`.
@@ -121,6 +130,7 @@ Using `static fn() => new TickMsg()` instead of PHP 8.3's `TickMsg::new`.
 ---
 
 ### 10. `readonly` Classes Not Used
+
 **Location:** All source files
 
 Immutable classes (`Bird`, `Pipe`, `TickMsg`) not declared `readonly`. PHP 8.3's `readonly class` enforces immutability at engine level.
@@ -132,6 +142,7 @@ Immutable classes (`Bird`, `Pipe`, `TickMsg`) not declared `readonly`. PHP 8.3's
 ## Async/ReactPHP Improvements
 
 ### 11. Synchronous High Score Persistence on Tick Path
+
 **Location:** `src/Game.php:165-176`, `src/Game.php:216-228`
 
 `mkdir()` and `file_put_contents()` are blocking operations inside tick closure.
@@ -143,6 +154,7 @@ Immutable classes (`Bird`, `Pipe`, `TickMsg`) not declared `readonly`. PHP 8.3's
 ## Security
 
 ### 12. Rand Closure Exception Not Caught
+
 **Location:** `src/Game.php:262`
 
 If injected `$rand` closure throws, game crashes with no recovery.

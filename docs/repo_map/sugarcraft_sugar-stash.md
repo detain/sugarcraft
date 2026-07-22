@@ -1,10 +1,15 @@
 # SugarCraft/sugar-stash
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-stash
+
 - **Language:** PHP 8.3+
+
 - **License:** MIT
+
 - **Status:** 🟢 v1 Ready
+
 - **Description:** Three-pane git TUI — port of `jesseduffield/lazygit` on the SugarCraft stack. Shells out to the system `git` binary for all operations, preserving user aliases, hooks, and signing config.
 
 ## Architecture Overview
@@ -22,20 +27,32 @@ GitDriver (interface)
 
 **`GitDriver` interface** (`src/GitDriver.php` — 117 lines) defines all git operations:
 - `status()` — `git status --porcelain=v1 -b`
+
 - `branches()` — `git for-each-ref --format=... refs/heads`
+
 - `log(int $limit)` — `git log --pretty=format:...`
+
 - `stage(string $path)` / `unstage(string $path)` / `stageAll()`
+
 - `discard(string $path)` — `git restore --worktree`
+
 - `commit(string $message)` / `amend()` / `reset()`
+
 - `stagePatch(string $path, string $hunk)` — `git apply --cached`
+
 - `createBranch(string $name)` / `deleteBranch(string $name)`
+
 - `merge(string $branch)` / `rebaseContinue/Abort/Skip()`
+
 - `stashList/Apply/Drop()` / `cherryPick()` / `worktreeList/Add/Remove()`
 
 **`Git` class** (`src/Git.php` — 246 lines) is the concrete implementation:
 - Uses `proc_open()` with piped stdout/stderr
+
 - Passes `-C <cwd>` flag for all commands
+
 - Throws `RuntimeException` on non-zero exit
+
 - `runPatch()` method for hunk staging (stdin + stdout separately managed)
 
 ### Three-Pane Layout
@@ -52,7 +69,9 @@ The UI is a **three-pane terminal layout**:
 ```
 
 - **Status pane (left):** `git status --porcelain=v1 -b` parsed into index/work status + path
+
 - **Branches pane (top right):** `git for-each-ref` showing HEAD-marked branch + short SHA
+
 - **Log pane (bottom right):** `git log` with SHA, subject, author, relative time
 
 **Pane enum** (`src/Pane.php` — 27 lines):
@@ -70,7 +89,9 @@ enum Pane: string {
 
 **`App` class** (`src/App.php` — 1201 lines) is the main Model:
 - Implements `Model` interface (`init()`/`update()`/`view()`/`subscriptions()`)
+
 - All state is `readonly` — every `update()` returns fresh `App`
+
 - Tracks: three pane lists + cursors, active pane, overlays (diff/stash/cherry-pick/worktrees/interactive-rebase)
 
 **State properties:**
@@ -98,8 +119,11 @@ public function __construct(
 
 **`Renderer` class** (`src/Renderer.php` — 480 lines) is a pure view function:
 - `Layout::joinHorizontal()` merges left pane with right vertical stack
+
 - `Border::rounded()` for pane frames
+
 - Focused pane gets bright border (`#ff5f87`), others dim (`#4a3868`)
+
 - Overlays render atop body: help, diff viewer, rebase menu, stash manager, cherry-pick bar, worktrees, interactive rebase
 
 ### Keyboard Navigation
@@ -134,8 +158,11 @@ public function __construct(
 For multi-character inputs (commit message, branch name, merge target, cherry-pick ref), sugar-stash uses a **gated input state** pattern:
 
 1. Boolean flag gates all normal key handling (`collectingCommit`, `collectingBranchName`, etc.)
+
 2. Accumulator string grows via `KeyMsg` rune character-by-character
+
 3. `Enter` confirms and executes the operation
+
 4. `Esc` cancels and clears the accumulator
 
 ```php
@@ -155,8 +182,11 @@ if ($this->collectingCommit) {
 
 **`DiffViewer` class** (`src/DiffViewer.php` — 93 lines) manages staged hunk selection:
 - Parses `@@ -N,N +N,N @@` hunk headers from `git diff --no-color -- <path>`
+
 - `hunkStarts: list<int>` — line indices where each hunk begins
+
 - `hunkCursor: int` — index into `hunkStarts` for selected hunk
+
 - `currentHunkPatch()` returns unified diff for `git apply --cached`
 
 **Navigation:** `↑/↓` or `j/k` navigate hunks, `Space` stages current hunk, `Esc` closes.
@@ -165,22 +195,29 @@ if ($this->collectingCommit) {
 
 **`StashManager` class** (`src/StashManager.php` — 95 lines):
 - Parses `git stash list` output into `StashEntry` objects (index, sha, branch, message)
+
 - `stashRef()` returns `"stash@{n}"` format for apply/drop
+
 - Overlay: `a` applies, `d` drops, `↑/↓` navigates, `Esc` closes
 
 ### Interactive Rebase
 
 **`InteractiveRebase` class** (`src/InteractiveRebase.php` — 224 lines):
 - `RebaseAction` enum: `Pick`, `Reword`, `Edit`, `Squash`, `Drop`
+
 - Two phases: `selectingN` (user types digit count), then todo list editor
+
 - `cycleAction()` advances through action states
+
 - `dropCurrent()` removes commit from todo list
 
 ### Undo/Redo System
 
 **`HistoryManager` class** (`src/HistoryManager.php` — 72 lines):
 - Two stacks: `undoStack` and `redoStack`
+
 - New mutation clears `redoStack`
+
 - `HistoryEntry` captures `op` + `inverseOp` pairs:
 
 | Op | InverseOp |
@@ -235,16 +272,25 @@ if ($this->collectingCommit) {
 ### Architectural Differences
 
 **Lazygit (Go):**
+
 - Direct Go-git library bindings (no shell spawning)
+
 - Full git state kept in memory, synced via `git status --porcelain=v2`
+
 - Complex state machine with dedicated panels for each git domain
+
 - Built on bubbletea (Charm's Elm-architecture TUI framework)
+
 - ~60+ files, 30k+ lines of Go
 
 **sugar-stash (PHP):**
+
 - Shells out to `git` binary for every operation (preserves aliases, hooks, config)
+
 - Simpler state: refresh on every keypress or explicit `R`
+
 - Built on SugarCraft/candy-core (PHP Elm-architecture port)
+
 - ~25 files, ~3500 lines of PHP
 
 ### Key Implementation Differences
@@ -313,19 +359,33 @@ sugar-stash is the most **complete application** in the SugarCraft monorepo:
 
 **`tests/AppTest.php` (705 lines)** — Comprehensive behavior tests using `FixtureGit`:
 - Pane cycling (`Tab` cycles Status → Branches → Log → Status)
+
 - Cursor movement clamping
+
 - Stage/unstage on single file
+
 - Stage all (`a` key)
+
 - Commit message collection
+
 - Branch checkout (`Space` in branches pane)
+
 - Diff viewer open/close
+
 - Hunk staging in diff viewer
+
 - Undo/redo (`u` / `Ctrl+r`)
+
 - Branch create/delete
+
 - Merge flow
+
 - Stash apply/drop
+
 - Cherry-pick
+
 - Worktree add/remove
+
 - Interactive rebase
 
 **`tests/StashManagerTest.php`** — Stash list parsing and cursor navigation
@@ -341,12 +401,19 @@ sugar-stash is the most **complete application** in the SugarCraft monorepo:
 ## Innovation Points (SugarCraft Enhancements)
 
 1. **Pluggable GitDriver interface** — Enables testable architecture with fixture doubles
+
 2. **Immutable state with readonly properties** — Every `update()` returns a fresh `App`
+
 3. **Private `withAll()` helper** — Atomic multi-field updates for complex transitions
+
 4. **Gated input collection pattern** — Clean separation of normal key handling vs. text input mode
+
 5. **Per-library i18n facade** — `Lang::t()` wrapper with namespace baked in
+
 6. **Two-phase interactive rebase** — `selectingN` → todo-list editor pattern
+
 7. **Undo/redo with explicit inverseOp** — Each `HistoryEntry` knows how to undo itself
+
 8. **Hunk-level diff staging** — `currentHunkPatch()` for surgical staging
 
 ---
@@ -354,11 +421,17 @@ sugar-stash is the most **complete application** in the SugarCraft monorepo:
 ## Strengths
 
 1. **Clean architecture** — `GitDriver` interface allows swapping implementation (real git vs. fixtures)
+
 2. **Immutable + fluent** — All state is readonly, every mutation returns new instance
+
 3. **Comprehensive test coverage** — 700+ lines of behavior tests with `FixtureGit`
+
 4. **i18n ready** — `Lang::t()` facade with 16 locales (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar)
+
 5. **VHS demo** — `.vhs/play.tape` and `.vhs/stage.tape` for CI rendering to GIF
+
 6. **CLI binary** — `bin/sugar-stash` with proper autoload resolution
+
 7. **Preserves git config** — Shells out to system `git`, respecting user aliases and hooks
 
 ---
@@ -366,13 +439,21 @@ sugar-stash is the most **complete application** in the SugarCraft monorepo:
 ## Gaps / Future Work
 
 1. **Commit graph visualization** — Colored branch topology like lazygit's `--graph`
+
 2. **Bisect support** — `git bisect` integration for finding bugs
+
 3. **Custom commands** — User-defined commands bound to keybindings
+
 4. **Filter/search** — `/` key to filter any panel's content
+
 5. **Push/pull** — Remote operations
+
 6. **Tags management** — List/create/delete tags
+
 7. **Submodules** — Submodule support
+
 8. **Blame view** — Per-line blame annotation
+
 9. **Rebase magic** — Custom patch application during rebase
 10. **Commit amend old commits** — Amend any commit (not just HEAD) via rebase
 
@@ -394,19 +475,29 @@ sugar-stash is the most **complete application** in the SugarCraft monorepo:
 **sugar-stash** is a well-architected PHP port of jesseduffield/lazygit that demonstrates the power of the SugarCraft stack for building complete applications. The decision to shell out to `git` rather than using libgit2 bindings is a pragmatic choice that preserves user configuration while keeping the implementation simple.
 
 **Architecture highlights:**
+
 - The `GitDriver` interface pattern is exemplary — it makes the entire application testable without staging real repos
+
 - Immutable state with readonly properties throughout
+
 - Clean separation of concerns: `App` (model), `Renderer` (view), `GitDriver` (git operations)
+
 - Comprehensive test coverage with behavior-driven tests
 
 **Comparison to upstream lazygit:**
+
 - sugar-stash implements ~60% of lazygit's features but with 10x less code
+
 - The most critical git workflows (stage, commit, branch, stash, rebase) are all functional
+
 - Missing features are largely advanced workflows (bisect, submodules, custom commands)
 
 **Strategic position:**
+
 - sugar-stash demonstrates that SugarCraft can build real-world applications
+
 - The pluggable `GitDriver` architecture could support alternative backends (e.g., GitHub CLI, libgit2)
+
 - The undo/redo system is a standout feature that makes the application feel polished
 
 ---
@@ -414,6 +505,9 @@ sugar-stash is the most **complete application** in the SugarCraft monorepo:
 ## Related Reports
 
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbletea.md` — Primary upstream TUI framework
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-core.md` — TUI framework foundation
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-sprinkles.md` — Styling system
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-bits.md` — Component library comparison

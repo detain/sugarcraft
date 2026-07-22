@@ -13,6 +13,7 @@ when the cassette has original-timing data.
 ## Files
 
 **Modify:**
+
 - `candy-vcr/src/Player.php` — `withIdleTrim(?float $seconds)`.
   When set, delays >threshold are clamped to threshold.
 - `candy-vcr/src/Cli/ReplayCommand.php` — `--idle-trim N` flag.

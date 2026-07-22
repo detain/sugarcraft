@@ -19,6 +19,7 @@ Two related cleanups:
 ## Files
 
 **Modify:**
+
 - `candy-mosaic/src/Renderer/Renderer.php` (interface) — add
   `delete(string $imageId): string`.
 - `candy-mosaic/src/Renderer/{Kitty,Iterm2,Sixel,HalfBlock,Quarter}Renderer.php`

@@ -1,6 +1,7 @@
 # SugarCraft/candy-lister
 
 ## Metadata
+
 - **SugarCraft Library**: candy-lister
 - **Namespace**: `SugarCraft\Lister`
 - **Composer pkg**: `sugarcraft/candy-lister`
@@ -30,6 +31,7 @@
 ## Key Classes and Methods
 
 ### Model (`src/Model.php`)
+
 Core list model. Stores items, renders visible lines within viewport.
 
 | Method | Signature | Notes |
@@ -56,6 +58,7 @@ Core list model. Stores items, renders visible lines within viewport.
 **Properties**: `width`, `height`, `cursorOffset`, `lineOffset`, `wrap`, `lessFunc`, `equalsFunc`, `prefixer`, `suffixer`, `lineStyle`, `currentStyle`, `filterFn`, `filterState`
 
 ### Item (`src/Item.php`)
+
 Internal wrapper pairing a `Stringable` value with a unique integer ID for stable identity across sort/reorder operations.
 
 ```php
@@ -66,6 +69,7 @@ final class Item {
 ```
 
 ### StringItem (`src/StringItem.php`)
+
 Plain-string adapter implementing `\Stringable` for use as list items.
 
 ```php
@@ -75,6 +79,7 @@ final class StringItem implements \Stringable {
 ```
 
 ### FilterState (`src/FilterState.php`)
+
 Three-state enum tracking filter lifecycle:
 
 ```php
@@ -86,6 +91,7 @@ enum FilterState {
 ```
 
 ### FuzzyMatch (`src/FuzzyMatch.php`)
+
 Smith-Waterman local alignment for fuzzy string scoring.
 
 | Const | Value | Purpose |
@@ -97,10 +103,12 @@ Smith-Waterman local alignment for fuzzy string scoring.
 | `ADJACENT_BONUS` | 5 | Consecutive match reward |
 
 **Key methods**:
+
 - `score(string $query, string $candidate): int` — two-row DP, O(c) memory
 - `match(string $query, array<\Stringable> $items): array` — returns `[[item, score], ...]` sorted desc
 
 ### Prefixer Interface (`src/Prefixer.php`)
+
 ```php
 interface Prefixer {
     public function initPrefixer(\Stringable $value, int $currentIndex,
@@ -110,6 +118,7 @@ interface Prefixer {
 ```
 
 ### DefaultPrefixer (`src/DefaultPrefixer.php`)
+
 Box-drawing prefixer with:
 - Separators: `╭` (first), `├` (middle), `│` (wrap continuation)
 - Line numbers (absolute or relative to cursor)
@@ -119,6 +128,7 @@ Box-drawing prefixer with:
 Properties: `number`, `numberRelative`, `prefixWrap`, `firstSep`, `separator`, `separatorWrap`, `currentMarker`, `emptyMarker`
 
 ### Suffixer Interface (`src/Suffixer.php`)
+
 ```php
 interface Suffixer {
     public function initSuffixer(\Stringable $value, int $currentIndex,
@@ -128,6 +138,7 @@ interface Suffixer {
 ```
 
 ### DefaultSuffixer (`src/DefaultSuffixer.php`)
+
 Shows `<` marker on first line of cursor item; empty string on all other lines (no padding emitted).
 
 ---
@@ -135,6 +146,7 @@ Shows `<` marker on first line of cursor item; empty string on all other lines (
 ## List Rendering Architecture
 
 ### Viewport-relative cursor offset
+
 The cursor stays `cursorOffset` lines from the visible viewport edge. `lines()` builds visible output in three phases:
 
 1. **Lines before cursor** — walks backward from `cursorIndex - 1` up to `lineOffset` items, collecting item lines bottom-up (reversed for correct display order)
@@ -142,6 +154,7 @@ The cursor stays `cursorOffset` lines from the visible viewport edge. `lines()` 
 3. **Lines after cursor** — continues forward until `height` lines accumulated or items exhausted
 
 ### Per-item rendering (`renderItem()`)
+
 For each item at a given index:
 
 1. `initPrefixer()` called once to compute prefix width reservation
@@ -156,9 +169,11 @@ For each item at a given index:
    - LineStyle or CurrentStyle ANSI codes applied based on whether `itemIndex === cursorIndex`
 
 ### ANSI width computation
+
 Uses `SugarCraft\Core\Util\Width::string()` for printable (non-ANSI) cell width, then `Ansi::CSI . $codes . 'm'` for SGR wrapping.
 
 ### Rendering pipeline
+
 ```
 Model.lines()
   └─ renderItem(itemIndex)         [per visible item]
@@ -176,6 +191,7 @@ Model.lines()
 ## Filter Implementation
 
 ### State machine
+
 Three states with explicit transitions documented in `FilterState`:
 
 | From | To | Trigger |
@@ -186,6 +202,7 @@ Three states with explicit transitions documented in `FilterState`:
 | `filtering` | `unfiltered` | filter cleared before result |
 
 ### `withFilterFn()` behavior
+
 1. Clones model (copy-on-write)
 2. Saves `originalItems = items`
 3. Applies `array_filter` using the closure
@@ -194,6 +211,7 @@ Three states with explicit transitions documented in `FilterState`:
 6. Returns the new cloned model
 
 ### `withoutFilter()` behavior
+
 1. If `filterFn === null`, returns `$this` (no-op)
 2. Clones model
 3. Restores `items = originalItems`
@@ -203,6 +221,7 @@ Three states with explicit transitions documented in `FilterState`:
 7. Returns the new cloned model
 
 ### Filter function signature
+
 ```php
 \Closure(\Stringable): bool
 ```
@@ -213,20 +232,24 @@ True = keep item, false = exclude.
 ## Navigation Patterns
 
 ### Cursor movement
+
 - `cursorUp(int $n = 1)` — decrements cursor by n, clamped to 0
 - `cursorDown(int $n = 1)` — increments cursor by n, clamped to length-1
 - `setCursor(int $index)` — absolute position, clamped to [0, length-1]
 - `cursorItem()` — returns value at current cursor position (throws if empty)
 
 ### Bounds handling
+
 All cursor operations use `max(0, min(index, count - 1))` for clamping. No out-of-bounds cursor possible.
 
 ### Sorting
+
 - `sort()` — applies `usort` with `lessFunc` or string comparison
 - Cursor stays on same **item** (tracked by unique ID) not same index after sort
 - Go upstream uses `sort.Interface` (Len/Less/Swap) — PHP uses closure injection
 
 ### Finding
+
 - `find(\Stringable $value): int` — linear search using `equalsFunc` or string comparison
 - Returns -1 if not found
 - Go upstream's `GetIndex()` uses concurrent goroutines; PHP port uses sequential search
@@ -236,6 +259,7 @@ All cursor operations use `max(0, min(index, count - 1))` for clamping. No out-o
 ## Word-wrap Handling
 
 ### Algorithm: `hardWrap()` (Model.php lines 461-494)
+
 1. Split input on `\n` for paragraph handling
 2. For each paragraph, split on whitespace (`preg_split('/\s+/')`)
 3. Greedy accumulation: if `withWord` fits in `contentWidth`, keep accumulating
@@ -246,6 +270,7 @@ All cursor operations use `max(0, min(index, count - 1))` for clamping. No out-o
 5. Handle final line after loop
 
 ### Oversized word splitting: `splitOverWidth()` (lines 502-509)
+
 ```php
 private function splitOverWidth(string $word, int $maxWidth): array {
     $chunks = [];
@@ -258,6 +283,7 @@ private function splitOverWidth(string $word, int $maxWidth): array {
 Note: Uses `strlen` (byte offset) not rune-aware splitting. This differs from Go upstream which uses `reflow/wordwrap.HardWrap` with proper Unicode handling.
 
 ### Wrap limit
+
 ```php
 if ($this->wrap > 0 && count($rawLines) > $this->wrap) {
     $rawLines = array_slice($rawLines, 0, $this->wrap);
@@ -266,6 +292,7 @@ if ($this->wrap > 0 && count($rawLines) > $this->wrap) {
 Truncates lines after wrapping, matching Go upstream's `if m.Wrap != 0 && len(lines) > m.Wrap`.
 
 ### Go upstream word-wrap
+
 Go upstream uses `github.com/treilik/reflow/wordwrap.HardWrap(i.value.String(), contentWith, "    ")` with a 4-space indent on wrapped lines. The PHP port does NOT indent wrapped lines — this is a minor divergence.
 
 ---
@@ -273,6 +300,7 @@ Go upstream uses `github.com/treilik/reflow/wordwrap.HardWrap(i.value.String(), 
 ## Comparison: candy-lister vs treilik/bubblelister (Upstream)
 
 ### Faithfulness
+
 | Aspect | treilik/bubblelister (Go) | candy-lister (PHP) | Divergence? |
 |---|---|---|---|
 | tea.Model interface | Yes (Init/Update/View) | No — pure rendering model | Yes — PHP port is view-only |
@@ -305,16 +333,19 @@ Go upstream uses `github.com/treilik/reflow/wordwrap.HardWrap(i.value.String(), 
 ## Comparison: candy-lister vs Other Mapped Repos
 
 ### vs charmbracelet/bubbles (List component)
+
 - **charmbracelet/bubbles List**: Full tea.Model with built-in filtering (`filterer` interface), vim keys, pagination, row selection. Much heavier (14 components total).
 - **candy-lister**: Lighter, focused on viewport rendering, pluggable prefix/suffix, word-wrap. No built-in key bindings.
 - **Verdict**: Different design philosophies — bubbles is a full component with opinions; candy-lister is a rendering engine with extension points.
 
 ### vs Genekkion/theHermit
+
 - **theHermit**: Quick-fix overlay list. Wraps existing views, background continues updating. Overlay positioning with centering.
 - **candy-lister**: Inline list renderer; no overlay/wrapper pattern.
 - **Verdict**: Complementary — theHermit provides the overlay mechanism, candy-lister provides the list rendering.
 
 ### vs treilik/bubbleboxer
+
 - **bubbleboxer**: Layout composer for composing multiple tea.Models into a tree structure with recursive rendering.
 - **candy-lister**: Single list rendering engine.
 - **Verdict**: bubbleboxer is a composition layer above individual components; candy-lister is a leaf component. A candy-lister instance could be a leaf in a bubbleboxer layout.

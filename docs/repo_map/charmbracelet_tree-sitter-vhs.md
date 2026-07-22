@@ -1,6 +1,7 @@
 # charmbracelet/tree-sitter-vhs
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/tree-sitter-vhs
 - **Language:** Go (grammar.js) + C (generated parser)
 - **Stars:** ~100-200 (estimated based on Charmbracelet ecosystem size; GitHub API unavailable for exact count)
@@ -8,6 +9,7 @@
 - **Description:** Tree-sitter grammar for syntax highlighting VHS `.tape` files (the terminal recording/playback format used by the Charmbracelet VHS tool)
 
 ## Feature List
+
 - **VHS Tape Parsing:** Full grammar for parsing VHS `.tape` script files used to record and replay terminal sessions
 - **Command Recognition:** Parses all VHS commands including `Output`, `Set`, `Type`, `Sleep`, `Enter`, `Backspace`, `Escape`, `Hide`, `Show`, `Copy`, `Paste`, arrow keys, and more
 - **Keyboard Modifiers:** Supports `Ctrl+`, `Alt+`, `Shift+` modifier combinations with keys
@@ -34,10 +36,12 @@ This is a **tree-sitter grammar** (not a traditional class-based library). The c
 - **`env` rule:** `seq('Env', $.string, $.string)` — environment variable setting
 
 ### Generated Artifacts (src/parser.c)
+
 - **`tree_sitter_vhs()`:** Main parser entry point, returns `TSLanguage*`
 - **`src/node-types.json:** Auto-generated node type definitions for all 35+ node types
 
 ### Language Bindings
+
 - **Node.js:** `bindings/node/binding.cc` — NAPI C++ binding, exports `tree_sitter_vhs()` + language object
 - **Go:** `bindings/go/binding.go` — cgo wrapper, `Language() unsafe.Pointer`
 - **Python:** `bindings/python/` — setuptools Extension building against `src/parser.c`
@@ -60,6 +64,7 @@ This is a **tree-sitter grammar** (not a traditional class-based library). The c
   ```
 
 ## Strengths
+
 - **Well-maintained Ecosystem:** Part of Charmbracelet's mature open-source ecosystem with proper CI/CD
 - **Multi-platform Support:** CI tests on Ubuntu, Windows, and macOS
 - **Comprehensive Test Coverage:** Tree-sitter corpus tests in `test/corpus/` covering all commands and edge cases
@@ -70,6 +75,7 @@ This is a **tree-sitter grammar** (not a traditional class-based library). The c
 - **MIT Licensed:** Permissive license for broad adoption
 
 ## Weaknesses
+
 - **Shallow Feature Set:** Grammar is narrow — only parses one file format (VHS .tape), not a general-purpose tool
 - **Limited Error Recovery:** Tree-sitter grammars can have strict error recovery, but the grammar doesn't define explicit error nodes
 - **Single-purpose:** Cannot be repurposed for other formats; tightly coupled to VHS syntax
@@ -105,6 +111,7 @@ This is a **tree-sitter grammar** (not a traditional class-based library). The c
 3. **VHS Integration**: SugarCraft could integrate with the actual VHS tool (Go binary) rather than reimplementing the format
 
 ### Not Applicable
+
 - Tree-sitter itself has no SugarCraft equivalent — SugarCraft is PHP-only
 - The multi-language binding architecture is tree-sitter-specific and not applicable to SugarCraft
 

@@ -1,6 +1,7 @@
 # php-school/cli-menu
 
 ## Metadata
+
 - **URL:** https://github.com/php-school/cli-menu
 - **Language:** PHP (>=8.2)
 - **Stars:** ~1,944
@@ -8,6 +9,7 @@
 - **Description:** A command line menu helper in PHP — build interactive TTY menus with colors, borders, checkboxes, radio items, submenus, input dialogs, and ASCII art.
 
 ## Feature List
+
 - **Interactive TTY menus** with keyboard navigation (arrow keys, vim-style `j/k`, Enter to select)
 - **Builder pattern** (`CliMenuBuilder`) for fluent menu construction
 - **Item types:** `SelectableItem`, `CheckboxItem`, `RadioItem`, `StaticItem`, `LineBreakItem`, `AsciiArtItem`, `SubMenuItem`, `SplitItem`
@@ -31,6 +33,7 @@
 ## Key Classes and Methods
 
 ### Core
+
 - **`CliMenu`**: The main menu runtime. `open()` starts the event loop, `close()` tears it down.
   - `open()`, `close()`, `redraw(bool $clear = false)`, `draw()`
   - `addItem()`, `addItems()`, `setItems()`, `removeItem()`, `getItems()`
@@ -67,6 +70,7 @@
   - `newLine()`, `addRow()`, `addRows()`, `getRows()`
 
 ### Menu Items (all implement `MenuItemInterface`)
+
 - **`SelectableItem`**: Basic selectable menu entry with custom marker and optional item extra.
   - `getRows()`, `getText()`, `canSelect()`, `getSelectAction()`, `showItemExtra()`, `hideItemExtra()`
   - Delegates rendering to `SelectableItemRenderer`
@@ -92,6 +96,7 @@
   - Implements `PropagatesStyles` to cascade style to child items
 
 ### Style System
+
 - **`MenuStyle`**: Menu-level visual styling (see above)
 - **`ItemStyle`**: Interface for per-item-type styling
 - **`SelectableStyle`**: Marker customization (`setSelectedMarker()`, `setUnselectedMarker()`) for `SelectableItem`/`MenuMenuItem`
@@ -101,6 +106,7 @@
 - **`Locator`**: Maps `MenuItem` classes to `ItemStyle` subclasses; allows custom style registration
 
 ### Input / Dialogue
+
 - **`Input`**: Interface for input collectors
 - **`InputIO`**: Handles TTY character reading for inputs (cursor movement, backspace, validation loop)
 - **`InputResult`**: Wraps the collected input value; `fetch()` returns the raw string
@@ -112,10 +118,12 @@
 - **`CancellableConfirm`**: Confirm dialog with a separate Cancel button
 
 ### Actions
+
 - **`ExitAction`**: Closes the entire menu tree
 - **`GoBackAction`**: Closes the current sub-menu and returns to parent
 
 ### Terminal / Utilities
+
 - **`TerminalFactory`**: Creates `Terminal` from system (from `php-school/terminal` package)
 - **`ColourUtil`**: Validates terminal color support, maps named colors to ANSI codes, generates 256-color fallbacks
 - **`StringUtil`**: String width calculation (multibyte-aware), ANSI strip, wordwrap

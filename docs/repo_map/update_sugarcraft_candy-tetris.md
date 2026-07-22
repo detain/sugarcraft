@@ -86,6 +86,7 @@ src/
 ## Critical
 
 ### 1. Full SRS Kick Table Integration
+
 - **Title:** Wire `SrsKickTable` into `Game::tryRotate()` for true SRS with vertical kicks
 - **Description:** The `SrsKickTable` class exists with correct official data but `Game::tryRotate()` currently uses simplified horizontal-only nudge `[0, -1, 1, -2, 2]`. True SRS tests up to 5 candidates per rotation transition, including vertical offsets.
 - **Why it matters:** Without full SRS, certain piece/rotation combinations that are valid in modern Tetris games will fail in candy-tetris. Players relying on wall kicks for competitive play will encounter unexpected failures.
@@ -98,6 +99,7 @@ src/
 - **Impact:** High — completes the Guideline rotation system; eliminates a critical gap
 
 ### 2. Hard Drop Scoring
+
 - **Title:** Award 2 points per cell for hard drops
 - **Description:** Guideline standard awards 2 points per row the piece falls during a hard drop. Currently hard drop moves the piece but awards no points.
 - **Why it matters:** Hard drop is a core scoring mechanic; absence breaks player expectation and removes a skill differentiator.
@@ -112,6 +114,7 @@ src/
 ## High
 
 ### 3. Soft Drop Scoring
+
 - **Title:** Award 1 point per cell for soft drops
 - **Description:** Guideline standard awards 1 point per row when soft dropping (holding ↓). Currently soft drop accelerates descent without score bonus.
 - **Why it matters:** Soft drop is a risk/reward choice — commit to faster fall for 1 point/cell vs. waiting for better placement. Without scoring, there's no reason to not always soft drop.
@@ -123,6 +126,7 @@ src/
 - **Impact:** Medium — removes a scoring incentive for careful play
 
 ### 4. Next Piece Preview Queue
+
 - **Title:** Display 1-2 upcoming pieces in the sidebar
 - **Description:** Most modern Tetris games show 1-3 next pieces. Currently candy-tetris only shows the current piece and held piece.
 - **Why it matters:** Players plan strategy based on upcoming pieces; not seeing them is a significant information gap.
@@ -135,6 +139,7 @@ src/
 - **Impact:** Medium — standard player expectation
 
 ### 5. honey-bounce Integration for Visual Polish
+
 - **Title:** Spring-animated ghost piece, line-clear particles, camera shake on Tetris
 - **Description:** The existing `honey-bounce` library provides damped spring physics that could animate the ghost piece settling, particles on line clears, and camera shake on 4-line clears.
 - **Why it matters:** juice" — visual feedback that makes the game feel more responsive and satisfying. The upstream (tetrigo) has none of this.
@@ -150,24 +155,28 @@ src/
 ## Medium
 
 ### 6. Initial Rotation System (IRS)
+
 - **Title:** Allow rotation during ARE before piece appears
 - **Description:** IRS lets players pre-rotate the next piece while current piece is locking. Guideline standard.
 - **Source:** `docs/repo_map/sugarcraft_candy-tetris.md:565`
 - **Complexity:** Medium — requires tracking next piece rotation state during ARE
 
 ### 7. Initial Hold System (IHS)
+
 - **Title:** Allow hold during ARE
 - **Description:** IHS lets players execute hold during the entry delay. Guideline standard.
 - **Source:** `docs/repo_map/sugarcraft_candy-tetris.md:566`
 - **Complexity:** Medium — similar to IRS implementation
 
 ### 8. Diminishing Lock Delay
+
 - **Title:** Lock delay speeds up with each reset
 - **Description:** Guideline option where each successful movement/rotation during lock delay reduces remaining lock time by a percentage.
 - **Source:** `docs/repo_map/sugarcraft_candy-tetris.md:567`
 - **Complexity:** Medium — requires lock delay state modification
 
 ### 9. Ghost Piece Toggle
+
 - **Title:** Allow hiding ghost per player preference
 - **Description:** Some players prefer playing without ghost piece for added difficulty.
 - **Source:** `docs/repo_map/sugarcraft_candy-tetris.md:568`
@@ -176,12 +185,14 @@ src/
 ## Low
 
 ### 10. T-Spin Mini Recognition (Wall-Based)
+
 - **Title:** Improve T-Spin Mini detection for wall-kick situations
 - **Description:** Current 3-corner rule handles basic T-Spin detection but doesn't account for some wall-kick scenarios where T-Spin Mini should be recognized differently.
 - **Source:** `docs/repo_map/sugarcraft_candy-tetris.md:223-234`
 - **Complexity:** High — requires analyzing all SRS kick scenarios for T-piece specifically
 
 ### 11. Complicated Piece Kick Tables (CPC)
+
 - **Title:** Implement full SRS-C drop mechanic
 - **Description:** Some modern variants use complicated piece-specific kick tables for certain rotations.
 - **Source:** General Tetris knowledge
@@ -194,6 +205,7 @@ src/
 ## Current vs External Approach
 
 ### Ghost Piece Drop
+
 **Current:** `Board::dropPiece()` uses a `while(true)` loop that moves the piece down one row at a time until collision. This is O(distance) per hard drop.
 
 **External (ratatui/ratatui):** No game-specific algorithm; rendering is immediate-mode with buffer diffing. The game logic is consumer responsibility.
@@ -205,9 +217,11 @@ src/
 **Applicability:** Low priority — current approach is correct for game logic. Could optimize display ghost calculation separately.
 
 ### AI Move Evaluation
+
 **Current:** `Computer.php` uses weighted sum of board features (height, holes, gaps, lines) evaluated for all x positions + rotations. O(n×rotations) per tick.
 
 **External (typical Tetris AI):** More sophisticated AIs use:
+
 - 7-8 feature weights (not just 4)
 - Population-based search (genetic algorithms)
 - Depth-limited lookahead with garbage estimation
@@ -222,6 +236,7 @@ src/
 **Applicability:** Medium — could improve AI quality but current AI is sufficient for casual play.
 
 ### DAS/ARR Implementation
+
 **Current:** `Input/Das.php` implements classic DAS/ARR with accumulator-based timing.
 
 **External (charmbracelet/bubbletea):** Uses ` tea.KeyPressMsg` with `IsRepeat` flag directly from terminal, bypassing DAS/ARR entirely.
@@ -302,6 +317,7 @@ Game::configure()
 **Current:** Scoring is hard-coded in `Game::update()`. Different scoring systems (NES, Guideline, Custom) are not swappable.
 
 **Improvement:** `ScoringSystem` interface with implementations:
+
 - `NesScoring`
 - `GuidelineScoring` (current)
 - `CustomScoring`
@@ -313,17 +329,21 @@ Game::configure()
 # Documentation / Cookbook Opportunities
 
 ## 1. Tetris Clone Tutorial
+
 A multi-part tutorial walking through building a minimal Tetris clone using candy-tetris as the game logic engine, focusing on custom renderers.
 
 **Reference:** `charmbracelet_vhs.md:145-154` — VHS architecture is well-documented for tool demos.
 
 ## 2. AI Bot Development Guide
+
 How to extend `Computer.php` with custom heuristics or integrate ML-trained weight files.
 
 ## 3. Scoring System Deep Dive
+
 `docs/repo_map/sugarcraft_candy-tetris.md:194-283` has the scoring data but needs a dedicated document with worked examples of B2B + combo + T-Spin stacking.
 
 ## 4. Physics Integration Examples
+
 How to use honey-bounce for ghost piece animation, particles, and camera shake — with copy-paste code snippets.
 
 **Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:266-301` — honey-flap integration example.
@@ -333,6 +353,7 @@ How to use honey-bounce for ghost piece animation, particles, and camera shake �
 # UX / TUI Improvements
 
 ## 1. Ghost Piece Animation
+
 **Priority:** Medium | **Complexity:** High
 
 The ghost piece appears instantly at the landing position. A spring-eased interpolation from current Y to ghost Y would provide visual feedback about where the piece will land.
@@ -340,6 +361,7 @@ The ghost piece appears instantly at the landing position. A spring-eased interp
 **Reference:** `docs/repo_map/sugarcraft_honey-bounce.md:303-364` — Spring animation system available.
 
 ## 2. Line Clear Visual Effect
+
 **Priority:** Medium | **Complexity:** High
 
 Currently lines clear instantly with no animation. A flash/pulse effect (or the classic line compression animation) would improve feedback.
@@ -347,11 +369,13 @@ Currently lines clear instantly with no animation. A flash/pulse effect (or the 
 **Reference:** `charmbracelet_vhs.md:24-26` — visual effects in terminal recording.
 
 ## 3. Camera Shake on Tetris
+
 **Priority:** Low | **Complexity:** Medium
 
 Screen shake (via `Canvas` layer offset) when player achieves a Tetris (4-line clear).
 
 ## 4. Custom Color Themes
+
 **Priority:** Medium | **Complexity:** Low
 
 Allow `Theme` customization for board colors, piece colors, border styles. Currently uses candy-sprinkles styling but no game-specific theme system.
@@ -359,6 +383,7 @@ Allow `Theme` customization for board colors, piece colors, border styles. Curre
 **Reference:** `docs/repo_map/sugarcraft_candy-sprinkles.md:208-214` — 10 named theme factories.
 
 ## 5. Sound Effect Hooks
+
 **Priority:** Low | **Complexity:** Medium
 
 A `Game::onSound(string $event)` callback system for playing sounds on line clear, Tetris, T-Spin, game over, etc.
@@ -368,9 +393,11 @@ A `Game::onSound(string $event)` callback system for playing sounds on line clea
 # Testing / Reliability Improvements
 
 ## 1. Golden Snapshot Tests for Rendered Boards
+
 **Priority:** High | **Complexity:** Low
 
 `RendererTest.php` exists with snapshot tests. Expand to cover:
+
 - All piece types at all rotation states on empty board
 - Ghost piece rendering in various positions
 - Hold piece display
@@ -379,14 +406,17 @@ A `Game::onSound(string $event)` callback system for playing sounds on line clea
 **Reference:** `docs/repo_map/sugarcraft_candy-tetris.md:543-544` — existing test coverage.
 
 ## 2. Lock Delay Integration Tests
+
 **Priority:** High | **Complexity:** Medium
 
 Current tests cover lock delay behavior in isolation. Add integration tests for:
+
 - Lock delay reset on successful rotation
 - Lock delay expiration leading to piece lock
 - Diminishing lock delay (future feature)
 
 ## 3. T-Spin Corner Case Tests
+
 **Priority:** Medium | **Complexity:** Medium
 
 Add tests for wall-kick T-Spin scenarios, OOB corner handling, and mini vs full T-Spin boundary conditions.
@@ -394,6 +424,7 @@ Add tests for wall-kick T-Spin scenarios, OOB corner handling, and mini vs full 
 **Reference:** `docs/repo_map/sugarcraft_candy-tetris.md:223-235` — existing 6 T-Spin tests.
 
 ## 4. DAS/ARR Timing Tests
+
 **Priority:** Medium | **Complexity:** Medium
 
 Add microsecond-precision tests for DAS/ARR accumulator logic to ensure correct key repeat behavior.
@@ -401,6 +432,7 @@ Add microsecond-precision tests for DAS/ARR accumulator logic to ensure correct 
 **Reference:** `docs/repo_map/sugarcraft_candy-tetris.md:382-392` — Input/Das.php implementation.
 
 ## 5. Performance Regression Suite
+
 **Priority:** Low | **Complexity:** Medium
 
 Benchmark the game loop to ensure gravity tick + render cycle completes within frame budget (16.67ms at 60fps).
@@ -410,6 +442,7 @@ Benchmark the game loop to ensure gravity tick + render cycle completes within f
 # Ecosystem / Integration Opportunities
 
 ## 1. sugar-charts Integration for Score History
+
 **Priority:** Low | **Complexity:** Medium
 
 Render a sparkline chart of score progression over time using `sugar-charts`. Could be shown in VS mode sidebar.
@@ -417,11 +450,13 @@ Render a sparkline chart of score progression over time using `sugar-charts`. Co
 **Reference:** `docs/repo_map/sugarcraft_sugar-charts.md` (not read, but in ecosystem).
 
 ## 2. candy-pty for Sound Effects
+
 **Priority:** Low | **Complexity:** Medium
 
 Use `candy-pty` to spawn aplay/aplay for audio playback on Linux/macOS.
 
 ## 3. Replay System via Session Recording
+
 **Priority:** Low | **Complexity:** High
 
 Record game inputs (key presses + timestamps) and replay them for demos or analytics. Use `candy-vcr` concepts.
@@ -429,11 +464,13 @@ Record game inputs (key presses + timestamps) and replay them for demos or analy
 **Reference:** `docs/repo_map/charmbracelet_bubbletea.md:249-250` — vcr mapped to candy-vcr.
 
 ## 4. VS Mode Network Play
+
 **Priority:** Low | **Complexity:** High
 
 Two-player network play via WebSocket or TCP. Each player's garbage rows would be sent over the network.
 
 ## 5. Integration with sugar-bits Timer Component
+
 **Priority:** Low | **Complexity:** Low
 
 Use `SugarCraft\Forms\Timer\Timer` for game timer in VS mode instead of manual tick counting.
@@ -445,11 +482,13 @@ Use `SugarCraft\Forms\Timer\Timer` for game timer in VS mode instead of manual t
 # Notable PRs / Issues / Discussions
 
 ## From Upstream (tetrigo)
+
 The upstream `Broderick-Westrope/tetrigo` has not implemented SRS kicks, T-Spin, B2B, Combo, Perfect Clear, DAS/ARR, or VS mode. **candy-tetris has significantly surpassed its upstream.**
 
 **Reference:** `docs/repo_map/sugarcraft_candy-tetris.md:501-519`
 
 ## From charmbracelet/bubbletea
+
 The Elm Architecture is well-understood in the Go ecosystem with extensive examples. The Bubble Tea repo has 60+ example programs demonstrating patterns directly applicable to candy-tetris.
 
 **Key lesson:** The `Cmd func() Msg` pattern maps to PHP closures. Bubble Tea's subscription system (`Tick`, `Every`) maps to `GravityMsg` scheduling in candy-tetris.
@@ -457,6 +496,7 @@ The Elm Architecture is well-understood in the Go ecosystem with extensive examp
 **Reference:** `docs/repo_map/charmbracelet_bubbletea.md:208-221`
 
 ## From honey-bounce
+
 The physics library is production-validated in `honey-flap` (Flappy Bird clone). The `REDUCE_MOTION` accessibility support is already built into `Spring::update()`.
 
 **Key lesson:** Frame-rate independence via `Spring::fps(60)` returning `1.0/60` deltaTime ensures consistent simulation across platforms.
@@ -530,6 +570,7 @@ candy-tetris is a **mature, well-architected** library that has already surpasse
 **Long-term positioning:** If candy-tetris adds tournament-standard game modes (Sprint, Ultra, Battle), network VS play, and a replay system, it could become the definitive Tetris implementation for the terminal.
 
 **Noted lessons from ecosystem:**
+
 - The Elm Architecture (bubbletea → candy-core) is the correct model — immutable state + pure update functions + declarative views work equally well in PHP
 - honey-bounce's physics-first approach (no rendering dependency) is the right split — rendering should remain consumer's responsibility
 - DAS/ARR keyboard timing is essential for competitive play; native terminal key repeat (Kitty protocol) is a future optimization

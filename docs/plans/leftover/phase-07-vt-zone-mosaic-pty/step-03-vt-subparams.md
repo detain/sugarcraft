@@ -12,6 +12,7 @@ to recognize `:` as a sub-parameter separator distinct from `;`.
 ## Files
 
 **Modify:**
+
 - `candy-vt/src/Parser/Parser.php` — sub-parameter aware tokenization.
 - `candy-vt/src/Handler/SgrHandler.php` — handle the colon forms.
 

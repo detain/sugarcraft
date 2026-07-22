@@ -503,12 +503,15 @@ public function testFlagCountAfterToggle(): void
 The codebase demonstrates several strong patterns worth highlighting:
 
 ### Immutable Value Object Pattern ✅
+
 `Cell`, `Board`, `Stats`, and `Game` all correctly implement immutable value objects. Every state transition returns a new instance rather than mutating in place. The `with*()` pattern (e.g., `Stats::withGame()`) is consistently applied.
 
 ### TEA Model Pattern ✅
+
 `Game` correctly implements the SugarCraft `Model` interface with proper `init()`, `update()`, `view()`, and `subscriptions()` methods. The TEA (Term, Effect, Action) pattern is correctly implemented — `update()` returns `[$model, ?Cmd]` tuples.
 
 ### Deterministic PRNG for Testing ✅
+
 ```php
 public function __construct(
     // ...
@@ -520,6 +523,7 @@ public function __construct(
 This is excellent for fixture testing — tests can pin mine layouts without touching global state. The pattern is used consistently throughout the test suite.
 
 ### O(1) Win Detection ✅
+
 ```php
 public function isWon(): bool
 {
@@ -530,6 +534,7 @@ public function isWon(): bool
 The `revealedCount` counter is a good pattern — avoids O(n*m) iteration on every win check. The same approach should be applied to `flagCount` (see Issue #3).
 
 ### Atomic Tmp+Rename Persistence ✅
+
 `DifficultyStats::save()` correctly uses the atomic tmp+rename pattern:
 ```php
 $tmp = $dir . '/.tmp_' . basename($path) . '.' . bin2hex(random_bytes(8));
@@ -539,9 +544,11 @@ if (!rename($tmp, $path)) { ... }
 This ensures the target file is never in a partial-write state, even on crash.
 
 ### Golden Render Tests ✅
+
 Comprehensive snapshot tests in `GoldenRenderTest.php` assert against raw ANSI output. This is the correct approach for TUI rendering — testing the actual output bytes rather than intermediate state.
 
 ### Test Structure ✅
+
 Tests are well-organized with:
 - Clear `setUp()`/`tearDown()` lifecycle
 - Descriptive test method names (`testFirstRevealOnEmptyAreaFloodsRecursively`)
@@ -549,6 +556,7 @@ Tests are well-organized with:
 - Proper isolation (each test gets a fresh `Game::start()`)
 
 ### Board Unserialize — Recomputes `revealedCount` ✅
+
 `Board::unserialize()` (line 298-300) correctly recomputes `revealedCount` from live cell state rather than trusting the persisted value:
 ```php
 // Drop the persisted 'r' value entirely — recompute from live cell state
@@ -558,6 +566,7 @@ Tests are well-organized with:
 This prevents save-game tampering attacks.
 
 ### Flood Fill Implementation ✅
+
 `floodReveal()` correctly implements the classic minesweeper flood-fill with:
 - Stack-based iteration (no recursion risk)
 - `$seen` map to prevent re-processing cells

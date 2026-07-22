@@ -15,6 +15,7 @@ Three operator-facing features:
 ## Files
 
 **Create:**
+
 - `candy-shell/src/Completion/BashCompletion.php`.
 - `candy-shell/src/Completion/ZshCompletion.php`.
 - `candy-shell/src/Completion/FishCompletion.php`.
@@ -22,10 +23,12 @@ Three operator-facing features:
   subcommand that emits the right shell.
 
 **Modify:**
+
 - `candy-shell/src/Application.php` — `versionFromComposer()` helper;
   env-var fallback wiring in flag resolution.
 
 **Tests:**
+
 - `candy-shell/tests/Completion/<Each>CompletionTest.php`.
 - `candy-shell/tests/EnvVarFallbackTest.php`.
 

@@ -16,6 +16,7 @@ Two Kitty protocol extensions:
 ## Files
 
 **Modify:**
+
 - `candy-mosaic/src/Renderer/KittyRenderer.php` — honor
   `KittyOptions::$useVirtual` and `KittyOptions::$compress`.
 - `candy-mosaic/src/KittyOptions.php` — both flags become non-experimental;

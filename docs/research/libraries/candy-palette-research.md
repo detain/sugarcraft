@@ -194,6 +194,7 @@ func (o *Output) ColorProfile() Profile {
 ```
 
 **Notable differences from candy-palette:**
+
 - Uses `COLORTERM=24bit` as TrueColor indicator (candy-palette accepts any value)
 - Explicit Google Cloud Shell detection
 - xterm-ghostty/xterm-kitty pattern support
@@ -221,6 +222,7 @@ func (o *Output) ColorProfile() Profile {
 
 ```
 # Source: alacritty/alacritty/extra/alacritty.info
+
 alacritty-direct|alacritty with direct color indexing,
     use=alacritty+common,
     RGB,        <-- Extended boolean capability advertising 24-bit
@@ -273,6 +275,7 @@ Terminals universally assume **sRGB** color space for TrueColor output:
 
 ```
 # Source: w3.org/Graphics/Color/srgb
+
 Chromaticity coordinates (ITU-R BT.709):
   R: x=0.64, y=0.33
   G: x=0.30, y=0.60

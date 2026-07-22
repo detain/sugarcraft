@@ -12,9 +12,11 @@
 ## Files
 
 **Modify:**
+
 - `sugar-bits/src/TextInput/TextInput.php`.
 
 **Create:**
+
 - `sugar-bits/src/TextInput/ValidateOn.php` (enum).
 
 ## Tests

@@ -4,6 +4,7 @@
 Connect HistoryRecorder to the App's admin data fetching so query history is actually recorded.
 
 ## Current State
+
 - `HistoryRecorder` implements `StatusSnapshotProviderInterface`
 - `SqliteHistoryStore` persists to SQLite
 - App::subscriptions() uses `Cmd::promise()` directly, not HistoryRecorder

@@ -1,6 +1,7 @@
 # charmbracelet/confettysh
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/confettysh
 - Language: Go
 - Stars: ~81
@@ -8,6 +9,7 @@
 - Description: Confetti and Fireworks over SSH. An SSH server that renders animated confetti and fireworks in the terminal using the Bubble Tea TUI framework.
 
 ## Feature List
+
 - **SSH Server**: Listens on a configurable port (default 2222) for incoming SSH connections
 - **Dual Effect Modes**: Two distinct visual effects selectable at connection time:
   - `confetti` — cascading colored confetti particles
@@ -21,6 +23,7 @@
 - **Docker Support**: Minimal scratch-based container image for easy deployment
 
 ## Key Classes and Methods
+
 - `main.go`: Single-file application entry point
   - `main()` — initializes SSH server with wishlist configuration, starts Prometheus listener
   - `teaHandler(effect string)` — returns a closure that creates the appropriate Tea model based on effect name
@@ -30,6 +33,7 @@
 - Middleware chain: `promwish.MiddlewareRegistry()` → `lm.Middleware()` → `activeterm.Middleware()`
 
 ## Notable Algorithms / Named Patterns
+
 - **Bubble Tea MVC Pattern**: Uses `tea.Model` interface with `Update()` and `View()` methods; the confetti library provides the model implementation
 - **SSH Middleware Chain**: Compose multiple wish middlewares in sequence (promwish → logging → active terminal)
 - **Particle System**: The underlying confetti/fireworks effects use a particle system algorithm with:
@@ -41,6 +45,7 @@
 - **Wishlist Endpoint Pattern**: Factory function pattern for creating per-endpoint SSH server instances with distinct configurations
 
 ## Strengths
+
 - **Zero-Dependency Core**: Single `main.go` file with clear, focused responsibility
 - **Charm Ecosystem Integration**: Tight integration with wish (SSH), bubbletea (TUI), and related Charm libraries
 - **Extensible Architecture**: Easy to add new effects by creating new wishlist endpoints with corresponding Tea handlers
@@ -51,6 +56,7 @@
 - **Professional CI/CD**: GoReleaser, Dependabot, multiple workflow checks (lint, build, nightly)
 
 ## Weaknesses
+
 - **Single Point of Configuration**: Effect selection is hardcoded to two endpoints; cannot select effects dynamically within a session
 - **No Authentication**: The demo SSH server has no authentication mechanism configured
 - **Limited Effect Customization**: No CLI flags for particle count, color schemes, or animation speed
@@ -60,6 +66,7 @@
 - **No Windows Support Note**: Terminal rendering of ANSI codes may behave differently across platforms
 
 ## SugarCraft Mapping
+
 This is a **wrapper application** (not a library), so it does not map directly to a single SugarCraft library. The mapping is conceptual:
 
 - **`sugar-bits`**: The Bubble Tea TUI integration pattern — confettysh uses `tea.Model`, `tea.Update()`, `tea.View()` cycle which sugar-bits also uses for its own TUI rendering

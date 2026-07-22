@@ -32,6 +32,7 @@ Address all 55 identified issues in sugar-reel (critical, high, medium, low seve
 **Related Code:** `sugar-reel/src/AudioPlayer.php:122-128`
 
 **Conditions for Success:**
+
 - AudioPlayer::pause() kills the subprocess on POSIX (where SIGSTOP works unreliably)
 - AudioPlayer stores position so resume() can restart from correct point
 - Windows: documented as non-functional limitation
@@ -64,6 +65,7 @@ public function pause(): void
 **Related Code:** `sugar-reel/src/AudioPlayer.php:135-141`
 
 **Conditions for Success:**
+
 - resume() restarts audio from the correct timestamp position
 - Audio and video stay in sync after pause/resume cycle
 
@@ -89,6 +91,7 @@ public function resume(): void
 **Related Code:** `sugar-reel/src/AudioPlayer.php:95-104`
 
 **Conditions for Success:**
+
 - Exit code captured and stored in `$this->exitCode`
 - `getExitCode(): ?int` method exposed
 - Non-zero exit codes logged via error_log
@@ -122,6 +125,7 @@ public function getExitCode(): ?int
 **Related Code:** `sugar-reel/src/Decode/FfmpegDecoder.php:348-363`
 
 **Conditions for Success:**
+
 - Exit code stored in `$this->exitCode`
 - `getExitCode(): ?int` method added
 - Non-zero exit codes trigger warning via error_log
@@ -162,6 +166,7 @@ public function getExitCode(): ?int
 **Related Code:** `sugar-reel/src/Player.php:902-920`
 
 **Conditions for Success:**
+
 - Remove `=== '/fake'` string comparison from production code
 - Add `DecoderInterface::reopen()` method for test seam
 - All existing tests still pass
@@ -205,6 +210,7 @@ private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $fra
 **Related Code:** `sugar-reel/src/Player.php:1089-1099`
 
 **Conditions for Success:**
+
 - frameAt() accepts optional mode/cellsW/cellsH params for thumbnail-appropriate decoding
 - Consider LRU cache for recent thumbnail decodes (future optimization)
 
@@ -237,6 +243,7 @@ public function frameAt(float $sec, ?Mode $mode = null, int $cellsW = 80, int $c
 **Related Code:** `sugar-reel/src/Player.php:931-942` and `1058-1068`
 
 **Conditions for Success:**
+
 - Extract to `private function rebuildAudio(?int $startMs): ?AudioPlayer`
 - Both methods call the extracted helper
 - Unit tests verify behavior
@@ -268,6 +275,7 @@ private function rebuildAudio(?int $startMs): ?AudioPlayer
 **Related Code:** `sugar-reel/src/Player.php:1189-1217` (lines 1206-1207 acknowledge this)
 
 **Conditions for Success:**
+
 - `['ended' => false]` actually sets ended to false
 - `['frameIndex' => 0]` actually sets frameIndex to 0
 
@@ -309,10 +317,12 @@ private function mutate(array $changes): self
 **What:** Player::frameToBuffer() has inline HalfBlock that mirrors HalfBlockRenderer exactly.
 
 **Related Code:**
+
 - `sugar-reel/src/Player.php:664-693` (inline path)
 - `sugar-reel/src/Render/HalfBlockRenderer.php:40-45` (never used at runtime)
 
 **Conditions for Success:**
+
 - Remove inline HalfBlock path; always route through RendererFactory
 - Update testHalfBlockInlineMatchesMosaicRenderer accordingly
 - Verify all HalfBlock rendering uses the same code path
@@ -446,6 +456,7 @@ if (!$currentResMatches) {
 **What:** AsciiRenderer and Player have similar but not identical pixel access logic.
 
 **Related Code:**
+
 - `sugar-reel/src/Render/AsciiRenderer.php:52-58`
 - `sugar-reel/src/Player.php:819-826`
 
@@ -565,6 +576,7 @@ public static function shouldSkip(int $currentFrame, int $targetFrame, int $skip
 **Related Code:** `sugar-reel/src/AudioPlayer.php:27`
 
 **Conditions for Success:**
+
 - Mark `final` AND change `buildCommand()` to `protected` to allow test subclassing
 - Update FakeAudioPlayer test pattern
 

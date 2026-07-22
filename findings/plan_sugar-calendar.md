@@ -47,12 +47,14 @@ Address all valid findings from the sugar-calendar audit: fix the hardcoded view
 **Why the change should be done:** A TUI component should be responsive to terminal size. Hardcoding 21 chars prevents use in narrower contexts or with different day-name lengths (e.g., full "Monday" vs "Mo").
 
 **Conditions for success:**
+
 - `DatePicker` accepts optional width parameter in constructor or `View()`
 - Day cells properly truncate/pad when width differs from default
 - Existing tests pass with default width
 - New tests verify rendering at narrower widths
 
 **Related code locations:**
+
 - `src/DatePicker.php:427` - `$width = 21` hardcoded
 - `src/DatePicker.php:536-558` - `placeStringAt()` with bounds checking
 - `src/DatePicker.php:657-716` - `buildCells()` generates 42 cells
@@ -70,11 +72,13 @@ Address all valid findings from the sugar-calendar audit: fix the hardcoded view
 **Why the change should be done:** At 60fps (cursor blinking), calling `buildCells()` 60 times per second for a static calendar is wasteful. The grid only changes when navigation or selection occurs.
 
 **Conditions for success:**
+
 - `View()` returns cached string when no state change occurred
 - Cache is invalidated on: `GoToPreviousMonth()`, `GoToNextMonth()`, `GoToPreviousYear()`, `GoToNextYear()`, `SetTime()`, `SelectDate()`, `ClearDate()`, `MoveCursor*()`, `handleKey()`, `withToday()`
 - Benchmark shows < 1ms for cached `View()` vs current ~0.1ms (still acceptable but improvement for 60fps scenarios)
 
 **Related code locations:**
+
 - `src/DatePicker.php:448` - `$cells = $this->buildCells();` called every View()
 - `src/DatePicker.php:657-716` - `buildCells()` full grid computation
 
@@ -93,11 +97,13 @@ Address all valid findings from the sugar-calendar audit: fix the hardcoded view
 **Why the change should be done:** Finding 2 reports "navigating left from the first day of a month wraps to the previous month's last day." Currently `MoveCursorLeft()` clamps at 0. This is an architectural difference from upstream (grid-index based vs date-based cursor). A decision is needed on whether to change this.
 
 **Conditions for success:**
+
 - Document the current behavior: Left from first day (index 0) stays at index 0 (not month-wrap)
 - OR implement month-boundary wrap if decided to match upstream
 - Add test coverage for all 7 days of the first week and last week of each month (as recommended by Finding 2)
 
 **Related code locations:**
+
 - `src/DatePicker.php:195-200` - `MoveCursorLeft()` uses `\max(0, ...)` clamp
 - `src/DatePicker.php:767-777` - `clampedCursor()` handles index clamping
 - `src/Navigation.php:18-28` - `Navigation::move()` also clamps
@@ -117,12 +123,14 @@ Address all valid findings from the sugar-calendar audit: fix the hardcoded view
 **Why the change should be done:** Feature parity with upstream. ISO week numbers are useful in calendar applications.
 
 **Conditions for success:**
+
 - New optional parameter `bool $showWeekNumbers = false` on `View()`
 - When enabled, renders a week number column (1-53) using `idate('W')`
 - Uses new `$weekStyle` for week number cells
 - Existing tests pass with default `$showWeekNumbers = false`
 
 **Related code locations:**
+
 - `src/DatePicker.php:422-464` - `View()` method
 - `src/DatePicker.php:447-462` - week row rendering loop
 
@@ -161,6 +169,7 @@ And line 702-703:
 **Why the change should be done:** Ensures cursor navigation works correctly at month boundaries. This is especially important given the architectural difference (grid-index based) from upstream (date-based).
 
 **Conditions for success:**
+
 - Test cursor position on each of the 7 days in week 1 of the month
 - Test cursor position on each of the 7 days in the last week of the month
 - Test left navigation from day 1 of month (when day 1 is at various weekday positions: Sun=0 through Sat=6)
@@ -168,6 +177,7 @@ And line 702-703:
 - Tests cover multiple months with different first-day-of-week offsets
 
 **Related code locations:**
+
 - `tests/DatePickerTest.php:96-116` - existing boundary tests
 - `src/DatePicker.php:195-221` - cursor movement methods
 

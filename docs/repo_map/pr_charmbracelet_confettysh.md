@@ -5,6 +5,7 @@
 **charmbracelet/confettysh** is a demonstration SSH server application (not a library) that renders animated confetti and fireworks in terminal sessions via SSH. It is a thin SSH wrapper around the upstream `maaslalani/confetty` particle physics library, composed with Bubble Tea TUI rendering and Charm ecosystem middleware.
 
 ### Key Facts
+
 - **Stars**: ~83 | **Forks**: 9 | **Open Issues**: 0 | **Open PRs**: 3 | **Closed PRs**: 107
 - **Upstream Particle Engine**: `maaslalani/confetty` (500 stars, separate repo)
 - **Go Version**: 1.24.0 | **Transitive Dependencies**: 40+
@@ -12,6 +13,7 @@
 - **No discussions endpoint** (404 — not enabled)
 
 ### What confettysh Actually Is
+
 confettysh is **not a library** — it is a demonstration application. The particle physics logic lives entirely in `maaslalani/confetty`, which confettysh consumes as a Go module dependency. The confettysh repo contributes only:
 1. SSH server scaffolding (wish, wishlist)
 2. Bubble Tea middleware wiring
@@ -56,6 +58,7 @@ The first-pass analysis noted:
 ### maaslalani/confetty Open Issues (upstream, 3 open):
 
 **#10 — Fix lagging/glitching effect with launching firework**
+
 - *Severity*: Performance/bug
 - *Problem*: When a firework rocket moves slowly near the top of the screen, the explosion triggers at the wrong moment (velocity threshold of Y > -3 fires too early or too late during deceleration)
 - *Root cause*: `Simulation.Update()` checks `p.Physics.Velocity().Y > -3` to trigger explosion, but this is a heuristic that fails during the deceleration phase of the rocket's arc
@@ -63,10 +66,12 @@ The first-pass analysis noted:
 - *Fix approach*: The issue remains open, suggesting maintainers have not prioritized it or the fix is non-obvious without changing the physics model
 
 **#11 — Moving starting point (e.g. using arrow keys)**
+
 - *Signal*: Users want interactive spawn point control
 - *SugarCraft opportunity*: `honey-bounce` should expose a configurable spawn point API, not just a global system spawn
 
 **#15 — Enhancement request: Add text modal**
+
 - *Signal*: A contributor wanted to overlay text on the particle system
 - *SugarCraft consideration*: Text modal overlay on particle effects is a legitimate extensibility pattern — SugarCraft could implement a `ParticleSystem::withOverlay()` method
 
@@ -83,6 +88,7 @@ The first-pass analysis noted:
 Since there are no issues, pain points must be inferred from commit history, PR patterns, and code structure:
 
 ### Pain Point 1: Dependency Maintenance Burden
+
 The commit history is dominated by `chore(deps): bump ...` from dependabot. The repo has 40+ transitive dependencies and is constantly updating:
 - bubbletea (major TUI framework)
 - wish (SSH server)
@@ -92,12 +98,15 @@ The commit history is dominated by `chore(deps): bump ...` from dependabot. The 
 **Inference**: The Charm ecosystem moves fast. SugarCraft should anticipate similar maintenance velocity if it heavily composes external libraries.
 
 ### Pain Point 2: Firework Lag/Glitch (from upstream issue #10)
+
 The physics model uses `tea.Tick` at 30 FPS with a velocity threshold for explosion triggering. When the rocket decelerates near its apex, the velocity dips below the threshold prematurely, causing premature or delayed explosions. This is a known, unfixed bug.
 
 ### Pain Point 3: No Configuration Extensibility
+
 Users cannot customize particle count, colors, spawn rate, or gravity. The hardcoded constants (75 confetti particles, 50 firework particles, 30 FPS, fixed color palette) cannot be overridden without code changes. The `teaHandler` factory only accepts an `effect` string, not a configuration struct.
 
 ### Pain Point 4: SSH-Only Access Model
+
 The app requires SSH access — users cannot experience the effects via a local TTY invocation. PR #54 (add installation instruction) has been open since Aug 2024 with no merge, suggesting maintainers are resistant to community documentation contributions.
 
 ## 7. Frequently Requested Features
@@ -122,11 +131,13 @@ Since there are no issue comments or discussions, feature demand must be inferre
 ## 8. Important PRs
 
 ### Automated PRs (97 of 107 closed):
+
 - All dependency bumps (bubbletea, wish, prometheus, actions)
 - CI config syncs (golangci-lint, dependabot)
 - These are machine-generated and represent the project's active maintenance
 
 ### Community PRs:
+
 - **#111** (open): "Fixing casing on README" — contributor-driven typo fix
 - **#109** (open): "ci: sync golangci-lint config" — automated config sync
 - **#54** (open, Aug 2024): "add installation instruction" — community doc contribution, **open for 9+ months with no merge or close**. This is the clearest signal of maintainer selectivity about accepting community work.
@@ -134,17 +145,20 @@ Since there are no issue comments or discussions, feature demand must be inferre
 **Interpretation**: Maintainers are active on dependency maintenance but very selective about accepting community feature or documentation contributions. The open PRs are either trivial (casing) or automated (CI sync). The stalled #54 suggests a contribution workflow bottleneck.
 
 ### Notable Historical PRs:
+
 - **#94** (merged Jun 2025): "docs: add contributing guidelines" — the only significant community docs contribution that was accepted
 - The project uses `contributing.md` to gate contributions, suggesting a formal process that filters out casual contributors
 
 ## 9. Architectural Changes
 
 ### Architecture Evolution:
+
 - **Original**: Single `main.go` using `ssh.Server` directly with a single endpoint
 - **Current**: Uses `wishlist` for multi-endpoint factory pattern with per-endpoint middleware chains
 - The evolution was from single-endpoint to multi-endpoint SSH server, driven by the need to expose both confetti and fireworks effects
 
 ### Key Architectural Pattern: Endpoint Factory
+
 ```go
 cfg := &wishlist.Config{
     Factory: func(e wishlist.Endpoint) (*ssh.Server, error) {
@@ -161,6 +175,7 @@ cfg := &wishlist.Config{
 This is the **most important architectural lesson**: the factory pattern allows n distinct SSH endpoints with distinct middleware chains, all sharing the same binary. SugarCraft could mirror this for multi-effect TUI applications.
 
 ### Dependency Updates as Architecture Signals:
+
 Recent commits show active updates to:
 - `charmbracelet/bubbletea` (v1.3.x → v1.3.10) — the TUI framework is actively maintained
 - `charmbracelet/ssh` (v0.0.0-YYYYMMDD) — the SSH library is moving to a different versioning scheme
@@ -249,12 +264,14 @@ The project has had some migration-related changes:
 ## 14. Clever Fixes & Workarounds
 
 ### Workaround 1: Per-Endpoint Host Key Isolation
+
 ```go
 wish.WithHostKeyPath(fmt.Sprintf(".ssh/%s", strings.ToLower(e.Name)))
 ```
 Each endpoint gets its own host key file (`.ssh/confetti`, `.ssh/fireworks`). This is a clean solution for development environments where multiple SSH servers run on different ports.
 
 ### Workaround 2: Tail Rendering with Velocity-Based Length
+
 ```go
 l := -int(p.Physics.Velocity().Y)
 for i := 1; i < l; i++ {
@@ -267,6 +284,7 @@ for i := 1; i < l; i++ {
 The tail length is proportional to rocket velocity, making fast-moving rockets have short tails and slow rockets have long tails. This is visually elegant but is also the source of the lag issue — when the rocket is slow at the apex, the tail becomes extremely long, triggering the explosion bug.
 
 ### Workaround 3: Null Particle Removal via Swap-and-Pop
+
 ```go
 func RemoveParticleFromArray(s []*Particle, i int) []*Particle {
     s[i] = nil
@@ -277,6 +295,7 @@ func RemoveParticleFromArray(s []*Particle, i int) []*Particle {
 Avoids O(n) array shift by swapping with last element. This is a good micro-optimization but the nil assignment is unusual (typically swap-without-nil is cleaner).
 
 ### Workaround 4: Float-to-Int Truncation for Rendering
+
 ```go
 plane[int(pos.Y)][int(pos.X)] = p.Char
 ```
@@ -307,6 +326,7 @@ Maintainer behavior patterns from commit history and PR management:
 Since nothing was formally rejected, we identify **architectural choices that limit the project** and represent implicitly rejected approaches:
 
 ### Implicitly Rejected: Configurable Particle Parameters
+
 The hardcoded constants in `confetti.go`:
 ```go
 const (
@@ -321,31 +341,39 @@ var (
 These could have been CLI flags or environment variables, but the maintainers chose simplicity. SugarCraft should consider these as configuration points.
 
 ### Implicitly Rejected: Dynamic Effect Selection
+
 Users cannot select effects within a session — they must connect to different ports/endpoints. A command-line flag or interactive menu was never considered. This is actually a missed opportunity for a better UX.
 
 ### Implicitly Rejected: Local TTY Mode
+
 The project only works over SSH. A local `./confettysh --effect fireworks` mode that uses the local terminal would dramatically increase accessibility. This was never discussed but seems intentional (the project is specifically "confetti over SSH").
 
 ### Implicitly Rejected: Animation Speed Control
+
 30 FPS is hardcoded via `tea.Tick(time.Second/framesPerSecond, ...)`. No way to slow down or speed up the animation. The `harmonica.FPS()` function exists but is not configurable.
 
 ## 18. Problems Likely Relevant To SugarCraft
 
 ### Problem 1: Firework Explosion Timing Bug (issue #10)
+
 **Direct risk to honey-bounce**: YES — the velocity-threshold explosion trigger is fundamentally flawed. When a projectile decelerates against gravity near its apex, its velocity approaches zero, triggering the explosion too early or not at all.
 **SugarCraft fix**: Use time-based triggering (`if timeSinceLaunch > someThreshold`) rather than velocity-based triggering, or use a position-based trigger (`if pos.Y < someHeight`).
 
 ### Problem 2: Per-Frame String Grid Allocation (Render bottleneck)
+
 **Direct risk to honey-bounce**: YES — PHP string concatenation is expensive. Building a full terminal-size string grid every frame is a guaranteed performance problem at scale.
 **SugarCraft fix**: Use ANSI escape sequences with cursor positioning (`\x1b[<row>;<col>H`) rather than filling the entire screen with spaces. Render only non-empty cells.
 
 ### Problem 3: Dependency Velocity
+
 **Risk to sugar-bits**: The Bubble Tea ecosystem updates frequently. SugarCraft's sugar-bits (Bubble Tea PHP port) will need active maintenance as the upstream API evolves.
 
 ### Problem 4: Hardcoded Physics Constants
+
 **Risk to honey-bounce**: If honey-bounce ships with hardcoded gravity/particle count/FPS, it will face the same configurability complaints. The `harmonica.TerminalGravity` constant should be exposed as a configurable parameter.
 
 ### Problem 5: Terminal Size Handling
+
 **Risk to honey-bounce**: The `tea.WindowSizeMsg` handling shows the pattern for dynamic terminal resize:
 ```go
 case tea.WindowSizeMsg:
@@ -360,6 +388,7 @@ This is the correct pattern — SugarCraft should handle resize events similarly
 ## 19. Features SugarCraft Should Consider
 
 ### Feature 1: Configurable ParticleSystem
+
 `honey-bounce` should expose all physics parameters as constructor/builder options:
 - Particle count (per effect type)
 - Color palette (hex colors)
@@ -369,6 +398,7 @@ This is the correct pattern — SugarCraft should handle resize events similarly
 - FPS target
 
 ### Feature 2: Effect Registry
+
 A factory pattern where effects are registered and can be selected by name:
 ```php
 ParticleSystem::register('confetti', ConfettiFactory::class);
@@ -377,9 +407,11 @@ $system = ParticleSystem::create('fireworks', width: 80, height: 24);
 ```
 
 ### Feature 3: Composite Effects
+
 Support combining multiple effect types in one system (e.g., confetti falling while fireworks explode in background). This is a clear gap in the upstream and represents a differentiation opportunity for SugarCraft.
 
 ### Feature 4: ANSI Cursor-Position Rendering
+
 Instead of rebuilding the full screen string each frame, use:
 ```php
 // Move cursor to position and render particle
@@ -390,12 +422,14 @@ Instead of rebuilding the full screen string each frame, use:
 This dramatically reduces string allocation overhead.
 
 ### Feature 5: Event-Driven Spawning
+
 The current model spawns particles on keypress OR automatically on first frame. SugarCraft could extend this to:
 - Timer-based continuous spawn
 - Event-based spawn (websocket messages, CLI signals)
 - Programmatic spawn from PHP code
 
 ### Feature 6: Animation Curve Configuration
+
 The harmonica library uses projectile physics with `TerminalGravity`. SugarCraft could expose:
 - Custom gravity vectors (not just downward)
 - Air resistance / drag coefficients
@@ -403,26 +437,31 @@ The harmonica library uses projectile physics with `TerminalGravity`. SugarCraft
 - Radial gravity (for black hole effects)
 
 ### Feature 7: Text Overlay System
+
 As requested in confetty issue #15, overlaying text on particle effects is a legitimate feature. SugarCraft's `honey-bounce` could implement a `ParticleSystem::withText(string, x, y, style)` method.
 
 ## 20. Architectural Lessons
 
 ### Lesson 1: Application vs. Library Architecture
+
 confettysh is an application, not a library — but it imports a library (maaslalani/confetty) which provides the actual value. This is a useful pattern for demonstrating ecosystem capabilities without maintaining complex abstractions.
 
 **SugarCraft implication**: `honey-bounce` should be a proper library (no SSH dependency, pure physics/rendering) while a separate demo app (like `sugar-bounce-demo`) exercises it over a TTY or SSH transport.
 
 ### Lesson 2: Factory Pattern for Endpoint Creation
+
 The `wishlist.Factory` pattern creates distinct SSH server instances with different middleware chains from a shared configuration. This is a clean separation of "what kind of server" from "how to build the server."
 
 **SugarCraft implication**: TUI effect factories should mirror this — a `Registry::create(effectName, config)` that returns a fully-configured `ParticleSystem`.
 
 ### Lesson 3: Physics/Rendering Separation
+
 The `simulation.System` completely separates physics (`Update()` — moves particles, triggers explosions) from rendering (`Render()` — draws particles to screen). This separation means the physics model could be reused with a different renderer (e.g., HTML canvas, WebGL).
 
 **SugarCraft implication**: `honey-bounce` should have a strict `PhysicsEngine` class and a separate `Renderer` class with a shared `Particle[]` state.
 
 ### Lesson 4: Middleware Chain Composition
+
 ```go
 wish.WithMiddleware(append(e.Middlewares, promwish.MiddlewareRegistry(...), lm.Middleware(), activeterm.Middleware())...)
 ```
@@ -431,6 +470,7 @@ The middleware chain is composed in order: custom middlewares → metrics → lo
 **SugarCraft implication**: SugarCraft's TUI rendering pipeline should follow a similar middleware model: input handling → state update → rendering.
 
 ### Lesson 5: Version Pinning via Pseudo-Version
+
 ```go
 github.com/charmbracelet/ssh v0.0.0-20250128164007-98fd5ae11894
 ```
@@ -439,6 +479,7 @@ Using pseudo-version for a critical dependency means builds can break silently i
 **SugarCraft implication**: Use proper semver for all SugarCraft libraries, even pre-1.0.
 
 ### Lesson 6: Alt-Screen for Clean Rendering
+
 ```go
 []tea.ProgramOption{tea.WithAltScreen()}
 ```
@@ -449,16 +490,19 @@ Using the terminal's alternate screen buffer prevents particle effects from poll
 ## 21. Defensive Design Lessons
 
 ### Lesson 1: Never Use Velocity Threshold for Time-Based Events
+
 The firework explosion bug (#10) is caused by using `p.Physics.Velocity().Y > -3` to trigger an explosion. This is a velocity-based proxy for "the rocket has reached its apex," which fails when the rocket is decelerating near the top.
 
 **Defensive rule**: Use explicit time or position markers for event triggering, not velocity proxies.
 
 ### Lesson 2: Pre-allocate Render Buffers
+
 The simulation `Render()` function allocates a new 2D string grid every frame. In a long-running TUI application, this causes GC pressure and visible stutter.
 
 **Defensive rule**: Pre-allocate the render buffer once and reuse it, clearing only the cells that were written in the previous frame.
 
 ### Lesson 3: Validate Terminal Dimensions
+
 ```go
 if s.Visible(p) {
     pos := p.Physics.Position()
@@ -471,6 +515,7 @@ The `Visible()` check validates bounds, but writing to `plane[y][x]` is not boun
 **Defensive rule**: Always validate array access bounds before writing, especially with external input (terminal dimensions).
 
 ### Lesson 4: Handle Zero-Initial-State Explicitly
+
 ```go
 if m.system.Frame.Width == 0 && m.system.Frame.Height == 0 {
     m.system.Particles = Spawn(msg.Width, msg.Height)
@@ -483,56 +528,71 @@ Using `== 0` as a sentinel for "not yet initialized" is fragile. A `bool initial
 ## 22. Ecosystem Trends
 
 ### Trend 1: Terminal Applications as First-Class Products
+
 confettysh (83 stars) and its upstream confetty (500 stars) demonstrate that terminal UI applications have a healthy audience. The Charm ecosystem's focus on TUI as a first-class medium (not a fallback) is validated by consistent community engagement.
 
 ### Trend 2: SSH as a Distribution Channel
+
 SSH provides a zero-installation distribution model: users only need an SSH client. This is an underappreciated deployment pattern. SugarCraft could consider an SSH-accessible demo service.
 
 ### Trend 3: Bubble Tea as the Standard Go TUI Framework
+
 The rapid evolution of `charmbracelet/bubbletea` (multiple updates per month) shows it is the de facto standard for Go TUI. PHP has no equivalent — `sugar-bits` could fill this gap but must track a rapidly moving target.
 
 ### Trend 4: Charm Ecosystem Composability
+
 The Charm ecosystem is built on composable middleware chains (wish → logging → prometheus → activeterm). This is a strong architectural pattern that SugarCraft should emulate: small, focused libraries that compose into rich applications.
 
 ### Trend 5: Prometheus Metrics as Standard Observability
+
 Even a demo application like confettysh exposes Prometheus metrics. This signals that metrics instrumentation is now expected even in the smallest projects.
 
 ## 23. Strategic Opportunities
 
 ### Opportunity 1: Port harmonica Physics to PHP
+
 The `harmonica` library provides projectile physics with configurable FPS, initial position, velocity vector, and gravity. Porting this to PHP as `honey-bounce/physics` would be a direct value-add and could be used by any PHP project needing 2D projectile simulation.
 
 ### Opportunity 2: Build a Unified Particle System API
+
 maaslalani/confetty has two separate effects (confetti, fireworks) with no common interface. SugarCraft could create a `ParticleEffectInterface` that both effects implement, allowing a `ParticleSystem::addEffect(ParticleEffectInterface)` for composite effects.
 
 ### Opportunity 3: SSH-Native Demo Distribution
+
 No PHP TUI library currently offers SSH-native demonstration. SugarCraft could provide a public SSH endpoint (like `ssh.demo.sugarcraft.sh`) that runs particle effects, creating viral awareness.
 
 ### Opportunity 4: ANSI Rendering Performance
+
 The Go implementation allocates a full 2D grid every frame. A PHP implementation using ANSI cursor positioning (`\x1b[row;colH`) would be dramatically more efficient and could outperform the Go original.
 
 ### Opportunity 5: WebSocket-Native Particle Effects
+
 The Bubble Tea model (state → update → view) maps naturally to WebSocket-based real-time rendering. SugarCraft could create a `honey-bounce/web` variant that renders particles in a browser via WebSocket, targeting a different deployment model.
 
 ## 24. Cross-Ecosystem Pattern Matches
 
 ### Pattern: Bubble Tea MVC → SugarCraft Model Contract
+
 confettysh uses Bubble Tea's `tea.Model` interface with `Init() tea.Cmd`, `Update(tea.Msg) (tea.Model, tea.Cmd)`, `View() string`. This maps directly to SugarCraft's `Model::init()`, `Model::update()`, `Model::view()` contract.
 
 **Match quality**: Direct structural equivalence. The major difference is that Go uses a `tea.Cmd` callback for async operations while PHP would use a different async mechanism (ReactPHP promises).
 
 ### Pattern: Wishlist Endpoint Factory → Effect Registry
+
 Both patterns create server instances from configuration + factory function. SugarCraft's effect registry should follow the same structure: config + factory → effect instance.
 
 ### Pattern: Middleware Chain → Filter Pipeline
+
 The wish middleware chain (`append(e.Middlewares, promwish, lm, activeterm)`) is a classic filter pipeline. SugarCraft could implement a similar pipeline for TUI rendering: input filter → state update filter → render filter.
 
 ### Pattern: simulation.System → ParticleEngine
+
 The simulation `System` class holds particles and frame metadata, runs per-frame `Update()` and `Render()`. This is the core loop pattern that `honey-bounce` should implement.
 
 ## 25. High ROI Recommendations
 
 ### Priority 1: Build honey-bounce Particle Physics Core (High ROI)
+
 The upstream confetti physics is simple enough to port cleanly to PHP:
 - `harmonica.Projectile` → `Projectile` class (position, velocity, gravity)
 - `simulation.System` → `ParticleSystem` class (particles[], frame{}, update(), render())
@@ -545,6 +605,7 @@ The upstream confetti physics is simple enough to port cleanly to PHP:
 **Expected value**: Enables SugarCraft to offer particle effects that the Go ecosystem only provides through external dependencies.
 
 ### Priority 2: Implement ANSI Cursor-Position Rendering (High ROI)
+
 Replace the per-frame 2D grid string builder with ANSI cursor positioning:
 ```php
 $output = '';
@@ -560,6 +621,7 @@ This eliminates O(terminal_size) string allocation per frame, replacing it with 
 **Expected value**: Dramatically better performance, especially for large terminals.
 
 ### Priority 3: Add ParticleSystem Configuration API (Medium ROI)
+
 Replace hardcoded constants with builder pattern:
 ```php
 $system = ParticleSystem::confetti()
@@ -574,6 +636,7 @@ $system = ParticleSystem::confetti()
 **Expected value**: Addresses the #1 community pain point (no customization) and differentiates SugarCraft from upstream.
 
 ### Priority 4: Fix Velocity-Threshold Explosion Bug (High ROI)
+
 Replace the velocity-based explosion trigger with a time-based or position-based trigger:
 ```php
 // Before (broken):
@@ -588,6 +651,7 @@ if ($particle->position->y <= $this->explosionY) { $this->explode($particle); }
 **Expected value**: Fixes the known firework lag bug that the Go upstream has not fixed.
 
 ### Priority 5: Build Effect Registry with Factory Pattern (Medium ROI)
+
 ```php
 ParticleEffectRegistry::register('confetti', ConfettiEffect::class);
 ParticleEffectRegistry::register('fireworks', FireworksEffect::class);

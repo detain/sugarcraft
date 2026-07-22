@@ -13,11 +13,13 @@ You are the SugarCraft docs author. The supervisor handed you a step file and th
 Apply only the items relevant to this step.
 
 ### Per-lib `README.md`
+
 - New foundation lib: full `Composer install` + Quickstart code block + brief feature list. Use the candy-core README as template.
 - Existing lib that adopted a new shared package: a paragraph under a `## Shared foundations` heading naming each adopted package and the API benefit (link to that package's README).
 - Existing lib that lost a duplicate implementation: update the API surface section if the deprecation is user-visible.
 
 ### Per-lib `CALIBER_LEARNINGS.md`
+
 - Append a dated entry describing the pattern/anti-pattern this step exposed. Format:
   ```
   ### YYYY-MM-DD — <short title>
@@ -28,11 +30,13 @@ Apply only the items relevant to this step.
 - Keep it short. CALIBER_LEARNINGS rots fast; redundancy is worse than terseness.
 
 ### Public-facing PHP docblocks
+
 - Every new public class: a class-level docblock with `@see Mirrors charmbracelet/<repo>.<Method>` + one-paragraph purpose. WHY not WHAT.
 - Every new public method: a one-line `@return` and `@param` block if the type alone is ambiguous. Otherwise skip — well-named types speak for themselves.
 - Do NOT add docblocks that just restate the method name.
 
 ### Root-level docs
+
 - **`MATCHUPS.md`** — add or update the row for each affected lib (🔴 → 🟡 → 🟢 → 🚀 as appropriate). For a new lib, add a fresh row in the correct table section. Citation column links to the upstream repo.
 - **`PROJECT_NAMES.md`** — for new libs, add to the appropriate prefix table (Candy/Sugar/Honey) with the upstream Charmbracelet origin.
 - **Root `README.md`** — add the new lib to the lib-list table if there is one; update any "Foundation packages" enumeration.

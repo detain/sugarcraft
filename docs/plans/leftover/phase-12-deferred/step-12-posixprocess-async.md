@@ -13,6 +13,7 @@ users. Layered on top of `proc_get_status` polling.
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/Posix/PosixProcess.php`.
 - `candy-pty/composer.json` — `require-dev` `react/promise`.
 

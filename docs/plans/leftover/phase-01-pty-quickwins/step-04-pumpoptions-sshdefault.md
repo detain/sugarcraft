@@ -15,6 +15,7 @@ the constants.
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/PumpOptions.php` — add the static `sshDefault()`
   method. Values come from the originals tracked in
   `InProcessTransport`:

@@ -12,6 +12,7 @@
 ## Files
 
 **Modify:**
+
 - `sugar-toast/src/Position.php` (enum).
 - `sugar-toast/src/Toast.php`.
 

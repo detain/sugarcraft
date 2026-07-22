@@ -7,12 +7,14 @@
 **Ecosystem Position:** sugar-spark occupies a unique niche as a *diagnostic tool* rather than a *rendering* or *framework* library. Unlike candy-vt (terminal emulation with cell grid output) or candy-core (TUI runtime), sugar-spark is purely about parsing and explaining ANSI byte streams in human-readable form. This makes it valuable across the entire ecosystem as a debugging companion.
 
 **Biggest Opportunity Areas:**
+
 1. PTY execution integration — capture live command output for inspection
 2. Golden file/snapshot testing infrastructure
 3. Optional theme/colorized output mode for enhanced readability
 4. State machine parser (aligns with candy-vt's VT500 approach)
 
 **Biggest Missing Capabilities:**
+
 1. No PTY execution (can't run commands and inspect their output)
 2. No syntax highlighting / theme support (unlike Go sequin with lipgloss)
 3. No golden file regression testing
@@ -36,6 +38,7 @@ sugar-spark/src/
 ```
 
 **Core Parsing Loop (Inspector::parse, lines 38-174):**
+
 - Manual byte-by-byte loop (NOT a state machine)
 - Accumulates plain text into `$textBuf`
 - On `\x1b` (ESC): detects sequence type by next byte:
@@ -138,6 +141,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 ### Critical Priority
 
 #### 1. PTY Execution Integration
+
 **Description:** sugar-spark cannot execute a command and inspect its live output — it can only parse pre-captured strings or piped data.
 
 **Why it matters:** The upstream Go sequin includes `exec.go` which creates a PTY to execute commands and capture their raw output. This enables `sequin -- some command` workflow. Without this, sugar-spark is limited to inspecting static output.
@@ -145,6 +149,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `charmbracelet/sequin` exec.go pattern (`docs/repo_map/sugarcraft_sugar-spark.md`)
 
 **Implementation ideas:**
+
 - Integrate with `candy-pty` (already exists in SugarCraft)
 - Create `Inspector::execute(string $command): list<Segment>` that spawns PTY, captures output, and feeds to parser
 - Use `candy-pty`'s `PosixPump` for byte capture
@@ -157,9 +162,11 @@ $segs = $inspector->finish();              // Flushes trailing text
 ---
 
 #### 2. Golden File / Snapshot Testing Infrastructure
+
 **Description:** Go sequin uses `charmbracelet/x/exp/golden` for snapshot testing with `.golden` files ensuring output stability.
 
 **Why it matters:** sugar-spark has 116 unit tests but no golden file regression tests. This means:
+
 - Refactoring the parser could silently break output format
 - Cross-platform differences aren't explicitly tracked
 - New sequence types need manual assertion writing
@@ -167,6 +174,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `charmbracelet/x/exp/golden` (`docs/repo_map/charmbracelet_x.md`)
 
 **Implementation ideas:**
+
 - Create `tests/snapshots/` directory with `.golden` files per sequence type
 - Implement `Snapshotter` class with `assertSnapshot(mixed $actual, string $name)` 
 - Support auto-update mode for CI
@@ -181,9 +189,11 @@ $segs = $inspector->finish();              // Flushes trailing text
 ### High Value
 
 #### 3. State Machine Parser
+
 **Description:** sugar-spark uses manual byte-by-byte parsing; Go sequin uses `charmbracelet/x/ansi` state machine parser.
 
 **Why it matters:** 
+
 - State machines are easier to verify correctness
 - Adding new sequence types is less error-prone
 - Aligns with candy-vt's VT500 state machine (same upstream source)
@@ -191,6 +201,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `charmbracelet/x/ansi` Parser (`docs/repo_map/charmbracelet_x.md`)
 
 **Implementation ideas:**
+
 - Port the `ansi.Parser` state machine from `charmbracelet/x/ansi`
 - Use the same state enum (Ground, CsiEntry, CsiParam, etc.) and transition table
 - Wire to existing `describeCsi()`, `describeOsc()`, etc.
@@ -203,6 +214,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 ---
 
 #### 4. Theme / Colorized Output Mode
+
 **Description:** Go sequin uses `lipgloss` for syntax-highlighted output with adaptive dark/light themes.
 
 **Why it matters:** Colorized output improves readability when debugging complex sequences. Plain text output makes it harder to distinguish sequence types at a glance.
@@ -210,6 +222,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `charmbracelet/sequin` raw mode + `charmbracelet/log` TextFormatter (`docs/repo_map/charmbracelet_log.md`)
 
 **Implementation ideas:**
+
 - Add `Inspector::reportStyled()` method using `candy-shine`
 - Create theme constants (Tokyo Night, Dracula, etc.)
 - Color-code sequence types (CSI=cyan, OSC=yellow, DCS=green, etc.)
@@ -222,6 +235,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 ---
 
 #### 5. Extended Handler Registry
+
 **Description:** Currently, adding new sequence types requires modifying core `Inspector.php`.
 
 **Why it matters:** Extensibility is limited — developers can't add custom sequence handlers without modifying core code.
@@ -229,6 +243,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `charmbracelet/x/ansi` handlerFn map (`docs/repo_map/charmbracelet_x.md`)
 
 **Implementation ideas:**
+
 - Create `SequenceHandler` interface
 - Add `Inspector::registerHandler(string $prefix, SequenceHandler $handler)`
 - Allow third-party packages to extend parsing
@@ -242,6 +257,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 ### Medium Priority
 
 #### 6. Diff/Change Detection Mode
+
 **Description:** Compare two byte streams and highlight differences.
 
 **Why it matters:** Useful for debugging TUI diffing — shows what sequences changed between renders.
@@ -249,6 +265,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `candy-vt`'s Screen::diff() (`docs/repo_map/sugarcraft_candy-vt.md`)
 
 **Implementation ideas:**
+
 - `Inspector::diff(string $before, string $after): DiffResult`
 - Returns added/removed/modified segments
 - Show before/after side-by-side
@@ -260,6 +277,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 ---
 
 #### 7. Interactive TUI Mode
+
 **Description:** A terminal-based UI for inspecting sequences with keyboard navigation.
 
 **Why it matters:** For large outputs, interactive navigation improves usability.
@@ -267,6 +285,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `charmbracelet/gum` pager + `textualize/textual` viewport (`docs/repo_map/textualize_textual.md`)
 
 **Implementation ideas:**
+
 - Create `sugar-spark-tui` example using `candy-core`
 - Scroll through sequences, search/filter, expand details
 - Show hexdump view alongside description
@@ -278,6 +297,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 ---
 
 #### 8. Improved Error Recovery
+
 **Description:** Invalid or truncated sequences currently get generic labels.
 
 **Why it matters:** Better error messages help developers fix issues faster.
@@ -285,6 +305,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `charmbracelet/x/ansi` error handling (`docs/repo_map/charmbracelet_x.md`)
 
 **Implementation ideas:**
+
 - Track parse errors separately from valid segments
 - Report malformed parameters, unrecognized private markers
 - Add severity levels (error, warning, info)
@@ -298,6 +319,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 ### Low Priority
 
 #### 9. Web Assembly / WASI Target
+
 **Description:** Compile to WASM for browser-based ANSI inspection.
 
 **Why it matters:** Enables `sequin.run` (web-based sequin) for users without PHP.
@@ -305,6 +327,7 @@ $segs = $inspector->finish();              // Flushes trailing text
 **Source:** `textualize/textual` web driver (`docs/repo_map/textualize_textual.md`)
 
 **Implementation ideas:**
+
 - Add WASI target to `composer.json`
 - Use `sugarcraft/candy-shell` for backend abstraction
 - Create simple HTML/JS frontend
@@ -316,11 +339,13 @@ $segs = $inspector->finish();              // Flushes trailing text
 ---
 
 #### 10. Sequence Frequency Statistics
+
 **Description:** Report which sequence types are most common in a byte stream.
 
 **Why it matters:** Helps identify verbose patterns in TUI output.
 
 **Implementation ideas:**
+
 - `Inspector::statistics(string $input): Statistics`
 - Count by sequence type, color usage, cursor movement
 - Suggest optimization opportunities
@@ -382,11 +407,13 @@ States: Ground(0), CsiEntry(1), CsiIntermediate(2), CsiParam(3),
 ```
 
 **Benefits:**
+
 - Aligns parsing with candy-vt (same upstream source)
 - Easier to add new sequence types
 - More rigorous correctness
 
 **Migration strategy:**
+
 1. Implement new `StateMachineParser` class alongside existing
 2. Run both parsers in tests, assert equivalence
 3. Gradually migrate call sites
@@ -419,6 +446,7 @@ final class Inspector {
 ```
 
 **Benefits:**
+
 - Extensible by third parties
 - Each handler is independently testable
 - Reduces Inspector.php complexity
@@ -448,6 +476,7 @@ final class JsonFormatter {
 ```
 
 **Benefits:**
+
 - Reuse parser for different output formats
 - Easier to test parsing logic in isolation
 - Supports multiple formatters (text, JSON, XML, etc.)
@@ -474,6 +503,7 @@ $result = Inspector:: analyze($input)
 ```
 
 **Benefits:**
+
 - Consistent with SugarCraft fluent patterns
 - Enables gradual API expansion
 - IDE autocomplete for options
@@ -519,6 +549,7 @@ final class OscSegment implements Segment { ... }
 ```
 
 **Benefits:**
+
 - IDE autocomplete for known sequence types
 - Type-safe handling in consumers
 - Self-documenting code
@@ -530,6 +561,7 @@ final class OscSegment implements Segment { ... }
 ### 1. Debugging Guide
 
 **Content:**
+
 - Debugging TUI output: ` sugarspark < file.ansi`
 - Piping from other tools: `candy-core-app | sugarspark`
 - Interpreting SGR sequences
@@ -540,7 +572,9 @@ final class OscSegment implements Segment { ... }
 ### 2. Cookbook Examples
 
 **Examples to add:**
+
 1. **Debugging your TUI app:** Add to your app's render loop
+
    ```php
    if (getenv('DEBUG_ANSI')) {
        echo Inspector::report($output);
@@ -548,6 +582,7 @@ final class OscSegment implements Segment { ... }
    ```
 
 2. **Capturing PTY output:** With future candy-pty integration
+
    ```php
    $segments = Inspector::execute('ls -la --color=always');
    foreach ($segments as $seg) {
@@ -556,12 +591,14 @@ final class OscSegment implements Segment { ... }
    ```
 
 3. **CI regression testing:** Using future golden file support
+
    ```php
    $result = Inspector::analyze($ansiOutput);
    $result->assertMatchesSnapshot('output/myapp.ansi');
    ```
 
 4. **Color sequence analysis:** What colors does your app use?
+
    ```php
    $stats = Inspector::statistics($output);
    echo "Colors used: " . implode(', ', $stats->uniqueColors());
@@ -570,6 +607,7 @@ final class OscSegment implements Segment { ... }
 ### 3. Sequence Reference
 
 **Expand `C0C1.php` documentation:**
+
 - Link to ECMA-48 sections
 - Document all control codes with examples
 - Note PHP UTF-8 limitations for C1
@@ -595,6 +633,7 @@ Available commands: help, exit, stats, clear, load <file>
 ### 2. Colorized Output (--color=auto)
 
 When stdout is a TTY, use `candy-shine` to colorize:
+
 - CSI sequences: cyan
 - OSC sequences: yellow  
 - DCS sequences: green
@@ -653,6 +692,7 @@ final class Snapshotter {
 ### 2. Fuzz Testing
 
 **Add `tests/FuzzerTest.php`:**
+
 - Use `fakerphp/faker` or similar to generate random byte sequences
 - Verify parser doesn't throw, crash, or hang
 - Compare output with reference implementation (Go sequin)
@@ -660,11 +700,13 @@ final class Snapshotter {
 ### 3. Cross-Platform Test Matrix
 
 **GitHub Actions matrix:**
+
 - Ubuntu 22.04, 24.04
 - macOS 13, 14
 - PHP 8.3, 8.4
 
 **Verify:**
+
 - Line ending handling in golden files
 - C1 code detection consistency
 - PTY integration (future)
@@ -710,6 +752,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 ### 3. VS Code Extension
 
 **Features:**
+
 - Syntax highlighting for ANSI escape sequences in files
 - Hover to see decoded sequence meaning
 - Command palette: "Debug this file with sugar-spark"
@@ -717,6 +760,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 ### 4. Browser-based Inspector
 
 **Using `sugarcraft/candy-shell` with ReactPHP:**
+
 - Simple HTTP endpoint: `POST /inspect`
 - Request: raw ANSI bytes
 - Response: JSON with decoded segments
@@ -732,6 +776,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 **Resolution:** Implemented in Go sequin via `exec.go` using `xpty`.
 
 **Lessons for sugar-spark:**
+
 - This is the #1 requested feature
 - Should prioritize candy-pty integration
 - PTY execution enables unique use cases beyond static analysis
@@ -743,6 +788,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 **Resolution:** Go sequin adopted `charmbracelet/x/exp/golden`.
 
 **Lessons for sugar-spark:**
+
 - Essential for long-term maintainability
 - Should be added before major refactors
 - Update mechanism needed for CI
@@ -754,6 +800,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 **Resolution:** Created the state machine-based `ansi.Parser` with handler maps.
 
 **Lessons for sugar-spark:**
+
 - State machine approach is battle-tested in upstream
 - Handler registry enables extensibility
 - Consider adopting even if manual parsing works
@@ -763,6 +810,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 **Observation:** sugar-spark has no `CALIBER_LEARNINGS.md` unlike most other SugarCraft libs.
 
 **Recommendation:** Document key implementation decisions:
+
 - Why manual parsing was chosen over state machine
 - PHP UTF-8 handling limitations for C1 codes
 - i18n integration approach
@@ -863,6 +911,7 @@ foreach (Inspector::parse($terminal->screen()->toAnsi()) as $segment) {
 sugar-spark is a mature, well-tested PHP port of Go sequin that provides comprehensive ANSI escape sequence inspection for TUI debugging. Its 116 tests, 16-locale i18n system, and unique streaming inspector demonstrate production quality. The library's clean API (`parse()`, `report()`, `reportAsJson()`) and comprehensive sequence coverage make it invaluable for the SugarCraft ecosystem.
 
 **Critical gaps compared to upstream:**
+
 1. **PTY execution** — The #1 feature request from Go sequin users
 2. **Golden file tests** — Essential for long-term maintainability
 3. **Theme support** — Developer experience improvement
@@ -874,6 +923,7 @@ The manual byte-by-byte parsing approach, while functional, differs from the sta
 sugar-spark is uniquely positioned as a debugging tool that complements rather than competes with other SugarCraft libs. It can be used alongside `candy-core` (TUI runtime), `candy-vt` (terminal emulation), `candy-pty` (PTY execution), and `candy-shine` (styling). The primary opportunity is integration with `candy-pty` to provide the PTY execution that makes Go sequin so powerful.
 
 **Recommended focus:**
+
 1. Add golden file testing immediately (low risk, high value)
 2. Integrate with `candy-pty` for PTY execution (high value, medium complexity)
 3. Consider state machine migration as a medium-term goal for better alignment with ecosystem

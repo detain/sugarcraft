@@ -32,6 +32,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/CassowarySolver.php:306-319`
 
 **What is Expected:**
+
 - Add `@deprecated` docblock to `CassowarySolver` class and `cassowary()` factory method
 - Uncomment the convergence guard at lines 315-319 but make it throw a deprecation warning instead of exception (for backward compatibility during migration)
 - Add `#[Deprecated]` PHP attribute
@@ -39,11 +40,13 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - Consider removing the simplex path entirely and delegating ALL constraint types to GreedySolver (like Min already does at line 111-113)
 
 **Why:**
+
 - The prototype is fundamentally broken and cannot be used in production
 - Users may unknowingly use it assuming it works correctly
 - Keeping it without guard produces incorrect results silently
 
 **Conditions for Success:**
+
 - [ ] All existing tests still pass (CassowarySolver still delegates to GreedySolver)
 - [ ] README clearly shows CassowarySolver is experimental
 - [ ] Deprecation notices appear when CassowarySolver is instantiated
@@ -56,6 +59,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 | `candy-layout/README.md` | 42-46 | Solver comparison table |
 
 **Investigation Notes:**
+
 - The cycling bug comment at lines 306-319 explicitly states: "The CassowarySolver prototype has a known cycling bug — the simplex never converges (optimizeOneStep never returns false) within 1000 iterations for ANY constraint type"
 - The guard is commented out because enabling it would fail all 21 Cassowary tests
 - Min constraints already delegate to GreedySolver at line 111-113
@@ -69,6 +73,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/LayoutSolver.php:26-37`
 
 **What is Expected:**
+
 - Remove `greedy()` and `cassowary()` from the `LayoutSolver` interface
 - Keep these methods on concrete classes only (`GreedySolver::greedy()` and `CassowarySolver::cassowary()`)
 - Add a separate `LayoutSolverFactory` class if factory access is still desired:
@@ -83,11 +88,13 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - Update tests and README examples
 
 **Why:**
+
 - Improves interface segregation and reduces coupling
 - Makes it clearer that callers depend only on the `solve()` contract
 - Follows standard OOP practice of separating interfaces from factory responsibilities
 
 **Conditions for Success:**
+
 - [ ] `LayoutSolver` interface no longer has static factory methods
 - [ ] All call-sites updated to use concrete factories
 - [ ] Tests pass
@@ -116,6 +123,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/GreedySolver.php:57-60`
 
 **What is Expected:**
+
 - Decide on design intent:
   - **Option A (Recommended):** Keep instance method but have it hold state for future extensibility (e.g., caching, solver configuration). Move `solveStatic` logic into instance state.
   - **Option B:** Remove instance `solve()` entirely, keep only `solveStatic()` as public, mark constructor private to enforce static-only usage.
@@ -123,10 +131,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - If Option B: Update call-sites to use `GreedySolver::solveStatic()` directly
 
 **Why:**
+
 - Unnecessary indirection increases cognitive load
 - Could suggest the class should be fully static (no state)
 
 **Conditions for Success:**
+
 - [ ] Tests pass
 - [ ] Code is cleaner with clear intent
 
@@ -146,6 +156,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/CassowarySolver.php:586-640`
 
 **What is Expected:**
+
 - Add a private `removeZeroTerms()` method to Expression:
   ```php
   private function removeZeroTerms(): void
@@ -159,10 +170,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - Call `removeZeroTerms()` at the end of `plus()`, `minus()`, and `times()` methods
 
 **Why:**
+
 - Tableau can accumulate zero-coefficient entries, wasting memory
 - Could cause division-by-zero in `getVariableValue()` if zero coefficient is treated as non-zero due to floating point
 
 **Conditions for Success:**
+
 - [ ] Expression operations produce clean arrays with no near-zero coefficients
 - [ ] Existing tests still pass
 
@@ -182,6 +195,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/Tableau.php:10-36`
 
 **What is Expected:**
+
 - Change all `public` properties to `private`:
   ```php
   final class Tableau
@@ -204,10 +218,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - Update all internal usages in `CassowarySolver` to go through accessors
 
 **Why:**
+
 - Direct external access bypasses invariants and can corrupt solver state
 - Prevents future changes to internal representation
 
 **Conditions for Success:**
+
 - [ ] No external code directly accesses Tableau properties
 - [ ] Tests still pass
 
@@ -227,6 +243,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/CassowarySolver.php:552-561`
 
 **What is Expected:**
+
 - Add bounds checking with a tolerance constant in `getVariableValue()`:
   ```php
   private function getVariableValue(string $varName): float
@@ -246,10 +263,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - Define a class constant `private const EPSILON = 1e-10;`
 
 **Why:**
+
 - If `$row[$varName]` is extremely small but non-zero due to floating point, division produces large/inf value
 - If `$tableau->b[$rowVar]` is PHP_FLOAT_MAX, dividing produces NaN or 1
 
 **Conditions for Success:**
+
 - [ ] Edge case tests pass
 - [ ] Division by very small numbers returns 0.0 instead of inf/NaN
 
@@ -267,6 +286,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/GreedySolver.php:327-343`
 
 **What is Expected:**
+
 - Update comment at line 333 to accurately reference line 340 and explain coordinate transformation logic:
   ```php
   // Flip area to use horizontal solver on the "other" dimension.
@@ -277,10 +297,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
   ```
 
 **Why:**
+
 - Misleading comment could confuse future maintainers
 - The actual re-addition of $area->x/$area->y is correct, but comment is outdated
 
 **Conditions for Success:**
+
 - [ ] Comment accurately reflects code behavior
 - [ ] No functional changes
 
@@ -305,6 +327,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/Constraint/Min.php:14-19`, `candy-layout/src/Constraint/Max.php:14-19`
 
 **What is Expected:**
+
 - Add docblock notes to both `Min` and `Max` classes:
   ```php
   /**
@@ -317,10 +340,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
   ```
 
 **Why:**
+
 - These edge cases may indicate programming errors when used unintentionally
 - Need to document that they are intentionally allowed
 
 **Conditions for Success:**
+
 - [ ] Docblock clearly explains intent
 - [ ] No functional changes
 
@@ -339,6 +364,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/CassowarySolver.php:585-640`
 
 **What is Expected:**
+
 - Add `__toString()` method to Expression class:
   ```php
   public function __toString(): string
@@ -362,10 +388,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
   ```
 
 **Why:**
+
 - Expression objects are complex (terms + constant)
 - Debugging solver output is difficult without string representation
 
 **Conditions for Success:**
+
 - [ ] Expression objects can be echo'd for debugging
 - [ ] Existing tests still pass
 
@@ -383,6 +411,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/CassowarySolver.php:55`
 
 **What is Expected:**
+
 - Add a docblock explaining the Big-M approach and its limitations:
   ```php
   /** @var float Big-M penalty value for artificial variables
@@ -395,10 +424,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
   ```
 
 **Why:**
+
 - Can cause numerical instability in simplex
 - Two-phase simplex without Big-M might be more numerically stable
 
 **Conditions for Success:**
+
 - [ ] Comment documents the design choice
 - [ ] No functional changes
 
@@ -422,6 +453,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/LayoutSolver.php`
 
 **What is Expected:**
+
 - Add async interface `AsyncLayoutSolver`:
   ```php
   interface AsyncLayoutSolver
@@ -444,10 +476,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - Add progress callback support for iterative solvers
 
 **Why:**
+
 - Cannot be used effectively in async TUI applications
 - Constraint solving could be a bottleneck in async applications
 
 **Conditions for Success:**
+
 - [ ] Async solves return PromiseInterface
 - [ ] Cancellation token stops long-running solves
 - [ ] Progress callbacks fire during iteration
@@ -467,6 +501,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/CassowarySolver.php:42-43, 544-547`
 
 **What is Expected:**
+
 - **Option A (Recommended):** Remove dead code:
   - Remove `EditInfo` class (lines 669-675)
   - Remove `$editVars` property (lines 42-43)
@@ -479,10 +514,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
   - This is significant work — more appropriate for a future sprint
 
 **Why:**
+
 - Dead code is confusing
 - Edit variables are a key Cassowary feature for interactive constraint editing
 
 **Conditions for Success:**
+
 - [ ] If removed: No dead code remains
 - [ ] If implemented: Edit variables correctly handle interactive constraint editing
 
@@ -501,15 +538,18 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **Finding:** `candy-layout.md:257-266`
 
 **What is Expected:**
+
 - Consider adding optional integration layer (not a hard dependency)
 - Could add `Region::toStyle()` or similar helper for TUI rendering pipeline
 - Or create a separate `candy-layout-tui` adapter package
 
 **Why:**
+
 - Consumers need to manually convert Region output to TUI components
 - Integration helpers would improve DX
 
 **Conditions for Success:**
+
 - [ ] Integration helpers available for TUI consumers
 - [ ] No hard coupling to candy-core
 
@@ -528,6 +568,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **File:** `candy-layout/src/CassowarySolver.php:317-325`
 
 **What is Expected:**
+
 - Create `ConstraintHandler` interface:
   ```php
   interface ConstraintHandler
@@ -541,11 +582,13 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - This is a larger refactoring — may warrant its own PR
 
 **Why:**
+
 - Violates Open/Closed Principle
 - Hard to add new constraint types
 - Could use Strategy pattern or visitor
 
 **Conditions for Success:**
+
 - [ ] instanceof chains replaced with handler dispatch
 - [ ] Adding new constraint types is easier
 - [ ] Tests still pass
@@ -564,6 +607,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **Finding:** `candy-layout.md:285-289`
 
 **What is Expected:**
+
 - Define named constants at class level:
   ```php
   private const EPSILON = 0.000001;
@@ -573,10 +617,12 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 - Replace magic numbers with constants
 
 **Why:**
+
 - Magic numbers scattered throughout code reduce readability
 - Hard to understand purpose of values like `0.000001` tolerance or `2` for rounding
 
 **Conditions for Success:**
+
 - [ ] No magic numbers remain
 - [ ] Tests still pass
 
@@ -588,16 +634,19 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 **Finding:** `candy-layout.md:289`
 
 **What is Expected:**
+
 - Define error strategy:
   - `\InvalidArgumentException` for invalid inputs (constraint validation)
   - `\RuntimeException` for solver failures (infeasible constraints, non-convergence)
 - Audit and fix inconsistent usages
 
 **Why:**
+
 - Some places throw `\InvalidArgumentException`, others throw `\RuntimeException`
 - Inconsistent error handling makes debugging harder
 
 **Conditions for Success:**
+
 - [ ] Consistent exception types used
 - [ ] No ambiguous error handling
 
@@ -623,10 +672,12 @@ Add tests for these currently untested scenarios:
 6. **CassowarySolver pivot operation edge cases**
 
 **Why:**
+
 - These scenarios are currently not tested
 - Could hide bugs in edge cases
 
 **Conditions for Success:**
+
 - [ ] All new test methods pass
 - [ ] Coverage increases for edge cases
 

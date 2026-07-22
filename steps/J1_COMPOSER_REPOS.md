@@ -27,6 +27,7 @@ For each sugarcraft/* package used:
 1. **`candy-query/composer.json`** — Add any missing path repo entries
 
 ## Current Repos Already Present
+
 - candy-core, candy-sprinkles, candy-layout, candy-async, candy-ansi, candy-input
 - sugar-table, sugar-toast, sugar-charts, sugar-dash, candy-buffer, candy-forms
 - candy-fuzzy, candy-pty, sugar-bits, candy-kit

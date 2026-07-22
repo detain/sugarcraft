@@ -17,6 +17,7 @@ This research compares terminal logging libraries across Go, Rust, and Python to
 **Source:** `/home/sites/sugarcraft/candy-log/src/`
 
 ### Architecture
+
 - `Logger` — Core logger with formatters, levels, styles
 - `Log` — Static facade for process-wide default logger
 - `Level` enum — Debug(0), Info(1), Warn(2), Error(3), Fatal(4)
@@ -27,6 +28,7 @@ This research compares terminal logging libraries across Go, Rust, and Python to
 - `PanicFormatter` — Styled exception/backtrace rendering
 
 ### Current Limitations
+
 1. **Color handling**: Hard-coded ANSI color numbers (0-8) without terminal capability detection
 2. **No color profile**: No concept of TrueColor vs 256-color vs 16-color terminals
 3. **Static styles**: `Styles` class uses numeric ANSI codes, not semantic colors
@@ -41,6 +43,7 @@ This research compares terminal logging libraries across Go, Rust, and Python to
 ### 2.1 Go Libraries
 
 #### charmbracelet/log (Upstream) v2.0.0
+
 **Source:** [GitHub](https://github.com/charmbracelet/log)
 
 | Feature | Implementation |
@@ -100,6 +103,7 @@ func DefaultStyles() *Styles {
 ```
 
 **Key Features to Port:**
+
 1. ✅ Color profile auto-detection and downsampling
 2. ✅ `SetColorProfile(colorprofile.TrueColor)` API
 3. ✅ Per-level `MaxWidth(4)` for aligned level labels
@@ -107,6 +111,7 @@ func DefaultStyles() *Styles {
 5. ✅ `CallerFormatter` type for customizable caller display
 
 #### zerolog
+
 **Source:** [GitHub](https://github.com/rs/zerolog)
 
 | Feature | Implementation |
@@ -134,11 +139,13 @@ output.FormatFieldValue = func(i interface{}) string {
 ```
 
 **Key Patterns to Consider:**
+
 1. Per-component formatter functions (more flexible than Styles object)
 2. `PartsOrder` for customizing log line structure
 3. `FormatPartValueByName` for name-based part value formatting
 
 #### logrus
+
 **Source:** [GitHub](https://github.com/sirupsen/logrus)
 
 | Feature | Implementation |
@@ -163,6 +170,7 @@ logrus.SetFormatter(&logrus.TextFormatter{
 ```
 
 **Key Patterns to Consider:**
+
 1. Environment variable awareness (CLICOLOR, CLICOLOR_FORCE, NO_COLOR, FORCE_COLOR)
 2. `PadLevelText` for visual alignment
 3. Hook system for extensibility
@@ -172,6 +180,7 @@ logrus.SetFormatter(&logrus.TextFormatter{
 ### 2.2 Rust Libraries
 
 #### tracing + tracing-subscriber
+
 **Source:** [tracing.rs](https://www.tracing.rs/)
 
 | Feature | Implementation |
@@ -194,6 +203,7 @@ tracing_subscriber::registry()
 **Key Insight:** Span-based logging is more powerful than flat messages for async/t并发 code. PHP port not feasible but worth noting for architecture.
 
 #### fern
+
 **Source:** [docs.rs/fern](https://docs.rs/fern/latest/fern/)
 
 | Feature | Implementation |
@@ -223,6 +233,7 @@ fern::Dispatch::new()
 ```
 
 **Key Patterns to Consider:**
+
 1. Builder pattern for complex configuration
 2. Per-level `Color` enum instead of numeric ANSI codes
 
@@ -231,6 +242,7 @@ fern::Dispatch::new()
 ### 2.3 Python Libraries
 
 #### loguru
+
 **Source:** [loguru.readthedocs.io](https://loguru.readthedocs.io/)
 
 | Feature | Implementation |
@@ -249,16 +261,19 @@ fmt = ("<red>{time}</red> - "
 logger.add(sys.stdout, format=fmt, level="DEBUG", colorize=True)
 
 # Custom levels with colors
+
 logger.level("INFO", color="<green>")
 logger.level("WARNING", color="<yellow><bold>")
 ```
 
 **Key Patterns to Consider:**
+
 1. Environment variable support: `NO_COLOR`, `FORCE_COLOR`
 2. Per-level color tags in format string
 3. `opt()` method for per-call customization (colors, depth, lazy evaluation)
 
 #### structlog
+
 **Source:** [structlog.org](https://www.structlog.org/)
 
 | Feature | Implementation |
@@ -289,6 +304,7 @@ cr = structlog.dev.ConsoleRenderer(
 ```
 
 **Key Patterns to Consider:**
+
 1. Column-based formatter with per-column styling
 2. `level_styles` dict for level-based colors
 3. Environment variable awareness (FORCE_COLOR, NO_COLOR)
@@ -322,6 +338,7 @@ cr = structlog.dev.ConsoleRenderer(
 | structlog | TTY + FORCE_COLOR | Auto via Rich | level_styles dict |
 
 **Recommendation:** Implement color profile detection similar to `colorprofile` library:
+
 1. Detect TrueColor (24-bit), 256-color, 16-color, or no color
 2. Auto-downsample colors based on terminal capability
 3. Honor NO_COLOR and FORCE_COLOR environment variables
@@ -351,6 +368,7 @@ cr = structlog.dev.ConsoleRenderer(
 | structlog | Via columns | Via ColumnFormatter | Yes (pad_event) |
 
 **Recommendation:** Consider adding:
+
 1. `PadLevelText` equivalent (all level labels same width)
 2. Alignment options for context fields
 

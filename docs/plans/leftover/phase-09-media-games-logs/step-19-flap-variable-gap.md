@@ -11,6 +11,7 @@ Today gap is constant.
 ## Files
 
 **Modify:**
+
 - `honey-flap/src/PipeGenerator.php` — gap-height varies (smaller as
   score increases, with a floor).
 

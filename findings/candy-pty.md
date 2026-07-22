@@ -13,6 +13,7 @@ Approximately 40 source files were reviewed across the core PTY implementation, 
 ## Critical Issues (file:line format)
 
 ### 1. FD Reuse Race in PosixMasterPty::close()
+
 **File:** `src/Posix/PosixMasterPty.php:211-257`
 
 When `stream()` is called, `fopen('php://fd/N')` creates a duplicate file descriptor referencing the same underlying kernel file description. When `fclose()` is called on the stream, it closes only the duplicate FD—the original `$this->fd` remains open. The subsequent call to `libc::close($this->fd)` then closes the original.
@@ -26,7 +27,9 @@ This is a classic FD leak / use-after-close scenario. Under load or in long-runn
 ---
 
 ### 2. stream_select Error Suppression Hides EINTR
+
 **Files:**
+
 - `src/Posix/PosixMasterPty.php:81`
 - `src/Posix/PosixPump.php:126`
 - `src/Posix/MultiPump.php:172`
@@ -40,7 +43,9 @@ This is a classic FD leak / use-after-close scenario. Under load or in long-runn
 ---
 
 ### 3. Missing pty-shim.php
+
 **Files:**
+
 - `src/Spawn.php:33`
 - `src/Spawn.php:110`
 
@@ -51,6 +56,7 @@ This is a classic FD leak / use-after-close scenario. Under load or in long-runn
 ---
 
 ### 4. MasterPty Interface Missing fd() Accessor
+
 **File:** `src/Contract/MasterPty.php`
 
 The `MasterPty` interface does not expose an `fd()` method, but `PosixMasterPty::fd()` at line 264 is public. Callers needing the raw fd must cast to `PosixMasterPty`, breaking interface abstraction:
@@ -66,6 +72,7 @@ $fd = $pty instanceof PosixMasterPty ? $pty->fd() : throw new RuntimeException('
 ## High Severity Issues
 
 ### 1. Encoding Artifact in Expect.php
+
 **File:** `src/Expect/Expect.php:389`
 
 String contains `"charmbracelet/m泡泡/expect.Exp"` — the characters `泡泡` (Chinese for "bubbles") appear corrupted or unintentionally inserted. This likely originated from a copy-paste error during porting from the Go upstream `charmbracelet/mbubbletea`.
@@ -75,6 +82,7 @@ String contains `"charmbracelet/m泡泡/expect.Exp"` — the characters `泡泡`
 ---
 
 ### 2. SignalForwarder::$asyncEnabled Is Process-Wide Static Never Reset
+
 **File:** `src/SignalForwarder.php:23`
 
 `public static bool $asyncEnabled = false;` is a static property. In PHP-FPM or long-running server environments, this value persists across requests. If one request enables async mode and then the worker is recycled, the next request in that worker will retain `asyncEnabled = true` from the previous request's runtime state.
@@ -84,6 +92,7 @@ String contains `"charmbracelet/m泡泡/expect.Exp"` — the characters `泡泡`
 ---
 
 ### 3. TermiosFactory::$loggedFallback Is Process-Wide Static
+
 **File:** `src/Termios/TermiosFactory.php:19`
 
 `private static bool $loggedFallback = false;` only logs the first fallback message per process lifetime. Subsequent fallback events are silently suppressed, making debugging difficult in long-running processes where only the first fallback instance is visible.
@@ -93,7 +102,9 @@ String contains `"charmbracelet/m泡泡/expect.Exp"` — the characters `泡泡`
 ---
 
 ### 4. Deprecated Pty Class Is README Quickstart Example
+
 **Files:**
+
 - `src/Pty.php`
 - `README.md`
 
@@ -106,7 +117,9 @@ The `Pty` class is marked `@deprecated` but is the primary quickstart example in
 ## Medium Severity Issues
 
 ### 1. O_RDWR and oNoCtty() Duplicated in Pty.php and PosixPtySystem.php
+
 **Files:**
+
 - `src/Pty.php:30,68-71`
 - `src/PosixPtySystem.php:17,127-130`
 
@@ -117,7 +130,9 @@ Both `Pty::O_RDWR`/`Pty::oNoCtty()` and `PosixPtySystem::O_RDWR`/`PosixPtySystem
 ---
 
 ### 2. Buffer Trim Logic Duplicated in Expect.php
+
 **Files:**
+
 - `src/Expect/Expect.php:295-299`
 - `src/Expect/Expect.php:377-381`
 - `src/Expect/Expect.php:428-430`
@@ -129,6 +144,7 @@ Buffer trimming (stripping leading/trailing whitespace) is repeated in `expectAn
 ---
 
 ### 3. Tight Polling Loop in ChildPollTrait::wait()
+
 **File:** `src/ChildPollTrait.php`
 
 `usleep(10_000)` (10ms) in a busy-wait polling loop wastes CPU and cannot be interrupted by signals. This pattern appears in a context where it may cause high CPU utilization during subprocess wait.
@@ -138,6 +154,7 @@ Buffer trimming (stripping leading/trailing whitespace) is repeated in `expectAn
 ---
 
 ### 4. stream_select Timeout Calculation Can Produce $usec >= 1_000_000
+
 **File:** `src/Posix/PosixMasterPty.php:77-78`
 
 ```php
@@ -152,6 +169,7 @@ When `$timeout` is not aligned to microseconds, this can produce `$usec >= 1_000
 ---
 
 ### 5. MultiPumpSession Uses Mutable Public Properties
+
 **File:** `src/Posix/MultiPump.php`
 
 `MultiPumpSession` has public properties (`id`, `pty`, `running`) that are modified directly by `MultiPump` during session management. This breaks encapsulation and makes it difficult to reason about session state transitions.
@@ -163,6 +181,7 @@ When `$timeout` is not aligned to microseconds, this can produce `$usec >= 1_000
 ## Low Severity Issues
 
 ### 1. @preg_match Error Suppression in Expect.php
+
 **File:** `src/Expect/Expect.php:330`
 
 `@preg_match(...)` suppresses regex compilation errors. If a bad pattern is passed, the error is silently swallowed and the function returns `false` without explanation. This makes debugging difficult.
@@ -172,6 +191,7 @@ When `$timeout` is not aligned to microseconds, this can produce `$usec >= 1_000
 ---
 
 ### 2. Darwin Resize via stty Subprocess on Every Call
+
 **File:** `src/Termios/Darwin/SizeIoctl.php:sttySetSize`
 
 `proc_open(['stty', ...])` spawns a subprocess for every Darwin resize operation. While necessary as a workaround for Darwin's missing `TIOCSWINSZ` FFI definition, this is expensive for frequent resizes.
@@ -181,6 +201,7 @@ When `$timeout` is not aligned to microseconds, this can produce `$usec >= 1_000
 ---
 
 ### 3. No __toString/Serialization on Value Objects
+
 **Files:** Various value objects (`Size`, `WinSize`, etc.)
 
 Value objects like `Size` and `WinSize` lack `__toString()` or `JsonSerializable` implementations, making debugging and logging verbose.
@@ -190,6 +211,7 @@ Value objects like `Size` and `WinSize` lack `__toString()` or `JsonSerializable
 ---
 
 ### 4. ControllingTerminal::claim Passes PHP null to ioctl FFI
+
 **File:** `src/Posix/ControllingTerminal.php:56`
 
 ```php
@@ -205,31 +227,37 @@ Passing `null` to ioctl is platform-dependent undefined behavior. On some platfo
 ## Missing Features
 
 ### 1. No ReactPHP Async Stream Interfaces for PTY
+
 The library does not implement `React\Stream\ReadableStreamInterface` or `React\Stream\WritableStreamInterface` for PTY entities. This prevents integration with the broader ReactPHP ecosystem (piping, filtering, buffering).
 
 ---
 
 ### 2. No Multi-Pattern Regex Expect (expectAnyPattern)
+
 Unlike the Go upstream `expect.AnyPattern()`, the PHP port only supports single-pattern `expect()` calls. Multi-pattern matching with per-pattern actions requires manual loop management.
 
 ---
 
 ### 3. No Built-in ANSI Escape Sequence Parsing
+
 The library depends on external `candy-ansi` for ANSI parsing, but `candy-pty` itself provides no built-in escape sequence handling. This creates a hard dependency chain for common use cases.
 
 ---
 
 ### 4. No Way to Get Raw FD from MasterPty Without Casting
+
 As noted in Critical Issue #4, the `MasterPty` interface does not expose the raw fd, forcing callers to cast to `PosixMasterPty` to access it.
 
 ---
 
 ### 5. No Async Acquire/Release on PtyPool
+
 `PtyPool::acquire()` and `PtyPool::release()` are documented as async methods but do not yield to the event loop during contention. Under load, this can block the event loop.
 
 ---
 
 ### 6. Pty Shim File Missing from Repository
+
 As noted in Critical Issue #3, `bin/pty-shim.php` is referenced but not present, blocking `controllingTerminal:true` functionality.
 
 ---
@@ -237,6 +265,7 @@ As noted in Critical Issue #3, `bin/pty-shim.php` is referenced but not present,
 ## Duplicated Logic / Refactoring Opportunities
 
 ### 1. O_RDWR and oNoCtty() Duplication
+
 **Locations:** `src/Pty.php:30,68-71` and `src/PosixPtySystem.php:17,127-130`
 
 Both files define `O_RDWR` constant and `oNoCtty()` method independently. See Medium Issue #1.
@@ -244,6 +273,7 @@ Both files define `O_RDWR` constant and `oNoCtty()` method independently. See Me
 ---
 
 ### 2. Buffer Trimming Duplication
+
 **Locations:** `src/Expect/Expect.php:295-299, 377-381, 428-430`
 
 Identical buffer-trim logic repeated in three expect methods. See Medium Issue #2.
@@ -251,6 +281,7 @@ Identical buffer-trim logic repeated in three expect methods. See Medium Issue #
 ---
 
 ### 3. $libc = Libc::lib() Pattern Repeated Throughout
+
 The pattern `$libc = Libc::lib()` appears in nearly every file that uses FFI calls. This could be centralized in a trait or base class:
 
 ```php
@@ -266,6 +297,7 @@ This would reduce boilerplate and ensure consistent singleton access across all 
 ---
 
 ### 4. PtyPool Active/Available Session Split
+
 **File:** `src/PtyPool.php`
 
 `$this->activeSessions` and `$this->availableSessions` are stored as parallel arrays with identical structure. These should be unified into a single structured collection with state tracking.
@@ -275,21 +307,25 @@ This would reduce boilerplate and ensure consistent singleton access across all 
 ## Compatibility Issues
 
 ### 1. ext-ffi Required but Disabled by Default
+
 `ext-ffi` is required for FFI calls but is disabled by default in many PHP installations (PHP 8.2+ often ship with FFI disabled for security). The README does not prominently warn users to enable FFI in `php.ini`.
 
 ---
 
 ### 2. /dev/ptmx Access Required
+
 The library requires access to `/dev/ptmx` which may not be available in certain container environments (e.g., some Docker setups with `--device-read-only` or minimal container images). No graceful error is produced when access is denied.
 
 ---
 
 ### 3. Darwin arm64 ioctl ABI Mismatch
+
 Darwin arm64 uses a different ioctl ABI for `TIOCSWINSZ`/`TIOCGWINSZ`, handled via stty subprocess fallback. This fallback works but is slow and not documented as a known limitation in user-facing documentation.
 
 ---
 
 ### 4. Termios Struct Size Assumption
+
 **File:** `src/Termios/TermiosFactory.php`
 
 Termios struct size is assumed to be 80 bytes:
@@ -303,6 +339,7 @@ This assumption may not hold across platforms (Linux vs. BSD vs. macOS vs. musl)
 ---
 
 ### 5. musl/Alpine Uses Different Libc Paths
+
 **File:** `src/Libc.php`
 
 The library uses hardcoded glibc paths in some fallbacks. Alpine Linux and other musl-based systems use different library paths, which may cause FFI initialization failures on those platforms.
@@ -312,6 +349,7 @@ The library uses hardcoded glibc paths in some fallbacks. Alpine Linux and other
 ## Async Pattern Improvements
 
 ### 1. PosixPump Uses Blocking stream_select Loop
+
 **File:** `src/Posix/PosixPump.php`
 
 `PosixPump::pump()` uses a blocking `stream_select` loop that cannot integrate with ReactPHP's event loop. When used in a ReactPHP application, this blocks the entire event loop during I/O wait.
@@ -321,11 +359,13 @@ The library uses hardcoded glibc paths in some fallbacks. Alpine Linux and other
 ---
 
 ### 2. No react/stream ReadableStreamInterface/WritableStreamInterface
+
 As noted in Missing Features #1, the PTY classes do not implement ReactPHP's stream interfaces, preventing standard piping and stream composition.
 
 ---
 
 ### 3. SignalForwarder Uses Static Callbacks
+
 **File:** `src/SignalForwarder.php`
 
 Signal handlers use static callbacks that cannot be unregistered per-instance. This prevents multiple `SignalForwarder` instances from coexisting independently, and prevents cleanup without process termination.
@@ -333,6 +373,7 @@ Signal handlers use static callbacks that cannot be unregistered per-instance. T
 ---
 
 ### 4. PosixChild::wait() Blocks the Event Loop
+
 **File:** `src/Posix/PosixChild.php`
 
 `PosixChild::wait()` is a blocking call with no async equivalent. In an async application, calling `wait()` will block the entire event loop until the child exits.
@@ -340,6 +381,7 @@ Signal handlers use static callbacks that cannot be unregistered per-instance. T
 ---
 
 ### 5. MultiPump::run() Blocks with No Async Variant
+
 **File:** `src/Posix/MultiPump.php`
 
 `MultiPump::run()` is a blocking loop with no async variant. There is no `MultiPump::runAsync()` or ReactPHP-compatible alternative.

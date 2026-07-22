@@ -11,6 +11,7 @@
 sugar-wishlist is a SSH endpoint launcher with YAML/JSON shortcuts. The current implementation covers basic functionality (endpoint picker + `pcntl_exec` dispatch) but is missing features present in comparable tools across Go, Rust, and Python ecosystems.
 
 **Key gaps identified:**
+
 1. No proxy/jump host support
 2. No SSH config file import
 3. Limited endpoint metadata (no description, link, remote command)
@@ -25,20 +26,24 @@ sugar-wishlist is a SSH endpoint launcher with YAML/JSON shortcuts. The current 
 **Source:** `/home/sites/sugarcraft/sugar-wishlist/src/`
 
 ### 1.1 Config.php (L1-199)
+
 - Supports JSON and YAML flat-list formats
 - Custom YAML parser (no ext-yaml dependency)
 - Field extraction: name, host, port, user, identity_file(s), description, options
 
 ### 1.2 Endpoint.php (L1-64)
+
 - Immutable value object with: name, host, port, user, identityFile, description, options
 - `toSshArgv()` generates ssh command args
 - `displayLine()` for picker display
 
 ### 1.3 Launcher.php (L1-54)
+
 - Uses `pcntl_exec()` to replace PHP process with ssh
 - Callable executor for testability
 
 ### 1.4 Picker.php (L1-191)
+
 - Terminal picker with j/k/arrow navigation
 - Type-to-search filtering
 - Raw mode TTY handling
@@ -133,6 +138,7 @@ sugar-wishlist is a SSH endpoint launcher with YAML/JSON shortcuts. The current 
 ### 3.1 High Priority (Low Effort, High Value)
 
 #### P1.1: Add `proxy_jump` Support
+
 **Current:** No proxy support
 **Add:** `proxy_jump` field to Endpoint, translate to `-J` flag in ssh argv
 
@@ -154,6 +160,7 @@ if ($this->proxyJump !== null) {
 ---
 
 #### P1.2: Add `description` Display in Picker
+
 **Current:** `displayLine()` shows only name and host:user
 **Add:** Show description as second line when available
 
@@ -181,11 +188,13 @@ private function draw(array $matches): void
 ---
 
 #### P1.3: Add `identity_files` Array with Fallback
+
 **Current:** Single `identity_file` string
 **Add:** Array of paths, ssh uses first available
 
 ```yaml
 # Example YAML
+
 - name: production
   host: prod.example.com
   identity_files:
@@ -202,6 +211,7 @@ private function draw(array $matches): void
 ### 3.2 Medium Priority (Moderate Effort)
 
 #### P2.1: Import from ~/.ssh/config
+
 **Current:** Only JSON/YAML file formats
 **Add:** Parse SSH config format, extract Host blocks
 
@@ -239,6 +249,7 @@ public static function parseSshConfig(string $raw): array
 ---
 
 #### P2.2: Add `forward_agent` Option
+
 **Current:** No agent forwarding control
 **Add:** Boolean to enable `-A` flag
 
@@ -259,6 +270,7 @@ if ($this->forwardAgent) {
 ---
 
 #### P2.3: Add `request_tty` Option
+
 **Current:** Always requests TTY (via pcntl_exec)
 **Add:** Control via `-t` / `-T` flags
 
@@ -281,6 +293,7 @@ if ($this->requestTty === true) {
 ---
 
 #### P2.4: Add `connect_timeout` Option
+
 **Current:** No connection timeout
 **Add:** `-o ConnectTimeout=N` option
 
@@ -304,11 +317,13 @@ if ($this->connectTimeout !== null) {
 ### 3.3 Lower Priority (Higher Effort)
 
 #### P3.1: Hints System (Glob Pattern Matching)
+
 **Current:** Exact name matching only
 **Add:** Hints array with glob patterns that apply to matching endpoints
 
 ```yaml
 # Example YAML with hints
+
 hints:
   - match: "*.local"
     port: 23234
@@ -324,6 +339,7 @@ hints:
 ---
 
 #### P3.2: Remote Command Execution
+
 **Current:** Interactive shell only
 **Add:** `remote_command` field to run specific command
 
@@ -346,6 +362,7 @@ public function dispatch(Endpoint $e, string $sshBinary = '/usr/bin/ssh'): void
 ---
 
 #### P3.3: Environment Variable Support
+
 **Current:** No env var handling
 **Add:** `set_env` and `send_env` arrays
 
@@ -368,11 +385,13 @@ foreach ($this->setEnv as $env) {
 ---
 
 #### P3.4: Link/URL Metadata
+
 **Current:** No link field
 **Add:** Optional link object with name and URL for display
 
 ```yaml
 # Example YAML
+
 - name: production
   host: prod.example.com
   link:
@@ -389,17 +408,20 @@ foreach ($this->setEnv as $env) {
 ## 4. Implementation Roadmap
 
 ### Phase 1: Essential Gaps (Week 1)
+
 1. Add `proxy_jump` support (P1.1)
 2. Add `identity_files` array with fallback (P1.3)
 3. Add `description` display in picker (P1.2)
 
 ### Phase 2: Feature Parity (Week 2)
+
 4. Add `forward_agent` (P2.2)
 5. Add `request_tty` control (P2.3)
 6. Add `connect_timeout` (P2.4)
 7. SSH config file import (P2.1)
 
 ### Phase 3: Advanced Features (Week 3-4)
+
 8. Hints system with glob patterns (P3.1)
 9. Remote command execution (P3.2)
 10. Environment variable support (P3.3)
@@ -413,14 +435,17 @@ foreach ($this->setEnv as $env) {
 
 ```yaml
 # wishlist.yml - sugar-wishlist config
+
 #
 # Basic endpoint
+
 - name: production
   host: prod.example.com
   port: 22
   user: deploy
 
 # Full-featured endpoint
+
 - name: staging
   host: stage.example.com
   user: admin
@@ -445,6 +470,7 @@ foreach ($this->setEnv as $env) {
     url: https://stage.example.com/admin
 
 # Hints - apply defaults to matching hosts
+
 hints:
   - match: "*.local"
     user: admin
@@ -487,16 +513,19 @@ hints:
 ## 6. Testing Recommendations
 
 ### 6.1 Unit Tests
+
 - Config parsing: JSON, YAML, SSH config formats
 - Endpoint: toSshArgv() output correctness
 - Host pattern matching (when hints added)
 
 ### 6.2 Integration Tests
+
 - Full dispatch flow with mocked executor
 - TTY raw mode handling
 - Signal handling (SIGINT, SIGTERM)
 
 ### 6.3 Snapshot Tests
+
 - Picker rendering with various endpoint counts
 - Filter matching behavior
 
@@ -505,10 +534,12 @@ hints:
 ## 7. Dependencies
 
 ### Current Dependencies
+
 - `sugarcraft/candy-core` (for Ansi utilities)
 - PHP 8.3+
 
 ### No New Dependencies Required
+
 All improvements can be implemented with vanilla PHP:
 - Custom YAML parser already in place
 - SSH config parsing with regex
@@ -519,25 +550,30 @@ All improvements can be implemented with vanilla PHP:
 ## 8. References
 
 ### Upstream
+
 - **wishlist:** https://github.com/charmbracelet/wishlist (1494 stars, MIT)
 - **wishlist config:** https://github.com/charmbracelet/wishlist/blob/main/_example/config.yaml
 
 ### Go Tools
+
 - **skm:** https://github.com/TimothyYe/skm (1010 stars) - SSH key manager
 - **ssm:** https://github.com/elliot40404/ssm (49 stars) - Simple SSH Manager
 
 ### Rust Tools
+
 - **sshs:** https://github.com/quantumsheep/sshs (1485 stars) - TUI SSH using ~/.ssh/config
 - **russh:** https://github.com/lacrioque/russh - TOML config with procedures
 - **sshm-rs:** https://github.com/bit5hift/sshm-rs - Full-featured TUI
 - **purple:** https://github.com/erickochen/purple (6200+ tests) - Cloud sync, MCP server
 
 ### Python Tools
+
 - **sshconf:** https://github.com/sorend/sshconf (101 stars) - SSH config library
 - **ssh-config-manager:** https://github.com/zietbukuel/ssh-config-manager - CLI tool
 - **ssh-cli:** https://pypi.org/project/ssh-cli/ - Full CLI with config management
 
 ### SSH Config Reference
+
 - **ProxyJump:** https://man7.org/linux/man-pages/man5/ssh_config.5.html (ProxyJump section)
 - **ProxyCommand:** https://man7.org/linux/man-pages/man5/ssh_config.5.html (ProxyCommand section)
 

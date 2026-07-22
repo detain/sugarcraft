@@ -4,6 +4,7 @@
 Make PostgresAdminProvider actually return meaningful metrics instead of empty arrays.
 
 ## Current Problem
+
 `PostgresAdminProvider::checkAllMetrics()` and `checkConnectionUsage()` return empty arrays - stub implementation.
 
 ## What MySQL Workbench Dashboard Shows (PostgreSQL equivalent)
@@ -17,6 +18,7 @@ Make PostgresAdminProvider actually return meaningful metrics instead of empty a
 1. **`src/Admin/Providers/PostgresAdminProvider.php`** — Implement `checkAllMetrics()` and `checkConnectionUsage()`
 
 ## Spec for checkAllMetrics()
+
 ```php
 public function checkAllMetrics(array $statusVariables, array $serverVariables): array
 {
@@ -27,8 +29,10 @@ public function checkAllMetrics(array $statusVariables, array $serverVariables):
 ```
 
 ## Metrics to Compute
+
 From `pg_stat_database` (queried via PostgresServerContext):
-- `tup_returned` rate → "Tuples Returned/sec"  
+
+- `tup_returned` rate → "Tuples Returned/sec"
 - `tup_fetched` rate → "Tuples Fetched/sec"
 - `tup_inserted` + `tup_updated` + `tup_deleted` rates → "Writes/sec"
 - `blks_hit` / (`blks_hit` + `blks_read`) → cache hit ratio %

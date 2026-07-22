@@ -92,13 +92,19 @@ final class Libc {
 
 **cdef symbols declared** (`Libc::cdef()`):
 - `setsid()`, `posix_openpt()`, `grantpt()`, `unlockpt()`, `ptsname_r()`
+
 - `waitpid()` — for sub-ms exit detection in ChildPollTrait
+
 - `close()`, `open()`, `ioctl()` — variadic-compatible signature
+
 - `fcntl()` — fixed-int-arg form for F_SETFD/FD_CLOEXEC only
+
 - `tcgetattr()`, `tcsetattr()`, `cfmakeraw()`, `cfgetospeed()`, `cfsetospeed()`, `cfgetispeed()`, `cfsetispeed()`
 
 **Platform branching:**
+
 - Darwin: `openpty` included in main libc cdef
+
 - Linux: `openpty` loaded separately from `libutil.so.1` via `libutil()`
 
 **Key gotcha** (documented in CALIBER_LEARNINGS.md):
@@ -108,12 +114,16 @@ final class Libc {
 
 struct termios layout differs across platforms:
 - glibc/musl: ~60 bytes
+
 - Darwin: 72 bytes
 
 **Solution:** Treat struct as opaque `char[80]` buffer and only call:
 - `tcgetattr(fd, &buf)` — snapshot current attrs
+
 - `cfmakeraw(&buf)` — produce raw-mode copy
+
 - `tcsetattr(fd, when, &buf)` — apply changes
+
 - `cfgetospeed/cfsetospeed/cfgetispeed/cfsetispeed` — only speed fields
 
 ```php
@@ -152,7 +162,9 @@ Note: `TIOCGWINSZ` read direction works despite the same ABI issue — empirical
 
 Three attachment methods:
 - `attachSigwinch(MasterPty, sizeProvider)` — pipes host TTY resize → `$master->resize()`
+
 - `attachSigwinchToFd(fd, sizeProvider, onResize)` — raw fd variant for non-PTY TTY handles
+
 - `attachSigchld(reaper)` — SIGCHLD delivery for waitpid-based reaping
 
 **Critical design rule** (CALIBER_LEARNINGS.md pattern):
@@ -261,7 +273,9 @@ final class PtySystemFactory {
 
 `SUGARCRAFT_PTY_BACKEND` values:
 - `posix-ffi` (default on POSIX)
+
 - `sidecar` / `pecl` — throws `forDeferredBackend()` (reserved for phase 12)
+
 - `auto` / `''` / unset — same as default
 
 ### 6.2 TermiosFactory (src/TermiosFactory.php)
@@ -295,7 +309,9 @@ To get Ctrl+C → SIGINT delivery, child must own the slave as its controlling t
 
 **bin/pty-shim.php** — thin PHP script that:
 1. Loads vendor autoload from multiple candidate paths (works in any project layout)
+
 2. Calls `ControllingTerminal::claim(0)` — `setsid()` + `ioctl(0, TIOCSCTTY, 0)`
+
 3. `pcntl_exec($cmd, $argv)` — replaces PHP process image with actual command
 
 **Spawn wrapping** (`Spawn::wrapInShim()`):
@@ -305,6 +321,7 @@ return [PHP_BINARY, $shim, ...$cmd];
 
 Platform constants:
 - Linux: `0x540E`
+
 - Darwin: `0x20007461`
 
 **Key gotcha:** `ioctl()` third arg is `unsigned long` not pointer — passing PHP `null` through `void *` FFI param renders as 0, which the kernel interprets as "don't steal existing ctty". Correct.
@@ -329,14 +346,18 @@ $stream = \fopen('php://fd/' . $this->fd, 'r+b');
 
 When stdin EOF arrives, the pump:
 1. Writes `VEOF` (`\x04`, Ctrl+D) to master
+
 2. Starts `stdinEofGraceSec` (default 300ms) timer
+
 3. If child exits in window → returns child's exit code
+
 4. If timer expires → returns -1, caller force-closes master (SIGHUP via lost-ctty)
 
 ### 7.5 Recorder Tap in Pump
 
 `PosixPump` has an optional `Recorder` tee (wired for candy-vcr):
 - stdin bytes recorded via `recordInputBytes()` after write to master (post-write so cassette is consistent with what child saw)
+
 - output bytes recorded via `recordOutput()` before write to stdout (pre-write so partial writes don't over-record)
 
 Null check overhead is zero when recorder is unset.
@@ -360,9 +381,13 @@ Null check overhead is zero when recorder is unset.
 | ConPTY support | Built-in for Windows | `UnsupportedPlatformException` (v2 sidecar) |
 
 **Observations:**
+
 - The Go implementation has native ConPTY on Windows; PHP has none
+
 - Go's `os/exec` integration is deeper; PHP's `proc_open` is more limited
+
 - The shim startup cost (~5-50ms) is a PHP-specific trade-off
+
 - FFI `waitpid` fast path achieves Go-level sub-ms exit detection
 
 ### 8.2 WhispPHP/whisp (PHP SSH Server)
@@ -401,14 +426,20 @@ to this table, uncomment the row below and point it at the Windows plan.
 
 The Go ConPTY implementation uses:
 - `NewConPTYSystem()` — factory returning `PtySystem`
+
 - `conpty.AttachToProcess(process)` — attach to existing process
+
 - `conpty.GetWindowSize()` — query dimensions
+
 - `conpty.SetWindowSize()` — resize
+
 - `conpty.ResizeTerminal()` — resize wrapper
 
 ConPTY requires:
 - Windows 10 1809+ (`Microsoft.Windows.SDK.Contracts` NuGet)
+
 - `CreatePseudoConsole()` / `ClosePseudoConsole()` API
+
 - PHP FFI bindings to `kernel32.dll`
 
 ### 9.3 SugarCraft ConPTY Integration Points
@@ -427,9 +458,13 @@ final class WindowsConPTYSystem implements PtySystem {
 ```
 
 **Key challenges:**
+
 1. PHP FFI to Win32 API (`kernel32.dll`) — different from libc FFI
+
 2. ConPTY process spawning requires `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` in `STARTUPINFOEX`
+
 3. Chocolatey's libvterm + ConPTY event loop integration with ReactPHP
+
 4. Windows API calling convention differences (stdcall vs cdecl)
 
 ---
@@ -481,10 +516,12 @@ posix_kill(posix_getpid(), SIGWINCH); // verify handler fires
 
 **EOF grace test** (PosixPumpEofGraceTest.php):
 - Child doesn't exit → pump returns -1, caller force-closes → SIGHUP
+
 - Child exits within grace window → pump returns child's exit code
 
 **Controlling-terminal smoke test** (SpawnTest.php):
 - `setsid` check: pid == sid for shim-spawned child
+
 - SIGINT delivery: `/bin/sleep 10` + write `\x03` + wait → elapsed < 2s
 
 ---
@@ -495,10 +532,15 @@ posix_kill(posix_getpid(), SIGWINCH); // verify handler fires
 
 candy-pty demonstrates a mature, production-grade approach to FFI in PHP 8.3+:
 - Lazy-loading singleton with caching
+
 - Separate FFI handles for libc vs libutil
+
 - `SUGARCRAFT_LIBC` env override for musl/Alpine
+
 - Opaque struct handling without layout assumptions
+
 - Platform-branched cdef strings
+
 - Graceful fallback to shell-out when FFI unavailable
 
 ### 11.2 Immutable + Fluent Configuration
@@ -614,20 +656,31 @@ candy-pty/
 ### 14.1 Strengths
 
 1. **Clean Contract-Driven Architecture** — seven well-defined interfaces make the implementation replaceable and testable
+
 2. **Mature FFI Patterns** — lazy loading, caching, fallback, platform branching, opaque struct handling all correctly implemented
+
 3. **Sub-Millisecond Exit Detection** — `waitpid` FFI fast path avoids proc_get_status polling overhead
+
 4. **Comprehensive Signal Handling** — async/sync modes, no-throw callbacks, self-delivery test patterns
+
 5. **Immutable + Fluent Configuration** — `PumpOptions` and `Termios` are safe for concurrent use
+
 6. **Polished Edge Cases** — macOS anchor fd, Darwin arm64 stty fallback, stdin EOF grace window, VEOF write
+
 7. **Recorder Integration** — null-guarded tap enables candy-vcr without pump overhead
+
 8. **Well-Documented Gotchas** — CALIBER_LEARNINGS.md captures every hard-won lesson
 
 ### 14.2 Limitations
 
 1. **No Windows ConPTY** — reserved for v2 sidecar; `UnsupportedPlatformException` thrown
+
 2. **FFI Required** — no pure-PHP fallback for core PTY operations (only termios has stty fallback)
+
 3. **Controlling Terminal Shim Cost** — ~5-50ms PHP boot overhead makes it opt-in only
+
 4. **No Platform-Adaptive Wait** — BSD/Solaris treated as POSIX but may have subtle differences
+
 5. **Single stream_select Loop** — MultiPump multiplexes master→stdout only; stdin→master is caller's responsibility
 
 ### 14.3 Comparison Verdict

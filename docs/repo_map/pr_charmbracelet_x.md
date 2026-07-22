@@ -83,6 +83,7 @@ The first analysis identified these gaps:
 **Labels**: enhancement
 
 **Summary**: The `ansi.Parser` API is "hard to work with and feels flaky." A cleaner, more idiomatic Scanner API is needed to parse sequences and text. Questions raised about:
+
 - Container types to limit allocations
 - Whether to drop the `parser` sub-package
 - How `ansi.DecodeSequence` should work
@@ -195,6 +196,7 @@ The first analysis identified these gaps:
 **Impact**: Directly affects lipgloss, bubbles, and any downstream that depends on these functions.
 
 **SugarCraft Implication**: Any PHP port MUST have comprehensive fuzzing/property-based tests for `StringWidth` and related functions. Edge cases include:
+
 - Strings with only ANSI escape sequences
 - Strings with combining characters
 - Strings with wide characters (CJK)
@@ -220,12 +222,14 @@ The first analysis identified these gaps:
 **Issues**: #58, #213, #367, #351, #466, #541
 
 **Pattern**: `ansi.Wrap` and `ansi.Truncate` have persistent edge case bugs around:
+
 - Newline handling within cut range
 - ANSI-stripped width vs. byte length
 - Multi-byte spaces
 - Exact-width fitting strings
 
 **SugarCraft Implication**: These are fundamentally hard problems. The Go implementation has years of bug fixes and still finds issues. SugarCraft should:
+
 - Build comprehensive test suites
 - Consider using existing battle-tested libraries (like `reflow`/unicWidth) rather than rewriting
 - Add fuzzing from day one
@@ -237,6 +241,7 @@ The first analysis identified these gaps:
 **Issues**: #485, #248
 
 **Pattern**: Windows keyboard input is problematic due to:
+
 - NumLock state affecting normal character keys
 - Console API vs. Virtual Terminal mode differences
 - ReadConsoleInput having no cancellation mechanism
@@ -251,12 +256,14 @@ The first analysis identified these gaps:
 **Issues**: Cursor problems in bubbles/bubbletea (#897, #906, #887, #1344), cursor style in x (#229)
 
 **Pattern**:
+
 - Cursor not displaying in tmux/Putty
 - Cursor position wrong for CJK wide characters
 - Cursor blink state not restored after exit
 - URxvt/QTerminal not respecting cursor reset sequences
 
 **SugarCraft Implication**: **MEDIUM** — Cursor handling is notoriously terminal-dependent. SugarCraft should:
+
 - Never assume cursor state persists
 - Provide explicit cursor reset on exit
 - Support querying current cursor state where possible
@@ -272,6 +279,7 @@ The first analysis identified these gaps:
 **Rationale**: Current parser is "hard to work with and feels flaky"
 
 **Suggested**:
+
 - Container types to limit allocations
 - `ansi.DecodeSequence` alternative
 - idiomatic Go iterator pattern
@@ -287,6 +295,7 @@ The first analysis identified these gaps:
 **Request**: Add scrollback support to virtual terminal
 
 **Implementation**:
+
 - `Scrollback` type with `Push`, `PushN`, `Line`, `Lines` methods
 - Configurable max lines
 - Pre-allocation for performance
@@ -352,6 +361,7 @@ The first analysis identified these gaps:
 **Significance**: Major API improvement addressing Issue #239
 
 **Key Changes**:
+
 - `Iterator` type for streaming ANSI sequence parsing
 - `Reader` type for input with automatic sequence detection
 - Memory-efficient parsing with configurable allocation limits
@@ -363,6 +373,7 @@ The first analysis identified these gaps:
 **Purpose**: Add configurable scrollback buffer to vt emulator
 
 **Key Changes**:
+
 - `NewScrollback(maxLines)` factory
 - `Push`, `PushN`, `Line`, `Lines`, `Clear` methods
 - Pre-allocation with capacity hints
@@ -393,6 +404,7 @@ The first analysis identified these gaps:
 **Purpose**: Multiple wrap edge case fixes
 
 **Key Fixes**:
+
 - ANSI codes at exact wrap boundary
 - NBSP (non-breaking space) handling
 - Breakpoint detection improvements
@@ -404,6 +416,7 @@ The first analysis identified these gaps:
 **Purpose**: Major refactor of ANSI modes and cursor API
 
 **Changes**:
+
 - Rename `ansi.MoveCursor` to `ansi.SetCursorPosition`
 - Rename `ansi.EraseDisplay` constants to `EraseScreen`
 - Add `ansi.Modes` type for mode management
@@ -476,6 +489,7 @@ type Terminal interface {
 **Proposed Solution**: Lookup table (LUT) with precomputed ASCII strings for 0-255
 
 **Benchmark Results**:
+
 - Using LUT brings `foregroundColorString` from ~7% to ~2% CPU
 - Tradeoff: ~5KB memory for lookup table
 - Negligible startup cost for precomputation
@@ -501,6 +515,7 @@ type Terminal interface {
 ### Discussion #533: teatest & golden improvements
 
 **Requested Features**:
+
 1. Expose `View()` for golden and non-golden testing in same `TestModel`
 2. Prevent consecutive golden calls from overwriting (use numbered suffixes)
 3. Support `colorprofile` option to strip/simplify colors in snapshots
@@ -509,6 +524,7 @@ type Terminal interface {
 6. ANSI-aware diff rendering
 
 **Maintainer Interest**: Positive, with additional suggestion:
+
 - Use `x/vt` and `x/xpty` for integrated tests with headless virtual terminals
 - Simulate running applications on actual TTYs/Consoles
 
@@ -765,12 +781,14 @@ type Terminal interface {
 **Risk**: CRITICAL
 
 **Description**: `StringWidth` returning incorrect values for:
+
 - Strings with only ANSI codes
 - Strings with combining characters
 - Strings with wide characters
 - Multi-byte whitespace
 
 **Mitigation**: 
+
 - Comprehensive fuzzing
 - Use battle-tested Unicode width libraries
 - Never assume byte-length == display-width
@@ -784,6 +802,7 @@ type Terminal interface {
 **Description**: When `candy-core` changes internal APIs, all consuming packages break
 
 **Mitigation**:
+
 - Strict internal API discipline
 - Consider semantic versioning even within monorepo
 - Test all consuming packages on any internal change
@@ -797,6 +816,7 @@ type Terminal interface {
 **Description**: Parser has many edge cases around partial sequences, split reads, etc.
 
 **Mitigation**:
+
 - Don't assume sequence boundaries
 - Maintain state between reads
 - Handle incomplete sequences gracefully
@@ -810,6 +830,7 @@ type Terminal interface {
 **Description**: Windows keyboard input handling is complex and buggy
 
 **Mitigation**:
+
 - Avoid Windows-specific input handling where possible
 - Test on actual Windows hardware
 - Consider using ConPTY directly
@@ -823,6 +844,7 @@ type Terminal interface {
 **Description**: Cursor style/color not restored correctly on some terminals
 
 **Mitigation**:
+
 - Always restore cursor state on exit
 - Don't assume cursor state persists
 - Provide manual reset capability

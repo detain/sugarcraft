@@ -1,6 +1,7 @@
 # charmbracelet/glamour
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/glamour
 - Language: Go
 - Stars: ~3.4k
@@ -9,6 +10,7 @@
 - Description: Stylesheet-based markdown rendering for CLI apps. Renders markdown documents and templates on ANSI-compatible terminals with customizable stylesheets.
 
 ## Feature List
+
 - **Markdown Parsing**: Full GFM (GitHub Flavored Markdown) support via goldmark parser
 - **ANSI Escape Rendering**: Converts markdown to ANSI escape sequences for terminal color/style output
 - **Stylesheet System**: JSON-based style configuration with cascading style inheritance
@@ -31,17 +33,20 @@
 ## Key Classes and Methods
 
 ### Core Renderer (`ansi/renderer.go`)
+
 - `ANSIRenderer`: Main struct implementing goldmark's `NodeRenderer` interface
 - `NewRenderer(options Options) *ANSIRenderer`: Constructor
 - `RegisterFuncs(reg NodeRendererFuncRegisterer)`: Registers handlers for all AST node kinds
 - `renderNode(w, source, node, entering)`: Dispatches rendering based on node type and enter/exit phase
 
 ### Rendering Context (`ansi/context.go`)
+
 - `RenderContext`: Holds state during rendering (options, blockStack, table, stripper)
 - `NewRenderContext(options Options) RenderContext`: Constructor
 - `SanitizeHTML(s string, trimSpaces bool) string`: HTML sanitization via bluemonday
 
 ### Block Stack (`ansi/blockstack.go`)
+
 - `BlockStack []BlockElement`: Stack tracking nested block elements for indentation/margin
 - `Push(e BlockElement)`, `Pop()`, `Len() int`: Stack operations
 - `Indent() uint`, `Margin() uint`: Computed aggregate values
@@ -50,6 +55,7 @@
 - `With(child StylePrimitive) StylePrimitive`: Style inheritance
 
 ### Style Configuration (`ansi/style.go`)
+
 - `StyleConfig`: Complete style tree (Document, H1-H6, Paragraph, List, Table, CodeBlock, etc.)
 - `StyleBlock`: Block-level style (StylePrimitive + Indent, Margin, IndentToken)
 - `StylePrimitive`: Individual style properties (Color, Bold, Italic, Underline, Prefix, Suffix, etc.)
@@ -57,10 +63,12 @@
 - `cascadeStyle(parent, child, toBlock)`: Inheritance merging
 
 ### Element Renderers (`ansi/elements.go`)
+
 - `NewElement(node ast.Node, source []byte) Element`: Factory dispatching correct element for AST node kind
 - Returns `Element{Entering, Exiting, Renderer, Finisher}` tuple
 
 ### Block Elements
+
 - `BlockElement`: Buffer for block children, applies margin/wrap via MarginWriter
 - `HeadingElement`: Level-aware heading (h1-h6) with style cascade
 - `ParagraphElement`: Text wrapping with soft/hard line break handling
@@ -72,6 +80,7 @@
 - `DefinitionList`, `DefinitionTerm`, `DefinitionDescription`: Definition list elements
 
 ### Inline Elements
+
 - `BaseElement`: Primitive text token with style, prefix/suffix, and template formatting
 - `EmphasisElement`: Level-based (italic/strong) with child rendering
 - `LinkElement`: OSC 8 hyperlink with text/href parts and URL resolution
@@ -81,20 +90,24 @@
 - `StrikethroughElement`: Crossed-out text
 
 ### Custom Writers (`ansi/margin.go`)
+
 - `MarginWriter`: io.Writer applying indentation and padding around content
 - `PaddingWriter`: Adds trailing spaces for alignment (UTF-8 aware)
 - `IndentWriter`: Adds indentation at line starts, skips on continuation lines
 
 ### Utility (`ansi/table_links.go`)
+
 - `tableLink`: Link/image storage for table footer links
 - `collectLinksAndImages(ctx)`: Walks table AST, collects reference-style links
 - `printTableLinks(ctx)`: Renders collected links in table footer style
 - `linkWithSuffix(tl tableLink, list)`: Formats link with numeric reference
 
 ### Template Helpers (`ansi/templatehelper.go`)
+
 - `TemplateFuncMap`: Left, Mid, Right, Last, Matches + all strings.* functions for style format templates
 
 ## Notable Algorithms / Named Patterns
+
 - **Block Stack Pattern**: Maintains a stack of block elements during AST traversal to compute dynamic indentation/margin without global state. Each block pushes itself on entry, pops on exit.
 - **Cascading Style Inheritance**: Styles cascade from parent to child blocks (not CSS - custom recursive merge). Parent properties are inherited unless explicitly overridden by child.
 - **OSC 8 Hyperlinks**: ANSI hyperlinks via `ESC ] 8 ; id=hash ; URL ST`. Uses FNV-32a hash of URL as unique identifier to allow multiple links with same URL.
@@ -104,6 +117,7 @@
 - **Child Element Short-Circuit**: `isChild()` checks if a node's parent renders it automatically (CodeSpan, Link, Image, Emphasis, etc.) to avoid double-rendering.
 
 ## Strengths
+
 - **Comprehensive Markdown Coverage**: GFM + definition lists + emoji + strikethrough + task lists + tables
 - **Stylesheet Flexibility**: Full JSON-based theming with per-element control (colors, bold, italic, indent, margin, prefixes/suffixes)
 - **Cascading Style System**: Parent styles inherit to children without circular dependency
@@ -116,6 +130,7 @@
 - **Active Maintenance**: Charm ecosystem with regular releases (v2.0.0 March 2026)
 
 ## Weaknesses
+
 - **External Root Package Missing**: The public `charm.land/glamour/v2` root package (`NewTermRenderer`, `Render`, `WithWordWrap`, etc.) is not present in this repo—only the `ansi` subpackage. The root package must be published separately to the charm.land module registry.
 - **No Color Downsampling Built-in**: Purposely "pure" but requires separate Lip Gloss call for real terminals, adding boilerplate
 - **No Custom Renderer Extension API**: Advanced customization requires copying internal types (MarginWriter, etc.) rather than interfaces

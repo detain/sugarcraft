@@ -11,13 +11,16 @@ i18n surface for sticker labels and any scroll-indicator strings.
 ## Files
 
 **Create:**
+
 - `sugar-stickers/lang/en.php`.
 - `sugar-stickers/src/Lang.php`.
 
 **Modify:**
+
 - Files under `sugar-stickers/src/`.
 
 **Tests:**
+
 - `sugar-stickers/tests/LangCoverageTest.php`.
 
 ## Acceptance

@@ -17,6 +17,7 @@ Four loose ends on the `candy-vcr record` CLI:
 ## Files
 
 **Create:**
+
 - `candy-vcr/docs/CASSETTE.md` — document the JSONL cassette schema
   including `t`, `tRaw`, `output`, `input`, `resize`, `quit`,
   `windowSize`, header event types.
@@ -26,6 +27,7 @@ Four loose ends on the `candy-vcr record` CLI:
   `markTestSkipped` when `htop` is missing.
 
 **Modify:**
+
 - `candy-vcr/src/Cli/RecordCommand.php`:
   - `installRescueHandlers()` — also register SIGINT alongside SIGTERM
     and SIGHUP.

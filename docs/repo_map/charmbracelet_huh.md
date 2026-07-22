@@ -1,6 +1,7 @@
 # charmbracelet/huh
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/huh
 - **Language:** Go
 - **Stars:** ~4.9k+ (based on public repo metrics)
@@ -8,6 +9,7 @@
 - **Description:** A simple, powerful library for building interactive forms and prompts in the terminal. Part of the Charmbracelet ecosystem (Bubble Tea, Lip Gloss, etc.).
 
 ## Feature List
+
 - **Multi-field form system** with pages (Groups) and fields
 - **Field types:** Input (single-line text), Text (multi-line), Select (single choice), MultiSelect (multiple choice), Confirm (yes/no), FilePicker (file/folder selection), Note (display-only)
 - **Dynamic forms** - fields can react to changes in other fields via `*Func()` methods with binding-based invalidation
@@ -161,6 +163,7 @@
 - **Accessible Mode** — terminal prompt fallback that doesn't redraw the screen
 
 ## Strengths
+
 - **Excellent Go idioms** — follows standard Bubble Tea patterns, proper error handling, context support
 - **Generics** — Select and MultiSelect are generic over any `comparable` type
 - **Comprehensive theming** — Lip Gloss provides full style customization
@@ -175,6 +178,7 @@
 - **Active ecosystem** — part of Charmbracelet which includes Bubble Tea, Lip Gloss, etc.
 
 ## Weaknesses
+
 - **Go-only** — not cross-language, SugarCraft would need full PHP port
 - **No auto-layout** — requires explicit width/height configuration
 - **Complexity for simple use cases** — requires understanding Bubble Tea concepts even for basic prompts
@@ -201,6 +205,7 @@
 | Eval/Cache | sugar-forms internal | Reactive update caching |
 
 **Many-to-Many Mapping:**
+
 - `huh/form.go` → `sugar-forms` (form runner, group management)
 - `huh/group.go` → `sugar-forms`
 - `huh/field_input.go` → `sugar-input`

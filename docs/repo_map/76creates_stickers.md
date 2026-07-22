@@ -1,6 +1,7 @@
 # 76creates/stickers
 
 ## Metadata
+
 - **URL**: https://github.com/76creates/stickers
 - **Language**: Go
 - **Stars**: ~500 (estimate; GitHub API credentials unavailable for exact count)
@@ -12,6 +13,7 @@
 ## Feature List
 
 ### FlexBox (`flexbox/` package)
+
 - **FlexBox**: Vertically-stacked responsive grid (rows flow top-to-bottom, cells within rows flow left-to-right)
 - **HorizontalFlexBox**: Horizontally-stacked responsive grid (columns flow left-to-right, cells within columns flow top-to-bottom)
 - **Ratio-based layout**: Cells and rows/columns sized by integer ratios (ratioX, ratioY) that distribute available space proportionally
@@ -23,6 +25,7 @@
 - **Lazy recalculation**: Dimensions are recomputed only on render when the `recalculateFlag` is set
 
 ### Table (`table/` package)
+
 - **Responsive table**: Built on top of FlexBox, inherits ratio-based column sizing
 - **Bidirectional scrolling**: X-axis (column) scrolling driven by cursor position; Y-axis (row) scrolling via visible window (`rowsTopIndex`)
 - **Sortable columns**: Supports `int`, `int8/16/32/64`, `float32/64`, and `string` types via Go generics (`Ordered` interface). `OrderByAsc(index)`, `OrderByDesc(index)` methods. Bubble sort implementation.
@@ -39,6 +42,7 @@
 ## Key Classes and Methods
 
 ### `flexbox.FlexBox` (`flexbox/flexbox.go`)
+
 - `New(width, height int) *FlexBox` — constructor
 - `SetStyle(style lipgloss.Style) *FlexBox` — set box style
 - `StylePassing(bool) *FlexBox` — toggle style inheritance
@@ -54,6 +58,7 @@
 - `ForceRecalculate()` — force layout recomputation
 
 ### `flexbox.Row` (`flexbox/row.go`)
+
 - `AddCells(...*Cell) *Row` — append cells (variadic)
 - `GetCell(int) *Cell` / `GetCellCopy(int) *Cell` / `GetCellWithID(string) *Cell`
 - `UpdateCellWithIndex(int, *Cell)` — replace cell
@@ -61,11 +66,13 @@
 - `CellsLen() int`
 
 ### `flexbox.Column` (`flexbox/column.go`)
+
 - Mirrors `Row` API but for `HorizontalFlexBox` columns
 - `AddCells(...*Cell) *Column`, `GetCell(int) *Cell`, `SetStyle`, `StylePassing`, `CellsLen()`
 - `setHeight(int) / setWidth(int)` (package-private)
 
 ### `flexbox.Cell` (`flexbox/cell.go`)
+
 - `NewCell(ratioX, ratioY int) *Cell`
 - `SetID(string) *Cell`
 - `SetContent(string) *Cell` — static content
@@ -76,6 +83,7 @@
 - `GetWidth() / GetHeight()`
 
 ### `table.Table` (`table/table.go`)
+
 - `NewTable(width, height int, columnHeaders []string) *Table`
 - `SetRatio([]int) *Table` — column width ratios
 - `SetTypes(...any) (*Table, error)` — set per-column types (must be `Ordered`)
@@ -96,6 +104,7 @@
 ## Notable Algorithms / Named Patterns
 
 ### Ratio-based responsive layout (`flexbox/utils.go`)
+
 The core layout algorithm distributes available space (width or height) across cells/rows/columns using integer ratios:
 
 - **`calculateRatio(distribute int, matrix []int) []int`**: Proportionally divides `distribute` units across `matrix` of ratio values. Uses `distributeToMatrix` for base floor division, then `distributeRemainder` to distribute leftover units one-by-one to the highest-ratio cell.
@@ -105,17 +114,21 @@ The core layout algorithm distributes available space (width or height) across c
 - **`calculateRatioWithMinimum(distribute int, matrix []int, minimumMatrix []int) []int`**: Recursive algorithm handling minimum constraints — if a cell's minimum exceeds its ratio-allocated share, the minimum is locked and the remaining space is re-distributed among the rest recursively.
 
 ### Bubble sort for table ordering (`table/ordering.go`)
+
 - **`sortIndex[T Ordered](slice []T, order SortingOrderKey) []int`**: Generic bubble sort returning a sorted **index** permutation rather than sorting in-place. Maintains parallel index array alongside value swaps.
 
 ### Bitmask cursor direction (`table/cursor.go`)
+
 - `cursorDirection` is a `uint8` with 2 bits encoding (vertical: up/down, horizontal: left/right). Methods use bitwise ops (`|`, `&^`) for direction changes and checks.
 
 ### Style inheritance chain
+
 - `FlexBox → Row → Cell` supports optional `StylePassing` where lipgloss styles are inherited via `style.Inherit(parent)` down the chain before rendering.
 
 ---
 
 ## Strengths
+
 - **CSS flexbox mental model**: Developers familiar with CSS flexbox will find the ratio-based layout intuitive — the gap between "I know what I want" and "I've implemented it" is small
 - **Deep bubbletea integration**: Natively follows the `tea.Model` pattern (`Update`/`View`/`Init`), fits cleanly into bubbletea applications
 - **Responsive without reinitialization**: Dimensions can be updated via `SetWidth`/`SetHeight` without recreating the component; layout recalculates lazily on next `Render`
@@ -129,6 +142,7 @@ The core layout algorithm distributes available space (width or height) across c
 ---
 
 ## Weaknesses
+
 - **Bubble sort**: The `sortIndex` implementation in `ordering.go` uses bubble sort (O(n²) worst case). For tables with thousands of rows this could be a noticeable performance issue. The author explicitly notes this in a comment and invites faster-algorithm PRs.
 - **No built-in key event handling**: Unlike some TUI frameworks, `FlexBox` and `Table` are pure render/calculation components — they don't handle keyboard/mouse input themselves. Applications must wire `tea.KeyMsg` to `CursorUp/Down/Left/Right` manually. This is by design (follows bubbletea's philosophy) but adds boilerplate for common patterns.
 - **Single-column filtering only**: `applyFilter` iterates over `filteredColumn` only; multi-column filtering is explicitly TODO. Users needing cross-column filters must implement filtering externally.
@@ -161,6 +175,7 @@ SugarCraft ports the Charmbracelet TUI ecosystem to PHP. The `stickers` library 
 | `StylePassing` inheritance | `SugarCraft\Bits\StyleInheritanceTrait` | FlexBox → Row → Cell style chain |
 
 ### Mapping Rationale
+
 - `flexbox/` maps to `sugar-bits` because `Cell`, `Row`, `FlexBox`, and `HorizontalFlexBox` are foundational/primitive TUI building blocks, not app-level components.
 - `table/` maps to `sugar-bits` as a leaf component (the table is a self-contained widget, not a foundational primitive) or optionally a sibling `sugar-table` if the table widget grows large enough to warrant separation.
 - The ratio-based layout algorithm in `flexbox/utils.go` is the core algorithmic contribution and must be faithfully ported — it is the mechanism that makes the CSS flexbox model work in a terminal character-cell environment.

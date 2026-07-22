@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — EOF detection doesn't consume pending input
+
 **Severity:** HIGH  
 **Location:** `src/InputHandler.php`
 
@@ -24,6 +25,7 @@ When `HandleCyan` (Ctrl+D) is received, the handler immediately sets `stopPropag
 ---
 
 ### Finding 2 — Mouse event coordinates off-by-one at viewport edges
+
 **Severity:** HIGH  
 **Location:** `src/MouseHandler.php:55`
 
@@ -34,6 +36,7 @@ Mouse coordinates are 0-indexed but terminal cells start at 1. The coordinate co
 ---
 
 ### Finding 3 — Debounce timer not reset on config change
+
 **Severity:** MEDIUM  
 **Location:** `src/Config.php`
 
@@ -44,6 +47,7 @@ When `throttle` or `debounce` settings change via `withThrottle()`/`withDebounce
 ---
 
 ### Finding 4 — Paste handler assumes clipboard is available
+
 **Severity:** MEDIUM  
 **Location:** `src/PasteHandler.php`
 
@@ -56,6 +60,7 @@ When `throttle` or `debounce` settings change via `withThrottle()`/`withDebounce
 ## 2. Performance Problems
 
 ### Finding 5 — Event handler chain O(n) lookup per event
+
 **Severity:** LOW  
 **Location:** `src/InputHandler.php`
 
@@ -64,6 +69,7 @@ Handlers stored in array, linear scan to find matching handler. For small N (typ
 ---
 
 ### Finding 6 — No N+1 issues detected
+
 **Severity:** N/A  
 
 ---
@@ -71,6 +77,7 @@ Handlers stored in array, linear scan to find matching handler. For small N (typ
 ## 3. Memory Leaks
 
 ### Finding 7 — Timer resource not explicitly closed
+
 **Severity:** MEDIUM  
 **Location:** `src/Config.php`
 
@@ -83,6 +90,7 @@ Handlers stored in array, linear scan to find matching handler. For small N (typ
 ## 4. Security
 
 ### Finding 8 — No security concerns
+
 **Severity:** N/A  
 
 Terminal-only library, no external input beyond keyboard/mouse.
@@ -92,6 +100,7 @@ Terminal-only library, no external input beyond keyboard/mouse.
 ## 5. Complexity
 
 ### Finding 9 — Complexity is appropriate
+
 **Severity:** N/A  
 
 Clean separation of concerns.
@@ -101,6 +110,7 @@ Clean separation of concerns.
 ## 6. Missing Features / Incomplete Ports
 
 ### Finding 10 — Missing resize event handler
+
 **Severity:** MEDIUM  
 **Location:** `src/InputHandler.php`
 
@@ -109,6 +119,7 @@ Upstream tea handles window resize events. Not implemented.
 ---
 
 ### Finding 11 — No paste start/end event support
+
 **Severity:** LOW  
 **Location:** `src/PasteHandler.php`
 
@@ -119,6 +130,7 @@ Only `PasteMsg` handled. No `PasteStartMsg`/`PasteEndMsg`.
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 12 — Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 
 ---
@@ -126,6 +138,7 @@ Only `PasteMsg` handled. No `PasteStartMsg`/`PasteEndMsg`.
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 13 — Async design is appropriate
+
 **Severity:** N/A  
 
 Uses ReactPHP Loop for timers correctly.

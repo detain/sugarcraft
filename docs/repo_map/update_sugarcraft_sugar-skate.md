@@ -3,6 +3,7 @@
 **sugar-skate** is a pure-PHP personal key/value store and the definitive PHP port of `charmbracelet/skate`. It provides multi-database isolation via SQLite file-per-database architecture, binary data storage via base64 encoding, glob pattern matching (translated to SQL LIKE), ordered listing, TTL/expiry, Levenshtein-based typo suggestions, and JSON/YAML import/export. The library is built with `final` classes, `declare(strict_types=1)`, PSR-4, and requires only PHP 8.3+ with `ext-sqlite3`.
 
 **Biggest opportunity areas:**
+
 1. Encryption at rest for sensitive data protection
 2. Cross-database atomic transactions
 3. Query capabilities beyond glob (range queries, value filtering, full-text search)
@@ -10,6 +11,7 @@
 5. Concurrent access handling
 
 **Biggest missing capabilities:**
+
 1. No encryption/authentication at rest
 2. No atomic cross-database operations
 3. No indexing for Levenshtein acceleration on large key sets
@@ -23,6 +25,7 @@
 ## Current Architecture
 
 ### Package Structure
+
 ```
 sugar-skate/
 ├── bin/skate                          # CLI entry point (280 lines)
@@ -44,6 +47,7 @@ sugar-skate/
 ### Core Components
 
 **Store** (`src/Store.php`) - Top-level API dispatching to per-database SQLite connections:
+
 - Multi-database via suffix syntax (`key@dbname`)
 - Database connection caching (`$this->databases[]`)
 - Data directory: `$XDG_CONFIG_HOME/skate/` or `~/.config/skate/` with `0o700` permissions
@@ -52,6 +56,7 @@ sugar-skate/
 - File-based binary storage via base64 encoding
 
 **Database** (`src/Database.php`) - SQLite wrapper per `.db` file:
+
 - Schema: `entries(key, value, binary, created, modified, expires_at)`
 - WAL journal mode + foreign keys enabled
 - Legacy migration via `ALTER TABLE` for `expires_at` column
@@ -60,11 +65,13 @@ sugar-skate/
 - Generator-based `list()` for memory efficiency
 
 **Entry** (`src/Entry.php`) - Value object with 6 readonly properties:
+
 - `isExpired()` - checks if `expiresAt <= now`
 - `rawValue()` - returns base64-decoded bytes if binary, original value otherwise
 - `Entry::binary(string $key, string $bytes)` - factory for binary entries
 
 **Import/Export System**:
+
 - `JsonImporter`: reads `{"key": "value", "_ttl": {"key": 3600}}` format
 - `YamlImporter`: reads `skate_ttl_key: 3600` entries, fallback YAML parser included
 - Atomic import via reflection accessing `Store::$databases`
@@ -105,6 +112,7 @@ sugar-skate/
 ## Critical Priority
 
 ### 1. Encryption at Rest
+
 **Title:** Data encryption for stored values and keys
 
 **Description:** All data stored in plain files in `~/.config/skate/` — anyone with file access can read everything including keys, values, and TTL metadata.
@@ -116,6 +124,7 @@ sugar-skate/
 **Source discussion:** `charmbracelet/skate` explicitly removed cloud sync and went local-only, acknowledging security concerns but not implementing encryption. The Go implementation stores plain files same as PHP.
 
 **Implementation ideas:**
+
 - Add `Store::encrypt(string $key, string $value, string $passphrase): string` helper
 - Add `Store::decrypt(string $key, string $encrypted, string $passphrase): ?string`
 - Use `openssl_encrypt()`/`openssl_decrypt()` with AES-256-GCM
@@ -128,6 +137,7 @@ sugar-skate/
 **Expected impact:** High - enables sensitive data storage use case
 
 ### 2. Query Beyond Glob Patterns
+
 **Title:** Value-based filtering and range queries
 
 **Description:** Currently only glob patterns on keys work. No ability to query by value content, range (numeric or temporal), or full-text search.
@@ -139,6 +149,7 @@ sugar-skate/
 **Source PR/issue:** Go skate Issue #142 "Query/filter by value" - deferred for v2
 
 **Implementation ideas:**
+
 - Add `Store::find(callable $filter): \Generator` for arbitrary value filtering
 - Add `Store::range(string $dbName, ?string $minKey, ?string $maxKey): \Generator`
 - Add `Entry::matches(string $pattern)` for regex/value matching
@@ -152,6 +163,7 @@ sugar-skate/
 ## High Value
 
 ### 3. Cross-Database Atomic Transactions
+
 **Title:** Multi-database transaction support
 
 **Description:** Multi-database atomic import explicitly throws `RuntimeException` because SQLite transactions are per-connection. No way to atomically write to multiple `.db` files.
@@ -161,6 +173,7 @@ sugar-skate/
 **Source repo:** N/A - inherent SQLite limitation
 
 **Implementation ideas:**
+
 - Implement two-phase commit pattern across multiple databases
 - Add `Store::multiTransaction(array $ops): mixed` where $ops = [['db' => 'name', 'fn' => callable]]
 - Document the limitation clearly with workaround suggestions
@@ -171,6 +184,7 @@ sugar-skate/
 **Expected impact:** Medium - enables more robust multi-database workflows
 
 ### 4. Levenshtein Performance on Large Key Sets
+
 **Title:** Index-based fuzzy search acceleration
 
 **Description:** `suggestSimilar()` loads all keys into PHP array via `allKeys()` and computes Levenshtein distance against every candidate. No optimization for databases with thousands of entries.
@@ -182,6 +196,7 @@ sugar-skate/
 **Source discussion:** Go skate Issue #89 - acknowledged, no current solution
 
 **Implementation ideas:**
+
 - Implement trigram index for approximate string matching (MySQL-style)
 - Use SQLite FTS5 for fuzzy search: `MATCH 'key*'` with prefix matching
 - Add configurable distance threshold based on key count
@@ -193,6 +208,7 @@ sugar-skate/
 **Expected impact:** Medium - enables large database usage without performance degradation
 
 ### 5. Compaction and Vacuum Scheduling
+
 **Title:** Automatic WAL journal cleanup
 
 **Description:** WAL journal mode is enabled but no `VACUUM` scheduling exists. Journal files grow indefinitely with heavy write usage.
@@ -204,6 +220,7 @@ sugar-skate/
 **Source PR:** Dgraph Badger#323 - compaction design document
 
 **Implementation ideas:**
+
 - Add `Database::vacuum(): void` method
 - Add `Store::vacuumAll(): void` for all databases
 - Implement automatic vacuum after N writes (configurable)
@@ -217,6 +234,7 @@ sugar-skate/
 ## Medium Priority
 
 ### 6. Concurrent Access Support
+
 **Title:** Multi-process locking and contention handling
 
 **Description:** Single PHP process model. Multiple processes accessing same `.db` file will have locking contention. No advisory locking or optimistic concurrency control.
@@ -226,6 +244,7 @@ sugar-skate/
 **Source repo:** SQLite itself handles this via file locking but sugar-skate doesn't expose or manage it
 
 **Implementation ideas:**
+
 - Add `Database::lockExclusive(): void` / `Database::lockShared(): void`
 - Implement retry logic with configurable timeout for busy locks
 - Consider `BEGIN IMMEDIATE` as already used, but make configurable
@@ -236,6 +255,7 @@ sugar-skate/
 **Expected impact:** Low - most usage is single-process CLI
 
 ### 7. Binary Data Native Storage
+
 **Title:** Avoid base64 overhead for binary data
 
 **Description:** Binary data is base64 encoded, increasing size by ~33%. No native binary storage despite SQLite supporting BLOB type.
@@ -245,6 +265,7 @@ sugar-skate/
 **Source repo:** `charmbracelet/skate` uses BadgerDB which stores raw bytes
 
 **Implementation ideas:**
+
 - Store BLOB directly in SQLite `value BLOB` column instead of TEXT
 - Add `Entry::isBinary()` to detect storage format
 - Add `Entry::rawValue()` that doesn't base64 decode
@@ -256,6 +277,7 @@ sugar-skate/
 **Expected impact:** Medium - saves space and CPU for binary data
 
 ### 8. Import/Export Enhancements
+
 **Title:** Streaming export and incremental import
 
 **Description:** Current import/export loads entire dataset into memory. No streaming support for large databases.
@@ -265,6 +287,7 @@ sugar-skate/
 **Source repo:** `charmbracelet/skate` has no import/export at all (PHP-only feature)
 
 **Implementation ideas:**
+
 - Add `ExportCommand::toStream(resource $handle): void` for streaming export
 - Add `JsonImporter::importStream(resource $handle): int` for streaming import
 - Add progress callback support for long-running imports
@@ -278,6 +301,7 @@ sugar-skate/
 ## Low Priority
 
 ### 9. Interactive TUI Mode
+
 **Title:** Full-screen browser for data exploration
 
 **Description:** Currently pure CLI with no interactive browsing. Users cannot visually explore databases.
@@ -285,6 +309,7 @@ sugar-skate/
 **Source repo:** `charmbracelet/skate` is CLI-only, but `charmbracelet/bubbletea` and `ratatui/ratatui` provide TUI frameworks
 
 **Implementation ideas:**
+
 - Implement `skate browse [db]` command using `candy-core`
 - Browse entries with vim-style navigation
 - Support search/filter within the browser
@@ -296,6 +321,7 @@ sugar-skate/
 **Expected impact:** Low - most usage is scripted/automated
 
 ### 10. Database Statistics and introspection
+
 **Title:** Metadata and analytics
 
 **Description:** No way to get database statistics beyond listing entries.
@@ -305,6 +331,7 @@ sugar-skate/
 **Source repo:** BadgerDB provides `badger.DB.GetThumbtable()` statistics
 
 **Implementation ideas:**
+
 - Add `Store::stats(string $dbName): DatabaseStats` with entry count, total size, WAL size
 - Add `Store::oldestExpiry(): ?\DateTimeImmutable` for TTL analysis
 - Add CLI command: `skate stats [db]`
@@ -315,6 +342,7 @@ sugar-skate/
 **Expected impact:** Low - administrative convenience feature
 
 ### 11. Shell Completion and Help Improvements
+
 **Title:** Enhanced CLI discoverability
 
 **Description:** Basic `--help` exists but no shell completion for keys, databases, or subcommands.
@@ -324,6 +352,7 @@ sugar-skate/
 **Source repo:** `charmbracelet/gum` provides completion generation
 
 **Implementation ideas:**
+
 - Add `skate complete bash` / `skate complete zsh` commands
 - Support key completion for `get`, `delete`, `list` commands
 - Support database name completion for `list-dbs`, `export`
@@ -342,12 +371,14 @@ sugar-skate/
 ### 1. Storage Backend: SQLite vs BadgerDB (LSM-tree)
 
 **Current (sugar-skate):**
+
 - SQLite with B-tree storage engine
 - File-per-database architecture
 - WAL journal mode for concurrency
 - BLOB storage via base64 encoding
 
 **External (Go skate + BadgerDB):**
+
 - LSM-tree (Log-Structured Merge-tree) for append-only storage
 - Directory-per-database architecture
 - Concurrent read/write transactions
@@ -363,11 +394,13 @@ sugar-skate/
 ### 2. Fuzzy Search: Full Scan vs Trigram Index
 
 **Current:**
+
 - `levenshtein()` computed against all keys on every miss
 - O(n*m) time complexity per suggestion
 - Memory: loads all keys into PHP array
 
 **External (PostgreSQL trigram extension):**
+
 - Trigram index on keys
 - ` similarity(key, $1) > 0.3` for fast approximate matching
 - Index-guided search, not full scan
@@ -381,11 +414,13 @@ sugar-skate/
 ### 3. Data Directory Resolution
 
 **Current (sugar-skate):**
+
 - Respects `$XDG_CONFIG_HOME` environment variable
 - Falls back to `~/.config/skate`
 - Creates with `0o700` permissions
 
 **External (Go skate via go-app-paths):**
+
 - Cross-platform path resolution (`~/.local/share/charm/kv/` on Unix)
 - Platform-specific conventions respected automatically
 
@@ -398,10 +433,12 @@ sugar-skate/
 ### 4. TTL Storage: ISO 8601 TEXT vs Unix Epoch INTEGER
 
 **Current:**
+
 - Stores TTL as ISO 8601 datetime in TEXT column
 - Human-readable, but requires string comparison
 
 **External:**
+
 - BadgerDB stores expiry as Unix timestamp (uint64)
 - Efficient integer comparison for range queries
 
@@ -416,6 +453,7 @@ sugar-skate/
 # Architecture Improvements
 
 ## 1. Store Layer Simplification
+
 **Current:** Store implements both API routing and database lifecycle management
 
 **Proposed:** Separate `Store` (API router) from `DatabaseManager` (connection lifecycle)
@@ -429,6 +467,7 @@ interface DatabaseManager {
 ```
 
 ## 2. Entry Value Object Enhancement
+
 **Current:** Entry is pure data holder with limited behavior
 
 **Proposed:** Add rich methods for serialization/deserialization
@@ -439,6 +478,7 @@ public function toArray(): array;
 ```
 
 ## 3. Configuration Object
+
 **Current:** Configuration via constructor arguments and environment variables
 
 **Proposed:** Explicit configuration object
@@ -454,6 +494,7 @@ final class StoreConfig {
 ```
 
 ## 4. Database Transaction Abstraction
+
 **Current:** `Database::transaction(callable $fn)` returns mixed
 
 **Proposed:** Formalize with result type
@@ -472,6 +513,7 @@ final class TransactionResult {
 # API / Developer Experience Improvements
 
 ## 1. Fluent Builder for Store Creation
+
 **Current:**
 ```php
 $store = new Store();
@@ -487,6 +529,7 @@ $store = Store::create()
 ```
 
 ## 2. Connection Pooling
+
 **Current:** Database connections cached in `$this->databases[]`
 
 **Proposed:** Explicit pool with lifecycle management
@@ -498,6 +541,7 @@ $container->get(Store::class);
 ```
 
 ## 3. Type-Safe Generic Methods
+
 **Current:**
 ```php
 $value = $store->get('key'); // returns string|null
@@ -506,15 +550,18 @@ $value = $store->get('key'); // returns string|null
 **Proposed:** Generic type hints for IDE support
 ```php
 /**
+
  * @template T
  * @param string $key
  * @param class-string<T> $type
  * @return T|null
+
  */
 public function get(string $key, string $type = 'string'): mixed;
 ```
 
 ## 4. Batch Operations
+
 **Current:** Set/get/delete one key at a time
 
 **Proposed:**
@@ -533,6 +580,7 @@ $store->batch(function (Batch $b) {
 ## 1. Usage Scenarios and Recipes
 
 ### Credential Storage with Encryption
+
 ```php
 $store = Store::create()
     ->withEncryption(getenv('SUGAR_SKATE_KEY'))
@@ -546,6 +594,7 @@ $token = $store->get('api-token', 'credentials');
 ```
 
 ### TTL-based Session Management
+
 ```php
 // Short-lived session
 $store->setWithTtl('session:abc123', $data, 3600);
@@ -556,6 +605,7 @@ $expired = $store->list(pattern: 'session:*', db: 'sessions')
 ```
 
 ### Multi-tenant Data Isolation
+
 ```php
 // Each tenant gets own database
 $store->set("config:{$tenantId}", json_encode($config), 'tenants');
@@ -565,6 +615,7 @@ $config = json_decode($store->get("config:{$tenantId}", 'tenants'));
 ```
 
 ### Backup and Restore via Export
+
 ```php
 // Export all databases
 $store->export('json', 'default', 'user-*');
@@ -577,12 +628,14 @@ foreach ($store->listDatabases() as $db) {
 ```
 
 ## 2. Performance Tuning Guide
+
 - When to use separate databases vs key prefixes
 - WAL mode tuning for read-heavy vs write-heavy workloads
 - Optimal TTL granularity for expiry patterns
 - Memory considerations for large key sets
 
 ## 3. Migration Guide
+
 - From Go skate (Badger) to sugar-skate (SQLite)
 - From other KV stores (Redis, Memcached)
 - Schema migration for legacy databases with missing `expires_at`
@@ -592,7 +645,9 @@ foreach ($store->listDatabases() as $db) {
 # UX / TUI Improvements
 
 ## 1. Interactive Browser Mode
+
 Using `candy-core` (TUI framework), implement `skate browse [db]`:
+
 - Vim-style key navigation (j/k/h/l, gg, G)
 - Real-time search/filter as you type
 - Entry preview with formatted JSON/YAML
@@ -600,14 +655,18 @@ Using `candy-core` (TUI framework), implement `skate browse [db]`:
 - Delete confirmation with entry preview
 
 ## 2. Colorized CLI Output
+
 Add optional colorized output via `candy-sprinkles`:
+
 - Colorized key-value display in list
 - Expiry warnings (red for soon-to-expire)
 - Database size indicators
 - Progress bars for import/export
 
 ## 3. Smart Suggestions
+
 Enhance Levenshtein suggestions:
+
 - Show multiple suggestions ranked by distance
 - Include "did you mean..." with confidence score
 - Add `--suggest` flag to control suggestion behavior
@@ -617,27 +676,34 @@ Enhance Levenshtein suggestions:
 # Testing / Reliability Improvements
 
 ## 1. Property-Based Testing
+
 Add `php-property-test` or similar for:
+
 - Round-trip serialization (Entry → DB → Entry)
 - TTL expiry edge cases
 - Glob pattern matching correctness
 - Concurrent access simulation
 
 ## 2. Fuzzing
+
 Add fuzzing for:
+
 - Malformed JSON/YAML import files
 - Invalid glob patterns
 - Binary data handling
 - Unicode key/value edge cases
 
 ## 3. Performance Regression Tests
+
 Add benchmarks for:
+
 - `get()` on 1000, 10000, 100000 keys
 - Levenshtein suggestion on N keys
 - List with glob pattern on N keys
 - Import/Export of N entries
 
 ## 4. Chaos Testing
+
 - Simulate partial write failures
 - Simulate disk space exhaustion
 - Simulate corrupted database files
@@ -647,6 +713,7 @@ Add benchmarks for:
 # Ecosystem / Integration Opportunities
 
 ## 1. Symfony Cache Adapter
+
 Implement `symfony/cache` `CacheItemPoolInterface`:
 ```php
 use SugarCraft\Skate\SymfonyCacheAdapter;
@@ -657,6 +724,7 @@ $cache = new FilesystemAdapter('', 0, '', $adapter);
 ```
 
 ## 2. PSR-16 Simple Cache Integration
+
 Implement `psr/simple-cache`:
 ```php
 use SugarCraft\Skate\Psr16Cache;
@@ -667,6 +735,7 @@ $cache = new Psr16Cache($store, 'default');
 ```
 
 ## 3. Laravel Database Driver
+
 Add as Laravel database driver:
 ```php
 // config/database.php
@@ -679,6 +748,7 @@ Add as Laravel database driver:
 ```
 
 ## 4. ReactPHP Integration
+
 Add async interface via ReactPHP:
 ```php
 use React\Async\Awaitable;
@@ -692,24 +762,28 @@ $result = await $awaitable;
 # Notable PRs / Issues / Discussions
 
 ## charmbracelet/skate#142 - Query by value
+
 **Summary:** Request to add value-based filtering beyond keys
 **Relevance:** sugar-skate has same limitation
 **Lessons learned:** Could implement SQLite FTS5 for value search
 **Potential adaptation:** Add `Store::findByValue(string $pattern)` using FTS5
 
 ## charmbracelet/skate#89 - Fuzzy search performance
+
 **Summary:** Levenshtein is slow on large key sets
 **Relevance:** sugar-skate uses identical algorithm
 **Lessons learned:** Trigram index or approximate nearest neighbor could help
 **Potential adaptation:** Add configurable suggestion threshold
 
 ## charmbracelet/skate#67 - Encryption at rest
+
 **Summary:** Feature request for encrypted storage
 **Relevance:** sugar-skate has same gap
 **Lessons learned:** Encryption should be transparent to API
 **Potential adaptation:** Implement `Store::withEncryption()` wrapper
 
 ## Dgraph/Badger#323 - Compaction design
+
 **Summary:** Detailed design for LSM-tree compaction
 **Relevance:** SQLite equivalent is VACUUM command
 **Lessons learned:** Could schedule automatic VACUUM after N writes
@@ -773,6 +847,7 @@ $result = await $awaitable;
 **sugar-skate** represents a mature, well-engineered PHP port of `charmbracelet/skate` that successfully adapts the Go original's design to PHP's SQLite-backed ecosystem. The library excels in its zero-configuration operation, multi-database isolation, and thoughtful CLI interface with STDIN/stdout separation.
 
 **Core strengths:**
+
 - Clean API design with immutable value objects
 - Comprehensive test coverage (56 test methods)
 - Memory-efficient generator-based listing
@@ -782,11 +857,13 @@ $result = await $awaitable;
 - Glob pattern matching translated to SQL LIKE
 
 **Critical gaps to address:**
+
 - **Encryption** - Most urgent for sensitive data use cases; should be built-in, not optional
 - **Query beyond glob** - FTS5 integration would transform the library from KV store to queryable store
 - **Large-scale performance** - Levenshtein optimization and compaction scheduling for long-term health
 
 **Competitive positioning:**
+
 - Compared to Go `skate`: Adds import/export, i18n, schema migration, but lacks BadgerDB's performance
 - Compared to `pterm/pterm`: Focuses purely on KV storage rather than general CLI output
 - Compared to `ratatui/ratatui`: Not a TUI framework, just a data storage library

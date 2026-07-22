@@ -24,6 +24,7 @@ Sugar-boxer is a well-architected PHP port of bubbleboxer with a solid foundatio
 **License:** MIT | **Language:** Go 1.17+
 
 **Approach:**
+
 - Tree-based layout engine integrated with bubbletea tea.Model
 - Nodes hold children + orientation + optional SizeFunc for custom distribution
 - Leaf nodes map to tea.Model via address string
@@ -45,11 +46,13 @@ type Node struct {
 ```
 
 **Strengths:**
+
 - Clean separation of layout tree from content models
 - SizeFunc allows custom space distribution algorithms
 - Integration with bubbletea ecosystem
 
 **Limitations:**
+
 - Only single border style (hardcoded │ and ─)
 - No text alignment control
 - No title support
@@ -64,6 +67,7 @@ type Node struct {
 **License:** MIT | **Stars:** ~600
 
 **Approach:**
+
 - Single-box renderer with builder pattern
 - 9 built-in styles: Single, Double, Round, Bold, SingleDouble, DoubleSingle, Classic, Hidden, Block
 - Custom glyphs for all corners and edges
@@ -85,11 +89,13 @@ out, err := b.Render("Title", "Content")
 ```
 
 **Strengths:**
+
 - Comprehensive style system
 - Color and Unicode handling via go-runewidth
 - Explicit error handling
 
 **Relevance to sugar-boxer:**
+
 - Provides design patterns for style enum and custom glyph configuration
 - Alignment enum pattern useful for PHP implementation
 
@@ -101,6 +107,7 @@ out, err := b.Render("Title", "Content")
 **License:** MIT | **Version:** 0.4.0
 
 **Approach:**
+
 - Single-box renderer with builder pattern
 - Multiple border styles via BorderStyle enum
 - TextAlignment and TitleAlignment enums
@@ -123,11 +130,13 @@ let result = builder()
 ```
 
 **Strengths:**
+
 - Closure-based dynamic sizing is excellent for responsive layouts
 - Comprehensive alignment system (text, title, float)
 - Margin support (outer spacing)
 
 **Relevance to sugar-boxer:**
+
 - Dynamic sizing pattern using closures could replace fixed minWidth/minHeight
 - Margin concept currently missing from sugar-boxer
 
@@ -139,6 +148,7 @@ let result = builder()
 **License:** MIT | **Focus:** Layout
 
 **Approach:**
+
 - Flexbox and Grid layout system
 - Child expansion factors (expand(1) vs expand(2))
 - Border configuration on box_sizing
@@ -157,6 +167,7 @@ let flexbox = Flexbox::new(Orientation::Horizontal, false)
 ```
 
 **Relevance to sugar-boxer:**
+
 - Expansion factor concept could enhance proportional distribution
 - Centered() alignment helper pattern
 
@@ -168,11 +179,13 @@ let flexbox = Flexbox::new(Orientation::Horizontal, false)
 **License:** MIT | **Version:** 1.2.2
 
 **Approach:**
+
 - Join text blocks vertically or horizontally
 - Padding and fill options
 - Overlapping boxes with transparency
 
 **Relevance to sugar-boxer:**
+
 - Similar core concept (block joining)
 - Transparency character concept for layered rendering
 
@@ -184,6 +197,7 @@ let flexbox = Flexbox::new(Orientation::Horizontal, false)
 **License:** MIT
 
 **Approach:**
+
 - Image to ASCII art conversion
 - Color support via Front/Back enums
 - Multiple output formats (terminal, HTML, image file)
@@ -198,16 +212,19 @@ let flexbox = Flexbox::new(Orientation::Horizontal, false)
 **License:** GPLv3
 
 **Approach:**
+
 - Command-line filter for drawing ASCII boxes
 - Configurable box designs stored in config file
 - Elastic sizing (adjusts to content)
 - Text positioning regular expressions
 
 **Strengths:**
+
 - Design customization via configuration file
 - Elastic/adaptive sizing
 
 **Relevance to sugar-boxer:**
+
 - Elastic sizing concept for auto-fit to content
 
 ---

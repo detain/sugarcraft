@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — Toast renders without checking viewport bounds
+
 **Severity:** MEDIUM  
 **Location:** `src/Toast.php`
 
@@ -24,6 +25,7 @@ If the toast is wider than the terminal width, it overflows without wrapping or 
 ---
 
 ### Finding 2 — Auto-dismiss timer not cancellable
+
 **Severity:** MEDIUM  
 **Location:** `src/Toast.php`
 
@@ -34,6 +36,7 @@ Once a toast is shown, its auto-dismiss timer cannot be cancelled or extended. I
 ---
 
 ### Finding 3 — Null message renders as "null" string
+
 **Severity:** LOW  
 **Location:** `src/Toast.php`
 
@@ -44,6 +47,7 @@ If `$message` is `null`, it renders as the string "null". Should be handled expl
 ## 2. Performance Problems
 
 ### Finding 4 — No performance concerns
+
 **Severity:** N/A  
 
 ---
@@ -51,6 +55,7 @@ If `$message` is `null`, it renders as the string "null". Should be handled expl
 ## 3. Memory Leaks
 
 ### Finding 5 — No memory leaks detected
+
 **Severity:** N/A  
 
 ---
@@ -58,6 +63,7 @@ If `$message` is `null`, it renders as the string "null". Should be handled expl
 ## 4. Security
 
 ### Finding 6 — No security concerns
+
 **Severity:** N/A  
 
 ---
@@ -65,6 +71,7 @@ If `$message` is `null`, it renders as the string "null". Should be handled expl
 ## 5. Complexity
 
 ### Finding 7 — Complexity is appropriate
+
 **Severity:** N/A  
 
 ---
@@ -72,6 +79,7 @@ If `$message` is `null`, it renders as the string "null". Should be handled expl
 ## 6. Missing Features
 
 ### Finding 8 — No action buttons on toast
+
 **Severity:** MEDIUM  
 **Location:** `src/Toast.php`
 
@@ -80,6 +88,7 @@ Upstream `toast` supports action buttons (e.g., "Undo", "Cancel"). Not implement
 ---
 
 ### Finding 9 — No stacked/queued toasts
+
 **Severity:** LOW  
 **Location:** `src/Toast.php`
 
@@ -88,6 +97,7 @@ Multiple toasts overwrite each other rather than queuing/stacking.
 ---
 
 ### Finding 10 — No `examples/` directory
+
 **Severity:** LOW  
 
 ---
@@ -95,6 +105,7 @@ Multiple toasts overwrite each other rather than queuing/stacking.
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 11 — Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 
 ---
@@ -102,6 +113,7 @@ Multiple toasts overwrite each other rather than queuing/stacking.
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 12 — No async improvements needed
+
 **Severity:** N/A  
 
 ---

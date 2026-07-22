@@ -10,13 +10,16 @@ i18n for file-manager prompts, confirmations, error strings, hint bar.
 ## Files
 
 **Create:**
+
 - `super-candy/lang/en.php`.
 - `super-candy/src/Lang.php`.
 
 **Modify:**
+
 - Files under `super-candy/src/`.
 
 **Tests:**
+
 - `super-candy/tests/LangCoverageTest.php`.
 
 ## Acceptance

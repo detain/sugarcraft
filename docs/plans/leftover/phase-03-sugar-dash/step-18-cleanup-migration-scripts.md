@@ -12,6 +12,7 @@ dead code. Plus, `dashboard-interactive.php` is misnamed (it's static).
 ## Files
 
 **Delete:**
+
 - `sugar-dash/delete_grid_files.php`
 - `sugar-dash/delete_grid_files.py`
 - `sugar-dash/delete_grid.sh`
@@ -25,12 +26,14 @@ for archival; otherwise just delete. Recommend delete — they're not
 useful post-reorg.)
 
 **Rename:**
+
 - `sugar-dash/examples/dashboard-interactive.php` →
   `sugar-dash/examples/dashboard-accordion-timeline.php` (since it's a
   static accordion + timeline render, not interactive).
 - Update any references in `README.md` and the homepage tile.
 
 **Update:**
+
 - `sugar-dash/README.md` "Examples" section — fix references.
 - `sugar-dash/.gitignore` — if any of the deleted scripts created
   artifacts, ensure those artifacts are ignored.

@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1: Division by zero in `distribute()` when all weights are zero
+
 **Severity:** HIGH  
 **Location:** `src/SugarBoxer.php:792`
 
@@ -34,6 +35,7 @@ if ($totalWeight === 0) {
 ---
 
 ### Finding 2: Zero-width grapheme carry can grow unboundedly
+
 **Severity:** MEDIUM  
 **Location:** `src/SugarBoxer.php:426`
 
@@ -44,6 +46,7 @@ if ($totalWeight === 0) {
 ---
 
 ### Finding 3: `withMargin()` uses fragile `func_num_args()` pattern
+
 **Severity:** MEDIUM  
 **Location:** `src/Node.php:227-231`
 
@@ -62,6 +65,7 @@ public function withMargin(int $top, ?int $right = null, ?int $bottom = null, ?i
 ---
 
 ### Finding 4: Identity check `=== []` for empty array
+
 **Severity:** LOW  
 **Location:** `src/SugarBoxer.php:329`
 
@@ -70,6 +74,7 @@ public function withMargin(int $top, ?int $right = null, ?int $bottom = null, ?i
 ---
 
 ### Finding 5: No validation for `$width` or `$height` being negative
+
 **Severity:** MEDIUM  
 **Location:** `src/SugarBoxer.php:87`
 
@@ -87,6 +92,7 @@ if ($width < 1 || $height < 1) {
 ## 2. Performance Problems
 
 ### Finding 6: SGR prefix recomputed on every `renderContent` call
+
 **Severity:** MEDIUM  
 **Location:** `src/SugarBoxer.php:362-369`
 
@@ -97,6 +103,7 @@ Probes style by rendering a space on every call. Same style reused 1000× comput
 ---
 
 ### Finding 7: Multiple passes over children arrays
+
 **Severity:** MEDIUM  
 **Location:** `src/SugarBoxer.php:235-243`
 
@@ -115,6 +122,7 @@ foreach ($children as $c) {
 ---
 
 ### Finding 8: `totalWidth()`/`totalHeight()` recursively recomputed
+
 **Severity:** LOW  
 **Location:** `src/Node.php:260-309`
 
@@ -123,6 +131,7 @@ Consider lazy caching if profiling shows it matters.
 ---
 
 ### Finding 9: `function_exists` called on every grapheme check
+
 **Severity:** LOW  
 **Location:** `src/SugarBoxer.php:546-547`
 
@@ -131,6 +140,7 @@ Cache in static variable.
 ---
 
 ### Finding 10: Regex recompiled per call in `sgrLeavesStyleOpen`
+
 **Severity:** LOW  
 **Location:** `src/SugarBoxer.php:576`
 
@@ -141,6 +151,7 @@ Extract to static compiled pattern.
 ## 3. Memory Leaks
 
 ### Finding 11: No memory leak issues found
+
 **Severity:** N/A  
 
 No streams, resources, or lingering references. `previousFrame` properly cleared on resize.
@@ -150,6 +161,7 @@ No streams, resources, or lingering references. `previousFrame` properly cleared
 ## 4. Security
 
 ### Finding 12: No input size limits documented
+
 **Severity:** LOW  
 
 Large inputs could cause memory exhaustion. Document expected size limits.
@@ -159,6 +171,7 @@ Large inputs could cause memory exhaustion. Document expected size limits.
 ## 5. Complexity
 
 ### Finding 13: `nop()` sentinel uses `\stdClass` instead of dedicated type
+
 **Severity:** LOW  
 **Location:** `src/Node.php:320-324`
 
@@ -167,6 +180,7 @@ Large inputs could cause memory exhaustion. Document expected size limits.
 ---
 
 ### Finding 14: Border separators not drawn between flex children
+
 **Severity:** MEDIUM  
 **Location:** `src/SugarBoxer.php:268-270`
 
@@ -179,6 +193,7 @@ In flex path, separator drawing is omitted. Not documented.
 ## 6. Missing Features / Incomplete Port
 
 ### Finding 15: NOBORDER node type ignores multiple children
+
 **Severity:** LOW  
 **Location:** `src/SugarBoxer.php:327-331`
 
@@ -189,6 +204,7 @@ Only passes through first child, ignoring others.
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 16: Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 
 Uses promoted constructors, `match`, `readonly`, `final class`. No issues.
@@ -196,6 +212,7 @@ Uses promoted constructors, `match`, `readonly`, `final class`. No issues.
 ---
 
 ### Finding 17: Zero-dimension edge case in `array_fill`
+
 **Severity:** LOW  
 **Location:** `src/SugarBoxer.php:92`
 
@@ -206,6 +223,7 @@ Uses promoted constructors, `match`, `readonly`, `final class`. No issues.
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 18: No async improvements applicable
+
 **Severity:** N/A  
 
 Pure computation library with no I/O. No natural async boundary.

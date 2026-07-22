@@ -56,6 +56,7 @@ From `repo_map/lrstanley_bubblezone.md`:
 ## 4. High-Signal Open Issues
 
 ### Issue #11: "bug: Handle zones in non WithAltScreen" (1 comment, open)
+
 **Problem:** When not using alt-screen mode, zone Y-positions are calculated as if content starts at top of terminal. Real applications may render starting at arbitrary vertical offsets.
 
 **Root Cause:** bubblezone's scanner assumes the first character of scanned output corresponds to row 0. Without alt-screen, the terminal has existing content above the application output.
@@ -68,7 +69,9 @@ From `repo_map/lrstanley_bubblezone.md`:
 ---
 
 ### Issue #7: "feature: debug mode" (0 comments, open)
+
 **Requested Features:**
+
 - Bounds checking validation
 - Incorrect usage detection for markers
 - Zone boundary visualization
@@ -80,9 +83,11 @@ From `repo_map/lrstanley_bubblezone.md`:
 ## 5. Important Closed Issues
 
 ### Issue #51: "breaking: bubbletea/lipgloss/bubbles v2" (6 comments, closed)
+
 **What happened:** A major v2 branch was created to support BubbleTea v2 and lipgloss v2. The branch is at `v2.0.0-alpha.3`.
 
 **Key observations from discussion:**
+
 - Maintainer acknowledges v2 may break lipgloss v2's canvas/compositor features
 - `Soft Serve v2` is already using this branch and patching it further
 - One user reported `zone.Get` always returns `nil` when using the new canvas and layers — turned out to be a missed `zone.Scan` call
@@ -93,11 +98,13 @@ From `repo_map/lrstanley_bubblezone.md`:
 ---
 
 ### Issue #10: "feature: workflow for de-duplicating mouse events when within a given zone" (1 comment, closed)
+
 **Problem:** When holding a mouse button and dragging, BubbleTea emits multiple events for each cell the mouse crosses. Simple bounds checking leads to duplicate actions (e.g., firing a button action for each column/row crossed during drag).
 
 **Screenshot evidence:** Shows a drag operation producing multiple `MouseDown` events across column/row boundaries.
 
 **User-proposed solutions:**
+
 1. Capture `mouseup` event instead of `mousedown` (mouseup only fires once)
 2. Cache zone+action pairs and clear on `mouseup`
 
@@ -113,6 +120,7 @@ This is a **direct feature opportunity** for SugarCraft to solve better than Go-
 ---
 
 ### Issue #50: "feature: Support V2 BETA" (1 comment, closed)
+
 **Contributor:** alexanderbh offered a PR to a v2-exp branch. The only required changes were the new `MouseMsg` structure in BubbleTea v2.
 
 **Analysis:** The v2 API changes were minimal — primarily the mouse message structure changed.
@@ -152,10 +160,12 @@ This is a **direct feature opportunity** for SugarCraft to solve better than Go-
 ## 8. Important PRs
 
 **Open PRs (both are Renovate bot dependency updates):**
+
 - #57: Update charm.land/bubbles/v2 (v2.0.0 → v2.1.0)
 - #56: Update non-major dependencies
 
 **Merged PRs (representative sample):**
+
 - #55/54: Dependency bumps (most recent)
 - #53: Go version update (1.24.2 → 1.26.0)
 - #52: bubbletea v1.3.4 → v1.3.10
@@ -167,6 +177,7 @@ This is a **direct feature opportunity** for SugarCraft to solve better than Go-
 ## 9. Architectural Changes
 
 ### v2 Breaking Changes:
+
 ```
 - charm.land/bubbletea/v2 (was github.com/charmbracelet/bubbletea)
 - charm.land/lipgloss/v2 (was github.com/charmbracelet/lipgloss)
@@ -175,9 +186,11 @@ This is a **direct feature opportunity** for SugarCraft to solve better than Go-
 ```
 
 ### The Great Relocation:
+
 The v2 module path moved from `github.com/lrstanley/bubblezone` to `github.com/lrstanley/bubblezone/v2`. This is a Go module version suffix pattern for major version handling.
 
 ### Canvas/Compositor Warning:
+
 > "bubblezone v2 may not work when using the lipgloss v2 canvas/compositor. lipgloss/bubbletea v2 have some more native features for mouse event tracking. That said, I do plan to release another library that covers advanced layouts/layering/etc with improved mouse event tracking (that's even better than bubblezone)."
 
 **Analysis:** The author explicitly acknowledges bubblezone has reached its architectural ceiling. The successor library hints at a more layered, composable approach to mouse tracking — possibly one that doesn't rely on string-scanning ANSI markers.
@@ -222,6 +235,7 @@ The README explicitly claims "fast" as a feature, noting:
 ## 13. Migration Problems
 
 **v2 migration pain points observed:**
+
 1. Import path changes everywhere (Go module v2 convention)
 2. `MouseMsg` structure changed in BubbleTea v2 (minimal change needed)
 3. lipgloss v2 canvas/compositor incompatibility — some applications cannot upgrade
@@ -234,15 +248,19 @@ The README explicitly claims "fast" as a feature, noting:
 ## 14. Clever Fixes & Workarounds
 
 ### Workaround: Non-rectangular zone padding
+
 Users surround organic shapes with padding to approximate the bounding box, accepting false-positive hits in corners.
 
 ### Workaround: Drag event deduplication
+
 Users implement their own deduplication by tracking which zones they've already fired an action for, clearing on `mouseup`.
 
 ### Workaround: lipgloss.Width() instead of len()
+
 The documentation explicitly directs users to use `lipgloss.Width()` rather than `len()` for width calculations when using bubblezone.
 
 ### Internal fix: Iteration-based invalidation
+
 ```go
 // Uses time.Now().Nanosecond() as iteration marker
 // Worker clears zones whose iteration differs from current scan's iteration
@@ -289,6 +307,7 @@ Heavy use of Renovate bot — maintainer focuses on substantive changes, not dep
 ## 18. Problems Likely Relevant To SugarCraft
 
 ### Problem A: Alt-screen dependency
+
 **Severity:** High
 **Description:** bubblezone fundamentally requires alt-screen mode. SugarCraft's TUI support should either:
 - Require alt-screen mode for zone-based mouse tracking
@@ -296,18 +315,22 @@ Heavy use of Renovate bot — maintainer focuses on substantive changes, not dep
 - Document that mouse zones require alt-screen
 
 ### Problem B: AABB collision for organic shapes
+
 **Severity:** Medium
 **Description:** SugarCraft should consider whether to implement any shape-aware hit testing (mask-based) or just document the padding workaround clearly.
 
 ### Problem C: Mouse event deduplication
+
 **Severity:** High
 **Description:** SugarCraft MUST implement proper click/drag deduplication. The Go library deferred this to upstream v2 changes (mouseup/mousedown event separation). PHP's BubbleTea port should provide explicit helpers for this.
 
 ### Problem D: Tight coupling to styling library
+
 **Severity:** High
 **Description:** bubblezone's ANSI marker approach is coupled to lipgloss's width calculation behavior. If SugarCraft's styling library changes rendering approach (like lipgloss v2 canvas), zone scanning could break. **SugarCraft should strictly isolate zone logic from styling logic.**
 
 ### Problem E: Global singleton convenience vs explicit manager complexity
+
 **Severity:** Medium
 **Description:** The global singleton is convenient but creates testing difficulties. SugarCraft should provide both patterns but make the explicit manager the default for library code.
 
@@ -336,21 +359,26 @@ Heavy use of Renovate bot — maintainer focuses on substantive changes, not dep
 ## 20. Architectural Lessons
 
 ### Lesson 1: String-scanning markers are fragile
+
 The zero-width ANSI marker approach works until upstream changes rendering architecture (as happened with lipgloss v2 canvas). **SugarCraft should consider whether markers are the right abstraction** — perhaps a declarative zone API that doesn't rely on string transformation would be more robust.
 
 ### Lesson 2: Single-pass scanning is the right default
+
 bubblezone's state-machine scanner processes the entire view in one pass with no allocations beyond the zone map. This is the correct performance model. PHP port should replicate this.
 
 ### Lesson 3: Async worker pattern needs PHP equivalent
+
 The Go implementation uses a goroutine + channel to decouple scanning from zone storage. In PHP/ReactPHP, this can be replicated as:
 - Synchronous dispatch (simplest, no concurrency)
 - ReactPHP event loop integration (proper async)
 - A queue-based approach for batch updates
 
 ### Lesson 4: Global convenience vs testing clarity
+
 The global singleton pattern is both praised (simple apps) and criticized (hard to test, hard to reason about in library code). SugarCraft should make the explicit manager the documented pattern and global the opt-in convenience.
 
 ### Lesson 5: Iteration invalidation is clever but risky
+
 Using nanosecond time as an iteration token is elegant but theoretically collides. SugarCraft should use a monotonic counter (e.g., increment on each Scan call) instead.
 
 ---
@@ -386,15 +414,19 @@ Using nanosecond time as an iteration token is elegant but theoretically collide
 ## 23. Strategic Opportunities
 
 ### Opportunity 1: PHP-native deduplication helpers
+
 The Go library couldn't solve mouse event deduplication without upstream changes. **SugarCraft can implement this entirely in userland** with a `ZoneTracker` class that wraps a zone manager and tracks in-progress clicks. This is a **competitive differentiation** — Go users still need to implement this themselves.
 
 ### Opportunity 2: Declarative zone API
+
 Instead of string-transforming `Mark()` calls embedded in view strings, SugarCraft could use a declarative approach where zones are registered separately and the view is scanned automatically. This would be more robust and easier to test.
 
 ### Opportunity 3: Development-time visualization
+
 A `RENDER_DEBUG=1` mode that renders zone boundaries with visible box-drawing characters. This is a straightforward feature that would significantly improve developer experience.
 
 ### Opportunity 4: Strict mode enforcement
+
 A `STRICT=1` mode that validates:
 - All zones have unique IDs
 - Zone IDs use proper prefixing
@@ -404,6 +436,7 @@ A `STRICT=1` mode that validates:
 This prevents silent failures and teaches users correct usage.
 
 ### Opportunity 5: ReactPHP async integration
+
 Go's goroutine-based async is elegant. SugarCraft can replicate this with ReactPHP's event loop, providing a proper async zone update mechanism that doesn't block the main loop.
 
 ---
@@ -411,18 +444,22 @@ Go's goroutine-based async is elegant. SugarCraft can replicate this with ReactP
 ## 24. Cross-Ecosystem Pattern Matches
 
 **vs. Charmbracelet/bubbletea issues:**
+
 - Mouse event deduplication was a recurring theme in bubbletea itself
 - The v2 transition affected multiple Charmbracelet libraries simultaneously (bubbletea, lipgloss, bubbles)
 
 **vs. ratatui (Rust TUI):**
+
 - ratatui's widget hit testing uses exactly the same AABB approach — same limitation for organic shapes
 - ratatui has a `on_click` handler pattern that SugarCraft could replicate
 
 **vs. textualize/textual:**
+
 - textual has a more sophisticated widget hierarchy and event bubbling model
 - textual's "mode" concept for mouse handling (click, drag, hover modes) is more advanced than bubblezone
 
 **vs. chrisk rug-laying patterns:**
+
 - Several TUI libraries use private-use ANSI sequences for markers
 - The fragility of this approach is known; SugarCraft should consider alternatives
 

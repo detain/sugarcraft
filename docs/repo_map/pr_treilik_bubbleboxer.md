@@ -74,12 +74,14 @@ From `repo_map/treilik_bubbleboxer.md`:
 > Thanks!
 
 **Analysis**:
+
 - **Problem**: User wants to create a "tabbed" interface where each tab has its own Boxer
 - **Pain Point**: No documentation on runtime resizing — the only mechanism is `SizeFunc` but it's not clear how to update it dynamically
 - **Root Cause**: bubbleboxer has no API for mutating node sizes after tree construction. The `SizeFunc` is set at tree-creation time and is static.
 - **No Response**: Issue has zero comments from maintainer, unresolved for 3+ years
 
 **Implication for SugarCraft**:
+
 - SugarCraft must provide **clear, discoverable APIs for runtime resize** — not just initial sizing
 - A tabbed interface pattern suggests demand for **dynamic layout reconfiguration** (swapping subtrees, not just resizing)
 
@@ -95,6 +97,7 @@ From `repo_map/treilik_bubbleboxer.md`:
 > `ModelMap` returns `tea.Model` but how to get the matching node for my model? I think that's missing.
 
 **Analysis**:
+
 - **Problem**: User has a `tea.Model` from `ModelMap` and wants to know its allocated size (width/height)
 - **Pain Point**: The `Node` struct is decoupled from `tea.Model` — they are related only by address string
 - **No Inverse Lookup**: `ModelMap["address"]` → `tea.Model`, but no way to go backwards: `tea.Model` → address → `Node`
@@ -102,6 +105,7 @@ From `repo_map/treilik_bubbleboxer.md`:
 - **No Response**: Issue has zero comments, unresolved for 3+ years
 
 **Implication for SugarCraft**:
+
 - SugarCraft should consider **providing bidirectional lookups** between layout constraints and contained components
 - A component should be able to **query its allocated bounds** — this is essential for self-aware rendering
 - The separation pattern (layout tree vs. component store) is good, but needs **query APIs** to be complete
@@ -132,6 +136,7 @@ m.tui.LayoutTree = boxer.Node{
 ```
 
 **Impact**: Users cannot implement:
+
 - Proportional resizing (e.g., sidebar shrinks to minimum, main content takes rest)
 - Dynamic layouts based on content (e.g., accordion panels)
 - User-resizable panes
@@ -145,11 +150,13 @@ m.tui.LayoutTree = boxer.Node{
 **Evidence**: Issue #6 and the architecture itself
 
 **Manifestation**:
+
 - `ModelMap`: `string` (address) → `tea.Model`
 - `Node`: Contains `address` string, `width`, `height`
 - No reverse lookup from `tea.Model` to `Node`
 
 **User Workflow Problem**:
+
 1. Component (e.g., viewport) needs to know its allocated size
 2. Component receives `tea.WindowSizeMsg` during `Update()`
 3. But the component has no reference to the `Node` that allocated its size
@@ -177,6 +184,7 @@ if !n.noBorder {
 ```
 
 **Impact**:
+
 - Borders are not CSS-style "outside" decorations — they consume child space
 - This means shrinking a border makes children larger, and vice versa
 - The `CreateNoBorderNode()` flag is explicitly documented as "not recursive"
@@ -194,6 +202,7 @@ Based on open issues and commit history analysis:
 **Requested**: Issue #7 explicitly asks for examples on sizing at creation and **runtime**
 
 **Unmet Need**: Documentation showing:
+
 - How `SizeFunc` can be replaced dynamically
 - How to implement draggable dividers
 - How to implement collapsible panels
@@ -217,6 +226,7 @@ Based on open issues and commit history analysis:
 **Not explicitly requested but implied by Issue #6**
 
 **SugarCraft Opportunity**: The ModelMap pattern is sound, but needs complementing APIs:
+
 - `GetNodeForModel(model tea.Model) (Node, error)` 
 - `GetSizeForModel(model tea.Model) (width, height int, error)`
 
@@ -379,18 +389,22 @@ type viewPortHolder struct { m viewport.Model }  // Wraps viewport
 ## Maintainer Guidance Patterns
 
 **Pattern 1: Implicit Constraints via Documentation**
+
 - The `CreateLeaf` requirement is documented but not enforced by type system
 - `noBorder` non-recursiveness is documented but not enforced
 
 **Pattern 2: TODO Comments in README**
+
 - README contains: `// TODO write about the need for embedding boxer into another model and about nobordernodes being non recursive`
 - This indicates **incomplete documentation** that users have noticed (Issue #7 requests more examples)
 
 **Pattern 3: Silent Unresolved Issues**
+
 - Both open issues have zero maintainer responses
 - No labels, no milestones, no development branches
 
 **SugarCraft Lesson**: 
+
 - Don't leave TODO comments in user-facing documentation
 - Respond to all issues, even to say "won't fix" or "consider this workaround"
 - Use labels and milestones to signal priority
@@ -404,6 +418,7 @@ type viewPortHolder struct { m viewport.Model }  // Wraps viewport
 **Implicitly Rejected**: Issue #7 asks for runtime resizing but no response or code change
 
 **Why It Might Be Rejected**: Implementing dynamic `SizeFunc` updates would require:
+
 - Thread-safe mutation of the tree during rendering
 - Re-rendering affected subtrees
 - Potential for layout thrashing
@@ -417,6 +432,7 @@ type viewPortHolder struct { m viewport.Model }  // Wraps viewport
 **Implicitly Rejected**: Issue #6 requests reverse lookup but no response or code change
 
 **Why It Might Be Rejected**: Adding a reverse map would:
+
 - Require synchronizing two maps on every leaf operation
 - Increase memory footprint
 - Introduce potential for inconsistency

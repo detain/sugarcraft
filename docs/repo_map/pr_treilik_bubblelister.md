@@ -112,6 +112,7 @@ No closed issues exist in the repository. All issue tracking data is empty.
 With 0 issues and 0 PRs (except the muesli CI PR), there is **no documented feature request data** from the community.
 
 **Inference**: Either:
+
 - The library's API is sufficient for its niche use case
 - The small star count (52) means insufficient users to generate requests
 - The library is considered "done" by its small community
@@ -121,6 +122,7 @@ With 0 issues and 0 PRs (except the muesli CI PR), there is **no documented feat
 ## 8. Important PRs
 
 ### PR #1: Add GitHub build & linter workflow
+
 - **Author**: muesli (Christian Muehlhaeuser — Charmbracelet creator)
 - **Status**: Merged 2022-02-04
 - **Significance**: The upstream Bubbletea author found value in this library enough to contribute CI infrastructure. This is a strong signal of ecosystem fit — muesli found the code worth integrating into his workflow tooling.
@@ -163,6 +165,7 @@ The library implements `sort.Interface` to leverage Go's native sorting while ma
    - Correctness fix — invisible items shouldn't be rendered at all
 
 **Performance Risks Identified**:
+
 - **Concurrent GetIndex unbounded parallelism**: One goroutine per item — thundering herd on large lists
 - **Elm architecture model copying**: Fundamental Bubbletea constraint — every Update/View creates a copy
 - **No virtualization**: All items held in memory; no pagination or windowing for large lists
@@ -499,6 +502,7 @@ treilik/bubblelister is a **niche, dormant library** (~52 stars, 0 active issues
 **SugarCraft's strategic advantage**: While treilik deliberately omitted keyboard handling and search, SugarCraft can add these as first-class features while avoiding the bugs discovered during treilik's development.
 
 **Highest ROI investments**:
+
 - ID-based cursor tracking (foundational for UX)
 - Viewport-aware rendering (foundational for performance)
 - Built-in keyboard navigation (treilik gap)

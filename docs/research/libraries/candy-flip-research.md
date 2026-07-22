@@ -48,11 +48,13 @@
 ### 2.1 Frame Extraction Approaches
 
 #### ext-gd (PHP) — Current candy-flip approach
+
 - `imagecreatefromgif()` returns only first frame
 - Requires workarounds: temp-file slicing or hand-rolled byte parsing
 - Native PHP, no external dependencies beyond ext-gd
 
 #### libvips (C) — Reference implementation
+
 - **GIF loading**: `VipsImage.gifload()` with `[n=-1]` for all frames
 - **Frame access**: Vertical strip model — `n-pages * page-height == height`
 - **Per-frame delay**: `vips_image_get_array_int(image, "delay")` returns millisecond array
@@ -61,17 +63,20 @@
 - **Key advantage**: Proper animation metadata handling without byte-level parsing
 
 #### aa-lib (C) — Classic ASCII art library
+
 - `aa_render()` converts image buffer to ASCII art
 - `aa_renderpalette()` for palette mode
 - Supports brightness, gamma, contrast, dithering parameters
 - Requires font/terminal context initialization
 
 #### CImg (C++) — Header-only image processing
+
 - `CImg::load_gif_external()` uses ImageMagick/GraphicsMagick externally
 - `CImgList` for animation frames
 - Template-based, no external library dependency if using internal loaders
 
 #### image crate (Rust) — Used by gifterm, viu, rascii
+
 - `image::open()` with `gif` decoder
 - `gif::Decoder` for frame-by-frame access
 - Supports frame disposal, transparency, timing
@@ -80,16 +85,19 @@
 ### 2.2 Dithering Algorithms
 
 #### Floyd-Steinberg (Error Diffusion)
+
 ```
  X 7/16
  3/16 5/16 1/16
 ```
+
 - **Best overall quality** for ASCII art (per `makeworld-the-better-one/dither` Go library analysis)
 - Serpentine (alternating scan direction) eliminates "worm" artifacts
 - **Limitation**: Sequential — cannot be parallelized efficiently
 - **Reference**: Floyd & Steinberg 1976
 
 #### Ordered Dithering (Bayer Matrix)
+
 - Pre-computed threshold map tiled across image
 - **Fast** — no forward error array, no sequential dependency
 - Parallelizable — each pixel independent
@@ -98,21 +106,25 @@
 - Bayer 4×4 and 8×8 most common
 
 #### Jarvis-Judice-Ninke (Error Diffusion)
+
 ```
  X 7/48 5/48
  3/48 5/48 7/48 5/48 3/48
  1/48 3/48 5/48 3/48 1/48
 ```
+
 - Smoother output than Floyd-Steinberg
 - **Slower** — 3x more pixels affected, divisor 48 not power-of-2
 - Good for static images
 
 #### Atkinson Dithering
+
 - Only propagates 75% of error (vs 100% in Floyd-Steinberg)
 - Creates brighter output with more contrast in midtones
 - Used in original Macintosh HyperScan
 
 #### libvips/cgif (C) — Palette Optimization
+
 - **libimagequant** for high-quality palette quantization
 - **Quantizr** (BSD-2 fork) — faster than libimagequant with slightly better quality
 - Per-frame palette optimization with caching
@@ -121,6 +133,7 @@
 ### 2.3 Playback Control
 
 #### kitty Graphics Protocol (gifterm Rust, viu, gifterm)
+
 - Frames transmitted via `OC=0` (sixel) or `T=t` (temp file transfer)
 - GPU-side animation management — process exits immediately
 - **No terminal CPU cost after launch**
@@ -128,12 +141,14 @@
 - tmux blocks protocol by default (`allow-passthrough on`)
 
 #### SugarCraft TUI (candy-flip PHP)
+
 - `Cmd::tick($interval)` schedules frame advance
 - All rendering in-process via ANSI escapes
 - Process runs for duration of playback
 - Full keyboard control (space=pause, arrows=step, d=preset toggle)
 
 #### asciicast2gif/agg (Node.js/Rust)
+
 - Renders asciicast recordings to GIF files
 - Not real-time playback — file generation
 - Uses gifsicle/giflossy for optimization
@@ -141,32 +156,39 @@
 ### 2.4 Color Handling
 
 #### Truecolor (24-bit) — Most terminals
+
 ```php
 // Foreground
 "\033[38;2;R;G;Bm"
 // Background (used by candy-flip)
 "\033[48;2;R;G;Bm"
 ```
+
 - Full 16.7M colors
 - All modern terminals support (except some tmux configs)
 
 #### ANSI 256-color palette
+
 ```php
 "\033[38;5;N"  // N = 0-255
 ```
+
 - 216 color cube + 24 grayscale
 - Useful for legacy terminal support
 - Color fidelity loss vs truecolor
 
 #### ANSI 16-color
+
 ```php
 "\033[3N"  // foreground
 "\033[4N"  // background
 ```
+
 - Limited to 8 foreground + 8 background
 - Only as a fallback
 
 #### Unicode Block Characters (candy-flip approach)
+
 - `█` (U+2588) — full block, background color fill
 - `▄` (U+2584) — lower half block (used by viu for half-block mode)
 - `▀` (U+2580) — upper half block
@@ -179,18 +201,21 @@
 ### 3.1 High-Priority Improvements
 
 #### P1: Replace Temp-File Frame Extraction with in-memory GD via StringIO
+
 **Current**: `renderSingleFrame()` writes entire GIF to temp file, then GD reads it for each frame.
 **Better**: Use `imagecreatefromstring()` with reconstructed single-frame GIF bytes.
 **Effort**: Low (1-2 hours)
 **Impact**: Significant speedup for multi-frame GIFs
 
 #### P2: Proper Frame Timing from GIF Metadata
+
 **Current**: All frames displayed at fixed interval (default 0.1s or 0.08s).
 **Better**: Parse Graphic Control Extension for per-frame delay (in centiseconds).
 **Effort**: Medium (3-4 hours)
 **Impact**: Correct playback speed for animations with variable timing
 
 #### P3: Area-Averaged Downsampling
+
 **Current**: Point-sample at cell center.
 **Better**: Average all source pixels in each cell region.
 **Effort**: Low (2-3 hours)
@@ -199,6 +224,7 @@
 ### 3.2 Medium-Priority Improvements
 
 #### P4: Error-Diffusion Dithering for Density Preset
+
 **Current**: Simple luminance ramp with no dithering.
 **Better**: Floyd-Steinberg serpentine dithering to 2-3 color ramp levels.
 **Reference**: `makeworld-the-better-one/dither` Go library, `libcaca` img2txt
@@ -206,18 +232,21 @@
 **Impact**: Much better grayscale gradient representation
 
 #### P5: Local Color Table Support
+
 **Current**: Only global color table handled.
 **Better**: Parse Local Color Table in image descriptors when present.
 **Effort**: Medium (4-5 hours)
 **Impact**: Correct colors for GIFs using local palettes
 
 #### P6: Transparency Handling
+
 **Current**: Transparent pixels not explicitly handled.
 **Better**: Parse transparency index from Graphic Control Extension, composite against previous frame per disposal method.
 **Effort**: Medium-High (6-8 hours)
 **Impact**: Correct rendering of transparent GIFs
 
 #### P7: Adaptive Cell Size Based on Terminal Dimensions
+
 **Current**: Fixed 60×24 cells.
 **Better**: Query terminal size via `exec('tput cols lines')` and adjust.
 **Effort**: Low (1-2 hours)
@@ -226,22 +255,27 @@
 ### 3.3 Low-Priority / Future Work
 
 #### P8: Floyd-Steinberg for Full-Color Mode
+
 Implement serpentine error diffusion for truecolor-to-palette reduction when using a reduced palette.
 
 #### P9: Ordered (Bayer) Dithering
+
 - Faster than Floyd-Steinberg
 - Better for animation (no temporal jitter)
 - Could replace current density ramp entirely
 
 #### P10: kitty/WezTerm Graphics Protocol Support
+
 Add fallback output path using terminal graphics protocol for zero-CPU playback.
 **Note**: This would make candy-flip a terminal-dependent feature rather than universal ANSI.
 
 #### P11: GIF Optimization on Write
+
 Add ability to save downsampled/dithered frames as new GIF.
 Uses libvips or cgif for high-quality palette optimization.
 
 #### P12: Frame Cache
+
 Cache decoded/downsampled frames to disk (like gifterm's `~/.cache/gifterm/`).
 SHA-256 key based on source file hash + cell dimensions.
 
@@ -252,6 +286,7 @@ SHA-256 key based on source file hash + cell dimensions.
 ### 4.1 Go Libraries
 
 #### Zebbeni/ansipx (Go) — Most Comprehensive
+
 - Frame extraction: `image` crate + custom GIF decoder
 - Dithering: Floyd-Steinberg, Bayer, ClusteredDot with full options
 - Color handling: Truecolor ANSI, 256-color fallback
@@ -262,6 +297,7 @@ SHA-256 key based on source file hash + cell dimensions.
 - **Stars**: Active
 
 #### makeworld-the-better-one/dither (Go)
+
 - Dedicated dithering library
 - Algorithms: Floyd-Steinberg, Jarvis-Judice-Ninke, Atkinson, Stucki, Burkes, Sierra, Bayer, ClusteredDot
 - Serpentine scanning option
@@ -270,6 +306,7 @@ SHA-256 key based on source file hash + cell dimensions.
 - **License**: MIT
 
 #### esimov/gifter (Go) — Old
+
 - termbox-go based
 - **Note**: Has flickering issues with non-transparent backgrounds
 - Uses `-rb` flag to remove dominant background color
@@ -278,22 +315,26 @@ SHA-256 key based on source file hash + cell dimensions.
 ### 4.2 Rust Libraries
 
 #### katharostech/cast2gif → asciinema/agg
+
 - asciicast-to-GIF rendering
 - Uses Kornel Lesiński's gifski for quality
 - **URL**: https://github.com/asciinema/agg
 
 #### nalediym/gifterm (Rust)
+
 - kitty graphics protocol
 - Frame caching to `~/.cache/gifterm/`
 - WASM-compatible library
 - **URL**: https://github.com/nalediym/gifterm
 
 #### viu (Rust)
+
 - Also supports kitty protocol as fallback
 - Half-block Unicode mode
 - **URL**: https://crates.io/crates/viu
 
 #### rascii (Rust)
+
 - ASCII + color modes
 - Lower performance with colored GIFs
 - **URL**: https://github.com/mightykho/rascii
@@ -301,18 +342,21 @@ SHA-256 key based on source file hash + cell dimensions.
 ### 4.3 C/C++ Libraries
 
 #### libcaca — img2txt
+
 - **Dithering algorithms**: none, ordered2, ordered4, ordered8, random, fstein (Floyd-Steinberg)
 - **Output formats**: ansi, caca, utf8, html, html3, irc, bbfr, ps, svg, tga
 - **Parameters**: brightness, contrast, gamma
 - **URL**: https://github.com/cacalabs/libcaca
 
 #### aa-lib
+
 - **Dithering**: floyd_steinberg, error_distribution, random
 - **Parameters**: brightness (0-255), contrast (0-255), gamma (0-1)
 - **Rendering modes**: inverse, fast, palette
 - **URL**: http://aa-project.sourceforge.net/aalib
 
 #### CImg
+
 - Header-only C++
 - `load_gif_external()` via ImageMagick/GraphicsMagick
 - `save_gif_external()` for animation export
@@ -321,6 +365,7 @@ SHA-256 key based on source file hash + cell dimensions.
 ### 4.4 PHP Libraries
 
 #### Sybio/GifFrameExtractor
+
 - Pure PHP animated GIF frame extractor
 - Extracts frames + durations
 - Does NOT require ext-gd
@@ -395,11 +440,13 @@ GIF89a
       - transparency flag (bit 0)
       - delay in centiseconds (2 bytes)
       - transparency index (1 byte)
+
     [Image Descriptor: 10 bytes]
       - left/top position
       - width/height
       - local color table flag (bit 7)
       - interlace flag (bit 6)
+
     [Local Color Table: 0-768 bytes]
     [Image Data: LZW compressed]
   [Trailer: 1 byte (0x3B)]

@@ -5,12 +5,14 @@
 **Ecosystem positioning:** candy-zone sits at the event-handling layer, integrating with `candy-core` (TEA runtime via `MouseMsg`), `candy-sprinkles` (styling system), and `sugar-bits` (interactive components). It is the sole SugarCraft library addressing mouse zone tracking.
 
 **Biggest opportunity areas:**
+
 1. Debug/visualization mode for zone boundaries (upstream issue #7, still open)
 2. Mouse event deduplication helpers for drag operations (upstream issue #10)
 3. Spatial indexing (O(log n) hit testing) for apps with many zones
 4. Shape-agnostic hit testing beyond AABB
 
 **Biggest missing capabilities:**
+
 1. No debug rendering mode to visualize zone boundaries
 2. No built-in mouse event deduplication (drag produces duplicate events)
 3. O(n) zone iteration instead of O(log n) spatial index
@@ -44,6 +46,7 @@ End:   ESC _ "candyzone:E:<id>" ESC \
 ```
 
 Format in `Manager.php:27-34`. The `mark()` method (`Manager.php:109-118`) wraps content with these markers. The `scan()` method (`Manager.php:127-234`) is a single-pass state machine that:
+
 - Strips APC markers from output (no width contribution)
 - Passes CSI/OSC sequences through unchanged (no width contribution)
 - Tracks column/row position, accounting for wide characters (CJK = 2 cells)
@@ -90,6 +93,7 @@ The library processes `SugarCraft\Core\Msg\MouseMsg` with `MouseButton` (Left/Ri
 ## API Surface
 
 ### Manager (core)
+
 - `newGlobal()` — Create global shared manager
 - `newPrefix(?string)` — Create prefixed manager for nested component isolation
 - `mark(id, content)` — Wrap content with APC zone markers
@@ -104,12 +108,14 @@ The library processes `SugarCraft\Core\Msg\MouseMsg` with `MouseButton` (Left/Ri
 - `setMotionTracking(bool)` — Return CSI 1003 h/l escape sequence
 
 ### Zone
+
 - `inBounds(MouseMsg)` — AABB collision test
 - `pos(MouseMsg)` — Relative mouse position [col, row]
 - `width()` / `height()` — Zone dimensions in cells
 - `isZero()` — Detect uninitialized/degenerate zone
 
 ### Trackers
+
 - `ZoneHoverTracker::update(MouseMsg)` — Returns `[$tracker, ?ZoneEnterMsg|?ZoneExitMsg]`
 - `DragTracker::update(MouseMsg)` — Returns `[$tracker, ?ZoneDragStartMsg|?ZoneDragMoveMsg|?ZoneDragEndMsg]`
 - `ClickCounter::update(MouseMsg)` — Returns `[$counter, ?DoubleClickMsg|?TripleClickMsg]`
@@ -119,6 +125,7 @@ The library processes `SugarCraft\Core\Msg\MouseMsg` with `MouseButton` (Left/Ri
 ## Extension Systems
 
 No formal plugin/extension system. Extensibility is achieved through:
+
 - **Prefix isolation** — `Manager::newPrefix()` allows component libraries to namespace their own zones
 - **Custom manager injection** — Trackers accept any `Manager` instance via `withManager()`
 - **State serialization** — Trackers provide `withZoneIds()`, `withCurrentZoneId()` for state restoration
@@ -191,6 +198,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source discussion:** Issue explicitly requests: bounds checking validation, incorrect usage detection, zone boundary visualization.
 
 **Implementation ideas:**
+
 - Add `Manager::setDebugVisualization(bool)` that changes `mark()` to wrap content in box-drawing characters instead of invisible APC markers
 - Add `RENDER_DEBUG=1` environment variable that auto-enables visualization
 - Provide separate `Manager::renderDebugBoundaries()` that returns zone boundaries as overlaid text
@@ -214,6 +222,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source discussion:** Issue shows screenshot of drag producing multiple `MouseDown` events. Maintainer response: "As part of bubbletea v2, this should be a non-issue."
 
 **Implementation ideas:**
+
 - Create `ZoneClickTracker` class that wraps a `Manager` and tracks in-progress clicks
 - `trackClick(MouseMsg)` returns `?ZoneClickMsg` — only fires once per zone per press until release
 - Track `MouseDown` zone + `MouseUp` pairs, discard intermediate events in same zone
@@ -236,6 +245,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source:** candy-zone internal (sugarcraft_candy-zone.md, lines 429-458)
 
 **Implementation ideas:**
+
 - Add `"suggest": { "ext-intl": "Required for correct grapheme cluster handling in scan()" }` to `composer.json`
 - Add a warning log or exception when `grapheme_extract()` is unavailable and fallback produces potentially incorrect results
 - Document the requirement in README
@@ -259,6 +269,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source repo:** `textualize/textual` (spatial_map.SpatialMap)
 
 **Implementation ideas:**
+
 - Add optional `ZoneSpatialIndex` class that stores zones in an R-tree-like structure
 - `Manager::withSpatialIndex(bool)` to enable
 - Maintain both O(n) iteration (simple, default) and O(log n) index (opt-in)
@@ -281,6 +292,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source:** sugarcraft_candy-zone.md, lines 416-421
 
 **Implementation ideas:**
+
 - Add optional `zIndex` parameter to `mark(id, content, zIndex: 0)`
 - Sort zones by z-index before iteration in `anyInBounds()`
 - Default z-index of 0, higher values render on top
@@ -303,6 +315,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source repo:** `lrstanley/bubblezone`, issue #11
 
 **Implementation ideas:**
+
 - Add `Manager::setStrictMode(bool)` that validates:
   - Mouse mode is set to SGR mode 1003 (all motion events) when using motion tracking
   - All zone IDs are unique within the manager
@@ -329,6 +342,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source repo:** `lrstanley/bubblezone`, issue #11
 
 **Implementation ideas:**
+
 - Add `Manager::setViewOffset(int $row, int $col)` to specify where the scanned view starts on screen
 - Add offset to all recorded zone coordinates
 - Document that alt-screen is required for correct operation, or provide offset parameter
@@ -350,6 +364,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source:** sugarcraft_candy-zone.md, lines 473-475
 
 **Implementation ideas:**
+
 - Add `Manager::$scanIteration` static counter incremented on each `scan()` call
 - Store iteration on each zone
 - On rescan, mark zones with old iteration as stale and remove them
@@ -371,6 +386,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source:** sugarcraft_candy-zone.md, weakness #7
 
 **Implementation ideas:**
+
 - In strict mode, detect when `mark()` is called with an ID already in the zones map
 - Warn or throw when duplicate detected
 - Suggest using `Manager::newPrefix()` for isolation
@@ -394,6 +410,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Source:** sugarcraft_candy-zone.md, lines 410-415
 
 **Implementation ideas:**
+
 - Accept a callback `isPointInShape(x, y)` in addition to the rectangular bounds
 - Store shape mask alongside each zone's bounding box
 - Call mask function during `inBounds()` check
@@ -414,6 +431,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Approach:** Goroutine + channel to decouple scanning from zone storage. State-machine scanner produces zone data and sends via channel; background worker applies updates under mutex.
 
 **Performance characteristics:**
+
 - `scan()` is non-blocking (producer)
 - Worker processes zones asynchronously
 - O(n) iteration for `AnyInBounds()`
@@ -424,6 +442,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Approach:** R-tree-like spatial map (`_spatial_map.SpatialMap`) for O(log n) widget lookup by screen position. Compositor maintains spatial index updated on each layout pass.
 
 **Performance characteristics:**
+
 - O(log n) hit detection at scale
 - Automatic z-ordering
 - More sophisticated but requires layout engine to pre-compute widget positions
@@ -433,6 +452,7 @@ No formal plugin/extension system. Extensibility is achieved through:
 **Approach:** Synchronous single-pass scan. No background worker. O(n) iteration for `anyInBounds()`.
 
 **Performance characteristics:**
+
 - `scan()` is blocking (simpler, no concurrency)
 - Immediate zone map availability after scan
 - O(n) hit detection (acceptable for <100 zones)
@@ -446,11 +466,13 @@ No formal plugin/extension system. Extensibility is achieved through:
 For applications with many interactive zones (100+), textual's O(log n) spatial lookup scales better than O(n) iteration. However:
 
 **Tradeoffs:**
+
 - Textual's approach requires a layout engine that pre-computes widget positions. candy-zone's marker-based approach works without a layout engine — any rendered string with markers is scannable.
 - The synchronous approach in candy-zone is simpler and avoids concurrency bugs.
 - For typical TUI apps (<50 zones), O(n) vs O(log n) is not perceptible.
 
 **Applicability to candy-zone:**
+
 - Adding an optional spatial index would benefit apps with many zones
 - For most SugarCraft apps, the current O(n) approach is fine
 - Consider adding `ZoneSpatialIndex` as opt-in for scale
@@ -480,6 +502,7 @@ For applications with many interactive zones (100+), textual's O(log n) spatial 
 **Current issue:** Tight coupling risk with candy-sprinkles. The APC marker approach works with current styling but could break if styling library changes rendering approach (like lipgloss v2 canvas).
 
 **Improvement:**
+
 - Keep zone scanning strictly isolated from styling
 - Do not depend on any internal behavior of candy-sprinkles
 - Test integration explicitly but keep packages loosely coupled
@@ -492,6 +515,7 @@ For applications with many interactive zones (100+), textual's O(log n) spatial 
 **Current issue:** `scan()` handles CSI, OSC, newlines, graphemes all in one method. This is efficient but hard to extend.
 
 **Improvement:**
+
 - Consider extracting the state machine into a separate `Scanner` class
 - Keep `scan()` as the orchestrator but delegate state handling
 - This would make it easier to add new escape sequence types
@@ -502,6 +526,7 @@ For applications with many interactive zones (100+), textual's O(log n) spatial 
 **Current issue:** The global `Zones` facade is convenient but makes testing harder.
 
 **Improvement:**
+
 - Make `Manager` the documented default pattern
 - Keep `Zones` facade as opt-in convenience
 - Add `DI` container integration examples for dependency injection
@@ -514,6 +539,7 @@ For applications with many interactive zones (100+), textual's O(log n) spatial 
 **Current issue:** No callbacks for zone enter/exit other than through trackers.
 
 **Improvement:**
+
 - Add optional `onEnter(callable)` and `onExit(callable)` to `Manager`
 - Callbacks fire when `anyInBounds()` detects a new zone
 - Allows inline handlers without full tracker class
@@ -543,6 +569,7 @@ $zone = $manager->zone('my-btn')
 **Current:** Silent failures when alt-screen not enabled, markers used incorrectly.
 
 **Opportunity:**
+
 - Add `Manager::validate()` method that checks configuration and emits warnings
 - Throw `ZoneException` in strict mode when misconfiguration detected
 - Include terminal escape sequences in error messages to help users debug
@@ -552,6 +579,7 @@ $zone = $manager->zone('my-btn')
 **Current:** Zone IDs are bare strings. No compile-time checking.
 
 **Opportunity:**
+
 - Document zone ID naming conventions
 - Consider `ZoneId` value object for type safety
 - Add `assertZoneId(string)` validation in strict mode
@@ -565,6 +593,7 @@ $zone = $manager->zone('my-btn')
 **Missing:** No cookbook showing typical usage patterns.
 
 **Opportunity sections:**
+
 - **Nested components with prefix isolation** — How to use `newPrefix()` in list items
 - **Drag-and-drop** — Complete example with `DragTracker`
 - **Hover tooltips** — How to combine `ZoneHoverTracker` with tooltip rendering
@@ -576,6 +605,7 @@ $zone = $manager->zone('my-btn')
 **Current:** Alt-screen requirement is buried in tips section.
 
 **Opportunity:**
+
 - Add prominent "Requirements" section at top of README
 - Document that `setMotionTracking()` return value must be written to TTY
 - Show complete minimal example with proper terminal setup
@@ -585,6 +615,7 @@ $zone = $manager->zone('my-btn')
 **Current:** No common issues documented.
 
 **Opportunity:**
+
 - Document that `len()` should not be used for width (use `Width::string()`)
 - Document that `scan()` must be called on full root frame
 - Document non-alt-screen coordinate offset issue
@@ -595,6 +626,7 @@ $zone = $manager->zone('my-btn')
 **Current:** README has API summary table but no full API docs.
 
 **Opportunity:**
+
 - Add PHPDoc to all public methods (already present but could be enhanced)
 - Consider generating HTML docs with apiGen or phpDocumentor
 - Publish to docs.sugarcraft.io
@@ -608,6 +640,7 @@ $zone = $manager->zone('my-btn')
 **Requested feature:** Visual zone boundaries during development.
 
 **Implementation:**
+
 - Add `Manager::setDebugVis(bool)` that changes `mark()` output
 - Debug mode wraps zones in visible box-drawing characters
 - Different colors for different zone types
@@ -620,6 +653,7 @@ $zone = $manager->zone('my-btn')
 **Idea:** When a zone is clicked, briefly flash the zone border.
 
 **Implementation:**
+
 - Add `Manager::flashZone(string $id, int $ms)` 
 - Returns escape sequence to draw attention to a specific zone
 - Useful for confirming click registration
@@ -629,6 +663,7 @@ $zone = $manager->zone('my-btn')
 **Idea:** Zones could also be navigated via keyboard (arrow keys).
 
 **Implementation:**
+
 - Not a core feature (out of scope for mouse zone library)
 - Could be added via `ZoneNavigator` class that wraps a `Manager`
 - Detects keyboard focus movement and emits enter/exit events
@@ -642,6 +677,7 @@ $zone = $manager->zone('my-btn')
 **Current:** Unit tests assert specific bounds values but no snapshot infrastructure.
 
 **Opportunity:**
+
 - Add snapshot tests for scanner output with known inputs
 - Capture zone bounds for complex renderings (CJK, emoji, ANSI sequences)
 - Guard against regressions as scanner evolves
@@ -653,6 +689,7 @@ $zone = $manager->zone('my-btn')
 **Current:** Table-driven unit tests with known inputs.
 
 **Opportunity:**
+
 - Add fuzz tests for `scan()` with random byte sequences
 - Edge case: malformed escape sequences, partial markers, binary data
 - Would catch parser edge cases before users encounter them
@@ -662,6 +699,7 @@ $zone = $manager->zone('my-btn')
 **Current:** Tests use raw styled output but don't exercise full integration.
 
 **Opportunity:**
+
 - Add integration tests that render actual candy-sprinkles components with zone markers
 - Verify interaction between zone scanning and styling library
 - Test with `Border::rounded()`, `Style::new()->padding()`, etc.
@@ -675,6 +713,7 @@ $zone = $manager->zone('my-btn')
 **Current:** sugar-bits (button, list, etc. components) doesn't use candy-zone.
 
 **Opportunity:**
+
 - Add candy-zone as optional dependency to sugar-bits
 - sugar-bits components automatically wrap themselves in zone markers
 - Provide `WithZone` trait for components that want zone support
@@ -685,6 +724,7 @@ $zone = $manager->zone('my-btn')
 **Current:** No canvas system in candy-sprinkles.
 
 **Opportunity:**
+
 - If/when candy-sprinkles adds canvas overlay, zone scanning must work with it
 - Do NOT tightly couple — keep scanning logic independent of rendering
 - Test explicitly when canvas is added
@@ -694,6 +734,7 @@ $zone = $manager->zone('my-btn')
 **Current:** candy-vcr records and replays terminal sessions.
 
 **Opportunity:**
+
 - Add helper to replay mouse events and verify zone hit detection
 - Combine with snapshot testing for reliable visual regression
 - Could serve as basis for mouse interaction testing
@@ -703,6 +744,7 @@ $zone = $manager->zone('my-btn')
 **Current:** Synchronous scan only. No async integration.
 
 **Opportunity:**
+
 - Add `Manager::scanAsync()` that wraps scanning in a ReactPHP promise
 - Allows non-blocking scan for very large outputs
 - Not critical (scan is already fast) but would align with ReactPHP ecosystem
@@ -718,6 +760,7 @@ $zone = $manager->zone('my-btn')
 **Relevance to candy-zone:** Fundamental architectural constraint. The zero-width ANSI marker approach relies on scanning the full view output and computing absolute coordinates. Any offset in the rendering surface breaks the coordinate system.
 
 **Lessons learned:**
+
 - Document alt-screen requirement prominently in README
 - Consider adding offset parameter for non-alt-screen scenarios
 - Make this an explicit error in strict mode
@@ -733,6 +776,7 @@ $zone = $manager->zone('my-btn')
 **Relevance to candy-zone:** This is critical for good UX. SugarCraft can solve this in userland without waiting for upstream changes. The Go library couldn't solve it without upstream v2 mouse event changes; PHP can provide helpers entirely in user code.
 
 **Lessons learned:**
+
 - Provide `ZoneClickTracker` class that tracks in-progress clicks and only fires once per zone until mouseup
 - This is a competitive differentiation opportunity — Go bubblezone users still implement this manually
 - Implement regardless of whether upstream provides it
@@ -748,6 +792,7 @@ $zone = $manager->zone('my-btn')
 **Relevance to candy-zone:** No debug tooling exists. This is a basic developer experience gap that upstream has not addressed.
 
 **Lessons learned:**
+
 - Add `RENDER_DEBUG=1` mode that visualizes zone boundaries with box-drawing characters
 - Add strict mode validation that detects incorrect marker usage
 - This would significantly improve developer experience
@@ -763,6 +808,7 @@ $zone = $manager->zone('my-btn')
 **Relevance to candy-zone:** Signals that the ANSI marker approach has architectural limits. The successor library hints at a more layered, composable approach to mouse tracking — possibly one that doesn't rely on string-scanning ANSI markers.
 
 **Lessons learned:**
+
 - Keep zone logic strictly isolated from styling logic
 - Do not depend on internal behavior of candy-sprinkles
 - Prepare for potential future changes in rendering approach
@@ -779,6 +825,7 @@ $zone = $manager->zone('my-btn')
 **Relevance to candy-zone:** If SugarCraft's component system holds similar reference cycles (parent→child strong references), could hit GC issues similar to textual's.
 
 **Lessons learned:**
+
 - Use weakrefs for parent/owner references in any widget-style system
 - Ensure caching structures can be cleared
 - Test long-running applications for GC behavior
@@ -853,16 +900,19 @@ $zone = $manager->zone('my-btn')
 candy-zone is a **complete, production-ready port** of bubblezone that faithfully replicates the upstream design while adapting to PHP's synchronous execution model. The marker-based approach elegantly solves mouse event routing without requiring components to track their own screen coordinates. The layered tracker suite (hover, drag, click) provides progressively sophisticated behavior.
 
 **Competitive position:**
+
 - Go bubblezone users still implement mouse event deduplication manually — candy-zone can provide this as a built-in helper
 - No debug visualization exists in upstream — candy-zone can add this as a competitive differentiator
 - The APC marker approach is fragile when upstream changes rendering (as happened with lipgloss v2) — candy-zone should keep zone logic strictly isolated
 
 **Architectural concerns:**
+
 - AABB-only collision detection is inherited from upstream and acceptable for rectangular UI
 - O(n) zone iteration is fine for typical apps (<100 zones)
 - ext-intl fallback is a correctness edge case that should be documented and warned about
 
 **Strategic direction:**
+
 1. **Solve what upstream hasn't** — Debug mode, mouse deduplication helpers, strict mode validation
 2. **Keep loosely coupled** — Zone scanning must remain strictly isolated from styling logic
 3. **Provide opt-in sophistication** — Spatial index for scale, z-order for overlapping zones

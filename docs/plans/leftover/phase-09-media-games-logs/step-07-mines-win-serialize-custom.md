@@ -13,11 +13,13 @@
 ## Files
 
 **Modify:**
+
 - `candy-mines/src/Board.php` — track `revealedCount` field; win check
   becomes `revealedCount === totalSafeCells`.
 - Add `serialize(): string`, `unserialize(string)`.
 
 **Create:**
+
 - `candy-mines/src/Ui/CustomDifficulty.php` — form for rows/cols/mines.
 
 ## Tests

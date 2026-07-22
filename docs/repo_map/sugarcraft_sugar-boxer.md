@@ -1,6 +1,7 @@
 # sugar-boxer Innovation & Comparison Report
 
 ## Metadata
+
 - **Library**: `sugarcraft/sugar-boxer`
 - **Upstream Primary**: [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) (Go, 84 stars, MIT)
 - **Status**: v1 ready
@@ -227,6 +228,7 @@ $share = (int) \round($weights[$i] / $totalWeight * ($available - $spacing * ($n
 ```
 
 **Key insight**: The `* 1.0` implicit conversion from int to float happens in the `round()` call. The algorithm:
+
 - Subtracts total spacing gaps from available space
 - Distributes remaining space proportionally by weight
 - Rounds each share to nearest integer
@@ -411,11 +413,13 @@ Note: Uses `preg_split('//u', ...)` with `PREG_SPLIT_NO_EMPTY` for grapheme-leve
 sugar-boxer, being a PHP port without the BubbleTea runtime, takes a simpler approach: leaf nodes hold raw string content that is rendered directly. This makes sugar-boxer a **layout engine** rather than a **component framework**.
 
 **What sugar-boxer does better**:
+
 - Simpler mental model — no indirection through ModelMap
 - Immutable nodes via `with*()` builders — no accidental mutation
 - PHP-native with strict types and readonly properties
 
 **What bubbleboxer does better**:
+
 - Composable with full BubbleTea component ecosystem
 - Custom `SizeFunc` allows arbitrary layout algorithms
 - tea.Model compliance enables integration with existing BubbleTea apps
@@ -480,6 +484,7 @@ private function distribute(int $available, array $weights, int $totalWeight, in
 | **Output** | Optimized ANSI escape sequences | Raw box-drawing strings |
 
 **Relationship**: ultraviolet is the **foundational rendering layer** that powers Bubble Tea v2 and Lip Gloss v2. It provides:
+
 - Cell-based rendering with diffing
 - Terminal input handling (keyboard/mouse)
 - Cassowary constraint layout
@@ -502,6 +507,7 @@ sugar-boxer sits **above** this layer. It uses ultraviolet's border character se
 | **Output** | Rich library formatting + ANSI | Raw box-drawing strings |
 
 **Conceptual overlap**: Both support nested box layouts, but with fundamentally different approaches:
+
 - textual uses CSS flexbox/grid layouts with a stylesheet
 - sugar-boxer uses recursive tree composition with explicit H/V nodes
 

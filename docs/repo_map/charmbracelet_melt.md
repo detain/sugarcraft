@@ -1,6 +1,7 @@
 # charmbracelet/melt
 
 ## Metadata
+
 - **URL**: https://github.com/charmbracelet/melt
 - **Language**: Go
 - **Stars**: ~700-900 (GitHub API unavailable, based on repo age and charmbracelet ecosystem positioning)
@@ -8,6 +9,7 @@
 - **Description**: Backup and restore SSH private keys using memorizable BIP39 seed phrases. Converts Ed25519 private keys to a 24-word mnemonic phrase that can be used to reconstruct the exact same key later.
 
 ## Feature List
+
 - **Backup**: Convert any Ed25519 SSH private key to a BIP39 mnemonic seed phrase
 - **Restore**: Reconstruct a Ed25519 SSH key pair from a seed phrase
 - **Stdin/Stdout Piping**: Full Unix pipeline support (`cat key | melt`, `melt restore - < seed`)
@@ -22,10 +24,12 @@
 ## Key Classes and Methods
 
 ### Core Library (`melt` package — melt.go)
+
 - `ToMnemonic(key *ed25519.PrivateKey) (string, error)` — Extracts the 32-byte seed from an Ed25519 private key and encodes it as a BIP39 mnemonic phrase
 - `FromMnemonic(mnemonic string) (ed25519.PrivateKey, error)` — Decodes a BIP39 mnemonic phrase back to a 32-byte seed and reconstructs an Ed25519 private key
 
 ### CLI (`cmd/melt/main.go`)
+
 - `backup(path string, pass []byte) (string, error)` — Reads an SSH key from file or stdin, prompts for passphrase if encrypted, delegates to `melt.ToMnemonic()`
 - `restore(mnemonic string, passFn func() ([]byte, error), outFn func(pem, pub []byte) error) error` — Uses `melt.FromMnemonic()`, then `ssh.MarshalPrivateKey[WithPassphrase]()`, writes PEM and authorized_pubkey via output strategy
 - `parsePrivateKey(bts, pass []byte) (interface{}, error)` — Wraps `ssh.ParseRawPrivateKey[WithPassphrase]`; detects `*ssh.PassphraseMissingError` to trigger passphrase prompt loop
@@ -38,11 +42,13 @@
 - `renderBlock(w io.Writer, s lipgloss.Style, width int, str string)` — Applies lipgloss style and renders wrapped text block
 
 ### CLI Commands (Cobra)
+
 - `rootCmd` — Default `melt` command; backs up a key to a seed phrase; accepts optional key path arg
 - `restoreCmd` — `melt restore` / `melt res` / `melt r`; restores a key from a seed phrase; accepts destination path; flags: `--seed/-s`, `--language/-l`
 - `manCmd` — Hidden `melt man`; generates man page via `mango-cobra`
 
 ### Tests (`cmd/melt/main_test.go`)
+
 - `TestBackupRestoreKnownKey` — Full round-trip test with known mnemonic, SHA256 fingerprint, and SHA256 public key fingerprint assertions
 - `TestBackupRestoreKnownKeyInJapanse` — Verifies i18n round-trip with Japanese wordlist
 - `TestGetWordlist` — Table-driven test covering 20+ language alias variations
@@ -56,6 +62,7 @@
 - **Language Tag Resolution**: `getWordlist()` uses `golang.org/x/text/language` to match user-supplied language strings (including aliases) to BCP47 tags, then falls back to the base language if a specific variant has no dedicated wordlist.
 
 ## Strengths
+
 - **Cryptographically Clean**: Directly leverages the Ed25519 seed property that the 32-byte seed fully determines the key, enabling lossless backup/restore verified by matching SHA256 public key fingerprints.
 - **Unix-Native**: Full stdin/stdout/stderr and pipe semantics, works cleanly in shell pipelines, supports `/dev/stdin` style paths.
 - **Excellent UX**: Beautiful lipgloss-styled output with terminal width awareness and adaptive light/dark colors.
@@ -66,6 +73,7 @@
 - **Cascading Linter Configuration**: golangci-lint with strict settings including `gosec`, `goimports`, `rowserrcheck`, `sqlclosecheck`, `tparallel`.
 
 ## Weaknesses
+
 - **Ed25519 Only**: Does not support RSA, ECDSA, or any other SSH key types. README explicitly notes this limitation.
 - **Memo/Lossy Metadata**: Public key comments (`user@host`) are not preserved through the backup/restore cycle. Users must re-apply them manually via `ssh-keygen -c`.
 - **BIP39 Entropy Limitations**: BIP39 was designed for Bitcoin HD wallets; using it for SSH keys is an unconventional but technically sound approach since the Ed25519 seed IS the 32-byte entropy.

@@ -1,6 +1,7 @@
 # pterm/pterm
 
 ## Metadata
+
 - **URL**: https://github.com/pterm/pterm
 - **Language**: Go (1.25.0)
 - **Stars**: ~6,000+ (GitHub badge visible on README; shallow-clone unavailable for exact count)
@@ -43,17 +44,20 @@
 ## Key Classes and Methods
 
 ### Core / Color
+
 - `Color` (uint8): ANSI color constant; `.Sprint()`, `.Sprintf()`, `.Print()`, `.Println()` — returns `*TextPrinter` (`color.go:L136-L256`)
 - `Style` ([]Color): composable style chain; `.Add()`, `.RemoveColor()`, `.Sprint()`, `.Print()` (`color.go:L263-L396`)
 - `RGB`: struct with `R`, `G`, `B` uint8 and `Background` bool; `.Fade()`, `.Sprint()`, `.Print()`, `.ToRGBStyle()` (`rgb.go:L14-L318`)
 - `RGBStyle`: foreground/background `RGB` + options; `.AddOptions()`, `.Sprint()`, `.Print()` (`rgb.go:L21-L156`)
 
 ### Interfaces
+
 - `TextPrinter`: `.Sprint()`/`.Sprintf()`/`.Sprintln()`/`.Sprintfln()` (return string) + `.Print()`/`.Printf()`/`.Println()`/`.Printfln()` + `.PrintOnError()`/`.PrintOnErrorf()` (return `*TextPrinter`) — implemented by `Color`, `Style`, `RGB`, `BoxPrinter`, `ProgressbarPrinter`, `SpinnerPrinter`, `Logger`, etc. (`interface_text_printer.go`)
 - `LivePrinter`: `.GenericStart()`/`.GenericStop()` (return `*LivePrinter, error`) + `.SetWriter(io.Writer)` — implemented by `ProgressbarPrinter`, `SpinnerPrinter`, `AreaPrinter` (`interface_live_printer.go`)
 - `RenderPrinter`: `.Render()` (writes to terminal) + `.Srender()` (returns string) — implemented by `TablePrinter`, `BarChartPrinter`, `BigTextPrinter`, `PanelPrinter`, `TreePrinter` (`interface_renderable_printer.go`)
 
 ### Printers
+
 - `ProgressbarPrinter`: `.Start()`/`.Stop()`, `.Increment()`, `.Add()`, `.UpdateTitle()`, `.WithTitle()`/`.WithTotal()`/`.WithBarCharacter()` etc. (`progressbar_printer.go`)
 - `SpinnerPrinter`: `.Start()`/`.Stop()`, `.UpdateText()`, `.Info()`/`.Success()`/`.Fail()`/`.Warning()` (`spinner_printer.go`)
 - `AreaPrinter`: `.Start()`/`.Stop()`, `.Update()`, `.Clear()`, `.WithFullscreen()`/`.WithCenter()` (`area_printer.go`)
@@ -77,6 +81,7 @@
 - `HeatmapPrinter`: `.Srender()`/`.Render()` (`heatmap_printer.go`)
 
 ### Utilities (putils)
+
 - `LettersFromString(text string) Letters` — creates per-char `Letter` slice with `ThemeDefault.LetterStyle` (`putils/letters_from_string.go:L11`)
 - `LettersFromStringWithStyle(text string, style *Style) Letters` — same with custom style
 - `LettersFromStringWithRGB(text string, rgb RGB) Letters` — per-char RGB coloring
@@ -87,6 +92,7 @@
 ## Notable Algorithms / Named Patterns
 
 ### MapRangeToRange (internal/map_range_to_range.go:L3-L8)
+
 Linear interpolation between two numeric ranges. Used extensively for:
 - Bar chart values → terminal character positions
 - Progressbar percentage → RGB color fade
@@ -99,30 +105,38 @@ func MapRangeToRange(fromMin, fromMax, toMin, toMax, current float32) int {
 ```
 
 ### RGB.Fade() (rgb.go:L175-L210)
+
 Multi-stop color gradient interpolation. Takes `min`, `max`, `current` float32 and variadic `end ...RGB` to interpolate across multiple color stops. Used for progress bar color (red→green) and text gradient effects.
 
 ### TextPrinter Interface Pattern
+
 Every printer implements `TextPrinter` with 4 pairs of methods (Sprint/Sprintf/Sprintln/Sprintfln returning string, and Print/Printf/Println/Printfln writing to io). This gives all components a consistent, familiar API surface.
 
 ### LivePrinter / Cursor Atomic Pattern
+
 `ProgressbarPrinter`, `SpinnerPrinter`, and `AreaPrinter` implement `LivePrinter` using `atomicgo.dev/cursor` for VT100 cursor control. `Start()` calls `cursor.Hide()`, `Stop()` calls `cursor.Show()`, and updates use `Fprinto()` / `\r` (carriage return) to overwrite the current line.
 
 ### Recursive Tree Walk (tree_printer.go:L142-L168)
+
 ```go
 func walkOverTree(list []TreeNode, p TreePrinter, prefix string) string
 ```
 Recursively renders tree nodes using prefix accumulation and pipe/branch Unicode characters. Handles both leaf nodes and branch nodes with children.
 
 ### Fuzzy Search in InteractiveSelect (interactive_select_printer.go:L296)
+
 Uses `lithammer/fuzzysearch` to rank-filter options as the user types, updating `displayedOptions` window for virtual scrolling.
 
 ### go-runewidth for Unicode (box_printer.go, panel_printer.go, header_printer.go)
+
 `github.com/mattn/go-runewidth` is used to correctly calculate visual width of Unicode characters (especially CJK-wide characters) in `BoxPrinter.Sprint()` and `PanelPrinter.Srender()`.
 
 ### slog Handler Bridge (slog_handler.go)
+
 `SlogHandler` implements Go's `log/slog.Handler` interface, converting `slog.Attr` records to `Logger.ArgsFromMap()`, routing to appropriate `Logger.Trace/Debug/Info/Warn/Error` methods. This enables pterm logging to be used as a drop-in for the standard library's structured logger.
 
 ### Global Default Instances Pattern
+
 Every printer type has a `DefaultXxx` package-level variable (e.g., `DefaultProgressbar`, `DefaultSpinner`, `DefaultArea`, `DefaultLogger`) pre-configured with theme defaults, allowing zero-config usage while still supporting full customization via `With*()` builder methods that return value receivers (enabling fluent chaining).
 
 ## Strengths

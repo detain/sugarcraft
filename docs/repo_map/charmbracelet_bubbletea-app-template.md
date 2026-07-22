@@ -1,6 +1,7 @@
 # charmbracelet/bubbletea-app-template
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/bubbletea-app-template
 - **Language:** Go (1.24.2)
 - **Stars:** 248
@@ -8,6 +9,7 @@
 - **Description:** A template repository to create Bubble Tea apps, providing a starter project that includes all core Charmbracelet TUI dependencies with CI/CD workflows already configured.
 
 ## Feature List
+
 - **Starter TUI App** — A minimal "loading forever" sample app using Bubble Tea's `Model`/`Update`/`View` pattern, demonstrating the full TEA (Tool/Equipment/Agent or Tree/Enter/Agent) architecture.
 - **Bubble Tea Integration** — The core TUI framework (`github.com/charmbracelet/bubbletea v1.3.10`) with the canonical `tea.Model` interface (`Init() tea.Cmd`, `Update(tea.Msg) (tea.Model, tea.Cmd)`, `View() string`).
 - **Bubbles Library** — Pre-integrated `github.com/charmbracelet/bubbles v1.0.0` components, demonstrated with a `spinner.Model` that ticks independently.
@@ -38,6 +40,7 @@
 - **Conventional Commits Changelog** — GoReleaser configured with regex groups for `^.*feat[(\w)]*:+.*$` and `^.*fix[(\w)]*:+.*$` to auto-categorize release notes.
 
 ## Strengths
+
 - **Zero-Config Start** — Developer can fork/clone and immediately run a working TUI with all dependencies declared, no boilerplate to delete.
 - **Complete CI/CD** — Build, lint, test, release, and dependency update pipelines are all wired up and ready; a production-grade template, not just a hello-world.
 - **Canonical Bubble Tea** — Demonstrates the idiomatic `model` struct + `Init`/`Update`/`View` triad correctly, including `tea.Quit` return and error handling patterns.
@@ -46,6 +49,7 @@
 - **Well-Maintained Dependencies** — Dependabot keeps all three ecosystems (gomod, GitHub Actions, Docker) up-to-date weekly.
 
 ## Weaknesses
+
 - **No Sub-Commands / Navigation** — The sample app is a single-screen spinner with only a quit interaction; does not demonstrate routing between multiple screens or concurrent models.
 - **No Component Examples** — Does not showcase other Bubbles components (text input, viewport, table, filtered list, etc.), leaving the developer to explore those independently.
 - **No Persistent State** — No file I/O, database, or flag parsing demonstrated; purely an in-memory, single-session model.
@@ -69,6 +73,7 @@
 | Dependabot weekly update schedule | `sugarcraft/sugarcraft` root `composer.json` | Dependency management cadence; SugarCraft uses Composer instead of Go modules but the same "keep deps updated" philosophy applies. |
 
 **Many-to-Many Summary:**
+
 - **bubbletea** ↔ **candy-core** — TEA architecture, Program runner, message loop
 - **bubbles** ↔ **sugar-bits** — Reusable TUI component library
 - **lipgloss** ↔ **candy-shine** — Declarative terminal styling

@@ -7,9 +7,11 @@ updated: 2026-06-30
 # Implementation Plan: candy-palette Code Review Findings
 
 ## Goal
+
 Address all 24 code review findings in candy-palette, consolidating duplicate enums, eliminating detection logic duplication, improving static state management, adding missing tooling configs, and filling architectural gaps.
 
 ## Context & Decisions
+
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Keep Profile and ColorProfile as separate enums | Profile is richer (degradedTo, maxColors, description) used by Palette/Color/ProfileWriter. ColorProfile is SSOT for Probe/TerminalProbe, used by consumer libs | ref:exploration |

@@ -1,6 +1,7 @@
 # sugar-stickers — Innovation & Comparison Report
 
 ## Metadata
+
 - **Package**: `sugarcraft/sugar-stickers`
 - **Namespace**: `SugarCraft\Stickers`
 - **Upstream**: [76creates/stickers](https://github.com/76creates/stickers) (Go, ~500 stars, MIT)
@@ -210,6 +211,7 @@ private function applyFilter(array $rows): array
 ```
 
 **Key difference from sugar-table**:
+
 - sugar-stickers: **OR logic** across all cells, **single global filter text**
 - sugar-table: **AND logic** across explicitly keyed columns, **per-column filter map**
 

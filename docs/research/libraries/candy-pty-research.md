@@ -25,6 +25,7 @@
 | `Lang.php` (31 lines) | i18n facade |
 
 **Key Files:**
+
 - `bin/pty-shim.php` (94 lines) — Controlling terminal claim via `setsid()` + `TIOCSCTTY` + `pcntl_exec()`
 - `lang/en.php` — Translation strings
 
@@ -73,12 +74,14 @@ golang.org/x/sys v0.36.0
 ```
 
 **Architecture:**
+
 - Interfaces for cross-platform PTY (`UnixPty`, `ConPty` for Windows)
 - Depends on `creack/pty` for Unix PTY operations
 - `term` package provides terminal size query utilities
 - `termios` package provides termios get/set via `golang.org/x/sys/unix`
 
 **Signal Handling (from xpto source patterns):**
+
 - Uses `signal.Notify(ch, syscall.SIGWINCH)` to listen for window changes
 - Separate goroutine reads winsize and calls `pty.SetSize()`
 
@@ -228,6 +231,7 @@ let child = pair.slave.spawn_command(CommandBuilder::new("bash"))?;
 **Forked from:** portable-pty 0.9.0
 
 **Planned improvements over portable-pty:**
+
 - Async support (tokio/async-std)
 - Better Windows ConPTY control
 - Improved error types
@@ -278,6 +282,7 @@ enum Signal {
 **PHP:** Since 8.0, PTY support was re-enabled in proc_open
 
 **History:**
+
 - Originally added in 2004, disabled within a month due to portability issues
 - Re-enabled in PHP 8.0 (PR #5525, commit a84cd96e865db795edc72b2799eac5c3c67aadfe)
 
@@ -342,6 +347,7 @@ Termios\Termios::tcflush($fd);     // Flush buffers
 
 **Repository:** https://github.com/linkorb/tty
 **Features:**
+
 - ttyrec parser
 - VT100/ANSI Terminal emulator
 - AsciiRenderer for replay
@@ -356,6 +362,7 @@ Termios\Termios::tcflush($fd);     // Flush buffers
 **Purpose:** Low-level terminal manipulation library heavily inspired by crossterm
 
 **Features:**
+
 - Raw mode
 - Terminal size query
 - Input event handling
@@ -422,6 +429,7 @@ ch <- syscall.SIGWINCH // Initial resize
 ```
 
 **Key Differences:**
+
 - Go uses a channel + goroutine; PHP uses signal handler + closure
 - PHP must wrap handler in try/catch (signal handlers cannot throw)
 - PHP has `isClosed()` race guard; Go relies on channel closing
@@ -451,6 +459,7 @@ func InheritSize(pty, tty *os.File) error {
 ```
 
 This copies the size from the PTY master to the terminal (stdin). When a terminal resize occurs:
+
 1. Host receives SIGWINCH
 2. Handler reads new size from PTY master via `GetsizeFull`
 3. Handler writes new size to terminal via `Setsize`

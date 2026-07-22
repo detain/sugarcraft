@@ -7,9 +7,11 @@ updated: 2026-06-30
 # Implementation Plan: honey-flap Audit Fixes
 
 ## Goal
+
 Address all 12 findings from the honey-flap audit, covering bug fixes, performance improvements, PHP 8.3+ compatibility, and security enhancements.
 
 ## Context & Decisions
+
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Scoring fires at x=7, collision at x=8 | Off-by-one bug causes score increment one frame before visual collision | `honey-flap.md:1-19` |
@@ -312,6 +314,7 @@ Address all 12 findings from the honey-flap audit, covering bug fixes, performan
 | 12 | Security | Rand closure exception not caught | Game.php:262 | 5.2 |
 
 ## Notes
+
 - 2026-06-30: Initial plan created from audit findings `honey-flap.md`
 - All source locations verified against actual code during investigation
 - Tests at `tests/GameTest.php` provide existing coverage patterns to follow

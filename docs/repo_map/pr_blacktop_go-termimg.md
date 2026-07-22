@@ -57,12 +57,14 @@ The `candy-mosaic` library in SugarCraft directly maps to `go-termimg` functiona
 **This is the most significant user-facing issue in the repo.**
 
 **User's Context**:
+
 - Building a terminal pager for djot markup language
 - Using bespoke terminal library for escape sequences
 - Using `TermImg.Build()` to get string for `io.Writer.Write()`
 - Problem: tmux positioning issues - image corrupts other panes
 
 **User-Reported Problems**:
+
 1. **Unclear protocol support** - "go-termimg works in tmux, even outside of iTerm or Kitty" but unclear WHY
 2. **Terminal state corruption** - "go-termimg does not leave the terminal in a reasonable state"
 3. **Positioning issues in tmux** - "images rendered when cursor is at bottom of window" behave differently than when at top
@@ -70,6 +72,7 @@ The `candy-mosaic` library in SugarCraft directly maps to `go-termimg` functiona
 5. **imgcat install issue** - `replace` directives in go.mod prevent `go install`
 
 **Maintainer Acknowledgment**:
+
 - "sorry for the slow response; I've recently become once again obsessed with terminal images"
 - "I have updated the API to hopefully be more simple and added sixel and halfblocks"
 - "the code is currently in a broken state, I'll try to fix it a bit later and tag it"
@@ -166,6 +169,7 @@ Based on issue analysis, no explicit feature requests have been submitted - the 
 3. A reference implementation for terminal graphics
 
 **Implicit features users want**:
+
 1. Clear error messages when protocol unsupported
 2. Better documentation on which terminals support which protocols
 3. Simpler API (maintainer acknowledged this)
@@ -559,6 +563,7 @@ go-termimg has LRU resize cache
 ### Recommendation #1: Audit Detect Class for Stdin Pollution (HIGH ROI)
 
 **Action**: Review `candy-mosaic/src/Detect.php` to ensure:
+
 - CSI queries have timeouts
 - stdin is flushed after queries
 - Environment-based detection short-circuits queries
@@ -568,6 +573,7 @@ go-termimg has LRU resize cache
 ### Recommendation #2: Add Resize LRU Cache (MEDIUM ROI)
 
 **Action**: Implement `ResizeCache` in candy-mosaic with:
+
 - Single-lock `get()` method (no TOCTOU)
 - RWMutex for concurrent reads, exclusive writes
 - LRU eviction with configurable size
@@ -577,6 +583,7 @@ go-termimg has LRU resize cache
 ### Recommendation #3: Audit Escape Sequence Termination (HIGH ROI)
 
 **Action**: Review all `Renderer` classes for proper terminators:
+
 - Kitty: Ensure `\x1b\\` after DCS sequences
 - Sixel: Ensure proper termination
 - iTerm2: Ensure OSC sequences terminated

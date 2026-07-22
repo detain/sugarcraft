@@ -6,20 +6,24 @@ Find and remove or update outdated comments in the codebase that no longer refle
 ## Files to Modify
 
 1. **`src/App.php`** — Remove/update this stale comment (around line 403-406):
+
    ```php
    // Note: ProcessList and ConnStats currently use DashboardPage as placeholder
    // since ConnectionsPage does not extend PageBase. Full ConnectionsPage
    // integration will come in a later phase.
    ```
+
    ConnectionsPage NOW extends PageBase, so this comment is false.
 
 2. Any other stale comments found via grep across the candy-query src/
 
 ## Grep for Stale Comments
+
 Run before coding to find all candidates:
+
 ```bash
 grep -rn "placeholder" /home/sites/sugarcraft/candy-query/src
-grep -rn "TODO" /home/sites/sugarcraft/candy-query/src  
+grep -rn "TODO" /home/sites/sugarcraft/candy-query/src
 grep -rn "FIXME" /home/sites/sugarcraft/candy-query/src
 grep -rn "later phase" /home/sites/sugarcraft/candy-query/src
 grep -rn "does not extend" /home/sites/sugarcraft/candy-query/src

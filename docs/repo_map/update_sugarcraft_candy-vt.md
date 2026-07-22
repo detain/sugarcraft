@@ -3,12 +3,14 @@
 **candy-vt** is an in-memory virtual terminal emulator that parses ANSI byte streams into a cell grid with cursor, mode, SGR style, and hyperlink state. It is a PHP port of `charmbracelet/x/vt` and serves as the terminal emulator behind `candy-vcr`'s render pipeline. The library provides two entry points: a full VT500 emulator (mutable, feed-in-place) and a lightweight renderer (immutable, fluent, for the vcr path).
 
 **Biggest opportunity areas:**
+
 1. **Truecolor support in the lightweight renderer path** — `CsiHandlerImpl` lacks truecolor SGR (`38;2;R;G;B`)
 2. **Mouse event emission** — Mode flags are tracked but no actual mouse events are emitted to consumers
 3. **DCS/SOS/PM/APC dispatch** — Currently no-op, limiting protocol completeness
 4. **Performance optimization** — Per-byte PHP iteration could benefit from batching strategies
 
 **Biggest missing capabilities:**
+
 1. **DECRTMM (margin mode queries)** — Mode request/response not implemented
 2. **Soft terminal reset (DECSTR)** — `CSI !p` not implemented
 3. **Character set selection (G0/G1/G2/G3)** — Not wired
@@ -24,6 +26,7 @@
 candy-vt implements a two-tier architecture:
 
 ### Full VT Emulator (`SugarCraft\Vt\Terminal\Terminal`)
+
 - **Parser:** Paul Williams VT500 state machine, direct port from `charmbracelet/x/ansi/parser`
 - **Handler:** `ScreenHandler` orchestrates Buffer/Cursor/Sgr/Mode mutations
 - **Feed style:** Mutable, in-place — `feed(string $bytes): void`
@@ -31,6 +34,7 @@ candy-vt implements a two-tier architecture:
 - **Grid:** `Buffer` (mutable `array<int, array<int, Cell>>`)
 
 ### Lightweight Renderer (`SugarCraft\Vt\Terminal` root namespace)
+
 - **Parser:** Same VT500 state machine via `HandlerAdapter` + `CsiHandlerImpl` + `OscHandlerImpl`
 - **Feed style:** Immutable fluent — `feed(string $bytes): self` returns NEW instance
 - **State:** Simplified subset — no hyperlinks, BCE, sync output, alt screen, tab stops, focus events, clipboard events
@@ -149,6 +153,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:661`, `charmbracelet_bubbletea.md:30`
 
 **Implementation ideas:**
+
 1. Extend `CsiHandlerImpl::sgrExtended()` to handle kind=2 with 5 parameters (R, G, B)
 2. Store truecolor as packed integer in `Cell::$fg`/`$bg` with a sentinel value indicating truecolor mode
 3. Add `Cell::TRUE_COLOR_FLAG` constant and decode at render time
@@ -168,6 +173,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:539`, `charmbracelet_bubbletea.md:22`
 
 **Implementation ideas:**
+
 1. Create `MouseMsg` value object with X, Y, button, modifier fields
 2. Add `ScreenHandler::mouseEvent(MouseMsg $msg)` that appends to `$mouseEvents[]`
 3. Wire `Terminal::mouseEvents()` accessor to expose accumulated events
@@ -188,6 +194,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:541`
 
 **Implementation ideas:**
+
 1. Implement basic DCS q (termcap) parsing similar to `charmbracelet/sequin` (`dcsHandlers map` in `handlers.go`)
 2. Store DCS payload in `ScreenHandler::$dcsPayload` for later retrieval
 3. Add `Terminal::dcsPayload(): ?string` accessor
@@ -209,6 +216,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:663`
 
 **Implementation ideas:**
+
 1. In `CsiHandlerImpl::printable()`, call `Width::string($rune)` before writing
 2. If width >= 2, write continuation cell with `Cell::$continuation = true`
 3. Advance cursor by full width
@@ -228,6 +236,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:545`
 
 **Implementation ideas:**
+
 1. Add `Mode::$marginMode` boolean field
 2. Handle `CSI ?s` (query) in `ModeHandler::csiDispatch()` returning mode state via OSC
 3. Handle `CSI ?t` (set) to update margin mode
@@ -247,6 +256,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:548`
 
 **Implementation ideas:**
+
 1. Add `ScreenHandler::softReset()` that:
    - Resets SGR to defaults
    - Clears tab stops
@@ -270,6 +280,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:567`
 
 **Implementation ideas:**
+
 1. Add `$syncUpdate` flag to renderer path state
 2. When active, queue mutations instead of applying immediately
 3. On mode disable, replay all queued mutations
@@ -309,6 +320,7 @@ windowTitle(): string
 **Source:** `docs/repo_map/sugarcraft_candy-vt.md:561`
 
 **Implementation ideas:**
+
 1. Add `OscHandlerImpl::hyperlink($uri, $id)` method
 2. Track `$currentHyperlink` state in renderer handler
 3. Attach hyperlink to cells during `printable()`
@@ -580,6 +592,7 @@ windowTitle(): string
 **Current:** No performance benchmarks exist.
 
 **Improvement:** Add benchmarks for:
+
 - Parser throughput (bytes/second)
 - CellGrid set operations (ops/second)
 - Screen diff computation (diffs/second)
@@ -615,6 +628,7 @@ windowTitle(): string
 **Current:** candy-vcr uses candy-vt's `Terminal` + `Snapshot` for frame capture.
 
 **Opportunity:** Enhance vcr integration with:
+
 - Frame deduplication improvements
 - Cassette compression
 - VCR assertions for mode/cursor verification (`docs/repo_map/sugarcraft_candy-vt.md:683-686`)
@@ -721,23 +735,27 @@ windowTitle(): string
 candy-vt is a well-engineered, faithful port of `charmbracelet/x/vt` that successfully brings VT500 terminal emulation to PHP. Its dual-entry-point architecture (full emulator vs. lightweight renderer) reflects thoughtful design that balances completeness with performance for the vcr use case.
 
 **Key differentiators:**
+
 1. **VT500 state machine** — Complete implementation of the Paul Williams algorithm with a synthetic UTF-8 state for PHP
 2. **Immutable/fluent patterns** — All state objects use `with*()` pattern per SugarCraft conventions
 3. **Comprehensive CSI/OSC/SGR coverage** — All major sequences handled
 4. **Real upstream usage** — Powers the entire candy-vcr render pipeline
 
 **Strategic priorities:**
+
 1. **Complete the renderer path** — Truecolor, wide-char, hyperlinks, synchronized output would make the renderer path suitable for most TUI applications
 2. **Enable interactive applications** — Mouse event emission is the missing piece for interactive terminal emulators
 3. **Improve test infrastructure** — Golden file testing and performance benchmarks would enable confident development
 4. **Explore ecosystem integration** — php-tui integration could expand candy-vt's utility beyond the vcr use case
 
 **Risk considerations:**
+
 - PHP performance inherently limits per-byte throughput compared to Go; optimization within PHP constraints is the best approach
 - The renderer path's simplicity is a feature (not a bug) for vcr, but needs clear documentation about feature limitations
 - The full path's incomplete features (DCS, mouse events) should be addressed before using candy-vt in production interactive applications
 
 **Competitive position:**
+
 - No direct PHP equivalent exists for terminal emulation
 - Compared to Go's `x/vt`, candy-vt is a complete port with minimal divergence
 - Compared to `php-tui/php-tui`, candy-vt provides lower-level terminal emulation rather than widget rendering

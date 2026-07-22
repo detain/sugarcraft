@@ -42,6 +42,7 @@ Clarify findings file ownership and address all valid issues in `sugar-charts/sr
 **Location:** `sugar-charts/src/Sparkline/Sparkline.php:L55-60` (auto-width logic) and `L144-149` (view early exit)
 
 **Investigation Notes:**
+
 - `Sparkline::new([], 3)->view()` at lines 155-157 correctly returns `'   '` (padded spaces)
 - `Sparkline::new([])->view()` auto-sets width to 0 (via `count([]) = 0` at line 58), then `view()` returns `''` at line 148
 - Test at line 13-15 (`testEmptyDataPaddedWithBlanks`) explicitly tests the width=3 case
@@ -62,6 +63,7 @@ Clarify findings file ownership and address all valid issues in `sugar-charts/sr
 **Location:** `sugar-charts/src/Sparkline/Sparkline.php:L214-229`
 
 **Investigation Notes:**
+
 - `glyph()` at lines 216-219 returns `▄` (mid-bar) when `range <= 0`
 - Test at lines 37-39 (`testFlatSeriesRendersMidBar`) confirms: `Sparkline::new([5, 5, 5])->view()` returns `'▄▄▄'`
 - This is correct and expected behavior — a flat series renders mid-bar for visibility
@@ -81,6 +83,7 @@ Clarify findings file ownership and address all valid issues in `sugar-charts/sr
 **Location:** `sugar-charts/src/Sparkline/Sparkline.php:L214-229`
 
 **Investigation Notes:**
+
 - `glyph()` at line 221: `$norm = ($v - $min) / $range`
 - At line 222: `$norm = max(0.0, min(1.0, $norm))` — this clamps correctly
 - For all-negative data (e.g., `[-5, -3, -1]`): `min = -5`, `max = -1`, `range = 4`
@@ -139,6 +142,7 @@ Clarify findings file ownership and address all valid issues in `sugar-charts/sr
 **Location:** `sugar-charts/src/Sparkline/Sparkline.php:L69-75`
 
 **Investigation Notes:**
+
 - Test at lines 18-20 (`testZeroWidthRendersEmpty`) explicitly tests width=0 returning `''`
 - This suggests width=0 is intentional design for placeholder states
 - However, the finding suggests 1-2 char sparklines "look broken"
@@ -158,6 +162,7 @@ Clarify findings file ownership and address all valid issues in `sugar-charts/sr
 **Location:** `sugar-charts/examples/sparkline.php`
 
 **Investigation Notes:**
+
 - Example file exists at `sugar-charts/examples/sparkline.php` with working code
 - Running `php examples/sparkline.php` produces visible output
 

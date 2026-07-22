@@ -50,6 +50,7 @@ From `repo_map/charmbracelet_pop.md`:
 ## 4. High-Signal Open Issues
 
 ### Issue #160: Ability to use pop in cron jobs (Feb 2026)
+
 **Signal:** Open, 1 PR submitted (#162), active maintainer engagement
 **Problem:** Pop requires TTY (`/dev/tty`), making it unusable in cron jobs or other non-interactive contexts. Error: `could not open a new TTY: open /dev/tty: no such device or address`
 **Requested solution:** `--no-tty` / `-n` flag that skips TUI even when fields are incomplete, outputting errors to STDERR only
@@ -57,17 +58,20 @@ From `repo_map/charmbracelet_pop.md`:
 **Analysis for SugarCraft:** This is a **headless/non-interactive mode** pattern. The tool currently conflates "UI mode" with "send mode" — the TUI is the only way to compose, and CLI mode requires all fields. SugarCraft should separate composition from delivery clearly.
 
 ### Issue #77: Mail reader feature (Jun 2024)
+
 **Signal:** 2 👍, 1 👀, active discussion, maintainer interest expressed
 **Problem:** Users want to read email, not just send. "Adding IMAP client would make it an awesome application."
 **Analysis for SugarCraft:** The read/write asymmetry is a known gap. SugarCraft has no email library at all, so this would be net-new. If `sugar-mail` were built, IMAP support would make it far more useful.
 
 ### Issue #142: POP_BCC environment variable (Jul 2025)
+
 **Signal:** 1 ❤️, PR #147 submitted and mergeable, community backing
 **Problem:** No way to set persistent BCC for sent-message backup. BCC field exists in the TUI but is hidden/not discoverable. "No BCC line in the TUI mode is a big turn-off for any use other than mass marketing."
 **PR #147:** Adds `POP_BCC` env var support — 7 lines, clean
 **Analysis for SugarCraft:** Environment variable for defaults (like `POP_FROM`, `POP_SIGNATURE`) is a well-established pattern. SugarCraft should support this same default-override pattern.
 
 ### Issue #136: Optional SMTP credentials (Jun 2025)
+
 **Signal:** 2 PRs (#144, #167), community workaround documented, open for 11+ months
 **Problem:** SMTP credentials (username + password) are **mandatory** even when the SMTP server accepts anonymous sends (e.g., university mail relays, internal corporate relays). Users had to set bogus credentials as a workaround.
 **Root cause (per PR #167):** The delivery gate required BOTH `smtpUsername` AND `smtpPassword` to be non-empty. The underlying `xhit/go-simple-mail` library already handles empty username correctly (no auth). The gate was the only blocker.
@@ -76,12 +80,14 @@ From `repo_map/charmbracelet_pop.md`:
 **Analysis for SugarCraft:** This is a **defensive design lesson**: don't gate functionality on optional components when the underlying library already handles the optionality correctly. SugarCraft should never require credentials that aren't actually needed.
 
 ### Issue #118: Reply-to header (Feb 2025)
+
 **Signal:** 2 👍, PR #119 clean and mergeable for 15+ months
 **Problem:** Resend SDK supports Reply-To header but pop doesn't expose it. Users with GSuite accounts want replies routed to their normal email.
 **Requested API:** `-R, --reply-to string` with `$POP_REPLY_TO` env var
 **Analysis for SugarCraft:** Simple missing feature, easily added. SugarCraft should ensure all standard email headers are representable.
 
 ### Issue #115: Plain text option (Dec 2024)
+
 **Signal:** 1 👍, PR #125 implements it (merged subsequently), maintainer actively reviewed
 **Problem:** Pop converts all bodies to HTML via goldmark Markdown rendering, with no way to send plain text. "Not all recipients of email, especially those working in open-source, appreciate html email. In fact, many despise it." Users sending log snippets lose whitespace formatting.
 **Solution in PR #125:** `--plaintext` flag + `POP_PLAINTEXT` env var, implemented for both SMTP and Resend
@@ -89,6 +95,7 @@ From `repo_map/charmbracelet_pop.md`:
 **Analysis for SugarCraft:** SugarCraft should provide explicit control over MIME type (text/plain vs text/html) and be transparent about defaults.
 
 ### Issue #116: Markdown tables not rendered (Dec 2024)
+
 **Signal:** Active discussion thread Dec 2025 revealing deeper inconsistency
 **Problem:** Markdown tables (from taskwarrior etc.) are sent as plain paragraphs, not HTML tables. "Ironically your own tool, glow, renders the table."
 **Key discovery:** `--unsafe` flag enables goldmark `extension.Table` for Resend path ONLY, NOT for SMTP path. This was unintentional/inconsistent.
@@ -96,10 +103,12 @@ From `repo_map/charmbracelet_pop.md`:
 **Analysis for SugarCraft:** Inconsistent feature availability between delivery backends is a maintainability nightmare. SugarCraft should have a single markdown rendering pipeline shared across all delivery methods.
 
 ### Issue #95: Raw mail output for piping (Aug 2024)
+
 **Signal:** 1 👍, open 9+ months
 **Problem:** Users want to use pop as an email composer and pipe output to other delivery agents (msmtp, mdeliver from mblaze toolkit, custom anonymization scripts). Currently pop only sends, it doesn't output the raw MIME message.
 **Requested solution:** `pop -o -` to output raw mail without sending
 **Use cases stated:**
+
 - `pop -o - | msmtp -a gmail` — compose with pop, deliver with user's existing MDA
 - `pop -o - | mdeliver /mnt/sshfs/some-host/mail/INBOX` — file-based delivery
 - `pop -o - | anonymize.sh | msmtp -a gmail` — pre-delivery transformation
@@ -110,17 +119,20 @@ From `repo_map/charmbracelet_pop.md`:
 ## 5. Important Closed Issues
 
 ### Issue #26: Resend API key required even with SMTP (Aug 2023)
+
 **Status:** Closed with workaround, not fully fixed until SMTP path was refactored
 **Pain:** Required bogus credentials workaround for 2+ years. The error message was misleading (asked for RESEND_API_KEY when SMTP was configured).
 **Lesson:** Delivery method detection logic was broken; users needed to set ALL SMTP vars including username/password even for anonymous relays.
 
 ### Issue #87: Launch a new release (Jul 2024 → May 2026)
+
 **Status:** Closed (v0.2.1 released April 2026)
 **Signal:** 1 👍, multiple maintainer pings over 2 years
 **Pain:** Debian `apt` users were stuck on v0.2.0 (Aug 2023). Feature parity with latest `main` was years behind for package manager users.
 **Lesson:** Sporadic release cadence creates ecosystem fragmentation. Users on stable packages don't benefit from active development.
 
 ### Issue #153: Do I need a website to use this? (Oct 2025)
+
 **Status:** Closed (question)
 **Insight:** New users don't understand Resend/onboarding flow. `onboarding@resend.dev` for sending without a custom domain is not discoverable.
 **Analysis for SugarCraft:** If SugarCraft builds an email lib, onboarding UX must be more discoverable.
@@ -161,27 +173,32 @@ From `repo_map/charmbracelet_pop.md`:
 ## 8. Important PRs
 
 ### PR #125: feat: Allow plaintext e-mails for SMTP (Mar 2025)
+
 - **State:** Open then merged
 - **Changes:** `--plaintext` flag + `POP_PLAINTEXT` env var for both SMTP and Resend
 - **Review process:** Maintainer (aymanbagabas) requested `POP_PLAINTEXT` env var addition, then asked for Resend support. Author (jficz) delivered on both requests.
 - **Lesson:** Maintainers will request env-var equivalents for every flag; ensure both are designed together from the start.
 
 ### PR #119: support for replyto header (Feb 2025)
+
 - **State:** Open 15+ months, clean, mergeable
 - **Changes:** 23 lines, 3 files, adds `-R/--reply-to` flag + `POP_REPLY_TO` env var
 - **Lesson:** Simple 23-line feature, unmerged for over a year. Review bottleneck exists.
 
 ### PR #162: Add initial no-tty implementation (Feb 2026)
+
 - **State:** Open, 31 lines, clean
 - **Changes:** `--no-tty/-n` flag for non-interactive use
 - **Lesson:** Fork was in production use for a week before PR. Community patience for review is limited.
 
 ### PR #144: fixes #136 (Aug 2025) + PR #167: allow SMTP without credentials (May 2026)
+
 - **State:** Two PRs addressing same problem independently
 - **PR #167 insight:** Correct fix is switching gate from "both credentials required" to "any SMTP setting present"
 - **Lesson:** When a problem persists 2+ years, multiple contributors will attempt fixes. SugarCraft needs faster review or clearer "we're working on it" signals.
 
 ### PR #147: Add support to POP_BCC environment variable (Sep 2025)
+
 - **State:** Open, mergeable, 7 lines
 - **Lesson:** Tiny, well-scoped PRs still sit open. SugarCraft should prioritize small PRs.
 
@@ -190,18 +207,21 @@ From `repo_map/charmbracelet_pop.md`:
 ## 9. Architectural Changes
 
 ### Dual Delivery Dispatch (established v0.2.0)
+
 - `DeliveryMethod` enum: `None`, `Resend`, `SMTP`, `Unknown`
 - Runtime dispatch rather than compile-time
 - Gmail smart defaults when SMTP username ends in `@gmail.com`
 - **Pain point:** Both Resend and SMTP paths have evolved with inconsistencies (markdown tables, plaintext flags)
 
 ### State Machine for TUI (unchanged since initial release)
+
 - `State` enum drives focus, keybindings, view rendering
 - Tab/Shift+Tab navigation through fields
 - Dynamic keybinding enable/disable via `updateKeymap()`
 - **Assessment:** Clean pattern, well-received, directly portable to SugarCraft
 
 ### Markdown → HTML Pipeline
+
 - Uses `yuin/goldmark` with configurable extensions
 - Resend path supports extra extensions under `--unsafe` flag
 - SMTP path has fewer extensions (intentionally or accidentally)
@@ -219,11 +239,13 @@ From `repo_map/charmbracelet_pop.md`:
 ## 11. Extensibility Discussions
 
 ### Issue #77: IMAP / mail reader
+
 Multiple users want to read email, not just send. This would transform pop from a **send-only tool** to a **full email client**. The maintainers have expressed interest but it's a large feature requiring significant architecture work.
 
 **Analysis for SugarCraft:** If SugarCraft builds `sugar-mail`, should it be send-only or include receive capabilities? IMAP support would dramatically increase utility. However, receive functionality is architecturally separate from compose/send.
 
 ### Issue #86: HTML templates + text file content
+
 Request for pre-existing content files and HTML template customization. This would require a template rendering layer between markdown conversion and email sending.
 
 **Analysis for SugarCraft:** Template support (Smarty is already used in the monorepo) could be a SugarCraft differentiator if `sugar-mail` supported both markdown authoring and HTML template wrapping.

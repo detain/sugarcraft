@@ -15,6 +15,8 @@
 ## Files
 
 **Move (from `src/Grid/`):**
+
+
 - `Item.php` → `src/Foundation/Item.php`
 - `Sizer.php` → `src/Foundation/Sizer.php`
 - `Options.php`, `ItemOptions.php`, `ItemWithOptions.php` →
@@ -29,11 +31,14 @@
   respectively (consolidating in step 03.03).
 
 **Update:** every `use SugarCraft\Dash\Grid\<Name>` import across:
+
 - `src/` — every file that referenced the moved classes.
 - `tests/` — every test that referenced them.
 - `examples/` — every example.
 
 ## Tests
+
+
 
 - `cd sugar-dash && vendor/bin/phpunit` green after the move.
 - New files have tests under `tests/Foundation/`, `tests/Layout/Grid/`,
@@ -57,6 +62,8 @@
 ---
 
 ## Process reminders
+
+
 
 - `unset GITHUB_TOKEN` before every `gh` invocation. Always.
 - End on `master` with clean working tree (commit → push → `gh pr create` → `gh pr merge --merge --delete-branch` → `git checkout master && git pull --ff-only`). See `_templates/process_reminders.md`.

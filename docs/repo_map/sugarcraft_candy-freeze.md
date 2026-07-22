@@ -1,6 +1,7 @@
 # SugarCraft/candy-freeze
 
 ## Metadata
+
 - **Package**: `sugarcraft/candy-freeze`
 - **Upstream**: `charmbracelet/freeze` (Go, ~4.6k stars)
 - **Status**: 🟢 v1 ready
@@ -201,22 +202,26 @@ The package does NOT use candy-shine for rendering — it implements its own SVG
 ## Comparison with Mapped Third-Party Repos
 
 ### charmbracelet/glamour (markdown rendering with ANSI)
+
 - glamour converts markdown → ANSI escape sequences for terminal rendering
 - candy-freeze converts ANSI → SVG/PNG image for screenshot capture
 - **Relationship**: Inverse pipelines — glamour is input-side, candy-freeze is output-side
 - glamour's `StylePrimitive` and cascade-style system influenced the Theme value object design in candy-freeze
 
 ### charmbracelet/gum (shell script helpers)
+
 - gum is a CLI tool that wraps Bubble Tea components for shell scripts
 - candy-freeze is a PHP library/CLI that produces static images, not interactive TUIs
 - **No direct overlap** — gum is about interactive prompts, candy-freeze is about static output capture
 
 ### sugar-charts (image rendering)
+
 - `sugar-charts` has a `Picture` class that renders images into terminals via Sixel/Kitty/iTerm2 protocols
 - `candy-freeze` renders text/code as SVG/PNG images (static files, not terminal protocols)
 - **Relationship**: Both handle image generation but for different targets (terminal vs file)
 
 ### candy-mosaic (terminal image rendering)
+
 - `candy-mosaic` renders PNG/JPEG into terminals via multiple protocols (Kitty, iTerm2, Sixel, HalfBlock)
 - `candy-freeze` renders text (with ANSI) as images
 - **No overlap** — mosaic is for displaying images in terminals, freeze is for capturing text as images
@@ -226,15 +231,19 @@ The package does NOT use candy-shine for rendering — it implements its own SVG
 ## Notable Implementation Patterns
 
 ### [pattern:per-segment-bg-rect]
+
 `SvgRenderer::render()` emits a `<rect>` for every segment with a non-null `$bg`. The rect is emitted before the `<text>` element at the same X/Y, scaled to `cellW × textLen` wide and `cellH` tall, using the segment's background colour as the fill. This produces per-character background highlighting matching the ANSI terminal experience.
 
 ### [pattern:sgr-bg-48]
+
 ANSI SGR code 48 (set background) is parsed identically to code 38 (set foreground) — mode 5 for 256-color (`\x1b[48;5;Nm`) and mode 2 for 24-bit RGB (`\x1b[48;2;R;G;Bm`). Code 49 resets the background to default. The `AnsiParser::applySgr()` method handles both codes symmetrically.
 
 ### [pattern:language-detector-priority-chain]
+
 `LanguageDetector::detect()` uses a three-tier priority chain: (1) shebang line exact/partial match, (2) filename extension lookup, (3) content signature scoring. Shebang is checked first because it is authoritative when present. Content scoring uses a simple hit-count per language signature array; the language with the most hits wins. Returns `"text"` as the fallback.
 
 ### [pattern:segment-immutable-withbg]
+
 `Segment` is an immutable value object. `withBg(?string $bg)` returns a new `Segment` instance with only the `$bg` field changed (via private constructor + named parameters), leaving `$text`, `$fg`, and attribute flags unchanged. This follows the same `mutate()` pattern used in other SugarCraft immutable classes.
 
 ---

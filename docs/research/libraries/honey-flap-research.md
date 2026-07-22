@@ -9,6 +9,7 @@
 ## 1. Current Implementation Analysis
 
 ### Source Files
+
 | File | Lines | Purpose |
 |------|-------|---------|
 | `src/Bird.php` | 71 | HoneyBounce Projectile physics (gravity + flap impulse) |
@@ -18,6 +19,7 @@
 | `src/TickMsg.php` | 17 | 30fps tick message |
 
 ### Physics Model
+
 **Source:** `honey-flap/src/Bird.php:L22-L65`
 
 ```php
@@ -51,12 +53,14 @@ final class Bird
 **Source:** [github.com/kbrgl/flapioca](https://github.com/kbrgl/flapioca)
 
 ### Architecture
+
 - **Framework:** Bubble Tea (Charmbracelet TUI framework)
 - **Physics:** Manual increment per tick (no physics library)
 - **Tick rate:** 5 ticks/second (`time.Second/5`)
 - **World:** 60×9 cells, bird at column 2
 
 ### Physics Implementation
+
 **Source:** [flapioca/internal/model.go](https://raw.githubusercontent.com/kbrgl/flapioca/master/internal/model.go)
 
 ```go
@@ -78,6 +82,7 @@ func (m Model) Frame() (tea.Model, tea.Cmd) {
 ```
 
 ### Key Differences from honey-flap
+
 | Aspect | flapioca | honey-flap |
 |--------|----------|------------|
 | Gravity | 1 cell/tick (discrete) | 70.0 cells/sec² (continuous) |
@@ -203,6 +208,7 @@ pub fn jump(mut query: Query<&mut Bird>, keyboard_input: Res<ButtonInput<KeyCode
 ## 5. Specific Improvements for honey-flap
 
 ### 5.1 Bird Rotation (High Priority)
+
 **Reference:** rust-adventure/floppy-corgi + Rustfinity
 
 Add visual rotation based on velocity to communicate bird pitch.
@@ -225,6 +231,7 @@ public function rotation(): float
 **Impact:** High (game feel improvement)
 
 ### 5.2 Variable Pipe Gap Height (Medium Priority)
+
 **Reference:** flapioca uses dynamic obstacle generation
 
 Currently fixed gap of 6 cells. Vary difficulty based on score.
@@ -242,6 +249,7 @@ if ($this->score > 10) {
 **Impact:** Medium (replayability)
 
 ### 5.3 Progressive Difficulty (Medium Priority)
+
 **Reference:** flapioca spawn logic
 
 Modify pipe spawn rate and speed based on score.
@@ -256,6 +264,7 @@ $pipeSpacing = max(12, self::PIPE_EVERY - intdiv($this->score, 5));
 **Impact:** Medium
 
 ### 5.4 Screen Shake on Collision (Low Priority)
+
 **Reference:** Game feel common pattern
 
 Add brief screen shake when bird crashes.
@@ -270,6 +279,7 @@ Add brief screen shake when bird crashes.
 **Impact:** Low-Medium (juice)
 
 ### 5.5 Sound Effects via candy-shell (Low Priority)
+
 **Reference:** Rustfinity plays wing.ogg on flap
 
 Use sugar-bits or candy-shell audio integration for:
@@ -281,6 +291,7 @@ Use sugar-bits or candy-shell audio integration for:
 **Impact:** Medium (immersion)
 
 ### 5.6 Smooth Pipe Scrolling (Medium Priority)
+
 **Reference:** Continuous movement vs discrete ticks
 
 Currently pipes move 1 cell per tick (discrete). Could use sub-cell positioning.
@@ -305,9 +316,11 @@ foreach ($pipes as $p) {
 **Impact:** Medium (polish)
 
 ### 5.7 Test Coverage for Collision Edge Cases (High Priority)
+
 **Reference:** Current tests are basic
 
 **Missing tests:**
+
 - Bird at exact gap boundary
 - Bird passing through gap at high speed
 - Multiple simultaneous collisions
@@ -317,6 +330,7 @@ foreach ($pipes as $p) {
 **Impact:** High (reliability)
 
 ### 5.8 Velocity-Based Terminal Velocity (Low Priority)
+
 **Reference:** HoneyBounce Projectile::TERMINAL_GRAVITY
 
 Currently gravity is constant. Add terminal velocity cap.
@@ -336,6 +350,7 @@ public const TERMINAL_VELOCITY = 100.0;
 ## 6. Prioritized Recommendations
 
 ### Tier 1: Quick Wins
+
 | # | Improvement | Effort | Impact | Description |
 |---|-------------|--------|--------|-------------|
 | 1 | **Bird rotation** | 2-3h | High | Velocity-based tilt for game feel |
@@ -343,12 +358,14 @@ public const TERMINAL_VELOCITY = 100.0;
 | 3 | **Variable gap height** | 1-2h | Medium | Difficulty scaling |
 
 ### Tier 2: Medium Effort
+
 | # | Improvement | Effort | Impact | Description |
 |---|-------------|--------|--------|-------------|
 | 4 | **Progressive difficulty** | 2h | Medium | Speed/spacing increases with score |
 | 5 | **Smooth pipe scrolling** | 4-5h | Medium | Sub-cell pipe movement |
 
 ### Tier 3: Nice to Have
+
 | # | Improvement | Effort | Impact | Description |
 |---|-------------|--------|--------|-------------|
 | 6 | **Screen shake** | 3-4h | Med-Low | Juice on collision |

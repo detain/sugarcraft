@@ -16,6 +16,7 @@ for free.
 ## Files
 
 **Modify:**
+
 - `candy-core/src/Util/Editor.php`:
   - Replace the `proc_open` block with `new PosixProcess(...)`.
   - Use `wait()` for blocking semantics; capture exit code.

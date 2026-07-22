@@ -45,6 +45,7 @@ Pathological input could hit `pcre.backtrack_limit` or `pcre.recursion_limit`. T
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - All existing tests pass
 - No regression in keyword highlighting coverage for PHP code
 - Performance test with pathological input completes without backtrack errors
@@ -63,12 +64,14 @@ Should be split into:
 ```
 
 **Related code locations:**
+
 - `sugar-glow/src/Highlighter/ChromaJsonHighlighter.php:48` (keyword pattern)
 - `sugar-glow/src/Highlighter/ChromaJsonHighlighter.php:40-62` (buildCombinedPattern method)
 - `sugar-glow/tests/Highlighter/ChromaJsonHighlighterTest.php:50-58` (existing keyword test)
 - `sugar-glow/tests/Highlighter/ChromaJsonHighlighterTest.php:185-197` (backtrack limit test)
 
 **Investigation notes:**
+
 - Examined the full `ChromaJsonHighlighter.php` source (131 lines)
 - The `buildCombinedPattern()` method at lines 40-62 builds the combined regex
 - `orderedTypes` array defines all token types with their regex patterns
@@ -90,6 +93,7 @@ After `preg_replace_callback` with named groups, `$matches` contains BOTH numeri
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - All existing tests pass
 - The optimization produces identical output to the current implementation
 - No performance regression in synthetic benchmarks
@@ -121,6 +125,7 @@ return $fullMatch;
 ```
 
 **Related code locations:**
+
 - `sugar-glow/src/Highlighter/ChromaJsonHighlighter.php:90-114` (highlight method)
 - `sugar-glow/tests/Highlighter/ChromaJsonHighlighterTest.php:157-172` (test for correct group selection)
 
@@ -129,6 +134,7 @@ return $fullMatch;
 ### 1.3 [MEDIUM] Fix or clarify HighlighterInterface::supports() contract
 
 **Files:**
+
 - `sugar-glow/src/Highlighter/HighlighterInterface.php:26`
 - `sugar-glow/src/Highlighter/ChromaJsonHighlighter.php:125-130`
 
@@ -143,6 +149,7 @@ The current implementation returns `true` for ANY non-empty, non-"text" language
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - ChromaJsonHighlighter returns `true` only for languages it actually supports (e.g., `php`, possibly `javascript`, `html`, `css`)
 - Interface contract is honest about what it supports
 - All existing tests pass
@@ -163,6 +170,7 @@ public function supports(string $language): bool
 ```
 
 **Related code locations:**
+
 - `sugar-glow/src/Highlighter/HighlighterInterface.php:21-26` (interface definition)
 - `sugar-glow/src/Highlighter/ChromaJsonHighlighter.php:125-130` (current implementation)
 - `sugar-glow/src/Highlighter/Highlighter.php:19-28` (Highlighter::new() hardcodes ChromaJsonHighlighter)
@@ -182,6 +190,7 @@ The CALIBER_LEARNINGS.md already captures this pattern (line 7: "FileWatcher::wa
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - PHPDoc updated with `@blocking` annotation or clear warning comment
 - CALIBER_LEARNINGS entry already exists (pattern:glow, no change needed there)
 - All tests pass
@@ -198,6 +207,7 @@ Add to the docblock of `watch()`:
 ```
 
 **Related code locations:**
+
 - `sugar-glow/src/FileWatcher.php:45-69` (watch method)
 - `sugar-glow/CALIBER_LEARNINGS.md:7` (existing pattern:glow entry)
 - `sugar-glow/tests/FileWatcherTest.php` (existing tests)
@@ -228,6 +238,7 @@ Add test coverage for all Viewport key bindings not currently tested:
 **Severity:** LOW
 
 **Conditions for success:**
+
 - New tests pass
 - All existing tests continue to pass
 - Coverage report shows the new tests hitting the relevant Viewport code paths
@@ -292,6 +303,7 @@ public function testAtBottomWhenContentFits(): void
 ```
 
 **Related code locations:**
+
 - `sugar-glow/tests/GlowModelTest.php` (existing tests, 66 lines)
 - `sugar-glow/src/GlowModel.php` (GlowModel implementation)
 - `candy-forms/src/Viewport/Viewport.php:98-128` (Viewport key bindings)
@@ -312,6 +324,7 @@ Silent failures mask configuration errors in production. The current behavior (r
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Existing behavior preserved when `$throws = false` (default)
 - When `$throws = true`, throws `\JsonException` for invalid JSON
 - All existing tests pass
@@ -345,6 +358,7 @@ public static function fromFile(string $path, bool $throws = false): self
 ```
 
 **Related code locations:**
+
 - `sugar-glow/src/GlamourTheme.php:34-49` (fromJson method)
 - `sugar-glow/src/GlamourTheme.php:54-62` (fromFile method)
 - `sugar-glow/tests/GlamourThemeTest.php:49-58` (existing test for invalid JSON)
@@ -371,6 +385,7 @@ All three cases return the same `null` value, making it impossible for callers t
 **Severity:** LOW
 
 **Conditions for success:**
+
 - If changed: All callers updated to handle new return type
 - Backward compatibility maintained
 - All tests pass
@@ -404,6 +419,7 @@ The callback is `static`, which means it cannot access `$this` or use instance s
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Comment added explaining the design decision
 - All tests pass
 
@@ -435,6 +451,7 @@ If a stream is empty or has no trailing content to flush the final chunk, `Pager
 **Severity:** LOW
 
 **Conditions for success:**
+
 - If changed: All existing tests updated
 - Consumer code can determine stream status
 - All tests pass
@@ -476,9 +493,11 @@ Run all tests after each phase:
 
 ```bash
 # Full test suite
+
 cd sugar-glow && vendor/bin/phpunit
 
 # Specific test files for each phase
+
 cd sugar-glow && vendor/bin/phpunit tests/Highlighter/ChromaJsonHighlighterTest.php
 cd sugar-glow && vendor/bin/phpunit tests/GlowModelTest.php
 cd sugar-glow && vendor/bin/phpunit tests/GlamourThemeTest.php

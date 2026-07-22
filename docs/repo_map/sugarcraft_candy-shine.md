@@ -33,9 +33,13 @@
 
 The `Renderer` constructor builds a `CommonMarkCoreEnvironment` with these extensions:
 - `CommonMarkCoreExtension` — headings, paragraphs, code blocks, lists, blockquotes, links, images, emphasis, strong, thematic breaks, HTML blocks/inline
+
 - `TableExtension` — GFM tables
+
 - `TaskListExtension` — GFM task list items (`[x]` / `[ ]`)
+
 - `StrikethroughExtension` — `~~strikethrough~~`
+
 - `AutolinkExtension` — auto-detect URLs
 
 The `MarkdownParser` is instantiated per `Renderer` instance (cached, not rebuilt per render call).
@@ -66,9 +70,13 @@ $markdown
 
 After `renderChildren(document)`:
 1. `rtrim()` strips trailing newlines
+
 2. `documentBlockPrefix` / `documentBlockSuffix` wrap the document
+
 3. `documentIndent` applies left indent
+
 4. `documentMargin` adds blank lines before/after
+
 5. `reapplyBlankRuns()` reinflates `\n{3,}` if `preservedNewLines` is set
 
 ### 1.4 Theme System
@@ -79,14 +87,19 @@ After `renderChildren(document)`:
 
 **JSON loading** (`Theme::fromJsonString()`) parses a flat object keyed by element name, supporting:
 - `foreground` / `background`: hex `#rrggbb`, `ansi:N`, `ansi256:N`
+
 - flags: `bold`, `italic`, `underline`, `strike`, `faint`, `blink`, `reverse`
 
 **Environment variable** `GLAMOUR_STYLE` is read by `Theme::fromEnvironment()` — mirrors glamour's behaviour exactly, including the `auto` keyword (dark/notty based on `stream_isatty()`).
 
 **Shortcomings vs glamour**:
+
 - No `StyleBlock` distinction between block-level (with Indent/Margin/IndentToken) and inline styles
+
 - No cascading merge — null slots become no-op Style, not inherited parent values
+
 - No `conceal` implementation (placeholder property exists but is not acted upon)
+
 - No margin/indent writer abstraction — paragraph prefix/suffix are applied as simple strings
 
 ### 1.5 Code Highlighting Integration
@@ -100,18 +113,27 @@ After `renderChildren(document)`:
 
 **Algorithm** (in `tokenise()`):
 1. Builds combined regex with 4 named alternatives (comment/string before keyword/number)
+
 2. Iterates matches in offset order via `PREG_OFFSET_CAPTURE | PREG_SET_ORDER`
+
 3. Styles each token via the matching theme slot
+
 4. Passes unrecognised gaps through `codeBlock` style
 
 **Line numbers**: Optional `$lineNumbers` parameter adds 1-based padded line numbers styled with `comment` theme.
 
 **Limitations**:
+
 - No actual lexer — regex cannot handle language grammar properly (e.g., string inside comment would be styled as string)
+
 - No HTML/XML lexer (upstream glamour's soft-serve uses Chroma for this)
+
 - Python keywords are case-sensitive (uppercase `True`/`False`/`None` won't match the lowercase keyword list)
+
 - SQL keywords in the list are lowercase — `SELECT` won't be highlighted
+
 - No regex/CRON/INI/yaml/css/etc. lexers
+
 - No theme inheritance for syntax tokens in stock themes (keyword/string/number/comment slots exist but not set in all stock themes — e.g., `plain()` has them set to no-op Style)
 
 ### 1.6 Hyperlink Handling
@@ -130,15 +152,20 @@ Ansi::hyperlink(string $url, string $text, string $id = '')  // combined
 
 **Base URL resolution** (`resolveUrl()`) handles:
 - Absolute URLs (any scheme) pass through unchanged
+
 - Protocol-relative (`//host`) pass through
+
 - Fragment-only (`#anchor`) pass through
+
 - Relative paths are prefixed with `baseUrl + '/' + path`
 
 ### 1.7 Word Wrap
 
 Uses `SugarCraft\Core\Util\Width::wrapAnsi()` — a custom ANSI-aware word wrapper that:
 - Parses inline CSI sequences and attaches them to the word that contains them
+
 - Breaks on word boundaries with fallback to mid-grapheme cuts for oversize words
+
 - Handles both soft breaks (`\n` in source) and hard wraps (computed)
 
 **Applied to**: paragraphs (full width), blockquotes (width - 2 for `▎ ` prefix), list item bodies (via indent calculation), table cells (when `tableWrap` enabled)
@@ -149,8 +176,11 @@ Uses `SugarCraft\Core\Util\Width::wrapAnsi()` — a custom ANSI-aware word wrapp
 
 Delegates to `SugarCraft\Sprinkles\Table\Table` (Sprinkles border system):
 - `border(Border::rounded())` — `╭` `─` `┬` `├` `┼` `┤` `┴` `╰` `╯` characters
+
 - Header row via `->headers(...$headers)` — rendered in bold (default) or `tableHeader` style if set
+
 - Body rows via `->row(...$cells)` — each cell rendered via `renderChildren(cell)` (inline pipeline), then optionally wrapped, then `tableCell` style applied
+
 - No per-column width constraints (unlike glamour's column width specification)
 
 **Gap vs glamour**: glamour supports table footer links (collected via `collectLinksAndImages()` and rendered below the table). Candy-shine does not.
@@ -180,9 +210,13 @@ foreach ($lines as $line) {
 ### 1.10 Blockquote/Strikethrough/Code Span Handling
 
 - **Blockquote**: `▎ ` prefix per line, then `blockquote` style wraps each prefixed line
+
 - **Strikethrough**: `Style::strikethrough()` (SGR 9) applied to inner text; falls back to no-op if theme has `$strike = null`
+
 - **Code span**: `code` style applied to literal text — no backtick stripping
+
 - **Indented code block**: `codeBlock` style applied to `rtrim($node->getLiteral(), "\n")`
+
 - **Fenced code block**: routed to `SyntaxHighlighter::highlight()` if language specified, otherwise plain `codeBlock` style
 
 ---
@@ -208,26 +242,35 @@ foreach ($lines as $line) {
 | Stock themes | dark, light, dracula, tokyo-night, pink, ascii | +notty, plain, ansi (9 themes) |
 
 **Key architectural differences**:
+
 1. Glamour's BlockStack is the heart of its rendering — it computes available width dynamically as blocks nest. Candy-shine loses this by handling nesting directly in each renderer method.
+
 2. Glamour's `Element` abstraction (Entering/Exiting/Renderer/Finisher) allows parent blocks to push state and child blocks to query it. Candy-shine lacks this abstraction.
+
 3. Glamour's `StyleBlock` distinguishes block-level properties (Indent, Margin, IndentToken) from inline `StylePrimitive`. Candy-shine conflates them into one `Style` type.
 
 ### 2.2 charmbracelet/glow (markdown reader) — 15k stars
 
 Glow consumes glamour for rendering. Candy-shine fills the same role:
 - Glow's `glamourRender()` does: strip YAML frontmatter, optionally wrap in code fences, render via glamour, add line numbers
+
 - SugarGlow (`sugar-glow/`) consumes candy-shine the same way
 
 **Gap**: SugarGlow does not yet implement:
+
 - Frontmatter stripping (`RemoveFrontmatter()`)
+
 - Live file watching (fsnotify)
+
 - GitHub/GitLab README fetching
+
 - Fuzzy file filtering
 
 ### 2.3 charmbracelet/huh (theming) — 4.9k stars
 
 Maps to candy-shine only for the **theme system** concept:
 - Huh uses `lipgloss` for all styling — its `Theme` maps different element types to `Styles` structs with `Base lipgloss.Style`
+
 - Candy-shine's `Theme` is the equivalent — a value object with per-element styles
 
 **Different focus**: huh is about form field presentation; candy-shine is about markdown rendering. They share the theming pattern (JSON-configurable stylesheet) but serve different rendering domains.
@@ -236,6 +279,7 @@ Maps to candy-shine only for the **theme system** concept:
 
 No direct markdown rendering. However:
 - `pterm.ThemeDefault` maps to `candy-shine` + `candy-core` as the SugarCraft theme defaults
+
 - The `Style` chain pattern (`color.go:L263-L396`) is functionally similar to `SugarCraft\Sprinkles\Style` — both use fluent builders returning new instances
 
 **Key insight**: pterm's 25+ printers cover the full spectrum from colored text to interactive TUI. Candy-shine's scope is narrower — markdown-to-ANSI only — but the styling primitives it uses (`Style`, `Color`) are shared infrastructure used by all SugarCraft libs.
@@ -346,28 +390,45 @@ This allows nested blockquotes at any depth to correctly compute their available
 ## 5. File References
 
 ### Source Files
+
 - `/home/sites/sugarcraft/candy-shine/src/Renderer.php` — Main renderer with all node type dispatch
+
 - `/home/sites/sugarcraft/candy-shine/src/Theme.php` — Theme value object with 45+ slots and 9 stock themes
+
 - `/home/sites/sugarcraft/candy-shine/src/SyntaxHighlighter.php` — Regex tokeniser for 7 languages
+
 - `/home/sites/sugarcraft/candy-shine/src/Lang.php` — i18n facade
 
 ### Tests
+
 - `/home/sites/sugarcraft/candy-shine/tests/RendererTest.php` — 458 lines, core rendering assertions
+
 - `/home/sites/sugarcraft/candy-shine/tests/SyntaxHighlighterTest.php` — 770 lines, comprehensive tokeniser coverage
+
 - `/home/sites/sugarcraft/candy-shine/tests/ThemeTest.php` — 161 lines, theme loading and preset assertions
+
 - `/home/sites/sugarcraft/candy-shine/tests/RendererRound2Test.php` — 125 lines, round-2 features
+
 - `/home/sites/sugarcraft/candy-shine/tests/ShortAliasesTest.php` — 58 lines, alias parity
+
 - `/home/sites/sugarcraft/candy-shine/tests/ThemeExtensionsTest.php` — 161 lines, audit #9 extensions
 
 ### Dependencies
+
 - `/home/sites/sugarcraft/candy-shine/composer.json` — `league/commonmark:^2.4`, `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`
+
 - `/home/sites/sugarcraft/candy-core/src/Util/Width.php` — Word wrap + ANSI-aware utilities
+
 - `/home/sites/sugarcraft/candy-core/src/Util/Ansi.php` — OSC 8 hyperlink primitives (lines 269-303)
+
 - `/home/sites/sugarcraft/candy-sprinkles/src/Style.php` — ANSI styling primitives
+
 - `/home/sites/sugarcraft/candy-sprinkles/src/Border.php` + `Table/Table.php` — Table rendering
 
 ### Consumer
+
 - `/home/sites/sugarcraft/sugar-glow/src/RenderCommand.php` — CLI that consumes candy-shine
+
 - `/home/sites/sugarcraft/sugar-glow/src/GlowModel.php` — Bubble Tea model for pager
 
 ---
@@ -377,17 +438,26 @@ This allows nested blockquotes at any depth to correctly compute their available
 **Candy-shine** is a well-structured, feature-rich PHP port of glamour that covers ~80% of the upstream functionality with significantly simpler architecture. Its primary strengths are:
 
 1. **Clean separation** between markdown parsing (league/commonmark), styling (Sprinkles Style), and layout (Width utilities)
+
 2. **Comprehensive theming** with 9 stock themes and JSON loading
+
 3. **Full GFM support** including tables, task lists, strikethrough
+
 4. **OSC 8 hyperlinks** with graceful fallback
+
 5. **Good test coverage** with deterministic snapshot-style assertions
 
 Its primary limitations stem from:
 1. **No block stack** for managing nested block indent/margin dynamically
+
 2. **No cascading style merge** — null slots fall through to no-op
+
 3. **Regex-based syntax highlighting** — insufficient for production code display
+
 4. **No definition list support** despite Theme slots existing
+
 5. **No HTML sanitisation** for untrusted input
+
 6. **No table footer links** (glamour's distinctive feature)
 
 For a 🟡 in-progress port, candy-shine is production-quality for basic markdown rendering, but lacks the nuanced block-level style handling and proper syntax highlighting that make glamour distinctive.

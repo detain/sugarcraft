@@ -78,143 +78,179 @@ Supporting classes: `NavigationItem` (title + data payload), `Closable` (onEnter
 ## Critical
 
 ### 1. Message-driven navigation pattern
+
 **Title:** Add message-driven navigation (PushNavigation/PopNavigation)
 **Description:** bubbleo uses `tea.Msg` for navigation — `PushNavigation{Item}` and `PopNavigation{}` messages that integrate with the Elm update cycle. sugar-crumbs has no equivalent.
 **Why it matters:** Enables reactive, decoupled navigation where any component can request navigation without direct coupling to the NavStack. Essential for large applications with many navigation points.
 **Source repo:** `KevM/bubbleo` (`navstack/model.go:40-44`)
 **Source PR/issue:** `KevM/bubbleo` natively implements this
 **Implementation ideas:**
+
 - Create `PushNavigationMsg` and `PopNavigationMsg` classes in `SugarCraft\Crumbs\Msg`
 - Add `update(Msg $msg): array{0: self, 1: ?Closure}` method to NavStack/Shell
 - Route messages in the consuming application's main update loop
+
 **Estimated complexity:** Medium (requires integration pattern, not complex algorithm)
 **Expected impact:** High — enables reactive navigation architecture
 
 ### 2. Fuzzy filtering with ranking/scoring
+
 **Title:** Upgrade filter() to fuzzy matching with score + indices
 **Description:** sugar-crumbs uses simple case-insensitive substring matching. bubbleo doesn't have filtering, but bubbles List uses `sahilm/fuzzy` for ranked fuzzy matching with character index reporting. promptkit also has filtering. sugar-crumbs needs quality fuzzy matching.
 **Why it matters:** Type-ahead filtering with ranking enables intelligent UX — best matches surface first, matched characters can be highlighted in the UI.
 **Source repo:** `charmbracelet/bubbles` (`list/filter.go`), `erikgeiser/promptkit` (`selection/model.go`)
 **Source PR/issue:** `sahilm/fuzzy` library (pure Go, MIT licensed)
 **Implementation ideas:**
+
 - Port `sahilm/fuzzy` to PHP as `SugarCraft\Fuzzy` or integrate via FFI
 - Add `filterFuzzy(string $term): FilterResult` returning `{matches: bool, score: int, indices: int[]}`
 - Extend `Breadcrumb::setItemRenderer()` to support highlighting matched ranges
+
 **Estimated complexity:** High (fuzzy algorithm port or FFI binding)
 **Expected impact:** High — significantly improves type-ahead UX
 
 ## High Value
 
 ### 3. Animation/transition support
+
 **Title:** Add animated transitions between navigation states
 **Description:** bubbleo's View() renders immediately. textualize and charmbracelet/harmonica (honey-bounce) provide animated transitions.
 **Why it matters:** Smooth transitions between screens improve perceived quality and help users understand spatial relationships in navigation.
 **Source repo:** `textualize/textual` (animator system), `charmbracelet/lipgloss` v2 (layer transitions)
 **Implementation ideas:**
+
 - Add `withTransition(Transition $t)` to Shell
 - Implement fade/slide transitions in Breadcrumb renderer
 - Coordinate with `honey-bounce` for spring animations
+
 **Estimated complexity:** Medium
 **Expected impact:** Medium — polish feature
 
 ### 4. Built-in back-button key handling
+
 **Title:** Add ESC/backspace key handler for automatic stack popping
 **Description:** Applications must implement ESC/backspace manually to pop the stack. There's no built-in handling or keybinding infrastructure.
 **Why it matters:** Back navigation is fundamental — users expect ESC or backspace to go back. Missing this is a UX gap.
 **Source repo:** `charmbracelet/bubbles` (`help/key.go` for keybinding patterns)
 **Implementation ideas:**
+
 - Add `KeyMap` class with configurable back keys (ESC, backspace, left arrow)
 - Add `withKeyMap(KeyMap $km)` to Shell
 - Return `?PopNavigationMsg` from Shell's update when back key pressed
+
 **Estimated complexity:** Low
 **Expected impact:** High — fundamental UX improvement
 
 ### 5. Closable lifecycle integration
+
 **Title:** Auto-invoke onEnter()/onLeave() during push/pop
 **Description:** bubbleo's `Closable.Close()` is automatically called on pop. sugar-crumbs has `onEnter()`/`onLeave()` but they are no-ops by default with no invocation in base NavStack.
 **Why it matters:** Resource cleanup (closing files, canceling subscriptions) is a core pattern from bubbleo that's not yet implemented.
 **Source repo:** `KevM/bubbleo` (`navstack/model.go:26-28`)
 **Implementation ideas:**
+
 - Modify `NavStack::pop()` to invoke `onLeave()` on popped item
 - Modify `NavStack::push()` to invoke `onEnter()` on new top item
 - Collect errors and surface via `?ClosableError` from pop/push return
+
 **Estimated complexity:** Low
 **Expected impact:** Medium — enables proper resource management
 
 ### 6. Menu/selection component
+
 **Title:** Port bubbleo's Menu component for selection-driven navigation
 **Description:** bubbleo includes a Menu component wrapping `bubbles/list` that pushes selected choices onto the NavStack. sugar-crumbs doesn't port this.
 **Why it matters:** Selection-driven navigation (choose from a list → push choice onto stack) is a common pattern for drill-down UIs.
 **Source repo:** `KevM/bubbleo` (`menu/model.go`)
 **Implementation ideas:**
+
 - Create `SugarCraft\Crumbs\Menu` class
 - Use `SugarCraft\Bits\ItemList` as the underlying list widget
 - On selection, call `Shell::withPush()` with the chosen item
+
 **Estimated complexity:** Medium
 **Expected impact:** Medium — common use case
 
 ## Medium Priority
 
 ### 7. Shell change listener/callback
+
 **Title:** Add onChange callback for shell state transitions
 **Description:** Shell has no listener mechanism. Applications must poll or observe externally. bubbleo has no equivalent, but it's a natural extension.
 **Why it matters:** Enables reactive UI updates when navigation changes — important for MVU architecture.
 **Source repo:** N/A (sugar-crumbs extension point)
 **Implementation ideas:**
+
 - Add `?Closure $onChange` to Shell constructor/withPush/withPop
 - Fire callback after stack mutation with old/new item info
+
 **Estimated complexity:** Low
 **Expected impact:** Medium
 
 ### 8. Separator customizability per-item
+
 **Title:** Allow different separators between specific crumb items
 **Description:** Currently a single separator is used for all items. bubbleo doesn't have this, but it could be useful for semantic separation (e.g., "Home / Settings > Display").
 **Source repo:** N/A
 **Implementation ideas:**
+
 - Add `NavigationItem::separator` field
 - Modify `Breadcrumb::render()` to use per-item separators
+
 **Estimated complexity:** Low
 **Expected impact:** Low — edge case
 
 ### 9. Multiple navigation stack support (tabs)
+
 **Title:** Support parallel navigation stacks for tabbed navigation
 **Description:** Linear single-stack navigation only. No support for tabs or parallel navigation paths.
 **Source repo:** `textualize/textual` (Tabs widget)
 **Implementation ideas:**
+
 - Create `TabGroup` class managing multiple `Shell` instances
 - `withActiveTab(int $idx)` to switch between shells
+
 **Estimated complexity:** High
 **Expected impact:** Low — advanced feature
 
 ### 10. Persist/restore navigation state
+
 **Title:** Add serialization for navigation state persistence
 **Description:** Navigation state is lost on quit. No save/restore mechanism.
 **Source repo:** `KevM/bubbleo` (not present, but natural extension)
 **Implementation ideas:**
+
 - Add `jsonSerialize()` to NavStack/Shell
 - Add `NavStack::restore(array $data)` and `Shell::restore()`
+
 **Estimated complexity:** Low
 **Expected impact:** Medium — enables session persistence
 
 ## Low Priority
 
 ### 11. Tea.Sequence equivalent for ordered ops
+
 **Title:** Add sequential command execution for coordinated navigation
 **Description:** bubbleo uses `tea.Sequence(pop, cmd)` to ensure pop executes before subsequent command. PHP has no equivalent.
 **Why it matters:** Ensures navigation state is consistent before passing messages to new top item.
 **Source repo:** `KevM/bubbleo` (`navstack/model.go:99-100`)
 **Implementation ideas:**
+
 - Document that PHP's synchronous model doesn't need Sequence
 - If async needed, use ReactPHP promises
+
 **Estimated complexity:** N/A
 **Expected impact:** Low — PHP synchronous model makes this unnecessary
 
 ### 12. Window/dimension management
+
 **Title:** Port bubbleo's Window model for layout calculations
 **Description:** bubbleo has `window.Model` for dimension management with TopOffset/SideOffset. Not needed without tea.WindowSizeMsg.
 **Source repo:** `KevM/bubbleo` (`window/model.go`)
 **Implementation ideas:**
+
 - Not needed until integration with candy-core's tea.WindowSizeMsg equivalent
+
 **Estimated complexity:** N/A
 **Expected impact:** Low
 
@@ -254,6 +290,7 @@ for ($i = \count($titles) - 2; $i >= 0; $i--) {
 ## External Approaches
 
 ### Fuzzy Filtering (bubbles List / promptkit)
+
 bubbles uses `sahilm/fuzzy` for ranked fuzzy matching:
 ```go
 // Returns matches with score and matched indices
@@ -403,21 +440,25 @@ promptkit's filter also supports custom filter functions with binary search pagi
 # Notable PRs / Issues / Discussions
 
 ### bubbleo Menu component not ported
+
 **Issue:** bubbleo's menu wrapping bubbles/list is not in sugar-crumbs
 **Relevance:** High — common navigation pattern
 **Lesson:** Need to explicitly plan Menu porting or document that `sugar-bits/ItemList` replaces it
 
 ### Closable lifecycle asymmetry
+
 **Issue:** `onEnter()`/`onLeave()` in sugar-crumbs are no-ops; bubbleo's `Close()` is called on pop
 **Relevance:** Medium — resource cleanup pattern missing
 **Adaptation:** Implement automatic invocation in NavStack::push()/pop()
 
 ### bubblezone zero-width ANSI markers
+
 **Source:** `docs/repo_map/lrstanley_bubblezone.md`
 **Relevance:** 🟢 Already integrated — sugar-crumbs uses `candy-zone/Manager` for zone marking
 **Lesson:** Zone marking pattern is sound — maintain composition over inheritance
 
 ### lipgloss v2 layer/compositor
+
 **Source:** `docs/repo_map/charmbracelet_lipgloss.md`
 **Relevance:** Medium — lipgloss v2 has built-in compositing that supersedes bubbletea-overlay
 **Lesson:** Consider using `candy-sprinkles` layer system instead of building overlay compositing
@@ -499,6 +540,7 @@ sugar-crumbs is a well-designed, focused library that successfully ports bubbleo
 The library's **core strengths** are its clean separation of concerns (NavStack for state, Breadcrumb for rendering, Shell for composition), its comprehensive test coverage, and its thoughtful extension points (custom itemRenderer, zoneManager integration). The `Closable` interface provides a hook for resource cleanup, and the `filter()` method enables useful type-ahead navigation.
 
 **Key gaps** relative to the broader TUI ecosystem are:
+
 1. No message-driven navigation — applications must call methods directly rather than dispatching `PushNavigation`/`PopNavigation` messages
 2. No fuzzy filtering with ranking — substring matching is adequate for small stacks but insufficient for deep hierarchies
 3. No animation/transition support — direct View() output with no smooth transitions
@@ -507,6 +549,7 @@ The library's **core strengths** are its clean separation of concerns (NavStack 
 **Strategic position:** sugar-crumbs is the navigation primitive for SugarCraft TUI applications. Its framework-agnostic design makes it a general-purpose library for any PHP application needing hierarchical navigation. The library is production-ready but has room for enhancement in filtering quality, reactive patterns, and visual polish.
 
 **Recommendations:**
+
 - Prioritize the "immediate wins" (onEnter/onLeave auto-invocation, back-button handling, change listener) — they have high impact per complexity
 - Invest in fuzzy filtering — it's the single highest-impact enhancement for deep navigation hierarchies
 - Consider integration with `candy-core` message loop for optional reactive navigation

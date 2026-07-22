@@ -13,10 +13,12 @@
 ## Files
 
 **Create:**
+
 - `candy-zone/src/ClickCounter.php`.
 - `candy-zone/src/Msg/DoubleClickMsg.php`, `TripleClickMsg.php`.
 
 **Modify:**
+
 - `candy-zone/src/Manager.php` — `setMotionTracking(bool)` toggles
   `\x1b[?1002` / `\x1b[?1003` mouse modes.
 

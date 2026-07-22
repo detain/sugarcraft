@@ -1,6 +1,7 @@
 # charmbracelet/bubbletea
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/bubbletea
 - **Language:** Go
 - **Stars:** ~23,000+ (GitHub)
@@ -10,6 +11,7 @@
 ## Feature List
 
 ### Core Architecture
+
 - **Elm Architecture Pattern**: Model/Update/View paradigm with functional state management
 - **Model Interface**: Any Go type implementing `Init()`, `Update(Msg)`, and `View()` methods
 - **Message System**: Typed messages (`Msg` interface) for all I/O events (keypress, mouse, tick, etc.)
@@ -18,6 +20,7 @@
 - **Batch & Sequence**: Run multiple commands concurrently or sequentially
 
 ### Input Handling
+
 - **Keyboard Input**: Full key press/release detection with modifier support (Ctrl, Alt, Shift, Meta)
 - **Mouse Input**: Click, release, wheel, and motion events with SGR extended mode
 - **Focus Events**: Report terminal focus gained/lost
@@ -25,6 +28,7 @@
 - **Bracketed Paste**: Support for bracketed paste mode
 
 ### Rendering
+
 - **High-Performance Cell-Based Renderer**: Built on `charmbracelet/ultraviolet`
 - **Synchronized Output**: Terminal mode 2026 for atomic updates
 - **Color Support**: True color, 256-color, and ANSI color downsampling via `charmbracelet/colorprofile`
@@ -33,6 +37,7 @@
 - **Grapheme Width**: Proper Unicode grapheme cluster handling
 
 ### Terminal Features
+
 - **Window Title**: Set terminal window title
 - **Cursor Control**: Position, shape (block/underline/bar), blink, color
 - **Progress Bar**: Terminal-native progress bar integration
@@ -41,6 +46,7 @@
 - **Terminal Size**: Automatic resize detection and handling
 
 ### Program Control
+
 - **Signal Handling**: Graceful SIGINT/SIGTERM handling
 - **Panic Recovery**: Automatic recovery with terminal restoration
 - **Suspend/Resume**: Ctrl+Z support with terminal state preservation
@@ -49,12 +55,14 @@
 - **Exec**: Run external commands (vim, shells) while pausing the TUI
 
 ### Examples
+
 - 60+ example programs demonstrating various features
 - Tutorials for basics and commands
 
 ## Key Classes and Methods
 
 ### `tea.Model` Interface
+
 ```go
 type Model interface {
     Init() Cmd                    // Returns initial command (nil for none)
@@ -64,6 +72,7 @@ type Model interface {
 ```
 
 ### `tea.Program` Struct
+
 ```go
 func NewProgram(model Model, opts ...ProgramOption) *Program
 func (p *Program) Run() (Model, error)
@@ -75,6 +84,7 @@ func (p *Program) Printf(template string, args ...any) Cmd
 ```
 
 ### `tea.View` Struct
+
 ```go
 type View struct {
     Content               string
@@ -93,11 +103,13 @@ type View struct {
 ```
 
 ### `tea.Cmd` Type
+
 ```go
 type Cmd func() Msg  // Commands are functions that return messages
 ```
 
 ### Special Commands
+
 ```go
 func Quit() Msg                        // Special quit command
 func Suspend() Msg                      // Suspend program
@@ -112,6 +124,7 @@ func ExecProcess(c *exec.Cmd, fn ExecCallback) Cmd
 ```
 
 ### `tea.KeyPressMsg` / `tea.Key`
+
 ```go
 type Key struct {
     Text         string   // Printable characters
@@ -126,6 +139,7 @@ func (k Key) Keystroke() string        // "ctrl+shift+a" format
 ```
 
 ### `tea.Mouse`
+
 ```go
 type Mouse struct {
     X, Y    int          // Coordinates (0-based)
@@ -135,12 +149,14 @@ type Mouse struct {
 ```
 
 ### Mouse Message Types
+
 - `MouseClickMsg` — Button click
 - `MouseReleaseMsg` — Button release
 - `MouseWheelMsg` — Wheel scroll
 - `MouseMotionMsg` — Movement (with/without button held)
 
 ### Program Options
+
 ```go
 func WithContext(ctx context.Context) ProgramOption
 func WithInput(input io.Reader) ProgramOption
@@ -159,6 +175,7 @@ func WithWindowSize(width, height int) ProgramOption
 ## Notable Algorithms / Named Patterns
 
 ### Elm Architecture
+
 The framework implements The Elm Architecture:
 1. **Model** — Single source of truth for application state
 2. **Update** — Pure function that takes current state + message, returns new state + commands
@@ -167,6 +184,7 @@ The framework implements The Elm Architecture:
 This is a unidirectional data flow pattern contrasting with MVC.
 
 ### Command Pattern for Async I/O
+
 ```go
 // cmd is a function that performs I/O and returns a message
 type Cmd func() Msg
@@ -179,10 +197,12 @@ func tick() tea.Msg {
 ```
 
 ### BatchMsg & SequenceMsg
+
 - `BatchMsg` — Executes commands concurrently, no ordering guarantees
 - `sequenceMsg` — Executes commands sequentially
 
 ### Cursed Renderer (cell-based)
+
 The default renderer (`cursedRenderer`) uses:
 - `uv.TerminalRenderer` for actual rendering
 - `uv.ScreenBuffer` for cell-based buffer
@@ -192,6 +212,7 @@ The default renderer (`cursedRenderer`) uses:
 - Backspace optimization
 
 ### Terminal Capability Detection
+
 ```go
 // Automatically detects terminals supporting synchronized output (mode 2026)
 func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
@@ -201,6 +222,7 @@ func shouldQuerySynchronizedOutput(environ uv.Environ) bool {
 ```
 
 ### Every vs Tick
+
 - `Every` — Syncs with system clock (tick at :00, :15, :30, :45 for minute intervals)
 - `Tick` — Independent of clock (precisely every N duration from start)
 

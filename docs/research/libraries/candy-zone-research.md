@@ -15,6 +15,7 @@
 **Source:** [github.com/lrstanley/bubblezone](https://github.com/lrstanley/bubblezone)
 
 **Architecture:**
+
 - APC (Announcement Pause Code) escape sequences: `\x1b_` prefix, `\x1b\\` terminator
 - `zone.Mark(id, content)` injects zero-width markers into rendered output
 - `zone.Scan(output)` parses output, calculates bounding boxes, strips markers
@@ -37,15 +38,18 @@ case tea.MouseReleaseMsg:
 ```
 
 **Click Handling:**
+
 - Detects via `tea.MouseReleaseMsg` with `msg.Button == tea.MouseLeft`
 - BubbleTea provides: `MouseButtonLeft`, `MouseButtonRight`, `MouseButtonWheelUp`, `MouseButtonWheelDown`
 - Also supports full motion tracking via `tea.MouseModeCellMotion`
 
 **Drag Detection:**
+
 - NOT built-in — handled by user code tracking `MouseMotionMsg` after `MouseDownMsg`
 - tcell (see below) has better drag support with button state tracking
 
 **Hover States:**
+
 - NOT built-in — handled by user code checking `MouseMotionMsg` continuously
 - Motion tracking must be enabled: `tea.WithMouseCellMotion()`
 
@@ -58,6 +62,7 @@ case tea.MouseReleaseMsg:
 **Source:** [github.com/gdamore/tcell](https://github.com/gdamore/tcell)
 
 **Architecture:**
+
 - Full-featured terminal library with rich mouse event model
 - `EventMouse` struct with `Buttons()` returning `ButtonMask`
 - Supports drag detection: "click drag can be identified by a motion event with the mouse down, without any intervening button release"
@@ -105,6 +110,7 @@ case *tcell.EventMouse:
 **Source:** [github.com/nsf/termbox-go](https://github.com/nsf/termbox-go)
 
 **Architecture:**
+
 - Minimalist API for text-based UIs
 - Mouse events via `Event.Type == EventMouse` with `Event.MouseX`, `Event.MouseY`
 - Keys: `MouseLeft`, `MouseRight`, `MouseMiddle`, `MouseRelease`, `MouseWheelUp`, `MouseWheelDown`
@@ -146,6 +152,7 @@ if b&32 != 0 {
 **Source:** [docs.rs/ratatui-interact](https://docs.rs/ratatui-interact/latest/ratatui_interact/)
 
 **Architecture:**
+
 - Ratatui is the successor to `tui` crate — no built-in mouse support
 - `ratatui-interact` provides `ClickRegionRegistry` for hit testing
 
@@ -164,11 +171,13 @@ if let Some(clicked) = registry.handle_click(mouse_x, mouse_y) {
 ```
 
 **Components provided:**
+
 - `Checkbox`, `Input`, `Button`, `Select`, `ContextMenu`, `MenuBar`, `PopupDialog`
 - Focus management via `FocusManager` with Tab/Shift+Tab navigation
 - `MousePointer` widget for visual cursor indicator
 
 **Limitations:**
+
 - Ratatui doesn't support hover states natively — requested in [Issue #1050](https://github.com/ratatui-org/ratatui/issues/1050)
 - Egui-style `rect.clicked(&ctx)` API proposed but not implemented
 
@@ -179,6 +188,7 @@ if let Some(clicked) = registry.handle_click(mouse_x, mouse_y) {
 **Source:** [docs.rs/tui-world](https://docs.rs/tui-world)
 
 **Architecture:**
+
 - State and event management for TUIs built with ratatui
 - `Pointer` struct manages mouse/pointer interactions for widgets
 
@@ -206,6 +216,7 @@ pub struct World {
 **Source:** [github.com/Textualize/textual](https://github.com/Textualize/textual)
 
 **Architecture:**
+
 - Modern async TUI framework with CSS-like styling
 - Message-passing system with event bubbling
 - Built-in hover, click, drag support
@@ -232,6 +243,7 @@ class MyWidget(Static):
 **Hover States:**
 ```python
 # Simply implement on_mouse_move and check if position is within bounds
+
 def on_mouse_move(self, event: MouseMove) -> None:
     if self.bounds.contains(event.offset):
         self.add_class("--hovered")
@@ -259,6 +271,7 @@ class Tank(Widget):
 **Source:** [github.com/prompt-toolkit/python-prompt-toolkit](https://github.com/prompt-toolkit/python-prompt-toolkit)
 
 **Improvements (PR #1387):**
+
 - Discriminate which mouse button was pressed
 - Report click-drags (mouse movements while button held)
 - Report mouse movements when no button pressed (hover)
@@ -417,23 +430,27 @@ final class DragTracker
 ## 5. Implementation Plan
 
 ### Phase 1: Hover Tracking (3-4 hours)
+
 - [ ] Create `src/MsgZoneHoverChange.php` message type
 - [ ] Create `src/ZoneHoverTracker.php` class
 - [ ] Add tests in `tests/ZoneHoverTrackerTest.php`
 - [ ] Document usage in README
 
 ### Phase 2: Drag Detection (4-5 hours)
+
 - [ ] Create `src/MsgZoneDrag.php` message types (Start, Move, End)
 - [ ] Create `src/DragTracker.php` class
 - [ ] Add tests
 - [ ] Add example `examples/draggable.php`
 
 ### Phase 3: Click Count (2 hours)
+
 - [ ] Create `src/ClickCounter.php` utility class
 - [ ] Add tests for timing thresholds
 - [ ] Update `MouseMsg` or create `MouseMsgWithClicks` wrapper
 
 ### Phase 4: Motion Mode Toggle (1-2 hours)
+
 - [ ] Add `Manager::setMotionTracking(bool)`
 - [ ] Update `anyInBounds()` to respect mode
 - [ ] Update documentation

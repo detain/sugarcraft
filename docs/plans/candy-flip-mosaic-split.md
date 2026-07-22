@@ -148,6 +148,7 @@ candy-flip  ── exposes ── list<Frame>  ─→  bridge  ─→  candy-mos
 ```
 
 **Pros:**
+
 - Maps to the existing lib boundaries: candy-mosaic already owns every
   ANSI / DCS / APC / OSC protocol path. Adding animation extends an
   existing surface rather than spawning a parallel one.
@@ -157,6 +158,7 @@ candy-flip  ── exposes ── list<Frame>  ─→  bridge  ─→  candy-mos
   animation loop.
 
 **Cons (load-bearing):**
+
 - Forces `candy-mosaic` to require `candy-flip`. That is the *wrong*
   direction. candy-flip is a higher-level lib that already requires
   candy-core + candy-sprinkles + ext-gd — making mosaic depend on
@@ -178,11 +180,13 @@ becomes a pure single-image lib; candy-flip handles both static and
 animated cases.
 
 **Pros:**
+
 - Single home for all "image to terminal" work.
 - candy-flip's existing `Player` Model becomes the universal frame
   scheduler.
 
 **Cons (load-bearing):**
+
 - Wrecks the existing architecture. candy-mosaic ships
   3,236 LOC across 21 files specifically *because* protocol output
   is hard and benefits from focused ownership. Bolting that subtree
@@ -222,6 +226,7 @@ candy-flip ── Decoder.frames → ImageSource[] (re-encode each cell-grid fra
 ```
 
 **Pros:**
+
 - No dependency-direction inversion. candy-mosaic stays a foundation-
   tier lib; candy-flip stays an end-user GIF viewer.
 - `Animation` is reusable for any frame source: GIF (via bridge),
@@ -238,6 +243,7 @@ candy-flip ── Decoder.frames → ImageSource[] (re-encode each cell-grid fra
   so it's not wasted.
 
 **Cons:**
+
 - A subtle duplication risk: if both libs evolve a "per-frame ANSI
   output" path, they could drift. This is the same risk the existing
   dual-foundation SSOT pattern (CALIBER entry 38) already manages —

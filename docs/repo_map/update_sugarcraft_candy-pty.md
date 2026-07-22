@@ -80,33 +80,52 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 ## Extension Systems
 
 - **Backend selection:** `SUGARCRAFT_PTY_BACKEND` env var (`posix-ffi` / `sidecar` / `pecl`)
+
 - **Termios backend:** `SUGARCRAFT_TERMIOS` env var (`posix-ffi` / `stty`)
+
 - **Libc override:** `SUGARCRAFT_LIBC` env var for musl/Alpine/custom sysroots
+
 - **Recorder tap:** Optional `SugarCraft\Core\Recorder` injection via `PumpOptions`
+
 - **Signal handler modes:** `async: true/false` controls `pcntl_async_signals()` lazy init
 
 ## Strengths
 
 1. **Clean contract-driven architecture** — seven well-defined interfaces make the implementation swappable and testable
+
 2. **Mature FFI patterns** — lazy loading, caching, fallback, platform branching, opaque struct handling all correctly implemented
+
 3. **Sub-millisecond exit detection** — `waitpid` FFI fast-path avoids `proc_get_status` polling overhead
+
 4. **Comprehensive signal handling** — async/sync modes, no-throw callbacks, self-delivery test patterns
+
 5. **Immutable + fluent configuration** — `PumpOptions` and `Termios` are safe for concurrent use
+
 6. **Polished edge cases** — macOS anchor fd, Darwin arm64 stty fallback, stdin EOF grace window, VEOF write
+
 7. **Recorder integration** — null-guarded tap enables `candy-vcr` without pump overhead
+
 8. **Well-documented gotchas** — `CALIBER_LEARNINGS.md` captures every hard-won lesson
+
 9. **DI-friendly** — `PtySystemFactory` enables test doubles without touching libc
 10. **Per-feature cdef symbol addition** — FFI symbols added incrementally per PR for bisectability
 
 ## Weaknesses
 
 1. **No Windows ConPTY** — `UnsupportedPlatformException` thrown on non-POSIX; reserved for v2 sidecar
+
 2. **FFI required for core operations** — no pure-PHP fallback for PTY pair opening (only termios has stty fallback)
+
 3. **Controlling terminal shim cost** — ~5–50ms PHP boot overhead makes it opt-in only
+
 4. **BSD/Solaris treated as POSIX** — may have subtle differences not yet surfaced
+
 5. **Single stream_select loop** — `MultiPump` multiplexes master→stdout only; stdin→master is caller's responsibility
+
 6. **No foreground job control** — only basic SIGINT/SIGTERM/SIGKILL injection; job control signals not exposed
+
 7. **No async concurrency model** — Go-style goroutines or PHP fibers not utilized; single-threaded pump loop
+
 8. **No pecl extension fallback** — pecl/uv or pecl/phpterm for FFI-free deployment not yet implemented
 
 ---
@@ -145,10 +164,15 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source discussion:** MATCHUPS.md line 82-85 documents the TODO; `plans/x-windows.md` tracks the design.
 
 **Implementation ideas:**
+
 1. Create `WindowsConPTYSystem implements PtySystem` with FFI to `kernel32.dll`
+
 2. Use `CreatePseudoConsole()` / `ClosePseudoConsole()` API
+
 3. Require `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` in `STARTUPINFOEX`
+
 4. `WindowsConPTYPair` / `WindowsMasterPty` / `WindowsChild` implementing existing contracts
+
 5. Windows FFI calling convention (stdcall vs cdecl) differs from POSIX — needs separate `LibcWin32` singleton
 
 **Estimated complexity:** High — requires deep Win32 FFI knowledge, process spawning differences, ConPTY event loop integration with ReactPHP
@@ -168,9 +192,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source PR/discussion:** Commit history shows "Check process is still a resource before attempting to close" pattern
 
 **Implementation ideas:**
+
 1. Add `isValid(): bool` method to `Child` contract
+
 2. Implement `PosixChild::isValid()` using `posix_kill($pid, 0)` — returns false + ESRCH when pid no longer exists
+
 3. Guard all `MasterPty::write()` / `read()` calls with validity check
+
 4. Consider `ProcessGoneException` thrown on invalid operations
 
 **Estimated complexity:** Low — single method addition + guards
@@ -192,9 +220,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source discussion:** MATCHUPS.md documents pecl sidecar deferred to phase 12
 
 **Implementation ideas:**
+
 1. Define `PtySystemSidecar extends PtySystem` throwing `forDeferredBackend('sidecar')` for v1
+
 2. Research existing PECL PTY extensions (phpterm, uv)
+
 3. Design FFI-free API surface that mirrors `PosixPtySystem`
+
 4. Consider `sugarcraft/pecl-pty` separate package vs. in-tree pecl backend
 
 **Estimated complexity:** High — requires C extension development, API design, release workflow
@@ -214,9 +246,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source PR:** imakeinternet's AES-256-GCM OpenSSL fallback PR
 
 **Implementation ideas:**
+
 1. Extend `TermiosFactory` to detect and rank backends: FFI > stty > expect-style
+
 2. Add `TermiosFactory::detect()` method that probes FFI availability first
+
 3. Consider platform-specific default ranking (Darwin FFI works for tcgetattr but not always tcsetwinsize)
+
 4. Add instrumentation/logging when falling back to help diagnose issues
 
 **Estimated complexity:** Low — refinement of existing fallback logic
@@ -236,9 +272,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source discussion:** `charmbracelet/wish` bubbletea middleware spawns goroutine per session for window resize forwarding
 
 **Implementation ideas:**
+
 1. Add `PtySystem::openAsync()` returning a `React\Promise\PromiseInterface`
+
 2. Implement `React\EventLoop\LoopAccessInterface` on `PosixPump` for native loop integration
+
 3. Add `PosixPump::runAsync()` returning promise that resolves on child exit
+
 4. Consider `Fiber`-based concurrency for PHP 8.1+ Fibers
 
 **Estimated complexity:** Medium — requires ReactPHP promise design + Fiber integration
@@ -260,9 +300,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source issue:** "stream_set_blocking(STDIN, false) left unrestored"
 
 **Implementation ideas:**
+
 1. Create `PosixMasterPty` destructor that calls `setBlocking(true)` if blocking was changed
+
 2. Add `MasterPtyState` snapshot object capturing original blocking mode and termios
+
 3. `MasterPty::withRawMode()` / `restore()` for explicit state save/restore
+
 4. Document RAII semantics in docblock
 
 **Estimated complexity:** Low — single destructor addition + state capture
@@ -282,9 +326,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source PR/discussion:** Whisp commit history
 
 **Implementation ideas:**
+
 1. Add `SessionId` property to `PosixMasterPty` / `PosixChild`
+
 2. Auto-generate UUID or incrementing counter in `PosixPtySystem::open()`
+
 3. Add `withSessionId(string $id)` for explicit IDs
+
 4. `SignalForwarder` callbacks could receive session ID for logging
 
 **Estimated complexity:** Low — property addition + propagation
@@ -304,9 +352,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source issue:** Commit history "Fix inactive disconnect using months instead of minutes"
 
 **Implementation ideas:**
+
 1. Add `withInactivityTimeout(float $seconds)` to `PumpOptions`
+
 2. Track last I/O timestamp; reset on any read/write
+
 3. On idle tick, check elapsed since last I/O; if > timeout, call `onTimeout()`
+
 4. Use `hrtime(true)` for sub-millisecond precision
 
 **Estimated complexity:** Low — callback + tracking logic
@@ -328,9 +380,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source discussion:** SugarCraft mapping to `candy-core` / `sugar-bits`
 
 **Implementation ideas:**
+
 1. Create `PtyView extends View` with embedded `PosixPtyPair`
+
 2. `PtyView::render(Buffer $buffer, Area $area)` piping PTY output into buffer cells
+
 3. `PtyView::handleResize()` chaining `SignalForwarder`
+
 4. Consider `candy-vt` integration for escape sequence interpretation
 
 **Estimated complexity:** High — depends on `candy-vt` and `candy-core` rendering APIs
@@ -350,9 +406,13 @@ Not applicable — `candy-pty` is a terminal I/O primitive library, not a render
 **Source discussion:** `charmbracelet_bubbletea.md` "Signal Handling: Graceful SIGINT/SIGTERM handling"
 
 **Implementation ideas:**
+
 1. Add constants for `SIGTSTP`, `SIGCONT`, `SIGSTOP` to `Child` contract
+
 2. `Child::kill(SIGTSTP)` suspends the process
+
 3. `Child::resume()` sends SIGCONT
+
 4. `PosixChild::signal(int $signo)` generic method
 
 **Estimated complexity:** Low — already supported via `posix_kill`, just need to expose
@@ -423,7 +483,9 @@ PtySystemFactory::register('conpty', new WindowsConPTYSystemProvider()); // v2
 
 **Proposed:** Enhance `PtyPool` with:
 - Session metadata (creation time, last activity, session ID)
+
 - Automatic cleanup callbacks on exit
+
 - Resource limit enforcement (memory, CPU per session)
 
 **Benefit:** Better resource management for long-running multi-session applications.
@@ -520,10 +582,15 @@ public static function default(): PtySystem
 **Topic:** Record and replay PTY sessions for testing and demo
 
 **Content:**
+
 - Basic recording with `Recorder`
+
 - Playback with `Vcr\Player`
+
 - Custom serialization formats
+
 - Handling resize events in recordings
+
 - Edge cases (fast typing, simultaneous output)
 
 **Source:** `candy-pty/CALIBER_LEARNINGS.md` "recorder-header-defaults" pattern
@@ -533,9 +600,13 @@ public static function default(): PtySystem
 **Topic:** Use `candy-pty` to build an SSH server
 
 **Content:**
+
 - Wiring `PosixPump` into SSH transport
+
 - Session lifecycle management
+
 - PTY + SSH key auth integration
+
 - Connection timeout handling
 
 **Source:** `WhispPHP/whisp` patterns, `charmbracelet_wish.md` middleware composition
@@ -545,9 +616,13 @@ public static function default(): PtySystem
 **Topic:** Build a split-pane terminal viewer with multiple PTY sessions
 
 **Content:**
+
 - `MultiPump` usage for N:1 demux
+
 - Per-session prefix tagging
+
 - Dynamic session add/remove
+
 - Quit-on-all-exit pattern
 
 **Source:** `candy-pty/examples/multi-pump.php`
@@ -557,9 +632,13 @@ public static function default(): PtySystem
 **Topic:** Automate interactive CLI programs with `Expect`
 
 **Content:**
+
 - Pattern matching with timeouts
+
 - Sendline and sendraw
+
 - Multiplex expect across multiple sessions
+
 - Error handling for timeout/eof
 
 **Source:** `candy-pty/src/Expect.php` API, pexpect documentation
@@ -606,8 +685,11 @@ if (!extension_loaded('ffi')) {
 **Title:** `Shell::isInteractive()` utility to detect if running in an interactive shell
 
 **Content:**
+
 - Check `isatty(STDOUT)` + `isatty(STDIN)`
+
 - Detect `TERM` environment variable
+
 - Determine appropriate `TERM` value if missing
 
 **Benefit:** Consumers can adjust behavior based on terminal type.
@@ -624,6 +706,7 @@ if (!extension_loaded('ffi')) {
 ```php
 /**
  * @property int $cols 0-10000
+
  * @property int $rows 0-10000
  */
 class SizePropertyTest extends PHPUnit\Framework\TestCase
@@ -645,7 +728,9 @@ class SizePropertyTest extends PHPUnit\Framework\TestCase
 
 **Proposed:** Test matrix across OS versions:
 - Linux: glibc 2.31+ (Ubuntu 20.04), musl 1.2+ (Alpine)
+
 - macOS: macOS 12 (Monterey), macOS 13 (Ventura), macOS 14 (Sonoma), macOS 15 (Sequoia)
+
 - Darwin arch64 vs x86_64
 
 **Benefit:** Ensures FFI cdef symbols actually exist on target platforms; caught macOS 15 `tcsetwinsize` missing.
@@ -656,8 +741,11 @@ class SizePropertyTest extends PHPUnit\Framework\TestCase
 
 **Proposed:** Add chaos testing:
 - Rapid SIGWINCH delivery (10 signals in 1ms)
+
 - SIGWINCH during close/resize race
+
 - SIGCHLD during active I/O
+
 - Nested signal handler invocation
 
 **Benefit:** Validates signal handler robustness under stress.
@@ -688,8 +776,11 @@ if ($isCiContainer) {
 
 **Proposed:** First-class `candy-pty` integration in `candy-wish`:
 - `WishTransport` interface implemented by `PosixPumpTransport`
+
 - PTY session per SSH channel
+
 - Window resize forwarding via `SignalForwarder`
+
 - Session recording via `Recorder` tap
 
 **Source:** `charmbracelet_wish.md` bubbletea middleware pattern
@@ -700,8 +791,11 @@ if ($isCiContainer) {
 
 **Proposed:** Deeper integration:
 - Shell detection and `TERM` auto-configuration
+
 - `candy-shell` command pipeline over PTY
+
 - Ctrl+C / Ctrl+Z signal forwarding
+
 - History navigation support
 
 **Source:** MATCHUPS.md "candy-shell" consumer listing
@@ -715,8 +809,11 @@ if ($isCiContainer) {
 **Source:** `charmbracelet_bubbletea.md` "tea.Exec" for running external commands
 
 **Implementation ideas:**
+
 1. Add `DebugAdapterTransport` wrapping `PosixPump`
+
 2. Parse DAP JSON messages
+
 3. Forward breakpoints, variable inspection
 
 **Benefit:** Enables VSCode PHP debugging without xdebug extension
@@ -802,16 +899,23 @@ if ($isCiContainer) {
 ## Immediate Wins (0-3 months)
 
 1. **Process resource validation** — Add `isValid()` to `Child` contract; guard I/O operations
+
 2. **RAII cleanup for blocking mode** — `MasterPty::__destruct()` restores original blocking state
+
 3. **Better missing-extension error messages** — Guide users to install `ext-ffi`
+
 4. **Inactivity timeout** — Add `withInactivityTimeout()` to `PumpOptions`
+
 5. **Connection ID logging** — Add `SessionId` to `PosixMasterPty` for multi-session debugging
+
 6. **BSD/Solaris testing** — Add CI coverage for platform differences
 
 ## Medium-Term Improvements (3-9 months)
 
 7. **Backend plugin architecture** — Enable runtime backend registration
+
 8. **Async/Fiber bridge** — Add `Fiber`-based async pump
+
 9. **Session lifecycle events** — `onSessionStart`, `onSessionEnd` callbacks
 10. **Enhanced PtyPool** — Session metadata, automatic cleanup, resource limits
 11. **Connection ID / session logging** — Prefix logs with session identifiers
@@ -862,16 +966,23 @@ if ($isCiContainer) {
 **Strategic position:** `candy-pty` is a foundational primitive for the SugarCraft ecosystem — consumed by SSH transport (`candy-wish`), session recording (`candy-vcr`), and interactive shell (`candy-shell`). Its quality directly impacts the quality of these downstream libraries.
 
 **Critical gaps:**
+
 1. **Windows ConPTY** is the most significant gap — it blocks the entire ecosystem from Windows users. This should be a medium-term priority despite its complexity, as it unlocks a major platform.
+
 2. **Process resource validation** is an immediate correctness issue — zombie processes can cause crashes in edge cases.
+
 3. **FFI-free fallback** via pecl extension would enable use in restricted hosting environments — a significant adoption blocker.
 
 **Competitive analysis:** Compared to `WhispPHP/whisp` (PHP SSH server with FFI PTY), `candy-pty` has a cleaner architecture (contract-driven vs. application-specific) and better separation of concerns. Compared to `charmbracelet/x/xpty` (Go upstream), `candy-pty` lacks Windows support and async concurrency, but achieves equivalent POSIX functionality.
 
 **Recommendations:**
+
 1. **Prioritize correctness improvements** (resource validation, RAII cleanup) in the immediate term — these prevent real-world crashes.
+
 2. **Invest in Windows ConPTY** in the medium term — it's the highest-impact missing feature.
+
 3. **Document the architecture** better with architecture decision records (ADRs) — the CALIBER_LEARNINGS.md is excellent but could be supplemented with formal ADRs for major decisions.
+
 4. **Expand CI coverage** for BSD/Solaris and Darwin arm64 — platform coverage gaps could surface at user sites not reproducible in CI.
 
 The library demonstrates that PHP 8.3+ FFI can achieve production-grade system programming. The biggest opportunity is translating this success to Windows, where the PHP ecosystem currently has no PTY solution.

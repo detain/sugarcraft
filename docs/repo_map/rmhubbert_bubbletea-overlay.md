@@ -1,6 +1,7 @@
 # rmhubbert/bubbletea-overlay
 
 ## Metadata
+
 - **URL:** https://github.com/rmhubbert/bubbletea-overlay
 - **Language:** Go
 - **Stars:** Unknown (gh command failed due to no auth; repo appears small with v0.6.0 from Dec 2025)
@@ -8,6 +9,7 @@
 - **Description:** A component for Charm's Bubble Tea TUI framework that aims to simplify creating and managing overlays and modal windows in TUI applications.
 
 ## Feature List
+
 - **Compositing Engine:** Merges foreground and background views into a single composited view string
 - **Positioning System:** Five-position placement (Top, Right, Bottom, Left, Center) for both X and Y axes
 - **Offset Fine-Tuning:** X/Y offset parameters to adjust positioning with pixel-level control
@@ -21,6 +23,7 @@
 ## Key Classes and Methods
 
 ### `Model` struct (model.go:27-34)
+
 ```go
 type Model struct {
     Foreground Viewable  // The overlay content
@@ -33,12 +36,14 @@ type Model struct {
 ```
 
 ### `New()` (model.go:37-46)
+
 Factory function that creates and returns a pointer to a new overlay Model:
 ```go
 func New(fore Viewable, back Viewable, xPos Position, yPos Position, xOff int, yOff int) *Model
 ```
 
 ### `Position` type (model.go:11-19)
+
 Enum-like constants for positioning:
 ```go
 const (
@@ -51,6 +56,7 @@ const (
 ```
 
 ### `Viewable` interface (model.go:21-23)
+
 Allows any type with a `View() string` method to be used:
 ```go
 type Viewable interface {
@@ -59,6 +65,7 @@ type Viewable interface {
 ```
 
 ### `Composite()` function (composite.go:14-74)
+
 Core compositing function that merges foreground onto background:
 ```go
 func Composite(fg, bg string, xPos, yPos Position, xOff, yOff int) string
@@ -70,6 +77,7 @@ func Composite(fg, bg string, xPos, yPos Position, xOff, yOff int) string
 - Uses line-by-line iteration with ANSI-aware truncation
 
 ### `offsets()` function (composite.go:78-117)
+
 Calculates actual X/Y offsets based on position enum values:
 - **Left:** x = 0
 - **Center:** x = (bgWidth/2) - (fgWidth/2)
@@ -77,18 +85,21 @@ Calculates actual X/Y offsets based on position enum values:
 - Same logic for Y axis with Top/Center/Bottom
 
 ### `clamp()` function (composite.go:120-132)
+
 Clamps a value between bounds, handles inverted bounds:
 ```go
 func clamp(v, lower, upper int) int
 ```
 
 ### `lines()` function (composite.go:136-139)
+
 Normalizes line endings (\r\n → \n) and splits string into slice:
 ```go
 func lines(s string) []string
 ```
 
 ### `Init()`, `Update()`, `View()` (model.go:49-79)
+
 tea.Model interface implementation:
 - `Init()` returns nil (no startup commands)
 - `Update()` returns self unchanged (overlay doesn't process updates)
@@ -97,6 +108,7 @@ tea.Model interface implementation:
 ## Notable Algorithms / Named Patterns
 
 ### **Compositing Algorithm**
+
 Line-by-line foreground/background merging based on Superfile's implementation:
 1. Split both strings into lines
 2. For each background line:
@@ -106,12 +118,14 @@ Line-by-line foreground/background merging based on Superfile's implementation:
 4. Uses `lipgloss.Size()` for measuring rendered dimensions
 
 ### **Center Bias Algorithm**
+
 When centering with even dimensions, offsets bias toward top-left (documented in test comments):
 - Center calculation uses integer division which truncates
 - When centering odd×odd → 2,2 (top-left bias)
 - When centering even×even → 2,3 (top-left bias in height)
 
 ### **Out-of-Bounds Clamping**
+
 ```go
 x = clamp(x, 0, bgWidth-fgWidth)
 y = clamp(y, 0, bgHeight-fgHeight)
@@ -119,12 +133,14 @@ y = clamp(y, 0, bgHeight-fgHeight)
 Prevents foreground from rendering outside background boundaries.
 
 ### **tea.Model Delegate Pattern**
+
 The Manager model in the example demonstrates proper update delegation:
 - Manages foreground and background update cycles externally
 - Calls `overlay.New()` once at initialization
 - Switches between direct background view and overlay view based on state
 
 ## Strengths
+
 - **Clean, focused API:** Single responsibility (compositing) with minimal surface area
 - **Comprehensive tests:** Table-driven tests covering all position/offset combinations and edge cases (644 lines in composite_test.go)
 - **Flexibility:** `Viewable` interface allows any `View()` implementer, not just `tea.Model`
@@ -136,6 +152,7 @@ The Manager model in the example demonstrates proper update delegation:
 - **No external runtime dependencies:** Only Go standard library + bubbletea/lipgloss ecosystem
 
 ## Weaknesses
+
 - **Two-layer limitation:** Only supports foreground/background (no stacked overlays)
 - **No animation support:** No built-in transitions for overlay show/hide
 - **Offset design quirk:** Offsets added after position calculation may produce unexpected results for Center positioning (intentional but non-obvious)
@@ -148,6 +165,7 @@ The Manager model in the example demonstrates proper update delegation:
 ## SugarCraft Mapping
 
 ### Primary Mapping
+
 | bubbletea-overlay Feature | SugarCraft Library | Notes |
 |---------------------------|-------------------|-------|
 | Overlay compositing | `sugar-bits` or new `sugar-overlay` | Could be a standalone overlay/modal library |
@@ -156,6 +174,7 @@ The Manager model in the example demonstrates proper update delegation:
 | ANSI-aware string ops | `candy-core` | FFI/raw terminal handling |
 
 ### Analysis
+
 This library represents a **modal/overlay system** for TUI applications. In SugarCraft terms:
 
 - **Could map to:** A new `sugar-overlay` library (or `sugar-modal`) focused on overlay positioning and compositing

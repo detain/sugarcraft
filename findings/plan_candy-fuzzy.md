@@ -45,11 +45,13 @@ This check is unreachable. After line 24-26 returns early if `$result->isEmpty()
 **Severity:** Critical (dead code)
 
 **Conditions for success:**
+
 - Run `vendor/bin/phpunit` - all 97 tests must pass
 - Run `php -l src/Highlighter.php` - no syntax errors
 - Code review confirms lines 31-33 are removed
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Highlighter.php:24-26` (first isEmpty() check)
 - `candy-fuzzy/src/Highlighter.php:29` ($indices assignment)
 - `candy-fuzzy/src/Highlighter.php:31-33` (dead code to remove)
@@ -80,11 +82,13 @@ This creates an inconsistency where `SahilmMatcher(true)->match('HELLO', 'HELLO'
 **Severity:** High (correctness)
 
 **Conditions for success:**
+
 - Add docblock explaining the behavior in constructor and/or compute() method
 - Existing test `testCaseSensitiveMatchStillScores` at `tests/SahilmMatcherTest.php:197-206` documents this behavior
 - All 97 tests pass
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:37-40` (constructor with caseSensitive flag)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:114-115` (lowercase transformation)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:136-162` (bonus calculations use original case)
@@ -109,11 +113,13 @@ The variable holds the **previous character** (lowercased), not a "lower candida
 **Severity:** High (code clarity)
 
 **Conditions for success:**
+
 - Rename variable throughout `compute()` method
 - Run `vendor/bin/phpunit` - all tests pass
 - Code review confirms variable name is accurate
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:127` (declaration)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:147` (first use in separator check)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:148` (array lookup)
@@ -141,10 +147,12 @@ CALIBER_LEARNINGS.md:19-21 already documents this limitation, but exposing it in
 **Severity:** High (robustness)
 
 **Conditions for success:**
+
 - PHPDoc updated with memory consideration note
 - All 97 tests pass
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php:10-15` (existing docblock)
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php:112-115` (matrix allocation)
 - `candy-fuzzy/CALIBER_LEARNINGS.md:19-21` (existing documentation)
@@ -159,6 +167,7 @@ The CALIBER_LEARNINGS.md correctly notes: "Smith-Waterman uses two-row matrix op
 ### 3.1 Add `matchAllGenerator()` Method [PENDING]
 
 **Files:**
+
 - `candy-fuzzy/src/FuzzyMatcher.php:43` (interface)
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php:85` (implementation)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:100` (implementation)
@@ -185,12 +194,14 @@ Current `matchAll()` returns `array<MatchResult>`, requiring all results in memo
 **Severity:** Medium (new feature)
 
 **Conditions for success:**
+
 - New method added to `FuzzyMatcher` interface
 - Implementation in both `SmithWatermanMatcher` and `SahilmMatcher`
 - New unit tests for generator behavior
 - All 97 existing tests pass + new tests pass
 
 **Related code locations:**
+
 - `candy-fuzzy/src/FuzzyMatcher.php:43` (existing matchAll declaration)
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php:57-85` (matchAll implementation)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:72-100` (matchAll implementation)
@@ -234,12 +245,14 @@ No convenient way exists to instantiate a matcher by name. Factory pattern enabl
 **Severity:** Medium (convenience)
 
 **Conditions for success:**
+
 - New factory class created in `src/Matcher/FuzzyMatcherFactory.php`
 - Factory registered in composer.json autoload if needed
 - Unit tests for factory
 - All 97 existing tests pass
 
 **Related code locations:**
+
 - `candy-fuzzy/src/FuzzyMatcher.php` (interface)
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php` (implementation)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php` (implementation)
@@ -252,6 +265,7 @@ The factory would be placed in the `SugarCraft\Fuzzy\Matcher` namespace alongsid
 ### 3.3 Extract MatchResultSorter Utility [PENDING]
 
 **Files:**
+
 - `candy-fuzzy/src/MatchResultSorter.php` (new)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:89-91`
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php:74-76`
@@ -284,11 +298,13 @@ Sorting logic is duplicated in `SahilmMatcher.php:89-91` and `SmithWatermanMatch
 **Severity:** Medium (DRY)
 
 **Conditions for success:**
+
 - New utility class created in `src/MatchResultSorter.php`
 - Both matchers updated to use `MatchResultSorter::sort()`
 - All 97 tests pass
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:86-91` (duplicated sort)
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php:71-76` (duplicated sort)
 - `candy-fuzzy/src/MatchResult.php` (MatchResult class)
@@ -319,10 +335,12 @@ Some callers may want to disable the camelCase bonus or adjust weights for their
 **Severity:** Low (enhancement)
 
 **Conditions for success:**
+
 - If implemented: new config class with tests
 - All 97 existing tests pass (backward compatible)
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:26-31` (scoring constants)
 - `candy-fuzzy/src/Matcher/SahilmMatcher.php:37-40` (constructor)
 
@@ -353,10 +371,12 @@ The current implementation always uses closures (arrow functions in tests). Usin
 **Severity:** Low (type safety)
 
 **Conditions for success:**
+
 - Type hint updated in Highlighter
 - All 97 tests pass
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Highlighter.php:22` (styler parameter)
 - `candy-fuzzy/tests/HighlighterTest.php` (all tests use closures)
 
@@ -378,10 +398,12 @@ Prevents user confusion about expected behavior. CALIBER_LEARNINGS.md:19-21 expl
 **Severity:** Low (documentation)
 
 **Conditions for success:**
+
 - PHPDoc updated with alignment constraint note
 - All 97 tests pass
 
 **Related code locations:**
+
 - `candy-fuzzy/src/Matcher/SmithWatermanMatcher.php:99-103` (query length check)
 - `candy-fuzzy/CALIBER_LEARNINGS.md` (existing documentation)
 

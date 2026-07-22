@@ -162,6 +162,7 @@ If `$cell->link()` is a different `Hyperlink` object with the same URL as `$prev
 ### 7. String concatenation in loops — O(n²) for large buffers
 
 **Files:** 
+
 - `src/Buffer.php:433` (`toAnsi()`)
 - `src/Diff/DiffEncoder.php:52-56` (`encode()`)
 

@@ -13,6 +13,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-hermit/src/Hermit.php` — accept
   `\SugarCraft\Sprinkles\Border\Border` and `Style`.
 - `candy-hermit/src/Hermit.php` — SIGWINCH handler attaches via
@@ -20,6 +21,7 @@
 - `candy-hermit/composer.json` — add `candy-sprinkles` + `candy-pty`.
 
 **Create:**
+
 - `candy-hermit/src/HelpBar.php`, `candy-hermit/src/StatusBar.php`.
 
 ## Tests

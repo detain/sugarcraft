@@ -45,6 +45,7 @@ Candy-serve is a solid foundation port of soft-serve with SSH Git protocol handl
 ### 2.1 Repository Browsing
 
 **Upstream (soft-serve):**
+
 - TUI shows list of repos with description, last activity
 - `repo tree <name>` — print directory tree
 - `repo blob <name> <path>` — print file contents with optional syntax highlighting (`-c -l`)
@@ -52,6 +53,7 @@ Candy-serve is a solid foundation port of soft-serve with SSH Git protocol handl
 - `repo branch/delete <name> <branch>` — branch management over SSH
 
 **Candy-serve current state:**
+
 - `Repo::branches()` ✅ returns branch list via `git branch`
 - `Repo::tags()` ✅ returns tag list via `git tag`
 - `Repo::readFile()` ✅ reads file at commit+path via `git show`
@@ -65,10 +67,12 @@ Candy-serve is a solid foundation port of soft-serve with SSH Git protocol handl
 **Upstream (soft-serve):**
 ```
 Permission levels: NONE (0), READ (1), WRITE (2), ADMIN (3)
+
 - Public repos: anyone can read
 - Private repos: only collaborators + admins
 - allowPush flag for unauthenticated push
 - Admin flag for server-wide management
+
 ```
 
 **Candy-serve current state:**
@@ -83,6 +87,7 @@ canRead(), canWrite(), canAdmin(), canCreateRepos(), allowAnonymousRead()
 ### 2.3 SSH Key Management
 
 **Upstream (soft-serve):**
+
 - Users stored in SQLite with public keys
 - `user create <username>` — create user
 - `user key <username> [key-file]` — add SSH public key
@@ -106,11 +111,13 @@ canRead(), canWrite(), canAdmin(), canCreateRepos(), allowAnonymousRead()
 ### 2.4 Markdown Rendering
 
 **Upstream (soft-serve):**
+
 - Uses BubbleTea's markdown rendering
 - Renders README files in TUI with proper formatting
 - Links are clickable (OSC 8 hyperlinks)
 
 **Candy-serve current state:**
+
 - CandyShine (markdown → ANSI) exists in monorepo: `candy-shine/`
 - `Repo::readme()` returns raw content
 - No integration with TUI (TUI doesn't exist)
@@ -122,11 +129,13 @@ canRead(), canWrite(), canAdmin(), canCreateRepos(), allowAnonymousRead()
 ### 2.5 Clipboard (OSC 52)
 
 **Upstream (soft-serve):**
+
 - Press `c` on highlighted repo to copy clone command
 - OSC 52 sequences for clipboard over SSH
 - Depends on terminal support
 
 **Candy-serve current state:**
+
 - Not implemented
 
 **Gap:** OSC 52 clipboard copy support
@@ -142,6 +151,7 @@ canRead(), canWrite(), canAdmin(), canCreateRepos(), allowAnonymousRead()
 This is the **core missing feature**. Without it, candy-serve is just a Git-over-SSH plumbing layer, not a true soft-serve port.
 
 **What soft-serve's TUI does:**
+
 1. **Repo List View** — shows all repos with public/private badge, description
 2. **Repo Detail View** — branches, tags, collaborators, clone URL
 3. **File Browser** — navigable tree view of repo contents
@@ -159,6 +169,7 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 ```
 
 **Dependencies:**
+
 - `candy-core` (BubbleTea port) ✅ exists
 - `candy-sprinkles` (styling) ✅ exists  
 - `candy-shine` (markdown rendering) ✅ exists
@@ -172,6 +183,7 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 **Current state:** Config exists (`httpListenAddr`), no implementation
 
 **What needs implementing:**
+
 - HTTP server (ReactPHP or PHP built-in)
 - `/git-upload-pack` and `/git-receive-pack` endpoints
 - Git wire protocol over HTTP
@@ -186,6 +198,7 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 **Current state:** Config exists (`gitListenAddr`), no implementation
 
 **What needs implementing:**
+
 - TCP server on port 9418
 - Git daemon protocol (dumb protocol)
 - `git-daemon-export-ok` file support
@@ -197,6 +210,7 @@ SSH Connection → SSHServer → [TUI Session Manager] → BubbleTea-style TUI
 **Current state:** `bin/soft-serve serve` prints info but doesn't daemonize
 
 **What needs implementing:**
+
 - Proper process management (pcntl, signals)
 - PID file management
 - Log rotation
@@ -248,6 +262,7 @@ The TUI should be a separate entry point callable via SSH forced command:
 ```
 
 **Existing infrastructure to leverage:**
+
 - `candy-core` — BubbleTea runtime port
 - `candy-sprinkles` — styling system
 - `candy-shine` — markdown/syntax rendering
@@ -282,6 +297,7 @@ src/
 ### 5.4 Similar Projects for Reference
 
 **Rust Git Server TUIs:**
+
 - [gitui-org/gitui](https://github.com/gitui-org/gitui) — 21k stars, Rust TUI Git client
 - [altsem/gitu](https://github.com/altsem/gitu) — Magit-inspired, 2.7k stars
 
@@ -294,11 +310,13 @@ src/
 **Current test coverage:** Basic PHPUnit tests exist
 
 **For TUI additions:**
+
 1. Snapshot tests for ANSI output
 2. Key event simulation for navigation
 3. Integration tests with SSH connection simulation
 
 **Reference patterns from existing libs:**
+
 - `sugar-bits/tests/` — snapshot testing for views
 - `candy-core/tests/` — BubbleTea component tests
 
@@ -307,16 +325,19 @@ src/
 ## 7. References
 
 ### Upstream
+
 - **soft-serve:** https://github.com/charmbracelet/soft-serve
 - **soft-serve TUI docs:** https://pkg.go.dev/github.com/charmbracelet/soft-serve
 
 ### Similar Tools
+
 - [gitui-org/gitui](https://github.com/gitui-org/gitui) — Rust Git TUI (21k stars)
 - [altsem/gitu](https://github.com/altsem/gitu) — Magit-style Rust TUI (2.7k stars)
 - [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit) — Go Git TUI (35k stars)
 - [git-town](https://git-town.com) — Git workflow automation CLI
 
 ### Existing CandyServe Code
+
 - `candy-serve/src/SSH/SSHServer.php` — SSH connection handling
 - `candy-serve/src/Repo.php` — Repo model with git operations
 - `candy-serve/src/User.php` — User model with SSH keys
@@ -326,6 +347,7 @@ src/
 - `candy-serve/src/LFS/LFSHandler.php` — LFS batch API
 
 ### Existing Monorepo Libraries to Leverage
+
 - `candy-core/` — BubbleTea TUI runtime
 - `candy-sprinkles/` — Lipgloss styling port
 - `candy-shine/` — Markdown/syntax rendering

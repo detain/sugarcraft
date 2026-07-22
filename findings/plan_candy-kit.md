@@ -38,12 +38,14 @@ The `$leftPad` parameter is documented as "cell width" but the formula `str_repe
 **Severity:** critical
 
 **Conditions for success:**
+
 1. `Section::header('X', Theme::plain(), leftPad: 2, width: 20, rune: '─')` → 2-cell left pad (single `─`, works with `intdiv(2,1)=2`)
 2. `Section::header('X', Theme::plain(), leftPad: 2, width: 20, rune: '──')` → 2-cell left pad (one `──`, works with `intdiv(2,2)=1`)
 3. `Section::header('X', Theme::plain(), leftPad: 3, width: 20, rune: '──')` → ≥2-cell left pad (must not overshoot width=20)
 4. The test `testMultiCellRuneNeverOvershoots` must pass and should be updated to assert exact width, not just `<=20`
 
 **Related code:**
+
 - `candy-kit/src/Section.php:33-34` — `$runeW` computation and `$left` formula
 - `candy-kit/tests/SectionTest.php:41-46` — existing (weak) test
 
@@ -82,6 +84,7 @@ Option (a) is chosen: treat `leftPad` as rune count. Update docblock and `$left 
 **Severity:** critical
 
 **Conditions for success:**
+
 1. `Section::rule(Theme::plain(), null, '─')` produces the same minimum output as `Section::header('', Theme::plain(), 0, null, '─')`
 2. Document both behaviors clearly
 
@@ -113,6 +116,7 @@ If called with a non-string (e.g., an integer), `Theme::byName()` should throw a
 **Severity:** high
 
 **Conditions for success:**
+
 1. `Theme::byName(123)` throws `\InvalidArgumentException` with message about string required
 2. `Theme::byName('dracula')` continues to work as before
 3. Existing tests still pass
@@ -136,6 +140,7 @@ The two-pass algorithm (first pass finds max key length, second pass builds outp
 **Severity:** high
 
 **Conditions for success:**
+
 1. Output of `HelpText::renderRows()` is identical before and after refactor
 2. All existing tests pass (especially `testRenderRowsAlignsKeys`)
 
@@ -158,6 +163,7 @@ The two-pass exists because the padding needs the max key width, which isn't kno
 **Severity:** high (but minor)
 
 **Conditions for success:**
+
 1. `Width::string($rune)` is called only once per `header()` invocation
 2. Output unchanged
 3. All tests pass
@@ -181,12 +187,14 @@ Add golden-file snapshot tests for the 6 classes that lack them: `Banner`, `Sect
 **Severity:** high
 
 **Conditions for success:**
+
 1. Each class has at least one golden file test
 2. All golden files use `Theme::ansi()` for coloured output
 3. Fixtures stored in `candy-kit/tests/fixtures/`
 4. All tests pass and CI captures the canonical output
 
 **Related code:**
+
 - `candy-kit/tests/GoldenRenderTest.php`
 - `candy-kit/tests/fixtures/stage-step.golden`
 - `candy-kit/tests/fixtures/stage-substep.golden`
@@ -216,6 +224,7 @@ Add golden-file snapshot tests for the 6 classes that lack them: `Banner`, `Sect
 **Severity:** medium
 
 **Conditions for success:**
+
 1. For the default rounded border, the same Style instance is reused across calls
 2. Output is byte-identical before and after
 3. All Banner tests pass
@@ -236,6 +245,7 @@ If any of the 7 Style properties is passed as `null`, the constructor should thr
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `new Theme(null, $style, ...)` throws `\InvalidArgumentException` with message naming the null field
 2. All existing tests still pass
 3. All 7 Style properties are validated
@@ -256,6 +266,7 @@ If any of the 7 Style properties is passed as `null`, the constructor should thr
 **Severity:** medium
 
 **Conditions for success:**
+
 1. Both methods' null-handling behavior is clearly documented in their docblocks
 2. `Section::rule()` docblock explicitly states the "minimum 2 cells when null" behavior
 
@@ -275,6 +286,7 @@ Add explicit getter methods for all 7 Style properties: `success()`, `error()`, 
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `$theme->success()` returns the same `Style` as `$theme->success`
 2. All existing tests using property access continue to work
 3. New getter methods are documented
@@ -298,6 +310,7 @@ Add a test that verifies `Theme::plain()` produces a Theme with all 7 fields bei
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `Theme::plain()->success === Theme::plain()->error === ... === Theme::plain()->muted` (same object)
 2. This is a property of the implementation, not just the render output
 
@@ -317,6 +330,7 @@ Add a test that verifies `Theme::plain()` produces a Theme with all 7 fields bei
 **Severity:** medium
 
 **Conditions for success:**
+
 1. Either document the limitation, OR
 2. Provide a `Logo::sugarcraft($fgColor, $borderColor)` variant, OR
 3. Provide a `Logo::sugarcraft()->withTextColor($c)->withBorderColor($c)` builder
@@ -337,6 +351,7 @@ Extract the common truncation-and-remeasure pattern from `padRight()` (lines 134
 **Severity:** medium
 
 **Conditions for success:**
+
 1. A new `private static function truncateWithEllipsis(string $s, int $width): string` exists
 2. Both `padRight` and `padCenter` call this helper
 3. Output is byte-identical before and after
@@ -364,6 +379,7 @@ Keep only repositories that are actually used: `candy-core`, `candy-sprinkles` (
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `composer validate` passes
 2. All tests pass with `cd candy-kit && composer install && vendor/bin/phpunit`
 3. `tools/check-path-repos.php` reports no errors
@@ -389,6 +405,7 @@ Add `Theme::auto()` that calls `BackgroundColorMsg::isDark()` from candy-core to
 **Severity:** low
 
 **Conditions for success:**
+
 1. `Theme::auto()` exists and returns appropriate preset based on terminal detection
 2. Falls back to `Theme::ansi()` if detection fails
 
@@ -408,6 +425,7 @@ Add an explicit API `Frame::withTitleText(string $text, Style $style)` that appl
 **Severity:** low
 
 **Conditions for success:**
+
 1. `Frame::new()->withTitleText('My Title', $theme->accent)->render(...)` works
 2. `withTitle()` continues to work as-is (backwards compatible)
 
@@ -427,6 +445,7 @@ Add `Section::subHeader()` that renders an indented section divider for sub-sect
 **Severity:** low
 
 **Conditions for success:**
+
 1. `Section::subHeader('Sub Section Name', Theme::ansi())` renders an indented divider
 2. Signature follows existing `header()` pattern
 
@@ -446,6 +465,7 @@ Add a variant of `subStep()` (or `step()`) that shows a progress bar or spinner 
 **Severity:** low
 
 **Conditions for success:**
+
 1. New method exists with clear signature
 2. Backwards compatible with existing `step()` and `subStep()`
 
@@ -465,6 +485,7 @@ Add a fluent builder for custom themes: `Theme::build()->success(Style::new()->b
 **Severity:** low
 
 **Conditions for success:**
+
 1. `Theme::build()->success($s)->error($s)->warn($s)->info($s)->prompt($s)->accent($s)->muted($s)->done()` returns a Theme
 2. All Style properties are required (no partial themes)
 
@@ -505,16 +526,19 @@ All operations are O(n) string building. Frame is O(lines + cells) which is opti
 ## Verification
 
 ### Pre-flight
+
 ```bash
 cd /home/sites/sugarcraft/candy-kit && composer install
 ```
 
 ### Run tests
+
 ```bash
 cd /home/sites/sugarcraft/candy-kit && vendor/bin/phpunit
 ```
 
 ### Specific test files
+
 ```bash
 cd /home/sites/sugarcraft/candy-kit && vendor/bin/phpunit tests/SectionTest.php
 cd /home/sites/sugarcraft/candy-kit && vendor/bin/phpunit tests/ThemeTest.php
@@ -528,11 +552,13 @@ cd /home/sites/sugarcraft/candy-kit && vendor/bin/phpunit tests/GoldenRenderTest
 ```
 
 ### Composer validation
+
 ```bash
 cd /home/sites/sugarcraft/candy-kit && composer validate
 ```
 
 ### Path repo checker
+
 ```bash
 cd /home/sites/sugarcraft && php tools/check-path-repos.php
 ```

@@ -41,6 +41,7 @@ From `repo_map/76creates_stickers.md`:
 ## 4. High-Signal Open Issues
 
 ### Issue #11 — GetContentWidth ignores padding (OPEN)
+
 - **Author**: jon4hz (Jan 2023)
 - **Reactions**: 🚀 1
 - **Signal**: Suggests API design problem — `GetContentWidth` does not account for cell padding via `GetHorizontalFrameSize()`. Maintainer questioned whether the function name is misleading rather than fixing it.
@@ -53,22 +54,26 @@ From `repo_map/76creates_stickers.md`:
 ## 5. Important Closed Issues
 
 ### Issue #14 — SetMinHeight is ignored (CLOSED Nov 2023)
+
 - **Author**: antonmedv
 - **Resolution**: Closed — "now working as expected"
 - **Signal**: Minimum dimension constraints had historical bugs; may have been fixed
 
 ### Issue #13 — A new version would be nice (CLOSED Aug 2023)
+
 - **Author**: fabio42
 - **Reactions**: None visible
 - **Signal**: **Critical ecosystem complaint**: Latest tag v1.3.0 was old and did not contain the `table` package. Users couldn't import new features. Forces forking or using `@latest` which may be unstable.
 - **Impact**: This is a recurring problem — users needed features from master but couldn't get them via semver. Maintainer acknowledged and eventually released v1.4+.
 
 ### Issue #17 — Feature: X axis scrollable table (CLOSED Jul 2025, OWN-IMPLEMENTING)
+
 - **Author**: 76creates (maintainer self-filed)
 - **Signal**: Maintainer explicitly acknowledged wide tables with many/hidden columns is a common use case. Proposed solution: max content length column sizing, `maxWidth`, cursor-based horizontal scrolling, column focus switching.
 - **Roadmap indicator**: This is actively being planned — SugarCraft should implement X-axis scrolling in parallel or beforehand.
 
 ### Issue #19 — Randomly Column Order Changes (CLOSED Dec 2024)
+
 - **Author**: csg33k
 - **Problem**: In `HorizontalFlexBox`, repeated tab navigation causes rendered column order to shift randomly
 - **Root cause**: Likely related to `GetColumn(ndx).GetCell(0).SetContent(content)` called in a loop while modifying the active column — potential race condition or iteration order issue
@@ -76,27 +81,32 @@ From `repo_map/76creates_stickers.md`:
 - **SugarCraft Risk**: **HIGH** — PHP equivalent code using `withContent()` or mutation patterns could exhibit same behavior
 
 ### Issue #4 — Multiline text in row (CLOSED Jul 2025)
+
 - **Author**: Vinschni (Jul 2022)
 - **Question**: How to make cell content span multiple lines?
 - **Resolution**: Closed (years later) — no solution implemented
 - **Signal**: This is a known limitation — FlexBox and Table assume single-line cell content. `ContentGenerator` can produce multiline output but the layout system doesn't account for it.
 
 ### Issue #8 — Flexbox does not render borders correctly (CLOSED Jan 2023)
+
 - **Author**: Cro0ksy
 - **Problem**: Right border not rendering; FlexBox takes 100% width regardless of content
 - **Root cause**: Lipgloss border rendering requires precise width allocation — FlexBox's integer ratio calculations didn't leave space for borders
 - **SugarCraft Risk**: **MEDIUM** — border rendering is a common pain point; SugarCraft should ensure ANSI SGR codes for borders (e.g., `\x1b[1m`) work with the ratio layout system
 
 ### Issue #22 — Examples panic with nil pointer dereference (CLOSED Oct 2025)
+
 - **Author**: ancientcatz
 - **Problem**: Examples crash if `SetContent` not called before `Render`
 - **Signal**: API requires mandatory initialization step; panic vs. graceful no-op
 
 ### Issue #20 — Can not run example using Go 1.23 (CLOSED Jul 2025)
+
 - **Author**: yunfan
 - **Signal**: Compatibility issues with newer Go versions — possible reliance on internal behavior
 
 ### Issue #9 — Use variadic function to add cells (CLOSED Apr 2023)
+
 - **Author**: jon4hz
 - **Resolution**: Implemented in PR #10 — `AddCells(...*Cell)` replaced `AddCells([]*Cell)`
 - **Signal**: API ergonomics improvement; variadic is preferred
@@ -122,6 +132,7 @@ From `repo_map/76creates_stickers.md`:
 ## 8. Important PRs
 
 ### PR #12 — Add methods to enable live updating of Tables (MERGED Oct 2024)
+
 - **Contributors**: drmille2, spogatetz (asked for merge after 1.5yr)
 - **Changes**:
   - `ClearRows()` — empty table for fresh data
@@ -131,22 +142,26 @@ From `repo_map/76creates_stickers.md`:
 - **Key lesson**: Maintainer's "I'll check it ASAP" followed by 18 months silence — suggests single-maintainer bottleneck
 
 ### PR #10 — Horizontally stacked flexbox and more (MERGED Apr 2023)
+
 - **Contributors**: jon4hz
 - **Changes**: Breaking refactor — package reorganization (`table/` separate from `flexbox/`), renaming (`FlexBoxRow` → `Row`), `HorizontalFlexBox` addition, variadic cells
 - **Maintainer concern**: "Feels like `HorizontalFlexBox` is basically mirror of the `FlexBox`, this is not really ideal... it might be better to create base struct that `FlexBox` and `HorizontalFlexBox` would inherit"
 - **Decision**: Merged as-is; refactor deferred to future PR
 
 ### PR #18 — Linter fixes (MERGED Nov 2024)
+
 - **Contributors**: tvanriel, ccoVeille (reviewer)
 - **Changes**: Typo fixes (`insipred` → `inspired`), `SetMinHeigth` deprecated wrapper for backwards compat
 - **Pattern**: Contributor found typo in public comment `// FlexBox responsive box grid inspipred by CSS flexbox`
 
 ### PR #23 — Update lipgloss to charm.land/lipgloss/v2 (MERGED Apr 2026)
+
 - **Contributor**: duckpie3
 - **Changes**: Module path update only; no behavioral change
 - **Signal**: lipgloss v2 moved to `charm.land` domain; library was still on v0.x import path
 
 ### PR #16 — Fix for issue #11 (OPEN)
+
 - **Contributor**: Omnikron13
 - **Changes**: Use `GetHorizontalFrameSize()` and `GetVerticalFrameSize()` for padding
 - **Status**: Open since Jun 2024; maintainer unclear on desired behavior
@@ -154,16 +169,19 @@ From `repo_map/76creates_stickers.md`:
 ## 9. Architectural Changes
 
 ### Package/Module Reorganization (v1.4 / Apr 2023)
+
 - `flexbox/` and `table/` split into separate packages
 - Users importing `github.com/76creates/stickers/table` needed new module path
 - This caused Issue #13 — users on v1.3.0 couldn't access table package
 
 ### Base Type Refactoring (Deferred)
+
 - Maintainer explicitly noted in PR #10 review: "Feels like `HorizontalFlexBox` is basically mirror of the `FlexBox`... it might be better to create base struct"
 - **Status**: Never implemented; code duplication persists
 - **SugarCraft opportunity**: Create shared base trait/class for FlexBox/HorizontalFlexBox to avoid duplication
 
 ### Style Inheritance Chain
+
 - `FlexBox → Row → Cell` optional `StylePassing` with `style.Inherit(parent)`
 - Duplicated across both FlexBox variants
 

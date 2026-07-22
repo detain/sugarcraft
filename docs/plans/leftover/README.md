@@ -90,6 +90,7 @@ end and may be paused indefinitely** per the user's instruction —
 macOS-specific items and Windows ConPTY are explicitly low priority.
 
 ### Phase 01 — PTY quickwins (`phase-01-pty-quickwins/`)
+
 1. `step-01-x-windows-stub.md`
 2. `step-02-drop-consumer-locks.md`
 3. `step-03-pump-idle-vs-sigwinch.md`
@@ -106,12 +107,14 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 14. `step-14-editor-open-posixprocess.md`
 
 ### Phase 02 — SSOT foundation (`phase-02-ssot-foundation/`)
+
 1. `step-01-theme-in-candy-sprinkles.md`
 2. `step-02-styleparser-in-candy-sprinkles.md`
 3. `step-03-candy-palette-probe.md`
 4. `step-04-module-aligns-model.md`
 
 ### Phase 03 — Sugar-dash (`phase-03-sugar-dash/`)
+
 1. `step-01-grid-reorg-foundation.md`
 2. `step-02-grid-reorg-charts.md`
 3. `step-03-grid-reorg-events-state.md`
@@ -132,11 +135,13 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 18. `step-18-cleanup-migration-scripts.md`
 
 ### Phase 04 — SSOT others (`phase-04-ssot-others/`)
+
 1. `step-01-boxer-composes-sprinkles.md`
 2. `step-02-stickers-composes-bits.md`
 3. `step-03-crumbs-uses-zone.md`
 
 ### Phase 05 — i18n rollout (`phase-05-i18n/`)
+
 1. `step-01-sugar-calendar.md`
 2. `step-02-sugar-table.md`
 3. `step-03-sugar-toast.md`
@@ -147,6 +152,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 8. `step-08-sugar-stickers.md`
 
 ### Phase 06 — Core / Shell / Wish features (`phase-06-core-shell-wish/`)
+
 1. `step-01-core-subscriptions.md`
 2. `step-02-core-screen-stack.md`
 3. `step-03-core-component-lifecycle.md`
@@ -162,6 +168,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 13. `step-13-wish-async-middleware.md`
 
 ### Phase 07 — VT / Zone / Mosaic / PTY / VCR (`phase-07-vt-zone-mosaic-pty/`)
+
 1. `step-01-vt-decstbm.md`
 2. `step-02-vt-decawm.md`
 3. `step-03-vt-subparams.md`
@@ -186,6 +193,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 22. `step-22-vcr-focuslostmsg.md`
 
 ### Phase 08 — Forms / Charts / Style / Freeze (`phase-08-forms-charts-style/`)
+
 1. `step-01-prompt-validators.md`
 2. `step-02-prompt-fuzzy.md`
 3. `step-03-prompt-async-debounce.md`
@@ -202,6 +210,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 14. `step-14-freeze-themes-font-linehighlight.md`
 
 ### Phase 09 — Media / Games / Logs / Metrics / Query / Physics (`phase-09-media-games-logs/`)
+
 1. `step-01-flip-imagecreatefromstring-timing.md`
 2. `step-02-flip-dither-localcolor-transparency.md`
 3. `step-03-flip-adaptive-cellsize-cache.md`
@@ -223,6 +232,7 @@ macOS-specific items and Windows ConPTY are explicitly low priority.
 19. `step-19-flap-variable-gap.md`
 
 ### Phase 10 — Apps (`phase-10-apps/`)
+
 1. `step-01-supercandy-copy-move-rename.md`
 2. `step-02-supercandy-bulk-preview-async.md`
 3. `step-03-stash-phase1.md`

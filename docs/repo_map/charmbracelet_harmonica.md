@@ -1,6 +1,7 @@
 # charmbracelet/harmonica
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/harmonica
 - Language: Go
 - Stars: 1530

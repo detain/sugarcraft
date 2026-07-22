@@ -16,6 +16,7 @@
 **Core Functionality**: Detects terminal color profiles (NoTTY, ASCII, ANSI, ANSI256, TrueColor) and provides automatic color degradation via a `Writer` type that intercepts ANSI sequences and downgrades them based on detected capability.
 
 **Key Dependency Tree**:
+
 - `github.com/charmbracelet/x/ansi` - ANSI sequence parsing
 - `github.com/charmbracelet/x/term` - Terminal detection
 - `github.com/lucasb-eyer/go-colorful` - Perceptual color quantization
@@ -56,6 +57,7 @@ From `repo_map/charmbracelet_colorprofile.md`:
 **Bug Description**: `envColorProfile()` caps TERM values prefixed with `tmux` at ANSI256, even when `COLORTERM=truecolor` is set. The comment on line 187 says "Tmux doesn't support $COLORTERM", but modern tmux does support COLORTERM.
 
 **Setup**:
+
 - Terminal Emulator: Ghostty, Kitty, Alacritty
 - Terminal Multiplexer: tmux 3.5a
 - TERM: `tmux-256color`
@@ -77,6 +79,7 @@ The tmux prefix check was historically correct (older tmux versions didn't pass 
 **Workaround**: Use `TERM=xterm-256color` instead of `TERM=tmux-256color`
 
 **Strategic Lesson for SugarCraft**:
+
 - **Direct Risk**: HIGH - Same stale tmux assumption could affect PHP detection
 - **Recommendation**: SugarCraft should probe tmux capabilities dynamically rather than assuming based on TERM prefix
 
@@ -112,6 +115,7 @@ case w.Profile <= NoTTY:
 ```
 
 **Defensive Lesson for SugarCraft**:
+
 - **Critical Pattern**: Writer middleware MUST return `len(p)` on success, not the bytes actually written after transformation
 - This is a common middleware mistake in Go and other languages
 - SugarCraft MUST test writer composition with `bufio.Writer` explicitly
@@ -123,18 +127,21 @@ case w.Profile <= NoTTY:
 ### 6.1 Terminal Multiplexer Detection Complexity
 
 **Pattern**: tmux and GNU Screen have different capabilities and environment handling. The library has accumulated special cases:
+
 - tmux doesn't support COLORTERM (historically)
 - Screen doesn't support TrueColor
 - tmux needs `tmux info` command to probe actual capabilities
 - Windows Terminal with bash.exe doesn't set TERM
 
 **Evidence**:
+
 - PR #72: Windows Terminal bash.exe detection
 - PR #60: Enhanced tmux Tc support detection
 - v0.3.1: "Tmux doesn't support $COLORTERM" comment added
 - Issue #76: Now tmux DOES support COLORTERM (contradiction)
 
 **Strategic Insight**: Terminal multiplexer detection is inherently fragile due to layered terminal architectures. SugarCraft should:
+
 - Document that multiplexers may cause detection inaccuracies
 - Provide manual override mechanisms (like `CLICOLOR_FORCE`)
 - Consider probing actual capability rather than assuming
@@ -149,6 +156,7 @@ The detection logic has evolved to handle multiple competing standards:
 - Platform-specific (Windows Registry, WT_SESSION)
 
 **Complexity Evidence**:
+
 - `isTTYForced()` with `SKIP_TTY_CHECK`/`TTY_FORCE` env var
 - `isDumb` checks with platform-specific behavior
 - `envNoColor()`, `cliColorForced()`, `cliColor()`, `colorTerm()` helper functions
@@ -419,6 +427,7 @@ case ASCII:
 ### 13.2 API Deprecations
 
 **Known Deprecations**:
+
 - `Ascii` constant → use `ASCII` (v0.4.0)
 - Various internal function renames (e.g., `isTTYForced`)
 
@@ -439,6 +448,7 @@ case ASCII:
 ### 14.3 Windows Terminal Detection via WT_SESSION
 
 **Detection order**:
+
 1. Check `WT_SESSION` directly in envColorProfile()
 2. Fall back to Windows API if no TERM
 
@@ -455,6 +465,7 @@ Based on issue comments and discussions:
 Users in tmux with TrueColor terminals report setting:
 ```bash
 # In ~/.tmux.conf
+
 set -g default-terminal "xterm-256color"
 ```
 
@@ -474,6 +485,7 @@ CLICOLOR_FORCE=1 ./program
 ### 16.1 Fast Patch Releases
 
 **Pattern**: Critical bugs get patches within hours:
+
 - Issue #74 reported 2026-03-09, fixed and released v0.4.3 same day
 - Issue #76 (open) has no fix yet as of 2026-03-30
 
@@ -496,6 +508,7 @@ linters:
 ### 16.3 Dependabot Automation
 
 **Pattern**: All dependencies auto-updated via Dependabot:
+
 - Regular bumps to golang.org/x/sys
 - charmbracelet/x/ansi updates
 - Minimal human review needed
@@ -534,6 +547,7 @@ PHP CLI applications face identical detection challenges:
 - Tmux/screen multiplexer compatibility
 
 **SugarCraft Strategy**: Build a robust terminal detection service that:
+
 - Supports NO_COLOR, CLICOLOR, CLICOLOR_FORCE, COLORTERM environment variables
 - Handles Windows via PHP OS detection
 - Can query terminfo if available (though PHP lacks native terminfo bindings)
@@ -545,6 +559,7 @@ PHP CLI applications face identical detection challenges:
 Using `go-colorful` for perceptually accurate quantization is the right approach. SugarCraft should use similar algorithms for TrueColor→ANSI256 conversion.
 
 **Option for PHP**:
+
 - Port color quantization logic
 - Use a PHP color library with similar algorithms
 - Accept less accurate nearest-neighbor (but this produces ugly results)

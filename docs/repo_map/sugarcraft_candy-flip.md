@@ -308,28 +308,35 @@ ASCII video player. Three display modes: encode (save to file), play (stdout), s
 ## Innovation Gaps & Opportunities
 
 ### 1. Sampling Quality
+
 candy-flip uses area-average (smooth but blurs edges). Upsream **Zebbeni/ansipx** demonstrates that Lanczos3 / Mitchell-Netravali give sharper results. Adding a `LanczosResampler` using `imagecopyresampled()` with a precomputed lanczos kernel would improve quality.
 
 **Implementation hint:** GD's `imagecopyresampled()` uses bilinear interpolation. A true Lanczos3 requires 2-pass resampling or the `imagick` extension. The `Downsampler` class could gain a `LANCZOS3` constant that uses `imagecopyresampled()` with careful dimension calculations as an approximation.
 
 ### 2. Full Disposal Method Pipeline
+
 `Frame::$disposal` is tracked and parsed but the `Player::view()` does not apply disposal between frames. Implementing DISPOSAL_RESTORE (clear to background) and DISPOSAL_PREVIOUS (restore previous content) requires maintaining a composite canvas across frames — the next frame's transparent cells would sample from this canvas rather than the raw frame.
 
 ### 3. Floyd-Steinberg Integration
+
 `FloydSteinberg::dither()` exists but is not wired into the `Decoder` pipeline. Adding a `Decoder::decodeWithDither()` that applies FS dithering against a configurable palette before downsampling would enable palette-reduced output modes.
 
 ### 4. Half-Block Rendering
+
 Like **jif** (Go) and **ansipx** (Go), candy-flip could support Unicode half-block rendering (`▀` upper + `▄` lower) to double effective vertical resolution with 24-bit color on each half.
 
 **Implementation:** In `Renderer::cell()`, add `PRESET_HALFBLOCK` that emits two stacked cells (upper-half pixel in foreground, lower-half pixel in background) using `\033[38;2;R;G;Bm▀` then `\033[48;2;R;G;Bm▄`.
 
 ### 5. Sixel / iTerm2 Protocol Support
+
 The **nalediym/gifterm** (Rust) and **hzeller/timg** (C++) and **blacktop/go-termimg** (Go) approaches transmit image data via terminal graphics protocols rather than text. While `candy-mosaic` handles this at the rendering layer, an extension to `candy-flip` that produces Sixel output for `ext-gd`-compatible frames would dramatically improve quality on supporting terminals (xterm, foot, mlterm).
 
 ### 6. WebP / APNG Input
+
 **nalediym/gifterm** roadmap includes APNG and WebP. `candy-flip` is GIF-only. Adding APNG support via `imagecreatefromwebp()` (PHP 8.3+) or `imagecreatefrompng()` would broaden input support.
 
 ### 7. Per-Frame Adaptive Quality
+
 For complex animated GIFs, the frame decode cost is non-trivial. A `FrameCache` at the `Decoder` level — not just at the `Renderer` level — would enable instant re-decoding of previously-seen frames (common in looping GIFs).
 
 ---

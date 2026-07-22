@@ -12,9 +12,11 @@ ranks by score; user picks via arrow keys.
 ## Files
 
 **Create:**
+
 - `sugar-prompt/src/Fuzzy/FuzzyMatcher.php`.
 
 **Modify:**
+
 - `sugar-prompt/src/Select.php` and `sugar-prompt/src/TextInput.php` —
   `withFuzzySuggestions()`.
 

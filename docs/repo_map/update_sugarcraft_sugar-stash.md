@@ -3,6 +3,7 @@
 **sugar-stash** is the SugarCraft monorepo's most complete application — a three-pane git TUI port of `jesseduffield/lazygit` built on the SugarCraft stack (candy-core + candy-sprinkles). It shells out to the system `git` binary, preserving user aliases, hooks, and signing config, while implementing an Elm-architecture state machine with comprehensive git operations (stage/unstage/commit/amend/branch/merge/stash/rebase/worktrees/cherry-pick).
 
 **Biggest opportunity areas:**
+
 - Commit graph visualization (colored branch topology like lazygit's `--graph`)
 - Search/filter functionality in all panels (`/` key)
 - Remote operations (push/pull/fetch)
@@ -11,6 +12,7 @@
 - Spring animations for smoother transitions
 
 **Biggest missing capabilities:**
+
 - Bisect integration
 - Submodule support
 - Tags management
@@ -25,6 +27,7 @@
 ## Architecture
 
 **Pluggable GitDriver Interface Pattern:**
+
 - `GitDriver` interface (`src/GitDriver.php` — 117 lines) defines all git operations as contract
 - `Git` class (`src/Git.php` — 246 lines) shells out via `proc_open()` with `-C <cwd>` for all commands
 - `FixtureGit` test doubles injected in tests via the interface
@@ -40,6 +43,7 @@
 ```
 
 **App Model (State Machine):**
+
 - `App` class (`src/App.php` — 1201 lines) implements `Model` interface
 - All state is `readonly` — every `update()` returns fresh `App`
 - Tracks: three pane lists + cursors, active pane, overlays (diff/stash/cherry-pick/worktrees/interactive-rebase)
@@ -111,59 +115,71 @@
 ## Critical Priority
 
 ### 1. Commit Graph Visualization
+
 **Title:** Colored branch topology in log pane  
 **Description:** Replace flat `git log` output with `git log --graph --oneline --decorate --all` rendering showing branch/merge history as ASCII art tree  
 **Why it matters:** Git users rely heavily on visual branch topology to understand history, especially in complex multi-branch repos. This is lazygit's signature feature.  
 **Source:** `docs/repo_map/sugarcraft_sugar-stash.md` (feature parity matrix)  
 **Implementation ideas:**
+
 - Parse `git log --graph --oneline --decorate --all --format="%h%d%s"` 
 - Render graph characters (`*`, `|`, `/`, `\`, `m`) with branch name highlighting
 - Use candy-sprinkles Color for commit hash/branch coloring
 - Add `--all` flag toggle for showing remote branches  
+
 **Estimated complexity:** Medium (parsing and rendering ASCII graph)  
 **Expected impact:** High — fills major visual gap vs. lazygit
 
 ### 2. Panel Search/Filter (`/` key)
+
 **Title:** Fuzzy search in status/branches/log panels  
 **Description:** Add `/` keybinding that opens inline filter input, filtering panel content in real-time via fuzzy matching  
 **Why it matters:** In large repos, scrolling through dozens of branches or files is slow. Filter enables rapid navigation.  
 **Source:** `docs/repo_map/charmbracelet_gum.md` — fuzzy filter algorithm  
 **Implementation ideas:**
+
 - Use `sahilm/fuzzy` port or PHP equivalent for matching
 - Filter status entries by path substring/regex
 - Filter branches by name
 - Filter log by commit message/author/SHA
 - Show filter input bar above panel, Esc to clear
 - Matched characters could be highlighted with reverse/underline style  
+
 **Estimated complexity:** Medium — requires new overlay state + fuzzy library  
 **Expected impact:** High — major usability improvement for large repos
 
 ### 3. Mouse Support
+
 **Title:** Clickable panes, entries, and actions  
 **Description:** Enable mouse clicks for cursor movement, action triggering, and pane switching  
 **Why it matters:** Many users expect mouse support in TUIs. lazygit has full mouse integration.  
 **Source:** `docs/repo_map/lrstanley_bubblezone.md`, `docs/repo_map/charmbracelet_bubbletea.md` (mouse input)  
 **Implementation ideas:**
+
 - Wire `MouseMsg` handler in `App::update()` alongside `KeyMsg`
 - Use `candy-zone` for zone-based hit detection if available
 - Click on pane border to switch focus
 - Click on entry to move cursor + optional action trigger
 - Mouse wheel for scrolling in long lists
 - Right-click for context menu (future)  
+
 **Estimated complexity:** Medium — requires MouseMsg handling + zone tracking  
 **Expected impact:** High — matches user expectations for modern TUIs
 
 ### 4. Push/Pull Remote Operations
+
 **Title:** Remote sync commands  
 **Description:** Add push, pull, and fetch operations bound to keys  
 **Why it matters:** Core git workflow for collaborating with remotes is missing.  
 **Source:** `docs/repo_map/sugarcraft_sugar-stash.md` (feature parity gap)  
 **Implementation ideas:**
+
 - Add `push()`, `pull()`, `fetch()` to `GitDriver` interface
 - Implement in `Git` class: `git push`, `git pull`, `git fetch`
 - Add keybindings: `P` (push), `p` (pull), `f` (fetch)
 - Show progress output in temporary overlay
 - Handle authentication (SSH key, credential helper) gracefully  
+
 **Estimated complexity:** Low — straightforward git command wrappers  
 **Expected impact:** High — completes core git workflow
 
@@ -172,42 +188,51 @@
 ## High Priority
 
 ### 5. Spring Animations
+
 **Title:** Smooth transitions between states  
 **Description:** Add harmonica-style spring animations for cursor movement, pane switching, overlay appearance  
 **Why it matters:** SugarCraft has `honey-bounce` (harmonica port) available. Animations make the TUI feel polished and responsive.  
 **Source:** `docs/repo_map/charmbracelet_harmonica.md`, `docs/repo_map/sugarcraft_sugar-stash.md` (animation gap)  
 **Implementation ideas:**
+
 - Animate cursor movement (smooth scroll to new position)
 - Animate pane focus change (border color transition)
 - Animate overlay appearance (slide/fade in)
 - Use `honey-bounce` Spring + SpringConfig for physics-based animation
 - Add `REDUCE_MOTION` support for accessibility  
+
 **Estimated complexity:** Medium — requires subscription tick + animation state  
 **Expected impact:** Medium — polish but not core functionality
 
 ### 6. Fuzzy Search in Filter/Choose
+
 **Title:** Real-time fuzzy filtering  
 **Description:** Replace substring match with fuzzy matching for panel filtering  
 **Why it matters:** Fuzzy matching handles typos and partial matches better. gum's filter uses this effectively.  
 **Source:** `docs/repo_map/charmbracelet_gum.md` — fuzzy algorithm reference  
 **Implementation ideas:**
+
 - Port `sahilm/fuzzy` to PHP or use existing PHP fuzzy library
 - Apply fuzzy score ranking to filtered results
 - Highlight matched characters in results
 - Preserve ranking order (best match first)  
+
 **Estimated complexity:** Medium — requires PHP fuzzy library + integration  
 **Expected impact:** High — better UX than substring match
 
 ### 7. Interactive Diff Improvements
+
 **Title:** Side-by-side diff view and syntax highlighting  
 **Description:** Enhance diff viewer with line-level understanding and optional side-by-side layout  
 **Why it matters:** Unified diff is readable but side-by-side is easier for large changes.  
 **Source:** `docs/repo_map/sugarcraft_sugar-stash.md` (diff viewer description)  
 **Implementation ideas:**
+
 - Parse diff output into structured `DiffLine` objects with change type (+/-/context)
 - Add syntax highlighting for common file types using candy-shine
 - Implement side-by-side layout mode via `Layout::joinHorizontal()`
 - Add `|` toggle between unified/side-by-side views  
+
 **Estimated complexity:** Medium — new diff parsing + layout modes  
 **Expected impact:** Medium — improves code review workflow
 
@@ -216,6 +241,7 @@
 ## Medium Priority
 
 ### 8. Bisect Integration
+
 **Title:** `git bisect` automation  
 **Description:** UI workflow for binary search through commits to find buggy one  
 **Why it matters:** Powerful but underutilized git feature, implemented in lazygit  
@@ -224,6 +250,7 @@
 **Expected impact:** Medium — advanced users only
 
 ### 9. Tags Management
+
 **Title:** List/create/delete annotated tags  
 **Description:** Add tags panel alongside branches  
 **Why it matters:** Missing from feature parity matrix  
@@ -231,6 +258,7 @@
 **Expected impact:** Low — niche use case
 
 ### 10. Blame View
+
 **Title:** Per-line commit attribution  
 **Description:** Show which commit last modified each line  
 **Why it matters:** Not implemented, listed in gaps  
@@ -238,6 +266,7 @@
 **Expected impact:** Low — specialized for code review
 
 ### 11. Submodule Support
+
 **Title:** Submodule list and update  
 **Description:** Handle nested git repositories  
 **Why it matters:** Listed as gap in feature parity  
@@ -245,18 +274,21 @@
 **Expected impact:** Low — rare use case
 
 ### 12. Rebase Magic / Patch Application
+
 **Title:** Custom patch application during rebase  
 **Description:** Apply arbitrary patches during interactive rebase  
 **Estimated complexity:** High  
 **Expected impact:** Low — advanced users only
 
 ### 13. Amend Old Commits
+
 **Title:** Amend any commit not just HEAD  
 **Description:** Via rebase-based workflow  
 **Estimated complexity:** Medium  
 **Expected impact:** Low — niche workflow
 
 ### 14. Custom Commands
+
 **Title:** User-defined commands bound to keys  
 **Description:** Extensible keybinding system for custom git workflows  
 **Why it matters:** Power user feature in lazygit  
@@ -269,6 +301,7 @@
 ## Low Priority
 
 ### 15. Command Palette
+
 **Title:** Fuzzy command search interface  
 **Description:** Type command name to invoke rather than remembering all keybindings  
 **Why it matters:** Modern TUI pattern from textual/gum  
@@ -277,6 +310,7 @@
 **Expected impact:** Low — keyboard power users already know bindings
 
 ### 16. Syntax Highlighting in Diff
+
 **Title:** Language-aware diff coloring  
 **Description:** Highlight code syntax in diff viewer  
 **Estimated complexity:** Low — integrate candy-shine  
@@ -289,17 +323,20 @@
 ## Current Approach vs. External
 
 ### Git Integration: proc_open() vs. libgit2
+
 **Current (sugar-stash):** Shells out to `git` binary via `proc_open()` with piped stdout/stderr. Each operation spawns a new process.
 
 **External (lazygit):** Uses libgit2 bindings for direct in-memory git operations without process spawning.
 
 **Tradeoffs:**
+
 - sugar-stash approach: Respects user git aliases, hooks, signing config automatically; simpler implementation; slower for high-frequency ops; no in-memory state
 - lazygit approach: Faster high-frequency ops; full git state in memory; must re-implement alias/hook handling; complex C bindings
 
 **Applicability:** The proc_open() approach is pragmatic and correct for sugar-stash's use case. Consider caching git output for the lifetime of a render cycle to avoid redundant spawns on rapid keypresses.
 
 ### Fuzzy Matching: Substring vs. Fuzzy
+
 **Current (sugar-stash):** No fuzzy search implemented.
 
 **External (gum filter):** Uses `sahilm/fuzzy` library with real-time matching and matched range highlighting.
@@ -307,6 +344,7 @@
 **Applicability:** Add fuzzy search library (PHP port of fuzzy or `gipht/fuzzy`) to enable typo-tolerant filtering.
 
 ### Rendering: Full Redraw vs. Delta
+
 **Current (sugar-stash):** `Renderer::render()` produces complete output on every call.
 
 **External (bubbletea):** Cell-based renderer with delta updates, only redraws changed lines, synchronized output mode (ANSI 2026).
@@ -314,6 +352,7 @@
 **Applicability:** Consider integrating `candy-vt` or candy-core's renderer improvements for partial redraws. The current approach is simpler but may flicker on some terminals.
 
 ### Spring Animations: Instant vs. Spring-based
+
 **Current:** No animations — state transitions are instantaneous.
 
 **External (harmonica):** Analytically exact damped spring physics per time step, constant-time after setup.

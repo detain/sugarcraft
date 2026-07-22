@@ -14,6 +14,7 @@ periodic refresh.
 ## Files
 
 **Modify (`sugar-dash/src/Modules/<Name>/<Name>Module.php`):**
+
 - `ClockModule` — uses `Cmd::tick(1000)` for 1Hz refresh; immutable
   `withTime(\DateTimeImmutable)` updates.
 - `SystemModule` — periodic `Cmd::async(fn() => readProcStat())` for

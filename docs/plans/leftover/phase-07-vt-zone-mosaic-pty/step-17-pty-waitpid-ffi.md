@@ -12,6 +12,7 @@ process-exit detection for ChildLifecycle.
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/Libc.php` — extend cdef with `waitpid`.
 - `candy-pty/src/Posix/ChildPollTrait.php` — use `waitpid(pid, &status,
   WNOHANG)` first; fall back to `proc_get_status` if FFI unavailable.

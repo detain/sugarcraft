@@ -1,4 +1,5 @@
 # Overview
+
 candy-query is a terminal SQLite browser built on the SugarCraft stack (PHP 8.3+, PSR-4, immutable/fluent patterns, `readonly` classes). It ports the core workflow of `jorgerojas26/lazysql` (Go, multi-driver SQL browser) to PHP. At v1, it is SQLite-only with 9 source files, 7 test files with 60+ test methods, 2 VHS demos, and 16 locales. The architecture cleanly separates Database (PDO wrapper), SchemaBrowser (PRAGMA introspection), ResultTable (horizontal-scrolling renderer), App (SugarCraft Model), and Renderer (ANSI view). **Biggest opportunity**: Multi-driver interface, inline row editing TUI, query result sorting, and schema tree sidebar. **Biggest missing**: Pagination controls, tabs for multiple tables, connection management, query snippet picker UI.
 
 ---
@@ -23,6 +24,7 @@ candy-query/src/
 ```
 
 ## Current Features
+
 - **3-pane TUI**: Tables list, Rows preview, Query editor — Tab cycles focus
 - **SQLite browsing**: `Database::tables()`, `Database::rows()` with LIMIT 100, `Database::query()` for arbitrary SQL
 - **Schema introspection**: `SchemaBrowser` exposes `SchemaTable`, `SchemaColumn`, `SchemaIndex`, `SchemaForeignKey` via PRAGMA queries
@@ -35,6 +37,7 @@ candy-query/src/
 - **2 VHS demos**: Query execution, query history cycling
 
 ## Strengths
+
 - Clean immutable/fluent patterns throughout (all `with*()` return new instances)
 - SugarCraft `Model` contract (`init()`/`update()`/`view()`) precisely followed
 - Comprehensive test coverage via `:memory:` PDO fixtures (60+ methods)
@@ -43,6 +46,7 @@ candy-query/src/
 - PRAGMA results wrapped in typed value objects catching mis-indexed access at construction
 
 ## Weaknesses
+
 - SQLite-only — `Database` is a sealed concrete class with no interface
 - No row editing TUI — `CellEditor` exists but not wired into `App`
 - No pagination controls in TUI — `ResultPager` exists but no keybindings
@@ -78,6 +82,7 @@ candy-query/src/
 ## Critical Priority
 
 ### 1. Multi-Driver Database Interface
+
 - **Title**: Extract `Database` into an interface enabling MySQL/Postgres drivers
 - **Description**: `Database` is explicitly designed as "promote to interface the day a second driver lands." Currently sealed concrete SQLite-only.
 - **Why it matters**: Caps the product at SQLite-only. Every competing SQL browser supports multiple databases.
@@ -87,6 +92,7 @@ candy-query/src/
 - **Expected impact**: Unlocks production use cases beyond SQLite
 
 ### 2. Row Editing TUI
+
 - **Title**: Wire `CellEditor` into the App with inline cell editing
 - **Description**: `CellEditor` exists with `updateCell()`, `updateRow()`, `readCell()` but is not connected to any pane or keybinding.
 - **Why it matters**: Users cannot edit data — a database browser without editing is severely limited.
@@ -96,6 +102,7 @@ candy-query/src/
 - **Expected impact**: Core workflow capability
 
 ### 3. Pagination Controls in TUI
+
 - **Title**: Connect `ResultPager` to keyboard controls (`<`/`>` or `PageUp`/`PageDown`)
 - **Description**: `ResultPager` exists with `nextPage()`/`prevPage()`/`goToPage()` but no TUI controls. `Database::rows()` has `LIMIT 100` hardcoded.
 - **Why it matters**: Tables with >100 rows cannot be fully browsed. Only first 13 rows shown in render.
@@ -107,6 +114,7 @@ candy-query/src/
 ## High Value Priority
 
 ### 4. Schema Sidebar Tree
+
 - **Title**: Replace flat table list with expandable tree showing columns, indexes, FKs
 - **Description**: Tables pane shows alphabetically sorted flat list. `SchemaBrowser` already exposes full schema but it's not rendered.
 - **Why it matters**: Users need to see column types, primary keys, foreign keys to write queries. Every competitor has this.
@@ -116,6 +124,7 @@ candy-query/src/
 - **Expected impact**: Core usability feature
 
 ### 5. Column Sorting
+
 - **Title**: Add asc/desc sort keybindings on column headers or `K`/`J` keys
 - **Description**: No sorting capability — results appear in database order.
 - **Why it matters**: Users browsing data need sorted views. Essential feature in every table component.
@@ -125,6 +134,7 @@ candy-query/src/
 - **Expected impact**: High usability improvement
 
 ### 6. Row Filtering / WHERE Clause
+
 - **Title**: Add `/` key to open WHERE-clause filter input
 - **Description**: No filtering — users must write SQL to filter results.
 - **Why it matters**: Browsing a 100k-row table without filtering is impractical. Standard TUI table feature.
@@ -134,6 +144,7 @@ candy-query/src/
 - **Expected impact**: Essential for large tables
 
 ### 7. Query Snippet Picker UI
+
 - **Title**: Wire `SnippetStore` into a TUI picker accessible from Query pane
 - **Description**: `SnippetStore` class is fully implemented and tested but has no TUI integration.
 - **Why it matters**: Users cannot browse/insert saved snippets from UI. Requires manual typing.
@@ -145,6 +156,7 @@ candy-query/src/
 ## Medium Priority
 
 ### 8. Tabbed Interface (Multiple Open Tables)
+
 - **Title**: Support multiple open tables/queries as tabs
 - **Description**: Only one table or query result can be active at a time.
 - **Why it matters**: Comparing data across tables requires constant switching. Power users need multiple views.
@@ -154,6 +166,7 @@ candy-query/src/
 - **Expected impact**: Power-user workflow
 
 ### 9. Query History Persistence
+
 - **Title**: Persist query history across sessions to file
 - **Description**: Query history lives only in App state for current session.
 - **Why it matters**: Losing history on exit is disruptive — users expect persistence.
@@ -163,6 +176,7 @@ candy-query/src/
 - **Expected impact**: UX polish
 
 ### 10. Connection Management
+
 - **Title**: In-app UI to add/edit/delete database connections
 - **Description**: Opens one SQLite file at a time via CLI argument. No way to manage connections from within TUI.
 - **Why it matters**: Production use requires connecting to different databases. Even SQLite-only could have an in-app file picker.
@@ -172,6 +186,7 @@ candy-query/src/
 - **Expected impact**: Usability for switching contexts
 
 ### 11. Fuzzy Snippet Search
+
 - **Title**: Upgrade `SnippetStore::search()` to fuzzy matching
 - **Description**: `search()` does case-insensitive substring match only.
 - **Why it matters**: Fuzzy matching (like `fuzzy.Find()` in Go's `sahilm/fuzzy`) is superior for human input with typos.
@@ -181,6 +196,7 @@ candy-query/src/
 - **Expected impact**: Better snippet discovery
 
 ### 12. Read-Only Mode
+
 - **Title**: Block mutation queries (DROP, DELETE, UPDATE, INSERT) in read-only config
 - **Description**: Any SQL can be executed including destructive mutations.
 - **Why it matters**: Browsing production databases requires safety against accidental mutations.
@@ -192,6 +208,7 @@ candy-query/src/
 ## Low Priority
 
 ### 13. External Editor for SQL
+
 - **Title**: Open query in `$SQL_EDITOR` (vim, nano, etc.)
 - **Description**: No external editor integration.
 - **Why it matters**: Long SQL queries are easier to edit in a proper editor.
@@ -201,6 +218,7 @@ candy-query/src/
 - **Expected impact**: Power-user editing
 
 ### 14. CSV Import TUI
+
 - **Title**: Wire `Database::importCsv()` into a TUI flow
 - **Description**: CSV import exists but requires calling the method directly.
 - **Why it matters**: Data import is a common workflow not accessible from TUI.
@@ -210,6 +228,7 @@ candy-query/src/
 - **Expected impact**: Completeness
 
 ### 15. Mouse Click Support
+
 - **Title**: Enable mouse click navigation in tables and rows panes
 - **Description**: No mouse handling — keyboard only.
 - **Why it matters**: Clicking table names / rows is expected UX for most users.
@@ -219,6 +238,7 @@ candy-query/src/
 - **Expected impact**: Accessibility/usability
 
 ### 16. JSON Viewer for JSON Values
+
 - **Title**: Toggle formatted JSON view with `z`/`Z` key
 - **Description**: JSON values are shown as collapsed/expanded single line based on column width.
 - **Why it matters**: Browsing JSON columns needs full formatting.
@@ -232,6 +252,7 @@ candy-query/src/
 # Algorithm / Performance Opportunities
 
 ## Virtual Scrolling for Large Result Sets
+
 - **Current**: `ResultTable` renders first `DEFAULT_PAGE_SIZE` (25) rows via `array_slice($this->rows, 0, self::DEFAULT_PAGE_SIZE)`. Full row set is held in memory.
 - **External approach**: bubble-table and Evertras/bubble-table use `visibleRowCache` invalidated on data change. ratatui table with large datasets (#1004) shows 1-2s lag when rendering all rows.
 - **Why external is better**: Only visible rows + buffer are rendered, avoiding O(N) per-frame cost.
@@ -239,6 +260,7 @@ candy-query/src/
 - **Applicability**: High — `ResultTable` and `ResultPager` would benefit from virtual scrolling for 10k+ row tables.
 
 ## Dirty Flag Rendering
+
 - **Current**: App::view() renders on every Program tick regardless of state change.
 - **External approach**: ratatui's dirty-flag rendering (issue #1338) shows 50x CPU improvement for static content — buffer diffing every frame is expensive.
 - **Why external is better**: Continuous rendering at 60fps even for unchanged output wastes CPU.
@@ -246,6 +268,7 @@ candy-query/src/
 - **Applicability**: Medium — candy-core's Program loop should support dirty-flag rendering; the pattern would benefit all SugarCraft apps.
 
 ## Layout Caching
+
 - **Current**: `ResultTable::computeColWidths()` runs a full pass over all rows at construction time. Renderer recomputes on every view() call.
 - **External approach**: ratatui layout caching (PR #22) showed 7.5x speedup via reference-based constraints + fast hashing. candy-shine should cache layout.
 - **Why external is better**: Column width computation is O(rows × cols) at construction — acceptable but not memoized across re-renders.
@@ -253,6 +276,7 @@ candy-query/src/
 - **Applicability**: Low-Medium — widths computed once at construction, not re-computed per render.
 
 ## Horizontal Scroll Performance
+
 - **Current**: `ResultTable::scrollRight()` returns new instance, recomputes `visibleColCount()` via `floor($this->visibleWidth / cellWidth())`. `cellWidth()` uses average column width.
 - **External approach**: bubble-table's `WithMaxTotalWidth` + horizontal scroll is simpler; frozen columns via `WithHorizontalFreezeColumnCount`.
 - **Why external is better**: candy-query's average-based `cellWidth()` can under/overshoot visible count on heterogeneous column widths.
@@ -264,18 +288,23 @@ candy-query/src/
 # Architecture Improvements
 
 ## Extract Database Interface Now
+
 The README explicitly states "promoting to an interface is a one-class job once the second driver lands." The interface contract is already clear from the 7 public methods. **Extract `DatabaseInterface` now** so that the `App` factory (`App::start(DatabaseInterface $db)`) is driver-agnostic from day one. This is low-cost now and enables the MySQL/Postgres port without restructuring.
 
 ## Schema Value Object Promotion
+
 `SchemaBrowser` currently returns private value objects (`SchemaTable`, `SchemaColumn`, `SchemaIndex`, `SchemaForeignKey`). These should be promoted to first-class exported classes so `SnippetStore::load()`-style code can reference them externally. Add `@template` generic annotations for IDE autocomplete.
 
 ## CellEditor Integration
+
 `CellEditor` requires `pdo` + `tableName` + `primaryKeyColumn` at construction. The App already knows the selected table and its schema. Pass `SchemaBrowser` to a `CellEditor` and let it auto-detect the primary key from `SchemaColumn::primaryKey`. This simplifies the wiring.
 
 ## Query Result as Shared Type
+
 `Database::query()` returns `list<array<string,mixed>>` but this is not typed as a value object. Create a `QueryResult` readonly class containing `rows`, `columns` (derived), `affected` (for mutations), and `timing` (optional). This enables `ExplainView::run()` to accept a `QueryResult` rather than a `Database` directly, improving testability.
 
 ## Overlay/Modal System
+
 For snippet picker, connection manager, and JSON viewer, consider a minimal `Overlay` helper following bubbletea-overlay patterns (`docs/repo_map/pr_rmhubbert_bubbletea-overlay.md`):
 ```php
 interface Renderable { public function render(): string; }
@@ -288,18 +317,22 @@ This avoids building a full framework and keeps compositing logic separate.
 # API / Developer Experience Improvements
 
 ## Named Constructors for ResultTable
+
 `ResultTable::fromRows($rows)` is the only factory. Add `ResultTable::fromDatabase(Database $db, string $sql)` for direct execution, and `ResultTable::fromPager(ResultPager $pager)` for wrapping paginated results.
 
 ## Builder Pattern for App
+
 `App::start(Database $db)` is the entry point but constructing App manually requires 12 arguments. Add a `AppBuilder`:
 ```php
 $app = AppBuilder::new()->withDatabase($db)->withReadOnly(true)->withPageSize(50)->build();
 ```
 
 ## Consistent Error Types
+
 `Database::tables()` returns `[]` on failure — silent empty array hides errors. Consider `Result<List<string>>` or at minimum a `bool $hadError` output parameter. `Database::query()` throws `PDOException` which is correct.
 
 ## SnippetStore File Location
+
 `/tmp/candy-query-snippets.json` should be `~/.config/candy-query/snippets.json` (respecting XDG on Linux). Use `getenv('HOME') . '/.config/candy-query/'` or the `~` expansion pattern.
 
 ---
@@ -307,18 +340,22 @@ $app = AppBuilder::new()->withDatabase($db)->withReadOnly(true)->withPageSize(50
 # Documentation / Cookbook Opportunities
 
 ## Query Editor Cookbook
+
 Document common SQL patterns: `SELECT * FROM tbl WHERE id > ?`, `JOIN` syntax, `PRAGMA` commands, `EXPLAIN QUERY PLAN` interpretation.
 
 ## SchemaBrowser API Examples
+
 The README shows basic usage but doesn't show iterating indexes or foreign keys. Add examples for:
 - Finding tables with FKs pointing to a given table
 - Detecting tables without primary keys
 - Listing all indexes for a table with their columns
 
 ## Explaining the Pane Architecture
+
 The 3-pane model (Tables → Rows → Query) should be documented with a state diagram showing transitions. This helps contributors understand the update routing.
 
 ## i18n Contribution Guide
+
 15 locales are translated. Document the translation workflow — how to add a new locale, which keys exist, where to find them.
 
 ---
@@ -326,21 +363,27 @@ The 3-pane model (Tables → Rows → Query) should be documented with a state d
 # UX / TUI Improvements
 
 ## Status Line Enhancement
+
 Currently shows row count or error. Consider: elapsed query time, selected table schema summary, current page indicator.
 
 ## Vim Keybindings Extension
+
 `j/k` work in Tables and Rows panes. Add `g`/`G` for go-to-top/bottom, `Ctrl+U`/`Ctrl+D` for half-page scroll, `/` for search (as filter trigger).
 
 ## Help Overlay
+
 Add `?` key to show help overlay listing all keybindings for current pane. Uses same overlay pattern as snippet picker.
 
 ## Syntax Highlighting in Query Editor
+
 SQL keywords (SELECT, FROM, WHERE, etc.) could be coloured differently from identifiers. Use regex-based tokenizer at render time — no full SQL parser needed.
 
 ## Error Highlighting
+
 PDOException messages are long. Truncate to 2 lines with expandable detail on `e` key or show only first line in status, full message in a dedicated error pane.
 
 ## Zebra Striping in ResultTable
+
 Evertras/bubble-table uses `RowStyleFunc` for zebra striping. Add optional `withZebra()` style in `ResultTable` for alternating row background colours.
 
 ---
@@ -348,18 +391,23 @@ Evertras/bubble-table uses `RowStyleFunc` for zebra striping. Add optional `with
 # Testing / Reliability Improvements
 
 ## Property-Based Testing
+
 Add `PHPUnit` data providers generating random SQL queries and verifying `Database::query()` never throws on valid SQLite syntax. Use `fakerphp/faker` for schema generation.
 
 ## Fuzz Testing on Identifier Escaping
+
 The `str_replace('"', '""', $name)` approach handles basic cases but could miss edge cases with Unicode identifiers. Add explicit tests for Unicode table/column names, names with backticks, names starting with numbers.
 
 ## Snapshot Tests for ANSI Output
+
 `ResultTable` already does snapshot-style testing via `RendererTest`. Extend to `ExplainView` output and `ResultTable::render()` with various column widths to catch regression in ANSI formatting.
 
 ## Mutation Testing
+
 Use `infection/infection` to verify tests actually catch bugs (i.e., mutating `offset + 1` to `offset + 2` should fail tests).
 
 ## Test SnippetStore Corruption Path
+
 `SnippetStore::load()` guards against corrupt JSON but this path is not explicitly tested with an actual corrupt file — only unit-test mocks are used.
 
 ---
@@ -367,15 +415,19 @@ Use `infection/infection` to verify tests actually catch bugs (i.e., mutating `o
 # Ecosystem / Integration Opportunities
 
 ## Plugin Architecture for Drivers
+
 Following ratatui's third-party widget ecosystem pattern, declare `sugarcraft/database-*` packages as official driver extensions. A `composer require sugarcraft/database-mysql` installs the MySQL driver, and `App::start()` auto-discovers it.
 
 ## candy-query as a Teaching Example
+
 The codebase is clean enough to serve as the canonical SugarCraft example app. Create `examples/` demonstrating each component in isolation: `Database` standalone, `SchemaBrowser` standalone, `ResultTable` standalone.
 
 ## Share ResultTable with sugar-bits
+
 `ResultTable` in candy-query is a specialized result set renderer. Consider extracting a general-purpose `Table` component to `sugar-bits` that `ResultTable` composes, so other SugarCraft apps can use the scrolling table.
 
 ## Export sugar-query as a Reusable Component
+
 The `App` class is `final` and directly constructs its own state. Consider extracting the `start(Database $db)` factory into a `BrowserApp` class that accepts a `DatabaseInterface`, making it reusable with MySQL/Postgres drivers without modification.
 
 ---
@@ -383,21 +435,27 @@ The `App` class is `final` and directly constructs its own state. Consider extra
 # Notable PRs / Issues / Discussions
 
 ## lazysql: Multi-Driver Architecture (upstream)
+
 lazysql's Go architecture uses separate driver packages (`pgx` for Postgres, `go-sql-driver` for MySQL, `go-sqlite3` for SQLite, `go-mssql` for MSSQL). This is the target architecture for the Database interface. Each driver has identical interface methods returning native Go types. For PHP, PDO already provides this abstraction — the interface is straightforward.
 
 ## bubbletea-overlay: Viewable Interface (PR #19, Dec 2025)
+
 `rmhubbert/bubbletea-overlay` relaxed from requiring `tea.Model` to requiring only `View() string`. This lesson applies directly: candy-query's overlay/snippet picker should accept `Renderable { render(): string }` rather than requiring `Model`. Full discussion in `docs/repo_map/pr_rmhubbert_bubbletea-overlay.md`.
 
 ## ratatui #1004: Table Performance with Large Datasets
+
 Critical issue: 15k items causes 1-2s render lag. Root causes: O(N) conversion to vec at construction, `text().height()` called for all items, all items create Spans even when off-screen. **Solution**: dirty-flag rendering (50x CPU improvement), virtual scrolling (only render visible items + buffer). For candy-query: `ResultTable` holds full result set but only renders first 25 rows — already has a form of virtualization but could memoize per-offset column widths.
 
 ## textualize #6381: GC Stuttering with MarkdownViewer
+
 MarkdownViewer creates hundreds of `MarkdownBlock` child widgets, each holding 3+ reference cycles through Styles objects, causing Python gen2 GC pauses of 50-200ms. **Lesson for candy-query**: The `Style` objects in candy-sprinkles should not hold strong references to parent App/Model objects. Use weak references or clear parent references on render completion.
 
 ## bubble-table: Fuzzy Filtering (bubbles List + sahilm/fuzzy)
+
 The `sahilm/fuzzy` library provides `Find()` returning ranked matches with character indices for highlighted filtering. bubble-table uses this in `List` and `gum filter` uses it. For candy-query, fuzzy search in `SnippetStore` would be a direct benefit. The PHP port or equivalent algorithm is needed.
 
 ## ratatui #1855: Layout Constraint Solver Hanging
+
 Cassowary constraint solver hangs with 100% CPU on certain constraint combinations. Root cause: non-deterministic `HashMap` behavior. Fix: `HashMap<Symbol, Row, BuildHasherDefault<SimpleStateHasher>>` for deterministic hashing. **Lesson**: If candy-shine uses any constraint solver, use deterministic hashing.
 
 ---
@@ -405,12 +463,14 @@ Cassowary constraint solver hangs with 100% CPU on certain constraint combinatio
 # Recommended Roadmap
 
 ## Immediate Wins (0–2 weeks)
+
 1. Extract `DatabaseInterface` from `Database` — enables MySQL/Postgres future ports without restructuring
 2. Add pagination controls (`<`/`>` keys in Rows pane) — connects existing `ResultPager`
 3. Add column sorting (`K`/`J` keys in Rows pane) — rebuilds query with `ORDER BY`
 4. Add query history persistence to `~/.config/candy-query/history.json` — use same pattern as `SnippetStore`
 
 ## Medium-term Improvements (1–3 months)
+
 5. Wire `CellEditor` into Rows pane for inline cell editing
 6. Add expandable schema tree sidebar — shows columns, indexes, FKs for selected table
 7. Build query snippet picker overlay (`Ctrl+S`) — composite rendering with `SnippetStore::search()`
@@ -420,6 +480,7 @@ Cassowary constraint solver hangs with 100% CPU on certain constraint combinatio
 11. Add `ResultTable::fromPager()` and `ResultTable::fromDatabase()` factories
 
 ## Major Architectural Upgrades (3–6 months)
+
 12. Tabbed interface for multiple open tables/queries
 13. Row filtering (`/` key → WHERE clause builder)
 14. Mouse click support in Tables and Rows panes
@@ -428,6 +489,7 @@ Cassowary constraint solver hangs with 100% CPU on certain constraint combinatio
 17. JSON viewer overlay for JSON columns (`z`/`Z` key)
 
 ## Experimental Ideas
+
 18. External editor integration (`$SQL_EDITOR`) via PTY
 19. Fuzzy query auto-completion using LLM
 20. TUI-side query plan visualization with cost estimation

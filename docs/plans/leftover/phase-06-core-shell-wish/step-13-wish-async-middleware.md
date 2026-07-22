@@ -12,16 +12,19 @@ stalling the chain.
 ## Files
 
 **Modify:**
+
 - `candy-wish/src/Middleware/Middleware.php` — handler can return
   `void` (existing) OR `\React\Promise\PromiseInterface` (new).
 - `candy-wish/src/Server.php` — awaits promises before continuing
   the chain.
 
 **Create:**
+
 - `candy-wish/src/Middleware/AsyncMiddleware.php` — abstract base for
   promise-returning middleware.
 
 **Tests:**
+
 - `candy-wish/tests/Middleware/AsyncMiddlewareTest.php`.
 
 ## Acceptance

@@ -5,6 +5,7 @@
 **candy-query** is a terminal SQLite browser built on the SugarCraft stack, porting the Go ecosystem `jorgerojas26/lazysql` to PHP. It is `final` classes, `declare(strict_types=1)`, PSR-4, PHP 8.3+, and requires only `ext-pdo_sqlite`. The architecture is deliberately narrow at v1 — SQLite-only — with a clear interface path to MySQL/Postgres once a second driver lands.
 
 **Key statistics:**
+
 - **9 source files** in `src/` (App, Database, SchemaBrowser, Renderer, ResultTable, ResultPager, CellEditor, SnippetStore, ExplainView, Pane enum, plus 4 schema value objects)
 - **7 test files** with 60+ test methods covering all major operations
 - **2 example scripts** (play.php, query-history.tape)
@@ -379,6 +380,7 @@ public function query(string $sql): array
 ```
 
 **Key differences from lazysql:**
+
 - lazysql uses database-driver-specific Go libraries (pgx for Postgres, go-sql-driver for MySQL, etc.)
 - candy-query uses PDO which provides a uniform interface but with less driver-specific optimization
 - No query parameterization in candy-query — all values are embedded in the SQL string directly via prepared statement binding
@@ -547,6 +549,7 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 ## File References
 
 ### Core Source Files
+
 - `/home/sites/sugarcraft/candy-query/src/App.php` — 415 lines, SugarCraft Model
 - `/home/sites/sugarcraft/candy-query/src/Database.php` — 234 lines, PDO wrapper + export
 - `/home/sites/sugarcraft/candy-query/src/SchemaBrowser.php` — 229 lines, PRAGMA introspection
@@ -560,6 +563,7 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 - `/home/sites/sugarcraft/candy-query/src/Lang.php` — 22 lines, i18n facade
 
 ### Tests
+
 - `/home/sites/sugarcraft/candy-query/tests/AppTest.php` — 16 methods (pane cycling, query editing, history, favorites)
 - `/home/sites/sugarcraft/candy-query/tests/DatabaseTest.php` — 14 methods (CRUD, CSV/SQL export/import)
 - `/home/sites/sugarcraft/candy-query/tests/SchemaBrowserTest.php` — 8 methods (PRAGMA parsing)
@@ -570,16 +574,19 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 - `/home/sites/sugarcraft/candy-query/tests/ExplainViewTest.php` — 10 methods (tag classification, depth)
 
 ### Examples & Demos
+
 - `/home/sites/sugarcraft/candy-query/examples/play.php` — In-memory demo (31 lines)
 - `/home/sites/sugarcraft/candy-query/.vhs/play.tape` / `play.gif` — Query execution demo
 - `/home/sites/sugarcraft/candy-query/.vhs/query-history.tape` / `query-history.gif` — History cycling demo
 
 ### Configuration
+
 - `/home/sites/sugarcraft/candy-query/composer.json` — Requires candy-core, candy-sprinkles; path repos
 - `/home/sites/sugarcraft/candy-query/phpunit.xml` — Bootstrap vendor/autoload.php, colors=true
 - `/home/sites/sugarcraft/candy-query/bin/candy-query` — CLI entry point (31 lines)
 
 ### Documentation
+
 - `/home/sites/sugarcraft/candy-query/README.md` — 160 lines, architecture table, usage examples
 - `/home/sites/sugarcraft/candy-query/CALIBER_LEARNINGS.md` — 4 accumulated patterns
 - `/home/sites/sugarcraft/candy-query/lang/en.php` + 15 locales — i18n strings
@@ -591,6 +598,7 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 **candy-query** is a well-structured, focused SQLite browser that ports the core lazysql workflow (browse tables, preview rows, run SQL) to PHP with the SugarCraft stack. Its architecture demonstrates several mature patterns: immutable state throughout, typed schema value objects from raw PRAGMA arrays, horizontal-scrolling result rendering, and a clean separation between the database layer and the TUI model.
 
 **Strengths:**
+
 - Clean SugarCraft `Model` integration — follows the `init()`/`update()`/`view()` contract precisely
 - Immutable + fluent patterns throughout (ResultPager, ResultTable, SnippetStore)
 - Comprehensive test coverage with `:memory:` PDO fixtures (60+ test methods)
@@ -600,6 +608,7 @@ No other SQL browser TUI ports exist in the repo_map. Notable SQL-related tools 
 - VHS demo recordings for CI regression testing
 
 **Gaps relative to upstream:**
+
 - SQLite-only (no multi-driver interface yet)
 - No row editing TUI (CellEditor exists but not wired up)
 - No pagination controls, no schema sidebar, no tabs

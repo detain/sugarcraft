@@ -57,6 +57,7 @@ private function tryRotate(int $delta): self
 ```
 
 **Issues:**
+
 - Only horizontal kicks (±1, ±2) - no vertical kicks
 - No distinction between piece types (I vs J/L/S/T/Z)
 - No distinction between clockwise/counter-clockwise rotations
@@ -109,6 +110,7 @@ var RotationCompasses = map[byte]RotationCompass{
 ```
 
 **Key differences:**
+
 - Full 5-offset SRS wall-kick tables per rotation state
 - I-piece has unique kick data (larger kicks due to size)
 - O-piece has no kicks (always at center)
@@ -182,6 +184,7 @@ public function withLines(int $cleared): self
 ```
 
 **This is NES-style scoring:**
+
 - Single: 40 × (level+1)
 - Double: 100 × (level+1)
 - Triple: 300 × (level+1)
@@ -206,6 +209,7 @@ From [Tetris Wiki Scoring](https://tetris.wiki/Scoring):
 | Hard drop | 2 per cell |
 
 **Key features in modern scoring:**
+
 1. **T-Spin detection** - awards bonus for rotating T into tight spaces
 2. **Back-to-Back (B2B)** - 1.5× multiplier for consecutive difficult clears
 3. **Combo system** - consecutive line clears earn bonus × combo_count
@@ -271,6 +275,7 @@ final class Bag
 ```
 
 **Status:** ✅ **This is correct and complete.**
+
 - Uses proper Fisher-Yates shuffle
 - 7-bag system guarantees all 7 pieces appear before any repeats
 - Injectable RNG for deterministic testing
@@ -325,6 +330,7 @@ public function dropPiece(Piece $piece): Piece
 ```
 
 **Status:** ✅ **Correct implementation.**
+
 - Ghost is computed by dropping piece until collision
 - Ghost rendered with dimmed style (`ghost()` method)
 - Ghost appears under live piece in render order
@@ -348,6 +354,7 @@ The candy-tetris implementation follows the standard guideline approach.
 ### 5.1 DAS (Delayed Auto-Shift)
 
 **Not implemented.** Guideline specifies:
+
 - Initial delay: 150-180ms before repeat starts
 - Repeat rate: 50-80ms between shifts
 
@@ -373,6 +380,7 @@ The candy-tetris implementation follows the standard guideline approach.
 **Currently implemented** with movement reset (15 ticks).
 
 Guideline specifies 3 modes:
+
 1. **Lock Delay Only** - locks after N moves/rotations regardless of downward movement
 2. **Movement Reset** - resets timer on movement (current implementation)
 3. **Diminishing Lock Delay** - timer speeds up with each reset
@@ -470,6 +478,7 @@ final class RotationSystem
      * @param int $fromState Current rotation state (0-3)
      * @param int $toState Target rotation state (0-3)
      * @return array<array{int,int}> Array of [dx, dy] offset pairs to try
+
      */
     public static function getKicks(Tetromino $kind, int $fromState, int $toState): array
     {
@@ -556,6 +565,7 @@ Create test cases from official SRS test suite (see [Tetris Wiki SRS](https://te
 ## 8. References
 
 ### Documentation
+
 - [Tetris Wiki - SRS](https://tetris.wiki/SRS)
 - [Tetris Wiki - Scoring](https://tetris.wiki/Scoring)
 - [Tetris Wiki - Guideline](https://tetris.wiki/Guideline)
@@ -563,12 +573,14 @@ Create test cases from official SRS test suite (see [Tetris Wiki SRS](https://te
 - [Tetris Wiki - Wall Kick](https://tetris.wiki/Wall_kick)
 
 ### Implementations
+
 - [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) - Go implementation
 - [DylanBulfin/tetrs](https://github.com/DylanBulfin/tetrs) - Rust implementation
 - [SamillWong/PPTetris](https://github.com/SamillWong/PPTetris) - C++ implementation
 - [lyze/Tetris](https://github.com/lyze/Tetris) - Java implementation
 
 ### Game Variants
+
 - [Classic Tetris World Championship (CTWC)](http://www.ClassicTetris.com/)
 - [BST (Basic Style Tetris)](https://tetris.wiki/BST) - Tournament standard before guideline
 

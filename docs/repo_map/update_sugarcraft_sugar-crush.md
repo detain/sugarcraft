@@ -3,6 +3,7 @@
 **sugar-crush** is SugarCraft's port of `charmbracelet/crush` — a chat-shell TUI for AI coding assistants with pluggable backends, markdown rendering via CandyShine, scrollback viewport, and session persistence. It is 🟢 v1 ready with 158 tests / 444 assertions.
 
 **Biggest opportunity areas:**
+
 1. **Streaming UI** — Real-time token rendering as they arrive (not after complete response)
 2. **Chat history persistence** — JSONL-based session storage for conversation resumption
 3. **Context compaction** — Auto-truncation when approaching token limits
@@ -10,6 +11,7 @@
 5. **MCP ecosystem integration** — HTTP/SSE transports beyond stdio-only Claude Code
 
 **Biggest missing capabilities:**
+
 1. **No LSP/code intelligence integration** — No gopls, tsserver equivalent
 2. **No real multi-step agentic loops** — Tool calling is sequential, not parallel
 3. **No permission system** — Tool execution has no allow-list/confirmation prompts
@@ -151,6 +153,7 @@ final class ToolResult {
 ## Critical Priority
 
 ### 1. Loop Detection
+
 **Title:** Infinite loop protection in agent tool execution
 
 **Description:** The upstream crush had a critical bug (#2130, fixed by PR #2214) where agents could get stuck in infinite loops calling the same tool repeatedly. The fix required adding both a step counter and repeated-tool-call detection (>5 times in last 10 steps) plus a max steps limit.
@@ -160,6 +163,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — Issue #2130, PR #2214
 
 **Implementation ideas:**
+
 - Add `maxSteps` parameter to Chat model
 - Track tool call frequency: `array<string, int>` with sliding window of last 10 calls
 - If same tool called >5 times in window → raise `LoopDetectedMsg`
@@ -170,6 +174,7 @@ final class ToolResult {
 **Expected impact:** Critical — enables reliable autonomous operation
 
 ### 2. Permission System
+
 **Title:** Per-tool execution allow-lists with confirmation prompts
 
 **Description:** The upstream crush had a broken safelist bypass vulnerability (#2368) where commands like `echo "data" > file.txt` bypassed permission prompts because `echo` was on the safe-list. Session-wide grants (#497) were also dangerous — granting "Allow for session" approved ALL bash commands, not just the one requested.
@@ -179,6 +184,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — Issues #2368, #497
 
 **Implementation ideas:**
+
 - Pattern-based matching (regex) for tool names, not just exact names
 - Per-invocation granularity, not session-wide
 - Tool allow-list + confirmation prompt + cache for session
@@ -189,6 +195,7 @@ final class ToolResult {
 **Expected impact:** Critical — enables safe autonomous operation
 
 ### 3. Context Budget Management
+
 **Title:** Token counting and auto-compaction for long conversations
 
 **Description:** The upstream crush had multiple compaction bugs: undefined `err` variable silently swallowing errors (#472), no timeout on compaction, compaction triggering when context was nearly full but model too small for summarization (#727). Auto-compaction must account for model context window size.
@@ -198,6 +205,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — Issues #472, #727
 
 **Implementation ideas:**
+
 - Add `TokenCounter` service estimating context usage
 - Track: tokens used, remaining, model limits
 - Compaction trigger: configurable threshold (e.g., 80% of context window)
@@ -211,6 +219,7 @@ final class ToolResult {
 ## High Value
 
 ### 4. Streaming UI
+
 **Title:** Real-time token rendering as they arrive
 
 **Description:** Currently tokens are accumulated before rendering. The StreamingCommandBackend receives tokens line-by-line via `$onToken` callback, but the UI only updates after the complete response. Users see no feedback while waiting.
@@ -220,6 +229,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — PR analysis shows streaming was a key feature
 
 **Implementation ideas:**
+
 - Add partial message state to Chat: `?string $partialContent`
 - `StreamingCommandBackend::completeAsync()` dispatches `PartialTokenMsg` as tokens arrive
 - Chat's `update()` handles `PartialTokenMsg` to update `partialContent`
@@ -230,6 +240,7 @@ final class ToolResult {
 **Expected impact:** High — major UX improvement
 
 ### 5. Chat History Persistence
+
 **Title:** JSONL-based session storage for conversation resumption
 
 **Description:** Session currently persists only UI state (cwd, selected files, filter, sort). Chat history is ephemeral — passed to backends each turn but never saved. Users cannot resume conversations.
@@ -239,6 +250,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — PR #2373 (CLI session management), Issue #1965 (chat export)
 
 **Implementation ideas:**
+
 - Add `ChatHistory` class persisting to `~/.config/sugarcraft-crush/history/<session-id>.jsonl`
 - Each line: JSON-encoded Message with metadata (timestamp, model used)
 - `ChatHistory::load(sessionId)` / `ChatHistory::save(sessionId, messages)`
@@ -249,6 +261,7 @@ final class ToolResult {
 **Expected impact:** High — enables practical long-term use
 
 ### 6. MCP Additional Transports
+
 **Title:** HTTP and SSE transport support beyond stdio
 
 **Description:** Currently McpClient only supports stdio transport (Claude Code). MCP spec supports stdio, HTTP, and SSE transports.
@@ -258,6 +271,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — MCP transports discussion
 
 **Implementation ideas:**
+
 - Add `McpTransport` interface with `send(Message): ?Message`
 - Implement `StdioTransport`, `HttpTransport`, `SseTransport`
 - Update `McpClient` to accept transport via constructor
@@ -268,6 +282,7 @@ final class ToolResult {
 **Expected impact:** Medium — opens MCP ecosystem
 
 ### 7. Hooks System
+
 **Title:** PreToolUse and other hooks for customization
 
 **Description:** The upstream crush implemented hooks (PR #2598) for PreToolUse with pattern matching. This enables permission checks and arbitrary custom logic without modifying tool implementations.
@@ -277,6 +292,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — PR #2598, Discussion #1336
 
 **Implementation ideas:**
+
 - Add `HookRunner` class with `before/after` hook arrays
 - Hook signature: `function(ToolCall): ?ToolResult` (return null = proceed)
 - Pattern matching on tool names via regex
@@ -287,6 +303,7 @@ final class ToolResult {
 **Expected impact:** Medium — enables enterprise customization
 
 ### 8. Built-in File Tools
+
 **Title:** read/write/edit/glob/grep via ToolRegistry
 
 **Description:** Upstream crush had comprehensive built-in tools: view, edit, bash, grep, etc. sugar-crush has only 5 viewport-related tools (filter, sort, goto, select, quit).
@@ -296,6 +313,7 @@ final class ToolResult {
 **Source repo:** `docs/repo_map/pr_charmbracelet_crush.md` — tool system analysis
 
 **Implementation ideas:**
+
 - Add `ReadTool`, `WriteTool`, `EditTool`, `GlobTool`, `GrepTool` classes
 - Register via `Chat::registerTool()` in constructor
 - Each tool validates paths, handles errors gracefully
@@ -308,6 +326,7 @@ final class ToolResult {
 ## Medium Priority
 
 ### 9. Plan/Build Mode Separation
+
 **Title:** Explicit read-only planning mode
 
 **Description:** Claude Code's shift-tab pattern provides plan mode with enforced read-only restrictions. Upstream crush requested this (issue #1734, 28 reactions) and implemented it (PR #2019).
@@ -315,6 +334,7 @@ final class ToolResult {
 **Why it matters:** Plan mode is essential for safety-critical workflows — users want to preview changes before autonomous execution.
 
 **Implementation ideas:**
+
 - Add `Chat::withPlanMode(bool)` and `Chat::planMode: bool` state
 - When `planMode=true`, tool calls to write tools are blocked with user prompt
 - Separate system prompt variant for plan mode
@@ -323,6 +343,7 @@ final class ToolResult {
 **Estimated complexity:** Medium (4-6h)
 
 ### 10. MCP Client — General Purpose
+
 **Title:** Make MCP client not Claude Code-specific
 
 **Description:** Currently `McpClient::forClaudeCode()` is the only documented factory. The client should be a general-purpose MCP client.
@@ -330,6 +351,7 @@ final class ToolResult {
 **Why it matters:** MCP is a standard protocol. A general-purpose client enables integration with any MCP-compatible server.
 
 **Implementation ideas:**
+
 - Generic `McpClient::forServer(command, args, transport)` factory
 - Remove Claude Code-specific assumptions
 - Support `initialize`, `tools/call`, `tools/list` standard methods
@@ -338,6 +360,7 @@ final class ToolResult {
 **Estimated complexity:** Medium (4-6h)
 
 ### 11. Syntax Highlighting
+
 **Title:** Code block highlighting in markdown
 
 **Description:** Currently code blocks render without coloring. The upstream uses glamour for syntax highlighting.
@@ -345,6 +368,7 @@ final class ToolResult {
 **Why it matters:** Syntax highlighting dramatically improves readability of code snippets.
 
 **Implementation ideas:**
+
 - Integrate `candy-highlight` (if exists) or syntax highlighting library
 - Configure via CandyShine options
 - Support common languages
@@ -352,6 +376,7 @@ final class ToolResult {
 **Estimated complexity:** Medium (4-5h)
 
 ### 12. CLAUDE.md Loading
+
 **Title:** Auto-load project context files on startup
 
 **Description:** The upstream crush reads AGENTS.md, CRUSH.md, CLAUDE.md, GEMINI.md from the working directory for project-specific instructions.
@@ -359,6 +384,7 @@ final class ToolResult {
 **Why it matters:** Context files are a standard pattern for providing project-specific instructions to AI coding assistants.
 
 **Implementation ideas:**
+
 - Add `ContextLoader` class to discover context files
 - Search: `./CLAUDE.md`, `./.cody/`, `~/.config/sugarcraft-crush/`
 - Merge context into system prompt on startup
@@ -369,11 +395,13 @@ final class ToolResult {
 ## Low Priority
 
 ### 13. Thinking Blocks
+
 **Title:** Display AI reasoning process (Claude)
 
 **Description:** Claude's thinking blocks are not currently rendered. Upstream crush had this as a future direction.
 
 **Implementation ideas:**
+
 - Detect `thinking` content type from backend
 - Render in collapsible/expandable format
 - Option to toggle display via config
@@ -381,11 +409,13 @@ final class ToolResult {
 **Estimated complexity:** Medium (4h)
 
 ### 14. Custom Themes
+
 **Title:** Theme switching, user styles
 
 **Description:** No theme system exists currently. Upstream crush used glamour themes (auto/dark/light/pink/notty/dracula/TokyoNight).
 
 **Implementation ideas:**
+
 - Add theme enum with common themes
 - Pass theme to CandyShine renderer
 - Support custom JSON stylesheets
@@ -393,11 +423,13 @@ final class ToolResult {
 **Estimated complexity:** Small (2-3h)
 
 ### 15. Subagents
+
 **Title:** Background sub-agents with separate contexts
 
 **Description:** Upstream crush had partial subagent support (PR #914) with configurable models per agent type, but full multi-agent was not achieved.
 
 **Implementation ideas:**
+
 - Add `Agent` class with own model, tools, prompts
 - Coordinator pattern for agent management
 - Inter-agent messaging
@@ -651,6 +683,7 @@ final class BackendAdapter {
 ## 1. Backend Adapter Examples
 
 **Create a custom backend for different providers:**
+
 - OpenAI-compatible API
 - Anthropic Direct
 - Ollama local
@@ -661,6 +694,7 @@ final class BackendAdapter {
 ## 2. Tool Development Guide
 
 **Register custom tools:**
+
 - File system tools (read, write, edit, glob, grep)
 - Shell command execution
 - Git operations
@@ -671,6 +705,7 @@ final class BackendAdapter {
 ## 3. MCP Server Integration
 
 **Connect to MCP servers:**
+
 - File management MCP
 - Database MCP
 - Cloud provider MCPs
@@ -679,6 +714,7 @@ final class BackendAdapter {
 ## 4. Hook Recipes
 
 **Common hook patterns:**
+
 - Permission prompting
 - Command logging
 - Token budget tracking
@@ -699,6 +735,7 @@ final class BackendAdapter {
 **Problem:** No indication of token usage, context budget, or tool execution progress.
 
 **Solution:** Add status bar with:
+
 - Token count / context limit
 - Active tool indicator (spinner)
 - Model name
@@ -736,6 +773,7 @@ Confirm [Enter]  Cancel [Esc]
 **Problem:** No UI for browsing/resuming past sessions.
 
 **Solution:** Add session list TUI:
+
 - List sessions with timestamps
 - Show message count, last model used
 - Resume or delete actions
@@ -850,6 +888,7 @@ final class McpServer {
 **Problem:** No AST-aware code understanding.
 
 **Solution:** Consider TreeSitter PHP grammar for:
+
 - Context packing (feed only relevant AST nodes)
 - AST-aware find-refs/go-to-def
 - Safer edits with blast-radius analysis
@@ -908,6 +947,7 @@ curl -X POST http://localhost:8080/chat -d '{"message": "hello"}'
 **Summary:** Multiple issues opened within days: "slow", "high CPU", "context clearing".
 
 **Root causes:**
+
 - Global `sync.Mutex` replacing lock-free `csync.Map`
 - Tool result handling from up to 5 concurrent goroutines without synchronization
 - Sequential tools blocking ALL dispatch (including parallel ones)
@@ -935,21 +975,25 @@ curl -X POST http://localhost:8080/chat -d '{"message": "hello"}'
 ## Immediate Wins (0-2 months)
 
 ### 1. Loop Detection (P0)
+
 - Add `maxSteps` parameter
 - Track tool call frequency with sliding window
 - Block repeated tool calls
 
 ### 2. Streaming UI (P1)
+
 - Add partial message state to Chat
 - Handle `PartialTokenMsg` in update loop
 - Show partial content with trailing cursor
 
 ### 3. Chat History Persistence (P1)
+
 - Add `ChatHistory` class
 - Persist to JSONL files
 - Session listing/showing CLI
 
 ### 4. Context Budget Management (P1)
+
 - Add `TokenCounter` service
 - Track tokens used/remaining
 - Implement compaction trigger
@@ -957,36 +1001,43 @@ curl -X POST http://localhost:8080/chat -d '{"message": "hello"}'
 ## Medium-term Improvements (2-6 months)
 
 ### 5. Built-in File Tools
+
 - Register read/write/edit/glob/grep
 - Validate paths, handle errors gracefully
 
 ### 6. Hooks System
+
 - Add `HookRunner` class
 - Support PreToolUse and PostToolUse hooks
 - Pattern matching on tool names
 
 ### 7. Permission System
+
 - Pattern-based matching for tool names
 - Per-invocation granularity
 - Confirmation prompts with caching
 
 ### 8. MCP Additional Transports
+
 - HTTP and SSE transport support
 - General-purpose `McpClient`
 
 ## Major Architectural Upgrades (6-12 months)
 
 ### 9. Provider Abstraction Layer
+
 - `Provider` interface
 - Built-in HTTP backends for OpenAI/Anthropic/Ollama
 - Retry logic with exponential backoff
 
 ### 10. Server-Client Architecture
+
 - REST API over Unix socket
 - Headless operation mode
 - Multiple UI clients
 
 ### 11. Subagents
+
 - `Agent` class with own model/tools/prompts
 - Coordinator for multi-agent management
 - Inter-agent messaging
@@ -994,11 +1045,13 @@ curl -X POST http://localhost:8080/chat -d '{"message": "hello"}'
 ## Experimental Ideas
 
 ### 12. TreeSitter Integration
+
 - AST-aware code understanding
 - Context packing with relevant nodes
 - Blast-radius analysis for edits
 
 ### 13. RAG Integration
+
 - Context file loading + semantic search
 - Embeddings stored in vector DB
 - AST-based chunking for PHP code
@@ -1040,6 +1093,7 @@ The upstream crush's archival in March 2026 creates a strategic opportunity: PHP
 4. **Permission system** — Robust, designed upfront, not reactively
 
 The most important lessons from the upstream crush's 18 months of active development are:
+
 - **Permission systems must be foundational**, not incremental
 - **Loop detection is non-negotiable** for autonomous agents
 - **Context budget management** requires explicit design

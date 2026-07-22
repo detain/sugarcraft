@@ -3,6 +3,7 @@
 **candy-shine** is a Markdown-to-ANSI renderer that ports charmbracelet/glamour to PHP, built on `league/commonmark` and the SugarCraft styling ecosystem (`candy-sprinkles`, `candy-core`). It occupies a critical position in the ecosystem as the primary markdown rendering engine for CLI output (used by `sugar-glow`).
 
 **Biggest opportunity areas:**
+
 1. Chroma-equivalent syntax highlighting (regex tokeniser is a critical limitation)
 2. Cascading style inheritance (BlockStack pattern from glamour)
 3. Definition list implementation (declared in Theme but unimplemented)
@@ -10,6 +11,7 @@
 5. Table footer links (glamour's distinctive feature)
 
 **Biggest missing capabilities:**
+
 1. No block-level indent/margin Style abstraction (vs glamour's `StyleBlock`)
 2. No MarginWriter/PaddingWriter composable whitespace abstraction
 3. No FNV link ID hashing for OSC 8 consolidation
@@ -22,6 +24,7 @@
 ## Architecture
 
 **Parser:** `league/commonmark` v2.4 (not goldmark as in upstream glamour)
+
 - `CommonMarkCoreExtension` — headings, paragraphs, code blocks, lists, blockquotes, links, images, emphasis, strong, thematic breaks, HTML blocks/inline
 - `TableExtension` — GFM tables
 - `TaskListExtension` — GFM task list items (`[x]` / `[ ]`)
@@ -97,6 +100,7 @@
 ## Test Suite
 
 ~1,572 assertions across:
+
 - `tests/RendererTest.php` (458 lines)
 - `tests/SyntaxHighlighterTest.php` (770 lines)
 - `tests/ThemeTest.php` (161 lines)
@@ -146,6 +150,7 @@
 ## Critical
 
 ### 1. Proper Syntax Highlighting (Chroma-equivalent)
+
 **Description:** The current regex-based tokeniser cannot handle language grammar properly. Keywords inside string literals get highlighted as keywords. Python keywords are case-sensitive (uppercase `True`/`False`/`None` won't match). SQL keywords are lowercase — `SELECT` won't be highlighted.
 
 **Why it matters:** Code block rendering is a primary use case. Broken highlighting produces visually incorrect output that undermines the library's credibility.
@@ -153,6 +158,7 @@
 **Source:** `charmbracelet/glamour.md` — Chroma integration with 200+ lexers
 
 **Implementation ideas:**
+
 - Port Chroma to PHP (significant effort)
 - Use `和精神`/`PHP-Tokens`/`PHP-Parser` based highlighting
 - Integrate Tree-sitter via FFI
@@ -161,6 +167,7 @@
 **Expected impact:** High — fixes a core use case
 
 ### 2. Cascading Style Inheritance
+
 **Description:** Glamour's `cascadeStyle()` recursively merges parent and child `StyleBlock` structs. When a child element doesn't specify a property, it inherits from the parent in the block stack. Candy-shine uses null-slot fallthrough: `($this->theme->property ?? Style::new())`.
 
 **Why it matters:** Without inheritance, nested elements (blockquote inside blockquote, list item inside list) cannot inherit from parent block styles. This limits thematic expressiveness.
@@ -168,6 +175,7 @@
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — `cascadeStyle()` recursive merge pattern
 
 **Implementation ideas:**
+
 - Implement `cascadeStyle()` equivalent in `Theme.php`
 - Add a `StyleBlock` type with `Indent`, `Margin`, `IndentToken` fields (like glamour)
 - Modify `renderNode()` to pass parent style context
@@ -175,6 +183,7 @@
 **Expected impact:** High — enables proper nested block styling
 
 ### 3. Definition Lists Implementation
+
 **Description:** Theme has `$definitionTerm`, `$definitionDescription`, `$definitionList` slots, but `renderNode()` has no case for these node types. They fall through to `default => renderChildren($node)`.
 
 **Why it matters:** GFM definition lists (`dt`/`dd`) are a documented feature that doesn't work. Users who rely on this feature will be disappointed.
@@ -182,6 +191,7 @@
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — `DefinitionList`, `DefinitionTerm`, `DefinitionDescription` elements
 
 **Implementation ideas:**
+
 - Check if league/commonmark has a definition list extension
 - If not, add a custom extension
 - Add rendering cases to `Renderer::renderNode()`
@@ -191,6 +201,7 @@
 ## High Value
 
 ### 4. Table Footer Links
+
 **Description:** Glamour collects links referenced in table cells and renders them as a numeric footer. Candy-shine does not implement this.
 
 **Why it matters:** Tables with links don't show where those links point without inline `(url)` suffixes. Footer links are more readable for complex tables.
@@ -198,6 +209,7 @@
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — `tableLink` collection and `printTableLinks()`
 
 **Implementation ideas:**
+
 - Walk table AST before rendering to collect links
 - Emit numbered footer links after table body
 - Use Theme slots for footer styling
@@ -205,11 +217,13 @@
 **Expected impact:** Medium — improves table readability
 
 ### 5. Block Stack for Dynamic Width
+
 **Description:** Glamour's `BlockStack` computes available width dynamically as blocks nest. Candy-shine handles nesting directly in `renderList()` and `renderBlockQuote()` but lacks a general abstraction. Deep nesting (blockquote inside list item inside blockquote) is not architecturally supported.
 
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — BlockStack with `Indent()` / `Margin()` / `Width()` computed values
 
 **Implementation ideas:**
+
 - Create a `BlockStack` class similar to glamour's
 - Push on block entry, pop on exit
 - Compute available width as `WordWrap - Indent - Margin*2`
@@ -218,6 +232,7 @@
 **Expected impact:** High — fixes nested block rendering correctness
 
 ### 6. HTML Sanitisation
+
 **Description:** Glamour uses bluemonday to sanitise HTML blocks and inline HTML. Candy-shine passes HTML through verbatim with only the `htmlBlock`/`htmlSpan` style applied.
 
 **Why it matters:** For untrusted input (e.g., rendering markdown from user comments), raw HTML is a security gap.
@@ -225,6 +240,7 @@
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — `SanitizeHTML()` via bluemonday
 
 **Implementation ideas:**
+
 - Integrate ` HTML Purifier` or `enshkn/html-sanitizer`
 - Add `withSanitizeHTML(bool)` option
 - Apply sanitisation before style application
@@ -234,11 +250,13 @@
 ## Medium
 
 ### 7. FNV Link ID Hashing
+
 **Description:** Multiple links to the same URL cannot share an OSC 8 link ID because no hashing is done. Glamour uses FNV-32a to hash URLs for link IDs. Links always get `id=null`.
 
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — FNV-32a hash of URL as unique identifier
 
 **Implementation ideas:**
+
 - Implement FNV-32a hash in `SugarCraft\Core\Util\Ansi`
 - Use hash as OSC 8 `id` parameter
 - Note: minor cosmetic issue, most terminals work without ID
@@ -246,11 +264,13 @@
 **Expected impact:** Low — minor deviation from glamour
 
 ### 8. MarginWriter/PaddingWriter Abstraction
+
 **Description:** Glamour's `MarginWriter`/`PaddingWriter`/`IndentWriter` are composable io.Writer wrappers. Candy-shine achieves similar effects with string concatenation but loses composability.
 
 **Source:** `docs/repo_map/charmbracelet_glamour.md` — custom `io.Writer` implementations
 
 **Implementation ideas:**
+
 - Create `MarginWriter` class wrapping a callable
 - Compose indentation logic in a reusable way
 - Could be used for nested block rendering
@@ -258,11 +278,13 @@
 **Expected impact:** Medium — code cleanliness, not user-facing
 
 ### 9. Per-column Table Width Constraints
+
 **Description:** Glamour's table rendering supports per-column width specifications. SprinklesTable handles table layout but candy-shine doesn't expose column width configuration.
 
 **Source:** `charmbracelet_lipgloss.md` — `table` sub-package with `Width(constraint)`
 
 **Implementation ideas:**
+
 - Add `withColumnWidths(array $widths)` to Renderer
 - Pass widths to SprinklesTable builder
 - Apply proportional sizing if sum < available width
@@ -272,9 +294,11 @@
 ## Low Priority
 
 ### 10. Additional Language Support
+
 **Description:** Regex highlighter only supports PHP, JS, TS, Python, Go, Bash, SQL, JSON. Missing: HTML/XML, CSS, Regex, CRON, INI, YAML, Rust, Ruby, etc.
 
 **Implementation ideas:**
+
 - Add keyword lists for more languages
 - Eventually replace with proper lexer
 
@@ -287,6 +311,7 @@
 ## Current Approach vs External
 
 ### 1. Syntax Highlighting
+
 **Current:** Regex tokeniser with hardcoded keyword lists, processed via `preg_match_all` with `PREG_OFFSET_CAPTURE | PREG_SET_ORDER`.
 
 **External (Glamour):** Chroma lexer library with 200+ language grammars, proper AST-based tokenisation.
@@ -294,6 +319,7 @@
 **Why external is better:** Regex cannot handle language grammar. For example, a keyword inside a string literal would incorrectly be styled as a keyword. Chroma uses actual lexer implementations.
 
 **Tradeoffs:** Chroma is a Go library. PHP would need either:
+
 - A PHP-native lexer (significant porting effort)
 - FFI bindings to a native library
 - A simpler but correct regex approach (accept some false positives)
@@ -301,6 +327,7 @@
 **Applicability:** Critical for production use. Regex approach is a MVP that works for simple cases.
 
 ### 2. Style Inheritance
+
 **Current:** Null-slot fallthrough — `($this->theme->property ?? Style::new())`. Each element queries its theme slot directly.
 
 **External (Glamour):** `cascadeStyle()` recursively merges parent and child `StyleBlock` structs, preferring child values when non-nil.
@@ -312,6 +339,7 @@
 **Applicability:** Medium — important for advanced theming, not blocking basic use.
 
 ### 3. Block Nesting Width Calculation
+
 **Current:** `renderBlockQuote()` hard-codes a 2-cell subtraction for the `▎ ` prefix. `renderList()` calculates indent from bullet width.
 
 **External (Glamour):** BlockStack maintains accumulated `Indent` and `Margin` values, computing available width as `WordWrap - Indent - Margin*2`.
@@ -446,6 +474,7 @@ public function inherit(Theme $parent): Theme;
 ## 1. Custom Theme Examples
 
 Create a cookbook of custom themes:
+
 - Minimalist (monochrome)
 - Nord-inspired
 - Dracula-inspired  
@@ -455,6 +484,7 @@ Create a cookbook of custom themes:
 ## 2. Advanced Usage Patterns
 
 Document:
+
 - Custom renderers extending `Renderer`
 - Pre-processing markdown (frontmatter stripping, code block language normalization)
 - Post-processing output (adding line numbers, prefixing every line)
@@ -462,6 +492,7 @@ Document:
 ## 3. Glamour Compatibility Guide
 
 Document differences from glamour to help users migrating from Go:
+
 - Parser differences (league/commonmark vs goldmark)
 - Style inheritance differences
 - Missing features
@@ -499,6 +530,7 @@ Add round-trip tests: render markdown → parse ANSI → extract styles → veri
 ## 2. Fuzz Testing
 
 Add fuzz tests for:
+
 - Malformed markdown input
 - Extremely nested structures
 - Very long lines (>1000 chars)
@@ -515,6 +547,7 @@ Add screenshot-style tests comparing rendered output against stored "golden" ANS
 ## 1. sugar-glow Enhancement
 
 `sugar-glow` (markdown reader TUI) could implement:
+
 - Frontmatter stripping (`RemoveFrontmatter()` from glow)
 - Live file watching (fsnotify)
 - GitHub/GitLab README fetching
@@ -541,30 +574,37 @@ Enhanced border styles (gradient borders, per-side colors) from lipgloss.
 ## charmbracelet/glamour
 
 ### BlockStack Architecture (lines 44-50 of glamour.md)
+
 The BlockStack pattern is glamour's architectural heart. It computes available width dynamically as blocks nest. **Lesson for candy-shine:** A simple BlockStack implementation would fix nested block rendering without major complexity.
 
 ### Cascading Style (line 57 of glamour.md)
+
 `cascadeStyle()` recursively merges parent and child styles. **Lesson:** Implementing this in Theme.php would enable proper style inheritance.
 
 ### Table Footer Links (lines 88-93 of glamour.md)
+
 The `collectLinksAndImages()` and `printTableLinks()` pattern shows how to implement glamour's distinctive table footer feature. **Lesson:** Candy-shine needs a pre-pass to collect links before rendering the table body.
 
 ## charmbracelet/lipgloss
 
 ### Inherit Style (line 85 of lipgloss.md)
+
 The `Inherit(Style)` method overlays unset properties from another style. **Lesson:** Could be added to `Style` or `Theme` for composition.
 
 ### Color Adaptive (lines 41, 149, 226 of lipgloss.md)
+
 `LightDark(bool)` and `AdaptiveColor` for terminal background-aware color selection. **Lesson:** Add to `candy-palette` and use in `Theme` construction.
 
 ## charmbracelet/soft-serve
 
 ### Chroma Lexer Usage (line 33 of soft-serve.md)
+
 Soft-serve uses Chroma lexers to detect markdown and highlight code blocks in README rendering. **Lesson:** This is the reference implementation for Chroma integration. Soft-serve's `IsFileMarkdown()` (line 166) uses Chroma to detect markdown content type.
 
 ## textualize/textual
 
 ### Markdown Widget (line 72 of textual.md)
+
 Textual's `Markdown` widget renders markdown in TUI. Not directly comparable (Python, different architecture), but shows what a full markdown rendering widget API looks like. **Lesson:** Could inspire a sugar-bits component wrapping candy-shine.
 
 ---
@@ -633,6 +673,7 @@ The **cascading style inheritance** gap is architectural but lower urgency. With
 For a 🟡 in-progress port, candy-shine is production-quality for basic markdown rendering. The critical missing pieces for full glamour parity are: proper syntax highlighting, cascading style inheritance, BlockStack, definition lists, table footer links, and HTML sanitisation. These should be addressed in order of urgency based on user needs.
 
 **Key reference repos for future work:**
+
 - `docs/repo_map/charmbracelet_glamour.md` — Primary upstream, full BlockStack and cascadeStyle patterns
 - `docs/repo_map/charmbracelet_lipgloss.md` — Theming patterns including `Inherit()`, adaptive colors
 - `docs/repo_map/charmbracelet_soft-serve.md` — Chroma lexer usage for syntax highlighting reference

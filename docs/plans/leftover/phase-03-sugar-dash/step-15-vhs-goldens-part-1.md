@@ -12,6 +12,7 @@ via a helper script that walks `examples/`.
 ## Files
 
 **Create:**
+
 - `sugar-dash/tools/generate-goldens.php` — walks every
   `examples/*.php`, sets `COLUMNS=80 LINES=24`, runs the example
   capturing stdout, writes `tests/golden/80x24/<name>.golden`.
@@ -22,6 +23,7 @@ via a helper script that walks `examples/`.
   dashboards — those run by VHS, not snapshot).
 
 **Generate (committed):**
+
 - `sugar-dash/tests/golden/80x24/<example>.golden` — one file per
   example.
 - `sugar-dash/tests/golden/120x40/<example>.golden` — same.

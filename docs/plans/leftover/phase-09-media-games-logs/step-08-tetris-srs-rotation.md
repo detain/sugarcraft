@@ -11,10 +11,12 @@ tables. Today rotation is naive.
 ## Files
 
 **Modify:**
+
 - `candy-tetris/src/Piece.php` — rotation states 0/R/2/L; transitions
   via kick tables.
 
 **Create:**
+
 - `candy-tetris/src/Rotation/SrsKickTable.php` — per-tetromino kick
   data (separate for J/L/S/T/Z and I).
 

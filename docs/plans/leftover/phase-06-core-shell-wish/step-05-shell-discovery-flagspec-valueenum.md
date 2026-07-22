@@ -17,6 +17,7 @@ Three declarative-CLI features:
 ## Files
 
 **Create:**
+
 - `candy-shell/src/Attribute/Command.php`
 - `candy-shell/src/Attribute/Flag.php`
 - `candy-shell/src/Attribute/ValueEnum.php`
@@ -24,10 +25,12 @@ Three declarative-CLI features:
   via reflection, finds `#[Command]` classes, registers them.
 
 **Modify:**
+
 - `candy-shell/src/Application.php` — opt-in `scan(string $namespace)`
   method that runs the CommandScanner.
 
 **Tests:**
+
 - `candy-shell/tests/Attribute/CommandScannerTest.php` — fixture
   namespace with two commands; assert both register.
 - `candy-shell/tests/Attribute/FlagAttributeTest.php`.

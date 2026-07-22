@@ -28,6 +28,7 @@ private function __construct(
 ```
 
 **Problems:**
+
 - **Test pollution:** The counter is never reset between tests. In a long-running test suite, timer IDs grow monotonically. While the tests at `tests/Timer/TimerTest.php:117` (`testIdAccessor`) and `tests/Stopwatch/StopwatchTest.php:78` (`testIdAccessor`) pass in isolation, they may fail or produce confusing results if run after other timer-heavy tests.
 - **Process lifetime:** In a long-running PHP-FPM or ReactPHP event-loop process, `$nextId` increments indefinitely. On a 64-bit system this won't overflow in any practical timeframe, but the pattern is risky.
 - **First ID = 1, not 0:** Pre-increment means the first created timer/stopwatch gets ID 1. This is not inherently wrong but is worth documenting.
@@ -41,6 +42,7 @@ private function __construct(
 ### 2. Duplicate `sanitizeCell()` Logic Across Multiple Components
 
 **Files:**
+
 - `src/Tabs/Tabs.php:462-466`
 - `src/Tree/Tree.php:366-372`
 - `src/Table/Table.php:580-584`

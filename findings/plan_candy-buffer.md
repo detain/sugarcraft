@@ -41,11 +41,13 @@ $cursorCol += $op->count * $width;  // advance by total cell width consumed
 ```
 
 **Verification:**
+
 - Write test: applyRepeatRunOp wide char (width=2) with count>1, verify continuation cells are not overwritten
 - Run `vendor/bin/phpunit` — all existing tests pass
 - `testRoundTripRandomPairsTwentyIterations` continues to pass
 
 **Investigation Notes:**
+
 - Source: `src/Buffer.php:393-413` (RepeatRunOp handling in `applyDiff`)
 - The bug is on line 412: `$cursorCol += $op->count;` advances by count, not by width
 - `SetCellOp` handling at line 381 correctly uses `$cursorCol += $width;`
@@ -70,10 +72,12 @@ $cursorCol += $op->count * $width;  // advance by total cell width consumed
 ```
 
 **Verification:**
+
 - Write test: buffer with EraseRunOp followed by another op at a later position — verify cursor position is correct
 - Run `vendor/bin/phpunit` — all existing tests pass
 
 **Investigation Notes:**
+
 - Source: `src/Buffer.php:383-392` (EraseRunOp handling in `applyDiff`)
 - `DiffEncoder.php:150-151` comment: "ECH erases characters in-place; the logical cursor does NOT advance"
 - This affects round-trip test accuracy when EraseRunOp is followed by more ops
@@ -116,11 +120,13 @@ public function equals(Cell $other): bool
 Note: Need to handle null styles — two null styles are equal, null !== Style object.
 
 **Verification:**
+
 - Write test: two distinct Style instances with identical values — verify they are considered equal
 - Write test: Cell::equals with two styles that are equal by value but different instances
 - Run `vendor/bin/phpunit`
 
 **Investigation Notes:**
+
 - Source: `src/Cell.php:83-89`
 - `Buffer::diff()` uses `Cell::equals()` at line 202 for the diff hot-path
 - `Style` has no existing `equals()` method
@@ -152,10 +158,12 @@ if ($run[$i]->rune() !== $repeatRune
 ```
 
 **Verification:**
+
 - Write test: two cells with distinct Style instances but equal values — verify RepeatRunOp is emitted
 - Run `vendor/bin/phpunit`
 
 **Investigation Notes:**
+
 - Source: `src/Buffer.php:274-276`
 - Depends on 1.3 (Style::equals must be added first)
 - Also at line 248: `$nextCell->style() === $runStyle` uses identity — should also use `equals()`
@@ -189,11 +197,13 @@ public function __construct(
 ```
 
 **Verification:**
+
 - Write test: `new Cell('X', null, null, 3)` throws `\InvalidArgumentException`
 - Write test: `new Cell('X', null, null, -1)` throws `\InvalidArgumentException`
 - Run `vendor/bin/phpunit`
 
 **Investigation Notes:**
+
 - Source: `src/Cell.php:33-38`
 - `Cell::new()` at line 43-49 passes through to constructor
 - `Cell::continuation()` at line 56-58 creates width=0 cells (valid)
@@ -232,10 +242,12 @@ if ($prevLink !== null && ($cell->link() === null || !$cell->link()->equals($pre
 ```
 
 **Verification:**
+
 - Write test: two distinct Hyperlink instances with same URL — verify only one close+open pair
 - Run `vendor/bin/phpunit`
 
 **Investigation Notes:**
+
 - Source: `src/Buffer.php:450`
 - `Hyperlink.php` currently has no `equals()` method
 
@@ -246,6 +258,7 @@ if ($prevLink !== null && ($cell->link() === null || !$cell->link()->equals($pre
 ### 3.1 Replace string concatenation loops with array buffers [PENDING]
 
 **Files:** 
+
 - `src/Buffer.php:433` (`toAnsi()`)
 - `src/Diff/DiffEncoder.php:52-56` (`encode()`)
 
@@ -298,11 +311,13 @@ public function encode(array $ops): string
 ```
 
 **Verification:**
+
 - Existing tests verify byte-identical output
 - Run `vendor/bin/phpunit`
 - Benchmark: render 80×24 buffer 1000 times, measure time
 
 **Investigation Notes:**
+
 - Source: `src/Buffer.php:433` and `src/Diff/DiffEncoder.php:52-56`
 
 ---
@@ -333,10 +348,12 @@ foreach ($op->cells as $cell) {
 ```
 
 **Verification:**
+
 - Run `vendor/bin/phpunit` — all tests pass
 - Byte-identical output verified by existing tests
 
 **Investigation Notes:**
+
 - Source: `src/Diff/DiffOptimiser.php:96`
 - `mergeCellSpans` at lines 83-118
 
@@ -371,10 +388,12 @@ public function encode(array $ops): string
 ```
 
 **Verification:**
+
 - Write test: reuse same DiffEncoder instance for two different diffs — verify each encodes correctly
 - Run `vendor/bin/phpunit`
 
 **Investigation Notes:**
+
 - Source: `src/Diff/DiffEncoder.php:28-44` (properties), `50-65` (encode method)
 - `testEncodeMoveCursorAlreadyAtPositionFromDifferentCursor` at DiffEncoderTest.php:54-60 actually tests state carrying over (line 57 encodes, line 58 encodes again) — this passes because the second call is a no-op for the same position, not because of correct reset
 
@@ -404,10 +423,12 @@ if (empty($op->cells)) {
 ```
 
 **Verification:**
+
 - Write test: empty SetCellOp does not merge with existing buffer
 - Run `vendor/bin/phpunit`
 
 **Investigation Notes:**
+
 - Source: `src/Diff/DiffOptimiser.php:125-127`
 
 ---
@@ -450,6 +471,7 @@ Apply similar pattern to: `Style`, `Hyperlink`, `Position`, `Region`, `Buffer`.
 **Note:** Buffer serialization requires special handling since `$grid` is a flat array of Cell objects.
 
 **Verification:**
+
 - Write test: serialize and unserialize a Buffer — verify equality
 - Write test: serialize and unserialize a Cell — verify equality
 - Run `vendor/bin/phpunit`
@@ -485,6 +507,7 @@ public function jsonSerialize(): array
 Apply similar pattern to other value objects.
 
 **Verification:**
+
 - Write test: `json_encode($buffer)` produces valid JSON
 - Run `vendor/bin/phpunit`
 
@@ -523,6 +546,7 @@ public function fill(Region $region, Cell $cell): self
 ```
 
 **Verification:**
+
 - Write test: fill a region — verify all cells in region are the fill cell
 - Write test: fill a region that extends beyond buffer bounds — verify clipping
 - Run `vendor/bin/phpunit`
@@ -566,6 +590,7 @@ public function copy(Region $region): self
 ```
 
 **Verification:**
+
 - Write test: copy a region — verify contents match
 - Write test: copy a region that extends beyond buffer — verify clipping to blank cells
 - Run `vendor/bin/phpunit`
@@ -600,6 +625,7 @@ abstract class DiffOp
 ```
 
 **Verification:**
+
 - Run `vendor/bin/phpunit` — no tests should break (these are just constants)
 
 ---
@@ -623,6 +649,7 @@ if ($dstCol < 0 || $dstRow < 0) {
 ```
 
 **Investigation Notes:**
+
 - Source: `src/Buffer.php:143-145` and `src/Buffer.php:283-318` (testWithRegionClipsNegativeOrigin)
 - Behavior confirmed correct — just needs documentation
 
@@ -698,6 +725,7 @@ public function withUnderline(bool $on = true): self
 ```
 
 **Verification:**
+
 - Write tests for each new builder
 - Run `vendor/bin/phpunit`
 
@@ -722,6 +750,7 @@ Using `dev-master` for a required dependency is unstable.
 **Fix:** When `candy-core` has a stable release, update to `^1.0` or similar. Until then, document the risk.
 
 **Investigation Notes:**
+
 - Source: `composer.json:31`
 - `candy-core` is a dev dependency (used for `candy-testing` in test builds)
 - Actually looking at the output, it's in `require-dev`, not `require` — still should be pinned

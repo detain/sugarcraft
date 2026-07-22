@@ -12,6 +12,7 @@ crumbs to emit zone markers via candy-zone.
 ## Files
 
 **Modify:**
+
 - `sugar-crumbs/src/Crumb.php` (or wherever the render method lives) —
   wrap each crumb's render output in `\SugarCraft\Zone\Manager::mark(...)`
   emit/exit calls so click coordinates are mappable back to the crumb.

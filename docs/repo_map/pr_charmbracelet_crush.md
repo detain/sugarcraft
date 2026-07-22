@@ -5,6 +5,7 @@
 **charmbracelet/crush** was a terminal-based AI coding assistant (Go, 24.7k stars, FSL-1.1-MIT license) that connected LLMs to development tools via multi-model support, LSP integration, MCP extensibility, and session-based workflow management. The project was **archived/sunset in March 2026** to focus development efforts elsewhere within the Charm ecosystem. The archive date (March 2026) combined with ongoing active development (137 releases, last push April 4, 2026) suggests strategic repositioning rather than technical failure.
 
 **Key architectural facts:**
+
 - Built on Charm ecosystem: Bubble Tea v2 (TUI), Lipgloss v2 (styling), Glamour v2 (markdown), Fantasy (LLM abstraction), Catwalk (provider database)
 - Core components: `internal/agent` (LLM loop), `internal/shell` (bash execution), `internal/lsp` (Language Server Protocol), `internal/ui` (Bubble Tea TUI), `internal/pubsub` (event bus), `internal/skills` (agent skills system)
 - Persistence: SQLite via sqlc with WAL mode
@@ -186,6 +187,7 @@ These gaps represent the fundamental architectural delta between a TUI component
 **Finding:** Title generation causes repeated HTTP requests to Gemini API with empty responses. The loop didn't use the main loop context, so canceling didn't stop it. Resulted in cost spike for user.
 
 **Root cause:** 
+
 - Title generation set `maxOutputTokens` too low for Gemini, causing empty responses
 - The retry loop didn't handle empty responses gracefully
 - Context cancellation didn't propagate to the retry loop
@@ -223,6 +225,7 @@ These gaps represent the fundamental architectural delta between a TUI component
 Multiple issues (#2223, #2241, #2240) opened within days of v0.40.0 release with the same symptom: "slow", "high CPU", "context clearing".
 
 **Root causes identified:**
+
 - LSP Manager refactoring added a global `sync.Mutex` replacing lock-free `csync.Map`
 - Fantasy library upgrade from v0.7.0 to v0.7.1
 - Two new parallel MCP tools added
@@ -328,6 +331,7 @@ Issue #1336 requested Claude Code-style hooks for notifications and customizatio
 Discussion #953 explored using TreeSitter for AST-aware tools (better context for LLM, safer edits, refactoring).
 
 **Ideas discussed:**
+
 - Context packer: feed only relevant AST nodes, not whole files
 - AST-aware find-refs/go-to-def
 - Preflight edit guardrails (blast radius scoring)
@@ -393,6 +397,7 @@ Request to add system prompt customization to `crush run` (non-interactive mode)
 This was the most significant architectural change in Crush's lifetime. It refactored Crush from a monolithic TUI into a server/client architecture with a REST API.
 
 **Key changes:**
+
 - `Workspace` abstraction unifying local and remote modes
 - REST API over Unix socket (default) or TCP
 - OpenAPI/Swagger generation

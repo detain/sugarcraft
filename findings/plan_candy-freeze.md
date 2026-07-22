@@ -80,15 +80,18 @@ final class PngRenderer
 ```
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit` passes in `candy-freeze/`
 - Add a test that calls `render()` 100 times and asserts no memory growth
 - `grep -n "WeakMap" src/PngRenderer.php` returns the new `WeakMap` property and its usage
 
 **Related Code Locations:**
+
 - `src/PngRenderer.php:231-252` — the `allocateColor()` method with static cache
 - `src/PngRenderer.php:28-59` — constructor where `WeakMap` should be initialized
 
 **Investigation Notes:**
+
 - The static `$cache` at line 233 uses `spl_object_id($img)` as the top-level key
 - Each call to `imagecreatetruecolor()` in `render()` (line 120) produces a new image, hence a new `spl_object_id`
 - When `imagedestroy($img)` is called (line 214), the `spl_object_id` becomes invalid but the cache entry persists
@@ -114,15 +117,18 @@ throw new \InvalidArgumentException("Failed to read VS Code theme file: {$path}"
 ```
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit --filter VsCodeThemeLoaderTest` passes
 - `php -l src/Theme/VsCodeThemeLoader.php` shows no syntax errors
 - The line no longer contains `throw throw`
 
 **Related Code Locations:**
+
 - `src/Theme/VsCodeThemeLoader.php:52` — the buggy duplicate `throw`
 - `src/Theme/ChromaThemeLoader.php:51-53` — correct usage for comparison
 
 **Investigation Notes:**
+
 - PHP 8.x uses `throw` as an expression: `return throw new Exception()` is valid (returns the exception)
 - `throw new Exception()` returns an Exception instance; `throw throw new Exception()` tries to throw that instance
 - The bug would produce: "Fatal error: Uncaught Error: Exception instance expected"
@@ -162,15 +168,18 @@ $buttonY = $titleBarY + ($titleBarHeight - $buttonSize) / 2;
 ```
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit --filter SvgRendererTest` passes
 - `vendor/bin/phpunit --filter PngRendererTest` passes
 - `grep -n "buttonHoverColors" src/SvgRenderer.php src/PngRenderer.php` returns nothing
 
 **Related Code Locations:**
+
 - `src/SvgRenderer.php:315-317` — unused variable declaration
 - `src/PngRenderer.php:298-300` — unused variable declaration
 
 **Investigation Notes:**
+
 - In `buildWindowsTerminalWindow()`, hover colors are never applied — only the base `$buttonColors` array is used
 - The three-button close/minimize/maximize design never uses hover effects
 - If hover interactions are desired in future, the hover color variables should be re-added with proper event handling
@@ -205,16 +214,19 @@ $foreground = self::resolveColor($colors, [
 ```
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit --filter VsCodeThemeLoaderTest` passes
 - `VsCodeThemeLoader::fromArray([])->foreground === '#c9d1d9'`
 - Compare with `Theme::dark()->foreground === '#c9d1d9'` — now consistent
 
 **Related Code Locations:**
+
 - `src/Theme/VsCodeThemeLoader.php:75-77` — the buggy fallback
 - `src/Theme.php:37` — `Theme::dark()` uses `#c9d1d9` correctly
 - `src/Theme/VsCodeThemeLoader.php:71-73` — background fallback uses `#0d1117` (correct)
 
 **Investigation Notes:**
+
 - The GitHub dark theme foreground is `#c9d1d9`
 - All other fallback values in `VsCodeThemeLoader::fromArray()` use the correct 6-digit hex format
 - This bug only manifests when `editor.foreground` is absent from the VS Code theme JSON
@@ -253,10 +265,12 @@ Also add a note to the `render()` method docblock:
 ```
 
 **Conditions for Success:**
+
 - `php -l src/PngRenderer.php` has no parse errors
 - `grep -n "Unicode" src/PngRenderer.php` shows the new warning
 
 **Related Code Locations:**
+
 - `src/PngRenderer.php:25-26` — existing font description
 - `src/PngRenderer.php:81-84` — render() method docblock
 
@@ -285,11 +299,13 @@ if ($inputPath !== null) {
 Add the i18n key `cli.path_outside_cwd` to `lang/en.php`: `"Input path is outside the current working directory"`.
 
 **Conditions for Success:**
+
 - Create symlink pointing to `/etc/passwd`, run CLI → exits with code 2 and error message
 - Normal files and stdin still work correctly
 - `php -l bin/candyfreeze` shows no parse errors
 
 **Related Code Locations:**
+
 - `bin/candyfreeze:112-114` — file reading that needs the guard
 - `lang/en.php` — i18n file for new key
 
@@ -366,11 +382,13 @@ final class LayoutCalculator
 Then update both renderers: extract lines into array, call `LayoutCalculator::calculate()`, destructure the result.
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit` passes in `candy-freeze/`
 - Both SVG and PNG output dimensions are identical to before (snapshot test)
 - `grep -n "maxCols" src/SvgRenderer.php` shows no duplicate calculation
 
 **Related Code Locations:**
+
 - `src/SvgRenderer.php:112-140` — SVG dimension calculation
 - `src/PngRenderer.php:86-118` — PNG dimension calculation
 - `src/LayoutCalculator.php` (new file)
@@ -460,11 +478,13 @@ final class WindowChromeGeometry
 Then refactor each `buildXxxWindow()` in both renderers to use the geometry object.
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit --filter WindowStyleTest` passes
 - All four window styles produce visually identical output (existing tests verify this)
 - `grep -n "buildMacosWindow\|buildITerm2Window\|buildHyperWindow\|buildWindowsTerminalWindow" src/SvgRenderer.php src/PngRenderer.php` shows streamlined implementations
 
 **Related Code Locations:**
+
 - `src/SvgRenderer.php:267-379` — four window builders (SVG)
 - `src/PngRenderer.php:265-350` — four window builders (PNG)
 - `src/WindowChromeGeometry.php` (new file)
@@ -507,11 +527,13 @@ if ($applied !== null) {
 Keep the existing range-check patterns for 30-37/40-47/90-97/100-107 unchanged.
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit --filter AnsiParserTest` passes
 - `php -l src/AnsiParser.php` shows no parse errors
 - `grep -n "if (\$p ===" src/AnsiParser.php` shows the range checks remain
 
 **Related Code Locations:**
+
 - `src/AnsiParser.php:119-133` — the block to replace
 - `src/AnsiParser.php:134-149` — range checks to keep
 
@@ -528,6 +550,7 @@ Keep the existing range-check patterns for 30-37/40-47/90-97/100-107 unchanged.
 **Decision:** Remove `Theme::$windowStyle` entirely. Window chrome style is a rendering concern, not a visual theme concern — themes carry colors, renderers carry chrome style.
 
 **Implementation:**
+
 1. Remove `$windowStyle` parameter from `Theme::__construct()` (line 30)
 2. Remove `$windowStyle` from all `Theme` preset factories
 3. Remove `$windowStyle` from `VsCodeThemeLoader::fromArray()` (line 117)
@@ -535,17 +558,20 @@ Keep the existing range-check patterns for 30-37/40-47/90-97/100-107 unchanged.
 5. Update any tests that construct `Theme` with `$windowStyle`
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit` passes in `candy-freeze/`
 - `grep -rn "windowStyle" src/Theme.php` returns no matches
 - No test references `Theme::$windowStyle`
 
 **Related Code Locations:**
+
 - `src/Theme.php:18-31` — constructor with `$windowStyle`
 - `src/Theme.php:33-102` — all preset factories set `$windowStyle`
 - `src/Theme/VsCodeThemeLoader.php:117` — sets `$windowStyle: WindowStyle::Macos`
 - `src/Theme/ChromaThemeLoader.php:106` — sets `$windowStyle: WindowStyle::Macos`
 
 **Investigation Notes:**
+
 - `grep -rn "theme->windowStyle\|Theme::.*->windowStyle" src/` returns no results
 - `Theme::$windowStyle` is set but never accessed in any renderer
 
@@ -565,6 +591,7 @@ Keep the existing range-check patterns for 30-37/40-47/90-97/100-107 unchanged.
 **What:** The CLI always uses `SvgRenderer` even when `--output file.png` is specified. No way to get actual PNG output.
 
 **Implementation:**
+
 1. Add `$format = 'svg'` variable after line 43
 2. Add case in switch:
 ```php
@@ -592,11 +619,13 @@ if ($format === 'png') {
 Add i18n keys `cli.unknown_format` and `cli.gd_required` to `lang/en.php`.
 
 **Conditions for Success:**
+
 - `candyfreeze --help` shows `--format` option
 - `echo "hello" | candyfreeze --format png | head -c 8` outputs PNG signature `\x89PNG\r\n\x1a\n`
 - `candyfreeze --format png` without ext-gd shows helpful error
 
 **Related Code Locations:**
+
 - `bin/candyfreeze:46-97` — option parsing loop
 - `bin/candyfreeze:120-148` — renderer construction
 
@@ -642,11 +671,13 @@ final class FileOutputWriter implements OutputWriter
 Add `renderToStream(string $text, OutputWriter $writer): void` to both renderers.
 
 **Conditions for Success:**
+
 - `StringOutputWriter` produces identical output to current `render()` behavior
 - `FileOutputWriter` streams directly to disk without buffering entire file in memory
 - Unit tests for both implementations pass
 
 **Related Code Locations:**
+
 - `src/SvgRenderer.php:112` — `render()` method to add streaming counterpart
 - `src/PngRenderer.php:86` — `render()` method to add streaming counterpart
 
@@ -673,6 +704,7 @@ $detectedLang = LanguageDetector::detect($text);
 ```
 
 **Conditions for Success:**
+
 - `echo '<?php echo "hello"' | candyfreeze --type php` renders without error
 - `LanguageDetector::detect()` is called during rendering
 
@@ -703,10 +735,12 @@ $ansi = PngRenderer::dark()
 ```
 
 **Conditions for Success:**
+
 - `php examples/freeze_to_png.php` runs without error
 - All output files are generated correctly
 
 **Related Code Locations:**
+
 - `candy-freeze/examples/freeze_to_png.php:47-52` — the redundant pattern
 
 ---
@@ -737,11 +771,13 @@ public static function detect(string $content): string
 ```
 
 **Conditions for Success:**
+
 - `LanguageDetector::detect(str_repeat('x', 2_000_000))` returns `'text'`
 - Normal inputs (≤1MB) still detect correctly
 - `vendor/bin/phpunit --filter LanguageDetectorTest` passes
 
 **Related Code Locations:**
+
 - `src/LanguageDetector.php:85-97` — `detect()` method
 
 ---
@@ -764,6 +800,7 @@ $json = file_get_contents($path, false, null, 0, 1_000_000);
 Add a test for large file rejection to each test file.
 
 **Conditions for Success:**
+
 - `php -l` on both files passes
 - `VsCodeThemeLoader::load()` with a >1MB file throws `\InvalidArgumentException`
 - New tests pass
@@ -790,6 +827,7 @@ Add a test for large file rejection to each test file.
 ```
 
 **Conditions for Success:**
+
 - `grep -n "renderToStream\|React\\\\Stream" src/SvgRenderer.php src/PngRenderer.php` finds the docblock note
 
 ---
@@ -832,10 +870,12 @@ final class Segment
 ```
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit --filter SegmentTest` passes
 - Immutability preserved: original instance is unchanged after `withBg()`
 
 **Related Code Locations:**
+
 - `src/Segment.php:23-33` — existing `withBg()` method
 - `candy-core/src/Concerns/Mutable.php:13-38` — the trait being applied
 - `candy-sprinkles/src/Style.php:39+` — canonical example of `mutate()` usage
@@ -882,6 +922,7 @@ private function runCli(array $args, ?string $stdin = null): array
 ```
 
 **Conditions for Success:**
+
 - `vendor/bin/phpunit --filter CliTest` passes
 - No pipe resource leaks detected
 
@@ -915,6 +956,7 @@ public function testAnsiBackgroundBecomesRectFill(): void
 **Conditions for Success:** Test passes
 
 **Related Code Locations:**
+
 - `tests/SvgRendererTest.php:75-82` — existing foreground test
 - `src/SvgRenderer.php:230-235` — where rect is emitted for backgrounds
 
@@ -1047,10 +1089,12 @@ php tools/check-path-repos.php --fix
 ```
 
 **Conditions for Success:**
+
 - `php tools/check-path-repos.php` exits 0 for the current state
 - Root `composer.json` already has path-repo for `candy-ansi` at line 103-108
 
 **Related Code Locations:**
+
 - `tools/check-path-repos.php` — closure checker script
 - `candy-freeze/composer.json:54-68` — local path repos for candy-ansi and candy-core
 

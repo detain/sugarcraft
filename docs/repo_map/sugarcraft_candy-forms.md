@@ -228,6 +228,7 @@ Top-level compositor implementing `Model`. Manages groups, focused field index, 
 - **`withKeyMap(?KeyMap)`** — mirrors the long-requested huh #272 feature, rebindable nav/submit/abort without forking the runtime.
 
 **Navigation algorithm:**
+
 1. Scan for first non-skippable field in direction from current position.
 2. If none found in current group, call `advanceGroup(+direction)`.
 3. Blur current field, focus new field, return new field's `focus()` Cmd.
@@ -345,25 +346,31 @@ gum is a CLI tool wrapping bubbles/huh. candy-forms provides the primitives that
 Based on analysis, the following gaps exist:
 
 ### Tests
+
 - **Snapshot tests** — component render outputs (`\x1b[...m` ANSI bytes) need golden file assertions to prevent regressions. Currently absent for most widgets.
 - **Behaviour tests** — scripted `KeyMsg`/`MouseMsg` driving `update()` with assertions on `[Model, ?Cmd]` tuples are partially present but not comprehensive.
 - **Coercion tests** — edge cases for validators (negative/oversized index, empty, null) need clamped/no-op assertions.
 
 ### Examples
+
 - No `examples/` directory exists (candy-forms has no examples yet, per the glob result). Demo tape files (`.vhs/*.tape`) and rendered `.gif` files are absent.
 
 ### TextArea Gaps
+
 - **Soft-wrap line tracking** — cursor positioning across wrapped lines is not implemented. The upstream Bubbles `LineInfo` accounting for wide Unicode characters across soft-wrapped lines is not present.
 - **Case transforms** and **character transpose** (`ctrl+t`) keyboard shortcuts from upstream Bubbles are not implemented.
 
 ### Fuzzy Filtering
+
 - **Smith-Waterman quality** — the `FuzzyMatcher` implementation is a custom port. At scale (thousands of candidates), performance and ranking quality against the reference `sahilm/fuzzy` library is unverified.
 - **Matched indices for highlighting** — the Go library returns matched character indices for rendering highlighted filter matches. `FuzzyMatcher::match()` returns scored candidates but not the positions for highlighting.
 
 ### Async Suggestions
+
 - The `withAsyncSuggestions()` implementation in `Field\Input` and `Field\Select` uses ReactPHP promises and debounce timers. The pattern is implemented but edge cases (rapid keystrokes, sequence cancellation on blur) may need additional test coverage.
 
 ### Documentation
+
 - `candy-forms/README.md` is present but likely minimal (extraction in progress).
 - `CALIBER_LEARNINGS.md` may not exist yet for this specific library.
 

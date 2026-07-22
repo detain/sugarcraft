@@ -1,6 +1,7 @@
 # charmbracelet/sh
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/sh (originally mvdan/sh, migrated to charmbracelet)
 - Language: Go
 - Stars: ~4,000+ (estimated based on repo age and activity)
@@ -8,6 +9,7 @@
 - Description: A shell parser, formatter, and interpreter. Supports POSIX Shell, Bash, and mksh. Requires Go 1.23 or later.
 
 ## Feature List
+
 - **Parser (`syntax` package)**: Full AST parser for POSIX Shell, Bash, and mksh with position tracking for error reporting
 - **Formatter (`syntax` package)**: Printer that can format/roundtrip shell scripts with configurable indentation, binary-next-line, case-indent, etc.
 - **Shell formatter CLI (`shfmt`)**: Production-ready formatter available via `go install mvdan.cc/sh/v3/cmd/shfmt@latest`
@@ -24,23 +26,27 @@
 ### `syntax` package
 
 **Parser**
+
 - `NewParser() *Parser` — Creates a new parser instance
 - `Parse(io.Reader, string) (*File, error)` — Parse a shell script into AST
 - `ParseWithRecovery(io.Reader, string) (*File, error)` — Parse with error recovery
 - `Interactive(io.Reader, func([]*Stmt) bool) error` — Interactive parsing with callback
 
 **File (AST root)**
+
 - `Name string` — File name
 - `Stmts []*Stmt` — Statements in the file
 - `Last []Comment` — Comments at end of file
 
 **Stmt (Statement)**
+
 - `Cmd Command` — The command being executed
 - `Negated bool` — `!` prefix
 - `Background bool` — trailing `&`
 - `Redirs []*Redirect` — I/O redirections
 
 **Command implementations**
+
 - `*CallExpr` — Simple command execution or function call
 - `*IfClause` — if/elif/else/fi
 - `*WhileClause` — while/until loops
@@ -55,6 +61,7 @@
 - `*CoprocClause` — mksh `|&` coprocess
 
 **Word structure**
+
 - `*Word` — Shell word with `Parts []WordPart`
 - `*Lit` — Literal string
 - `*SglQuoted` — Single-quoted string
@@ -66,6 +73,7 @@
 - `*ExtGlob` — Bash extended globs `@(*|...)`
 
 **Printer**
+
 - `NewPrinter(...PrinterOption) *Printer` — Create a printer
 - `Print(io.Writer, Node) error` — Print an AST node with formatting
 - `PrintNode(io.Writer, Node) error` — Print without trailing newline
@@ -74,6 +82,7 @@
 ### `interp` package
 
 **Runner**
+
 - `New(...RunnerOption) (*Runner, error)` — Create interpreter instance
 - `Run(ctx context.Context, node syntax.Node) error` — Execute AST node
 - `Reset()` — Reset runner to initial state for reuse
@@ -81,6 +90,7 @@
 - `Exited() bool` — Check if last Run triggered shell exit
 
 **Runner options**
+
 - `Env(expand.Environ)` — Set environment variables
 - `Dir(string)` — Set working directory
 - `StdIO(io.Reader, io.Writer, io.Writer)` — Configure stdio
@@ -90,6 +100,7 @@
 - `OpenHandler()`, `ReadDirHandler2()`, `StatHandler()` — Handler injection points
 
 **ExitStatus**
+
 - `ExitStatus uint8` — Exit code type
 - `IsExitStatus(err error) (uint8, bool)` — Extract exit status from error
 
@@ -120,6 +131,7 @@
 - **Lexer-based tokenizer** with token kinds for all shell constructs in `tokens.go`
 
 ## Strengths
+
 - **Pure Go** — No external dependencies beyond the standard library and a few utilities; easy to embed
 - **Comprehensive AST** — Detailed syntax tree covering all POSIX, Bash, and mksh features
 - **Round-trip printing** — Parser → Printer produces semantically equivalent output, enabling format verification
@@ -131,6 +143,7 @@
 - **WASM/npm availability** — `sh-syntax` npm package bundles the parser as WASM
 
 ## Weaknesses
+
 - **Pure Go subshell limitation** — Cannot fork processes, so subshells use goroutines instead; real PIDs and file descriptors cannot be used directly
 - **No interactive shell parity** — `gosh` is explicitly a POC; full interactive features like job control, readline editing are out of scope
 - **POSIX `$((` ambiguity** — Backtracking would complicate the parser and break streaming support
@@ -143,6 +156,7 @@
 This repository is a **Go library** (shell parser/formatter/interpreter), while SugarCraft is a **PHP monorepo** of TUI (Text User Interface) library ports from the Charmbracelet Go ecosystem. There is no direct functional equivalent in SugarCraft, as SugarCraft focuses on PHP ports of Go TUI libraries (like bubbletea, glow, etc.) rather than shell parsing.
 
 **Indirect mapping considerations:**
+
 - If SugarCraft were to port this library, it would create `sugar-sh` or similar for shell-related functionality
 - The **pattern matching** (`pattern` package) could map to `honey-glob` or similar if globbing were needed
 - The **expansion** logic could inform string handling utilities if ever needed

@@ -12,6 +12,7 @@
 Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.local/share/sugar-tick/`), tracks project/language/file/duration, and renders a Bubble Tea TUI dashboard. This research surveys Go, Rust, and Python time trackers to identify concrete improvements for data storage, project organization, reports, and privacy features.
 
 **Key findings:**
+
 - TakaTime (upstream) uses MongoDB — a significant infrastructure dependency sugar-tick avoids
 - Most modern CLI trackers (tmpo, oclock, hours) use SQLite for richer queries
 - Timewarrior's tag-based model is more flexible than project-only hierarchies
@@ -26,23 +27,27 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** 57 | **Language:** Go | **License:** MIT
 
 **Data Storage:**
+
 - MongoDB (self-hosted or Atlas free tier)
 - Connection string stored in `~/.local/share/nvim/taka_data.json`
 - Split binaries: `taka-upload`, `taka-dashboard`, `taka-report`
 - Editor plugins send heartbeats to `taka-upload` daemon → MongoDB
 
 **Project Organization:**
+
 - Automatic project/language/file detection from editor context
 - Privacy controls: `.takaignore` and `.takatrack` files
 - Tags support (via `+TAG` syntax in dashboard)
 
 **Reports/Summaries:**
+
 - `taka-report` binary generates GitHub README stats
 - Interactive TUI dashboard (Bubble Tea) via `taka-dashboard`
 - Themes: dark, light, dracula, nord, gruvbox, monokai, cyberpunk
 - GitHub Actions integration for automated profile updates
 
 **Privacy Features:**
+
 - Self-hosted MongoDB — no third-party cloud
 - Data never leaves user's infrastructure
 - Interactive setup via `:TakaInit` — connection string not hardcoded
@@ -56,20 +61,24 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** N/A (newer) | **Language:** Go | **License:** MIT
 
 **Data Storage:**
+
 - SQLite (local, `~/.local/share/tmpo/tmpo.db`)
 - Automatic project detection from Git repos or `.tmporc` files
 
 **Project Organization:**
+
 - Milestone tracking (sprints, releases, project phases)
 - Global projects vs per-directory projects
 - Automatic project name detection
 
 **Reports/Summaries:**
+
 - `tmpo stats` — statistics with filtering
 - Export to CSV/JSON
 - Hourly rate tracking configurable
 
 **Privacy Features:**
+
 - 100% local storage — no network calls
 - XDG base directory compliant (`$XDG_DATA_HOME/tmpo`)
 
@@ -82,16 +91,19 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** N/A | **Language:** Go | **License:** GPL-3.0
 
 **Data Storage:**
+
 - **Multiple backends:** flat files, TodoTXT, TimeWarrior, SQLite
 - XDG config compliant (`~/.config/tock/tock.yaml`)
 - Activity log format designed for plaintext longevity
 
 **Project Organization:**
+
 - Project + description + notes + tags
 - Calendar view for browsing entries
 - Interactive TUI via Bubble Tea
 
 **Reports/Summaries:**
+
 - `tock report` — time tracking reports
 - `tock analyze` — productivity pattern analysis
 - `tock calendar` — interactive calendar view
@@ -99,6 +111,7 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 - CSV/JSON export
 
 **Privacy Features:**
+
 - All storage backends are local
 - No network connectivity by design
 
@@ -111,20 +124,24 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** 788 | **Language:** Go | **License:** Apache-2.0
 
 **Data Storage:**
+
 - JSON files by default (configurable)
 - Reports stored as JSON
 
 **Project Organization:**
+
 - Projects as top-level entities (key + name)
 - Records tagged with projects
 - Tags via `+TAG` syntax
 
 **Reports/Summaries:**
+
 - `timetrace report` (beta)
 - CSV/JSON export
 - Filtering by project, date range
 
 **Privacy Features:**
+
 - Fully local — no cloud
 - XDG base directory compliant
 
@@ -137,15 +154,18 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** N/A | **Language:** Go | **License:** MIT
 
 **Data Storage:**
+
 - SQLite (internal)
 - TUI-first design
 
 **Project Organization:**
+
 - Tasks with start/stop recording
 - Task logs (manual entries)
 - Deactivate/activate tasks
 
 **Reports/Summaries:**
+
 - `hours report` — time per task per day
 - `hours stats` — aggregate statistics
 - `hours log` — detailed task logs
@@ -153,6 +173,7 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 - Custom theme creation via JSON
 
 **Privacy Features:**
+
 - Fully local, no network
 - Themes stored as JSON files
 
@@ -167,20 +188,24 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** 44 | **Language:** Rust | **License:** Apache-2.0
 
 **Data Storage:**
+
 - JSON files: `~/.rtw.json` (ongoing), `~/.rtwh.json` (finished)
 - No file locking — concurrent writes unsafe
 - XDG config compliant
 
 **Project Organization:**
+
 - Simple activity tracking with start/stop
 - Config file for customization
 
 **Reports/Summaries:**
+
 - `rtw summary` — day's activity
 - `rtw day` — timeline view
 - `rtw week` / `rtw month` — periodic views
 
 **Privacy Features:**
+
 - 100% local JSON files
 - No network, no telemetry
 
@@ -193,20 +218,24 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** N/A | **Language:** Rust | **License:** MIT
 
 **Data Storage:**
+
 - SQLite via event-sourcing design
 - Daemon-based (server/client architecture)
 - Database: `~/.oclock/oclock.db`
 
 **Project Organization:**
+
 - Tasks created and switched between
 - Retroactive task switching (correct past entries)
 - PUB/SUB socket for real-time state updates
 
 **Reports/Summaries:**
+
 - `oclock client timesheet` — CSV daily totals
 - JSON API for all commands
 
 **Privacy Features:**
+
 - Fully local SQLite
 - No network by default
 
@@ -219,23 +248,27 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** N/A | **Language:** Rust | **License:** N/A
 
 **Data Storage:**
+
 - SQLite
 - Event-based (IN/OUT pairs)
 - Internal audit log
 - Safe migrations with automatic backups
 
 **Project Organization:**
+
 - Day positions: Office, Remote, Client, Holiday, National holiday, Sick, Mixed
 - Multiple locations per day
 - Configurable lunch rules
 
 **Reports/Summaries:**
+
 - Expected exit time calculation
 - Daily surplus/deficit tracking
 - JSON/CSV/XLSX/PDF export
 - Import from JSON/CSV
 
 **Privacy Features:**
+
 - Fully local
 - Automatic database backups
 
@@ -248,20 +281,24 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** N/A (crates.io) | **Language:** Rust | **License:** MIT
 
 **Data Storage:**
+
 - SQLite (`~/.timetrack.db`)
 - Encrypted secrets via AES-256-GCM + Argon2id
 
 **Project Organization:**
+
 - Issue keys with Jira sync
 - Timeline visualization (vertical bar chart)
 - Task management
 
 **Reports/Summaries:**
+
 - Weekly statistics by issue/description
 - Jira issue name auto-sync
 - Clipboard copy for durations
 
 **Privacy Features:**
+
 - API tokens encrypted at rest
 - Local SQLite only
 - Passphrase-based encryption
@@ -277,6 +314,7 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** 1,572 | **Language:** C++/Python | **License:** MIT
 
 **Data Storage:**
+
 - Monthly data files: `${XDG_DATA_HOME}/timewarrior/data/YYYY-MM.data`
 - Tags database: `tags.data`
 - Undo transactions: `undo.data`
@@ -284,6 +322,7 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 - XDG Base Directory Specification compliant (since v1.5.0)
 
 **Project Organization:**
+
 - **Tag-based** (not hierarchical projects)
 - Intervals with start/end times
 - Annotations on intervals
@@ -291,6 +330,7 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 - Extensions directory for custom scripts
 
 **Reports/Summaries:**
+
 - `timew summary` — aggregate by tag
 - `timew report` — custom reports
 - `timew export` — JSON export
@@ -299,6 +339,7 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 - Holiday/exclusion support
 
 **Privacy Features:**
+
 - 100% local plaintext files
 - No network, no telemetry
 - XDG compliant
@@ -312,20 +353,24 @@ Sugar-tick currently stores heartbeats as JSONL (one file per day under `~/.loca
 **Stars:** N/A | **Language:** Python | **License:** BSD
 
 **Data Storage:**
+
 - Reads from Taskwarrior database
 - Pulls from external issue trackers
 - Configuration: `${XDG_CONFIG_HOME}/bugwarrior/bugwarriorrc` or `.toml`
 
 **Project Organization:**
+
 - Imports issues from: GitHub, Gitlab, Jira, Trello, Bitbucket, Pagure, and 20+ others
 - Unified as Taskwarrior tasks with UDAs
 
 **Reports/Summaries:**
+
 - Works with Timewarrior via hooks
 - `bugwarrior pull` — sync issues
 - `bugwarrior uda` — export UDA definitions
 
 **Privacy Features:**
+
 - Local-only by default
 - Issue tracker credentials stored locally
 - Keyring support for credential management
@@ -375,6 +420,7 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 | bugwarrior | Issues → Tasks | No | Yes | GitHub API |
 
 **Recommendations for sugar-tick:**
+
 1. **Add tags** — Timewarrior's tag model is proven and flexible. Add `tags: list<string>` to `Heartbeat`.
 2. **Add milestones** — tmpo's milestone concept (sprints, releases) could map to user-defined coding goals.
 3. **Add project aliases** — Allow `project: "my-project"` → display name "My Project" mapping.
@@ -396,6 +442,7 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 | bugwarrior | — (sync only) | — | No | Issue aggregation |
 
 **Recommendations for sugar-tick:**
+
 1. **Add CSV/JSON export** — Trivial to implement, high user value. `sugar-tick export --format csv --from 2026-01-01 --to 2026-01-31`
 2. **Add "gaps" detection** — Find periods with no heartbeats (like Timewarrior)
 3. **Add iCal export** — Enables calendar integration (like tock)
@@ -420,6 +467,7 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 | WakaTime | Cloud | No | No | No |
 
 **Recommendations for sugar-tick:**
+
 1. **Document privacy guarantees** — Sugar-tick's JSONL is the most portable and verifiable privacy model. Make this prominent in README.
 2. **Add optional encryption** — Use sodium (libsodium-php) to encrypt heartbeats at rest with a user passphrase, similar to trackWork's AES-256-GCM approach.
 3. **Add .sugartrackignore** — Like `.gitignore` for privacy-sensitive projects/files.
@@ -463,6 +511,7 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 ## 6. Implementation Plan
 
 ### Phase 1: Export & Tags (Weeks 1-2)
+
 ```
 1.1 Add tags field to Heartbeat value object
 1.2 Implement TagFilter in Stats class
@@ -473,6 +522,7 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 ```
 
 ### Phase 2: Storage Backend (Weeks 3-4)
+
 ```
 2.1 Design SQLite schema (heartbeats table with indexes)
 2.2 Implement SqliteStore alongside JsonlStore
@@ -481,6 +531,7 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 ```
 
 ### Phase 3: Reports & Analysis (Weeks 5-6)
+
 ```
 3.1 Implement gaps detection algorithm
 3.2 Add iCal generation
@@ -489,6 +540,7 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 ```
 
 ### Phase 4: Polish (Weeks 7-8)
+
 ```
 4.1 Theme system for dashboard
 4.2 Automatic daily summary (cron-friendly)
@@ -501,12 +553,14 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 ## 7. Appendix: Data Format Reference
 
 ### Timewarrior Interval Format (`.data` files)
+
 ```json
 {"start":"20260113T090000","end":"20260113T120000","tags":["project","coding"]}
 {"start":"20260113T140000","end":"20260113T173000","tags":["project","meeting"]}
 ```
 
 ### TakaTime Heartbeat (MongoDB)
+
 ```json
 {
   "time": 1704067200,
@@ -519,11 +573,13 @@ Implementation: Add `SugarCraft\Tick\SqliteStore` alongside `Store`, sharing the
 ```
 
 ### Sugar-tick Heartbeat (Current JSONL)
+
 ```json
 {"time":1704067200,"project":"my-project","language":"go","file":"/path/to/file.go","duration":60}
 ```
 
 ### Proposed Extended Heartbeat (with tags)
+
 ```json
 {
   "time": 1704067200,

@@ -1,6 +1,7 @@
 # SugarCraft/candy-kit
 
 ## Metadata
+
 - **Package:** `sugarcraft/candy-kit`
 - **Namespace:** `SugarCraft\Kit`
 - **Description:** Opinionated CLI presentation helpers: StatusLine, Banner, Section, Stage, HelpText. PHP port of the Go charmbracelet/fang ecosystem.
@@ -39,6 +40,7 @@ public function __construct(
 ```
 
 **6 factory methods:**
+
 - `Theme::ansi()` — sensible defaults using ANSI 16 colors (bright variants)
 - `Theme::plain()` — no-op palette for snapshot tests (all styles are `Style::new()` passthrough)
 - `Theme::charm()` — pink + cyan Charm-brand palette

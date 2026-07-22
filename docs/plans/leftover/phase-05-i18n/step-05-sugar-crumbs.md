@@ -11,13 +11,16 @@ landmark text.
 ## Files
 
 **Create:**
+
 - `sugar-crumbs/lang/en.php`.
 - `sugar-crumbs/src/Lang.php`.
 
 **Modify:**
+
 - Files under `sugar-crumbs/src/`.
 
 **Tests:**
+
 - `sugar-crumbs/tests/LangCoverageTest.php`.
 
 ## Acceptance

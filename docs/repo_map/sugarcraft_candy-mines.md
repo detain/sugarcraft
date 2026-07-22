@@ -1,13 +1,21 @@
 # SugarCraft/candy-mines
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/candy-mines
+
 - **Upstream:** [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep)
+
 - **Language:** PHP 8.3+
+
 - **Stars:** N/A (monorepo library)
+
 - **License:** MIT
+
 - **Status:** 🟢 v1 ready
+
 - **Composer:** `sugarcraft/candy-mines`
+
 - **Namespace:** `SugarCraft\Mines`
 
 ---
@@ -21,6 +29,7 @@
 ## Feature Inventory
 
 ### Core Game Logic
+
 | Feature | Implementation | File |
 |---|---|---|
 | Grid generation | `Board::blank()` creates empty 2D cell grid | `src/Board.php:50` |
@@ -34,6 +43,7 @@
 | Win/loss gate | After game ends only `r` (restart) and `q` (quit) are accepted | `src/Game.php:98` |
 
 ### Difficulty Presets
+
 | Preset | Dimensions | Mines |
 |---|---|---|
 | `EASY` | 9x9 | 10 |
@@ -42,14 +52,21 @@
 | Custom | 2-50 x 2-50 | 1 to rows×cols-9 |
 
 ### Input Handling
+
 - Arrow keys + vim keys (hjkl) for cursor movement
+
 - `Space` / `Enter` to reveal
+
 - `f` to toggle flag
+
 - `c` or middle-click for chord
+
 - `r` to restart
+
 - `q` / `Esc` to quit
 
 ### Persistence & Stats
+
 | Feature | Implementation | File |
 |---|---|---|
 | Mid-game save/load | Versioned JSON serialization (`Board::serialize()` / `Board::unserialize()`) | `src/Board.php:224` |
@@ -58,12 +75,17 @@
 | Timer | Sub-second via `microtime(true)` | `src/Game.php:140` |
 
 ### Rendering
+
 - CandySprinkles `Style` + `Border::rounded()`
+
 - Color-coded adjacent numbers (8 distinct colors)
+
 - Cursor reverse highlighting
+
 - Emoji-free ASCII mode (default) with glyphs: `·` (hidden), `F` (flagged), `*` (mine), `1-8` (numbers)
 
 ### i18n
+
 - 16 locales via `Lang::t()` facade: en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar
 
 ---
@@ -123,8 +145,11 @@ Difficulty (PHP enum)
 **Problem:** Ensure the first click is never a mine and the player gets a meaningful flood-fill opening.
 
 **Algorithm:**
+
 1. Collect all cells where `abs(x - sx) > 1 || abs(y - sy) > 1` (outside 3x3 around click)
+
 2. Fisher-Yates/Knuth shuffle using injected `rand` closure
+
 3. Take first `$mineCount` cells as mine positions
 
 **Why exclude 3x3:** A standard Minesweeper rule — ensures the clicked cell and all 8 neighbors are safe, guaranteeing at least a 3x3 opening.
@@ -170,11 +195,17 @@ $b = Board::blank(5, 5, 5)->reveal(2, 2, $rand);
 **Approach:** Iterative stack-based traversal (not recursive) to avoid PHP call-stack overflow on large boards.
 
 **Algorithm:**
+
 1. Push starting cell onto stack
+
 2. Pop cell, mark as revealed (increment `revealedCount`)
+
 3. If cell is a mine, set `exploded = true`, continue
+
 4. If cell has `adjacent !== 0`, skip neighbor expansion (boundary of flood)
+
 5. If cell has `adjacent === 0`, push all unvisited unflagged unrevealed neighbors onto stack
+
 6. Repeat until stack empty
 
 **Key invariant:** A cell with `adjacent > 0` stops the flood — only zero-adjacent cells expand further. This is the classic Minesweeper behavior.
@@ -269,6 +300,7 @@ This is **O(width × height)** per check. The candy-mines approach is **O(1)** �
 
 **Counter maintenance:** `revealedCount` is incremented in two places:
 - `floodReveal()` — every cell revealed during flood fill
+
 - `chord()` — every neighbor revealed during chord
 
 Both always pass through the same code path, ensuring the counter is never out of sync.
@@ -280,9 +312,13 @@ Both always pass through the same code path, ensuring the counter is never out o
 **Problem:** Safely reveal neighbors when the player has correctly identified all adjacent mines.
 
 **Algorithm:**
+
 1. Get the revealed cell at (x, y) — must have `adjacent > 0`
+
 2. Count flagged neighbors (`adjFlags`)
+
 3. If `adjFlags === adjacent` (satisfied), reveal all unflagged unrevealed neighbors
+
 4. If any revealed neighbor is a mine, set `exploded = true`
 
 **Code reference:** `src/Board.php:305-360`
@@ -328,12 +364,16 @@ func sweep(x, y int, m *model, userInitiatedSweep bool, swept set[point]) {
 ## SugarCraft-Specific Innovations
 
 ### 1. Immutable Value Objects
+
 Every state transition returns a new instance. `Cell`, `Board`, `Stats`, and `Game` are all immutable. This enables:
 - Safe concurrency (none here, but foundationally sound)
+
 - Easy testing without mocks
+
 - Time-travel debugging via `Board::unserialize()`
 
 ### 2. Closure-Based RNG Injection
+
 Instead of a static/global RNG, the PRNG is a `Closure(int):int` passed to `Game::__construct`. Tests pin deterministic layouts:
 
 ```php
@@ -345,6 +385,7 @@ $board = Board::blank(5, 5, 3)->reveal(2, 2, $rand);
 This makes tests fully deterministic without touching global state.
 
 ### 3. Mid-Game Serialization
+
 `Board::serialize()` produces a versioned JSON payload:
 ```json
 {"v":1,"w":5,"h":5,"m":3,"p":true,"e":false,"r":17,"c":[[...], ...]}
@@ -352,8 +393,10 @@ This makes tests fully deterministic without touching global state.
 `Board::unserialize()` reconstructs an identical board. This enables save/restore functionality.
 
 ### 4. Stats Persistence with Atomic Writes
+
 `DifficultyStats::save()` uses the Homestead pattern:
 1. Write JSON to `$dir/.tmp_<random>.json`
+
 2. `rename()` over target (atomic on POSIX)
 
 This prevents corruption if a crash occurs mid-write.
@@ -444,20 +487,31 @@ candy-mines/
 ## Strengths
 
 1. **First-click safety fully implemented** — upstream has this as a TODO
+
 2. **O(1) win detection** — upstream scans the entire grid after every move
+
 3. **Deterministic injectable RNG** — enables fully reproducible tests
+
 4. **Mid-game serialization** — save/restore without external storage
+
 5. **Immutable architecture** — no hidden shared state, trivial testability
+
 6. **i18n** — 16 locales, zero runtime overhead for non-i18n apps
+
 7. **Atomic persistence** — stats survive crashes
+
 8. **Iterative flood-fill** — no stack overflow on large boards (vs recursive upstream)
 
 ## Weaknesses
 
 1. **Dense 2D array access** — `rows[y][x]` with y=row, x=col — easy to confuse
+
 2. **No undo/redo** — immutable design makes this possible but not yet implemented
+
 3. **Single-threaded** — PHP limitation, but appropriate for TUI
+
 4. **No AI solver** — purely a game, no hint system
+
 5. **Board state in `Game::$board`** — could be decoupled further for replay systems
 
 ---
@@ -466,10 +520,15 @@ candy-mines/
 
 `candy-mines` is a faithful and improved port of `go-sweep`. It adds significant value over the upstream:
 - First-click safety (fully working vs upstream's TODO)
+
 - O(1) win detection (vs O(n) grid scan)
+
 - Deterministic testing via injectable RNG
+
 - Mid-game save/load via JSON serialization
+
 - i18n support
+
 - Atomic stats persistence
 
 The code is clean, thoroughly tested, and follows SugarCraft conventions (immutable value objects, fluent `with*()` setters, `Model` interface for the TEA runtime). The iterative flood-fill avoids PHP's stack limitations, making it robust on Expert-sized boards.

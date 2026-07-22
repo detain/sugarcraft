@@ -14,11 +14,13 @@
 ## Files
 
 **Create:**
+
 - `honey-bounce/src/SpringPreset.php` (enum).
 - `honey-bounce/src/SpringConfig.php`.
 - `honey-bounce/src/Easing/CubicBezier.php`.
 
 **Modify:**
+
 - `honey-bounce/src/Spring.php` — `fromPreset(SpringPreset)` factory.
 
 ## Tests

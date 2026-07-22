@@ -1,10 +1,15 @@
 # SugarCraft/sugar-calendar
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-calendar
+
 - **Language:** PHP 8.3+
+
 - **License:** MIT
+
 - **Status:** 🟢 v1 ready
+
 - **Description:** PHP port of EthanEFung/bubble-datepicker — interactive month-grid date picker with keyboard navigation, date range selection, locale day names, event store architecture, and pure ANSI rendering.
 
 ## Upstream
@@ -62,6 +67,7 @@ sugar-calendar
 The central component. All navigation methods return new clones (immutable + fluent pattern).
 
 #### State Properties
+
 ```php
 private int $viewMonth;              // 1-12, currently viewed month
 private int $viewYear;                // currently viewed year
@@ -74,6 +80,7 @@ private bool $rangeMode;            // range selection toggle
 ```
 
 #### ANSI Style Properties (hardcoded SGR codes)
+
 ```php
 private string $headerStyle        = '1;37';  // bold white
 private string $dayNameStyle        = '90';     // bright black
@@ -86,6 +93,7 @@ private string $rangeStyle          = '1;35';   // bold magenta
 ```
 
 #### Key Constants (vim-style + web conventions)
+
 ```php
 public const KEY_LEFT  = 'left';
 public const KEY_RIGHT = 'right';
@@ -174,9 +182,13 @@ public function View(): string  // returns ANSI-rendered calendar
 The 7-column grid is the core rendering algorithm. Here's how it works:
 
 ### Grid Structure
+
 - **42 cells** = 6 weeks × 7 days (allows for months with up to 31 days + padding)
+
 - **Index range:** 0-41
+
 - **Row offset:** Each row represents 7 consecutive days
+
 - **Column mapping:** 0=Sun, 1=Mon, ..., 6=Sat
 
 ### Algorithm (from `buildCells()` at line 482)
@@ -220,10 +232,15 @@ private function firstDayOffset(): int
 ```
 
 ### Example: May 2026
+
 - May 1, 2026 is a **Friday** (day-of-week = 5)
+
 - `firstDow = 5`
+
 - Cells 0-4 (Sun-Thu) render as `'  '` (empty)
+
 - Cell 5 = day 1, cell 6 = day 2, ..., cell (5+31-1) = cell 35 = day 31
+
 - Cells 36-41 render as `'  '` (empty, past month end)
 
 ### Cursor Clamping (`clampCursor()` at line 555)
@@ -261,9 +278,12 @@ const (
 ```
 
 - `tab` / `shift+tab` cycles: `HeaderMonth → HeaderYear → Calendar → HeaderMonth`
+
 - Arrow key behavior **changes based on focus zone**:
   - In `HeaderMonth`: ↑/↓ = previous/next month
+
   - In `HeaderYear`: ↑/↓ = previous/next year
+
   - In `Calendar`: ↑/↓ = up/down one week
 
 ### SugarCraft Implementation
@@ -273,8 +293,11 @@ const (
 SugarCraft's DatePicker does **not** implement the three-tier focus system. Instead, it uses a **flat cursor-index model**:
 
 - Cursor moves freely through the 42-cell grid
+
 - Arrow keys move the cursor ±1 (left/right), ±7 (up/down)
+
 - Month/year navigation methods (`GoToNextMonth()`, etc.) are **explicit API calls**, not keyboard-triggered
+
 - The `handleKey()` method only handles cursor movement + range selection (lines 272-306)
 
 **Rationale:** The focus zone system adds complexity for limited UX gain in a pure renderer. The explicit navigation API (`GoToNextMonth()`, etc.) is more composable — callers can wire up any key bindings they prefer.
@@ -344,8 +367,11 @@ if ($key === self::KEY_ESCAPE && $this->rangeMode) {
 ```
 
 **handleRangeEnter() (lines 308-333):**
+
 - First Enter: sets `rangeStart` to cursor date
+
 - Second Enter: sets `rangeEnd` to cursor date (normalizes so start ≤ end)
+
 - Third Enter: starts fresh (clears both, sets new `rangeStart`)
 
 **Range rendering in buildCells() (lines 500-521):**
@@ -659,27 +685,35 @@ Each cell is 2 characters wide. Empty cells are `'  '`.
 ## Innovation Points (SugarCraft Enhancements Over Upstream)
 
 ### 1. **Immutable + Fluent Pattern**
+
 Upstream Go `bubble-datepicker` mutates `time.Time` fields directly. SugarCraft's DatePicker is fully immutable — every state method returns a clone.
 
 ### 2. **Date Range Selection**
+
 Not present in upstream Go. SugarCraft adds `DateRange` value object, `rangeStart/rangeEnd`, and range-aware rendering.
 
 ### 3. **Localization Framework**
+
 Upstream has hardcoded English strings. SugarCraft adds `Lang.php` facade, `lang/en.php`, and `LangCoverageTest` for translation completeness verification.
 
 ### 4. **Event Store Architecture**
+
 `EventStore` + `EventStoreInterface` enables DI-friendly event sourcing for calendar state changes. Not present in upstream.
 
 ### 5. **Pure ANSI Renderer**
+
 Upstream requires Bubble Tea framework + Lipgloss. SugarCraft's `View()` outputs pure ANSI strings — no TUI framework dependency.
 
 ### 6. **Navigation Helper Class**
+
 `Navigation` static class decouples grid-movement logic from DatePicker state machine, enabling reuse and independent testability.
 
 ### 7. **DateRange Value Object**
+
 `DateRange` is a `readonly` class with `withStart`/`withEnd` factories, `contains()`, `durationInDays()`, and `isComplete()` — a proper immutable domain object.
 
 ### 8. **LangCoverageTest**
+
 Translation completeness test that statically analyzes source files and verifies every `Lang::t()` key exists — prevents silent i18n gaps.
 
 ---
@@ -687,13 +721,21 @@ Translation completeness test that statically analyzes source files and verifies
 ## Known Gaps
 
 1. **`CALIBER_LEARNINGS.md` missing** — noted in sugarcrash_findings.md, not yet created
+
 2. **EventStore uses `time()` (second precision)** — should use `microtime(true)` for sub-second accuracy
+
 3. **`firstOfViewMonth()` return false handling** — some callers (e.g., `clampCursor()`) don't fully handle the `false` case from `DateTimeImmutable::createFromFormat()`
+
 4. **Vim keys h/j/k/l/g/G not wired in `handleKey()`** — only arrow keys are handled; vim mnemonics need to be added
+
 5. **Min/max date constraints** — not yet implemented (research doc outlines the design)
+
 6. **Focus zones (HeaderMonth/HeaderYear/Calendar)** — not implemented; flat cursor model instead
+
 7. **Event store not wired into rendering** — EventStore exists but `buildCells()` doesn't consult it for per-day styles
+
 8. **No mouse interaction** — keyboard only (matches upstream)
+
 9. **No time picker** — date-only (matches upstream)
 
 ---
@@ -701,33 +743,53 @@ Translation completeness test that statically analyzes source files and verifies
 ## File References
 
 ### Source Files
+
 - `/home/sites/sugarcraft/sugar-calendar/src/DatePicker.php` — main component (572 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/src/DateRange.php` — range value object (60 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/src/Navigation.php` — grid movement helper (39 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/src/EventStore.php` — event store (39 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/src/EventStoreInterface.php` — store interface (20 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/src/Lang.php` — i18n facade (22 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/lang/en.php` — English translations (34 lines)
 
 ### Test Files
+
 - `/home/sites/sugarcraft/sugar-calendar/tests/DatePickerTest.php` — 27 tests (384 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/tests/NavigationTest.php` — 11 tests (80 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/tests/DateRangeTest.php` — 12 tests (123 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/tests/EventStoreTest.php` — 7 tests (74 lines)
+
 - `/home/sites/sugarcraft/sugar-calendar/tests/LangCoverageTest.php` — translation completeness (148 lines)
 
 ### Examples
+
 - `/home/sites/sugarcraft/sugar-calendar/examples/basic.php` — basic demo
+
 - `/home/sites/sugarcraft/sugar-calendar/examples/constraints.php` — navigation + selection demo
 
 ### VHS Demos
+
 - `/home/sites/sugarcraft/sugar-calendar/.vhs/basic.tape` + `basic.gif`
+
 - `/home/sites/sugarcraft/sugar-calendar/.vhs/constraints.tape` + `constraints.gif`
 
 ### Documentation
+
 - `/home/sites/sugarcraft/docs/research/libraries/sugar-calendar-research.md` — 600-line feature research doc
+
 - `/home/sites/sugarcraft/sugar-calendar/README.md` — 75-line package README
+
 - `/home/sites/sugarcraft/plans/leftover/phase-05-i18n/step-01-sugar-calendar.md` — i18n implementation plan
+
 - `/home/sites/sugarcraft/plans/leftover/phase-10-apps/step-20-calendar-range-eventstore.md` — range + event store plan
 
 ---
@@ -735,9 +797,13 @@ Translation completeness test that statically analyzes source files and verifies
 ## Related Reports
 
 - `/home/sites/sugarcraft/repo_map/EthanEFung_bubble-datepicker.md` — upstream Go port analysis
+
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbles.md` — framework reference (components)
+
 - `/home/sites/sugarcraft/repo_map/ratatui_ratatui.md` — Rust reference (Calendar widget)
+
 - `/home/sites/sugarcraft/repo_map/textualize_textual.md` — Python reference (DateRangePicker)
+
 - `/home/sites/sugarcraft/repo_map/sugarcrash_findings.md` — audit findings (CALIBER_LEARNINGS.md missing, time() precision)
 
 ---
@@ -747,21 +813,35 @@ Translation completeness test that statically analyzes source files and verifies
 **sugar-calendar** is a well-structured PHP port that significantly enhances its upstream Go source. The most notable innovations are the immutable + fluent architecture (every method returns clones), the date range selection system (DateRange + rangeMode + handleKey), and the i18n framework (Lang facade + LangCoverageTest). The pure ANSI renderer design is strategically sound — it decouples the calendar from any specific TUI framework, making it composable with both candy-core and standalone use.
 
 **Strengths:**
+
 - Immutable + fluent throughout
+
 - Pure ANSI rendering (framework-independent)
+
 - Date range selection (significant UX enhancement over upstream)
+
 - Localization framework with completeness testing
+
 - Event store architecture for future extensibility
+
 - Comprehensive test coverage (57 tests across 5 test files)
 
 **Weaknesses:**
+
 - Missing `CALIBER_LEARNINGS.md` (audit finding)
+
 - EventStore uses `time()` instead of `microtime(true)`
+
 - Focus zone system not implemented (flat cursor model only)
+
 - Min/max date constraints not yet implemented
+
 - Vim keys h/j/k/l/g/G not wired in `handleKey()`
+
 - Event store not connected to per-day rendering
+
 - No mouse interaction
+
 - No compound widget (input + dropdown calendar)
 
 **Strategic position:** sugar-calendar occupies the date-picker niche in SugarCraft's component library. Its pure renderer approach makes it a building block for higher-level widgets (DateSelect with input field, DateTimePicker with time component). The 🟢 v1 ready status is appropriate — the core selection and navigation work well, but several enhancements from the research doc remain unimplemented.

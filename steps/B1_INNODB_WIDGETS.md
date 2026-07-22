@@ -27,6 +27,7 @@ Based on mysql_workbench_dash.md §5.1 Appendix A and comparing with current Wid
 | Insert Buffer Size | counter | StatusVar('ibuf_pool_size') or similar | bytes | blue |
 
 ### Key Metrics Missing
+
 - `Innodb_innodb_io_pending_*` (pending I/O) — may need special handling
 - `Innodb_buffer_pool_read_ahead_*` (read-ahead effectiveness)
 

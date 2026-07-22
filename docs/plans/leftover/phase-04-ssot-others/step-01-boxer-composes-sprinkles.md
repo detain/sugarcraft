@@ -14,6 +14,7 @@ instead of rolling its own.
 ## Files
 
 **Modify:**
+
 - `sugar-boxer/src/Boxer.php` — `withBorder(\SugarCraft\Sprinkles\Border\Border)`,
   `withStyle(\SugarCraft\Sprinkles\Style)`, `withTitle(string)`. Delete
   any internal `Border*` / `BorderChars` / `BorderStyle` enums sugar-boxer
@@ -22,6 +23,7 @@ instead of rolling its own.
   + path-repo.
 
 **Add (sugar-boxer-specific):**
+
 - `withMargin(int $top, int $right = 0, int $bottom = 0, int $left = 0)`
   — outer spacing (vs padding which is inner). This stays in sugar-boxer
   because candy-sprinkles doesn't ship margin as a first-class concept.

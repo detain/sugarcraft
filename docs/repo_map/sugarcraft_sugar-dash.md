@@ -3,15 +3,25 @@
 ## Metadata
 
 - **Package**: `sugarcraft/sugar-dash`
+
 - **Description**: Dashboard TUI library -- column grid layout, framed panels, status bar, tabs, and more. Ports patterns from bubble-grid, bubbletea-tilelayout, go-tealeaves, bubbleboxer, lattice, Homedash, and termui.
+
 - **Status**: 🟢 v1 ready
+
 - **Primary Upstream**: [charmbracelet/bubble-grid](https://github.com/charmbracelet/bubble-grid) (shahar3/bubble-grid fork)
+
 - **Additional Upstreams**: rasjonell/dashbrew, 76creates/stickers (FlexBox), tealeaves/bubbletea-tilelayout, treilik/bubbleboxer
+
 - **Subdirectory**: `sugar-dash/`
+
 - **Composer Package**: `sugarcraft/sugar-dash`
+
 - **Namespace**: `SugarCraft\Dash\`
+
 - **PHP**: ^8.3
+
 - **Dependencies**: `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/candy-pty`
+
 - **Dev Dependencies**: `sugarcraft/candy-vcr`, `phpunit/phpunit` ^10.5
 
 ---
@@ -25,10 +35,15 @@ The centerpiece of sugar-dash's dashboard system. A multi-column stacked grid th
 **File**: `/home/sites/sugarcraft/sugar-dash/src/Layout/Grid/StackedGrid.php`
 
 **Core Architecture**:
+
 - Items placed into columns (0-based index) via `addItem(Item, ItemOptions)`
+
 - Items within the same column are stacked vertically, sharing column width
+
 - Items in different columns placed side-by-side with equal column widths
+
 - Supports nested grids (StackedGrid can contain another StackedGrid as an item)
+
 - Implements `Sizer` interface for explicit dimension propagation
 
 **Key Code Pattern** (lines 112-129):
@@ -53,13 +68,19 @@ private function groupByColumn(): array
 expandHeight = (totalHeight - fixedHeight) / expandingCount
 ```
 - Partition items into `expanding` (expandVertical=true) and `fixed` (expandVertical=false)
+
 - Calculate fixed items' natural heights first
+
 - Distribute remaining height among expanding items with floor division
+
 - Last expanding item gets the remainder (prevents off-by-one drift)
 
 **Responsive Behavior**:
+
 - Collapses to single column when terminal width < 90 cells (Breakpoint::narrow())
+
 - When collapsed, all items flattened into one column and rendered vertically
+
 - `fitScreen` option controls whether columns share equal width (true) or use natural size (false)
 
 **Narrow Terminal Handling** (lines 80-89):
@@ -81,6 +102,7 @@ if (Breakpoint::narrow($this->width)) {
 
 **ItemOptions** (26 lines) -- per-item placement:
 - `column: int` (0-based) -- which column to place item in
+
 - `expandVertical: bool` -- whether item expands to fill remaining vertical space
 
 ### 1.3 Comparison with Upstream bubble-grid
@@ -94,9 +116,13 @@ if (Breakpoint::narrow($this->width)) {
 | Nested grids supported | `if ($item instanceof self)` check | Same pattern |
 
 **Differences from Go Original**:
+
 1. **PHP immutability**: Go bubble-grid uses pointer receivers with mutation; sugar-dash uses readonly properties and returns new clones
+
 2. **No interface{}**: PHP's lack of generics means `Sizer` interface check instead of type assertion
+
 3. **Breakpoint collapse**: sugar-dash adds responsive collapse at 90 cells (Homedash convention)
+
 4. **ItemWithOptions wrapper**: Internal pairing class not needed in Go's struct-based approach
 
 ---
@@ -108,11 +134,17 @@ if (Breakpoint::narrow($this->width)) {
 A bordered frame that wraps any `Item`, providing configurable borders, title, padding, and vertical alignment.
 
 **Core Features**:
+
 - Configurable border characters (rounded, normal, thick, double, block) via `Border` from candy-sprinkles
+
 - Optional title displayed on top border
+
 - Per-side border color overrides via `Color`
+
 - Configurable padding (all sides or per-side)
+
 - Vertical alignment within the bordered content area
+
 - Fluent setters for all properties
 
 **File**: `/home/sites/sugarcraft/sugar-dash/src/Layout/Frame.php` (296 lines)
@@ -142,10 +174,15 @@ public function getInnerSize(): array
 A panel component with header and footer sections, distinct from Frame in purpose.
 
 **Core Features**:
+
 - Optional title header with border
+
 - Main content area
+
 - Optional footer with border
+
 - Customizable border style (single, double, rounded, bold, empty)
+
 - Customizable border and title colors
 
 **File**: `/home/sites/sugarcraft/sugar-dash/src/Layout/Panel.php` (489 lines)
@@ -191,38 +228,60 @@ Defined across multiple files in `src/Layout/`:
 ### 3.2 Core Layout Containers
 
 #### HStack (`src/Layout/HStack.php`, 284 lines)
+
 - Horizontal stack layout
+
 - `withSpacing(int)` gap between items
+
 - `withAlignment(HAlign)` horizontal alignment
+
 - `withItems(array)` replaces all items
+
 - `withAppended(Item)` / `withPrepended(Item)` add items
+
 - Factory methods: `new(...items)`, `spaced(int, ...items)`, `centered(...items)`
 
 #### VStack (`src/Layout/VStack.php`, 251 lines)
+
 - Vertical stack layout with alignment options
+
 - Similar API to HStack but for vertical stacking
+
 - Factory methods: `new(...items)`, `spaced(int, ...items)`, `centered(...items)`, `right(...items)`
 
 #### ZStack (`src/Layout/ZStack.php`, 300 lines)
+
 - Layered stack (items on top of each other)
+
 - Items rendered bottom-to-top (last item visible by default)
+
 - `withAlignment(HAlign)` and `withVAlignment(VAlign)` for positioning within shared dimensions
+
 - Factory methods: `new(...items)`, `left(...)`, `right(...)`, `top(...)`, `bottom(...)`
 
 #### Stack (`src/Layout/Stack.php`)
+
 - Basic vertical stack (simpler than VStack)
+
 - Factory methods: `new(...items)`, `spaced(int, ...items)`
 
 ### 3.3 Advanced Layouts
 
 #### FlexLayout (`src/Layout/FlexLayout.php`, 710 lines)
+
 CSS Flexbox-inspired layout with:
 - Flex directions: Row, Column, RowReverse, ColumnReverse
+
 - FlexWrap: NoWrap, Wrap, WrapReverse
+
 - JustifyContent (main axis distribution)
+
 - AlignItems (cross axis alignment)
+
 - Gap between items
+
 - Responsive wrapping behavior
+
 - Natural-size rendering when no dimensions set
 
 **Flex Distribution Algorithm** (lines 362-384):
@@ -251,41 +310,62 @@ private function calculateRowItemWidths(int $totalWidth, array $itemSizes): arra
 ```
 
 #### GridLayout (`src/Layout/GridLayout.php`, 452 lines)
+
 CSS Grid-style layout with:
 - Configurable rows and columns
+
 - Gap support between cells (columnGap, rowGap)
+
 - Spanning support (items can span multiple cells via GridItem)
+
 - Two factory methods: `columns(int, items)` and `rows(int, items)`
+
 - `withItem(Item)` / `withItems(array)` / `withColumns(int)` / `withRows(int)` / `withGap(int)`
 
 #### Layout (`src/Layout/Layout.php`, 604 lines)
+
 Advanced layout algorithm supporting:
 - Horizontal and vertical layouts
+
 - Flex-like distribution (grow/shrink via flex weights)
+
 - Gap/spacing support
+
 - Horizontal and vertical alignment
+
 - Natural dimension calculation
+
 - Complex multi-pass size calculation (flex distribution, then proportional shrinking)
 
 **Flex Weight Algorithm** (lines 245-315):
 1. Calculate total weight from flex children
+
 2. First pass: assign fixed sizes and minimums
+
 3. Second pass: distribute remaining space to flex children based on weight ratios
+
 4. Third pass: if still not fitting, shrink proportionally with scale factor
 
 ### 3.4 Tile Layout (Constraint-Based)
 
 #### TileLayout (`src/Layout/Tile/TileLayout.php`, 261 lines)
+
 Based on bubbletea-tilelayout pattern with constraint-based sizing.
 
 **Tile System Components**:
+
 - `Tile` -- named tile with Size and content
+
 - `Size` -- width/height constraints (fixedWidth, fixedHeight, weight, minWidth, minHeight, optional, minSizeFit)
+
 - `Constraint` -- how a child should be sized (Fixed, Flex, Fit)
+
 - `ConstraintKind` -- enum for constraint types
+
 - `Resolver` -- 5-phase constraint resolution algorithm
 
 #### Constraint (`src/Layout/Tile/Constraint.php`, 89 lines)
+
 ```php
 final class Constraint
 {
@@ -306,10 +386,14 @@ final class Constraint
 ```
 
 #### Resolver (`src/Layout/Tile/Resolver.php`, 348 lines)
+
 5-phase constraint resolution algorithm:
 1. **Phase 1**: Resolve Fixed and Fit children -- subtract their sizes from remaining
+
 2. **Phase 2+3**: Distribute remaining to Flex children with cumulative rounding, then clamp and redistribute until stable
+
 3. **Phase 4**: Check optional children -- remove any below minSize
+
 4. **Retry** loop if any removed until stable
 
 **Key Algorithm** (lines 104-108):
@@ -329,8 +413,11 @@ self::distributeFlexWithClamping($remaining, $work, $sizes, $active);
 
 Tabbed interface component with:
 - Multiple tabs with labels and content
+
 - Active tab highlighting with color
+
 - Tab separator customization
+
 - Keyboard navigation via selected tab index
 
 **Factory**: `Tabs::new(array $tabs)` with tabs array format `['label' => string, 'content' => Item]`
@@ -366,10 +453,15 @@ Status bar with left/right zones and configurable separators.
 
 Terminal screen management:
 - Enter/leave alternate screen buffer
+
 - Show/hide cursor
+
 - Clear screen (full or partial)
+
 - Save/restore cursor position
+
 - Screen size detection
+
 - Mouse tracking enable/disable
 
 **ANSI Escape Sequences**:
@@ -420,7 +512,9 @@ echo $grid->render();
 
 **Example: dashboard-status.php** (111 lines):
 - Demonstrates Spinner, Skeleton, NProgress, Progress, ProgressBar, ProgressRing, Gauge
+
 - NotificationQueue with Toast/Alert/ModalNotification
+
 - HStack layout for multiple components in a row
 
 ---
@@ -441,13 +535,16 @@ interface Module extends Model
 
 **Core Model Methods** (inherited):
 - `init(): ?Closure` -- invoked once on startup, may return initial Cmd
+
 - `update(Msg): array{0: Module, 1: ?Cmd}` -- receives messages, returns next module and optional command
+
 - `view(): string` -- renders current module to string
 
 ### 5.2 BaseModule (`src/Module/BaseModule.php`)
 
 Abstract helper with:
 - `withState(array): static` for immutable state updates
+
 - Default `update()` returns `[self, null]`
 
 ### 5.3 Built-in Modules
@@ -470,10 +567,15 @@ Abstract helper with:
 JSON-based protocol for extending dashboards with external binaries.
 
 **Core Classes**:
+
 - `Request` -- Plugin request DTO
+
 - `Response` -- Plugin response DTO
+
 - `PluginSdk` -- Plugin runner loop
+
 - `ExternalModule` -- Wraps binary into Module interface
+
 - `Discovery` -- Plugin discovery from filesystem
 
 ### 6.2 Request/Response Protocol
@@ -646,6 +748,7 @@ Uses `SugarCraft\Vcr` for recording/replaying render sessions.
 
 Key test files for the grid system:
 - `tests/Layout/Grid/StackedGridTest.php` -- main grid tests
+
 - `tests/Layout/Grid/StackedGridResponsiveTest.php` -- responsive behavior tests
 
 ---
@@ -751,13 +854,21 @@ public function withTheme(Theme $theme): self
 ## 14. Strengths
 
 1. **Comprehensive layout system**: 8+ distinct layout strategies (StackedGrid, HStack, VStack, ZStack, FlexLayout, GridLayout, Layout, TileLayout)
+
 2. **Immutable patterns**: Consistent use of readonly properties and wither methods
+
 3. **Constraint-based layout**: Tile/Constraint system from tealeaves for sophisticated sizing
+
 4. **Theme system**: Consistent Drawable interface with theme fan-down
+
 5. **Responsive design**: Built-in breakpoint system for narrow/medium/wide terminals
+
 6. **Module architecture**: Elm-pattern modules with clear init/update/view contract
+
 7. **Deep component library**: 200+ components organized into 13 namespaces
+
 8. **Plugin system**: JSON-based external binary integration
+
 9. **VHS demos**: 40+ animated GIF demos in `.vhs/` directory
 10. **Dual-SSOT awareness**: Clear documentation of distinct primitive types
 
@@ -766,13 +877,21 @@ public function withTheme(Theme $theme): self
 ## 15. Architectural Gaps & Future Opportunities
 
 1. **Constraint enum system**: Ratatui-style `Constraint::Min()`, `Constraint::Max()`, `Constraint::Length()`, `Constraint::Percentage()`, `Constraint::Ratio()`, `Constraint::Fill()` -- currently handled via separate Constraint class
+
 2. **StatefulWidget separation**: Components like Tabs, List, Table mix state and rendering; external state objects (SelectionState) would improve testability
+
 3. **Reactive properties**: No reactive mechanism for automatic re-render on state change
+
 4. **Component lifecycle**: No mount/unmount hooks for initialization/cleanup
+
 5. **Block wrapper**: Borders/padding/title rendering duplicated in Frame, Panel, Card; Ratatui-style Block wrapper would DRY this up
+
 6. **Streaming data**: No support for streaming/chunked data updates (vs bubble-grid's append mode)
+
 7. **Bubble sort in Table**: Table sorting uses bubble sort (O(n²)) -- could use PHP's built-in sorting
+
 8. **Gap distribution**: FlexLayout's space-around and space-evenly implementations are simplified/stubbed
+
 9. **Event handling**: Components are pure render-only; events handled externally in candy-core runtime
 10. **Composition pattern**: No `compose()` generator interface for declarative child declaration
 
@@ -781,45 +900,71 @@ public function withTheme(Theme $theme): self
 ## 16. File Reference Index
 
 ### Core Grid System
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Grid/StackedGrid.php` -- Main grid layout
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Grid/Options.php` -- Grid options
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Grid/ItemOptions.php` -- Per-item placement
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Grid/ItemWithOptions.php` -- Internal pairing
 
 ### Layout Containers
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/HStack.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/VStack.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/ZStack.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Stack.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/FlexLayout.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/GridLayout.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Layout.php`
 
 ### Panel/Frame System
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Frame.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Panel.php`
 
 ### Tile Layout
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Tile/TileLayout.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Tile/Constraint.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Tile/Resolver.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Tile/Size.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Tile/Tile.php`
 
 ### Foundation Interfaces
+
 - `/home/sites/sugarcraft/sugar-dash/src/Foundation/Item.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Foundation/Sizer.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Foundation/Drawable.php`
 
 ### Module System
+
 - `/home/sites/sugarcraft/sugar-dash/src/Module/Module.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Module/BaseModule.php`
 
 ### Components
+
 - `/home/sites/sugarcraft/sugar-dash/src/Components/Tabs/Tabs.php`
+
 - `/home/sites/sugarcraft/sugar-dash/src/Components/StatusBar/StatusBar.php`
 
 ### Screen & Output
+
 - `/home/sites/sugarcraft/sugar-dash/src/Layout/Screen.php`
 
 ---
@@ -832,8 +977,11 @@ The library's primary strength is its breadth -- over 200 components across 13 n
 
 Primary areas for future enhancement include:
 1. Constraint enum system (Ratatui-style) for more declarative sizing
+
 2. StatefulWidget separation for better testability
+
 3. Reactive properties for automatic re-rendering
+
 4. Block wrapper component to DRY up border/padding rendering
 
 The dual-SSOT awareness (documented distinction between sugar-dash primitives and other SugarCraft libraries' primitives) reflects mature architectural thinking about the relationship between different ports in the ecosystem.

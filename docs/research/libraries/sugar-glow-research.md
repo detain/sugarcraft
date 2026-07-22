@@ -23,6 +23,7 @@ This document details findings from Go, Rust, Python, and JavaScript ecosystems 
 **Source:** `/home/sites/sugarcraft/sugar-glow/src/` + `/home/sites/sugarcraft/candy-shine/src/`
 
 ### Architecture
+
 ```
 Input Markdown
     ↓
@@ -38,6 +39,7 @@ ANSI output
 ```
 
 ### Current Capabilities
+
 - ✅ 8 stock themes (ansi, plain, dark, light, dracula, tokyo-night, pink, notty)
 - ✅ Word wrap with Width::wrapAnsi()
 - ✅ OSC 8 hyperlinks
@@ -46,6 +48,7 @@ ANSI output
 - ✅ Paging via Viewport (candy-core)
 
 ### Current Limitations
+
 - ❌ Syntax highlighting limited to: PHP, JS, TS, Python, Go, Bash, SQL (no JSON, Ruby, Rust, etc.)
 - ❌ No streaming/incremental rendering
 - ❌ No Chroma/syntect-style rich theme definition for code blocks
@@ -57,9 +60,11 @@ ANSI output
 ## 2. Go Ecosystem (Upstream: glow + glamour)
 
 ### glow (charmbracelet/glow)
+
 **Source:** [github.com/charmbracelet/glow](https://github.com/charmbracelet/glow) (25K stars)
 
 #### Paging Architecture
+
 ```go
 // From ui/pager.go - uses Bubble Tea viewport
 type pagerModel struct {
@@ -77,6 +82,7 @@ Key features:
 - **Help overlay**: `?` key shows hotkey help
 
 #### glamour Rendering (charmbracelet/glamour)
+
 **Source:** [github.com/charmbracelet/glamour](https://github.com/charmbracelet/glamour) (3.4K stars)
 
 Uses **goldmark** parser + custom ANSI renderer. Theme system is JSON-based:
@@ -108,12 +114,14 @@ Uses **goldmark** parser + custom ANSI renderer. Theme system is JSON-based:
 ```
 
 **Key glamour patterns:**
+
 1. `block_prefix`/`block_suffix` for document-level wrappers
 2. `indent_token` for list continuation markers (e.g., `│ ` for blockquotes)
 3. `chroma` section for syntax highlighting theme
 4. `format` string for custom rendering (e.g., `Image: {{.text}} →`)
 
 ### v2.0 Changes (2026-03)
+
 - Now uses Lip Gloss v2 for color downsampling
 - Auto-style detection removed (default is "dark")
 - Overline styles removed (poor terminal support)
@@ -123,6 +131,7 @@ Uses **goldmark** parser + custom ANSI renderer. Theme system is JSON-based:
 ## 3. Rust Ecosystem
 
 ### mdansi (2026-03, actively maintained)
+
 **Source:** [crates.io/crates/mdansi](https://crates.io/crates/mdansi)
 
 Modern, fast Markdown-to-ANSI renderer with streaming mode:
@@ -138,6 +147,7 @@ for chunk in markdown_chunks {
 ```
 
 **Key features:**
+
 1. **Streaming mode**: Incremental rendering for piped LLM/AI output with buffered multi-line constructs
 2. **200+ languages** via syntect syntax highlighting
 3. **TOML theme system** with 4 built-in themes + custom `.toml` files
@@ -146,6 +156,7 @@ for chunk in markdown_chunks {
 6. **Smart text wrapping**: Unicode-aware, CJK/emoji-correct, orphan prevention
 
 ### markdown-to-ansi
+
 **Source:** [crates.io/crates/markdown-to-ansi](https://crates.io/crates/markdown-to-ansi)
 
 Simpler library, uses pulldown-cmark + syntect:
@@ -162,6 +173,7 @@ let output = render("# Hello\n\nThis is **bold**.", &opts);
 ```
 
 ### pulldown-cmark
+
 **Source:** [github.com/pulldown-cmark/pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark)
 
 The standard CommonMark parser for Rust. Key design:
@@ -184,6 +196,7 @@ let parser = pulldown_cmark::Parser::new_ext(
 ## 4. Python Ecosystem
 
 ### mistune (lepture/mistune)
+
 **Source:** [github.com/lepture/mistune](https://github.com/lepture/mistune) (3K stars)
 
 Fast, extensible Python Markdown parser with pluggable renderer architecture:
@@ -206,12 +219,14 @@ markdown = mistune.create_markdown(renderer=HighlightRenderer())
 ```
 
 **Key patterns:**
+
 1. **Renderer interface**: Separate renderers for HTML, Markdown, RST output
 2. **AST mode**: `renderer=None` returns token list for analysis
 3. **Plugin system**: Striketrhough, table, footnote, task lists as plugins
 4. **No built-in ANSI renderer**: Community `mistune-terminal` package exists
 
 ### marked-terminal (Node.js)
+
 **Source:** [npmjs.com/package/marked-terminal](https://www.npmjs.com/package/marked-terminal)
 
 Uses chalk for styling + cli-highlight for syntax:
@@ -253,6 +268,7 @@ marked.use(markedTerminal({}, { theme: 'monokai' }));
 ## 5. JavaScript Ecosystem
 
 ### marked + marked-highlight + marked-terminal
+
 **Source:** [github.com/markedjs/marked](https://github.com/markedjs/marked)
 
 Marked is a fast, low-level markdown compiler. Terminal rendering via extensions:
@@ -274,6 +290,7 @@ const marked = new Marked(
 ```
 
 ### Bun's markdown-to-ANSI (2026)
+
 **Source:** [oven-sh/bun#28833](https://github.com/oven-sh/bun/pull/28833)
 
 Built-in Zig implementation with sophisticated ANSI rendering:
@@ -293,6 +310,7 @@ pub const AnsiRenderer = struct {
 ```
 
 ### markdown-it-terminal
+
 **Source:** [github.com/trabus/markdown-it-terminal](https://github.com/trabus/markdown-it-terminal)
 
 Uses `ansi-styles` for styling + `cardinal` for highlighting:
@@ -371,6 +389,7 @@ var options = {
 **Problem:** Current regex-based highlighter only handles 7 languages.
 
 **Options:**
+
 1. **Pygments (recommended for PHP)**: `pygments/pygments` package, 500+ languages
 2. **Scrutiny**: `scrutinyphp/scrutiny` - PHP-native port of Prism.js
 3. **shivammathur/php-highlight**: Highlight.js wrapper for PHP
@@ -408,6 +427,7 @@ for chunk in markdown_chunks {
 ```
 
 **Implementation for PHP:**
+
 - Buffer fenced code blocks and tables until complete
 - Emit paragraph content immediately
 - Use ReactPHP async streams for non-blocking render
@@ -456,6 +476,7 @@ for chunk in markdown_chunks {
 **Reference:** glow's `fsnotify.Watcher` in pager.go
 
 **PHP alternatives:**
+
 - `symfony/process` + `inotify_wait` (Linux)
 - `ReactPHP/async-rotation` for async file monitoring
 
@@ -480,6 +501,7 @@ public function watchFile(string $path): void
 **Reference:** mdansi's "Unicode-aware, CJK/emoji-correct" wrapping
 
 **PHP libraries:**
+
 - `symfony/polyfill-mbstring` (already available)
 - `composer/package-versions-guard` for `symfony/text-width`
 

@@ -15,6 +15,7 @@ Four small features bundled:
 ## Files
 
 **Modify:**
+
 - `sugar-prompt/src/MultiSelect.php`.
 - `sugar-prompt/src/Form.php` — `validateAll`.
 - `sugar-prompt/src/Select.php` — enum mode.

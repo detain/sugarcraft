@@ -48,6 +48,7 @@ From `repo_map/p-gen_smenu.md`:
 ## 4. High-Signal Open Issues
 
 ### #48: musl-static ARM binaries (Jan 2026) — 1 comment
+
 **Request**: Static binaries linked with musl for armv7l and aarch64 for use in Android adb shell/Termux and other ARM Linux environments.
 
 **Relevance**: Indicates niche embedded/mobile use cases for selection filtering. SugarCraft should consider cross-compilation and musl targets.
@@ -55,6 +56,7 @@ From `repo_map/p-gen_smenu.md`:
 ---
 
 ### #19: Move most logic from main into functions (Jun 2019) — 4 comments, OPEN
+
 **Request**: Extract smenu core into a library function callable via `smenu.h` with API: input = pointer to array of strings + options, output = pointer to array of selected strings. User wanted to call from Nim language.
 
 **Discussion**: A third-party Nim wrapper exists ([kaushalmodi/nim-smenu](https://github.com/kaushalmodi/nim-smenu)) but stalled because most code is inline in `main`.
@@ -66,6 +68,7 @@ From `repo_map/p-gen_smenu.md`:
 ---
 
 ### #6: Windows support? (Jan 2018) — 7 comments, OPEN
+
 **Request**: Compile to .exe with Visual Studio tools for use with MinTTY.
 
 **Discussion**: No resolution. MinTTY supports most Unix builtins but smenu requires PTY/terminal introspection not available on native Windows.
@@ -75,6 +78,7 @@ From `repo_map/p-gen_smenu.md`:
 ---
 
 ### #3: Completion of error handling (Dec 2016) — 4 comments, OPEN
+
 **Request**: Add error handling for `fprintf` and `strdup` return values.
 
 **Discussion**: Points to specific lines in smenu.c where error handling is missing.
@@ -86,6 +90,7 @@ From `repo_map/p-gen_smenu.md`:
 ## 5. Important Closed Issues
 
 ### #49: Print help/usage messages to stderr (Feb 2026) — 4 comments, MERGED
+
 **Request**: Print help/usage to stderr instead of stdout so `answer=$(smenu)` captures clean output.
 
 **Shell script problem**:
@@ -101,6 +106,7 @@ if [ -z answer ] ...
 ---
 
 ### #45: Terminal does not have capability to report cursor position (Feb 2025) — 2 comments
+
 **Request**: Error occurs when terminal input arrives before smenu renders. Reproduction:
 ```bash
 $ sleep 2 && smenu -2 ^Y -1 ^N -3 ^C -s /^N -m "Please" <<< "Yes"
@@ -114,6 +120,7 @@ During the 2-second sleep, pressing any key causes the error.
 ---
 
 ### #42: v1.3.0 not working with TERM=xterm (Oct 2023) — 8 comments
+
 **Report**: Static binary says "unknown terminal type" for xterm despite xterm being listed as supported.
 
 **Resolution**: User discovered the static Linux glibc binary didn't include xterm terminfo. Solution was to use `tic` to install terminfo.
@@ -123,6 +130,7 @@ During the 2-second sleep, pressing any key causes the error.
 ---
 
 ### #41: Option to start with search running (Jun 2023) — 2 comments
+
 **Request**: Start smenu with predefined search already active (without pressing `/`) to directly search server names.
 
 **Maintainer**: Not implemented. Suggestion is to use `-` to prefix search term: `echo "server list" | smenu -s "searchterm"`.
@@ -132,6 +140,7 @@ During the 2-second sleep, pressing any key causes the error.
 ---
 
 ### #40: Press key to choose selection and exit without ENTER (May 2023) — 2 comments
+
 **Request**: For menus like "a) OptionA b) OptionB c) OptionC", allow pressing `a`, `b`, or `c` to select and exit immediately, like pressing `q` exits immediately.
 
 **Maintainer**: Not implemented; would require additional key binding logic.
@@ -141,12 +150,15 @@ During the 2-second sleep, pressing any key causes the error.
 ---
 
 ### #39: Segmentation fault with hidden timeout word mode (Mar 2023) — 3 comments
+
 **Report**:
 ```bash
 # Works
+
 echo "a b c" | smenu -x word d 5
 
 # Crashes
+
 echo "a b c" | smenu -X word d 5  # Segmentation fault
 ```
 `-X` (hidden timeout) with `word` mode crashes; `-x` (normal timeout) works.
@@ -156,6 +168,7 @@ echo "a b c" | smenu -X word d 5  # Segmentation fault
 ---
 
 ### #37: Column context limiting columns produced (Sep 2022) — 4 comments
+
 **Request**: Partial column selection. Input has 3 fields (stream name, view count, title) but user wants only first 2 columns to be "selectable" while keeping the rest free-form:
 ```
 foobar | 1234 | title of the stream
@@ -174,6 +187,7 @@ baz    | 1337 | another | title | for | another stream
 ---
 
 ### #36: Insufficient memory with malformed sed substitution (Aug 2022) — 8 comments
+
 **Report**:
 ```bash
 $ echo '[A]' '[B]' '[C]' | smenu -ES '/([^[]]+)/\2/'
@@ -187,6 +201,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 ---
 
 ### #33: Add support for fuzzy matching equivalent to gum filter (Aug 2022) — 1 comment
+
 **Request**: Implement `gum filter` equivalent — visual fuzzy filtering menu.
 
 **Reference**: Links to charmbracelet/gum filter animation.
@@ -198,6 +213,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 ---
 
 ### #31: Word limit 512 characters (Jul 2022) — 5 comments
+
 **Report**: `smenu` fails with "length of word has reached limit of 512" when used as CTRL-R replacement for large history files (2MB/~30K lines, 3.6MB/~80K lines). `hstr` handles same files fine.
 
 **Discussion**: hstr uses different algorithm (doesn't load full history into memory at once).
@@ -207,6 +223,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 ---
 
 ### #28: dmenu input behavior (May 2021) — 2 comments
+
 **Request**: Reproduce dmenu behavior where user can type arbitrary input not in the list if the list is empty OR the typed input becomes the result.
 
 **Discussion**: smenu can't accept input outside the provided list. This is by design for menu selection, but limits use as input prompt.
@@ -216,6 +233,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 ---
 
 ### #25: Exit 1 on Control-C pressed? (Nov 2020) — 12 comments
+
 **Request**: Distinguish between empty selection and Ctrl-C cancel via different exit codes. Currently both exit 0.
 
 **Maintainer**: Won't implement; suggests using signal handler or checking if output is empty.
@@ -225,6 +243,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 ---
 
 ### #23: Multi-select question (Apr 2020) — 2 comments
+
 **Request**: How to select multiple entries when using `-T` (tag mode)?
 
 **Explanation**: Enter selects and exits. Multi-select requires SPACE to tag, then Enter to confirm.
@@ -234,6 +253,7 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 ---
 
 ### #1: Support for multiple selections (Dec 2016) — 4 comments
+
 **Original multi-select request**: Output format like `"A\0B\0C"` for multiple selections.
 
 **Resolution**: Tag mode (`-T`) with null-delimited output was implemented.
@@ -290,16 +310,19 @@ Error: Insufficient memory (attempt to calloc 2305843009213693952 bytes)
 ## 9. Architectural Changes
 
 ### Ctxopt Migration (v0.9.15)
+
 - **Change**: Introduced `ctxopt` framework for context-sensitive option handling
 - **Impact**: Broke existing scripts that relied on old option parsing behavior (#46 - gcc15 compilation failure)
 - **Signal**: Internal refactoring caused breaking changes despite not changing user-facing behavior
 
 ### Word Length Limits Evolution
+
 - Original limit: 256 bytes (#17)
 - Current limit: 512 bytes (#31)
 - **Signal**: Limits are architectural constraints, not easily changed without breaking existing users
 
 ### Single-File Architecture
+
 - All ~17,500 lines in `smenu.c` with module headers
 - **Why**: Simplicity, no build system complexity for linking
 - **Consequence**: Blocks library extraction (#19)
@@ -316,6 +339,7 @@ No explicit performance issues in issues/PRs. However:
 - **Timeout system**: 100ms tick granularity via `setitimer`
 
 **SugarCraft lessons**:
+
 - Implement integer overflow protection in size calculations
 - Use safe arithmetic with explicit overflow checks
 
@@ -324,6 +348,7 @@ No explicit performance issues in issues/PRs. However:
 ## 11. Extensibility Discussions
 
 ### Library Extraction Request (#19)
+
 User wanted to call smenu from Nim with:
 ```c
 // Input: pointer to array of strings + smenu options
@@ -336,6 +361,7 @@ char** smenu_interface(char **input, int input_count, smenu_options_t *opts);
 **SugarCraft opportunity**: This is exactly what SugarCraft should provide — a composable selection/filtering library.
 
 ### Plugin System
+
 No plugin system exists. smenu is a single-purpose tool.
 
 ---

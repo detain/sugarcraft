@@ -12,6 +12,7 @@ round-trip correctly.
 ## Files
 
 **Modify:**
+
 - `candy-vcr/src/BuiltinSerializer.php` — add cases for
   `\SugarCraft\Vt\Msg\FocusInMsg` and `FocusOutMsg`.
 - `candy-vcr/composer.json` — confirm `sugarcraft/candy-vt` is in

@@ -5,17 +5,27 @@
 **Ecosystem positioning:** It occupies a distinct niche in the SugarCraft ecosystem as the only overlay-specific fuzzy filter (versus `sugar-bits` inline components, `candy-lister` inline lists, or `sugar-veil` general-purpose overlay compositor). It is a v1-ready library with solid fundamentals but significant enhancement opportunities.
 
 **Biggest opportunity areas:**
+
 1. UTF-8 grapheme cluster support for match highlighting and text rendering
+
 2. Scored fuzzy ranking (vs. simple anchor-biased substring)
+
 3. ANSI-aware width calculation using existing SugarCraft utilities
+
 4. Optional pagination for large lists (hundreds of items)
+
 5. Keyboard focus management for embedded use
 
 **Biggest missing capabilities:**
+
 1. No UTF-8 awareness — `highlightMatches()` and `replaceSegment()` use byte-level indexing
+
 2. No pagination — shows `windowHeight - 2` items and scrolls via cursor only
+
 3. No fuzzy ranking — items return in original order, not ranked by relevance
+
 4. No direct TTY ioctl for SIGWINCH — relies on stale `COLUMNS`/`LINES` env vars
+
 5. No mouse support — keyboard-only navigation
 
 ---
@@ -38,10 +48,15 @@ candy-hermit/src/
 ```
 
 **Core State (all readonly):**
+
 - `$allItems` / `$filteredItems` — item arrays
+
 - `$isShown` / `$cursor` / `$filterText` / `$prompt` — overlay state
+
 - `$itemFormatter` / `$filterFn` / `$matchStyle` — customization closures
+
 - `$windowHeight` / `$windowWidth` / `$xOffset` / `$yOffset` — geometry
+
 - `$border` / `$style` / `$helpBar` / `$statusBar` / `$onResize` — decoration/config
 
 **Immutable + Fluent Pattern:** All state mutations (`show()`, `hide()`, `type()`, `backspace()`, `clear()`, `cursorUp()`, `cursorDown()`, `cursorTop()`, `cursorBottom()`) and configuration (`withItems()`, `setPrompt()`, `setMatchStyle()`, `setWindowHeight()`, etc.) return new instances via internal clone pattern.
@@ -67,20 +82,31 @@ candy-hermit/src/
 ## Strengths
 
 1. **Fuzzy filtering delivered** — theHermit's most requested feature (noted as TODO upstream) is implemented
+
 2. **Proper immutable + fluent pattern** — PHP `readonly` properties with clone-based mutation
+
 3. **Composite design** — HelpBar, StatusBar, FileHistory all compose cleanly via interfaces
+
 4. **Background continues updating** — the core Hermit value proposition preserved from upstream
+
 5. **Character-level compositing** — simple and effective for the overlay use case
+
 6. **Well-tested** — 47 test methods covering Hermit state machine, filtering, cursor, immutability, border/style composition
+
 7. **SIGWINCH integration** — proper signal handling via SignalForwarder
 
 ## Weaknesses
 
 1. **No UTF-8 grapheme awareness** — `highlightMatches()` uses `strncasecmp` with byte-level indexing; multi-byte characters break match highlighting
+
 2. **No pagination** — shows `windowHeight - 2` items; no offset-based pagination for long lists
+
 3. **No fuzzy ranking** — anchor-biased substring matching doesn't produce quality scores; items returned in original order
+
 4. **No ANSI-aware width** — uses naive `strlen()` for character positioning; upstream uses `lipgloss.Width()` with ANSI/Unicode awareness
+
 5. **SIGWINCH size source** — uses `COLUMNS`/`LINES` env vars rather than direct `/dev/tty` ioctl; may be stale or unset
+
 6. **Single-column layout** — no multi-column or staggered layout options
 
 ---
@@ -108,6 +134,7 @@ candy-hermit/src/
 ## Critical
 
 ### 1. UTF-8 Grapheme Cluster Support
+
 **Title:** Grapheme-aware match highlighting and text width
 
 **Description:** The current implementation uses `strlen()`, `strpos()`, and character-by-character loops that operate on bytes, not Unicode grapheme clusters. This breaks when users type filter text containing multi-byte characters (emoji, CJK, combining characters).
@@ -119,8 +146,11 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/charmbracelet_lipgloss.md` (Unicode Grapheme-Aware Width section); `docs/repo_map/charmbracelet_x.md` (Grapheme-Aware Width Calculation section)
 
 **Implementation ideas:**
+
 - Replace `strlen()`/`strpos()` with `grapheme_strlen()`/`grapheme_substr()` in `highlightMatches()` and `replaceSegment()`
+
 - Add `Width()` utility using `grapheme_strlen()` for visual character count
+
 - Use `IntlBreakIterator` for grapheme boundaries where `ext-intl` is available
 
 **Estimated complexity:** Medium — requires reviewing all string operations in `Hermit.php`
@@ -130,6 +160,7 @@ candy-hermit/src/
 ---
 
 ### 2. ANSI-Aware Width Calculation
+
 **Title:** Proper ANSI escape sequence and double-width character handling
 
 **Description:** The `View()` method and overlay compositing use byte-level `strlen()` to determine positions. When ANSI SGR codes or double-width characters (CJK) are present in the background view, character positioning becomes incorrect.
@@ -141,9 +172,13 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/charmbracelet_lipgloss.md` (Width/Height measurement section)
 
 **Implementation ideas:**
+
 - Add `Width()` static method to `Hermit` or extract to `SugarCraft\Core\Util\Width`
+
 - Use `mb_strwidth()` or `grapheme_strlen()` as fallback
+
 - Consider leveraging existing `SugarCraft\Core\Ansi` utilities if they handle ANSI stripping
+
 - Track visible width separately from byte length during compositing
 
 **Estimated complexity:** Medium — requires replacing position calculations with width-aware versions
@@ -155,6 +190,7 @@ candy-hermit/src/
 ## High Value
 
 ### 3. Scored Fuzzy Filtering
+
 **Title:** Quality-ranked fuzzy matching with match indices
 
 **Description:** The current anchor-biased substring match returns items in their original array order. Items that match better (e.g., match at position 0 vs position 10) are not ranked higher. The `sahilm/fuzzy` library used by `charmbracelet/bubbles` provides scored matches with character indices.
@@ -166,9 +202,13 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/charmbracelet_bubbles.md` (List component section)
 
 **Implementation ideas:**
+
 - Add optional fuzzy scoring to `applyFilter()` that sorts by match quality
+
 - Implement Smith-Waterman-like local alignment for scoring substring matches
+
 - Add `setFuzzyScoring(bool)` configuration option
+
 - Expose match quality via `itemQuality()` query or sort the filtered array
 
 **Estimated complexity:** High — requires implementing a scoring algorithm or porting `sahilm/fuzzy` to PHP
@@ -178,6 +218,7 @@ candy-hermit/src/
 ---
 
 ### 4. Pagination for Large Lists
+
 **Title:** Offset-based pagination for lists with hundreds of items
 
 **Description:** The Hermit shows `windowHeight - 2` items (prompt + separator + items) and scrolls via cursor. For lists with hundreds of items (e.g., file lists, command histories), this means many cursor-down presses to reach the desired item. `charmbracelet/bubbles` List provides pagination.
@@ -189,10 +230,15 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/charmbracelet_bubbles.md` (List component section)
 
 **Implementation ideas:**
+
 - Add `setPageSize(int)` configuration
+
 - Track `$pageOffset` state in addition to `$cursor`
+
 - Add PageUp/PageDown key handling
+
 - Render page indicator in StatusBar
+
 - Allow jumping to page via number keys (1-9)
 
 **Estimated complexity:** Medium — adds new state and key handling
@@ -202,6 +248,7 @@ candy-hermit/src/
 ---
 
 ### 5. Keyboard Focus Management
+
 **Title:** Focus tracking for embedded Hermit in larger TUI apps
 
 **Description:** When Hermit is embedded in a larger Bubble-Tea-style application (via the `Model` interface), there's no concept of focus. If the parent app has multiple interactive components, the Hermit doesn't know if it has keyboard focus.
@@ -213,9 +260,13 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/charmbracelet_bubbletea.md` (Focus Events section)
 
 **Implementation ideas:**
+
 - Add `$hasFocus` state to `Hermit`
+
 - Add `focus()` / `blur()` methods
+
 - On `blur()`, stop responding to key events but continue rendering
+
 - Add `withFocusTracking()` factory variant
 
 **Estimated complexity:** Low — adds simple boolean state
@@ -227,6 +278,7 @@ candy-hermit/src/
 ## Medium Priority
 
 ### 6. Custom Filter Modes
+
 **Title:** Support for prefix/fuzzy/substring filter modes
 
 **Description:** The current filter is anchor-biased substring. Some users may want strict prefix matching (`filter must start at position 0`) or true fuzzy matching (non-contiguous character matches).
@@ -238,8 +290,11 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/sugarcraft_candy-hermit.md` (vs. p-gen/smenu section)
 
 **Implementation ideas:**
+
 - Add `enum FilterMode { Substring, Prefix, Fuzzy }` 
+
 - Add `setFilterMode(FilterMode $mode)` configuration
+
 - Implement respective algorithms for each mode
 
 **Estimated complexity:** Medium — three distinct filter algorithms
@@ -249,6 +304,7 @@ candy-hermit/src/
 ---
 
 ### 7. Direct TTY ioctl for SIGWINCH
+
 **Title:** Use `/dev/tty` ioctl for accurate terminal size on SIGWINCH
 
 **Description:** The current SIGWINCH handler reads `COLUMNS`/`LINES` environment variables to determine terminal size. These may be stale or unset in some environments. Using `ioctl(STDIN, TIOCGWINSZ, ...)` provides accurate real-time size.
@@ -260,8 +316,11 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/charmbracelet_x.md` (term Package section)
 
 **Implementation ideas:**
+
 - Enhance `SignalForwarder::attachSigwinchToFd()` to accept a size-fetching callback
+
 - Use `proc_open` with `TIOCGWINSZ` ioctl as fallback when env vars unavailable
+
 - Document the limitation and fallback behavior
 
 **Estimated complexity:** Medium — requires platform-specific code (already exists in `candy-pty`)
@@ -271,6 +330,7 @@ candy-hermit/src/
 ---
 
 ### 8. Match Highlighting via StyleRunes Pattern
+
 **Title:** Use styled-rune approach for match highlighting
 
 **Description:** The current `highlightMatches()` uses `strncasecmp` for matching and wraps matched characters with `$matchStyle`. A more flexible approach uses index arrays like `lipgloss.StyleRunes(str, matchedIndices, matchedStyle, unmatchedStyle)`.
@@ -282,8 +342,11 @@ candy-hermit/src/
 **Source file:** `docs/repo_map/charmbracelet_lipgloss.md` (StyleRunes section)
 
 **Implementation ideas:**
+
 - Add `setUnmatchedStyle(string $ansiStyle)` configuration
+
 - Modify `highlightMatches()` to return both matched and unmatched styled spans
+
 - Update `itemFormatter` to receive matched/unmatched segments
 
 **Estimated complexity:** Low — modifies existing highlighting logic
@@ -295,6 +358,7 @@ candy-hermit/src/
 ## Low Priority
 
 ### 9. Multi-Column Layout
+
 **Title:** Support for multi-column item display
 
 **Description:** Currently all items display in a single column. For wide terminals with many short items, a multi-column layout would show more items simultaneously.
@@ -304,8 +368,11 @@ candy-hermit/src/
 **Source:** `ratatui/ratatui` List does not directly support this, but `charmbracelet/huh` Select uses horizontal layout option.
 
 **Implementation ideas:**
+
 - Add `setColumns(int $n)` configuration
+
 - Calculate column width as `windowWidth / columns`
+
 - Distribute items across columns in `View()`
 
 **Estimated complexity:** High — requires reworking the View rendering logic
@@ -315,6 +382,7 @@ candy-hermit/src/
 ---
 
 ### 10. Escape Key Handling
+
 **Title:** First-class Escape key to close/cancel
 
 **Description:** Currently users must check if `filterText === ''` to detect "escape pressed while empty = close" pattern. This logic is in the consuming application, not in Hermit.
@@ -324,9 +392,13 @@ candy-hermit/src/
 **Source:** `charmbracelet/bubbles` List handles Escape via keybindings.
 
 **Implementation ideas:**
+
 - Add `withEscapeClose(bool $closeOnEscape = true)` configuration
+
 - Track a `$escapePressed` state
+
 - Add `wasEscapePressed(): bool` query method
+
 - On `hide()`, clear the escape state
 
 **Estimated complexity:** Low — simple boolean and query method
@@ -344,28 +416,40 @@ candy-hermit/src/
 **candy-hermit current:**
 ```
 1. Case-insensitive substring search (strpos)
+
 2. Anchor bias: match position * 2 < strlen(value)
+
 3. Custom filter predicate (ANDed)
+
 4. No ranking/scoring
 ```
 
 **charmbracelet/bubbles List (sahilm/fuzzy):**
 ```
 1. Finds all possible matches in the string
+
 2. Assigns a score based on:
    - Consecutive character matches (higher score)
+
    - Match at word boundary (higher score)
+
    - Match at start of string (higher score)
+
    - Matched character ratio
+
 3. Returns matches sorted by score descending
+
 4. Provides character indices for highlighting
 ```
 
 **p-gen/smenu (TST approach):**
 ```
 1. Builds Ternary Search Tree from all items
+
 2. O(k) search where k = key length (not string length)
+
 3. Bitmap tracking for match highlighting
+
 4. Three modes: prefix, fuzzy, substring
 ```
 
@@ -395,8 +479,11 @@ func Width(str string) int {
 
 **Why external is better:** The Go library correctly handles:
 - ANSI escape sequences (zero width)
+
 - Double-width characters (CJK, emoji)
+
 - Combining characters (zero width when combined)
+
 - Grapheme clusters (single visual unit)
 
 **Tradeoffs for candy-hermit:** Full grapheme cluster support requires either `ext-intl` or careful implementation. The current byte-level approach works for ASCII but breaks for Unicode.
@@ -411,7 +498,9 @@ func Width(str string) int {
 
 Create `SugarCraft\Core\Util\Width` class with static methods:
 - `strwidth(string $s): int` — visual width accounting for ANSI and Unicode
+
 - `substring(string $s, int $start, int $length): string` — grapheme-aware substr
+
 - `ansiStrip(string $s): string` — remove ANSI codes for width calculation
 
 This could be used by `candy-hermit`, `sugar-bits`, `sugar-prompt`, and other rendering components.
@@ -506,24 +595,33 @@ public function onFilterChange(callable $callback): self;  // called when filter
 
 Create a cookbook example showing how to build a VS Code-style command palette with:
 - Fuzzy file search
+
 - Recent files from FileHistory
+
 - Keyboard shortcut display in HelpBar
+
 - Entry selection triggers action
 
 ## 2. Multi-Step Selection Flow
 
 Document the pattern for multi-step selection:
 1. Show Hermit with filtered items
+
 2. User selects item
+
 3. Hermit hides
+
 4. Background view updates based on selection
+
 5. Later, user can reopen Hermit with recent items shown
 
 ## 3. Embedding in Bubble-Tea-Style App
 
 Document the `Model` interface pattern for embedding Hermit in larger apps, including:
 - Message routing
+
 - Focus management
+
 - View composition
 
 ---
@@ -534,8 +632,11 @@ Document the `Model` interface pattern for embedding Hermit in larger apps, incl
 
 Add visual options for the selected item:
 - Reverse video (swap foreground/background colors)
+
 - Underline
+
 - Bold text
+
 - Custom style via `setSelectedStyle()`
 
 ## 2. Empty State Rendering
@@ -567,24 +668,33 @@ public function withPreviewPane(callable $renderer): self;
 
 Expand test coverage with:
 - Emoji in item values (`['🍎 Apple', '🍌 Banana']`)
+
 - CJK characters in items and filter
+
 - Combining characters (`café` vs `cafe\u0301`)
+
 - Zero-width characters
+
 - Mixed ASCII + multi-byte in same item
 
 ## 2. Add Property-Based Tests
 
 Use `phpunit/phpunit` quickcheck-style testing to verify:
 - `cursorUp() . cursorDown()` returns to same position
+
 - `type() . backspace()` returns to previous filter state
+
 - Filter always returns subset of all items
 
 ## 3. Snapshot Tests for View Output
 
 Add golden file tests for `View()` output at various states:
 - Default overlay with 5 items
+
 - Overlay with match highlighting active
+
 - Overlay with empty filter results
+
 - Overlay with custom border/style
 
 ---
@@ -611,7 +721,9 @@ When enabled, clicking on an item selects it and clicking outside closes the Her
 
 Create `sugarcraft/vscode-hermit` extension that:
 - Registers `package.json` contributes for commands
+
 - Uses Hermit for fuzzy command search
+
 - Persists command history
 
 ## 4. Alfred/Launchy Integration
@@ -676,57 +788,74 @@ Document using Hermit as the search mechanism for desktop launcher integration.
 
 1. **UTF-8 grapheme support in highlightMatches()**
    - Replace `strncasecmp`/`strpos` with `grapheme_stripos()` 
+
    - Add test cases for emoji/CJK in items and filter
 
 2. **Add Escape close state**
    - Add `wasEscapePressed()` query method
+
    - Document "Escape while empty = close" pattern
 
 3. **Empty message configuration**
    - Add `withEmptyMessage(string $msg, ?string $style)`
+
    - Render message when filter produces zero items
 
 ## Medium-Term Improvements (1-2 weeks each)
 
 4. **ANSI-aware width utility**
    - Extract `Width` utility to `candy-core` or `candy-sprinkles`
+
    - Use in `replaceSegment()` for correct positioning
 
 5. **Pagination for large lists**
    - Add page state and PageUp/PageDown handling
+
    - Add page indicator to StatusBar
 
 6. **Scored fuzzy filtering**
    - Implement basic scoring (consecutive match bonus + position bonus)
+
    - Sort filtered results by score
+
    - Add `setFuzzyScoring(bool)` configuration
 
 7. **Keyboard focus tracking**
    - Add `focus()`/`blur()` methods
+
    - Add `hasFocus()` query
+
    - Only respond to keys when focused
 
 ## Major Architectural Upgrades (ongoing)
 
 8. **FilterScorer plugin interface**
    - Extract scoring into `FilterScorer` interface
+
    - Default to current anchor-bias approach
+
    - Allow custom scorers (TST, fuzzy library)
 
 9. **Async/streaming filter**
    - For large lists, allow filter to run in background
+
    - Show "filtering..." indicator while processing
+
    - Support cancellation
 
 10. **Mouse selection support**
     - Integration with `candy-zone` for click handling
+
     - Track item regions for hit testing
 
 ## Experimental Ideas
 
 - Multi-column layout for wide terminals
+
 - Preview pane for selected item details
+
 - vim-mode navigation (j/k for up/down, / for filter)
+
 - Custom filter modes (prefix, fuzzy, substring)
 
 ---

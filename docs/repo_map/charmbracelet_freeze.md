@@ -1,6 +1,7 @@
 # charmbracelet/freeze
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/freeze
 - Language: Go
 - Stars: ~4,583
@@ -31,12 +32,14 @@
 ## Key Classes and Methods
 
 ### main.go
+
 - `main()` — Entry point; handles CLI parsing via kong, orchestrates input reading, lexing, SVG generation, and output format conversion
 - `printFilenameOutput(filename string)` — Prints the "WROTE" success message with lipgloss styling
 - `printErrorFatal(msg string, err error)` — Prints formatted error and exits with code 1
 - `helpPrinter(kong.HelpOptions, *kong.ParseContext)` — Custom help formatter
 
 ### config.go
+
 - `Config` struct — Main configuration containing Window, Settings, Decoration (Border/Shadow), Font, and Line options
 - `Shadow` struct — blur, x, y offset configuration
 - `Border` struct — radius, width, color configuration
@@ -45,12 +48,14 @@
 - `loadUserConfig()` / `saveUserConfig(Config)` — User config file persistence via xdg
 
 ### interactive.go
+
 - `runForm(config *Config) (*Config, error)` — Builds and runs huh form for interactive configuration with file picker, theme selector, font settings, border/shadow controls
 - `validateColor(s string) error` — Validates hex color format with regex
 - `validateInteger(s string) error` / `validateFloat(s string) error` — Input validation
 - `parsePadding(v string) []float64` — Parses space-separated padding values
 
 ### ansi.go
+
 - `dispatcher` struct — Handles ANSI escape sequence dispatching for terminal output rendering
 - `dispatcher.Print(r rune)` — Inserts rune into SVG tspan element, handles wide characters
 - `dispatcher.Execute(code byte)` — Handles tab/newline execution
@@ -60,6 +65,7 @@
 - `palette` — 256-color ANSI palette array
 
 ### svg/svg.go
+
 - `AddShadow(element *etree.Element, id string, x, y, blur float64)` — Adds SVG filter definition for drop shadow
 - `AddClipPath(element *etree.Element, id string, x, y, w, h float64)` — Adds clipping path definition
 - `AddCornerRadius(e *etree.Element, radius float64)` — Adds rx/ry attributes for rounded corners
@@ -69,29 +75,36 @@
 - `GetDimensions(element *etree.Element)` / `SetDimensions(element *etree.Element, width, height float64)` — SVG dimension manipulation
 
 ### png.go
+
 - `libsvgConvert(doc *etree.Document, _, _ float64, output string) error` — Converts SVG to PNG via system `rsvg-convert` binary (faster path)
 - `resvgConvert(doc *etree.Document, w, h float64, output string) error` — Fallback PNG conversion using embedded resvg-go WebAssembly renderer with embedded JetBrains Mono fonts
 
 ### pty.go
+
 - `executeCommand(config Config) (string, error)` — Executes command in PTY, captures output including ANSI codes; uses shellwords parsing, context timeout, xpty for PTY management
 
 ### style.go
+
 - `charmStyle` — Custom Chroma syntax highlighting style definition with 20+ token type mappings
 
 ### font/font.go
+
 - `JetBrainsMonoTTF` / `JetBrainsMonoNLTTF` — Embedded JetBrains Mono font files (OFL licensed)
 - `JetBrainsMono` / `JetBrainsMonoNL` — Base64-encoded font strings for embedding in SVG/PNG
 
 ### cut.go
+
 - `cut(input string, window []int) string` — Slices input to line range [start, end)
 - `clamp(n, low, high int) int` — Constrains value to range
 
 ### input/input.go
+
 - `ReadFile(file string) (string, error)` — Reads file contents
 - `ReadInput(in io.Reader) (string, error)` — Reads stdin
 - `IsPipe(in *os.File) bool` — Detects if stdin is a pipe
 
 ### help.go
+
 - Contains help text and flag documentation
 
 ## Notable Algorithms / Named Patterns

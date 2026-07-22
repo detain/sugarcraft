@@ -132,11 +132,13 @@ The `otherwise()` callback's potential throw from `dispatch(new ExceptionMsg($e)
 ### Test suite is comprehensive
 
 **Key test files reviewed:**
+
 - `tests/RendererTest.php` — 346 lines; excellent coverage including `ShortWriteStream` custom stream wrapper
 - `tests/ProgramTest.php` — 991 lines; extensive integration tests using `stream_socket_pair`
 - `tests/I18n/TTest.php` — 228 lines; covers locale fallback chain, placeholder interpolation
 
 **Strengths:**
+
 - `RecordingModel` test double is clean and reusable
 - Tests verify behavior not implementation
 - Good use of custom stream wrappers for edge cases

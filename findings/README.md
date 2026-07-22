@@ -119,6 +119,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 ## Top Cross-Cutting Recommendations
 
 ### 1. Extract Shared Utilities to candy-core
+
 - **mutate() trait** — currently reimplemented 35+ times; create a `SugarCraft\Core\Concerns\WithBuilder` trait
 - **AsyncOps class** — duplicated in candy-async, candy-buffer, sugar-dash; consolidate into candy-core
 - **Clamping utility** — `SugarCraft\Core\clamp(int $value, int $min, int $max): int` — appears in 10+ projects
@@ -127,6 +128,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - **FFI memory wrapper** — shared `SugarCraft\Core\FFI\free_ffi(mixed $ptr)` utility
 
 ### 2. Security Hardening
+
 - Audit every `escapeshellarg()` call for stripslashes aftermath
 - Add input validation for all integer coordinates (mouse, viewport, collision)
 - Fix hardcoded bearer tokens and placeholder credentials
@@ -134,18 +136,21 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - Document which libs handle untrusted input and which assume trusted
 
 ### 3. Performance Optimization
+
 - Cache Style objects in hot render loops (candy-mold, honey-flap, candy-shine)
 - Pre-compute visible column indices before row iteration (sugar-stickers, sugar-table)
 - Add caching to SmithWatermanMatcher in fuzzy filter (candy-shell, sugar-crush)
 - Use array rewind + single-pass iteration instead of multiple array_map passes
 
 ### 4. PHP 8.4 Readiness
+
 - Most libs are PHP 8.3+ fully compatible
 - No uses of deprecated features detected
 - Consider `readonly class` for immutable value objects (Bird, Pipe, TickMsg in honey-flap, etc.)
 - Consider first-class callable syntax (ClassName::method) where closures only invoke constructors
 
 ### 5. Missing Features Priority
+
 - candy-shell: `--no-selected`, `--print-query`, fuzzy highlight rendering
 - candy-vcr: async batch rendering, buffering improvements
 - sugar-gallery: format fallback, animated GIF, async decode

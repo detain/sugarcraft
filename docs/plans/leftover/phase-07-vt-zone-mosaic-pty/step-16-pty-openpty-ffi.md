@@ -14,6 +14,7 @@ Adds an alternate path that may resolve the macOS arm64 ABI issues
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/Libc.php` — extend cdef with `openpty`.
 - `candy-pty/src/Posix/PosixPtySystem.php` — try `openpty()` first
   on Darwin; fall back to the existing quartet.

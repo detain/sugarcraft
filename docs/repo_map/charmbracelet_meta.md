@@ -1,6 +1,7 @@
 # charmbracelet/meta
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/meta
 - **Language:** YAML / GoReleaser Config / GitHub Actions Workflows
 - **Stars:** Not directly applicable (infrastructure/meta repo)
@@ -10,6 +11,7 @@
 ## Feature List
 
 ### GoReleaser Configurations
+
 - **goreleaser.yaml** — Full-featured release config for standard CLI tools with multi-platform builds (Linux, macOS, Windows, FreeBSD, OpenBSD, NetBSD), arm64/amd64/386/arm support, Docker multi-arch image publishing (docker.io + ghcr.io), Homebrew taps, Scoop, AUR, Winget, NIX/NUR, Furies, and SBOM generation with cosign signing
 - **goreleaser-lib.yaml** — Simplified config for Go libraries (skips builds, focuses on changelog and source publishing)
 - **goreleaser-vhs.yaml** — Specialized config for VHS (includes shell completions, manpages, ffmpeg/ttyd dependencies for video tooling)
@@ -21,6 +23,7 @@
 - **goreleaser-announce.yaml** — Announcement-only config
 
 ### GitHub Actions Workflows (Reusable)
+
 - **build.yml** — Multi-platform CI (Ubuntu/macOS/Windows), Go vulnerability scanning via govulncheck, go mod tidy validation, build + test execution, auto-merge for Dependabot PRs
 - **lint.yml** — Cross-platform linting with golangci-lint across Ubuntu/macOS/Windows, supports custom lint configs and pre-run commands
 - **goreleaser.yml** — Full release workflow with Nix/Nixfmt, Cosign signing, QEMU/docker buildx, multi-registry Docker login (ghcr.io + docker.io), SBOM generation via Syft, macOS code signing + notarization, GoReleaser Pro distribution
@@ -38,10 +41,12 @@
 - **build-plan9.yml** — Plan 9 OS compatibility builds
 
 ### Dependabot Configuration
+
 - **dependabot.yml** — Central Dependabot config managing go.mod, GitHub Actions, and Docker dependencies on weekly schedule with grouped updates
 - **dependabot/dependabot-*.yml** — Specialized Dependabot configs per project (bubbletea, lipgloss, huh, vhs, soft-serve-action, colorprofile, wish)
 
 ### Other
+
 - **golangci.yml** — Central golangci-lint configuration with strict linter set (bodyclose, exhaustive, goconst, godot, gosec, misspell, nakedret, nilerr, noctx, nolintlint, prealloc, revive, rowserrcheck, sqlclosecheck, tparallel, unconvert, unparam, whitespace, wrapcheck) with gofumpt + goimports formatters
 - **templates/README.md** — Standard README template for Charm projects
 - **footer.md** — Release footer with artifact verification instructions via cosign
@@ -60,6 +65,7 @@ This is not a Go library — it is a meta-configuration repository. There are no
 ## Notable Algorithms / Named Patterns
 
 ### GoReleaser Variable Interpolation
+
 Template variable system used across all release configs:
 ```yaml
 variables:
@@ -71,12 +77,14 @@ variables:
 ```
 
 ### Semantic Version Tag Sorting
+
 ```yaml
 git:
   tag_sort: semver
 ```
 
 ### Conventional Changelog Grouping
+
 Regexp-based changelog categorization for automated grouping:
 ```yaml
 changelog:
@@ -90,9 +98,11 @@ changelog:
 ```
 
 ### Multi-Architecture Docker Builds
+
 Build templates for arm64 + amd64 + armv7 with platform-specific labels.
 
 ### Cosign Sigstore Signing
+
 Blob signing for artifact verification using Sigstore's cosign tool:
 ```yaml
 signs:
@@ -107,6 +117,7 @@ signs:
 ```
 
 ### Go Module Proxy
+
 ```yaml
 gomod:
   proxy: true

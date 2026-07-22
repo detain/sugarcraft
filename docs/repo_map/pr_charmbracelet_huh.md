@@ -1,6 +1,7 @@
 # Second-Stage Ecosystem Intelligence Report: charmbracelet/huh
 
 ## Metadata
+
 - **Report Date:** 2026-05-27
 - **Repository:** https://github.com/charmbracelet/huh
 - **Language:** Go
@@ -16,6 +17,7 @@
 **charmbracelet/huh** is a TUI form library forming part of the Bubble Tea ecosystem. It provides multi-field forms with pages (Groups), diverse field types (Input, Text, Select, MultiSelect, Confirm, FilePicker, Note), validation, theming, keyboard navigation, dynamic reactive forms, and accessibility mode.
 
 **Key Statistics:**
+
 - 76 open issues (as of analysis)
 - 60 contributors
 - 17 releases
@@ -59,6 +61,7 @@ The first-pass analysis identified:
 ## 4. High-Signal Open Issues
 
 ### #761: Proposal: Declarative YAML form generator (charm-form)
+
 **Author:** junhinhow (April 2026)
 **State:** Open - Feature Proposal
 
@@ -67,9 +70,11 @@ The first-pass analysis identified:
 **Key Details:**
 ```
 # YAML spec would define forms, output JSON
+
 charm-form run deploy.yaml
 # → Interactive huh form appears
 # → Outputs JSON with answers
+
 ```
 
 **Supported Field Types:** input, text, select, multiselect, confirm, filepicker
@@ -84,6 +89,7 @@ charm-form run deploy.yaml
 ---
 
 ### #769: Select/Multiselect long-option-lines issue
+
 **Author:** onyxraven (April 2026)
 **State:** Open
 
@@ -97,6 +103,7 @@ charm-form run deploy.yaml
 ---
 
 ### #740: Set focus to form field if automatically filled
+
 **Author:** dennis-dko (February 2026)
 **State:** Open
 
@@ -110,6 +117,7 @@ charm-form run deploy.yaml
 ---
 
 ### #745: Cannot use themes anymore in v2
+
 **Author:** hramrach (March 2026)
 **State:** Open
 
@@ -137,6 +145,7 @@ func (t myTheme) Theme(isDark bool) *huh.Styles { ... }
 ---
 
 ### #718: Add option to skip TTY initialization for fully-hidden forms
+
 **Author:** tetienne (December 2025)
 **State:** Open
 
@@ -147,6 +156,7 @@ func (t myTheme) Theme(isDark bool) *huh.Styles { ... }
 ---
 
 ### #770: V2 Regression: Blurred styles no longer apply on input fields
+
 **Author:** seanamos (April 2026)
 **State:** Open
 
@@ -171,6 +181,7 @@ i.textinput.TextStyle = styles.TextInput.Text
 ## 5. Important Closed Issues
 
 ### #429: Select options disappear when other options wrap
+
 **Author:** seeseemelk (October 2024)
 **State:** Closed (March 2025)
 **Labels:** bug, select
@@ -184,6 +195,7 @@ i.textinput.TextStyle = styles.TextInput.Text
 ---
 
 ### #655: don't run validation on blur
+
 **Author:** leandergangso (May 2025)
 **State:** Closed (merged PR #725)
 **Labels:** bug
@@ -202,6 +214,7 @@ i.textinput.TextStyle = styles.TextInput.Text
 ---
 
 ### #281: Keypresses ignored upon reaching 2nd form
+
 **Author:** patricklatorre (June 2024)
 **State:** Closed (February 2025)
 **Labels:** bug
@@ -232,6 +245,7 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ---
 
 ### #191: Shift-tab functionality impossible with dynamic forms
+
 **Author:** iloveicedgreentea (April 2024)
 **State:** Closed (PR #285)
 **Labels:** bug
@@ -250,6 +264,7 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ## 6. Recurring Pain Points
 
 ### A. Validation Blocking Navigation
+
 **Frequency:** 5+ issues (#[655, #191, #120, #315, #540])
 **Pattern:** Validation on blur/change blocks backward navigation
 **Impact:** Poor UX, users trapped on invalid fields
@@ -261,11 +276,13 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ---
 
 ### B. Terminal.app Rendering on Mac
+
 **Frequency:** 3+ issues (#[631, #341])
 **Pattern:** Line duplication, screen corruption in macOS Terminal.app
 **Root Cause:** Specific commit (fd4724c71710a7786d9aa5de74d1c1613284546f) introduced rendering bug
 
 **Manifestations:**
+
 - Lines duplicate and accumulate on each navigation
 - Window resize causes wild behavior
 - Persisted across multiple versions
@@ -277,6 +294,7 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ---
 
 ### C. Multi-Form Keypress Interference
+
 **Frequency:** 2+ issues (#[278, #281])
 **Pattern:** Internal messages (`nextGroupMsg`, `nextFieldMsg`) not scoped to specific form instances
 **Impact:** Multiple forms in same TUI interfere with each other
@@ -290,6 +308,7 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ---
 
 ### D. Viewport Line Wrapping
+
 **Frequency:** 4+ issues (#[429, #485, #573, #769])
 **Pattern:** Viewport assumes single-line content; breaks with wrapped text
 **Impact:** Options disappear, scroll position wrong, content cut off
@@ -301,11 +320,13 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ---
 
 ### E. Theme API Breaking Changes (v2)
+
 **Frequency:** Ongoing (#[745, #770, #320])
 **Pattern:** Theme changed from struct to interface; all functions changed signatures
 **Impact:** Large migration burden, custom themes break
 
 **Specific Breaks:**
+
 1. `Theme` struct → `ThemeFunc` interface
 2. `huh.ThemeCharm()` → `huh.ThemeCharm(isDark bool)`
 3. Return type `*Theme` → `*Styles`
@@ -321,6 +342,7 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ## 7. Frequently Requested Features
 
 ### A. Filterable for Select (Discussion #559)
+
 **Status:** Approved, implemented in MultiSelect, requested for Select
 **User Need:** Type-ahead filtering via `/` key should be toggleable
 **Alternative:** Users currently use MultiSelect with limit=1 for single selection with filtering
@@ -330,6 +352,7 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ---
 
 ### B. Circular Selection (Issue #356)
+
 **Status:** Closed (implemented March 2025)
 **Feature:** Navigation wraps at ends - going down from last option shows first option
 **Implementation:** Added in v2
@@ -339,8 +362,10 @@ func CleanKeys(msg tea.Msg) tea.Msg {
 ---
 
 ### C. Layout System (PRs #214, #274)
+
 **Status:** Implemented
 **Features:**
+
 - `LayoutDefault` - one group at a time
 - `LayoutColumns(n)` - split groups into columns
 - `LayoutGrid(rows, cols)` - 2D grid
@@ -366,6 +391,7 @@ form.WithLayout(huh.LayoutAuto) // auto-fit
 ---
 
 ### D. Dynamic Forms with `*Func()` Pattern (PR #233)
+
 **Status:** Implemented (July 2024)
 **Pattern:**
 ```go
@@ -387,6 +413,7 @@ huh.NewSelect[string]().
 ---
 
 ### E. YAML/Declarative Forms (Issue #761)
+
 **Status:** Proposal stage
 **External POC:** https://github.com/junhinhow/charm-form
 
@@ -404,6 +431,7 @@ $form = Form::fromArray([
 ---
 
 ### F. Skip Pre-filled Fields (Issue #740)
+
 **Status:** Requested, not implemented
 **Need:** Auto-advance past fields with default values from env vars/flags
 
@@ -418,10 +446,12 @@ $form = Form::fromArray([
 ## 8. Important PRs
 
 ### #609: feat!: v2
+
 **Author:** caarlos0 (merged March 2026)
 **Scope:** 78 files, +1545/-1236 lines
 
 **Major Changes:**
+
 1. Module path: `github.com/charmbracelet/huh` → `charm.land/huh/v2`
 2. Theme: struct → interface with `ThemeFunc`
 3. Spinner: merged into main package
@@ -436,10 +466,12 @@ $form = Form::fromArray([
 ---
 
 ### #573: fix: height and width calculation improvements, wrapping
+
 **Author:** caarlos0 (merged March 2025)
 **Scope:** 19 files, +226/-135 lines
 
 **What Fixed:**
+
 - Uses height of tallest group for entire form
 - Proper line joining with lipgloss
 - Avoids empty lines when not needed
@@ -457,6 +489,7 @@ $form = Form::fromArray([
 ---
 
 ### #233: feat: Dynamic Inputs
+
 **Author:** maaslalani (merged July 2024)
 **Scope:** 23 files, +1525/-314 lines
 
@@ -476,6 +509,7 @@ DescriptionFunc(func() string { ... }, &binding)
 ---
 
 ### #214: feat: multicolumn layout forms
+
 **Author:** adamdotdevin (closed July 2024)
 **Scope:** 7 files, +301/-6 lines
 
@@ -496,6 +530,7 @@ form.WithLayout(huh.LayoutStack)
 ---
 
 ### #725: fix(input): do not run validation on blur
+
 **Author:** nelvko (merged January 2026)
 **Scope:** 12 files, +466/-150
 
@@ -538,6 +573,7 @@ func ThemeBase16(isDark bool) *Styles
 ```
 
 **Migration Impact:**
+
 - All custom themes must implement `ThemeFunc` signature
 - All theme function calls need `isDark` parameter
 - Users had to rewrite theme code
@@ -549,6 +585,7 @@ func ThemeBase16(isDark bool) *Styles
 ### B. Bubble Tea v2 Integration
 
 **Changes:**
+
 - `tea.Model` interface unchanged but types updated
 - `tea.Cmd`, `tea.Msg` now from `charm.land/bubbletea/v2`
 - View rendering changed (new `tea.View` type)
@@ -581,6 +618,7 @@ form.WithViewHook(func(v tea.View) tea.View {
 ```
 
 **Use Cases:**
+
 - Dynamic terminal feature control
 - Custom view transformations
 - Integration with larger Bubble Tea apps
@@ -592,9 +630,11 @@ form.WithViewHook(func(v tea.View) tea.View {
 ## 10. Performance Discussions
 
 ### A. Height/Width Calculation Complexity
+
 **Issues:** #[485, #573, #429, #275, #486]
 
 **Pain Points:**
+
 - Off-by-one errors in content overflow
 - Offset calculations wrong for wrapped content
 - Group height calculation didn't account for titles/descriptions
@@ -614,6 +654,7 @@ form.WithViewHook(func(v tea.View) tea.View {
 ---
 
 ### B. Viewport Scrolling with Wrapped Content
+
 **Issues:** #[429, #644 (bubbles)]
 
 **Root Cause:** Viewport calculates visible lines as `cursorPos / viewportHeight`, assuming each item = 1 line.
@@ -642,6 +683,7 @@ type Layout interface {
 ```
 
 **Implementations:**
+
 - `LayoutDefault` - one at a time
 - `LayoutColumns(n)` - side by side
 - `LayoutGrid(rows, cols)` - 2D grid
@@ -673,6 +715,7 @@ WithViewHook(func(v tea.View) tea.View {
 **Problem:** Setting KeyMap on field gets overwritten by group/form defaults
 
 **User Need:**
+
 1. Custom KeyMap per field instance
 2. Different KeyMap when field is "zoomed" (e.g., FilePicker)
 3. Ability to add help keybinds (e.g., "back" for FilePicker)
@@ -972,6 +1015,7 @@ func truncateMiddle(s string, maxWidth int) string {
 ## 17. Rejected Ideas Worth Revisiting
 
 ### A. LayoutAuto (PR #214)
+
 **Status:** Not implemented - "couldn't figure out"
 **Note:** Contributor struggled with algorithm for auto-layout
 
@@ -980,6 +1024,7 @@ func truncateMiddle(s string, maxWidth int) string {
 ---
 
 ### B. Confirm Checkbox Indicators (Issue #630)
+
 **Status:** Partially addressed via theme customization
 **Request:** Better default indicators for colorblind users
 
@@ -988,6 +1033,7 @@ func truncateMiddle(s string, maxWidth int) string {
 ---
 
 ### C. Field-Level WithAccessible (v2)
+
 **Status:** Removed in favor of form-level only
 **Rationale:** Simpler, more consistent
 
@@ -1118,6 +1164,7 @@ if ($form->allFieldsHidden()) {
 **Lesson:** Changing fundamental types affects all users.
 
 **SugarCraft Directive:** 
+
 - Avoid changing core types post-stable
 - If needed, provide deprecated layer with migration path
 - Version with clear upgrade guides
@@ -1137,6 +1184,7 @@ if ($form->allFieldsHidden()) {
 **Lesson:** Keyboard handling differs across platforms; workarounds required.
 
 **SugarCraft Directive:** 
+
 - Isolate platform-specific code
 - Test on Windows, macOS, Linux
 - Have escape hatches (dumb terminal mode)
@@ -1213,6 +1261,7 @@ class Form {
 ### D. Test on Multiple Platforms
 
 **Essential Test Matrix:**
+
 - Windows 10/11 (cmd, PowerShell, Windows Terminal)
 - macOS (Terminal.app, iTerm2, kitty)
 - Linux (gnome-terminal, konsole, kitty, tmux, screen)
@@ -1253,6 +1302,7 @@ class Form {
 
 **Trend:** Bubble Tea v2 with new renderer ("cursed renderer")
 **Improvements:**
+
 - Better keyboard handling
 - Declarative views
 - Built-in color downsampling

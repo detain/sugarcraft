@@ -1,6 +1,7 @@
 # Bdeering1/console-menu
 
 ## Metadata
+
 - URL: https://github.com/Bdeering1/console-menu
 - Language: Rust
 - Stars: Unknown (GitHub API unavailable for unauthenticated requests)
@@ -8,6 +9,7 @@
 - Description: A simple yet powerful library for creating beautiful console menus in Rust with ANSI color support, vim-style keybindings, and nested menu capability.
 
 ## Feature List
+
 - Interactive console menu rendering with arrow key navigation
 - Vim-style keybindings (h/j/k/l for left/down/up/right movement)
 - 8-bit ANSI escape code colors for foreground, background, title, selected option, and message
@@ -22,6 +24,7 @@
 - Bell/bold/underline text styling for titles
 
 ## Key Classes and Methods
+
 - `Menu`: Main interactive menu struct
   - `Menu::new(options: Vec<MenuOption>, props: MenuProps) -> Self` — Constructor that initializes menu state, calculates pagination, and determines max width
   - `show(&mut self)` — Entry point that hides cursor, clears screen, draws initial menu, and starts the navigation loop
@@ -43,6 +46,7 @@
   - `WHITE=15`, `LIGHT_GRAY=7`, `GRAY=8`, `BLUE=32`, `GREEN=35`, `PURPLE=99`, `RED=160`, `ORANGE=208`, `YELLOW=220`, `BLACK=233`, `DARK_GRAY=236`
 
 ## Notable Algorithms / Named Patterns
+
 - **ANSI 8-bit color escape codes**: Uses `\x1b[38;5;{color}m` for foreground and `\x1b[48;5;{color}m` for background, ensuring widespread terminal compatibility
 - **Pagination algorithm**: `options_per_page = (terminal_height - 6)`, `num_pages = ((options.len() - 1) / options_per_page) + 1`; calculates centered page windows with `page_start = selected_page * options_per_page`
 - **Centered layout calculation**: `indent = terminal_width / 2 - (menu_width + 4) / 2` and `vertical_pad = terminal_height / 2 - (options_per_page + extra_lines) / 2`
@@ -50,6 +54,7 @@
 - **Boxed dynamic dispatch**: `Box<dyn FnMut()>` allows arbitrary callbacks while maintaining type erased storage
 
 ## Strengths
+
 - **Simplicity**: Single-file library with a clean, minimal API surface
 - **Ergonomic builder pattern**: `MenuOption::new()` and `MenuProps::default()` with struct update syntax make usage intuitive
 - **Theming flexibility**: Full control over fg/bg colors for menu, title, selected item, and footer message via 8-bit ANSI colors
@@ -60,6 +65,7 @@
 - **Self-contained rendering**: Uses raw ANSI escape sequences without external terminal capability detection
 
 ## Weaknesses
+
 - **No multi-line labels**: Labels are single-line strings only; no support for descriptions, icons, or sublabels per option
 - **All-or-nothing exit behavior**: `exit_on_action` exits immediately after callback OR stays open regardless — no hybrid mode
 - **No menu positioning**: Menu is always centered; no API for left/right/top/bottom alignment
@@ -71,6 +77,7 @@
 - **Hardcoded escape sequences**: Uses literal ANSI codes rather than a proper terminal abstraction
 
 ## SugarCraft Mapping
+
 - **candy-core**: The core rendering and event loop patterns (`show()`, `run_navigation()`, `draw()`) map to how `candy-core` handles TUI loop infrastructure. The ANSI color handling via the `color` module parallels `candy-core`'s theme/color support.
 - **sugar-bits**: This library is most directly comparable to `sugar-bits` — it's a single component (a menu/selector widget) rather than a full application framework. The `Menu` struct is analogous to a `Component` in SugarCraft's `Component` trait.
 - **honey-bounce**: Not directly relevant — this library has no animation/timing physics.

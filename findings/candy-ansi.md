@@ -34,6 +34,7 @@ public function feed(string $bytes): void
 ```
 
 **Problem**: This library is part of a ReactPHP-based ecosystem (per AGENTS.md: "ReactPHP" is mentioned in the monorepo description), yet the Parser offers no async or streaming support. There is no:
+
 - `feedStream(ReadableStreamInterface $stream): Promise` method
 - Event-driven parsing with callbacks
 - Ability to parse from a ReactPHP ReadableStream in non-blocking chunks
@@ -73,6 +74,7 @@ public function execute(int $byte): void
 **Impact**: Terminal output with newlines, vertical tabs, form feeds, or bell characters will not be processed correctly when using `HandlerAdapter`.
 
 **Recommendation**: Either:
+
 1. Map these to appropriate `CsiHandler` methods (e.g., LF → line feed, BEL → bell/alert)
 2. Or document clearly which control characters the adapter handles
 3. Or throw an exception for unhandled control characters to make the gap visible
@@ -376,22 +378,26 @@ This regex is called for every OSC dispatch. While OSC dispatch is not as freque
 ## 8. SUMMARY OF RECOMMENDATIONS
 
 ### Must Fix (Before 1.0)
+
 1. Add async/stream parsing support for ReactPHP integration
 2. Handle all C0 control characters in HandlerAdapter, not just 3 bytes
 
 ### Should Fix
+
 3. Add maximum string buffer length to prevent memory exhaustion
 4. Add `Transitions::reset()` for testing
 5. Remove redundant `mb_check_encoding` call or document why it's needed
 6. Extract magic number 65535 to named constant
 
 ### Could Fix
+
 7. Implement OSC hyperlink support
 8. Support more OSC commands beyond just OSC 2
 9. Add debug logging for unknown CSI commands
 10. Extend test coverage for edge cases and stress scenarios
 
 ### Won't Fix (Known/Expected)
+
 - CsiHandlerImpl being all no-ops (by design, deferred to candy-vt)
 - Synchronous-only design for now (future async work)
 

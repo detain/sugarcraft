@@ -1,6 +1,7 @@
 # charmbracelet/vhs
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/vhs
 - Language: Go
 - Stars: ~19,791
@@ -8,6 +9,7 @@
 - Description: Your CLI home video recorder 📼 — Write terminal GIFs as code for integration testing and demoing your CLI tools.
 
 ## Feature List
+
 - **Tape DSL**: Domain-specific language for scripting terminal interactions (`.tape` files)
 - **Terminal Recording**: Capture terminal sessions to GIF, MP4, and WebM formats
 - **Frame Capture**: Screenshot-based frame capture from xterm.js canvas via go-rod browser automation
@@ -28,6 +30,7 @@
 ## Key Classes and Methods
 
 ### Core Engine
+
 - **`VHS`** (vhs.go): Main struct controlling setup, options, browser/page lifecycle, frame recording
   - `Start()`: Initializes ttyd, browser, and go-rod page
   - `Setup()`: Applies options to terminal (viewport, theme, fonts)
@@ -40,6 +43,7 @@
 - **`Evaluate(ctx, tape, out, opts)`** (evaluator.go): Main entry point - parses tape, executes commands, produces output
 
 ### Command Execution
+
 - **`Execute(c, v)`** (command.go): Dispatches commands to handler functions
 - **`CommandFuncs`** (command.go): Map of `CommandType → func(c, v) error`
 - **`ExecuteKey(k)`** (command.go): Higher-order function for key press execution
@@ -49,6 +53,7 @@
 - **`ExecuteHide/ExecuteShow(c, v)`** (command.go): Pause/resume frame recording
 
 ### Parser/Lexer (Tape DSL)
+
 - **`Lexer`** (lexer/lexer.go): Tokenizer for `.tape` files
   - `NextToken()`: Returns next token with line/column info
   - `readString()`, `readNumber()`, `readRegex()`, `readJSON()`: Literal parsers
@@ -62,6 +67,7 @@
 - **`CommandType`** (parser/parser.go): Type alias to `token.Type`
 
 ### Video/FFmpeg
+
 - **`FilterComplexBuilder`** (ffmpeg.go): Builds FFmpeg `-filter_complex` strings
   - `WithWindowBar()`, `WithBorderRadius()`, `WithMarginFill()`, `WithGIF()`
   - `Build()`: Returns `[]string` for exec.Command
@@ -73,25 +79,30 @@
 - **`makeMedia(opts, targetFile)`** (video.go): Spawns ffmpeg process
 
 ### Image Generation
+
 - **`MakeBorderRadiusMask(width, height, radius, target)`** (draw.go): Creates rounded corner PNG mask
 - **`MakeWindowBar(termWidth, termHeight, opts, file)`** (draw.go): Creates window bar PNG
 - **`circle`**, **`rect`**, **`roundedrect`** (draw.go): Image drawables using `image/color` and `draw` packages
 
 ### Themes
+
 - **`Theme`** (themes.go): 16-color base16 theme struct for xterm.js
 - **`findTheme(name)`** (themes.go): Fuzzy matches theme names via Levenshtein distance
 - **`DefaultTheme`** (themes.go): Default dark theme (background #171717)
 
 ### Recording
+
 - **`Record(cmd, args)`** (record.go): PTY-based tape recording
 - **`inputToTape(input)`** (record.go): Converts PTY input to tape format
 - **`EscapeSequences`** (record.go): Map of ANSI escape sequences to VHS commands
 
 ### SSH Server
+
 - **`serveCmd`** (serve.go): SSH server middleware using `charmbracelet/wish`
 - **`config`** (serve.go): Environment-based configuration (port, host, UID/GID)
 
 ## Notable Algorithms / Named Patterns
+
 - **Recursive Descent Parser**: The parser uses classic top-down parsing with `curToken`/`peekToken` lookahead
 - **Higher-Order Functions for Command Execution**: `ExecuteKey(k)` returns a `CommandFunc` closure for DRY key handling
 - **Levenshtein Distance for Theme Matching**: `agnivade/levenshtein.ComputeDistance()` for fuzzy theme lookup
@@ -102,6 +113,7 @@
 - **Goroutine Channel Pattern**: `Record()` uses context cancellation and error channel for frame capture loop
 
 ## Strengths
+
 - **Clean Architecture**: Clear separation between lexer/parser/executor/video generation
 - **Extensibility**: New commands added by registering in `CommandFuncs` map and `parser.CommandTypes`
 - **Production Quality**: Comprehensive error handling, dependency checking, version validation
@@ -113,6 +125,7 @@
 - **Built-in Publishing**: Easy sharing via `vhs publish`
 
 ## Weaknesses
+
 - **External Dependencies**: Requires `ttyd` and `ffmpeg` binaries on PATH
 - **Browser Automation**: Heavy dependency on go-rod/browser for frame capture
 - **No Real Terminal**: Uses xterm.js in browser, not a real TTY - some terminal apps may behave differently
@@ -135,6 +148,7 @@
 | Recording mode | N/A | Would need PTY/terminal capture - platform-specific |
 
 ### Potential New Libs:
+
 - **`sugar-vhs`**: PHP port of VHS concept - tape format parser, frame capture, video encoding
   - Heavy dependency on FFmpeg via `symfony/process` or similar
   - No direct equivalent to go-rod browser automation in PHP

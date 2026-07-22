@@ -13,6 +13,7 @@
 ## Files
 
 **Create:**
+
 - `super-candy/src/BulkRename.php` + UI.
 - `super-candy/src/PreviewPane.php` — for image files invokes
   `\SugarCraft\Mosaic\Renderer`.
@@ -20,6 +21,7 @@
   `\React\Promise`.
 
 **Modify:**
+
 - `super-candy/composer.json` — `sugarcraft/candy-mosaic` +
   `react/promise`.
 

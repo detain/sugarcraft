@@ -1,6 +1,7 @@
 # ratatui/ratatui-image
 
 ## Metadata
+
 - URL: https://github.com/ratatui/ratatui-image
 - Language: Rust
 - Stars: ~500-700 (estimated based on active community usage)
@@ -8,6 +9,7 @@
 - Description: An image widget for ratatui, supporting sixels, kitty, iterm2, and unicode-halfblocks
 
 ## Feature List
+
 - **Multi-protocol terminal image rendering**: Unifies Sixel, Kitty, iTerm2, and Unicode halfblock rendering
 - **Terminal capability detection**: Queries terminal for supported graphics protocols via escape sequences
 - **Font-size detection**: Automatically detects terminal font size in pixels to map image pixels to character cells
@@ -23,12 +25,14 @@
 ## Key Classes and Methods
 
 ### Core Widgets
+
 - `Image<'a>`: Stateless fixed-size image widget with `new()`, `allow_clipping()`
 - `StatefulImage<T>`: Stateful adaptive image widget with `new()`, `resize()`
 - `SlicedImage<'a>`: Partially visible image for scrolling with `new()`
 - `ThreadProtocol`: Non-blocking image updates via channels with `new()`, `replace_protocol()`, `update_resized_protocol()`
 
 ### Picker (Capability Detection)
+
 - `Picker`: Terminal capability detection helper
   - `from_query_stdio()`: Query terminal for protocols and font-size
   - `from_query_stdio_with_options()`: Query with custom options
@@ -38,17 +42,20 @@
   - `new_resize_protocol()`: Create a StatefulProtocol for dynamic resizing
 
 ### Protocol Types
+
 - `Protocol`: Enum of `Halfblocks(Halfblocks)`, `Sixel(Sixel)`, `Kitty(Kitty)`, `ITerm2(Iterm2)`
 - `StatefulProtocol`: Stateful protocol with resize capability
 - `StatefulProtocolType`: Enum variant wrapper for stateful protocols
 - `ProtocolType`: Enum of `Halfblocks`, `Sixel`, `Kitty`, `Iterm2`
 
 ### Resize System
+
 - `Resize`: Enum with `Fit(Option<FilterType>)`, `Crop(Option<CropOptions>)`, `Scale(Option<FilterType>)`
 - `CropOptions`: Specifies clip_top/clip_left for cropping
 - `FontSize`: Terminal font dimensions `new(width, height)`
 
 ### Protocol Implementations
+
 - `Sixel`: Sixel graphics protocol encoder/renderer
   - `new(image, size, is_tmux)`: Encode image as sixels
 - `Kitty`: Kitty graphics protocol with unicode-placeholders
@@ -60,11 +67,13 @@
   - `new(image, size)`: Render with optional chafa enhancement
 
 ### Threading
+
 - `ResizeRequest`: Request sent to worker thread
 - `ResizeResponse`: Completed resize returned from worker
 - `ResizeEncodeRender` trait: `resize_encode()`, `render()`, `needs_resize()`
 
 ### Supporting
+
 - `ImageSource`: Original image storage with hash for change detection
 - `SlicedProtocol`: Enum of sliced variants per protocol
 - `SignedPosition`: Signed (x, y) for partial image positioning
@@ -72,6 +81,7 @@
 ## Notable Algorithms / Named Patterns
 
 ### Terminal Capability Detection (cap_parser)
+
 The `Picker` module implements terminal probing via escape sequence orchestration:
 1. Write multiple queries in parallel: `_Gi=...` (Kitty), `[c` (DA1+Sixel), `[16t` (cell-size), `[1337n` (iTerm2), `[5n` (DSR)
 2. Parse responses via `cap_parser::Parser`
@@ -81,6 +91,7 @@ The `Picker` module implements terminal probing via escape sequence orchestratio
 **Source:** `src/picker.rs:L94-165` and `src/picker/cap_parser.rs`
 
 ### fit_area_proportionally
+
 Aspect-ratio-preserving resize calculation:
 ```rust
 fn fit_area_proportionally(width, height, nwidth, nheight) -> (u32, u32) {
@@ -95,6 +106,7 @@ fn fit_area_proportionally(width, height, nwidth, nheight) -> (u32, u32) {
 **Source:** `src/lib.rs:L552-570`
 
 ### Font-Size to Cell Mapping
+
 Converts pixel dimensions to terminal cell dimensions:
 ```rust
 fn round_pixel_size_to_cells(img_width, img_height, font_size) -> Size {
@@ -106,6 +118,7 @@ fn round_pixel_size_to_cells(img_width, img_height, font_size) -> Size {
 **Source:** `src/lib.rs:L537-541`
 
 ### Sixel Band Slicing
+
 Sixel images are sliced vertically by bands (6-pixel columns) for partial rendering:
 ```rust
 fn bands(&self, skip_line_count, drop_line_count) -> Vec<&str> {
@@ -117,6 +130,7 @@ fn bands(&self, skip_line_count, drop_line_count) -> Vec<&str> {
 **Source:** `src/sliced.rs:L310-331`
 
 ### Kitty Transmission Tracking
+
 Uses `AtomicBool` to track one-time transmission:
 ```rust
 struct KittyProtoState {
@@ -132,6 +146,7 @@ fn make_transmit(&self) -> Option<&str> {
 **Source:** `src/protocol/kitty.rs:L19-48`
 
 ## Strengths
+
 - **Immediate-mode friendly**: Both stateless (Image) and stateful (StatefulImage) widgets work with ratatui's immediate-mode paradigm
 - **Protocol abstraction**: Unified `Protocol` enum hides implementation details of different terminal graphics protocols
 - **Thread-safe resizing**: `ThreadProtocol` pattern prevents UI blocking during expensive resize/encode operations
@@ -144,6 +159,7 @@ fn make_transmit(&self) -> Option<&str> {
 - **Comprehensive tests**: Snapshot tests, screenshot tests across multiple terminals
 
 ## Weaknesses
+
 - **StatefulImage blocking risk**: Resize at render-time can block UI thread if not properly offloaded
 - **termwiz backend broken**: Not working correctly (documented issue)
 - **Sixel scroll issue**: Sixel images on last terminal line cause unwanted scrolling (#57)
@@ -170,6 +186,7 @@ ratatui-image is a Rust library that would map to SugarCraft's TUI image renderi
 | FontSize detection | `candy-core` | Terminal geometry |
 
 **Mapping Analysis:**
+
 - **sugar-bits**: Closest match for base widget infrastructure (Image widget, Ratatui integration)
 - **candy-core**: For Picker (terminal capability detection) and ThreadProtocol (async messaging)
 - **honey-bounce**: For resize algorithms (fit_area_proportionally, aspect-ratio math)

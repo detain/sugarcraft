@@ -50,6 +50,7 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 ## 4. High-Signal Open Issues
 
 ### Issue #506: PTY + Bubble Tea Alt Screen Problem (Oct 2025)
+
 **Severity:** High — Core TUI functionality broken
 **Problem:** When a Bubble Tea program under `bubbletea.Middleware` tries to launch an interactive child via `tea.Exec`, the TUI frame stays on screen and child output appears "stacked" below it instead of replacing the UI.
 **Technical Root Cause:** `wish.Cmd`'s `SetStdin/SetStdout/SetStderr` methods were no-ops, causing Bubble Tea's alt screen escape sequences to be written to a different output path than the child process.
@@ -57,54 +58,64 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 **Direct Risk to SugarCraft:** If SugarCraft ever implements TUI-over-SSH, this same alt-screen-release pattern will be critical. The issue reveals that bridging TUI frameworks with subprocess execution requires careful I/O handle management.
 
 ### Issue #488: SSH Proxy/Router ("Nginx for SSH") (Aug 2025)
+
 **Problem:** Request for a Wish-based service that forwards SSH sessions to other SSH servers based on logic beyond just port (e.g., path-based routing).
 **Signal:** Users want to use Wish as a reverse proxy for SSH.
 **Direct Risk to SugarCraft:** None directly, but the middleware composition pattern used in Wish could enable similar routing if SugarCraft ever adds SSH support.
 
 ### Issue #483: Namespace Conflict with Tcl/Tk Wish (Jul 2025)
+
 **Problem:** There is a well-known shell called "wish" from Tcl/Tk, causing confusion.
 **Reactions:** 👎 2, 😕 1
 **Direct Risk to SugarCraft:** SugarCraft's `candy-wish` port name won't conflict, but the naming decision in PROJECT_NAMES.md should be reviewed.
 
 ### Issue #455: Mosh Support (Apr 2025)
+
 **Reactions:** 👍 6
 **Problem:** Request to support Mosh (alternative SSH that handles connection interruptions). Mosh uses SSH for auth but provides a different transport.
 **Interesting Note:** Commenter suggests `tsshd` as a Go implementation that could be integrated, offering "mosh-like benefits for mobile clients."
 **Direct Risk to SugarCraft:** None, but signals demand for resilient SSH connections.
 
 ### Issue #405: NoClientAuth Selection (Feb 2025)
+
 **Problem:** Cannot use `NoClientAuth` for some users while using other auth methods for others simultaneously.
 **Direct Risk to SugarCraft:** Fine-grained auth composition is a common requirement; SugarCraft's auth layer should support composable auth modes.
 
 ### Issue #325: Auth Before Rate Limiter (Aug 2024)
+
 **Reactions:** 👍 1
 **Problem:** Rate limiting happens AFTER authentication, defeating the purpose of rate limiting for brute-force protection. The auth handlers are called before middleware in Wish's server struct.
 **Maintainer Response:** Acknowledged as a design issue; auth handlers live in a different struct field than middleware, so middleware ordering cannot affect auth timing.
 **Direct Risk to SugarCraft:** **Critical pattern.** SugarCraft must ensure rate limiting/countermeasures execute BEFORE authentication to provide brute-force protection. This requires auth to be part of the middleware chain or use connection callbacks, not a pre-middleware handler.
 
 ### Issue #303: wish.Command() Output Goes to Server (Aug 2024)
+
 **Problem:** When running bash scripts with `dialog`/`whiptail` via `wish.Command`, output displays on server console instead of client.
 **Status:** Maintainer couldn't reproduce; suggests `whiptail` may be "doing something funky."
 **Direct Risk to SugarCraft:** PTY handling differences between interactive and non-interactive contexts will affect any SugarCraft process execution.
 
 ### Issue #291: Capture Output for wish.Command (Jun 2024)
+
 **Problem:** Cannot capture output from `wish.Command` when using `tea.Exec` — the `StdoutProxy` approach that works with regular `exec.Command` fails.
 **Root Cause:** When running on a PTY, the slave IO overrides any custom stdout set via `SetStdout`.
 **Maintainer Note:** "because it might run on a pty, in which case it'll be overridden by the slave IO anyway"
 **Direct Risk to SugarCraft:** Any subprocess execution wrapper must handle PTY vs non-PTY contexts differently.
 
 ### Issue #232: PTY + Bubble Tea on Windows (Jan 2024)
+
 **Assignee:** caarlos0
 **Problem:** Keypresses seem ignored on Windows when using PTY with Bubble Tea.
 **Suspected Cause:** Somewhere a `go io.Copy` needs to be made cancelable.
 **Direct Risk to SugarCraft:** Windows PTY support is notoriously difficult; `candy-pty` FFI wrappers must handle this.
 
 ### Issue #207: SCP Windows Issues (Jan 2024)
+
 **Problem:** SCP protocol issues on Windows including "protocol error: expected control record" on downloads and requiring `-O` flag with OpenSSH 9.0.
 **Solution:** SFTP support was added to the SCP example via PR #224 (`WithSubsystem`), providing an alternative file transfer method.
 **Direct Risk to SugarCraft:** File transfer over SSH requires understanding both SCP and SFTP protocol quirks.
 
 ### Issue #456: Padding Background Color Not Applied in Docker (May 2025)
+
 **Problem:** Lip Gloss padding background color renders correctly locally but not in Docker containers.
 **Additional Context:** Commenter confirms same issue with colors in Docker images.
 **Root Cause:** Likely related to terminal capability detection in containers vs local terminals.
@@ -115,38 +126,46 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 ## 5. Important Closed Issues
 
 ### Issue #440: Support tview (Mar 2025) — CLOSED AS DISCUSSION
+
 **Request:** Support `tview` (another TUI framework) in addition to Bubble Tea, or decouple from Bubble Tea entirely using interfaces.
 **Outcome:** Converted to discussion; no implementation commitment.
 **Signal:** Users want framework-agnostic TUI serving, not just Bubble Tea integration.
 **Direct Risk to SugarCraft:** SugarCraft's TUI approach uses its own component library philosophy; if ever adding transport layers, should consider framework-agnostic interfaces.
 
 ### Issue #236: huh? middleware? (Feb 2024) — CLOSED COMPLETED
+
 **Request:** Simple way to serve a `huh` form via Wish without manually handling the tea.Model.
 **Outcome:** Closed as completed via https://github.com/charmbracelet/huh/pull/216
 **Direct Risk to SugarCraft:** Form library integration with TUI-over-SSH is a common pattern.
 
 ### Issue #205: Banner Instead of Comment (Jan 2024) — CLOSED COMPLETED
+
 **Request:** MOTD-style banner at session start (not just comment at end).
 **Outcome:** Implemented via PR #210 (`WithBanner`/`WithBannerHandler`).
 **Direct Risk to SugarCraft:** Session start/end hooks are useful for any interactive service.
 
 ### Issue #82: Refresh authorized_keys (Nov 2022) — CLOSED COMPLETED
+
 **Request:** Re-read authorized_keys files without server restart (like OpenSSH).
 **Outcome:** Implemented via PR #88.
 **Direct Risk to SugarCraft:** Hot-reloading of auth configuration is a production necessity.
 
 ### Issue #40: SCP Requires -O Flag with OpenSSH 9.0 (Apr 2022) — CLOSED COMPLETED
+
 **Problem:** OpenSSH 9.0 changed default from SCP to SFTP protocol.
 **Solution:** `WithSubsystem` added via PR #224 for SFTP support.
 **Signal:** Protocol compatibility requires ongoing maintenance.
 
 ### Issue #350: Background Color Queries Printed (Oct 2024) — CLOSED FIXED
+
 **Problem:** Background color queries (`^[]11;rgb:...^G`) printed to terminal instead of being queried.
 **Root Cause:** Commit that added PTY query support put PTY slave in wrong mode.
 **Direct Risk to SugarCraft:** PTY terminal mode configuration affects color handling.
 
 ### Issue #228: Bash Shell Issues in wish-exec (Jan 2024) — CLOSED FIXED
+
 **Problems:**
+
 1. Bash output going to server stdout instead of client
 2. `Inappropriate ioctl for device` error when setting PTY manually
 
@@ -154,6 +173,7 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 **Signal:** Bubble Tea's `ExecProcess` concept needs special handling in SSH context.
 
 ### Issue #196: Bubble Tea ExecProcess Within Wish Session (Dec 2023) — CLOSED FIXED
+
 **Problem:** `tea.ExecProcess` breaks when hosted via Wish — terminal becomes unresponsive after subprocess exits.
 **Long Discussion:** Multiple iterations debugging PTY ownership conflicts.
 **Root Cause:** Both Bubble Tea and Vim try to acquire terminal; exit from subprocess doesn't properly restore terminal state.
@@ -161,11 +181,13 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 **Signal:** Terminal state restoration after subprocess execution is complex.
 
 ### Issue #96: undefined: wish.Session (Nov 2022) — CLOSED COMPLETED
+
 **Problem:** Examples broke after refactor from `ssh.Session` to `wish.Session`.
 **Lesson:** Type re-exports from the main package need proper versioning.
 **Direct Risk to SugarCraft:** API consistency matters for developer experience.
 
 ### Issue #45: Color Issues Under Systemd (May 2022) — CLOSED FIXED
+
 **Problem:** Colors not displayed when running via systemd service.
 **Solution:** PR #197 fixed by using real PTY for color profile detection.
 **Workaround Still Cited:** `Environment="CLICOLOR_FORCE=1"` in systemd service file.
@@ -176,6 +198,7 @@ From the first-stage analysis (`repo_map/charmbracelet_wish.md`):
 ## 6. Recurring Pain Points
 
 ### PTY State Management
+
 The most recurring theme across multiple issues (#506, #232, #228, #196, #291) is PTY state management. Specific problems:
 - PTY allocation must happen before terminal queries
 - PTY must be placed in raw mode before querying capabilities
@@ -184,9 +207,11 @@ The most recurring theme across multiple issues (#506, #232, #228, #196, #291) i
 - Windows ConPTY requires different handling than Unix PTY
 
 ### Auth Handler vs Middleware Ordering
+
 Issue #325 reveals that auth handlers execute BEFORE middleware regardless of middleware ordering. This is a fundamental architectural limitation in how Wish handles the SSH server setup. **SugarCraft must design auth as middleware or connection callbacks to enable proper rate limiting before auth.**
 
 ### Color Profile Detection
+
 Multiple issues (#350, #45, #456) involve color rendering differences across:
 - Local vs Docker containers
 - Systemd vs interactive execution
@@ -194,6 +219,7 @@ Multiple issues (#350, #45, #456) involve color rendering differences across:
 - PTY vs non-PTY contexts
 
 ### Bubble Tea + SSH Subprocess Integration
+
 Issues #506, #291, #228, #196 all relate to the difficulty of running subprocesses (vim, bash, dialog) from within Bubble Tea programs hosted over SSH. The problems stem from:
 - Alt screen management
 - PTY ownership conflicts
@@ -222,8 +248,10 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 ## 8. Important PRs
 
 ### PR #522: fix(cmd): respect SetStdin/SetStdout/SetStderr (Dec 2025) — OPEN
+
 **Status:** Open, approved by aymanbagabas, awaiting merge
 **Changes:**
+
 - Added `stdin`, `stdout`, `stderr` fields to `Cmd` struct
 - Implemented `SetStdin`, `SetStdout`, `SetStderr` to store values
 - Updated `doRun()` to use custom I/O when set, falling back to PTY
@@ -233,7 +261,9 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 **Significance:** Fixes the fundamental issue where Bubble Tea exec couldn't properly release alt screen.
 
 ### PR #229: feat: add wish.Command and wish.Cmd (Jan 2024) — MERGED
+
 **Changes:**
+
 - Introduced `wish.Cmd` type wrapping `exec.Cmd` with SSH PTY awareness
 - `wish.Command()` factory that creates `Cmd` with session PTY as stdio
 - Automatic PTY fallback to direct session stdio when no PTY allocated
@@ -242,7 +272,9 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 **Significance:** Solved the subprocess output routing problem that affected bash, vim, etc.
 
 ### PR #197: feat: use real pty (Dec 2023–Jan 2024) — MERGED
+
 **Changes:**
+
 - Allocated real PTY for sessions (not just a PtyWriter hack)
 - Color profile detection from PTY
 - Pass `lipgloss.Renderer` down to tea.App
@@ -251,7 +283,9 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 **Significance:** Major improvement enabling real interactive subprocess execution.
 
 ### PR #224: feat: WithSubsystem (Jan 2024) — MERGED
+
 **Changes:**
+
 - `WithSubsystem(key string, h ssh.SubsystemHandler)` option
 - Enabled SFTP integration via `github.com/pkg/sftp`
 - Updated SCP example to provide both SCP and SFTP
@@ -259,7 +293,9 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 **Significance:** Solved OpenSSH 9.0 compatibility by adding SFTP as alternative.
 
 ### PR #210: feat: support server banners (Jan 2024) — MERGED
+
 **Changes:**
+
 - `WithBanner(banner string)` option
 - `WithBannerHandler(h ssh.BannerHandler)` for dynamic banners
 - Implemented in underlying `charmbracelet/ssh` via PR #10
@@ -267,6 +303,7 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 **Significance:** Enables MOTD and ToS acceptance flows.
 
 ### PR #132: feat: allow to user a termenv renderer (Apr 2023) — SUPERSEDED
+
 **Status:** Superseded by PR #197
 **Purpose:** Allow querying user terminal for color profile instead of using server defaults.
 **Significance:** Demonstrates the difficulty of color profile detection in SSH context.
@@ -276,22 +313,26 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 ## 9. Architectural Changes
 
 ### From v0.x to v1.x
+
 - `ssh.Session` re-exported as `wish.Session` (breaking change for some users, issue #96)
 - Middleware type signature remained stable: `func(next ssh.Handler) ssh.Handler`
 - Auth handlers separated from middleware (causes #325 issue)
 
 ### Real PTY Allocation (PR #197)
+
 - Changed from PtyWriter hack to real PTY allocation
 - Enabled proper subprocess execution (vim, bash)
 - Fixed color profile detection from client terminal
 - Required coordinated changes in `charmbracelet/ssh`
 
 ### WithSubsystem Addition (PR #224)
+
 - Added SSH subsystem handler option
 - Enabled SFTP integration without changing core architecture
 - Demonstrates extensibility via options pattern
 
 ### Banner Support (PR #210)
+
 - Added server banner options
 - Required changes in underlying `charmbracelet/ssh`
 - Demonstrates need for coordinated upstream changes
@@ -301,11 +342,13 @@ Issues #506, #291, #228, #196 all relate to the difficulty of running subprocess
 ## 10. Performance Discussions
 
 ### Issue #325: Rate Limiter LRU Cache
+
 The `ratelimiter` uses an LRU cache mapping remote IP → `rate.Limiter` token bucket, bounded to `maxEntries`. **Problem:** Idle connections' limiters stay in memory indefinitely if `maxEntries` is large enough. No time-based eviction.
 
 **Performance Implication:** For a long-running SSH server with many clients, memory could grow unbounded if many unique IPs connect then idle.
 
 ### PTY Allocation Overhead
+
 Each SSH session with PTY allocates a pseudo-TTY. On Unix, this involves `openpty()` or similar. The overhead is minimal for typical use, but could be significant for thousands of concurrent sessions.
 
 ---
@@ -313,6 +356,7 @@ Each SSH session with PTY allocates a pseudo-TTY. On Unix, this involves `openpt
 ## 11. Extensibility Discussions
 
 ### Middleware Composition Pattern
+
 Wish's middleware is composable via the adapter/decorator pattern:
 ```go
 func Middleware(func(next ssh.Handler) ssh.Handler)
@@ -320,11 +364,13 @@ func Middleware(func(next ssh.Handler) ssh.Handler)
 Middlewares are applied first-to-last; the last registered is outermost (first to execute). This is the "onion model."
 
 **Extensibility Opportunities:**
+
 - Chain any number of middleware
 - Middleware can short-circuit, modify request, or pass through
 - Middleware can wrap errors and transform responses
 
 ### Options Pattern
+
 Server configuration uses functional options:
 ```go
 wish.NewServer(
@@ -338,6 +384,7 @@ wish.NewServer(
 **Limitation:** Auth handlers are NOT middleware and execute before middleware regardless of ordering (#325).
 
 ### Subsystem Handlers
+
 SSH subsystems (like SFTP) can be registered via `WithSubsystem`. This enables extending the server beyond just request handlers.
 
 ---
@@ -345,13 +392,16 @@ SSH subsystems (like SFTP) can be registered via `WithSubsystem`. This enables e
 ## 12. API/UX Complaints
 
 ### Issue #325: Auth Before Middleware
+
 "Rate limiting should happen before auth, perhaps via `s.ConnCallback` instead of middleware."
 **Complaint:** The API design doesn't make the execution order obvious. Auth is a different kind of handler, not middleware.
 
 ### Issue #483: Namespace Conflict
+
 Naming conflict with Tcl/Tk's `wish` shell causes user confusion. Not an API issue but a discoverability problem.
 
 ### Issue #96: Breaking Type Changes
+
 The `wish.Session` vs `ssh.Session` confusion after refactoring shows that re-exporting types from different packages can break user code when versions don't align.
 
 ---
@@ -359,6 +409,7 @@ The `wish.Session` vs `ssh.Session` confusion after refactoring shows that re-ex
 ## 13. Migration Problems
 
 ### Issue #45: Color Issues Under Systemd
+
 Users running Wish via systemd services saw different (broken) color rendering. Root cause: systemd services don't have a real TTY, so color profile detection fails.
 
 **Migration Path:** Users needed to either:
@@ -366,11 +417,13 @@ Users running Wish via systemd services saw different (broken) color rendering. 
 2. Set `CLICOLOR_FORCE=1` in service environment
 
 ### Issue #40: OpenSSH 9.0 SCP Protocol Change
+
 OpenSSH changed default from SCP to SFTP protocol, breaking existing Wish SCP implementations.
 
 **Migration Path:** Add SFTP support via `WithSubsystem` and `github.com/pkg/sftp`.
 
 ### Issue #350: PTY Query Regression
+
 A commit adding PTY color queries broke rendering for some users. The fix required putting PTY slave in raw mode before querying.
 
 **Migration Path:** No user migration needed; maintainer fixed in subsequent commit.
@@ -380,15 +433,19 @@ A commit adding PTY color queries broke rendering for some users. The fix requir
 ## 14. Clever Fixes & Workarounds
 
 ### Workaround: CLICOLOR_FORCE=1
+
 For color issues under systemd, users discovered that setting `Environment="CLICOLOR_FORCE=1"` in the service file resolves the issue.
 
 ### Workaround: exec.Command with Session Stdio
+
 Before `wish.Command` existed, users worked around PTY issues by directly setting `cmd.Stdout = sess` and `cmd.Stderr = sess` instead of using PTY slave.
 
 ### Workaround: Opening New PTY for Subprocess
+
 For running vim within Bubble Tea over SSH, the suggested (but "hacky") approach was to open a new PTY and copy I/O between the Bubble Tea PTY and the subprocess PTY. This was later improved by PR #197's real PTY allocation.
 
 ### Systemd Service Color Fix
+
 The `CLICOLOR_FORCE=1` workaround (still cited in 2025) suggests that terminal capability detection in non-interactive contexts remains imperfect.
 
 ---
@@ -396,12 +453,15 @@ The `CLICOLOR_FORCE=1` workaround (still cited in 2025) suggests that terminal c
 ## 15. Community Workarounds
 
 ### SSH Session as Stdout/Stderr
+
 For capturing output, users set `cmd.Stdout = sess` instead of PTY slave. This works for non-interactive output but breaks interactive programs.
 
 ### Using SFTP Instead of SCP
+
 When SCP protocol issues arose with Windows clients, users were pointed to SFTP as an alternative via `WithSubsystem` and `github.com/pkg/sftp`.
 
 ### Framework-Agnostic TUI Rendering
+
 Request for `tview` support (#440) suggested decoupling TUI rendering from Bubble Tea via interfaces. This hasn't been implemented but remains a desired pattern.
 
 ---
@@ -409,6 +469,7 @@ Request for `tview` support (#440) suggested decoupling TUI rendering from Bubbl
 ## 16. Maintainer Guidance Patterns
 
 ### When Users Report Issues They Can't Reproduce
+
 Maintainers (caarlos0) often say "I cannot repro" and ask for:
 - `$TERM` and `$SHELL` values
 - Terminal emulator and version
@@ -416,14 +477,17 @@ Maintainers (caarlos0) often say "I cannot repro" and ask for:
 - Whether it works with simpler alternatives (nano instead of vim)
 
 ### Dependency on charmbracelet/ssh
+
 Many features require coordinated changes in `charmbracelet/ssh`:
 - Banner support required https://github.com/charmbracelet/ssh/pull/10
 - PTY improvements required https://github.com/charmbracelet/ssh/pull/8
 
 ### Encouraging Small, Focused PRs
+
 Maintainers merge small, focused changes rather than large refactors. PR #229 (wish.Command) was merged quickly; large breaking changes like PR #197 took longer.
 
 ### Suggesting Upstream Fixes First
+
 When issues are in underlying libraries (termenv, bubbletea), maintainers point users to file issues in those repos first.
 
 ---
@@ -431,12 +495,15 @@ When issues are in underlying libraries (termenv, bubbletea), maintainers point 
 ## 17. Rejected Ideas Worth Revisiting
 
 ### Framework-Agnostic TUI Middleware
+
 Issue #440 requested decoupling Wish from Bubble Tea via interfaces. This was closed as a discussion without implementation. **Worth Revisiting for SugarCraft:** If SugarCraft ever adds network/TUI serving, consider framework-agnostic rendering interfaces rather than tight Bubble Tea coupling.
 
 ### Mosh Support
+
 Requested in #455. Maintainers didn't commit to implementation. Commenter suggested `tsshd` as potential integration point. **Worth Revisiting:** Mosh provides better connection resilience. SugarCraft could consider this for any future SSH implementation.
 
 ### SSH Proxy/Router
+
 Requested in #488. This would make Wish act as an "Nginx for SSH." No commitment from maintainers. **Worth Revisiting:** Could be a valuable addition if SugarCraft ever adds SSH serving.
 
 ---
@@ -444,6 +511,7 @@ Requested in #488. This would make Wish act as an "Nginx for SSH." No commitment
 ## 18. Problems Likely Relevant To SugarCraft
 
 ### 1. PTY State Management
+
 SugarCraft's `candy-pty` will need careful handling of:
 - Raw vs cooked terminal modes
 - Window resize signaling
@@ -451,6 +519,7 @@ SugarCraft's `candy-pty` will need careful handling of:
 - Terminal capability queries (color profile, etc.)
 
 ### 2. Middleware Composition
+
 The middleware decorator pattern is portable. SugarCraft could use this for:
 - Logging middleware
 - Rate limiting middleware
@@ -458,21 +527,25 @@ The middleware decorator pattern is portable. SugarCraft could use this for:
 - Session management middleware
 
 ### 3. Auth Handler Ordering
+
 **Critical for SugarCraft:** Auth must be middleware or connection callback to enable rate limiting before auth. This is a fundamental API design lesson from #325.
 
 ### 4. Color Profile Detection
+
 SugarCraft TUI components that render colors must handle:
 - Different terminal capabilities
 - Non-interactive contexts (systemd, Docker)
 - Force-fallback when detection fails
 
 ### 5. Subprocess I/O Routing
+
 When running subprocesses from TUI programs, must handle:
 - Interactive programs need PTY
 - Output capture requires redirecting to correct destination
 - PTY slave overrides custom stdout/stderr when set
 
 ### 6. Containerized Rendering
+
 Docker/container environments may lack full terminal capabilities. SugarCraft should:
 - Default to conservative color profile
 - Allow forcing color profile via configuration
@@ -541,9 +614,11 @@ Docker/container environments may lack full terminal capabilities. SugarCraft sh
 ## 20. Architectural Lessons
 
 ### Lesson: Auth vs Middleware Separation
+
 Auth handlers being separate from middleware is a design flaw. They should be middleware or use connection callbacks to enable proper rate limiting. **SugarCraft must design auth as middleware.**
 
 ### Lesson: PTY is Complex
+
 PTY handling involves:
 - Terminal mode configuration (raw, cooked)
 - Window size negotiation
@@ -553,15 +628,18 @@ PTY handling involves:
 Any TUI-over-transport implementation must carefully manage PTY lifecycle.
 
 ### Lesson: Bubble Tea + Subprocess = Hard Problem
+
 Running interactive subprocesses (vim, bash) from Bubble Tea programs over SSH is fundamentally difficult because:
 - Both want to own the terminal
 - Alt screen management must coordinate
 - PTY ownership must be transferred and restored
 
 ### Lesson: Terminal Detection in Containers
+
 Systemd, Docker, and other non-interactive contexts break terminal capability detection. Always provide fallback profiles and configuration overrides.
 
 ### Lesson: Middleware Composition is Powerful
+
 The `func(next ssh.Handler) ssh.Handler` pattern enables clean composition. Each middleware can:
 - Transform input before passing to next
 - Transform output after receiving from next
@@ -569,6 +647,7 @@ The `func(next ssh.Handler) ssh.Handler` pattern enables clean composition. Each
 - Log, measure, or restrict access
 
 ### Lesson: Options Pattern for Configuration
+
 Functional options like `WithAddress()`, `WithMiddleware()` provide:
 - Clear, composable configuration
 - Sensible defaults (auto host-key generation)
@@ -579,27 +658,35 @@ Functional options like `WithAddress()`, `WithMiddleware()` provide:
 ## 21. Defensive Design Lessons
 
 ### Do: Design Auth as Middleware
+
 Auth must be rate-limitable. In SSH context, this means using `ConnCallback` or making auth a middleware that executes first.
 
 ### Do: Handle Missing PTY Gracefully
+
 Not all sessions have PTY allocated. Middleware like `activeterm` rejects these, but Bubble Tea integration should handle the non-PTY case.
 
 ### Do: Provide Fallback Color Profiles
+
 When terminal detection fails (containers, systemd), default to a conservative profile and allow forced override via configuration.
 
 ### Do: Use Real PTY for Interactive Sessions
+
 PtyWriter hacks don't work for interactive subprocesses. Real PTY allocation enables vim, bash, and other TTY programs to work correctly.
 
 ### Don't: Mix Auth and Middleware Execution Contexts
+
 Auth handlers should be conceptually similar to middleware, not a separate execution context. This enables consistent ordering and composition.
 
 ### Don't: Assume Terminal Capabilities
+
 Terminals vary widely. Always query capabilities and have fallbacks for missing features.
 
 ### Don't: Block on Subprocess Exit Without Cleanup
+
 After subprocess exit, terminal state must be restored (exit raw mode, restore window size). Failure to do this causes the "terminal becomes unresponsive" issue seen in #196.
 
 ### Don't: Use Single PTY for Multiple Processes
+
 When Bubble Tea and a subprocess both try to use the same PTY, conflicts arise. PR #197 solved this by allocating separate PTY for subprocess execution.
 
 ---
@@ -607,24 +694,31 @@ When Bubble Tea and a subprocess both try to use the same PTY, conflicts arise. 
 ## 22. Ecosystem Trends
 
 ### 1. TUI-over-SSH Maturing
+
 The pattern of serving TUIs over SSH (rather than just locally) is becoming more common. Wish is the canonical Go implementation.
 
 ### 2. Framework-Agnostic Rendering
+
 Users want TUI serving to work with any TUI framework, not just Bubble Tea. This suggests interfaces over concrete implementations.
 
 ### 3. Connection Resilience
+
 Mosh support request (#455) shows demand for SSH alternatives that handle unstable connections. This trend may grow.
 
 ### 4. Protocol Compatibility Challenges
+
 OpenSSH 9.0's change from SCP to SFTP default (#40) shows that protocol compatibility requires ongoing maintenance. SFTP as a fallback is now standard.
 
 ### 5. Windows PTY Support
+
 ConPTY support via `x/xpty` (PR #522) shows Windows PTY support is being taken seriously. This is increasingly important as Windows development grows.
 
 ### 6. Containerized TUI
+
 Issue #456 shows TUIs running in Docker containers is a real use case. Container environments require special handling.
 
 ### 7. Security-First Auth
+
 Rate limiting before auth (#325) reflects security-conscious users wanting protection against brute-force attacks.
 
 ---
@@ -678,18 +772,23 @@ Rate limiting before auth (#325) reflects security-conscious users wanting prote
 ## 24. Cross-Ecosystem Pattern Matches
 
 ### Wish Middleware ↔ HTTP Middleware
+
 The `func(next ssh.Handler) ssh.Handler` pattern mirrors Go HTTP middleware. This is a well-understood pattern in the Go ecosystem.
 
 ### PTY Handling ↔ Unix Terminal I/O
+
 PTY management in Wish is similar to general Unix terminal programming. The patterns from `candy-pty` will be relevant.
 
 ### Bubble Tea Integration ↔ TUI Framework Integration
+
 The challenges of running Bubble Tea programs over SSH (issues #506, #196, #291) will be relevant for any TUI framework ported to run over a transport layer.
 
 ### Auth Ordering ↔ Security Layering
+
 The rate-limiting-before-auth issue (#325) is a universal security principle: apply countermeasures as early as possible in the request lifecycle.
 
 ### Container Terminal Issues ↔ Non-Interactive Contexts
+
 Color/profile detection failures in Docker (#456, #45) are relevant for any terminal application running in non-standard environments.
 
 ---

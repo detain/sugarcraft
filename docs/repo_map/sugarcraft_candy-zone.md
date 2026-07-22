@@ -7,10 +7,15 @@
 The core insight is elegant: wrap every interactive region in invisible ANSI escape sequence markers, scan the fully-rendered view at the root to record each region's screen coordinates, then simply ask "is this mouse event inside this named zone?" at event-handling time. This shifts the coordinate calculation burden from every component to a single scan pass.
 
 **Key statistics:**
+
 - **7 source files** in `src/` (Manager, Zone, Zones, ZoneHoverTracker, DragTracker, ClickCounter, MsgZoneInBounds)
+
 - **8 Message subclasses** (ZoneEnterMsg, ZoneExitMsg, ZoneDragStartMsg, ZoneDragMoveMsg, ZoneDragEndMsg, DoubleClickMsg, TripleClickMsg)
+
 - **6 test files** with 40+ test methods covering all trackers and edge cases
+
 - **Status:** 🟢 Complete port, fully tested against upstream semantics
+
 - **Upstream:** lrstanley/bubblezone (880+ stars, MIT License)
 
 ---
@@ -153,11 +158,17 @@ public function scan(string $rendered): string
 ```
 
 **Key behaviors:**
+
 - APC markers are stripped (not counted toward width)
+
 - CSI sequences (SGR color, cursor movement) pass through unchanged with zero width
+
 - OSC sequences (title, clipboard) pass through unchanged with zero width
+
 - Newlines track the rightmost column for each open zone before resetting column counter
+
 - Grapheme width uses `Width::string()` from candy-core (supports wide East-Asian chars, emoji, zero-width combining marks)
+
 - End column calculation has special logic for single-line vs. multi-line zones
 
 ### Zone Representation
@@ -297,7 +308,9 @@ public function anyInBoundsAndUpdate(Model $model, Msg $mouse): array
 
 Static facade (`Zones.php`) mirroring upstream's package-level functions:
 - `mark()`, `scan()`, `get()`, `all()`, `clear()`, `close()`
+
 - `setEnabled()`, `isEnabled()`, `newPrefix()`, `anyInBounds()`, `anyInBoundsAndUpdate()`
+
 - `setDefaultManager()` for swapping in custom managers (useful in tests)
 
 ### Tracker: ZoneHoverTracker
@@ -342,7 +355,9 @@ public function update(MouseMsg $msg): array
 Tracks press → move → release drag sequences (`DragTracker.php`, 191 lines):
 
 - `Press` inside a zone → `ZoneDragStartMsg` (originZone = currentZone at start)
+
 - `Motion` while dragging → `ZoneDragMoveMsg` when cursor crosses zone boundary (origin fixed, current updates)
+
 - `Release` while dragging → `ZoneDragEndMsg` (originZone = where drag started, currentZone = where released)
 
 Origin zone is **fixed for the entire drag** and never changes. Current zone updates on every boundary crossing.
@@ -352,7 +367,9 @@ Origin zone is **fixed for the entire drag** and never changes. Current zone upd
 Tracks double/triple click streaks (`ClickCounter.php`, 152 lines):
 
 - Configurable click interval (default 500ms)
+
 - Streak resets when: interval expires, cursor moves to different zone, non-press event
+
 - Emits `DoubleClickMsg` on second press, `TripleClickMsg` on third press
 
 ---
@@ -363,7 +380,9 @@ Tracks double/triple click streaks (`ClickCounter.php`, 152 lines):
 
 The zone marker approach cleanly separates concerns:
 - **Components** only need to call `mark(id, content)` — no coordinate math
+
 - **Root view** calls `scan(frame)` once — zone bounds are discovered automatically
+
 - **Event handlers** call `anyInBounds(mouse)` or `get(id)->inBounds(mouse)` — simple API
 
 This is fundamentally superior to manual coordinate tracking, which requires every component to know its screen position.
@@ -380,19 +399,28 @@ The PHP port uses a synchronous `scan()` without a background worker goroutine. 
 
 Three layered trackers provide increasingly sophisticated behavior:
 - Raw `anyInBounds()` for simple click routing
+
 - `ZoneHoverTracker` for enter/exit events (tooltips, highlights)
+
 - `DragTracker` for drag-and-drop sequences
+
 - `ClickCounter` for double/triple click detection
 
 ### 5. Full Edge Case Coverage
 
 Tests cover:
 - Wide East-Asian characters (CJK counts as 2 cells)
+
 - Zero-width graphemes (ZWSP, combining marks don't inflate zone width)
+
 - Multi-line zones (end-of-line tracking for open zones)
+
 - End marker without start (silently ignored)
+
 - Rescan replaces previous bounds (layout changes detected)
+
 - Prefixed managers don't collide
+
 - Disabled mode skips all operations
 
 ### 6. Prefix Isolation for Nested Components
@@ -460,6 +488,7 @@ This fallback only handles single-byte graphemes correctly. Actual grapheme clus
 
 The `Zones` facade (`Zones.php`) uses a static `?Manager $default` singleton. While `setDefaultManager()` exists for test cleanup, this pattern:
 - Makes parallel testing harder (shared global state)
+
 - Can cause subtle state leakage between tests
 
 The README documents this: `Zones::setDefaultManager(null)` flushes state in teardown.
@@ -490,6 +519,7 @@ Upstream bubblezone uses `time.Now().Nanosecond()` as an iteration marker to aut
 
 **Key architectural difference:** bubblezone uses a background goroutine (`zoneWorker()`) with a channel (`setChan`) to decouple scanning from zone storage. candy-zone computes everything synchronously inside `scan()`. This means:
 - bubblezone: scan() is non-blocking, zones appear after worker processes them
+
 - candy-zone: scan() returns immediately with complete zone map
 
 For single-threaded PHP, the synchronous approach is actually more natural and avoids concurrency bugs.
@@ -502,6 +532,7 @@ Textual uses a fundamentally different approach to mouse event routing. Its comp
 
 ```python
 # Textual's spatial map enables efficient hit detection
+
 widget = self._compositor._spatial_map.hit_test(mouse_x, mouse_y)
 ```
 
@@ -572,66 +603,102 @@ The README explicitly notes: "lipgloss.Width() (CandySprinkles) and CandyZone in
 
 Tests core Manager functionality:
 - `testMarkWrapsContentWithApcMarkers` — verifies marker format
+
 - `testScanStripsMarkersFromOutput` — clean output verification
+
 - `testScanRecordsSimpleZone` — zone bounds computation
+
 - `testZoneWidthAndHeight` — dimension accessors
+
 - `testInBoundsHits` — corner and interior hit detection
+
 - `testRelativePosition` — `pos()` relative coordinates
+
 - `testTwoSideBySideZones` — multi-zone positioning
+
 - `testZoneAcrossLines` — multi-line zone bounds
+
 - `testAnsiStylingDoesNotShiftZone` — ANSI sequences ignored
+
 - `testCjkWideCharCountsAsTwoCells` — wide character handling
+
 - `testZeroWidthGraphemeDoesNotInflateZone` — ZWSP/combining marks
+
 - `testRescanReplacesPreviousBounds` — dynamic layout updates
+
 - `testSetEnabledFalseSkipsMarkers` — disabled mode
+
 - `testNewPrefixGeneratesUniqueIds` — prefix isolation
+
 - `testAnyInBoundsAndUpdateRoutesHitToModelAsMsgZoneInBounds` — TEA integration
 
 ### ZoneTest (88 lines)
 
 Tests Zone class:
 - Corner and interior hit testing
+
 - Relative position calculation (including negative for out-of-bounds)
+
 - Width/height computation
+
 - `isZero()` detection of degenerate zones
 
 ### ZonesTest (87 lines)
 
 Tests the static facade:
 - Lazy default manager construction
+
 - `setDefaultManager()` override
+
 - Mark/scan round-trip
+
 - Clear (all and targeted)
 
 ### ZoneHoverTrackerTest (236 lines)
 
 Tests hover state machine:
 - Zone enter/exit detection
+
 - Same-zone motion produces no message
+
 - Two-step boundary crossing (exit then enter)
+
 - Cursor in no zone stays null
+
 - `currentZone()` accessor
 
 ### DragTrackerTest (253 lines)
 
 Tests drag sequence tracking:
 - Press outside zone: no drag start
+
 - Press inside zone: `ZoneDragStartMsg`
+
 - Motion within same zone: no message
+
 - Motion crossing boundary: `ZoneDragMoveMsg` (origin fixed, current updates)
+
 - Release: `ZoneDragEndMsg`
+
 - Cross-zone drag: origin stays fixed, current follows cursor
 
 ### ClickCounterTest (203 lines)
 
 Tests multi-click tracking:
 - Single click: no message, streak = 1
+
 - Second click within interval: `DoubleClickMsg`
+
 - Third click within interval: `TripleClickMsg`
+
 - Fourth+ click: no message (streak continues internally)
+
 - Outside zone: streak reset
+
 - Zone change: streak reset
+
 - Motion events: no-op
+
 - Interval expiry: streak reset
 
 ---

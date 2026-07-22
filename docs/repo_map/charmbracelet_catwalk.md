@@ -1,6 +1,7 @@
 # charmbracelet/catwalk
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/catwalk
 - Language: Go
 - Stars: ~687 (as of mid-2026)
@@ -8,6 +9,7 @@
 - Description: A database of Crush-compatible AI inference providers and models. Catwalk serves as the provider/model registry for the [Crush](https://github.com/charmbracelet/crush) shell — a community-maintained, typed Go library that wraps LLM APIs with a consistent interface.
 
 ## Feature List
+
 - **Provider Registry**: Centralized database of 35+ LLM providers (OpenAI, Anthropic, Google Gemini, Azure, Bedrock, VertexAI, xAI, DeepSeek, Groq, Cerebras, OpenRouter, HuggingFace, Vercel, and many more)
 - **Model Metadata**: Rich per-model data including context windows, pricing per 1M tokens (input/output/cached), reasoning capability flags, supported modalities (text/image), and default max tokens
 - **HTTP API Server**: Lightweight Go HTTP server (`:8080`) with endpoints: `GET /v2/providers` (JSON list of all providers), `GET /providers` (deprecated), `GET /healthz`, `GET /metrics` (Prometheus)
@@ -24,6 +26,7 @@
 ## Key Classes and Methods
 
 ### `pkg/catwalk/provider.go`
+
 - `Type` (type alias `string`) — Provider type constants: `TypeOpenAI`, `TypeOpenAICompat`, `TypeOpenRouter`, `TypeVercel`, `TypeAnthropic`, `TypeGoogle`, `TypeAzure`, `TypeBedrock`, `TypeVertexAI`
 - `InferenceProvider` (type alias `string`) — Provider ID constants: `InferenceProviderOpenAI`, `InferenceProviderAnthropic`, `InferenceProviderGemini`, `InferenceProviderDeepSeek`, etc. (35 total)
 - `Provider` struct — Holds provider metadata: `Name`, `ID`, `APIKey`, `APIEndpoint`, `Type`, `DefaultLargeModelID`, `DefaultSmallModelID`, `Models []Model`, `DefaultHeaders`
@@ -33,25 +36,30 @@
 - `KnownProviderTypes()` — Returns all known `Type` values
 
 ### `pkg/catwalk/client.go`
+
 - `Client` struct — HTTP client for talking to a catwalk server: `baseURL`, `httpClient *http.Client`
 - `New()` / `NewWithURL(url string)` — Constructor; reads `CATWALK_URL` env var or falls back to `localhost:8080`
 - `GetProviders(ctx, etag string)` — Fetches all providers from the server, returns `[]Provider`, uses ETag for cache validation, returns `ErrNotModified` when unchanged
 
 ### `internal/providers/providers.go`
+
 - `providerRegistry []ProviderFunc` — Slice of 35 provider factory functions registered at init
 - `GetAll() []catwalk.Provider` — Calls every factory in the registry and returns the aggregated list
 - `loadProviderFromConfig([]byte)` — Unmarshals a single embedded JSON config into a `Provider` struct
 - Per-provider factory functions: `openAIProvider()`, `anthropicProvider()`, `geminiProvider()`, `deepSeekProvider()`, `openRouterProvider()`, etc.
 
 ### `pkg/embedded/embedded.go`
+
 - `GetAll() []catwalk.Provider` — Thin wrapper around `providers.GetAll()` for offline use
 
 ### `main.go`
+
 - `providersHandler(w, r)` — HTTP handler for `GET /v2/providers`, uses ETag, supports `HEAD`
 - `providersHandlerDeprecated(w, r)` — HTTP handler for legacy `/providers` endpoint
 - `main()` — Sets up `http.ServeMux` with all routes, creates `http.Server` with timeouts, listens on `:8080`
 
 ### Per-Provider Generator CLIs (`cmd/<name>/main.go`)
+
 Each follows the same pattern: fetch models from the provider's API → transform to `catwalk.Provider` → `json.MarshalIndent` → write to `internal/providers/configs/<name>.json`.
 Key patterns include:
 - `selectBestEndpoint([]Endpoint)` — Chooses best endpoint by uptime (>90%), tool support, context length
@@ -60,6 +68,7 @@ Key patterns include:
 - `getPricing(Model) ModelPricing` — Converts per-token pricing to per-million-tokens
 
 ## Notable Algorithms / Named Patterns
+
 - **Endpoint Selection Algorithm** (`cmd/openrouter/main.go:selectBestEndpoint`): Picks the best model endpoint from multiple providers by filtering on status ≥ 0 and uptime ≥ 90%, then lexicographically preferring tool support → larger context window → higher uptime
 - **Cost Rounding**: `math.Round(v*1e5)/1e5` — 5-decimal-place rounding to avoid floating point noise in JSON (e.g., `0.09999999999999999` becomes `0.1`)
 - **ETag-based Caching**: Uses `charmbracelet/x/etag` to compute-content ETags; server sends `304 Not Modified` when client sends matching `If-None-Match`
@@ -68,6 +77,7 @@ Key patterns include:
 - **Per-Provider ID Prefixing**: HuggingFace models use provider-prefixed IDs like `moonshotai/Kimi-K2.5:fireworks-ai` to disambiguate which backend serves them
 
 ## Strengths
+
 - **Comprehensive Provider Coverage**: 35+ providers with hundreds of models covering OpenAI, Anthropic, Google, Azure, open-source (Llama, DeepSeek, Qwen, etc.), and niche providers
 - **Excellent Documentation**: `CRUSH.md` documents code style, adding new providers, update workflow, and manual procedures
 - **Automated Model Fetching**: Each provider has a generator CLI that hits the provider's live API, so model lists stay current without manual curation
@@ -80,6 +90,7 @@ Key patterns include:
 - **MIT Licensed**: Permissive open source license
 
 ## Weaknesses
+
 - **No Actual API Proxying**: Catwalk only serves metadata — it does not forward/proxy LLM inference requests. Clients must implement their own API calls using the metadata
 - **Static JSON Snapshots**: Provider configs are embedded at compile time; the server must be recompiled/redeployed to pick up new models or prices
 - **No Write API**: There is no endpoint to update provider configs — changes require a full `go run cmd/<provider>/main.go` + PR workflow

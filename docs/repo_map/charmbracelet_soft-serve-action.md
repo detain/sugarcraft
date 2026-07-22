@@ -1,6 +1,7 @@
 # charmbracelet/soft-serve-action
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/soft-serve-action
 - **Language:** Go (main Soft Serve server) / GitHub Action YAML (this action wrapper)
 - **Stars:** ~7K for main soft-serve repo (this action is a thin wrapper, likely few hundred)
@@ -8,6 +9,7 @@
 - **Description:** A GitHub Action for synchronizing GitHub repositories to your own [Soft Serve](https://github.com/charmbracelet/soft-serve) self-hostable Git server on every push.
 
 ## Feature List
+
 - **Repository Mirroring:** Clone repositories as bare mirrors for exact synchronization
 - **SSH Authentication:** Configure SSH keys for secure authentication to Soft Serve servers
 - **SSH Known Hosts:** Automatically add Soft Serve server host keys to known_hosts
@@ -27,6 +29,7 @@ This is **not a Go library** — it's a GitHub Action defined entirely in YAML w
 
 ```yaml
 # From action.yml:L32-L72
+
 - id: mirror
   if: ${{ inputs.mirror == 'true' }}
   shell: bash
@@ -68,6 +71,7 @@ This is **not a Go library** — it's a GitHub Action defined entirely in YAML w
 ```
 
 ## Notable Algorithms / Named Patterns
+
 - **SSH Agent Socket Pattern:** Uses `/tmp/ssh_agent.sock` for inter-process SSH agent communication
 - **Known Hosts Accumulation:** `ssh-keyscan` appends to `~/.ssh/known_hosts` for host verification
 - **Git Mirror Push:** `git clone --mirror` + `git push --mirror` for exact replica synchronization
@@ -76,6 +80,7 @@ This is **not a Go library** — it's a GitHub Action defined entirely in YAML w
 - **Composite Action Pattern:** Uses `runs: using: "composite"` to compose multiple bash steps
 
 ## Strengths
+
 - **Minimal Footprint:** Single `action.yml` file, no compiled code or dependencies
 - **Secure by Default:** Uses SSH with proper key permissions (`chmod 0600`) and known_hosts verification
 - **Idempotent Push:** `--prune --force --all --follow-tags` ensures comprehensive synchronization
@@ -85,6 +90,7 @@ This is **not a Go library** — it's a GitHub Action defined entirely in YAML w
 - **MIT Licensed:** Permissive open-source license
 
 ## Weaknesses
+
 - **No Error Handling:** No explicit error checking in bash scripts (e.g., `set -e`, error codes)
 - **Shallow Clone Problem:** README notes `fetch-depth: 0` required but no enforcement
 - **Limited SSH Key Types:** Only supports basic SSH key file, no certificate-based auth

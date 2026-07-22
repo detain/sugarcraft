@@ -5,6 +5,7 @@ SugarCharts (`sugar-charts`) is a comprehensive PHP terminal charting library pr
 **Ecosystem Positioning**: sugar-charts is a mid-layer component that sits above `candy-core` (Style/Color/ANSI primitives) and `candy-sprinkles` (Theme/input) but depends on `sugar-dash` for the BrailleCanvas bridge. It is a consumer of canvas primitives and a producer of chart output for dashboards.
 
 **Biggest Opportunity Areas**:
+
 1. **MarkLine integration** — The `MarkLine` annotation class exists but is not wired into any chart type
 2. **Snapshot testing** — No byte-level SGR output tests for any chart type except Sixel
 3. **Missing chart types** — Gauge, radar/spider, bubble/scatter with sized points, horizontal stacked bars
@@ -12,6 +13,7 @@ SugarCharts (`sugar-charts`) is a comprehensive PHP terminal charting library pr
 5. **Color science** — RGB linear interpolation instead of LAB for perceptually uniform gradients
 
 **Biggest Missing Capabilities**:
+
 1. Logarithmic axis scale support
 2. Grid overlay option for charts
 3. Per-data-point coloring (gradients within a series)
@@ -34,6 +36,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 ```
 
 **Canvas Primitives** (`SugarCraft\Charts\Canvas`):
+
 - `Cell` — immutable value object (single rune + optional Style)
 - `Canvas` — mutable in-place 2D grid (intentional for animation performance)
 - `Graph` — drawing primitives (line, axis, labels, candlestick, columns)
@@ -55,11 +58,13 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 | MarkLine | `MarkLine.php` | ⚠️ exists but not integrated |
 
 **Aggregation Layer** (`SugarCraft\Charts\Aggregation`):
+
 - `BucketByTime` — groups timestamped values into time buckets
 - `MovingAverage` — SMA and EMA computation
 - `Resample` — upsampling (linear/nearest) and downsampling (last/mean)
 
 **Key APIs**:
+
 - Immutable fluent `with*()` pattern throughout
 - `Chart::view()` → `renderChart()` → `mergeLegend()` → `addTitle()` → `addYLabel()` → `addXLabel()`
 - Short-form aliases on setters: `data`, `size`, `min`, `max`, `palette`, `bars`, etc.
@@ -107,6 +112,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 ## Critical
 
 ### 1. MarkLine Not Integrated into Charts
+
 **Description**: `MarkLine` class exists as a standalone annotation concept (`min()`, `max()`, `average()`, `at()` static factories) but is not used by any chart class.
 **Why it matters**: Threshold reference lines are a fundamental chart annotation feature expected by users.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (upstream comparison section)
@@ -115,6 +121,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: High — fills a common annotation gap.
 
 ### 2. Snapshot Tests Absent
+
 **Description**: No chart class has snapshot tests asserting exact SGR byte output. Only Sixel has byte-level assertions.
 **Why it matters**: Without snapshot tests, SGR output changes silently and breaking changes go undetected.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (testing section)
@@ -125,6 +132,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 ## High Value
 
 ### 3. Gauge/Arc Chart Type
+
 **Description**: Ratatui has a `Gauge` widget; sugar-charts does not.
 **Why it matters**: Gauge charts are common for progress/kpi dashboards.
 **Source**: `docs/repo_map/ratatui_ratatui.md` (widget list)
@@ -133,6 +141,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: High — fills common dashboard need.
 
 ### 4. Logarithmic Axis Scale
+
 **Description**: All axes are linear only; no logarithmic scale support.
 **Why it matters**: Log scales are essential for scientific/financial data spanning multiple orders of magnitude.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (incomplete APIs)
@@ -141,6 +150,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Medium — niche but important for specific domains.
 
 ### 5. Grid Overlay Option
+
 **Description**: Charts don't support optional grid lines for reference.
 **Why it matters**: Grid lines aid visual estimation of values in charts.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (incomplete APIs)
@@ -149,6 +159,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Medium — common expectation.
 
 ### 6. Per-Data-Point Color (Gradient Within Series)
+
 **Description**: LineChart applies single color per series, not per-point gradients.
 **Why it matters**: Gradient coloring within a series can show intensity/spatial distribution.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (incomplete APIs)
@@ -157,6 +168,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Medium — enhances visual expressiveness.
 
 ### 7. Animation Orchestration (ReactPHP)
+
 **Description**: `animationProgress` exists but duration-based animation (driven by ReactPHP timers) is not wired.
 **Why it matters**: Smooth chart animations require frame sequencing over time.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (rendering gaps)
@@ -167,6 +179,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 ## Medium
 
 ### 8. Radar/Spider Chart
+
 **Description**: Not present in sugar-charts.
 **Why it matters**: Radar charts are useful for multi-variable comparison.
 **Source**: Not present in upstream (ntcharts) — SugarCraft extension opportunity.
@@ -175,6 +188,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Low-Medium — specialized use case.
 
 ### 9. Bubble/Scatter with Sized Points
+
 **Description**: `Scatter` uses fixed-size rune; bubble would need size encoding.
 **Why it matters**: Bubble charts show 3 dimensions (x, y, size).
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (incomplete)
@@ -183,6 +197,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Low-Medium — specialized.
 
 ### 10. Horizontal Stacked Bar Charts
+
 **Description**: `BarChart::withHorizontal()` renders horizontal bars but stacked behavior requires custom Bar extensions.
 **Why it matters**: Stacked horizontal bars are common in comparative dashboards.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (incomplete)
@@ -191,6 +206,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Medium — common dashboard pattern.
 
 ### 11. Sixel Dithering
+
 **Description**: Simple RGB cube quantization produces visible banding; no error diffusion/dithering.
 **Why it matters**: Photographic or gradient content renders poorly.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (technical debt)
@@ -199,6 +215,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Medium — visual quality for certain image types.
 
 ### 12. Kitty/iTerm2 PNG Encoding
+
 **Description**: `Picture::fromGrid()` works for Sixel but Kitty/iTerm2 require GD/Imagick for PNG encoding.
 **Why it matters**: Kitty/iTerm2 provide better image quality than Sixel.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (platform integration)
@@ -209,6 +226,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 ## Low Priority
 
 ### 13. LAB Color Interpolation
+
 **Description**: `Color::blend()` uses RGB linear interpolation, not perceptually uniform.
 **Why it matters**: RGB gradients can have non-uniform perceived brightness across the gradient.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (technical debt)
@@ -217,6 +235,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Low — subtle visual improvement.
 
 ### 14. PHP 8.4 Constructor Property Hooks
+
 **Description**: Many `copy()` variants with flag parameters indicate strained immutability pattern.
 **Why it matters**: PHP 8.4 constructor property hooks could simplify immutable setter pattern.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (technical debt)
@@ -225,6 +244,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Expected impact**: Low — code cleanliness, not user-facing.
 
 ### 15. Scientific Notation in `niceNumbers()`
+
 **Description**: `Graph::niceNumbers()` doesn't handle very large/small values with scientific notation.
 **Why it matters**: Scientific data with extreme values produces bad tick labels.
 **Source**: `docs/repo_map/sugarcraft_sugar-charts.md` (technical debt)
@@ -245,6 +265,7 @@ User-facing Chart Classes (BarChart, LineChart, Heatmap, OHLC, Sparkline, etc.)
 **Why external is better**: For large dashboards with multiple charts, diffing minimizes terminal I/O. Bubble Tea's ultraviolet renderer uses the same pattern.
 
 **Tradeoffs**: 
+
 - PHP's single-threaded nature makes diffing less critical than in Go/Rust
 - sugar-dash already has `Buffer` with diffing capability
 - Implementing diffing at chart level would require buffer abstraction matching sugar-dash
@@ -301,6 +322,7 @@ $state = new LineChartState(animationProgress: 0.5);
 **Problem**: Canvas is mutable, contradicting the immutable fluent pattern used throughout SugarCraft.
 
 **Proposed options**:
+
 - (a) Keep mutable Canvas but document it clearly as an intentional performance optimization
 - (b) Implement copy-on-write Canvas that clones on mutation, providing immutability with performance similar to mutable for single-frame renders
 - (c) Refactor to use `ImmutableCanvas` for all chart rendering and only use mutable Canvas explicitly in animation loops
@@ -390,6 +412,7 @@ $chart = $chart->withColorProfile($profile);
 
 **Gap**: Users must read individual chart docs to choose.
 **Proposed**: Add a decision tree / comparison table in README showing:
+
 - Sparkline vs LineChart vs Streamline for time-series
 - BarChart vs Heatmap for categorical intensity
 - OHLC vs LineChart for financial data
@@ -482,6 +505,7 @@ public function testSparklineRendersCorrectly(): void
 **Priority**: High.
 **Current**: Only 6 tests for Sixel.
 **Proposed**: Add tests for:
+
 - Palette quantization edge cases
 - Image dimensions at terminal boundaries
 - Empty/transparent regions
@@ -493,6 +517,7 @@ public function testSparklineRendersCorrectly(): void
 **Priority**: Medium.
 **Current**: MovingAverage, Resample, BucketByTime have tests but edge cases may be missing.
 **Proposed**: Add tests for:
+
 - Empty input handling
 - Single-element windows
 - Very large timestamp ranges
@@ -659,6 +684,7 @@ sugar-charts is a **well-structured, mature charting library** that successfully
 **Competitive position**: php-tui has ChartWidget/BarChartWidget but no sparkline/heatmap/OHLC. ratatui has all widget types but is Rust-only. sugar-charts has the most comprehensive PHP terminal chart coverage.
 
 **Strategic priorities**:
+
 1. **Complete the MarkLine integration** — low effort, high value, immediately useful
 2. **Add snapshot testing** — prevents regressions, enables confident iteration
 3. **Implement Gauge** — fills common dashboard need, matches ecosystem expectations
@@ -667,6 +693,7 @@ sugar-charts is a **well-structured, mature charting library** that successfully
 **Dependency health**: The bridge to sugar-dash via BrailleCanvas is experimental but functional. The pure-PHP Sixel encoder is a strong differentiator — no GD/Imagick dependency. Dependencies on candy-core and candy-sprinkles are stable.
 
 **Pre-1.0 opportunities**: The v11 breaking changes in ratatui-image demonstrate that pre-1.0 is the time for API cleanup. sugar-charts should consider:
+
 - Breaking `copy()` variants in favor of standardized `with()` pattern before v1.0
 - Making Canvas mutability explicit (either fully mutable for animation or immutable with explicit mutable wrapper)
 - Establishing clear ChartState pattern for animation/render state separation

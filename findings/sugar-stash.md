@@ -25,6 +25,7 @@
 Every git operation in the `Git` class uses `proc_open()` synchronously, blocking the PHP process until the command completes. This happens inside the TUI's update loop (`App::update()`) on every user action that touches git (stage, commit, checkout, etc.). In a ReactPHP-based TUI ecosystem where the event loop must remain responsive to keyboard input and screen rendering, blocking on external process execution degrades the user experience significantly and contradicts the async architecture of sibling libraries in the SugarCraft monorepo.
 
 **Impact:**
+
 - Every git operation (stage, unstage, commit, checkout, etc.) freezes the TUI for the duration of the subprocess
 - Under slow git operations (large diffs, network-backed repos), the interface becomes unresponsive
 - Cannot be used in scenarios requiring concurrent git operations
@@ -44,6 +45,7 @@ Consider introducing an async git driver interface (e.g., `AsyncGitDriver`) that
 The `composer.json` lists `sugarcraft/candy-fuzzy: dev-master` as a dependency (required by `StashManager::fuzzyFilter()` at line 98 of `StashManager.php`), and includes the path repository for candy-fuzzy itself. However, the CALIBER_LEARNINGS.md notes that path-repo closure must propagate to the FULL transitive dependency graph. The candy-fuzzy library may itself have path repository requirements that are not fully wired in sugar-stash's `repositories[]` array, which would cause `composer install` to fail or pull the package from packagist instead of the local path.
 
 **Impact:**
+
 - `composer install` may fail if candy-fuzzy is not available as a local path
 - If candy-fuzzy has its own path dependencies, those may not resolve correctly
 
@@ -59,6 +61,7 @@ Run `composer validate --no-check-all` (without `--strict`, as noted in AGENTS.m
 ### 🟠 M-1: Duplicate `removeDir()` implementation in test files
 
 **Location:**
+
 - `tests/GitApplyIntegrationTest.php:37-45`
 - `tests/GitTrapTest.php:27-35` (both files contain identical `removeDir()` method)
 
@@ -66,6 +69,7 @@ Run `composer validate --no-check-all` (without `--strict`, as noted in AGENTS.m
 The `removeDir()` helper method — a recursive directory removal utility — is copy-pasted verbatim into two integration test files. This is a DRY violation that makes maintenance harder: if the removal logic needs to change (e.g., to use `RecursiveDirectoryIterator` with proper symlink handling, or to add error handling), the fix must be applied in two places.
 
 **Impact:**
+
 - Maintenance burden: changes must be duplicated
 - Risk of divergence if one copy is updated and the other is forgotten
 
@@ -86,6 +90,7 @@ The `InteractiveRebase` class manages the full state machine for building an int
 The `RebaseAction` enum includes an `Edit` action, but editing a commit during a rebase requires spawning an editor and waiting for user interaction, which has no implementation.
 
 **Impact:**
+
 - Interactive rebase is visually complete but functionally a no-op
 - User can build a todo list but cannot execute it
 
@@ -112,6 +117,7 @@ The library has no `.github/workflows/ci.yml` of its own. CI discovery in this m
 - proper integration with GitHub's PR review UI showing per-lib status
 
 **Impact:**
+
 - CI must be triggered through monorepo root; standalone lib testing requires extra setup
 - Codecov and other PR integrations may not show per-lib status
 
@@ -130,6 +136,7 @@ Add `sugar-stash/.github/workflows/ci.yml` following the pattern used in other l
 The library has no `codecov.yml` flag/component configuration of its own. Codecov reporting relies on the root `codecov.yml` for aggregation. A per-lib codecov configuration would allow independent coverage tracking and per-lib coverage requirements.
 
 **Impact:**
+
 - Coverage reports aggregate at monorepo level only
 - Cannot enforce per-lib coverage thresholds independently
 
@@ -148,6 +155,7 @@ Add `sugar-stash/codecov.yml` following the pattern documented in AGENTS.md.
 The `withHunkCursor()` method clamps the provided `$cursor` index to `[0, max]` where `max = count($this->hunkStarts) - 1`. However, when `hunkStarts` is empty, `$max` becomes `-1`, and the expression `max >= 0 ? $max : 0` correctly returns `0`. But the subsequent line `$lineIdx = ($max >= 0 && isset($this->hunkStarts[$newIdx]))` correctly handles the empty case by falling back to `0`. This appears correct but the logic is complex enough to benefit from an explicit early-return guard for the zero-hunk case.
 
 **Impact:**
+
 - Correct in practice, but the complexity makes future maintenance risky
 
 **Recommendation:**
@@ -170,6 +178,7 @@ if ($this->hunkStarts === []) {
 `HistoryManager::push()` returns a new instance with the new entry appended to `undoStack` and `redoStack` cleared. This is correct immutable behavior. However, the `undo()` and `redo()` methods use `array_pop()` on a copy of the stack array (`$newUndoStack = $this->undoStack; array_pop($newUndoStack)`), which is correct but the intent would be clearer if used array spread syntax (`[..., $entry]`) consistently with `push()`.
 
 **Impact:**
+
 - Minor readability improvement; behavior is correct
 
 **Recommendation:**

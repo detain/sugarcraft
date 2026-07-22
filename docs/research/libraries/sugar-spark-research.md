@@ -15,6 +15,7 @@ The current sugar-spark implementation is a solid direct port of sequin's functi
 ## 1. Current Implementation Analysis
 
 ### Architecture
+
 The current sugar-spark uses a **byte-by-byte parsing loop** with explicit sequence type detection based on escape character prefixes:
 
 ```php
@@ -34,12 +35,14 @@ while ($i < $len) {
 ```
 
 ### Strengths
+
 - **Comprehensive sequence support:** CSI, OSC, DCS, APC, SS3, two-byte ESC
 - **Detailed human-readable labels:** Full SGR color/attribute descriptions
 - **Robust fallback:** Unknown sequences get generic `CSI param final` labels
 - **Good test coverage:** 670 lines of tests covering all major branches
 
 ### Weaknesses
+
 - **Manual byte-by-byte parsing:** No state machine, harder to extend
 - **No incremental parsing:** Must buffer all text before `describe()`
 - **Limited visual representation:** Only `printable()` method for raw byte display
@@ -54,6 +57,7 @@ while ($i < $len) {
 **Source:** [github.com/charmbracelet/sequin](https://github.com/charmbracelet/sequin)
 
 **Architecture:**
+
 - Relies on `charmbracelet/x/ansi` state-machine parser
 - Handler-based architecture with dispatch maps:
 ```go
@@ -78,6 +82,7 @@ var csiHandlers = map[int]handlerFn{
 | Control string support | None | SOS (`\x98`), PM (`\x9e`) |
 
 **Unique sequin features:**
+
 - **Syntax highlighting:** `--raw` mode with theme support (`SEQUIN_THEME` env var)
 - **Command execution:** `sequin -- some command` runs and inspects output
 - **Control code table:** Full C0 (0x00-0x1F) and C1 (0x80-0x9F) descriptions
@@ -109,6 +114,7 @@ func (p *Parser) Advance(b byte) parser.Action {
 **State transitions:** Ground → Escape → (CsiEntry/DcsEntry/OscString/ApcString/SosString/PmString) → dispatch
 
 **Benefits for PHP port:**
+
 - Clean separation between parsing and handling
 - Extensible via `Handler` interface
 - Handles all edge cases (UTF-8, incomplete sequences, two-byte ESC)
@@ -125,6 +131,7 @@ pub fn strip_str(data: &str) -> StrippedStr<'_>  // Strip ANSI from string
 ```
 
 **Relevant patterns:**
+
 - `StripStr` / `StripBytes` for incremental stripping
 - `StripStrIter` for iterator-based processing
 - Well-tested UTF-8 handling via `utf8parse::Receiver`
@@ -143,6 +150,7 @@ pub fn strip_str(data: &str) -> StrippedStr<'_>  // Strip ANSI from string
 ```
 
 **Unique features:**
+
 - `Sequence` class: sequence-aware string subclass
 - `SequenceTextWrapper`: text wrapping with sequence awareness
 - Grapheme cluster support for emoji width calculation
@@ -236,6 +244,7 @@ Ground → Escape → CsiEntry → CsiParam → CsiIntermediate → CsiDispatch
 ```
 
 **Benefits:**
+
 - Clear state transition rules
 - Easier to add new sequence types
 - Standardized handling of edge cases
@@ -338,6 +347,7 @@ public static function highlight(string $input, HighlightTheme $theme = null): s
 | SGR 4 (double underline) | ✅ | ❌ | 4;1 single, 4;2 double, etc. |
 
 ### SGR 4 underline styles (from sequin sgr.go):
+
 ```php
 // Current (sugar-spark):
 $code === 4 => 'underline'
@@ -371,20 +381,24 @@ case 4:
 ## 6. Implementation Plan
 
 ### Phase 1: Quick Wins (1-2 sessions)
+
 1. Add C0/C1 control code descriptions
 2. Add SGR underline style variants
 3. Add SOS/PM sequence handling
 4. Add missing DECRQSS variants
 
 ### Phase 2: Output Formats (1 session)
+
 1. Add `reportAsJson()` method
 2. Add `reportAsDebug()` for var_dump-style output
 
 ### Phase 3: Streaming (2 sessions)
+
 1. Implement `StreamingInspector` class
 2. Add CLI `--stream` flag for chunked processing
 
 ### Phase 4: Refactoring (3-4 sessions)
+
 1. Design state machine
 2. Migrate parsing logic
 3. Maintain backward compatibility via adapter

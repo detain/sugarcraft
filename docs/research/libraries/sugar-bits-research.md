@@ -11,6 +11,7 @@
 sugar-bits provides 14+ prebuilt TUI components (TextInput, TextArea, Table, ItemList, Paginator, etc.) following the Bubble Tea MVU model. This research compares sugar-bits against alternatives in Go, Rust, Python, and Node.js to identify API improvements, cleaner patterns, and additional features worth porting.
 
 **Key findings:**
+
 1. sugar-bits TextInput is more feature-rich than Bubbles (vim mode, history limits, sentinel-based setters)
 2. Table lacks sorting/filtering/pagination that bubble-table provides
 3. ratatui's separated state pattern (TableState/ListState) is worth adopting for cleaner render loops
@@ -58,6 +59,7 @@ final class TextInput implements Model
 ```
 
 **Strengths over upstream:**
+
 - ✅ Vim mode (h/l/w/b/0/$/i/a/A/x)
 - ✅ History with limits (`withHistoryLimit()`)
 - ✅ Sentinel-based nullable setters (`$validateSet`, `$errSet`) per CALIBER_LEARNINGS
@@ -65,6 +67,7 @@ final class TextInput implements Model
 - ✅ Short-form method aliases (`.placeholder()`, `.prompt()`, etc.)
 
 **Weaknesses vs alternatives:**
+
 - ❌ Validation fires on every edit only; no timing control
 - ❌ No `validate_on` option (blur/submit/changed)
 - ❌ No restrict pattern (regex-based input filtering)
@@ -101,6 +104,7 @@ func (m *Model) SetStyles(s Styles)
 
 ```python
 # Source: textual.textualize.io/widgets/input
+
 input = Input(
     value="Hello World",
     placeholder="Enter text here",
@@ -115,6 +119,7 @@ input = Input(
 ```
 
 **Better patterns to port:**
+
 1. **`validate_on` timing** — Sugar-bits should support `onChange`, `onBlur`, `onSubmit` validation triggers
 2. **`restrict` regex** — Filter allowed characters before insertion
 3. **Multiple validators** — Currently sugar-bits only supports one validator closure
@@ -133,6 +138,7 @@ nameInput := tview.NewInputField().
 ```
 
 **Notable patterns:**
+
 - `InputFieldInteger` / `InputFieldFloat` / `InputFieldMaxLength` as built-in acceptance functions
 - Form integration with label+field as a unit
 
@@ -181,6 +187,7 @@ final class TextArea implements Model
 ```
 
 **Strengths:**
+
 - ✅ Line-by-line storage with `row`/`col` cursor tracking
 - ✅ Dynamic height mode (renders only content lines, capped by maxHeight)
 - ✅ `promptFunc` for per-line dynamic prompts
@@ -223,6 +230,7 @@ let paragraph = Paragraph::new(text)
 
 ```python
 # Simple multi-line text area in Textual
+
 await pilot.ppress("b")  # Send 'b' key
 await pilot.click("#textarea-id")
 ```
@@ -264,12 +272,14 @@ final class Table implements Model
 ```
 
 **Features:**
+
 - ✅ Cursor-based row selection (vim keys j/k)
 - ✅ Column width auto-sizing with explicit overrides
 - ✅ `styleFunc` for per-cell styling
 - ✅ Fixed header rendering with underline
 
 **Missing vs bubble-table:**
+
 - ❌ No built-in sorting
 - ❌ No filtering/searching
 - ❌ No pagination
@@ -309,6 +319,7 @@ table.New(columns).
 ```
 
 **Key features to port:**
+
 1. **Pagination** — `WithPageSize()`, `PageUp()`, `PageDown()`, `PageFirst()`, `PageLast()`
 2. **Filtering** — `WithFiltered(true)`, per-column `WithFiltered(true)`
 3. **Sorting** — `SortByDesc()`, `SortByAsc()`, `ThenSortByDesc()`
@@ -405,6 +416,7 @@ final class ItemList implements Model
 ```
 
 **Features:**
+
 - ✅ Filtering mode (press `/` to enter)
 - ✅ Status messages with expiration
 - ✅ Infinite scrolling (wrap cursor)
@@ -448,6 +460,7 @@ list.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut run
 
 ```python
 # Source: textual.textualize.io/widgets/list_view
+
 class ListApp(App):
     def compose(self) -> ComposeResult:
         yield ListView(
@@ -494,12 +507,14 @@ final class Paginator implements Model
 ```
 
 **Features:**
+
 - ✅ Dots mode (● ○ ○ ○)
 - ✅ Arabic mode ("3/8")
 - ✅ Keyboard navigation (arrows, h/l, pgup/pgdn)
 - ✅ `sliceBounds()` for item pagination
 
 **Missing:**
+
 - ❌ No page size configuration after construction
 - ❌ No first/last buttons
 - ❌ No page jump / direct page selection
@@ -548,12 +563,14 @@ form := tview.NewForm().
 
 ```python
 # Source: textual.textualize.io/guide/widgets
+
 class InputWithLabel(Widget):
     def compose(self) -> ComposeResult:
         yield Label(self.input_label)
         yield Input()
 
 # Usage:
+
 yield InputWithLabel("First Name")
 yield InputWithLabel("Last Name")
 yield InputWithLabel("Email")
@@ -592,11 +609,13 @@ frame.render_stateful_widget(table, area, &mut table_state);
 ```
 
 **Pros for sugar-bits adoption:**
+
 - State persisted in parent model, survives across renders
 - Multiple views can share same state without copying
 - Clearer separation: state management vs rendering
 
 **Cons for sugar-bits adoption:**
+
 - PHP doesn't have mutable references like Rust
 - Would require breaking API changes
 - Current pattern is simpler for PHP use cases
@@ -607,6 +626,7 @@ frame.render_stateful_widget(table, area, &mut table_state);
 
 ```python
 # Source: textual.textualize.io
+
 value: var[str] = var("")  # Reactive variable
 
 @on(Input.Changed)
@@ -636,6 +656,7 @@ style := lipgloss.NewStyle().
 ```
 
 **What sugar-bits should adopt from lipgloss:**
+
 1. Fluent chaining (already used in `Style`)
 2. Border helpers (`RoundedBorder()`, `NormalBorder()`, etc.)
 3. Color constants (`lipgloss.Color("63")`)
@@ -775,6 +796,7 @@ public function withPage(int $page): self;
 ### Phase 5: Documentation & Patterns
 
 **Add to CALIBER_LEARNINGS.md:**
+
 - Form composition patterns (TextInput + TextArea in a form)
 - Validation timing strategies
 - Table filtering/sorting usage
@@ -786,16 +808,19 @@ public function withPage(int $page): self;
 ## 11. Summary of Recommended Improvements
 
 ### Immediate (next PR)
+
 1. **TextInput: Add `validate_on`** — validation timing control
 2. **TextInput: Add `restrict` regex** — input filtering
 3. **Paginator: Add `pageFirst()`, `pageLast()`, `withPage()`**
 
 ### Short-term (next 2-3 PRs)
+
 4. **Table: Add sorting** — `sortBy()`, `thenSortBy()`
 5. **Table: Add filtering** — `withFilterable()`
 6. **Table: Add pagination** — `withPageSize()` + navigation
 
 ### Long-term (backlog)
+
 7. **TextInput: Multiple validators** — accept `list<Closure>`
 8. **Document form composition patterns**
 9. Consider built-in acceptance functions (integer, email, URL)
@@ -805,6 +830,7 @@ public function withPage(int $page): self;
 ## 12. References
 
 ### Documentation Sources
+
 - [Bubble Tea](https://github.com/charmbracelet/bubbletea) - Go TUI framework
 - [Bubbles](https://github.com/charmbracelet/bubbles) - Go TUI components
 - [bubble-table](https://github.com/evertras/bubble-table) - Go table with pagination/sort/filter
@@ -816,6 +842,7 @@ public function withPage(int $page): self;
 - [blessed](https://github.com/chjj/blessed) - Node.js terminal library
 
 ### Key File Locations
+
 - sugar-bits TextInput: `sugar-bits/src/TextInput/TextInput.php`
 - sugar-bits TextArea: `sugar-bits/src/TextArea/TextArea.php`
 - sugar-bits Table: `sugar-bits/src/Table/Table.php`

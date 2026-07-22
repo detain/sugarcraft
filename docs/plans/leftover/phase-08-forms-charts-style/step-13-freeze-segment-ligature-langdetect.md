@@ -14,12 +14,15 @@
 ## Files
 
 **Modify:**
+
 - `candy-freeze/src/Segment.php` — `$bg` field, applied in render.
 
 **Create:**
+
 - `candy-freeze/src/LanguageDetector.php`.
 
 **Modify:**
+
 - `candy-freeze/src/Renderer/SvgRenderer.php` — `--ligatures` flag
   emits `font-variant-ligatures: normal`.
 

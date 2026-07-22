@@ -15,6 +15,7 @@ accept), and future consumers all call a single API.
 ## Files
 
 **Create:**
+
 - `candy-palette/src/Probe.php` — static class with:
   - `Probe::colorProfile(): ColorProfile` — returns the negotiated
     profile after walking every env var in precedence order.
@@ -42,6 +43,7 @@ accept), and future consumers all call a single API.
     if available; upgrade Ansi → TrueColor.
 
 **Tests:**
+
 - `candy-palette/tests/ProbeTest.php` — parameterized:
   - Each precedence rule has at least one test case.
   - Fixture sets env vars, runs `Probe::colorProfile()`, asserts

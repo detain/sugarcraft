@@ -1,11 +1,17 @@
 # sugarcraft/candy-metrics
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/candy-metrics
+
 - **Language:** PHP 8.3+
+
 - **License:** MIT
+
 - **Package:** `sugarcraft/candy-metrics`
+
 - **Namespace:** `SugarCraft\Metrics`
+
 - **Status:** 🟢 v1 ready
 
 ## Description
@@ -17,32 +23,51 @@ Lightweight telemetry primitives for SugarCraft / CandyWish servers. Provides co
 ## Feature List
 
 ### Metric Instruments
+
 - **Counter** — Monotonically accumulating integer/float (connection counts, error counts)
+
 - **Gauge** — Instantaneous value that replaces on set (queue depth, RSS memory)
+
 - **Histogram** — Distribution of samples (latency, payload size) with configurable/classic bucket boundaries
+
 - **UpDownCounter** — Synchronous counter supporting positive and negative increments (active connections, queue size)
+
 - **AsyncCounter** — Asynchronous monotonic counter observed at collection time via callback (JVM GC counts, DB pool size)
+
 - **AsyncGauge** — Asynchronous non-monotonic gauge observed at collection time via callback (memory usage, queue depth)
 
 ### Backend Implementations
+
 - **InMemoryBackend** — Accumulator for tests; counters add up, gauges hold latest, histograms keep all samples
+
 - **JsonStreamBackend** — Newline-delimited JSON emitter to file/stderr/socket; one event per line with ts/kind/name/value/tags
+
 - **StatsdBackend** — UDP datagrams in etsy/DogStatsD wire format; supports `dogstatsd: false` for legacy tag-free mode
+
 - **PrometheusFileBackend** — Atomic rewrite of Prometheus textfile collector file; 14 classic cumulative `le` buckets +Inf, proper TYPE/HELP lines, label escaping, flock serialization
+
 - **MultiBackend** — Fanout to multiple backends simultaneously (e.g. live StatsD + JSON audit trail)
 
 ### Registry Facade
+
 - **Central Registry** — Application-facing facade forwarding to Backend; backends are swappable config, call sites stay agnostic
+
 - **Descriptor Registration** — DTO for metric name/help/type/labelKeys; enables early TYPE/HELP pre-emission before samples recorded
+
 - **time() Helper** — Returns a closure that records elapsed wall-clock seconds as a histogram
+
 - **withTags()** — Returns a child registry with pre-merged default tags (merged on top of existing defaults)
+
 - **Cardinality Management** — Tracks per-metric label-value combinations; FIFO eviction when exceeding limit (default 10,000); prevents memory exhaustion from unbounded high-cardinality labels
+
 - **deleteLabelValues()** — Manual eviction for explicit cleanup (session teardown)
 
 ### Middleware
+
 - **SessionMetrics** — CandyWish middleware emitting session telemetry: `wish.session.connect` (counter), `wish.session.duration` (histogram), `wish.session.error` (counter with exception label). Tags: `user`, `term`, plus optional `extraTags` callable for custom labels (client subnet, geo, build version).
 
 ### Internationalization
+
 - **Lang facade** — Extends `SugarCraft\Core\I18n\Lang` with `metrics` namespace; 19 supported locales (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar)
 
 ---
@@ -88,6 +113,7 @@ candy-metrics/
 ## Metric Type Analysis
 
 ### Counter (`Registry::counter()`)
+
 **Behavior:** Monotonically accumulating. Each `counter(name, value, tags)` adds `value` to the running sum for that name+label combination.
 
 **Implementation detail (InMemoryBackend):**
@@ -105,6 +131,7 @@ public function counter(string $name, float $value, array $tags = []): void
 **Cardinality tracking:** Registry wraps every emit in `trackCardinality()` which checks if this is a new (name, tag-set) combination and evicts the oldest via FIFO when over limit.
 
 ### Gauge (`Registry::gauge()`)
+
 **Behavior:** Instantaneous value. Each `gauge(name, value, tags)` replaces the previous value.
 
 **Implementation detail (InMemoryBackend):**
@@ -119,6 +146,7 @@ public function gauge(string $name, float $value, array $tags = []): void
 **Use cases:** Queue depth, memory usage, temperature — values that jump around and don't have a natural accumulation semantics.
 
 ### Histogram (`Registry::histogram()`)
+
 **Behavior:** Records a sample into the distribution. Backends decide how to aggregate.
 
 **PrometheusFileBackend bucket accumulation:**
@@ -155,6 +183,7 @@ public function histogram(string $name, float $value, array $tags = []): void
 **StatsdBackend:** emits `|h` (histogram type) —DogStatsD supports timing histograms natively.
 
 ### UpDownCounter (`Registry::upDownCounter()` + `Instrument\UpDownCounter`)
+
 **Behavior:** Supports positive and negative increments. Use for values that naturally go up and down (active connections, items in queue).
 
 ```php
@@ -174,6 +203,7 @@ $connCounter->add(-1);    // connection closed
 ```
 
 ### AsyncCounter (`Registry::asyncCounter()` + `Instrument\AsyncCounter`)
+
 **Behavior:** Value is owned by external system, read at collection time via callback. Each `observe()` invokes the closure and records the result.
 
 ```php
@@ -187,6 +217,7 @@ public function observe(): void
 **Cardinaltiy note:** AsyncCounter tracks cardinality on `observe()` calls, not on callback value — the external value doesn't affect cardinality.
 
 ### AsyncGauge (`Registry::asyncGauge()` + `Instrument\AsyncGauge`)
+
 **Behavior:** Non-monotonic instantaneous reading from external system (memory, queue depth, temperature). Unlike AsyncCounter, the value is not expected to be monotonically increasing.
 
 **OpenTelemetry alignment:** Both AsyncCounter and AsyncGauge mirror `opentelemetry.io/api/metrics` async instrument semantics. The callback is called once per `observe()` invocation, not continuously.
@@ -217,7 +248,9 @@ histogram: lat:0.005|h
 
 ```
 # HELP http_request_duration HTTP request duration in seconds
+
 # TYPE http_request_duration histogram
+
 http_request_duration_bucket{method="GET",route="/api",le="0.005"} 0
 http_request_duration_bucket{method="GET",route="/api",le="0.01"} 1
 ...
@@ -226,6 +259,7 @@ http_request_duration_count{method="GET",route="/api"} 5
 http_request_duration_sum{method="GET",route="/api"} 0.342
 
 # TYPE hits counter
+
 hits{method="GET",route="/api"} 42
 ```
 
@@ -248,11 +282,17 @@ Implements `SugarCraft\Wish\Middleware` (signature: `handle(Context, Session, ca
 | `wish.session.error` | counter (+1) | `user`, `term`, `exception` |
 
 **Flow:**
+
 1. Merges tags: `user` + `term` from session + optional `extraTags` callable
+
 2. Increments `wish.session.connect` BEFORE calling `$next`
+
 3. Starts wall-clock timer
+
 4. Calls `$next($ctx, $session)`
+
 5. If throw: increments `wish.session.error` with `exception` label, re-throws
+
 6. `finally`: stops timer, records duration histogram
 
 ```php
@@ -335,22 +375,33 @@ private static function escapeLabel(string $s): string
 ## Aggregation Strategies
 
 ### InMemoryBackend
+
 - **Counter:** Accumulates via addition. Key is unique per (name, tag-set).
+
 - **Gauge:** Replace. Last writer wins.
+
 - **Histogram:** Appends to `list<float>`. No aggregation — keeps raw samples for exact distribution analysis.
+
 - **UpDownCounter:** Accumulates (positive and negative).
+
 - **AsyncCounter/AsyncGauge:** Replace (last observed value wins).
 
 ### PrometheusFileBackend
+
 - **Counter:** Accumulates across `flush()` calls — persists in memory between flushes.
+
 - **Gauge:** Replaces on each set.
+
 - **Histogram:** Accumulates count/sum/buckets in memory; `flush()` emits all accumulated buckets. Counter accumulation means short-lived processes can write incremental data to the textfile between flushes without losing data.
+
 - **UpDownCounter:** Accumulates.
 
 ### JSONStreamBackend
+
 No aggregation — one NDJSON line per emit. Consumer (Logstash, etc.) does aggregation.
 
 ### StatsdBackend
+
 No aggregation — one UDP packet per emit. StatsD server (Carbon/Graphite, Datadog Agent, etc.) does aggregation server-side.
 
 ---
@@ -358,12 +409,14 @@ No aggregation — one UDP packet per emit. StatsD server (Carbon/Graphite, Data
 ## Export Formats
 
 ### NDJSON (JsonStreamBackend)
+
 ```json
 {"ts":"2026-05-02T16:30:00+00:00","kind":"counter","name":"hits","value":1,"tags":{"route":"/x"}}
 {"ts":"2026-05-02T16:30:01+00:00","kind":"histogram","name":"lat","value":0.042,"tags":{}}
 ```
 
 ### etsy StatsD / DogStatsD
+
 ```
 hits:1|c|#route:/x,env:prod
 queue_depth:42|g
@@ -371,9 +424,12 @@ lat:0.042|h|#route:/x
 ```
 
 ### Prometheus Textfile
+
 ```
 # HELP lat Request latency in seconds
+
 # TYPE lat histogram
+
 lat_bucket{le="0.005"} 0
 lat_bucket{le="0.01"} 2
 ...
@@ -381,6 +437,7 @@ lat_bucket{le="+Inf"} 100
 lat_count 100
 lat_sum 4.200000
 # TYPE hits counter
+
 hits 42
 ```
 
@@ -390,16 +447,27 @@ hits 42
 
 **41 tests** across:
 - `RegistryTest` — counter accumulation, gauge replacement, histogram appends, time() closure, withTags(), tag merging, key canonicalization
+
 - `CardinalityTest` — FIFO eviction, per-metric independence, DeleteLabelValues, 10,000 default limit, async/sync instrument cardinality
+
 - `DescriptorTest` — valid types, empty name/help/type validation, empty label key rejection
+
 - `HistogramBucketsTest` — bucket accumulation, bucket order, +Inf equality, tag labels
+
 - `SessionMetricsTest` — connect/duration/error recording, exception propagation, extraTags callable
+
 - `AsyncCounterTest` / `AsyncGaugeTest` — callback invocation, value updating, tags, name/help accessors
+
 - `UpDownCounterTest` — increment/decrement, negative values, tags
+
 - `Backend/InMemoryBackendTest` — (implicit via other tests)
+
 - `Backend/StatsdBackendTest` — counter/histogram/gauge wire format, legacy mode drops tags, integer formatting
+
 - `Backend/JsonStreamBackendTest` — line count, kind/name/value/tags extraction, invalid target rejection
+
 - `Backend/MultiBackendTest` — fanout to all children, empty multi is no-op
+
 - `Backend/PrometheusFileBackendTest` — counter/gauge/histogram emission, label rendering, escaping, atomic flush
 
 ---
@@ -429,13 +497,16 @@ The `SessionMetrics` middleware bridges `candy-metrics` into the `candy-wish` SS
 
 Key differences in session metadata:
 - **promwish:** only `command` label via `CommandFn`
+
 - **candy-metrics:** `user`, `term` always; `exception` on error; `extraTags` callable for arbitrary additional labels (client subnet, geo, build version)
 
 ### Additional Third-Party Metric/Telemetry Repos
 
 No other metric or telemetry-specific repos are mapped in `repo_map.md`. Observability-related mentions appear in:
 - **charmbracelet/soft-serve** — Prometheus metrics via `promauto` counters for auth attempts
+
 - **charmbracelet/catwalk** — Built-in request counting via `promwish`
+
 - **charmbracelet/confettysh** — Prometheus metrics on separate port via `promwish`
 
 None of these are telemetry libraries themselves — they are consumers of `promwish`.
@@ -489,15 +560,21 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 ## SugarCraft Ecosystem Position
 
 ### Dependency Chain
+
 - `candy-metrics` depends on `candy-core` (base TUI primitives)
+
 - `candy-metrics` is a peer of `candy-wish` (SSH server); `SessionMetrics` middleware bridges them
 
 ### Related Libraries
+
 - `candy-log` — Logging primitives (observability sibling — different axis)
+
 - `candy-core` — Provides `SugarCraft\Core\I18n\Lang` which `candy-metrics\Lang` extends
+
 - `candy-wish` — SSH server whose middleware stack `SessionMetrics` integrates into
 
 ### Dependency Order in Monorepo
+
 `candy-core` → `candy-sprinkles` → `honey-bounce` → `candy-zone` → `sugar-bits` → leaf libs including `candy-metrics`
 
 ---
@@ -505,6 +582,7 @@ None of these are telemetry libraries themselves — they are consumers of `prom
 ## Notable Implementation Details
 
 ### Time Helper Closure
+
 ```php
 // src/Registry.php:138-146
 public function time(string $name, array $tags = []): callable
@@ -520,6 +598,7 @@ public function time(string $name, array $tags = []): callable
 Returns a closure that records elapsed seconds as a histogram AND returns the float for direct use. Pattern mirrors OpenTelemetry's `RecordBatch` API.
 
 ### Cardinality FIFO Eviction
+
 ```php
 // src/Registry.php:203-218
 private function trackCardinality(string $name, array $tags): void
@@ -543,6 +622,7 @@ private function trackCardinality(string $name, array $tags): void
 Uses `reset()` + `key()` to get the **first** inserted array key — PHP's internal array iteration order is insertion-ordered for string keys, making this a correct FIFO queue without explicit timestamp tracking.
 
 ### Integer Formatting for StatsD
+
 ```php
 // src/Backend/StatsdBackend.php:88-94
 private static function fmt(float $v): string
@@ -556,6 +636,7 @@ private static function fmt(float $v): string
 Strips unnecessary trailing zeros from floats — `5.0` becomes `5`, `0.005` stays `0.005`, preserving StatsD wire efficiency.
 
 ### Label Canonicalization
+
 ```php
 // src/Registry.php:227-238
 private function tagKey(array $tags): string
@@ -574,6 +655,7 @@ private function tagKey(array $tags): string
 Sorted keys ensure stable string keys regardless of insertion order — identical tag sets produce identical cache keys.
 
 ### Lang Facade Pattern
+
 ```php
 // src/Lang.php:18-22
 final class Lang extends BaseLang

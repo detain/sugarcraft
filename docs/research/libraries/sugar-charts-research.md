@@ -12,6 +12,7 @@
 This research surveys terminal chart/visualization libraries across Go, Rust, Python, and JavaScript to identify patterns and improvements for sugar-charts. The library already has a solid foundation mirroring ntcharts, but opportunities exist in rendering precision, real-time streaming, data aggregation, axis labeling, and color management.
 
 **Key Findings:**
+
 1. **Braille canvas** (2x4 sub-pixel rendering) provides significantly better resolution than cell-based rendering
 2. **Real-time streaming** patterns are well-established across all languages (Sparkline-style sliding windows)
 3. **Data aggregation** is an underserved feature in most terminal libraries — opportunities for differentiation
@@ -25,6 +26,7 @@ This research surveys terminal chart/visualization libraries across Go, Rust, Py
 ### 1.1 Go Libraries
 
 #### NimbleMarkets/ntcharts (Upstream) ⭐
+
 **Repository:** https://github.com/NimbleMarkets/ntcharts
 **Stars:** ~680
 
@@ -37,6 +39,7 @@ This research surveys terminal chart/visualization libraries across Go, Rust, Py
 | Framework | Bubble Tea v2 native |
 
 **Strengths:**
+
 - Full Bubble Tea integration with tea.Model
 - Mouse zoom/pan on TimeSeries via BubbleZone
 - Picture module with Kitty graphics + Sixel fallback
@@ -44,12 +47,14 @@ This research surveys terminal chart/visualization libraries across Go, Rust, Py
 - HeatPicture with Perlin noise at full Kitty resolution
 
 **Patterns to Mirror:**
+
 - `chart.Push()` for streaming data
 - `chart.SetZoneManager()` for mouse support
 - `DrawBrailleAll()` for high-resolution rendering
 - Multi-dataset with `PushDataSet()` and `SetDataSetStyle()`
 
 #### vicanso/go-charts
+
 **Repository:** https://github.com/vicanso/go-charts
 **Output:** SVG/PNG (not ASCII)
 
@@ -71,6 +76,7 @@ charts.LineRender(values,
 ```
 
 #### ChartGo
+
 **Repository:** https://github.com/aayanmtn/chartgo
 **Stars:** Fork of go-analyze/charts
 
@@ -82,6 +88,7 @@ charts.LineRender(values,
 | Theme | Cyberpunk aesthetic |
 
 **Notable Patterns:**
+
 - Zero-allocation hot paths
 - Bresenham's algorithm for line rendering
 - Midpoint circle algorithm for bubbles
@@ -92,6 +99,7 @@ charts.LineRender(values,
 ### 1.2 Rust Libraries
 
 #### Ratatui/ratatui (formerly tui-rs)
+
 **Repository:** https://github.com/ratatui/ratatui
 **Documentation:** https://docs.rs/ratatui-widgets
 
@@ -131,6 +139,7 @@ let sparkline = Sparkline::default()
 ```
 
 #### termplot-rs
+
 **Repository:** https://github.com/sabbat-cloud/termplot
 **Focus:** High-performance real-time rendering
 
@@ -142,12 +151,14 @@ let sparkline = Sparkline::default()
 | Clipping | Cohen-Sutherland algorithm |
 
 **Key Innovations:**
+
 - `render_to(&mut buffer)` for zero-allocation updates
 - Cartesian vs Screen coordinate modes
 - Color blending policies (Overwrite vs KeepFirst)
 - Auto-range calculation with configurable padding
 
 #### textplots
+
 **Repository:** https://crates.io/crates/textplots
 
 | Feature | Implementation |
@@ -157,6 +168,7 @@ let sparkline = Sparkline::default()
 | API | Simple `Chart::default().lineplot(&Shape::Continuous(...)).display()` |
 
 #### termichart
+
 **Repository:** https://docs.rs/termichart-charts
 
 | Feature | Implementation |
@@ -171,6 +183,7 @@ let sparkline = Sparkline::default()
 ### 1.3 Python Libraries
 
 #### plotext
+
 **Repository:** https://github.com/piccolomo/plotext
 **PyPI:** https://pypi.org/project/plotext/
 **Stars:** ~2K
@@ -187,19 +200,23 @@ let sparkline = Sparkline::default()
 import plotext as plt
 
 # Basic line
+
 plt.plot(y)
 plt.title("Title")
 plt.show()
 
 # Multiple datasets with labels
+
 plt.plot(x, y1, label="data1")
 plt.plot(x, y2, label="data2")
 plt.legend()  # auto-placed
 
 # Themes
+
 plt.theme("caliche")  # or "textual-design-dark"
 
 # Streaming
+
 plt.clt()  # clear terminal
 plt.cld()  # clear data only
 plt.scatter(data)
@@ -218,6 +235,7 @@ for i in range(frames):
 ```
 
 #### textual-plotext
+
 **Repository:** https://github.com/Textualize/textual-plotext
 
 Widget wrapper for Plotext in Textual apps:
@@ -236,6 +254,7 @@ class ScatterApp(App[None]):
 ```
 
 #### textual-plot
+
 **Repository:** https://github.com/davidfokkema/textual-plot
 
 Native Textual plotting widget with:
@@ -246,6 +265,7 @@ Native Textual plotting widget with:
 - Automatic "nice" tick placement
 
 #### asciichartpy
+
 **Repository:** https://github.com/kroitor/asciichart
 **PyPI:** https://pypi.org/project/asciichartpy/
 
@@ -264,6 +284,7 @@ series = [1, 4, 2, 7, 5]
 print(plot(series))  # auto-sizes to data
 
 # With config
+
 config = {'height': 10, 'colors': [blue, green]}
 print(plot([arr1, arr2], config))
 ```
@@ -273,6 +294,7 @@ print(plot([arr1, arr2], config))
 ### 1.4 JavaScript Libraries
 
 #### yaronn/blessed-contrib
+
 **Repository:** https://github.com/yaronn/blessed-contrib
 **Framework:** Blessed (curses-like)
 
@@ -300,6 +322,7 @@ line.setData([series1, series2]);
 ```
 
 #### asciichart (JavaScript original)
+
 **Repository:** https://github.com/kroitor/asciichart
 
 Same API as Python port — single `plot()` function with config:
@@ -326,23 +349,27 @@ console.log(asciichart.plot(s0, { height: 10, colors: [asciichart.blue] }));
 | asciichart | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 **Gap Analysis for sugar-charts:**
+
 - **Missing:** Pie/Donut, Area fill, Radar, Bubble
 - **Opportunity:** These are highly usable in terminals with Unicode ring characters
 
 ### 2.2 Rendering Approaches
 
 #### Cell-Based (sugar-charts, ntcharts, ratatui)
+
 - One character = one data point
 - Simple, fast, predictable
 - Limited resolution (width × height maximum points)
 
 #### Braille-Based (termplot-rs, ChartGo, textual-plot, plotext optional)
+
 - One character = 2×4 sub-pixels (8 dots)
 - 2x horizontal, 4x vertical resolution improvement
 - Requires careful line algorithms (Bresenham)
 - Better for smooth lines and dense data
 
 #### Half-Block (ratatui Sparkline)
+
 - One character = 2 vertical positions
 - Good for sparklines, compact charts
 - Simpler than braille
@@ -360,6 +387,7 @@ console.log(asciichart.plot(s0, { height: 10, colors: [asciichart.blue] }));
 | textual-plot | Worker API | Automatic | Reactive |
 
 **sugar-charts Current State:**
+
 - Sparkline: ✅ Full push/shift window
 - LineChart/TimeSeries: Animation progress support but no streaming window
 - Streamline: Exists in ntcharts port but implementation differs
@@ -455,10 +483,12 @@ public function withNiceYTicks(int $count = 4): self
 - Integrated with chart area
 
 **Position Variants:**
+
 - Top, Bottom, Left, Right (all libraries)
 - Overlay/Float (plotext themes)
 
 **Opportunities:**
+
 1. Collapsible legend for many series
 2. Legend click to toggle series visibility
 3. Multi-row legend for many series
@@ -489,8 +519,10 @@ hotColor:  Color::hex('#ff4040'),  // red
 **plotext (more sophisticated):**
 ```python
 # Uses themes with full palette
+
 plt.colorize()  # applies current theme
 # Or per-point colors
+
 plt.scatter(y, color="red")
 ```
 
@@ -503,6 +535,7 @@ plt.scatter(y, color="red")
 ### 3.1 High Priority (Low Effort, High Impact)
 
 #### 3.1.1 Add "Nice Numbers" Axis Labeling
+
 **Effort:** Medium
 **Impact:** High
 
@@ -525,6 +558,7 @@ public static function niceNumbers(float $min, float $max, int $count): array
 ```
 
 #### 3.1.2 Add Sliding Window Streaming to LineChart/TimeSeries
+
 **Effort:** Low
 **Impact:** High
 
@@ -545,6 +579,7 @@ public function push(int|float $value): self
 ```
 
 #### 3.1.3 Add Area Fill Option to LineChart
+
 **Effort:** Low
 **Impact:** Medium
 
@@ -558,6 +593,7 @@ public function withFill(bool $fill = true, ?string $fillChar = '▓'): self
 ### 3.2 Medium Priority (Medium Effort, Medium Impact)
 
 #### 3.2.1 Optional Braille Canvas Rendering
+
 **Effort:** High
 **Impact:** High
 
@@ -591,6 +627,7 @@ public function withBrailleRendering(bool $braille = true): self
 ```
 
 #### 3.2.2 Add Min/Max/Average Mark Lines
+
 **Effort:** Low
 **Impact:** Medium
 
@@ -602,6 +639,7 @@ public function withMarkLine(MarkLineType $type, ?string $label = null): self
 ```
 
 #### 3.2.3 Data Aggregation Helpers
+
 **Effort:** Medium
 **Impact:** Medium
 
@@ -615,18 +653,21 @@ public static function resample(array $data, int $targetCount): array;
 ### 3.3 Lower Priority (Higher Effort, Nice to Have)
 
 #### 3.3.1 Multiple Y-Axes (plotext pattern)
+
 **Effort:** High
 **Impact:** Low
 
 For comparing datasets with different scales.
 
 #### 3.3.2 Interactive Zoom/Pan
+
 **Effort:** High
 **Impact:** Low
 
 Requires terminal mouse support — complex.
 
 #### 3.3.3 Pie/Donut Chart
+
 **Effort:** Medium
 **Impact:** Low
 

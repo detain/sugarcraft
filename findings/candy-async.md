@@ -438,6 +438,7 @@ The library has excellent test coverage:
 - **LangTest** — 2 tests covering fallback behavior
 
 **Missing test cases:**
+
 - No test for `CancellationSource::new()` returning distinct instances with separate cancellation state (though CancellationTokenTest:139 tests token distinctness)
 - No test for `Subscription::count()` / `isEmpty()` from the interface perspective
 - No integration tests with actual ReactPHP event loop in complex scenarios

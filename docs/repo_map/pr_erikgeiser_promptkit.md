@@ -202,27 +202,32 @@ Based on README and examples, these features appear user-driven:
 ## 8. Important PRs
 
 ### PR #35: Multi Selection (March 2026)
+
 - **What:** Added `MultiSelection[T]` and `MultiModel[T]` for selecting multiple items
 - **Constraints:** `MinSelections`, `MaxSelections` bounds
 - **Notable:** Used `PreSelected` function for pre-selecting items
 - **Community Signal:** Issue #2 (Multiple Selections) had 9 comments indicating strong demand
 
 ### PR #36: Textarea (March 2026)
+
 - **What:** Added `TextArea` multi-line input with auto-resize
 - **Features:** `Height` (fixed or auto-expand), `ShowLineNumbers`
 - **Windows Fix:** Multiple commits to fix textarea submission on Windows
 - **Requested by:** Issue #28 (user request)
 
 ### PR #37: Autocomplete Improvements (March 2026)
+
 - **What:** Improved autocomplete UX based on issue #30
 - **Requested by:** Issue #30 (Allow to browse suggestions)
 - **Result:** User can browse suggestions with arrow keys
 
 ### PR #38: PreSelected for Multi-Selection (April 2026)
+
 - **What:** Added `PreSelected` function to pre-select items in multi-selection
 - **Example:** `MultiSelection.WithPreSelected func(index int) bool`
 
 ### PR #34: Migrate from bubbletea/bubbles v1 to v2 (March 2026)
+
 - **What:** Major dependency upgrade
 - **Impact:** All prompt types required updates
 - **Note:** This was a significant maintenance burden for solo maintainer
@@ -234,21 +239,25 @@ Based on README and examples, these features appear user-driven:
 ### 9.1 Major Architectural Decisions
 
 **1. Config/Model Separation**
+
 - `Selection` (config) → `Model` (bubbletea model)
 - This mirrors MVC pattern and allows embedding as widgets
 - However caused usability confusion (Issue #25)
 
 **2. Generic Type Safety**
+
 - `Selection[T]`, `MultiSelection[T]` for compile-time type safety
 - Choice display priority: explicit `String` field → `string` → `fmt.Stringer` → `fmt.Sprintf`
 - Edge case: fails when T is itself a `Choice` type (Issue #24)
 
 **3. Template-Based Rendering**
+
 - Uses Go `text/template` with composed FuncMaps
 - Functions from: termenv, promptkit helpers, custom (IsScrollDownHintPosition, Selected, Unselected)
 - Enables complete UI customization
 
 **4. Init() as Early Termination Point**
+
 - `Init()` returns `tea.Quit` for empty choices
 - This is an anti-pattern for composed models (Issue #27)
 - With bubbletea v2, View() now always runs before Update()
@@ -400,6 +409,7 @@ Users discovered they must:
 ### 16.2 Merged vs Rejected Pattern
 
 **Accepted:**
+
 - Multi-selection (long-requested, eventually implemented)
 - TextArea (user requested, implemented)
 - Cursor looping (simple enhancement, merged)

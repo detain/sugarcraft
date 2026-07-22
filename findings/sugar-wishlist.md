@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — Item selection doesn't validate index bounds
+
 **Severity:** MEDIUM  
 **Location:** `src/Wishlist.php`
 
@@ -24,6 +25,7 @@
 ---
 
 ### Finding 2 — No duplicate item prevention
+
 **Severity:** LOW  
 **Location:** `src/Wishlist.php`
 
@@ -32,6 +34,7 @@ Adding the same item twice results in duplicate entries. No unique-constraint en
 ---
 
 ### Finding 3 — Empty wishlist state not rendered specially
+
 **Severity:** LOW  
 **Location:** `src/Wishlist.php`
 
@@ -42,6 +45,7 @@ Empty wishlist shows blank area rather than a placeholder message like "Your wis
 ## 2. Performance Problems
 
 ### Finding 4 — Selection state stored as array of bools, recalculated on access
+
 **Severity:** LOW  
 **Location:** `src/Wishlist.php`
 
@@ -50,6 +54,7 @@ Empty wishlist shows blank area rather than a placeholder message like "Your wis
 ---
 
 ### Finding 5 — No performance concerns beyond above
+
 **Severity:** N/A  
 
 ---
@@ -57,6 +62,7 @@ Empty wishlist shows blank area rather than a placeholder message like "Your wis
 ## 3. Memory Leaks
 
 ### Finding 6 — No memory leaks detected
+
 **Severity:** N/A  
 
 ---
@@ -64,6 +70,7 @@ Empty wishlist shows blank area rather than a placeholder message like "Your wis
 ## 4. Security
 
 ### Finding 7 — No security concerns
+
 **Severity:** N/A  
 
 ---
@@ -71,6 +78,7 @@ Empty wishlist shows blank area rather than a placeholder message like "Your wis
 ## 5. Complexity
 
 ### Finding 8 — Complexity is appropriate
+
 **Severity:** N/A  
 
 ---
@@ -78,6 +86,7 @@ Empty wishlist shows blank area rather than a placeholder message like "Your wis
 ## 6. Missing Features
 
 ### Finding 9 — No item removal from wishlist
+
 **Severity:** MEDIUM  
 **Location:** `src/Wishlist.php`
 
@@ -86,6 +95,7 @@ Items can be added and selected but not removed (except through the UI). No API 
 ---
 
 ### Finding 10 — No quantity/support level per item
+
 **Severity:** LOW  
 **Location:** `src/Wishlist.php`
 
@@ -94,6 +104,7 @@ Wishlist items only have selected/unselected state. No quantity, priority, or no
 ---
 
 ### Finding 11 — No `examples/` directory
+
 **Severity:** LOW  
 
 ---
@@ -101,6 +112,7 @@ Wishlist items only have selected/unselected state. No quantity, priority, or no
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 12 — Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 
 ---
@@ -108,6 +120,7 @@ Wishlist items only have selected/unselected state. No quantity, priority, or no
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 13 — No async improvements needed
+
 **Severity:** N/A  
 
 ---

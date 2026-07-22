@@ -23,6 +23,7 @@ From `repo_map/charmbracelet_harmonica.md`:
 ## 3. Previously Identified Gaps
 
 From `repo_map/charmbracelet_harmonica.md`:
+
 - Mutable `Projectile` (Update() mutates receiver)
 - No spring presets or UIKit tension/friction mappings
 - No `SpringChain` or `SpringCollection`
@@ -36,6 +37,7 @@ From `repo_map/charmbracelet_harmonica.md`:
 ## 4. High-Signal Open Issues
 
 ### Issue #13 — "issue running an example" (Open, 4 comments)
+
 **Signal**: Environment setup problem for OpenGL example. User could not compile OpenGL example despite having Mesa drivers installed. Maintainers pointed to missing `libgl1-mesa-dev xorg-dev` system packages. This issue remained unresolved in the conversation (user said error persisted after trying suggested fixes).
 
 **Root Cause**: OpenGL example depends on GLFW vendored C sources that require development headers. The `go-gl/glfw/v3.3/glfw/c_glfw.go:4` includes `glfw/src/context.c` directly — this is a vendored C file that must be present on the system. The README had no mention of system dependencies.
@@ -49,6 +51,7 @@ From `repo_map/charmbracelet_harmonica.md`:
 ## 5. Important Closed Issues
 
 ### Issue #11 — "`go mod tidy` unable to pull Projectile, Point, Vector etc" (Closed, 2 comments)
+
 **Signal**: Breaking API between v0.1.0 and v0.2.0. Example code from `master` used types (`Projectile`, `Point`, `Vector`, `NewProjectile`) that didn't exist in the latest tagged release (v0.1). Go's module proxy served v0.1, not master, so users got undefined errors.
 
 **Impact**: Users following README examples couldn't compile. The `examples/physics/main.go` file on master referenced types that only existed after v0.2.0 was tagged.
@@ -56,6 +59,7 @@ From `repo_map/charmbracelet_harmonica.md`:
 **Lesson**: Master HEAD vs. latest tagged release mismatch creates confusing onboarding. SugarCraft should ensure examples match the latest tagged release or use versioned imports correctly.
 
 ### Issue #15 — "remake a telnet starwars movie with harmonica" (Closed, 2 comments)
+
 **Signal**: Novel use-case request — using harmonica to animate ASCII art in a telnet starwars movie remake. commenter `@taigrr` pointed to their `ssh-wars` project as an implementation. This demonstrates harmonica's framework-agnostic appeal beyond TUIs.
 
 ---
@@ -98,12 +102,14 @@ These were noted as TODOs in the PR but never addressed. SugarCraft's `honey-bou
 ## 9. Architectural Changes
 
 ### v0.1 → v0.2 (April 2022)
+
 - **Added**: `Projectile`, `Point`, `Vector`, `Gravity`, `TerminalGravity`, `NewProjectile()`, `FPS()`
 - **Renamed**: examples directory from `physics/` to `particle/`
 - **Package doc**: Added projectile example alongside spring example
 - **Significant**: The entire second half of the library (projectile physics) was added in this release
 
 ### Notable Code Changes
+
 - `NewProjectile` initially returned value; PR #7 changed it to return `*Projectile` pointer (to match confetty usage pattern)
 - PR #24 added `initialAcceleration` parameter name fix (was `initalAcceleration` — typo)
 - Commit `d45b9627`: "Copy values in Update method to avoid data races" — data race prevention in concurrent use

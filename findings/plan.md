@@ -54,6 +54,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 ## Execution Groups
 
 ### Group A — Foundation Critical Fixes [PENDING]
+
 **Must execute first — these unblock everything else**
 
 | Lib | Phase | Items | Key Critical Fix |
@@ -146,16 +147,19 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan here provides sequencing; individual plans provide exact file:line changes.
 
 ### Group A Source Plans
+
 - `findings/plan_candy-core.md` — Phase 1 (items 1.1–1.2), Phase 2 (items 2.1–2.2)
 - `findings/plan_candy-vt.md` — Phase 1 (items 1.1–1.2), Phase 2–12 (deferred after P1)
 - `findings/plan_sugar-dash.md` — Phase 1 (parse error + RingBuffer bug; full plan ~52KB)
 
 ### Group B Source Plans
+
 - `findings/plan_sugar-reel.md` — Phase 1 (items 1.1–1.8), Phase 2–6 (deferred)
 - `findings/plan_candy-pty.md` — Phase 1 (FD reuse race, EINTR timeout)
 - `findings/plan_candy-query.md` — Phase 1 (items 1.1–1.8 all critical SQL injection)
 
 ### Group C Source Plans
+
 - `findings/plan_honey-bounce.md` — Phase 1 (Spring tick mutates in place)
 - `findings/plan_sugar-charts.md` — Phase 1 (ChartExtras trait extraction)
 - `findings/plan_candy-async.md` — Phase 1 (AsyncOps duplication)
@@ -164,6 +168,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-glow.md` — Phase 1 (animation timing)
 
 ### Group D Source Plans
+
 - `findings/plan_sugar-bits.md` — Phase 1 (Stopwatch teardown, Tick edge cases)
 - `findings/plan_candy-mouse.md` — Phase 1 (mouse coordinate validation, wheel events)
 - `findings/plan_candy-lister.md` — Phase 1 (Paginator state machine, filter input)
@@ -172,6 +177,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-veil.md` — Phase 1 (animation frame timing)
 
 ### Group E Source Plans
+
 - `findings/plan_sugar-post.md` — Phase 1 (Attachment silent failure, unchecked fwrite)
 - `findings/plan_sugar-prompt.md` — Phase 1 ($pid uninitialized on fork failure)
 - `findings/plan_candy-log.md` — Phase 1 (log level filtering, handler consistency)
@@ -180,6 +186,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_candy-freeze.md` — Phase 1 (WeakMap allocateColor cache)
 
 ### Group F Source Plans
+
 - `findings/plan_candy-shine.md` — Phase 1 (BlockStack state not reset, withTheme shares stack)
 - `findings/plan_candy-mosaic.md` — Phase 1 (mosaic grid layout edge cases)
 - `findings/plan_candy-hermit.md` — Phase 1 (shell environment isolation)
@@ -193,6 +200,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 ## Phase 1 Implementation Steps
 
 ### Step 1: Execute Group A
+
 1. Spawn 3 subagents in parallel:
    - **Subagent A1:** Implement candy-core Phase 1.1 (InputReader undefined var) + Phase 1.2 + Phase 2
    - **Subagent A2:** Implement candy-vt Phase 1.1 (Transitions thread-safe) + Phase 1.2 (Theme maps)
@@ -201,6 +209,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 3. After all 3 complete: commit to master, pull, continue to Group B
 
 ### Step 2: Execute Group B
+
 1. Spawn 3 subagents in parallel:
    - **Subagent B1:** Implement sugar-reel Phase 1.1–1.3 (AudioPlayer SIGSTOP, mutate() ?? bug)
    - **Subagent B2:** Implement candy-pty Phase 1.1–1.3 (FD reuse race, EINTR timeout)
@@ -209,6 +218,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 3. After all 3 complete: commit to master, pull, continue to Group C
 
 ### Step 3: Execute Group C
+
 1. Spawn 6 subagents in parallel:
    - **Subagent C1:** honey-bounce (SpringChain::tick() returns new instances)
    - **Subagent C2:** sugar-charts (ChartExtras trait extraction)
@@ -220,14 +230,17 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 3. After all 6 complete: commit to master, pull, continue to Group D
 
 ### Step 4: Execute Group D
+
 1. Spawn 6 subagents in parallel (6 libs from Group D)
 2. After all complete: commit to master, pull, continue to Group E
 
 ### Step 5: Execute Group E
+
 1. Spawn 6 subagents in parallel (6 libs from Group E)
 2. After all complete: commit to master, pull, continue to Group F
 
 ### Step 6: Execute Group F
+
 1. Spawn 6 subagents in parallel (first 6 of 9 libs + repeated_logic)
 2. Commit, spawn remaining 3 subagents
 3. Execute repeated_logic LAST (after all dependent plans complete)
@@ -256,11 +269,13 @@ The following plans have findings marked as no-action — only documentation/cla
 
 ```bash
 # Run tests for all libs in the group
+
 cd candy-core && composer install && vendor/bin/phpunit
 cd ../candy-vt && composer install && vendor/bin/phpunit
 cd ../sugar-dash && composer install && vendor/bin/phpunit
 
 # PHPStan level 9
+
 cd candy-core && vendor/bin/phpstan analyse --level=9 src/
 cd ../candy-vt && vendor/bin/phpstan analyse --level=9 src/
 cd ../sugar-dash && vendor/bin/phpstan analyse --level=9 src/

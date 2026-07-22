@@ -35,6 +35,7 @@ Address the 10 major categories of repeated logic patterns identified in the rep
 **Severity:** Medium
 
 **Source locations:**
+
 - `sugar-stash/src/App.php:L515` — `private function clamp(int $i, int $size): int`
 - `candy-palette/src/Color.php:L67` — `private static function clamp(int $v): int` (0-255 range)
 - `sugar-bits/src/Tree/Tree.php:L317` — `private function clamp(): self`
@@ -92,6 +93,7 @@ final class Clamp
 ```
 
 **Verification:**
+
 - Create `candy-core/tests/Unit/Util/ClampTest.php` with edge case tests (min=max, value<min, value>max, negative values)
 - Run `cd candy-core && vendor/bin/phpunit` — all tests pass
 - Replace 4 local clamp implementations with the shared utility
@@ -107,6 +109,7 @@ final class Clamp
 **Severity:** Medium
 
 **Source locations:**
+
 - `candy-forms/src/Viewport/Viewport.php:L57` — `throw new \InvalidArgumentException(Lang::t('viewport.dim_nonneg'))`
 - `sugar-charts/src/Heatmap/Heatmap.php:L55` — `throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'))`
 - `sugar-bits/src/Table/Table.php:L66` — `throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'))`
@@ -167,6 +170,7 @@ final class Validation
 ```
 
 **Verification:**
+
 - Create `candy-core/tests/Unit/Util/ValidationTest.php`
 - Migrate 3-5 existing validation call sites to use the new utilities
 - Run `cd candy-core && vendor/bin/phpunit` — all tests pass
@@ -182,6 +186,7 @@ final class Validation
 **Severity:** Low
 
 **Source locations:**
+
 - `sugar-bits/src/Stopwatch/Stopwatch.php:L382` — example with validation
 - `candy-sprinkles/src/Style.php:L103` — simple factory
 
@@ -194,6 +199,7 @@ Add to `CALIBER_LEARNINGS.md`:
 ```
 
 **Verification:**
+
 - Search for any new class added without `::new()` in code review
 - No automated check needed — documented convention
 
@@ -212,12 +218,14 @@ Add to `CALIBER_LEARNINGS.md`:
 **Investigation notes:**
 
 **candy-async/AsyncOps (212 lines):**
+
 - `withTimeout(LoopInterface, PromiseInterface, float)` — wraps promise with timeout
 - `retry(callable, int, float, ?CancellationToken)` — retry with exponential backoff
 - `debounce(callable, float, ?LoopInterface)` — returns debounced closure
 - `throttle(callable, float, ?LoopInterface)` — returns throttled closure
 
 **candy-files/AsyncOps (207 lines):**
+
 - `copyAsync(string $src, string $dst): PromiseInterface<bool>`
 - `moveAsync(string $src, string $dst): PromiseInterface<bool>`
 - `renameAsync(string $src, string $newName): PromiseInterface<bool>`
@@ -227,6 +235,7 @@ Add to `CALIBER_LEARNINGS.md`:
 **Key insight:** These are distinct operations — candy-async handles generic async patterns (timeout, retry, debounce, throttle), while candy-files handles file-specific I/O. They don't directly overlap but could share the underlying `Deferred` + `futureTick` pattern. Recommend keeping separate but extracting shared pattern to `candy-core` if needed.
 
 **Verification:**
+
 - Document findings in a separate ADR (Architecture Decision Record)
 - Determine if `candy-files` could use `candy-async` utilities
 
@@ -243,6 +252,7 @@ Add to `CALIBER_LEARNINGS.md`:
 **Severity:** High
 
 **Source locations:**
+
 - Canonical trait: `candy-core/src/Concerns/Mutable.php:L27-L39`
 - 35 local implementations found via grep across: `sugar-veil/Veil.php`, `candy-forms/Field/Input.php`, `candy-forms/Field/Select.php`, `candy-buffer/Style.php`, `sugar-stash/App.php`, etc.
 
@@ -286,6 +296,7 @@ Add to `CALIBER_LEARNINGS.md`:
 3. Create migration script for Type A cases
 
 **Verification:**
+
 - Run delegation to audit all 35 implementations
 - Document classification in findings file
 - Proceed with migration only for Type A (simple) cases
@@ -315,6 +326,7 @@ Update the entry to explicitly list when local override IS required:
 - Classes with mutable (non-constructor) state that must be manually copied
 
 **Verification:**
+
 - Review new class contributions to ensure pattern is followed correctly
 
 ---
@@ -328,6 +340,7 @@ Update the entry to explicitly list when local override IS required:
 **Severity:** Low
 
 **Verification:**
+
 - Create `docs/adr/001-asyncops-consolidation.md` with decision and rationale
 - Reference in future code reviews
 
@@ -344,6 +357,7 @@ Update the entry to explicitly list when local override IS required:
 **Severity:** Low
 
 **Source locations:**
+
 - Interface: `candy-forms/src/Validator/Validator.php:L12-L17`
 - Implementations: `Required.php`, `Email.php`, `Pattern.php`, `MinLength.php`, `MaxLength.php`
 
@@ -358,6 +372,7 @@ If evaluation recommends keeping as-is:
 - Document in CALIBER_LEARNINGS.md that Validator lives in candy-forms and is the standard for input validation
 
 **Verification:**
+
 - Document decision rationale
 - If promoted: run full test suite for affected libs
 

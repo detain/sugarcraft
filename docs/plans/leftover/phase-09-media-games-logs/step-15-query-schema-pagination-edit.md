@@ -13,6 +13,7 @@ Three TUI features:
 ## Files
 
 **Modify / Create:**
+
 - `candy-query/src/SchemaBrowser.php`.
 - `candy-query/src/ResultPager.php`.
 - `candy-query/src/CellEditor.php`.

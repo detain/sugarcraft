@@ -1,6 +1,7 @@
 # sugarcraft/candy-hermit — Innovation & Comparison Report
 
 ## Metadata
+
 - **SugarCraft Library:** `candy-hermit`
 - **Porting Source:** `Genekkion/theHermit` (primary, 15 stars), with patterns from `rmhubbert/bubbletea-overlay` and `p-gen/smenu`
 - **Status:** v1 Ready
@@ -193,6 +194,7 @@ private function applyFilter(string $text): array
 **Anchor bias formula:** `$pos * 2 < strlen($value)` — the match position must be in the first half of the string. This biases toward matching near the start of the string, similar to "fuzzy" behavior without full scoring.
 
 **Two-stage filtering:**
+
 1. **Stage 1:** Case-insensitive substring match with anchor bias
 2. **Stage 2:** Custom `$filterFn` predicate (e.g., category filter, visibility flag)
 
@@ -291,6 +293,7 @@ final class FileHistory {
 **Format:** One JSON-encoded line per item: `{"n":1,"v":"apple"}\n`
 
 **Design notes:**
+
 - Uses `FILE_APPEND | LOCK_EX` for safe concurrent writes
 - Line-based `fgets()` loop avoids loading entire file into memory
 - Returns `FilteredItem` instances (not generic `Item` — concrete implementation)
@@ -438,6 +441,7 @@ The overlay pattern is useful for:
 - Context-sensitive item selection over live content
 
 **Recommended enhancements (post v1):**
+
 1. UTF-8 grapheme cluster support in `highlightMatches()` and `replaceSegment()` (use `grapheme_strlen`/`grapheme_substr`)
 2. ANSI-aware width calculation (leverage `SugarCraft\Core\Util\Width` or `Ansi` utilities)
 3. Optional pagination for large lists

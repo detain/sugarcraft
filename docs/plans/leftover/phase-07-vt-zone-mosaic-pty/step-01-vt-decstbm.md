@@ -13,6 +13,7 @@ support throughout the scroll handler.
 ## Files
 
 **Modify:**
+
 - `candy-vt/src/Handler/ScrollHandler.php` — track top/bottom margin
   rows; `scroll up/down` respects them.
 - `candy-vt/src/Screen/Screen.php` — `scrollRegion(int $top, int $bottom)`

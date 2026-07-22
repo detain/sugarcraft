@@ -11,6 +11,7 @@ middleware so wish's auth surface is complete.
 ## Files
 
 **Create:**
+
 - `candy-wish/src/Middleware/Auth/PasswordAuth.php` — callback
   validates `(user, password)`.
 - `candy-wish/src/Middleware/Auth/CertificateAuth.php` — validates
@@ -21,6 +22,7 @@ middleware so wish's auth surface is complete.
   response interactive prompt.
 
 **Tests:**
+
 - `candy-wish/tests/Middleware/Auth/<Each>Test.php`.
 
 ## Acceptance

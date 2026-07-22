@@ -18,11 +18,13 @@ Three features:
 ## Files
 
 **Create:**
+
 - `sugar-charts/src/Aggregation/BucketByTime.php`
 - `sugar-charts/src/Aggregation/MovingAverage.php`
 - `sugar-charts/src/Aggregation/Resample.php`
 
 **Modify:**
+
 - `sugar-charts/src/LineChart.php` and `Chart.php` — `withCanvas(BrailleCanvas)`
   alternative mode.
 - `sugar-charts/composer.json` — add `sugarcraft/candy-sprinkles` (for

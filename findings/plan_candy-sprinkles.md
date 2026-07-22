@@ -1,6 +1,7 @@
 # Implementation Plan: candy-sprinkles Findings
 
 ## Goal
+
 Address findings in candy-sprinkles library, mapping each issue to actual file locations in the codebase.
 
 ## Context & Decisions

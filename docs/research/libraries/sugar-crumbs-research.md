@@ -50,6 +50,7 @@ Tests cover:
 - Shell withPush/withPop
 
 **Missing tests:**
+
 - Edge cases: max-width = 0, empty stack truncation
 - Separator escaping for ANSI sequences
 - Grapheme-aware width calculations
@@ -135,6 +136,7 @@ func New() Model {
 ```
 
 **Key requirements:**
+
 - `<nav>` with `aria-label="Breadcrumbs"`
 - Ordered list (`<ol>`) for semantic structure
 - Separators are `aria-hidden`
@@ -212,6 +214,7 @@ sugar-crumbs (PHP):
 ```
 
 **Missing in sugar-crumbs:**
+
 1. No `Closable` interface for cleanup on pop
 2. No lifecycle hooks (OnEnter/OnLeaving)
 3. No WindowSize handling
@@ -420,24 +423,28 @@ public function renderAria(NavStack $stack): array
 ## 10. Implementation Plan
 
 ### Phase 1: Stabilization (2-3 hours)
+
 - [ ] Fix or remove `examples/navigation.php`
 - [ ] Add `view()` method to NavStack (returns formatted stack state)
 - [ ] Add `filter()` method to NavStack (filter items by title substring)
 - [ ] Add `pushDirectory()` to Shell (parse path segments into stack)
 
 ### Phase 2: Feature Parity with bubbleo (5-6 hours)
+
 - [ ] Add `Closable` interface
 - [ ] Add `Navigable` interface with `onEnter()`/`onLeave()`
 - [ ] Update NavStack to call hooks on push/pop
 - [ ] Add `currentPath()` derivation
 
 ### Phase 3: Rendering Extensions (4-5 hours)
+
 - [ ] Add `renderWithClickRegions()`
 - [ ] Add `renderHtml()` for web contexts
 - [ ] Add separator escaping
 - [ ] Add aria-current structured output
 
 ### Phase 4: Polish (2-3 hours)
+
 - [ ] Add missing test cases for edge conditions
 - [ ] Document separator customization
 - [ ] Add `SeparatorRenderer` callback support

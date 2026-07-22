@@ -66,21 +66,27 @@ bin/wishlist
 ## APIs
 
 ### Config::load(string $path): array<Endpoint>
+
 Loads endpoints from YAML or JSON config file.
 
 ### Config::importFromSshConfig(string $path): array<Endpoint>
+
 Imports endpoints from OpenSSH config file.
 
 ### Picker::pick(array<Endpoint> $endpoints): ?Endpoint
+
 Renders the interactive picker, returns selected endpoint or null on quit.
 
 ### Launcher::dispatch(Endpoint $ep, ?string $sshBinary = null): void
+
 Executes `ssh` via `pcntl_exec` with endpoint's SSH arguments.
 
 ### Endpoint::toSshArgv(): array<string>
+
 Builds the argument array for `pcntl_exec`.
 
 ### SshConfigParser::parse($resource): array<hostinfo>
+
 Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 
 ## Rendering Systems
@@ -140,132 +146,163 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 ## Critical
 
 ### 1. SSH-Server Mode
+
 **Title:** Serve TUI over SSH connections  
 **Description:** Upstream `charmbracelet/wishlist` can serve its TUI over SSH, allowing users to SSH into the wishlist server and see the interactive picker, then select an endpoint to jump to.  
 **Why it matters:** This is the primary differentiator for remote/multi-machine workflows. Without it, sugar-wishlist is only useful on the machine where it's run.  
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "Server mode: Serve the TUI over SSH, allowing users to SSH in and see the same interactive listing."  
 **Source PR/Issue:** `charmbracelet/wishlist` serves the TUI via `charmbracelet/wish` middleware (`listingMiddleware` in `middleware.go`)  
 **Implementation ideas:**
+
 - Integrate `candy-shell` (SSH server port) to accept incoming SSH connections
 - Serve the Picker TUI over SSH using the same stream-based I/O pattern from `candy-shell`
 - Use the `wish/bubbletea` middleware pattern as reference: spawn a `tea.Program` per SSH session with PTY wiring
+
 **Estimated complexity:** High — requires full SSH server integration, PTY handling per session, window resize forwarding
 **Expected impact:** Enables remote access paradigm; major feature parity with upstream
 
 ### 2. Multiple Identity Files
+
 **Title:** Emit all identity files in SSH argv  
 **Description:** SSH supports multiple `-i` flags to specify multiple identity keys. sugar-wishlist's `Endpoint` model stores a `list<string>` of identity files, but `toSshArgv()` only emits `$identityFiles[0]`.  
 **Why it matters:** Users with multiple SSH keys (e.g., one per environment) cannot specify all their keys  
 **Source:** `docs/repo_map/sugarcraft_sugar-wishlist.md` — "Single identity file — `toSshArgv()` only uses `$identityFiles[0]` when building the argv"  
 **Implementation ideas:**
+
 - Change `toSshArgv()` to iterate and emit all identity files: `foreach ($this->identityFiles as $identityFile) { $argv[] = '-i'; $argv[] = $identityFile; }`
 - Add tests for multiple identity files
+
 **Estimated complexity:** Low — single method change
 **Expected impact:** Full SSH feature parity, fixes real workflow issue
 
 ## High Value
 
 ### 3. SSH Config `Include` Directive
+
 **Title:** Support `Include` directive in OpenSSH config parsing  
 **Description:** Real-world OpenSSH configs often use `Include` directives to pull in host-specific config snippets (e.g., `Include ~/.ssh/config.d/*`). The `SshConfigParser` currently ignores `Include` directives.  
 **Why it matters:** Users with modular SSH configs cannot fully import their configuration  
 **Source:** `docs/repo_map/sugarcraft_sugar-wishlist.md` — "No `Include` directive support in SSH config parser"  
 **Implementation ideas:**
+
 - Add `Include` keyword support to `SshConfigParser`
 - Recursively parse included files with relative path resolution
 - Handle glob patterns in includes
+
 **Estimated complexity:** Medium — requires file globbing and recursive parsing
 **Expected impact:** Enables adoption for users with modular SSH configs
 
 ### 4. Dynamic Service Discovery
+
 **Title:** Implement Zeroconf/mDNS, DNS SRV, and Tailscale discovery  
 **Description:** Upstream `charmbracelet/wishlist` supports discovering SSH services via `_ssh._tcp` Zeroconf browsing, DNS SRV records, and Tailscale tailnet devices. These are deferred in sugar-wishlist v1.  
 **Why it matters:** For users with dynamic infrastructure (Docker, Kubernetes, Tailscale), static config files are a step backward from upstream  
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "DNS SRV record discovery", "Zeroconf/mDNS/Avahi/Bonjour discovery", "Tailscale tailnet device discovery"  
 **Source discussion:** `charmbracelet/wishlist/srv/`, `zeroconf/`, `tailscale/` sub-packages  
 **Implementation ideas:**
+
 - Create a future `sugar-discovery` leaf library
 - Implement `srv.Endpoints()` for DNS SRV + TXT record lookup
 - Implement Zeroconf browsing via `grandcat/zeroconf` PHP equivalent or raw UDP/mDNS
 - Implement Tailscale API client with OAuth support (as upstream prefers)
+
 **Estimated complexity:** High — requires network protocol implementation and API integration
 **Expected impact:** Enables dynamic infrastructure usage, major feature parity
 
 ### 5. Theme/Color Adaptation
+
 **Title:** Adaptive light/dark terminal color scheme  
 **Description:** The picker's ANSI colors (SGR 36 for cyan, SGR 1 for bold) are hardcoded. Upstream `charmbracelet/wishlist` uses `lipgloss.AdaptiveColor` for light/dark theme adaptation.  
 **Why it matters:** Users with light terminal backgrounds may find the current cyan difficult to read  
 **Source:** `docs/repo_map/sugarcraft_sugar-wishlist.md` — "No color scheme adaptation — The ANSI color codes are hardcoded"  
 **Source reference:** `charmbracelet/lipgloss.md` — "Adaptive colors: `LightDark(hasDarkBackground)` helper returns light/dark variant"  
 **Implementation ideas:**
+
 - Use `candy-palette` color detection (`HasDarkBackground`, `BackgroundColor`) to detect terminal theme
 - Define light/dark color variants in the style constants
 - Select appropriate variant at render time
+
 **Estimated complexity:** Low — only constant changes and conditional rendering
 **Expected impact:** Improved accessibility and user experience
 
 ### 6. Config File Watching
+
 **Title:** Watch config files for changes and reload  
 **Description:** Upstream can refresh and broadcast endpoint updates to connected clients. sugar-wishlist loads config once at startup with no mechanism for live reload.  
 **Why it matters:** Users editing config files while wishlist is running want their changes reflected without restarting  
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "Dynamic Endpoint Updates: Server can refresh endpoints on a configurable interval and push updates"  
 **Implementation ideas:**
+
 - Use `inotify` (Linux) or `FSEvents` (macOS) via FFI to watch config file
 - Re-parse config on change and re-render picker
 - For SSH-server mode: broadcast updated endpoints to connected clients via `broadcast.Relay`
+
 **Estimated complexity:** Medium — file system event handling
 **Expected impact:** Better UX for power users
 
 ## Medium
 
 ### 7. SSH Config `Match` Block Support
+
 **Title:** Parse `Match` blocks in OpenSSH config  
 **Description:** The `SshConfigParser` only handles `Host` blocks. OpenSSH `Match` blocks conditionally apply config based on user, host, or other criteria. These are completely ignored.  
 **Why it matters:** Advanced SSH configs use `Match` for conditional configuration  
 **Source:** `docs/repo_map/sugarcraft_sugar-wishlist.md` — "No SSH config `Match` block support"  
 **Implementation ideas:**
+
 - Parse `Match` blocks with their conditional criteria
 - Evaluate match conditions at connection time
 - Apply matched settings when connecting
+
 **Estimated complexity:** High — requires condition evaluation logic
 **Expected impact:** Niche but enables advanced SSH config usage
 
 ### 8. Host Key Management
+
 **Title:** Configurable host key verification options  
 **Description:** sugar-wishlist uses native `ssh` binary behavior (prompts user for host key verification). Upstream has `hostKeyCallback()` with auto-accept behavior.  
 **Why it matters:** Users may want strict host key checking or, conversely, auto-accept for ephemeral environments  
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "Host Key Callback with Auto-Accept"  
 **Implementation ideas:**
+
 - Expose host key verification options in config (strict, accept-new, off)
 - Pass appropriate `-o` options to ssh binary
+
 **Estimated complexity:** Low — config and flag passing
 **Expected impact:** Security flexibility
 
 ### 9. Endpoint Hints/Overrides
+
 **Title:** Apply glob-based hints to discovered endpoints  
 **Description:** Upstream supports applying hints (override port, user, description) to discovered endpoints via glob patterns.  
 **Why it matters:** Discovered endpoints may need user-specific metadata applied  
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "Endpoint Hints: Apply glob-based hints to discovered endpoints"  
 **Implementation ideas:**
+
 - Add `hints` section to config file
 - Apply hint overrides when building endpoint list
+
 **Estimated complexity:** Low — config processing
 **Expected impact:** Enables customization of discovered endpoints
 
 ### 10. Team/Shared Config Support
+
 **Title:** Support team-level shared configuration  
 **Description:** `~/.config/wishlist.yml` is per-user. No mechanism exists for sharing configs across a team.  
 **Why it matters:** Teams managing shared infrastructure may want centralized endpoint definitions  
 **Source:** `docs/repo_map/sugarcraft_sugar-wishlist.md` — "Single-user only — No mechanism for sharing configs across a team"  
 **Implementation ideas:**
+
 - Support loading from environment variable or CLI flag pointing to shared config
 - Merge shared config with user config (user overrides shared)
+
 **Estimated complexity:** Low — config loading logic
 **Expected impact:** Team collaboration enablement
 
 ## Low Priority
 
 ### 11. Prometheus Metrics
+
 **Title:** Optional metrics endpoint for SSH server mode  
 **Description:** Upstream provides optional `/metrics` endpoint via `promwish`.  
 **Why it matters:** Production deployments benefit from metrics observability  
@@ -274,6 +311,7 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 **Expected impact:** Operational visibility
 
 ### 12. Man Page Generation
+
 **Title:** Built-in man page via `man` subcommand  
 **Description:** Upstream has a `man` subcommand via `mango-cobra`.  
 **Why it matters:** CLI discoverability and documentation  
@@ -289,21 +327,25 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 ### 1. Picker Rendering: Line-by-Line vs Cell-Based Buffer
 
 **Current (sugar-wishlist):**
+
 - Direct ANSI escape sequences written to STDOUT
 - Full redraw on every keypress
 - No cell-based buffer or diffing
 
 **External approach (charmbracelet/bubbletea + ultraviolet):**
+
 - Cell-based `ScreenBuffer` with per-cell styling
 - Delta rendering: only changed lines are re-sent to terminal
 - Synchronized output mode (ANSI 2026) for flicker-free updates
 
 **Why external is better:**
+
 - Reduces terminal I/O for large endpoint lists
 - Enables partial updates (cursor movement without full redraw)
 - ANSI 2026 synchronized mode eliminates flicker
 
 **Tradeoffs:**
+
 - Significant complexity increase for a single-purpose widget
 - The picker is intentionally minimal (~40 lines) by design
 
@@ -312,16 +354,19 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 ### 2. SSH Config Parsing: Hand-Rolled vs Lexer-Based
 
 **Current (sugar-wishlist):**
+
 - Stateful line-by-line parser
 - Tracks `$globalOptions`, `$hostBlocks`, `$inGlobalBlock`
 - First-match-wins semantics
 
 **External approach (charmbracelet/wishlist sshconfig):**
+
 - Thread-safe `hostinfoMap` with ordered keys
 - Handles `Include` directives with recursive globbing
 - Left-biased `mergeHostinfo` for host merging
 
 **Why external is better:**
+
 - Handles `Include` directives (critical for real-world configs)
 - Thread-safe for concurrent access
 - Proper path resolution for included files
@@ -331,21 +376,25 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 ### 3. TUI Framework: Hand-Rolled Picker vs Full Elm Architecture
 
 **Current (sugar-wishlist):**
+
 - Single `while(true) { draw(); readKey(); switch() }` loop
 - No message passing, no command pattern, no subscriptions
 - Renders directly to STDOUT
 
 **External approach (charmbracelet/bubbletea):**
+
 - Elm architecture: `Model` → `Update(Msg)` → `View()`
 - `Cmd` pattern for async operations returning messages
 - Subscription system for time-based events
 
 **Why external is better:**
+
 - Enables composable, testable, predictable state management
 - Commands can be cancelled, batched, sequenced
 - Program can be tested in isolation from terminal I/O
 
 **Tradeoffs:**
+
 - Full Elm architecture is overkill for a fire-and-forget picker
 - sugar-wishlist correctly chose minimalism for v1
 
@@ -354,14 +403,17 @@ Parses OpenSSH config into hostinfo map with first-match-wins semantics.
 ### 4. Layout: Manual ANSI Positioning vs Constraint Solver
 
 **Current (sugar-wishlist):**
+
 - Hardcoded cursor positions via ANSI escape sequences
 - No layout algorithm
 
 **External approach (php-tui/php-tui):**
+
 - Cassowary constraint solver for flex-style layouts
 - Responsive to terminal resize
 
 **Why external is better:**
+
 - Automatic layout adaptation to terminal size
 - Removes hardcoded dimensions
 
@@ -584,16 +636,19 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 ## charmbracelet/wishlist
 
 ### PR: STDIN Multiplexing Implementation
+
 **Summary:** The `multiplex.Reader()` pattern for forking STDIN during TUI handoff to SSH session.  
 **Relevance:** This is a critical pattern for SSH-server mode in sugar-wishlist. When serving the TUI over SSH and the user selects an endpoint, STDIN needs to be released from the TUI and handed to the SSH session.  
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "STDIN Multiplexing: `multiplex.Reader()` forks the SSH session's STDIN into two independent readers"
 
 ### Issue: Auto-Accept Host Keys Security Concern
+
 **Summary:** Upstream's `hostKeyCallback()` auto-accepts unknown host keys rather than prompting or failing.  
 **Relevance:** sugar-wishlist uses the system `ssh` binary, which handles host keys natively. This is actually a strength — sugar-wishlist inherits SSH's security model rather than implementing its own (potentially flawed) one.  
 **Lesson:** For SSH-server mode, follow the native SSH approach rather than auto-accepting.
 
 ### Discussion: Tailscale OAuth vs API Keys
+
 **Summary:** Upstream prefers OAuth client credentials over static API keys for Tailscale, noting API keys expire in 90 days.  
 **Relevance:** If Tailscale discovery is implemented, follow this best practice.  
 **Source:** `docs/repo_map/charmbracelet_wishlist.md` — "Tailscale OAuth: Using OAuth client credentials instead of expiring API keys is a best practice"
@@ -601,11 +656,13 @@ public static function previewSshConfigImport(string $path): array<SshConfigPrev
 ## charmbracelet/wish
 
 ### Pattern: Middleware Composition
+
 **Summary:** `wish.Middleware` type `func(next ssh.Handler) ssh.Handler` with first-to-last execution ordering.  
 **Relevance:** Reference for how to structure middleware when implementing SSH-server mode.  
 **Source:** `docs/repo_map/charmbracelet_wish.md` — "Middleware Pipeline Composition"
 
 ### Pattern: Bubble Tea over SSH Per-Session
+
 **Summary:** Each SSH session spawns its own `tea.Program` in a goroutine with window-resize forwarding.  
 **Relevance:** Reference for how to wire Picker into SSH session I/O for server mode.
 
@@ -671,6 +728,7 @@ sugar-wishlist is a well-scoped, well-implemented v1 port of `charmbracelet/wish
 The **single most important gap** relative to upstream is the lack of **SSH-server mode** — the ability to serve the TUI over SSH so users can connect remotely. This is the primary use case that distinguishes wishlist from a simple shell alias. The architecture is cleanly structured so this could be added later using `candy-shell` (for SSH serving), but the dependency chain is non-trivial.
 
 The **most actionable immediate improvements** are:
+
 1. **Multiple identity files** — trivial fix, real workflow impact
 2. **SSH config `Include` directive** — enables adoption for users with modular SSH configs
 3. **Theme detection** — quick win for accessibility

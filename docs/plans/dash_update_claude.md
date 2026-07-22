@@ -85,6 +85,7 @@ These split into clear families: **Layout primitives** (Stack/VStack/HStack/ZSta
 These are the non-obvious algorithms that should land in sugar-dash regardless of whether we ship the full lib:
 
 ### 1. Braille canvas math (termui/drawille)
+
 **Source:** `/tmp/dash-research/src/termui/drawille_drawille.go:7-39`
 
 ```go
@@ -106,6 +107,7 @@ var BRAILLE = [4][2]rune{
 **Why this matters:** Gives 2× horizontal and 4× vertical resolution vs. the 1:1 pixel canvas sugar-dash currently ships. A 80×24 terminal becomes a 160×96 dot canvas for line charts, scatter plots, and arbitrary geometry. Plot widget gets dramatically smoother curves.
 
 ### 2. Five-phase constraint solver (go-tealeaves/tealayout)
+
 **Source:** `/tmp/dash-research/src/tealeaves/tealayout_resolve.go:35-201`
 
 Five-phase resolver beats tilelayout's iterative leftover distribution:
@@ -128,6 +130,7 @@ Five-phase resolver beats tilelayout's iterative leftover distribution:
 **Why this matters:** Current `Layout::calculateHorizontalSizes()` (`src/Grid/Layout.php:241-311`) does fixed-then-flex but no clamping loop and no cumulative rounding — flex children silently lose pixels at the rounding boundary. Adopt cumulative rounding now even if we don't ship the full 5-phase machinery.
 
 ### 3. Bubbleboxer address-tree separation (84★)
+
 **Source:** `/tmp/dash-research/src/boxer/boxer.go:24-86`
 
 Layout tree (`Node`) is structurally distinct from model instances (`ModelMap[address]string → tea.Model`). Mutating a model never requires traversing the tree. `CreateLeaf(address, model)` is the **only** way to spawn a valid leaf — the `address` field is private. `EditLeaf(address, fn)` runs a closure on the model and auto-saves only on success.
@@ -135,6 +138,7 @@ Layout tree (`Node`) is structurally distinct from model instances (`ModelMap[ad
 **Why this matters:** Sugar-dash currently rebuilds entire layouts on each `setSize()`. With a Node/ModelMap split, panels can update independently without re-allocating the tree. Critical for dashboards where one panel updates per second and the others are quiescent.
 
 ### 4. ParseStyles inline syntax (termui)
+
 **Source:** `/tmp/dash-research/src/termui/style_parser.go:77-156`
 
 Syntax: `[text](fg:red,bg:blue,mod:bold)` with state-machine parser. Nested `[...]` allowed via `squareCount` tracking. Falls back to default style on malformed input via `rollback()`.
@@ -142,6 +146,7 @@ Syntax: `[text](fg:red,bg:blue,mod:bold)` with state-machine parser. Nested `[..
 **Why this matters:** Markdown/Highlight/Code/Text widgets all currently take an external `Style` argument per chunk. Inline syntax compresses theming into the string itself — much nicer ergonomics for log output, status messages, hover hints. Becomes the canonical "rich text" syntax for sugar-dash.
 
 ### 5. RatioGrid recursive composition (termui/grid.go)
+
 **Source:** `/tmp/dash-research/src/termui/grid.go:82-133`
 
 ```go
@@ -155,6 +160,7 @@ Syntax: `[text](fg:red,bg:blue,mod:bold)` with state-machine parser. Nested `[..
 **Why this matters:** Reads like declarative UI. Sugar-dash's current `Layout` is imperative (`withChild()`/`addItem()`). RatioGrid composition is cleaner for dashboard layouts that don't need flex semantics — pure float ratios that compose recursively.
 
 ### 6. Cumulative-rounding sparkline scale (Homedash)
+
 **Source:** `/tmp/dash-research/src/homedash/internal_ui_components_sparkline.go:31-46`
 
 ```php
@@ -167,6 +173,7 @@ Plus **left-pad with dim ░** when buffer has fewer samples than width — keep
 **Why this matters:** Sugar-dash's existing Sparkline probably scales differently; standardize on 0–100 → idx mapping with dim-edge padding.
 
 ### 7. GaugeWithDetail overlay (Homedash)
+
 **Source:** `/tmp/dash-research/src/homedash/internal_ui_components_gauge.go:36-89`
 
 Compute bar width = total − label − padding − pct. Center detail text on bar. Compute filled/empty split, then split detail-text position too: **left of detail** gets filled-color blocks up to `min(pad, filled)`, then dim blocks for the remainder; **right of detail** gets filled if still in the filled range, else dim. Detail text is bold, in default fg color, drawn between.
@@ -178,6 +185,7 @@ DATA   ███████ 105G/250G ░░░░░░░░  42%
 **Why this matters:** Disk gauges in Homedash overlay `used/total` strings directly on the bar. Much higher information density than two-line "DISK ███░░ 42%\n  105G/250G".
 
 ### 8. Notification queue with dual ring (Homedash)
+
 **Source:** `/tmp/dash-research/src/homedash/internal_ui_notifications.go:22-102`
 
 Two parallel slices: `items` (active, max 20, dismissable) + `history` (max 50, append-only). `current()` returns head of `items`. `recent(n)` returns last `n` from `history` newest-first. Both buffers drop oldest when full via slice reslicing.
@@ -185,6 +193,7 @@ Two parallel slices: `items` (active, max 20, dismissable) + `history` (max 50, 
 **Why this matters:** "Show current notification + show last 5 in alert panel" is the standard dashboard pattern. Current sugar-dash `Notification.php` is single-shot.
 
 ### 9. Atomic state persistence (Homedash)
+
 **Source:** `/tmp/dash-research/src/homedash/internal_state_state.go:46-75`
 
 ```go
@@ -196,6 +205,7 @@ os.Rename(tmp, path)  // atomic on POSIX
 **Why this matters:** Dashboards persist user prefs (collapsed panels, current tab). Tmp+rename prevents corruption on crash. PHP's `file_put_contents` + `rename()` gives same guarantee.
 
 ### 10. Responsive panel breakpoint (Homedash)
+
 **Source:** `/tmp/dash-research/src/homedash/internal_ui_panels_system.go:13-122`
 
 `if width < 90: render single-column; else: dual-column with left=48%, right=52%, gap=2`. Disk gauges fall through to single-column body in narrow mode.
@@ -203,6 +213,7 @@ os.Rename(tmp, path)  // atomic on POSIX
 **Why this matters:** TUI dashboards are routinely run in narrow tmux panes. Hard width thresholds are the simplest responsive pattern. Should be a documented convention across sugar-dash panels.
 
 ### 11. Lattice JSON plugin protocol (floatpane/lattice)
+
 **Source:** `/tmp/dash-research/src/lattice/pkg_plugin_sdk.go` + `internal_plugin_runner.go`
 
 Line-delimited JSON over stdin/stdout. Three request types: `init` (returns Name/MinSize/Interval), `update` (returns Content), `view` (with Width/Height → Content). Plugin can be any executable in any language. `Interval > 0` schedules periodic update via `tea.Tick`.
@@ -210,6 +221,7 @@ Line-delimited JSON over stdin/stdout. Three request types: `init` (returns Name
 **Why this matters:** Lets users write dashboard modules in Bash, Python, Node, or PHP without recompiling sugar-dash. A `system-fan-speed.sh` plugin is 20 lines of bash.
 
 ### 12. teagrid GCD for column ratios (`/tmp/dash-research/src/tealeaves/teagrid_calc.go:1-15`)
+
 Recursive GCD via `goto end`-style. Used when reducing column-width ratios to smallest equivalent integers (e.g. `[2,4,6] → [1,2,3]`). Useful when column widths are user-specified as integers but need to be proportional.
 
 ---
@@ -448,6 +460,7 @@ src/
 ```
 
 **Phase 0 deliverables (PR #1):**
+
 - New directory tree per above with all 222 files **moved** (no rewrites)
 - `composer.json` autoload remains `SugarCraft\\Dash\\` → `src/` — no change needed; nested namespaces inferred from path
 - Every internal `use` updated (mostly relative — most code uses `Grid\Foo` which becomes `Components\Foo` or `Layout\Foo`)
@@ -463,6 +476,7 @@ src/
 Goal: introduce the universal `Drawable` contract and the inline `[text](fg:...)` syntax. Widgets gain a second draw mode (string `render()` and `draw(Buffer)`) — opt-in, existing code unaffected.
 
 **New files:**
+
 - `Foundation/Drawable.php` — interface with `getRect(): Rect; setRect(Rect): void; draw(Buffer): void`. Default impl wraps existing `render()` output for backwards compat.
 - `Foundation/Buffer.php` — fixed-size `Cell[][]` grid; `getCell(x,y)`, `setCell(x,y,Cell)`, `fill(rect, Cell)`, `setString(x,y,string,Style)`.
 - `Foundation/Cell.php` — `readonly { string $rune; Style $style }`.
@@ -475,6 +489,7 @@ Goal: introduce the universal `Drawable` contract and the inline `[text](fg:...)
 Goal: 2× horizontal, 4× vertical resolution for any pixel-style widget. New `Plot` widget with `MarkerBraille`/`MarkerDot` toggle.
 
 **New files:**
+
 - `Plot/Braille/BrailleCanvas.php` — port `drawille.go` (lines 7-83). Use `mb_chr(0x2800 + $bits)` to emit braille runes. `setPoint(Point, Color)`, `setLine(Point, Point, Color)` (Bresenham per source lines 55-83).
 - `Plot/Braille/BrailleMatrix.php` — 4×2 lookup table as constant.
 - `Plot/Plot.php` — port `widgets/plot.go`. `LineChart` + `ScatterPlot` modes. `MarkerBraille` default, `MarkerDot` fallback. `ShowAxes` with auto-tick labels via `verticalScale = maxVal / (innerH - 1)`. `HorizontalScale` for x-stride.
@@ -535,6 +550,7 @@ Goal: full data grid (sort/filter/page/scroll/freeze) distinct from existing vis
 Goal: extensibility surface. Anyone can author a module (PHP class) or plugin (any executable).
 
 **New files:**
+
 - `Module/Module.php` — interface (name/init/update/view/minSize).
 - `Module/BaseModule.php` — abstract with default `init() = null`, `minSize() = [30, 4]`.
 - `Module/TickEpoch.php` — `uint64`-style counter, `bump()` on focus regain, `isStale($received)` for discarding old ticks.
@@ -783,22 +799,27 @@ This is the exact sequence to run between phases. NO pause for user prompts — 
 
 ```bash
 # 1. Make sure you're on master and current
+
 git checkout master && git pull --ff-only
 
 # 2. Branch
+
 git checkout -b ai/sugar-dash-phase-NN-<slug>
 
 # 3. Do the work (edits, new files, tests, docs, .vhs tapes)
 
 # 4. Verify
+
 cd sugar-dash && composer install --quiet && vendor/bin/phpunit
 cd ..
 
 # 5. Caliber sync (if hook missing)
+
 grep -q "caliber" .git/hooks/pre-commit || caliber refresh
 git add <touched files>  # be explicit — never `git add -A`
 
 # 6. Commit as Joe Huss (NEVER skip hooks, NEVER use --no-verify)
+
 git commit -m "$(cat <<'EOF'
 sugar-dash: phase NN — <one-line summary>
 
@@ -808,16 +829,20 @@ EOF
 )" --author="Joe Huss <detain@interserver.net>"
 
 # 7. Push
+
 git push -u origin ai/sugar-dash-phase-NN-<slug>
 
 # 8. Open PR — GITHUB_TOKEN must be UNSET for gh to use the user's auth
+
 unset GITHUB_TOKEN
 gh pr create --title "sugar-dash: phase NN — <summary>" --body "$(cat <<'EOF'
 ## Summary
+
 - <bullet 1>
 - <bullet 2>
 
 ## Test plan
+
 - [x] vendor/bin/phpunit green (NNN tests, MMM assertions)
 - [x] Snapshot diffs reviewed under tests/golden/phase-NN/
 - [x] examples/<demo>.php runs cleanly (manual TUI check)
@@ -828,18 +853,22 @@ EOF
 )"
 
 # 9. Merge (assumes CI passed; if not, fix and force-push the branch — NEVER force-push master)
+
 PR_NUM=$(gh pr view --json number -q .number)
 gh pr merge $PR_NUM --merge --delete-branch
 
 # 10. Back to master, pull, prune local branch ref
+
 git checkout master
 git pull --ff-only
 git branch -D ai/sugar-dash-phase-NN-<slug> 2>/dev/null || true
 
 # 11. Immediately start next phase — DO NOT WAIT for user confirmation
+
 ```
 
 **Key rules baked into the workflow above:**
+
 - ✅ `unset GITHUB_TOKEN` BEFORE every `gh` call — otherwise `gh` uses the project bot token and `gh pr create` 401s (see CLAUDE.md PR workflow).
 - ✅ Author commits as `Joe Huss <detain@interserver.net>` via `--author=` flag — required even when AI-driven (see AGENTS.md).
 - ✅ Use HEREDOCs for commit + PR bodies (formatting).

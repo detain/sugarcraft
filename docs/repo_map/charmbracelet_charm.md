@@ -1,6 +1,7 @@
 # charmbracelet/charm
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/charm
 - **Language:** Go
 - **Stars:** ~2.4k (as of 2024)
@@ -10,18 +11,21 @@
 ## Feature List
 
 ### Core Libraries
+
 1. **Charm KV** — An embeddable, encrypted, cloud-synced key-value store built on BadgerDB. Supports cloud backup, multi-machine syncing, and end-to-end encryption.
 2. **Charm FS** — A Go `fs.FS` compatible cloud-based user filesystem with read/write operations, directories, and file metadata.
 3. **Charm Crypt** — End-to-end encryption for stored data and on-demand encryption for arbitrary data using SIV mode encryption.
 4. **Charm Accounts** — Invisible user account creation and authentication based on SSH keys. No friction-filled auth flows.
 
 ### Charm Client
+
 - SSH-based authentication using PKAM (Public Key Authentication Method)
 - JWT token generation via SSH session
 - Environment variable configuration (`CHARM_HOST`, `CHARM_SSH_PORT`, `CHARM_HTTP_PORT`, etc.)
 - Key management (link/unlink machines, backup/restore keys)
 
 ### Self-Hosted Server
+
 - Single binary (`charm serve`) runs entire Charm Cloud backend
 - SQLite-backed user and key storage
 - HTTP and SSH server protocols
@@ -30,6 +34,7 @@
 - File storage with per-user size limits
 
 ### CLI Commands
+
 - `charm link` — Link a machine to Charm account
 - `charm kv set/get/delete/list/sync/reset` — Key-value store operations
 - `charm fs cat/cp/rm/mv/ls/tree` — Filesystem operations
@@ -40,6 +45,7 @@
 ## Key Classes and Methods
 
 ### client.Client (`client/client.go`)
+
 - `NewClient(cfg *Config)` / `NewClientWithDefaults()` — Create authenticated client
 - `JWT(aud ...string)` — Generate JWT token for user
 - `ID()` — Get user's Charm ID
@@ -49,6 +55,7 @@
 - `AuthedRequest()` / `AuthedJSONRequest()` — Make authenticated HTTP requests
 
 ### kv.KV (`kv/kv.go`)
+
 - `Open(cc, name, opt)` / `OpenWithDefaults(name)` — Open KV store
 - `Set(key, value)` / `Get(key)` / `Delete(key)` — Key-value operations
 - `SetReader(key, io.Reader)` — Set value from reader
@@ -60,6 +67,7 @@
 - `Keys()` — List all keys
 
 ### fs.FS (`fs/fs.go`)
+
 - `NewFS()` / `NewFSWithClient(cc)` — Create filesystem instance
 - `Open(name)` — Implement `fs.FS`, returns `fs.File`
 - `ReadFile(name)` — Read entire file bytes
@@ -69,6 +77,7 @@
 - `EncryptPath(path)` / `DecryptPath(path)` — Path encryption
 
 ### crypt.Crypt (`crypt/crypt.go`)
+
 - `NewCrypt()` — Create crypt with user's encryption keys
 - `NewEncryptedWriter(w)` — Create writer that encrypts data
 - `NewDecryptedReader(r)` — Create reader that decrypts data
@@ -76,29 +85,34 @@
 - `DecryptLookupField(field)` — Decrypt lookup field
 
 ### server.Server (`server/server.go`)
+
 - `NewServer(cfg *Config)` — Initialize server with config
 - `Start()` — Start HTTP, SSH, health, and stats servers
 - `Shutdown(ctx)` — Graceful shutdown
 - `Close()` — Immediate close of all listeners
 
 ### server.HTTPServer (`server/http.go`)
+
 - `NewHTTPServer(cfg)` — Create HTTP server with routes
 - `handleGetFile` / `handlePostFile` / `handleDeleteFile` — FS operations
 - `handleGetSeq` / `handlePostSeq` — Sequence number for KV sync
 - `handleGetUser` / `handlePostUser` — User bio management
 
 ### ui.Model (`ui/ui.go`) — Bubble Tea TUI
+
 - `Init()` — Initialize with Charm client
 - `Update(msg)` — Handle messages (spinner, keypress, client messages)
 - `View()` — Render TUI with menu system
 
 ### Command Tree (`cmd/*.go`)
+
 - `KVCmd` with subcommands: `kvSetCmd`, `kvGetCmd`, `kvDeleteCmd`, `kvListCmd`, `kvSyncCmd`, `kvResetCmd`
 - `FSCmd` with subcommands: `fsCatCmd`, `fsCopyCmd`, `fsRemoveCmd`, `fsMoveCmd`, `fsListCmd`, `fsTreeCmd`
 - `ServeCmd` — Self-host server command
 - `LinkCmd`, `KeysCmd`, `BioCmd`, `NameCmd`, `BackupKeysCmd`, `ImportKeysCmd`
 
 ### Proto Definitions (`proto/*.go`)
+
 - `Auth` — Auth response with JWT, ID, encryption keys
 - `User` — User account structure
 - `PublicKey` — SSH public key with SHA
@@ -109,25 +123,30 @@
 ## Notable Algorithms / Named Patterns
 
 ### Encryption
+
 - **SIV (Syntactically Invalid Vector) mode encryption** — Deterministic authenticated encryption used for lookup fields (path encryption)
 - **Scrypt** — Key derivation for encryption keys via `muesli/sasquatch`
 - **SSH PKAM Authentication** — Custom SSH authentication method for key-based auth
 
 ### Synchronization
+
 - **Sequence-based sync** — KV uses monotonically increasing sequence numbers to order transactions; backup files stored as `name/seq` in FS
 - **Streaming backup/restore** — Badger stream API for incremental backup
 
 ### File System
+
 - **Path encryption** — Deterministic encryption of path components for privacy on server
 - **Multipart upload with content-length** — Custom chunking for encrypted file upload
 - **Lazy directory resolution** — `sysFuture` pattern defers directory listing fetch
 
 ### TUI Pattern
+
 - **Bubble Tea MVC** — Model/Update/View pattern with `tea.Model` interface
 - **State machine menu** — Menu navigation via keyboard (j/k, enter)
 - **Child model delegation** — `updateChildren()` dispatches to sub-models (info, keys, linkgen, username)
 
 ### Server Architecture
+
 - **Goji mux** — HTTP router with middleware chain
 - **JWT Middleware** — Token validation with JWKS endpoint
 - **Error handling** — Custom error types with `Unwrap()` for chained errors
@@ -190,6 +209,7 @@
 | Overall architecture | `candy-core` | The Elm-style update/model/view pattern for TUI applications. |
 
 **SugarCraft libs that could be built on this:**
+
 - **Sugar-KV** — A PHP port of the KV package using a local DB (SQLite/PDO alternative to BadgerDB) for persistence with cloud sync capability
 - **Sugar-FS** — A PHP `fs.FS` compatible filesystem abstraction with encryption
 - **Sugar-Crypt** — E2E encryption utilities using PHP's crypto extensions (OpenSSL SIV mode, scrypt)

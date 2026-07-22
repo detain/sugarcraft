@@ -3,17 +3,27 @@
 **candy-flip** is SugarCraft's ASCII GIF viewer — a PHP port of `namzug16/gifterm` (Go) that decodes `.gif` files via `ext-gd`, downsamples frames to a cell grid, and renders animations as ANSI-colored Unicode block-glyphs or luminance-ramp ASCII. It sits at the intersection of image processing, terminal rendering, and TUI interactivity.
 
 **Biggest opportunity areas:**
+
 - Downsampling quality (Lanczos3/Mitchell-Netravali vs current area-average)
+
 - Full disposal method pipeline (DISPOSAL_RESTORE / DISPOSAL_PREVIOUS not applied)
+
 - Floyd-Steinberg dithering integration (exists but unwired)
+
 - Half-block rendering for 2× vertical resolution
+
 - Terminal graphics protocol integration (Sixel/Kitty/iTerm2 via candy-mosaic)
 
 **Biggest missing capabilities:**
+
 - APNG / WebP input support (GIF-only)
+
 - Parallel frame decoding
+
 - Half-block preset (`PRESET_HALFBLOCK`)
+
 - Remote URL input
+
 - Video file support (`.mp4`, `.webm`)
 
 ---
@@ -62,26 +72,39 @@ candy-flip/src/
 ## Extension Systems
 
 - `FrameCache` uses `WeakMap<object, string>` — automatic GC when frame is garbage-collected
+
 - `FloydSteinberg::dither()` is a standalone utility not wired into the `Decoder` pipeline
+
 - `Renderer` supports `withAdaptiveSize()` and `withConstraints()` for viewport-aware rendering
 
 ## Strengths
 
 1. **Zero temp-file I/O** — all GIF parsing in-memory via `imagecreatefromstring()`
+
 2. **Per-frame GCE timing** — carries forward zero-delay frames per GIF spec
+
 3. **Transparent-pixel handling** — skips transparent pixels in area-average
+
 4. **Immutable + fluent patterns** — `Frame` is readonly value, `Player` follows TEA model
+
 5. **WeakMap cache** — automatic memory management in long-running players
+
 6. **Comprehensive test suite** — 10 test files covering all major subsystems
 
 ## Weaknesses
 
 1. **Area-average blurs edges** — no Lanczos3/Mitchell option
+
 2. **Disposal methods not applied** — renders each frame in isolation
+
 3. **FS dithering unwired** — exists but not in pipeline
+
 4. **No half-block mode** — 1× vertical resolution only
+
 5. **GIF-only input** — no APNG, WebP, video
+
 6. **No protocol output** — text-only, no Sixel/Kitty/iTerm2
+
 7. **Sequential decoding** — no parallel frame decoding
 
 ---
@@ -111,25 +134,35 @@ candy-flip/src/
 ## Critical
 
 ### 1. Full Disposal Method Pipeline
+
 **Description:** `Frame::$disposal` is tracked and parsed but `Player::view()` renders each frame in isolation without compositing against a canvas. DISPOSAL_RESTORE (clear to background) and DISPOSAL_PREVIOUS (restore previous content) are not applied.
 **Why it matters:** Complex animated GIFs (especially those with transparency and disposal) animate incorrectly — ghosting, incorrect background restoration, missing previous-frame restoration.
 **Source:** `docs/repo_map/sugarcraft_candy-flip.md` (self-analysis); `Gaurav-Gosain/jif` handles disposal properly
 **Implementation ideas:**
+
 - Maintain a composite canvas (`\GdImage`) across frames
+
 - For DISPOSAL_RESTORE: clear canvas to background color before next frame
+
 - For DISPOSAL_PREVIOUS: snapshot canvas before compositing new frame, restore from snapshot
+
 - Transparent cells in new frame sample from composite canvas
 **Estimated complexity:** High — requires re-architecting Player to hold canvas state
 **Expected impact:** Fixes animation quality for 20-30% of real-world GIFs
 
 ### 2. Floyd-Steinberg Integration
+
 **Description:** `FloydSteinberg::dither()` exists but is not wired into the `Decoder` pipeline. Grayscale/limited-palette output is unimplemented.
 **Why it matters:** Dithering against a fixed palette enables candy-flip to render in 16-color or 256-color terminals where 24-bit output isn't available.
 **Source:** `docs/repo_map/sugarcraft_candy-flip.md`; `Zebbeni/ansipx` has 14 diffusion matrices
 **Implementation ideas:**
+
 - Add `Decoder::decodeWithDither(Dither $dither, array $palette)` method
+
 - Wire `FloydSteinberg::dither()` before downsampling
+
 - Add `Dither` enum: `None`, `FloydSteinberg`, `Stucki`, `Atkinson` (candy-mosaic has Stucki/Atkinson)
+
 - Add `PRESET_PALETTE` render mode that outputs palette-indexed glyphs
 **Estimated complexity:** Medium
 **Expected impact:** Enables 256-color terminal support
@@ -137,46 +170,63 @@ candy-flip/src/
 ## High Value
 
 ### 3. Half-Block Rendering Preset
+
 **Description:** `PRESET_SOLID` uses full-cell `█` (1× vertical resolution). Half-blocks (`▀` upper + `▄` lower) would double effective vertical resolution with 24-bit color per half.
 **Why it matters:** jif and ansipx both use half-blocks. Doubling vertical resolution significantly improves visual quality for the same terminal width.
 **Source:** `Gaurav-Gosain/jif`, `Zebbeni/ansipx`, `docs/repo_map/sugarcraft_candy-mosaic.md` (HalfBlockRenderer)
 **Implementation ideas:**
+
 - In `Renderer`, add `PRESET_HALFBLOCK` constant
+
 - Scale source to `cellW × cellH*2` pixels before sampling
+
 - For each cell: top pixel → foreground SGR `▀`, bottom pixel → background SGR `▄`
+
 - Handle transparent halves (skip SGR if half is transparent, emit opposite half-block)
 **Estimated complexity:** Low — standalone Renderer mode, no decoder changes
 **Expected impact:** 2× visual quality vertically for same width
 
 ### 4. Higher-Quality Downsampling (Lanczos3)
+
 **Description:** candy-flip uses area-average (smooth but blurs edges). `nalediym/gifterm` and `Zebbeni/ansipx` use Lanczos3 for sharper results.
 **Why it matters:** Area averaging blurs edges and text in GIFs. Lanczos3 preserves sharp transitions.
 **Source:** `nalediym/gifterm` (Rust fork), `Zebbeni/ansipx`, `docs/repo_map/sugarcraft_candy-flip.md`
 **Implementation ideas:**
+
 - GD's `imagecopyresampled()` uses bilinear interpolation — a true Lanczos3 requires 2-pass resampling or `ext-imagick`
+
 - Add `Downsampler::LANCZOS3` mode that uses `imagecopyresampled()` with careful dimension calculations as approximation
+
 - Alternatively, implement a precomputed Lanczos3 kernel (8-tap filter) convolved per-cell
 **Estimated complexity:** Medium
 **Expected impact:** Sharper text and edge rendering
 
 ### 5. Terminal Graphics Protocol Output
+
 **Description:** On terminals supporting Kitty/Sixel/iTerm2, candy-flip produces text where binary protocols would look dramatically better.
 **Why it matters:** `candy-mosaic` handles protocol rendering but is not integrated with `candy-flip`'s `Player`/`TickMsg` animation loop.
 **Source:** `blacktop/go-termimg`, `docs/repo_map/sugarcraft_candy-mosaic.md`
 **Implementation ideas:**
+
 - Add `KittyRenderer::renderFrame()` + `delete()` to `candy-mosaic`'s animation driver
+
 - Create `PlayerProtocol` that wraps `Player` but outputs via `candy-mosaic` protocol renderers instead of ANSI
+
 - Detect terminal capability via `Detect::cached()` and auto-select best protocol
 **Estimated complexity:** High — requires architectural integration between two libs
 **Expected impact:** Near-lossless rendering on supporting terminals (kitty, WezTerm, foot)
 
 ### 6. APNG Input Support
+
 **Description:** candy-flip is GIF-only. APNG is animated PNG with wider color support.
 **Why it matters:** APNG is increasingly common for animated images on the web. Ext-gd has `imagecreatefrompng()`.
 **Source:** `nalediym/gifterm` roadmap mentions APNG
 **Implementation ideas:**
+
 - Extend `Decoder` to detect PNG vs GIF via magic bytes
+
 - If PNG with ACTL chunk (animation control), extract frames via `imagecreatefromstring()` sequentially
+
 - Add `Decoder::decodeApng()` path
 **Estimated complexity:** Medium
 **Expected impact:** Broader input format support
@@ -184,33 +234,44 @@ candy-flip/src/
 ## Medium Priority
 
 ### 7. Remote URL Input
+
 **Description:** `jif` supports HTTP remote URLs for GIF sources.
 **Why it matters:** Enables fetching GIFs from the web without manual download.
 **Source:** `Gaurav-Gosain/jif`
 **Implementation ideas:**
+
 - Add `--url` flag to CLI
+
 - Use `file_get_contents()` with stream context for HTTP/HTTPS
+
 - Validate Content-Type is `image/gif` or `image/png` before decoding
 **Estimated complexity:** Low
 **Expected impact:** Convenience for web-sourced GIFs
 
 ### 8. WebP Input Support
+
 **Description:** Both candy-flip and go-termimg lack WebP due to ext-gd limitations.
 **Why it matters:** WebP offers better compression than GIF with full alpha.
 **Source:** `blacktop/go-termimg` planning WebP
 **Implementation ideas:**
+
 - PHP 8.4+ FFI to `libwebp` direct binding
+
 - Or: use `symfony/process` to call `cwebp` as external command
 **Estimated complexity:** High (FFI) or Medium (external process)
 **Expected impact:** Better compression for animated web images
 
 ### 9. Parallel Frame Decoding
+
 **Description:** Frames are decoded sequentially. ReactPHP async could parallelize.
 **Why it matters:** For 100+ frame GIFs, decoding time can exceed frame display time.
 **Source:** `blacktop/go-termimg` uses goroutine parallelism
 **Implementation ideas:**
+
 - Use `React\Promise\PromiseInterface` with `Promise::all()` for concurrent frame decoding
+
 - Apply `pcntl_fork()` for true parallelism (single-threaded PHP limitation)
+
 - Queue frames in `React\EventLoop\StreamIterator` for sequential async
 **Estimated complexity:** High — significant architectural change
 **Expected impact:** Faster decode for large GIFs
@@ -234,22 +295,31 @@ candy-flip/src/
 ## Why External Is Better
 
 1. **Lanczos3** preserves sharp edges better than area-average. Area-average is O(1) per cell but produces blurry results on text/line art GIFs.
+
 2. **Disposal canvas** enables correct animation replay for complex GIFs. Frame-in-isolation rendering causes ghosting on disposal-aware GIFs.
+
 3. **Disk cache** (nalediym/gifterm's SHA-256 approach) persists decoded frames across invocations — identical GIF played twice only decodes once.
+
 4. **Protocol output** delivers near-lossless quality on modern terminals — a 1000×1000 image at 96 dpi looks photographic vs pixelated ASCII.
 
 ## Tradeoffs
 
 - **Lanczos3** is 3-5× slower than area-average; acceptable for pre-decode step
+
 - **Disposal canvas** requires mutable `\GdImage` state in Player — challenges immutable design
+
 - **Disk cache** adds filesystem I/O; needs cache directory management
+
 - **Protocol output** requires `candy-mosaic` as dependency; increases coupling
 
 ## Applicability to candy-flip
 
 - **Lanczos3**: Implementable via `imagecopyresampled()` approximation or `ext-imagick`
+
 - **Disposal canvas**: Implementable as private `$canvas` property on `Player` with `applyDisposal()` method
+
 - **Disk cache**: Add `Cache/DiskCache` using `sha1_file()` + `~/.cache/candy-flip/`
+
 - **FS dithering**: Wire existing `FloydSteinberg` into `Decoder` pipeline
 
 ---
@@ -350,18 +420,23 @@ $player = Player::new($frames)
 # Documentation / Cookbook Opportunities
 
 ## 1. GIF Anatomy Guide
+
 Explain GIF89a structure: header, LSD, GCT, GCE, LCT, LZW sub-blocks, trailer — with hex dump examples.
 
 ## 2. Disposal Methods Illustrated
+
 Visual guide showing how each disposal method (0-3) affects frame compositing, with before/after hex dumps.
 
 ## 3. Terminal Protocol Comparison
+
 Table comparing ANSI text vs Kitty vs Sixel vs iTerm2 — quality, terminal support, performance tradeoffs.
 
 ## 4. Custom Palette Dithering Recipe
+
 How to use `FloydSteinberg` with a custom palette (e.g., IBM VGA 16-color, WebSafe 216-color).
 
 ## 5. Integration with candy-mosaic
+
 How to use `candy-mosaic`'s protocol renderers for near-lossless output within `candy-flip`'s player loop.
 
 ---
@@ -374,8 +449,11 @@ Current: `frame 3/45  ·  solid  ·  playing   space pause   ←/→ step   d pr
 
 Enhanced with:
 - Current GIF dimensions and frame size
+
 - Estimated playback time
+
 - FPS counter
+
 - Protocol indicator (ANSI/Sixel/Kitty)
 
 ## 2. Visual Frame Step Indicator
@@ -408,14 +486,18 @@ Support TokyoNight, Dracula, Nord themes via `candy-palette` for the status bar 
 
 Add golden file tests for GIFs with disposal methods:
 - `disposal_none.gif` → no special handling
+
 - `disposal_restore.gif` → background restored between frames
+
 - `disposal_previous.gif` → previous frame content restored
 
 ## 2. Protocol Output Tests
 
 Add tests for each protocol renderer:
 - `KittyRenderer` chunking, alpha, dimensions
+
 - `SixelRenderer` palette, dithering, band encoding
+
 - `Iterm2Renderer` inline image format
 
 ## 3. Performance Regression Tests
@@ -445,7 +527,9 @@ Golden files for render output in both light/dark themes across different charac
 
 `candy-mosaic` provides:
 - `KittyRenderer`, `SixelRenderer`, `Iterm2Renderer` 
+
 - `Detect::cached()` for capability detection
+
 - `AnimationDriver` as candy-core Model
 
 **Integration:** Create `candy-flip/src/ProtocolPlayer.php` that wraps `candy-mosaic`'s renderers in the `Player` loop.
@@ -454,8 +538,11 @@ Golden files for render output in both light/dark themes across different charac
 
 Add `.tape` files under `candy-flip/.vhs/`:
 - `play.tape` — basic playback
+
 - `density.tape` — luminance ramp mode
+
 - `step.tape` — frame stepping
+
 - `halfblock.tape` — half-block mode (when implemented)
 
 ## 3. sugar-charts Integration
@@ -507,16 +594,23 @@ Animated sparklines or bar charts could use `candy-flip`'s frame rendering for r
 ## Immediate Wins (1-2 weeks)
 
 1. **Wire Floyd-Steinberg into Decoder** — add `Decoder::decodeWithDither()` path
+
 2. **Add PRESET_HALFBLOCK** — double vertical resolution in Renderer
+
 3. **Add custom density ramp CLI flag** — `candy-flip my.gif --density "..."`
+
 4. **Improve status bar** — add dimensions, FPS, playback time
 
 ## Medium-Term Improvements (1-2 months)
 
 5. **Full disposal pipeline** — canvas compositing in Player
+
 6. **Lanczos3 downsampling mode** — `imagecopyresampled()` approximation or imagick extension
+
 7. **candy-mosaic integration** — `ProtocolPlayer` using Kitty/Sixel/iTerm2 renderers
+
 8. **APNG input support** — detect and decode animated PNG
+
 9. **Disk cache** — SHA-256 hashed frame cache to `~/.cache/candy-flip/`
 
 ## Major Architectural Upgrades (3-6 months)
@@ -561,12 +655,17 @@ Animated sparklines or bar charts could use `candy-flip`'s frame rendering for r
 The package's primary strategic gap is **visual quality** — area-average downsampling blurs edges, disposal methods are tracked but not applied (causing animation errors on complex GIFs), and half-block rendering is absent. The second gap is **output fidelity** — text-only ANSI output occupies a specific niche (universal terminal compatibility) but sacrifices dramatic visual quality available via terminal graphics protocols.
 
 **Immediate priorities:**
+
 1. Wire the existing `FloydSteinberg` ditherer into the pipeline (low-hanging fruit with high impact for 256-color terminals)
+
 2. Implement `PRESET_HALFBLOCK` for 2× vertical resolution on truecolor terminals
+
 3. Implement full disposal canvas in `Player` — this is critical for correct animation replay
 
 **Medium-term priorities:**
+
 4. Integrate with `candy-mosaic` for protocol-aware rendering — this transforms candy-flip from a text-only viewer into a quality-conscious multi-protocol viewer
+
 5. Add Lanczos3 downsampling via `imagecopyresampled()` approximation or `ext-imagick`
 
 **Long-term positioning:**

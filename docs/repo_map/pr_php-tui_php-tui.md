@@ -46,6 +46,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ## High-Signal Open Issues
 
 ### Issue #233: `stream_set_blocking(STDIN, false)` left unrestored
+
 **Severity**: Medium-High | **Author**: AlexanderTheGr8-gr | **Date**: 2026-02-04
 
 **Problem**: The `StreamReader` class sets `STDIN` to non-blocking mode but never restores it. When php-tui is invoked from another program (e.g., `nnn` file manager), the parent process's STDIN remains in non-blocking state, breaking subsequent commands.
@@ -59,6 +60,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #230: `IntlChar` class not found
+
 **Severity**: Medium | **Author**: asya1098 | **Date**: 2025-06-13
 
 **Problem**: `BrailleGrid` uses `IntlChar` which requires PHP's `ext-intl` extension. Users without the extension get fatal errors.
@@ -68,6 +70,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #213: Table crash when selecting < 1st row (undefined offset)
+
 **Severity**: Medium | **Author**: dantleech | **Date**: 2023-12-02
 
 **Problem**: Scrolling beyond table bounds causes undefined offset crash.
@@ -79,6 +82,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #203: Paragraph word wrapping "line composer" not supported
+
 **Severity**: Low-Medium | **Author**: dantleech | **Date**: 2023-11-30
 
 **Problem**: Only character-based wrapping existed; word-based wrapping was missing. This was **later resolved** via PR #219 (merged Dec 2023).
@@ -90,9 +94,11 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #187: Add PhpAT or similar to enforce architectural rules
+
 **Severity**: Low | **Author**: dantleech | **Date**: 2023-11-29
 
 **Problem**: Request for architecture enforcement tool (like PHP Architecture Testing). Examples:
+
 - All widget classes should have `default()` method
 - All widgets should have private constructors
 - All mutators should return `self`
@@ -102,6 +108,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #184: `equals()` method on Color interface
+
 **Severity**: Low | **Author**: KennedyTedesco | **Date**: 2023-11-28
 
 **Problem**: The library uses weak comparisons (`!=`) for Color objects. PHPStan 2.0 will flag these. However, adding `equals()` causes ~6% performance regression in buffer diffing (hot path).
@@ -113,6 +120,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #139: Additional gradient color support
+
 **Severity**: Low | **Author**: dantleech | **Date**: 2023-11-19
 
 **Problem**: Gradient colors were only supported in Gauge, BarChart, and Sprite — not in Text, Shapes, Paragraph, Table, List, etc.
@@ -122,9 +130,11 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #124: Aggregate widget/shape renderer silent failure
+
 **Severity**: Low | **Author**: dantleech | **Date**: 2023-11-15
 
 **Problem**: When no renderer handles a widget, the system silently continues rather than throwing. The maintainer debated:
+
 - Option A: Add `supports(Widget): bool` method to renderer interface
 - Option B: Return `bool` from `render()` to indicate acceptance
 - Option C: Keep current design (iterate all, early return pattern)
@@ -136,6 +146,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #217: Colors documentation not rendered
+
 **Severity**: Low | **Author**: dantleech | **Date**: 2023-12-12
 
 **Documentation bug** — the colors reference page doesn't render properly.
@@ -147,6 +158,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ## Important Closed Issues
 
 ### Issue #204: Dialogs/floating windows support
+
 **Status**: Closed (completed via PR #209) | **Author**: dantleech | **Date**: 2023-11-30
 
 **Problem**: No widget existed for floating windows/dialogs.
@@ -158,6 +170,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #225: Widget area access for click handling
+
 **Status**: Closed (completed via PR #209) | **Author**: mtk3d | **Date**: 2024-07-15
 
 **Problem**: User wanted to check if mouse position is inside a widget's rendered area.
@@ -169,6 +182,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #229: Documentation examples have incorrect imports
+
 **Status**: Closed | **Author**: ellisgl | **Date**: 2025-03-28
 
 **Problem**: Example code shows `PhpTui\Tui\Text\Title` but should be `PhpTui\Tui\Model\Text\Title`. Namespace reorg broke examples.
@@ -180,6 +194,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #224: Symfony command wrapper question
+
 **Status**: Closed | **Author**: ellisgl | **Date**: 2024-05-12
 
 **Problem**: User asked about wrapping Symfony Console output with php-tui.
@@ -189,6 +204,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #199: Events blocking infinitely on Mac
+
 **Status**: Closed (pending reproduction) | **Author**: AuroraYolo | **Date**: 2023-11-30
 
 **Problem**: Event reading blocks indefinitely on macOS, with screenshot showing hang.
@@ -200,6 +216,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #202: Paragraph wrap not used
+
 **Status**: Closed (fixed via PR #219) | **Author**: dantleech | **Date**: 2023-11-30
 
 **Problem**: Word wrap option existed but wasn't actually applied during rendering.
@@ -207,6 +224,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #201: Remove corners from borders when superfluous
+
 **Status**: Closed (fixed) | **Author**: dantleech | **Date**: 2023-12-01
 
 **Bug**: Adjacent borders rendered double corners unnecessarily.
@@ -214,6 +232,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ---
 
 ### Issue #211: Moving cursor truncates text
+
 **Status**: Closed (fixed via PR #216) | **Author**: dantleech | **Date**: 2023-12-04
 
 **Bug**: Line truncation when moving cursor in certain positions.
@@ -223,6 +242,7 @@ The first-pass analysis identified these weaknesses in php-tui:
 ## Recurring Pain Points
 
 ### 1. Multi-width Unicode Handling
+
 **Issues**: #215, #214, #192, #180, #178
 
 Repeated issues with Unicode grapheme width calculation, truncation, and multi-byte input. This suggests the underlying `mb_strwidth()` approach is fragile.
@@ -232,6 +252,7 @@ Repeated issues with Unicode grapheme width calculation, truncation, and multi-b
 ---
 
 ### 2. Namespace/Class Organization
+
 **Issues**: #206 (massive reorg), #229 (stale docs)
 
 The library went through major namespace reorganization, breaking user code and documentation.
@@ -241,6 +262,7 @@ The library went through major namespace reorganization, breaking user code and 
 ---
 
 ### 3. Inline Viewport Complexity
+
 **Issues**: #218 (POC inline resize), #150, #154, #158
 
 The inline viewport had multiple bugs related to clearing and resizing. The current solution (`setInlineHeight` method) is considered a "code smell."
@@ -252,6 +274,7 @@ The inline viewport had multiple bugs related to clearing and resizing. The curr
 ## Frequently Requested Features
 
 ### 1. Word Wrap for Paragraph
+
 **Status**: Implemented via PR #219 (Dec 2023) | **Author**: KennedyTedesco
 
 Supported variants: `Word`, `WordTrimmed`, `Character` (default).
@@ -261,6 +284,7 @@ Supported variants: `Word`, `WordTrimmed`, `Character` (default).
 ---
 
 ### 2. Self-rendering Widgets
+
 **Status**: Implemented via PR #226 (Sept 2024)
 
 Widgets can now render themselves if implementing `WidgetRenderer`.
@@ -270,6 +294,7 @@ Widgets can now render themselves if implementing `WidgetRenderer`.
 ---
 
 ### 3. Window/Draggable Dialogs
+
 **Status**: Implemented via PR #209 (Jul 2024)
 
 Simple window widget with draggable positioning.
@@ -279,6 +304,7 @@ Simple window widget with draggable positioning.
 ---
 
 ### 4. Text Editor / TextArea Widget
+
 **Status**: Draft PR #170 (Nov 2023, stalled)
 
 Full-featured text editor with cursor, undo/redo, multi-byte support. The maintainer noted (Sept 2025) he's not currently working on it.
@@ -288,6 +314,7 @@ Full-featured text editor with cursor, undo/redo, multi-byte support. The mainta
 ---
 
 ### 5. Gradient Color Expansion
+
 **Status**: Requested (Issue #139)
 
 Users want gradients in more widgets: Text, Circle, Line, Map, Points, Rectangle, Chart, List, Paragraph, Table.
@@ -295,6 +322,7 @@ Users want gradients in more widgets: Text, Circle, Line, Map, Points, Rectangle
 ---
 
 ### 6. Inline Height Resize
+
 **Status**: Implemented via PR #218 (Dec 2023)
 
 Allows resizing the inline viewport dynamically.
@@ -304,6 +332,7 @@ Allows resizing the inline viewport dynamically.
 ## Important PRs
 
 ### PR #235: Require INTL extension
+
 **Merged**: Apr 2026 | **Author**: dantleech
 
 Makes `ext-intl` a hard requirement for certain canvas features.
@@ -313,6 +342,7 @@ Makes `ext-intl` a hard requirement for certain canvas features.
 ---
 
 ### PR #226: Allow self-rendering widgets
+
 **Merged**: Sep 2024 | **Author**: dantleech
 
 Allows widgets to implement their own renderer without external renderer class.
@@ -320,6 +350,7 @@ Allows widgets to implement their own renderer without external renderer class.
 ---
 
 ### PR #219: Paragraph word wrap support
+
 **Merged**: Dec 2023 | **Author**: KennedyTedesco
 
 Added proper word-wrapping. Heavily based on Ratatui's implementation.
@@ -327,6 +358,7 @@ Added proper word-wrapping. Heavily based on Ratatui's implementation.
 ---
 
 ### PR #210: Perf — improves `Position::toIndex()`
+
 **Merged**: Dec 2023 | **Author**: KennedyTedesco
 
 Shows active performance optimization work on hot paths.
@@ -334,6 +366,7 @@ Shows active performance optimization work on hot paths.
 ---
 
 ### PR #208: Minor change in Buffer diff
+
 **Merged**: Dec 2023 | **Author**: KennedyTedesco
 
 Buffer diffing is a performance-critical path that receives ongoing attention.
@@ -341,6 +374,7 @@ Buffer diffing is a performance-critical path that receives ongoing attention.
 ---
 
 ### PR #207: Reintroduce Area argument to WidgetRenderer
+
 **Merged**: Dec 2023 | **Author**: dantleech
 
 Shows the API design was still evolving — the `Area` argument was removed and then reintroduced.
@@ -350,6 +384,7 @@ Shows the API design was still evolving — the `Area` argument was removed and 
 ---
 
 ### PR #206: Massive Class Reorganisation
+
 **Merged**: Dec 2023 | **Author**: dantleech
 
 Major namespace cleanup — removed `Model` namespace entirely.
@@ -359,17 +394,20 @@ Major namespace cleanup — removed `Model` namespace entirely.
 ## Architectural Changes
 
 ### v0.2.0 (Major Refactoring)
+
 - Removed `Model` namespace entirely
 - Renamed `RawWidget` → `BufferWidget`
 - Reintroduced `area` argument to `WidgetRenderer`
 - Made `Line::fromSpans()` variadic
 
 ### v0.1.0
+
 - Made all classes `final`
 - Split `term` into separate package
 - Added int range type hints
 
 ### Design Pattern: Visitor-style Rendering
+
 ```php
 // WidgetRenderer::render($renderer, $widget, $buffer, $area)
 // The renderer passes itself as the "outer" renderer for nested rendering
@@ -378,6 +416,7 @@ Major namespace cleanup — removed `Model` namespace entirely.
 **Issue #124 Discussion**: The aggregate renderer pattern uses iteration-with-early-return. The maintainer considered but deferred a `supports()` method.
 
 ### Design Pattern: Extension Architecture
+
 `DisplayExtension` interface allows adding widget renderers and shape painters. Built-in `CoreExtension` provides defaults.
 
 ---
@@ -385,15 +424,18 @@ Major namespace cleanup — removed `Model` namespace entirely.
 ## Performance Discussions
 
 ### Hot Path: Buffer Diffing
+
 - Issue #184 notes that Color equality checks in buffer diff cause ~6% regression
 - Ongoing optimization work (PRs #210, #208)
 
 **Signal**: Buffer diffing is the primary performance bottleneck.
 
 ### Position Calculation
+
 PR #210 improved `Position::toIndex()` performance — shows that coordinate conversion is a hotspot.
 
 ### Widget Rendering
+
 Each `render()` call traverses the widget tree. No evidence of virtualization or viewport culling.
 
 ---
@@ -401,6 +443,7 @@ Each `render()` call traverses the widget tree. No evidence of virtualization or
 ## Extensibility Discussions
 
 ### Issue #124: Silent Failure in Aggregate Renderer
+
 Main maintainer deferred because "not really an issue right now." Community member (KennedyTedesco) suggested:
 ```php
 public function supports(Widget $widget): bool;
@@ -413,6 +456,7 @@ public function supports(Widget $widget): bool;
 ---
 
 ### DisplayExtension Pattern
+
 Allows adding custom:
 - Widget renderers
 - Shape painters
@@ -425,14 +469,17 @@ Allows adding custom:
 ## API/UX Complaints
 
 ### Issue #229: Stale Example Code
+
 Documentation examples had incorrect imports after namespace reorganization.
 
 **Lesson**: Namespace stability is critical for user experience.
 
 ### Issue #224: Symfony Integration
+
 User asked about wrapping Symfony Console output — shows php-tui doesn't integrate with common PHP frameworks.
 
 ### Issue #225: Widget Area Access
+
 No clean way to get widget's rendered area for hit-testing.
 
 **Resolved via PR #209** — BufferContext now provides area access.
@@ -442,11 +489,13 @@ No clean way to get widget's rendered area for hit-testing.
 ## Migration Problems
 
 ### Namespace Changes (v0.2.0)
+
 Breaking change: `PhpTui\Tui\Text\Title` → `PhpTui\Tui\Model\Text\Title`
 
 Users on v0.0.x had to update all imports after upgrading.
 
 ### Prerelease Status
+
 Library is still at 0.x — users should expect breaking changes.
 
 **SugarCraft Implication**: SugarCraft should aim for API stability earlier than php-tui did.
@@ -456,16 +505,19 @@ Library is still at 0.x — users should expect breaking changes.
 ## Clever Fixes & Workarounds
 
 ### Destructor Fix for STDIN Restoration (Issue #233)
+
 Maintainer suggested using `__destruct` to restore `stream_set_blocking(STDIN, true)`.
 
 This is a **RAII pattern** adaptation for PHP resource management.
 
 ### Inline Viewport Workarounds
+
 Issue #154: "Inline viewport sets terminal to raw but does not set it back" — fixed with proper state restoration.
 
 Issue #158: "Inline 'clear' is too greedy" — shows the clear behavior was eating content unexpectedly.
 
 ### Cross-platform Event Handling
+
 Issue #199 was closed as "pending reproduction" — event blocking on Mac suggests platform-specific event handling differences.
 
 ---
@@ -473,11 +525,13 @@ Issue #199 was closed as "pending reproduction" — event blocking on Mac sugges
 ## Community Workarounds
 
 ### Symfony Command Integration (Issue #224)
+
 User asked about using php-tui inside Symfony Commands. No official solution provided — user was seeking guidance.
 
 **Opportunity for SugarCraft**: Provide official integration patterns for common frameworks.
 
 ### IntlChar Workaround (Issue #230)
+
 User didn't know they needed `ext-intl`. Solution: install PHP's intl extension.
 
 **SugarCraft Opportunity**: Better error messages that guide users to install missing dependencies.
@@ -487,16 +541,19 @@ User didn't know they needed `ext-intl`. Solution: install PHP's intl extension.
 ## Maintainer Guidance Patterns
 
 ### Defer Non-Critical Issues
+
 Issue #124 (silent renderer failure) was deferred with "let's leave it for now." This suggests:
 - Small team prioritizes features over polish
 - Technical debt accumulates intentionally
 
 ### Acknowledge Design Imperfections
+
 On Issue #218 (inline resize): "I don't really like [the API], but we do need to be able to resize the inline viewport. There should be a better way."
 
 This honest acknowledgment shows a pragmatic approach — ship working code, note the debt.
 
 ### Active Bug Fixes
+
 Most PRs fix specific bugs reported by users (unicode truncation, adjacent borders, line truncation, etc.).
 
 ---
@@ -504,11 +561,13 @@ Most PRs fix specific bugs reported by users (unicode truncation, adjacent borde
 ## Rejected Ideas Worth Revisiting
 
 ### No Architectural Enforcement Tool
+
 Issue #187 requested PhpAT or similar. Maintainer didn't act on it.
 
 **For SugarCraft**: Consider adding architecture tests from day one.
 
 ### No `supports()` Method on Renderer Interface
+
 Despite discussion, the `supports()` method was never added. The aggregate renderer still uses iteration-with-early-return.
 
 **For SugarCraft**: Consider whether explicit `supports()` improves debuggability enough to justify the API change.
@@ -577,21 +636,25 @@ Despite discussion, the `supports()` method was never added. The aggregate rende
 ## Architectural Lessons
 
 ### 1. The Widget/Renderer Separation Was Inverted
+
 In Ratatui, the widget holds render logic. In php-tui, the renderer was split out — but the interface evolved: `WidgetRenderer::render($renderer, $widget, $buffer, $area)`.
 
 This inversion makes sense in PHP but required ongoing API refinement.
 
 ### 2. Extension Points Should Be Explicit
+
 The `DisplayExtension` pattern works but is underdocumented. Users don't know how to add custom widgets.
 
 **For SugarCraft**: Provide clear extension patterns with examples.
 
 ### 3. Buffer Is King
+
 Buffer diffing is the central performance concern. All optimizations center on reducing buffer comparisons.
 
 **For SugarCraft**: Design buffer/cell representation for cache efficiency.
 
 ### 4. Viewport Modes Are Orthogonal
+
 Fullscreen, inline, and fixed viewports should be composable, not mutually exclusive.
 
 ---
@@ -599,6 +662,7 @@ Fullscreen, inline, and fixed viewports should be composable, not mutually exclu
 ## Defensive Design Lessons
 
 ### Lesson 1: RAII for Terminal State
+
 ```php
 // Never leave raw mode set
 public function __destruct() {
@@ -607,17 +671,21 @@ public function __destruct() {
 ```
 
 ### Lesson 2: Fail Fast on Missing Renderers
+
 Instead of silent iteration, throw when no renderer handles a widget.
 
 ### Lesson 3: Clamp All Indices
+
 ```php
 $this->selected = max(0, min($this->selected, $maxIndex));
 ```
 
 ### Lesson 4: Value Objects Need Equality
+
 Color, Position, Area should use value equality, not object identity.
 
 ### Lesson 5: Document Extension Points
+
 Users shouldn't need to read source to understand how to add custom widgets.
 
 ---
@@ -635,24 +703,31 @@ Users shouldn't need to read source to understand how to add custom widgets.
 ## Strategic Opportunities for SugarCraft
 
 ### 1. Superior API Stability
+
 Avoid php-tui's namespace churn. Establish stable APIs early with BC guarantees.
 
 ### 2. Better Extension Story
+
 Provide documented, first-class extension points for custom widgets and renderers.
 
 ### 3. Async-First Design
+
 Build async event handling into the core rather than as an afterthought.
 
 ### 4. Framework Integration
+
 Unlike php-tui, SugarCraft could provide official integrations with Laravel, Symfony, etc.
 
 ### 5. Comprehensive Unicode Handling
+
 Use a battle-tested approach from the start — don't roll custom Unicode width logic.
 
 ### 6. Strict Type Safety
+
 PHPStan's 2.0 strictness will break weak comparisons. Use value equality for value objects from day one.
 
 ### 7. Community-Centric Development
+
 php-tui has limited contributor diversity. SugarCraft could foster broader community contribution.
 
 ---
@@ -660,6 +735,7 @@ php-tui has limited contributor diversity. SugarCraft could foster broader commu
 ## Cross-Ecosystem Pattern Matches
 
 ### From Ratatui (Rust)
+
 php-tui ports Ratatui faithfully but struggles with:
 - Async event handling (Rust has async/.await)
 - Trait object safety (PHP doesn't have dyn Trait)
@@ -668,6 +744,7 @@ php-tui ports Ratatui faithfully but struggles with:
 **SugarCraft should**: Learn from php-tui's adaptation challenges when porting from Charmbracelet.
 
 ### From Terminal Community
+
 Key patterns:
 - Crossterm-style event model (already adopted)
 - Terminal state management best practices

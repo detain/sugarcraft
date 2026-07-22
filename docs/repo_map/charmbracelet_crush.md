@@ -1,6 +1,7 @@
 # charmbracelet/crush
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/crush
 - **Language:** Go
 - **Stars:** 24,731
@@ -28,6 +29,7 @@
 ## Key Classes and Methods
 
 ### Core Agent (`internal/agent/agent.go`)
+
 - `SessionAgent.Run()` — Executes LLM conversation for a session
 - `SessionAgent.SetModels()` — Configures large/small language models
 - `SessionAgent.SetTools()` — Registers agent tools
@@ -36,12 +38,14 @@
 - `IsSessionBusy()` / `IsBusy()` — Checks agent activity state
 
 ### Coordinator (`internal/agent/coordinator.go`)
+
 - `Coordinator.Run()` — Main entry for agent task execution
 - `Coordinator.UpdateModels()` — Refreshes model configuration
 - `Coordinator.IsSessionBusy()` — Session busy state check
 - Manages named agents ("coder", "task") with separate configurations
 
 ### Shell (`internal/shell/shell.go`)
+
 - `Shell.Exec()` — Execute command, return stdout/stderr
 - `Shell.ExecStream()` — Execute with streaming output
 - `Shell.SetWorkingDir()` / `GetWorkingDir()` — Working directory management
@@ -49,6 +53,7 @@
 - `CommandsBlocker()` / `ArgumentsBlocker()` — Command blocking predicates
 
 ### LSP Manager (`internal/lsp/manager.go` / `client.go`)
+
 - `lsp.Manager` — Manages multiple LSP client instances
 - `Client.Initialize()` — Initialize LSP handshake
 - `Client.TextDocumentCompletion()` — Request completions
@@ -56,17 +61,20 @@
 - Auto-discovery and on-demand LSP server startup
 
 ### Config (`internal/config/config.go`)
+
 - `ConfigStore` — Central configuration service
 - Provider/Model configuration with credentials support
 - Variable resolution for environment expansion
 - Context path discovery for AGENTS.md variants
 
 ### Skills (`internal/skills/manager.go`)
+
 - `Manager.LoadSkills()` — Discover and load skill packages
 - `Manager.GetSkill()` — Retrieve loaded skill by name
 - Support for global (`~/.config/crush/skills/`) and project-local (`.crush/skills/`) paths
 
 ### Tools (`internal/agent/tools/`)
+
 - `bash.go` — Shell command execution with background job support
 - `edit.go` / `multiedit.go` — File editing operations
 - `view.go` — File content viewing with syntax highlighting
@@ -78,6 +86,7 @@
 - `mcp-tools.go` — MCP server tool bridging
 
 ### TUI (`internal/ui/`)
+
 - `model/ui.go` — Main Bubble Tea model with layout management
 - `chat/` — Chat message rendering with list-based view
 - `diffview/` — Diff visualization

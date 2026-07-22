@@ -3,11 +3,17 @@
 ## Metadata
 
 - **Library:** `candy-mosaic` (`sugarcraft/candy-mosaic`)
+
 - **Namespace:** `SugarCraft\Mosaic`
+
 - **Upstream:** `charmbracelet/x/mosaic` (Go)
+
 - **Status:** 🟢 v1 ready (public API + tests + docs + demo)
+
 - **PHP:** ^8.3
+
 - **ext-gd:** Required
+
 - **Key Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `react/promise`
 
 ---
@@ -59,28 +65,45 @@ candy-mosaic/src/
 **Mechanism:** APC (Application Program Command) sequences carrying chunked base64-encoded PNG data.
 
 **Implementation details (`src/Renderer/KittyRenderer.php`):**
+
 - PNG bytes are base64-encoded and split into 4092-byte chunks (CHUNK_SIZE, accounting for base64 padding overhead)
+
 - Each chunk emitted via `Ansi::kittyGraphicsChunk($chunk, $more)` where `$more=true` sets `m=1` (more data follows); final chunk sets `m=0`
+
 - Transmission: `Ansi::kittyGraphicsBegin(['c' => $width, 'r' => $effectiveHeight])` → chunk stream → `Ansi::kittyGraphicsEnd()`
+
 - Supports **alpha/transparency** (full RGBA PNG passed through)
+
 - Supports **virtual image placement** via `KittyOptions` — transmit once with `a=p` storing in terminal, then reference by ID+offset for bandwidth savings
+
 - Supports **zlib compression** (`f=1` with `gzcompress()`) for large images on slow links
+
 - Supports **animation** via `renderFrame($image, $width, $height, $imageId)` which uses a stable image ID for targeted delete+redraw
+
 - **Delete support:** APC `a=d` action via `Ansi::kittyGraphicsClear((int) $imageId)`
 
 **Protocol strengths:**
+
 - Best quality/speed tradeoff among modern protocols
+
 - Virtual images enable efficient multi-placement without re-transmission
+
 - Terminal handles aspect-ratio and scaling — no pixel manipulation needed
+
 - Universal deletion API via image ID
 
 **Protocol weaknesses:**
+
 - Kitty-only (kitty, ghostty, WezTerm)
+
 - Large images produce long base64 strings (~33% larger than raw)
 
 **SugarCraft differentiators vs upstream:**
+
 - `renderFrame()` + `delete()` form a clean animation API matched to candy-core's `Model::update()/view()` cycle
+
 - `KittyOptions` value object with fluent `withZIndex()`, `withCompression()`, `withUseVirtual()` mirrors the builder pattern but as immutable value
+
 - Chunking is explicit in source (not abstracted behind a library call)
 
 ---
@@ -90,20 +113,31 @@ candy-mosaic/src/
 **Mechanism:** OSC (Operating System Command) 1337 carrying base64-encoded PNG or JPEG.
 
 **Implementation details (`src/Renderer/Iterm2Renderer.php`):**
+
 - Uses `imagepng()` to encode source; passes PNG bytes directly if already PNG format
+
 - Base64-encoded in a single OSC 1337 sequence: `Ansi::iterm2InlineImage($base64, ['width' => $width, 'height' => $effectiveHeight, 'preserveAspectRatio' => true])`
+
 - Terminal handles aspect-ratio and scaling
+
 - **Supports alpha** (PNG preserves transparency)
+
 - **No targeted delete by ID** — `delete()` emits OSC 1337 "Pop" which removes the topmost image from the stack only
 
 **Protocol strengths:**
+
 - Simple, well-supported in iTerm2, WezTerm, mintty
+
 - JPEG encoding option for photographs (smaller than PNG)
+
 - Good quality with zero client-side pixel manipulation
 
 **Protocol weaknesses:**
+
 - No per-image deletion — "Pop" removes topmost, not by ID
+
 - No virtual placement or compression
+
 - OSC sequences can be interrupted by terminal noise
 
 ---
@@ -113,14 +147,23 @@ candy-mosaic/src/
 **Mechanism:** DEC Sixel — a 6-pixel-tall band encoding scheme using a palette of up to 256 colors.
 
 **Implementation details (`src/Renderer/SixelRenderer.php`):**
+
 - **Median-cut quantizer** (`medianCut()`) — recursively splits RGB color space to produce ≤256 palette entries
+
 - **Error-diffusion dithering** (`Dither` enum: None, FloydSteinberg, Stucki, Atkinson) applied per-pixel with floating-point accumulation
+
 - Sixel band encoding: each 6-pixel-tall band encodes one bitmask per color
+
 - **RLE encoding** (`emitRle()`) — consecutive identical sixel bytes compressed as `!count<char>`
+
 - Palette emitted as color introducers: `Ansi::sixelColorIntroducer($i, $r, $g, $b)` → `DCS p SixelColor p;p;p;pb`
+
 - DECSIXEL header: `Ansi::sixelDcsHeader($width, $effectiveHeight)` → `DCS q P1;Px;Py`
+
 - Terminator: `Ansi::sixelTerminator()` → BEL (`\x07`)
+
 - **Does NOT support alpha** — no transparency in Sixel protocol itself
+
 - **No delete** — DECSIXEL has no remove command
 
 **Dither algorithm details (`diffuseError()`):**
@@ -132,15 +175,23 @@ candy-mosaic/src/
 | Atkinson | 6 (right, bottom-right, bottom, bottom-left) | 75% | Lighter result, Apple original |
 
 **Protocol strengths:**
+
 - Widest terminal support (xterm, foot, mlterm, wezterm, contour)
+
 - High quality at 256 colors with dithering
+
 - Band structure enables partial rendering
 
 **Protocol weaknesses:**
+
 - No alpha/transparency (1-bit background at best)
+
 - No delete mechanism — cannot remove a rendered sixel image
+
 - 256-color limit per image
+
 - ~90ms render time (vs ~2.5ms for Kitty/iTerm2 per go-termimg benchmarks)
+
 - Client-side pixel manipulation required (quantization + dithering)
 
 **Caliber learnings (`CALIBER_LEARNINGS.md`):**
@@ -153,21 +204,33 @@ candy-mosaic/src/
 **Mechanism:** Renders image as Unicode ▀ (U+2580 Upper Half Block) characters with 24-bit foreground + background SGR codes. Each cell shows two vertically-stacked pixel rows.
 
 **Implementation details (`src/Renderer/HalfBlockRenderer.php`):**
+
 - `PixelGrid::fromGd($img, $cellW, $cellH)` resizes source to `cellW × cellH*2` pixels (double height)
+
 - For each cell: top pixel color → foreground SGR, bottom pixel color → background SGR
+
 - **Transparent pixel handling:** GD alpha=127 maps to `null` in PixelGrid cell tuple; null-alpha halves skip SGR codes entirely
+
 - When only one half is transparent: emits the **opposite** half-block glyph (▄ for bottom-transparent, ▀ for top-transparent) with only the visible half's SGR codes
+
 - Output: `implode("\r\n", $lines)` for cross-platform line endings
 
 **Protocol strengths:**
+
 - Universal — works in any truecolor terminal
+
 - No external dependency (self-contained, pure GD + ANSI SGR)
+
 - Supports per-pixel transparency via null-alpha handling
 
 **Protocol weaknesses:**
+
 - Half the vertical resolution of the source image
+
 - 256-color limitation per cell (24-bit fg + 24-bit bg, but terminal may quantize)
+
 - No stored image identity for deletion
+
 - `supportsAlpha()` returns `false` (no alpha blending, just binary transparency)
 
 ---
@@ -177,20 +240,31 @@ candy-mosaic/src/
 **Mechanism:** Each terminal cell renders a 2×2 group of source pixels. A 4-bit mask (1 bit per quadrant, 1=bright if any RGB > 10) indexes a 16-glyph lookup table using shade characters (░▒▓█).
 
 **Implementation details (`src/Renderer/QuarterBlockRenderer.php`):**
+
 - `PixelGrid::fromGdQuarter($img, $cellW, $cellH)` scales source to `cellW*2 × cellH*2` pixels
+
 - Samples four quadrants (ul, ur, ll, lr) per cell
+
 - 16-entry GLYPH_MAP: 0=space, 1,2,4,8=░, 3,5,6,9,10,12=▒, 7,11,13,14=▓, 15=█
+
 - Same color for fg+bg SGR; bright quads=fg, dim quads=bg
+
 - **No alpha support**
 
 **Protocol strengths:**
+
 - 4× the detail of half-block (4 sub-pixels per cell vs 2)
+
 - Still universal — works in any truecolor terminal
+
 - No external dependency
 
 **Protocol weaknesses:**
+
 - Coarser quantization (4 brightness levels vs continuous color)
+
 - No transparency
+
 - No stored image identity
 
 ---
@@ -271,7 +345,9 @@ public function render(int $cellWidth, int $cellHeight): string {
 **Async variant:** `withAsync(?AsyncRenderer $renderer)` configures `SyncAsyncRenderer` (futureTick defer) or a custom `AsyncRenderer` implementation.
 
 **Key comparison with go-termimg:**
+
 - go-termimg uses `sync.RWMutex` for thread-safe LRU with `ResizeCache` struct keyed as `widthxheight_path_srcWidthxsrcHeight` (includes source dimensions in key)
+
 - candy-mosaic uses simpler "cell dimensions only" key — less precise but faster for repeated renders at same size
 
 ---
@@ -280,7 +356,9 @@ public function render(int $cellWidth, int $cellHeight): string {
 
 CandyMosaic does **not** currently implement parallel base64 encoding. However, `go-termimg` implements this pattern:
 - `sync.Pool` for buffer reuse (~33% faster thanstdlib)
+
 - `ParallelBase64Encode` with worker pool threshold: 2× chunk size
+
 - Channel-based job distribution to goroutine pool
 
 **PHP equivalent opportunity:** Using `React\Promise\PromiseInterface` with `React\Promise\Deferred` in a worker pool via `pcntl_fork()` or `clue/reactphp-promise-stream` for parallel chunk encoding.
@@ -318,7 +396,9 @@ public function withFrame(int $index, ImageSource $frame, int $delayMs): self;  
 
 **`AnimationDriver`** — candy-core `Model` implementation:
 - `init()`: Returns `Cmd::tick($delaySec, FrameTickMsg::class)` when not paused
+
 - `update(FrameTickMsg)` — advances `$index = ($index + 1) % $animation->frameCount()`, schedules next tick
+
 - `view()` — emits `$renderer->delete($imageId) . $renderer->render($frame, $cellWidth, $cellHeight)` for clean per-frame redraw
 
 **SugarCraft innovation vs upstream:** No equivalent animation driver in `charmbracelet/x/mosaic` — this is a pure SugarCraft addition.
@@ -359,14 +439,19 @@ enum Scale {
 ### 9.2 Memory Usage
 
 - **Kitty/iTerm2:** PNG bytes in memory, base64-encoded string, chunk strings
+
 - **Sixel:** Full pixel grid (w×h floats for error accumulation) + quantized palette + index grid
+
 - **HalfBlock/QuarterBlock:** GD image + 2× or 4× intermediate surface + cell grid arrays
+
 - **Chafa:** External process + temp file on disk
 
 ### 9.3 Cache Efficiency
 
 - **AdaptiveImage LRU:** Only 4 entries by default — small but sufficient for viewport re-renders
+
 - **Font-size detection:** Cached per-process via `Detect::$cached`
+
 - **go-termimg comparison:** Uses 100-entry LRU keyed on `widthxheight_path_srcWidthxsrcHeight`; includes source dimensions for more precise caching
 
 ---
@@ -458,6 +543,7 @@ enum Scale {
 
 VHS uses `go-termimg` internally via its `tui` package to render images in the xterm.js canvas during frame capture. The relevant connection is:
 - VHS renders images during tape playback for demo recording
+
 - CandyMosaic's `AnimationDriver` + `KittyRenderer::renderFrame()` provides equivalent per-frame delete+redraw semantics that would enable VHS-style animation capture
 
 **Assessment:** VHS is a consumer of image rendering technology, not a competing implementation. CandyMosaic's animation support positions it to potentially power future SugarCraft demo tools.
@@ -483,6 +569,7 @@ Using `React\Promise\PromiseInterface` with a worker pool:
 
 Ratui-image implements band-sliced Sixel rendering for smooth scrolling. This would require:
 - `SixelRenderer::renderSliced($image, $cellW, $cellH, $skipLines, $dropLines)` 
+
 - Band indexing math from `ratatui-image/src/sliced.rs:L310-331`
 
 ### 12.4 Unicode Placeholder Mode (Kitty)

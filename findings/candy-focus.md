@@ -3,6 +3,7 @@
 **Library:** sugarcraft/candy-focus  
 **FocusRing:** Focus ring state machine — an ordered set of focusable regions with wrap-around Tab/Shift-Tab traversal  
 **Files Reviewed:**
+
 - `src/FocusRing.php` (373 lines)
 - `tests/FocusRingTest.php` (435 lines, 48 tests)
 - `composer.json`, `phpunit.xml`, `CALIBER_LEARNINGS.md`, `README.md`

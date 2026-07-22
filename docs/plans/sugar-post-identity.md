@@ -83,6 +83,7 @@ What's **not** in the shipped lib (relative to upstream `pop`):
 Everything else upstream Pop does has a matching PHP surface.
 
 **Source citations:**
+
 - `sugar-post/README.md:L13` — "PHP port of charmbracelet/pop"
 - `sugar-post/composer.json:L2` — `sugarcraft/sugar-post`
 - `sugar-post/src/Email.php:L21–L32` — immutable readonly props

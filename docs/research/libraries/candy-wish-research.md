@@ -21,6 +21,7 @@ candy-wish currently implements middleware composition and session handling that
 **Current:** `Session::fromEnvironment()` parses SSH connection metadata from `$_SERVER`/`getenv()` - a reasonable approach for ForceCommand deployments.
 
 **Limitations:**
+
 - No access to actual SSH channel information (session ID, reserved bytes)
 - No per-channel state tracking
 - Cannot handle multiple channels per connection (subsystem forwarding, etc.)
@@ -60,6 +61,7 @@ interface Middleware
 ```
 
 **Issues vs upstream wish:**
+
 - Wish (Go) uses functional middleware: `func(next ssh.Handler) ssh.Handler`
 - gliderlabs/ssh uses context propagation: `Context` interface with `SetValue()`/`Value()`
 - russh uses async trait methods with session state
@@ -90,6 +92,7 @@ public function handle(Session $session, callable $next): void
 ```
 
 **Limitations:**
+
 - No support for password authentication
 - No keyboard-interactive (2FA/challenge-response)
 - No certificate-based auth
@@ -99,6 +102,7 @@ public function handle(Session $session, callable $next): void
 ### 1.4 Transport Layer
 
 **Two transports:**
+
 1. `InProcessTransport` (default): Allocates candy-pty, spawns subprocess
 2. `HostSshdTransport` (legacy): Runs middleware inline against sshd's PTY
 
@@ -117,6 +121,7 @@ public function run(Session $session, array $stack): void
 ```
 
 **Issues:**
+
 - Transport injection via duck-typed `setTransport()` is fragile
 - No interface for transports that don't spawn children
 - No way to access channel-level events (pty-req, window-change, signals)
@@ -157,6 +162,7 @@ type Context interface {
 **Source:** [charmbracelet/wish](https://github.com/charmbracelet/wish)
 
 **Key Patterns:**
+
 1. Middleware composes from outside-in (last registered runs first)
 2. Context propagation through the handler chain
 3. `ssh.Handler` is a simple function: `func(ssh.Session)`
@@ -184,6 +190,7 @@ func DefaultSessionHandler(srv *Server, conn *gossh.ServerConn, newChan gossh.Ne
 ```
 
 **Key Features:**
+
 - `Server` struct with callbacks for auth, pty, session requests
 - `Context` for request-scoped state
 - `PtyCallback`, `SessionRequestCallback`, `SubsystemHandler` hooks
@@ -221,6 +228,7 @@ type SessionChannelHandler interface {
 ```
 
 **Key Insight:** Separates connection lifecycle into distinct interfaces:
+
 - `NetworkConnectionHandler` - pre-auth, connection-level
 - `SSHConnectionHandler` - post-auth, handles channels
 - `SessionChannelHandler` - per-channel, handles exec/pty/shell
@@ -276,6 +284,7 @@ impl server::Handler for Server {
 ```
 
 **Key Features:**
+
 - Async/await with tokio
 - Per-connection handler instance (clone for each connection)
 - Channel ID for tracking multiple channels
@@ -326,6 +335,7 @@ class MySSHServer(asyncssh.SSHServer):
 ```
 
 **Key Features:**
+
 - Lifecycle hooks: `connection_made`, `connection_lost`, `begin_auth`
 - Per-session class with `session_started`, `data_received`, `eof_received`, `break_received`
 - PTY support via `process.term_size`, `process.term_type`
@@ -338,6 +348,7 @@ class MySSHServer(asyncssh.SSHServer):
 **Architecture:** Client-side SSH implementation (not a server).
 
 **Note:** phpseclib is primarily a client library, not a server. It provides:
+
 - `SSH2::login()` with multiple auth methods
 - `SSH2::exec()` for command execution
 - `SSH2::startSubsystem()` for subsystems
@@ -361,6 +372,7 @@ class MySSHServer(asyncssh.SSHServer):
 | ContainerSSH | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **candy-wish Gap:** All auth methods are handled by sshd. candy-wish can only filter post-auth (user list, key fingerprint). It cannot:
+
 - Implement its own password auth
 - Implement 2FA/challenge-response
 - Inspect which auth method was used
@@ -377,6 +389,7 @@ class MySSHServer(asyncssh.SSHServer):
 | ContainerSSH | Layered interfaces | Explicit params | ✅ |
 
 **Key Insight:** Most libraries separate:
+
 1. **Connection-level** handling (auth, metadata)
 2. **Channel-level** handling (exec, pty, subsystem)
 3. **Application-level** middleware (logging, rate limiting)
@@ -413,6 +426,7 @@ interface Context
 ```
 
 **Changes:**
+
 1. Add `Context` class with array storage
 2. Add `Server::withContext(Context $ctx)` - injected or created
 3. Add `Session::withContext(Context $ctx)` - passed through chain
@@ -441,6 +455,7 @@ interface ChannelHandler
 ```
 
 **Changes:**
+
 1. Add `ChannelHandler` interface
 2. Add `Server::withChannelHandler(ChannelHandler $h)`
 3. Transport implementations call handler at appropriate times
@@ -598,6 +613,7 @@ interface AsyncMiddleware
 5. **Update `Server::serve()`** to create or inject context
 
 **Files to modify:**
+
 - `src/Session.php` - add properties, update fromEnvironment
 - `src/Context.php` - new file
 - `src/Middleware.php` - update interface
@@ -617,6 +633,7 @@ interface AsyncMiddleware
 5. **Create `ChannelHandlerMiddleware`** adapter to bridge channel handler to middleware chain
 
 **Files to modify:**
+
 - `src/ChannelHandler.php` - new file
 - `src/Transport.php` - add channel handler
 - `src/Transport/InProcessTransport.php` - emit channel events
@@ -629,6 +646,7 @@ interface AsyncMiddleware
 3. **Add `AuthMethods` middleware** - to constrain which auth methods are accepted
 
 **Files to add/modify:**
+
 - `src/Middleware/PasswordAuth.php` - new
 - `src/Middleware/CertificateAuth.php` - new
 - `src/Middleware/AuthMethods.php` - new
@@ -639,6 +657,7 @@ interface AsyncMiddleware
 2. **Add `SftpSubsystem` example** handler
 
 **Files to add:**
+
 - `src/Middleware/Subsystem.php` - new
 - `src/Middleware/Subsystem/SftpHandler.php` - new
 
@@ -697,6 +716,7 @@ This is tracked separately under `plans/x-xpty.md` Option A.
 ## Appendix B: Pattern Quick Reference
 
 ### Decorator Middleware Pattern (Go wish)
+
 ```go
 func LoggingMiddleware(next ssh.Handler) ssh.Handler {
     return func(s ssh.Session) {
@@ -707,6 +727,7 @@ func LoggingMiddleware(next ssh.Handler) ssh.Handler {
 ```
 
 ### Lifecycle Hook Pattern (asyncssh)
+
 ```python
 class MySSHServerSession(asyncssh.SSHServerSession):
     def connection_made(self, chan):
@@ -721,6 +742,7 @@ class MySSHServerSession(asyncssh.SSHServerSession):
 ```
 
 ### Layered Handler Pattern (ContainerSSH)
+
 ```go
 type Handler interface {
     OnNetworkConnection(id string, addr net.Addr) (NetworkConnectionHandler, error)

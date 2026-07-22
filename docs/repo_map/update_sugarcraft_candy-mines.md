@@ -3,20 +3,33 @@
 `candy-mines` is a Minesweeper clone ported from Go (`maxpaulus43/go-sweep`) to PHP, running on the SugarCraft TUI stack (`candy-core` + `candy-sprinkles`). It faithfully reproduces the upstream experience while adding PHP-native improvements: immutable value objects, injectable deterministic RNG for testing, O(1) win detection, mid-game serialization, and i18n support across 16 locales.
 
 **Biggest opportunity areas:**
+
 - Undo/redo system leveraging the immutable architecture
+
 - AI solver/hint system for educational value
+
 - Achievement and progression tracking beyond basic stats
+
 - Enhanced mouse interactions (drag-to-reveal, gesture support)
+
 - Replay system using serialization
+
 - Command palette for navigation
+
 - Web-based rendering for accessibility
 
 **Biggest missing capabilities:**
+
 - No undo/redo (though architecture supports it)
+
 - No AI solver or hint system
+
 - No replay system leveraging mid-game serialization
+
 - No achievements or progression beyond per-difficulty stats
+
 - No accessibility features (screen reader support, high contrast mode)
+
 - No demo/tutorial mode
 
 ---
@@ -83,20 +96,31 @@ DifficultyStats (atomic JSON persistence)
 ## Strengths
 
 1. **First-click safety fully implemented** — upstream has this as a TODO
+
 2. **O(1) win detection** — upstream scans entire grid after every move
+
 3. **Deterministic injectable RNG** — enables fully reproducible tests
+
 4. **Mid-game serialization** — save/restore without external storage
+
 5. **Immutable architecture** — no hidden shared state, trivial testability
+
 6. **i18n** — 16 locales, zero runtime overhead
+
 7. **Atomic persistence** — stats survive crashes
+
 8. **Iterative flood-fill** — no stack overflow on large boards
 
 ## Weaknesses
 
 1. **No undo/redo** — architecture supports it but not implemented
+
 2. **No AI solver** — purely a game, no hint system
+
 3. **Dense 2D array access** — `rows[y][x]` easy to confuse
+
 4. **Board state in Game::$board** — could be decoupled for replay systems
+
 5. **No achievements** — stats only, no progression
 
 ---
@@ -118,30 +142,41 @@ DifficultyStats (atomic JSON persistence)
 ## Critical
 
 ### 1. Undo/Redo System
+
 **Title:** Implement undo/redo using immutable architecture
 **Description:** Every state transition in candy-mines returns a new Board instance. This makes undo/redo trivial to implement by maintaining a history stack of Board states.
 **Why it matters:** Major UX improvement for a puzzle game — players can recover from mistakes without restarting.
 **Source repo:** N/A (architectural opportunity)
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - Add `history: list<Board>` to Game model
+
 - On each move that changes board state, push previous state to history
+
 - `undo()` pops history and returns previous board
+
 - `redo()` maintains separate forward stack
+
 - Limit history size to prevent memory bloat (e.g., last 100 moves)
 **Estimated complexity:** Low — architecture already supports it
 **Expected impact:** High — standard Minesweeper feature
 
 ### 2. Testing Infrastructure
+
 **Title:** First-class testing utilities for TUI games
 **Description:** Bubble Tea v2 has no official testing framework (issue #1654). Textual has Pilot class. candy-mines could lead with superior testing DX.
 **Why it matters:** Ensures game logic correctness, enables TDD, prevents regressions
 **Source repo:** `charmbracelet/bubbletea` issue #1654, `textualize/textual` Pilot class
 **Source PR/issue/discussion:** `pr_charmbracelet_bubbletea.md:65-74`
 **Implementation ideas:**
+
 - `Simulator` class for deterministic input simulation
+
 - `Program::withInput()` / `withOutput()` for I/O redirection
+
 - Snapshot testing for ANSI output
+
 - Message injection helpers
 **Estimated complexity:** Medium
 **Expected impact:** High — foundational quality tool
@@ -149,56 +184,75 @@ DifficultyStats (atomic JSON persistence)
 ## High Value
 
 ### 3. AI Solver / Hint System
+
 **Title:** Add optional AI solver demonstrating safe moves
 **Description:** Analyze board state and highlight cells that are provably safe based on constraint propagation.
 **Why it matters:** Educational value, accessibility for新手, demonstrates PHP capability
 **Source repo:** N/A (novel for this domain)
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - Basic: Highlight cells with 0 adjacent mines (automatic reveal)
+
 - Intermediate: Constraint-based solving for cells with unique configurations
+
 - Advanced: Mine probability calculation for uncertain cells
 **Estimated complexity:** Medium-High
 **Expected impact:** Medium — nice-to-have, not core
 
 ### 4. Replay System
+
 **Title:** Record and playback games using serialization
 **Description:** Use mid-game serialization to enable game recording and playback functionality.
 **Why it matters:** Share impressive games, analyze mistakes, community feature
 **Source repo:** N/A
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - Record each move's timestamp, cursor position, and action
+
 - Serialize to JSON alongside Board serialization
+
 - ReplayPlayer class to step through recorded games
+
 - Support variable playback speed
 **Estimated complexity:** Medium
 **Expected impact:** Medium — community engagement
 
 ### 5. Achievement System
+
 **Title:** Add achievements and progression tracking
 **Description:** Beyond basic stats (games/wins/best time), add achievements for milestones.
 **Why it matters:** Increased engagement, replayability
 **Source repo:** N/A
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - Achievements: "Win without flagging", "Win in under 60 seconds", "Win Expert first try"
+
 - Unlock notifications via toast-style rendering
+
 - Persistent achievement storage alongside DifficultyStats
+
 - Local leaderboard (per-installation)
 **Estimated complexity:** Low-Medium
 **Expected impact:** Medium — engagement driver
 
 ### 6. Enhanced Mouse Interactions
+
 **Title:** Drag-to-reveal and gesture support
 **Description:** Implement Windows Minesweeper-style drag-to-reveal where holding mouse on revealed number and dragging shows destination.
 **Why it matters:** Familiar UX for Windows users, accessibility
 **Source repo:** N/A
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - On mousedown on revealed number with adjacent flags, enter "drag mode"
+
 - Show ghost cursor following mouse
+
 - On mouseup over neighbor, chord-reveal
+
 - Visual feedback during drag (highlight valid targets)
 **Estimated complexity:** Medium
 **Expected impact:** Medium — UX polish
@@ -206,55 +260,73 @@ DifficultyStats (atomic JSON persistence)
 ## Medium Priority
 
 ### 7. Command Palette
+
 **Title:** Add command palette for navigation and actions
 **Description:** Textual's command palette pattern enables fuzzy search of available actions.
 **Why it matters:** Keyboard power users expect this pattern
 **Source repo:** `textualize/textual` command system, `candy-kit`
 **Source PR/issue/discussion:** `pr_textualize_textual.md:642-645`
 **Implementation ideas:**
+
 - `?` or `Ctrl+P` to open palette
+
 - Actions: new game, change difficulty, undo, redo, show stats, toggle theme
+
 - Fuzzy search filtering
+
 - Recent actions at top
 **Estimated complexity:** Low-Medium
 **Expected impact:** Medium — power user feature
 
 ### 8. High Contrast / Accessibility Mode
+
 **Title:** Add accessibility options for visually impaired
 **Description:** High contrast color schemes, optional large cursor, screen reader announcements.
 **Why it matters:** Accessibility compliance, broader audience reach
 **Source repo:** N/A
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - High contrast theme option (black/white/yellow)
+
 - Larger cell rendering option
+
 - Announce cell contents on cursor move (via Lang::t)
+
 - Optional color-blind friendly palette
 **Estimated complexity:** Low
 **Expected impact:** Medium — accessibility
 
 ### 9. Tutorial / Demo Mode
+
 **Title:** Interactive tutorial for new players
 **Description:** Guided walkthrough teaching mechanics.
 **Why it matters:** onboarding, accessibility
 **Source repo:** N/A
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - First launch shows brief tutorial overlay
+
 - "Teach flood-fill" → "Teach chord" → "Teach flagging"
+
 - Interactive hints that highlight possible actions
 **Estimated complexity:** Medium
 **Expected impact:** Low-Medium — onboarding
 
 ### 10. Board Customization Improvements
+
 **Title:** Enhanced custom difficulty with presets
 **Description:** Beyond current 2-50 constraints, add named presets and community shapes.
 **Why it matters:** Flexibility for experienced players
 **Source repo:** N/A
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - Named custom presets stored in stats
+
 - "Pascal's Triangle" shaped boards (if technically feasible)
+
 - Hexagonal grid option (major refactor)
 **Estimated complexity:** Medium
 **Expected impact:** Low — niche
@@ -262,26 +334,33 @@ DifficultyStats (atomic JSON persistence)
 ## Low Priority
 
 ### 11. Web Rendering Path
+
 **Title:** Browser-based rendering for candy-mines
 **Description:** Textual offers textual-web. SugarCraft has no equivalent.
 **Why it matters:** Access from non-terminal environments
 **Source repo:** `textualize/textual` web driver
 **Source PR/issue/discussion:** `pr_textualize_textual.md:798-802`
 **Implementation ideas:**
+
 - Not recommended for candy-mines — significant architecture change
+
 - Would require separate package
 **Estimated complexity:** Very High
 **Expected impact:** Low — terminal app doesn't need web rendering
 
 ### 12. Sound Effects
+
 **Title:** Audio feedback for actions
 **Description:** Sound effects for reveal, flag, win, lose.
 **Why it matters:** Immersion
 **Source repo:** N/A
 **Source PR/issue/discussion:** N/A
 **Implementation ideas:**
+
 - PHP can invoke external player via Process
+
 - Keep sounds optional/muted by default
+
 - Provide sample sounds
 **Estimated complexity:** Low
 **Expected impact:** Low — not core to gameplay
@@ -335,7 +414,9 @@ DifficultyStats (atomic JSON persistence)
 **External approaches:** Binary serialization for compactness, streaming for large boards.
 
 **Why external might be better:**
+
 - JSON is human-readable but larger
+
 - For very large boards (>100x100), binary would use less memory
 
 **Tradeoffs:** JSON is debuggable, binary requires additional parsing code.
@@ -372,7 +453,9 @@ class ReplayGame implements BoardState {
 
 **Proposed:** Extract strategy interfaces for:
 - `MinePlacer`: Algorithm for placing mines (default, random, solver-based)
+
 - `CellRevealer`: Algorithm for revealing cells (flood-fill, single, etc.)
+
 - `WinDetector`: Algorithm for win detection (current counter approach)
 
 **Benefit:** Enables AI solver, custom rules, testing stubs.
@@ -383,8 +466,11 @@ class ReplayGame implements BoardState {
 
 **Proposed:** Add optional event dispatcher:
 - `onBeforeReveal(x, y)` → can modify behavior or cancel
+
 - `onAfterReveal(x, y, cell)`
+
 - `onGameWon(duration, board)`
+
 - `onGameLost(explodedCell)`
 
 **Benefit:** Enables achievements, replay recording, analytics without core changes.
@@ -461,8 +547,11 @@ $game = Game::builder()
 **Topic:** How to test game logic with deterministic RNG.
 
 **Examples:**
+
 - Testing flood-fill with pinned shuffle
+
 - Testing win detection with known board states
+
 - Testing chord click with partial flagging
 
 **Location:** tests/README.md or CALIBER_LEARNINGS.md.
@@ -485,6 +574,7 @@ $game = Game::builder()
 
 **Proposed:** When middle-mouse held on number cell:
 - Highlight all unflagged neighbors with subtle highlight
+
 - Show count of what will be revealed
 
 **Implementation:** Track drag state in Game model, modify Renderer to show highlights.
@@ -502,8 +592,11 @@ $game = Game::builder()
 **Current:** Timer and flag count shown inline.
 
 **Proposed:**
+
 - Add remaining safe cells count (`width * height - mineCount - revealedCount`)
+
 - Add current game state indicator (playing, won, lost)
+
 - Show keyboard shortcuts hint
 
 ## 4. Color Scheme Selector
@@ -511,8 +604,11 @@ $game = Game::builder()
 **Current:** Fixed color scheme (8 distinct number colors).
 
 **Proposed:**
+
 - Theme selector via command palette
+
 - Built-in themes: Classic, TokyoNight, Monokai, HighContrast
+
 - Persist preference
 
 ---
@@ -541,7 +637,9 @@ public function testRendererOutput(): void
 
 **Proposed:** Use PHP property-based testing (if available) or exhaustive testing:
 - Test all 3x3 board configurations with 1-2 mines
+
 - Test all board sizes 2x2 to 5x5
+
 - Verify flood-fill correctness for edge cases
 
 ## 3. Fuzz Testing for Serialization
@@ -550,8 +648,11 @@ public function testRendererOutput(): void
 
 **Proposed:** Fuzz test unserialize with malformed data:
 - Invalid JSON
+
 - Missing fields
+
 - Wrong types
+
 - Out-of-range values
 
 **Benefit:** Ensure graceful failure, not crashes.
@@ -562,7 +663,9 @@ public function testRendererOutput(): void
 
 **Proposed:** Add benchmarks for:
 - Flood-fill on large board
+
 - Serialization/deserialization
+
 - Win detection calls
 
 **Benefit:** Detect performance regressions.
@@ -602,19 +705,25 @@ public function testRendererOutput(): void
 ## From charmbracelet/bubbletea (via pr_charmbracelet_bubbletea.md)
 
 ### Issue #1654: Testing Framework Proposal
+
 **Summary:** Community proposed `charm-test` package with Simulator class for deterministic TUI testing.
 **Relevance:** Direct opportunity for SugarCraft to lead with superior testing infrastructure.
 **Lessons learned:** 
+
 - Input simulation (`SendKey()`, `Type()`, `Resize()`) is essential
+
 - Snapshot testing with golden files is the expected pattern
+
 - No official testing solution after 6+ years — gap in market
 
 ### Issue #1655: DevTools Inspector
+
 **Summary:** Proposal for F12-toggleable inspector showing message log, state viewer, component tree.
 **Relevance:** Would be valuable for debugging complex games like minesweeper.
 **Lessons learned:** Implementing later is harder than designing in from start.
 
 ### Issue #1599 / #1690: Data Races
+
 **Summary:** Shared state between render loop and input handlers caused races.
 **Relevance:** candy-mines uses immutable objects but candy-core renderer could have similar issues.
 **Lessons learned:** All shared state between loops must be mutex-protected.
@@ -622,11 +731,13 @@ public function testRendererOutput(): void
 ## From textualize/textual (via pr_textualize_textual.md)
 
 ### Issue #6381: GC-Induced Stuttering
+
 **Summary:** MarkdownViewer created 600+ reference cycles, causing 50-200ms GC pauses.
 **Relevance:** If candy-sprinkles styles hold strong references to widgets, same issue possible.
 **Lessons learned:** Use weakrefs for parent references, clear caches on shutdown.
 
 ### Issue #4964: Object Leak / Reference Cycles
+
 **Summary:** Styles held strong refs to widget.node, causing leaks.
 **Relevance:** Same pattern could affect SugarCraft widget system.
 **Lessons learned:** Audit all parent-child references for weakref opportunities.
@@ -634,11 +745,13 @@ public function testRendererOutput(): void
 ## From erikgeiser/promptkit (via pr_erikgeiser_promptkit.md)
 
 ### Issue #27: Empty State Handling
+
 **Summary:** Selection widget with empty choices caused silent failure via tea.Quit.
 **Relevance:** Similar pattern could affect candy-mines with edge cases.
 **Lessons learned:** Document explicit contracts for edge cases; don't use early termination.
 
 ### Issue #7: Contextual Validation Errors
+
 **Summary:** Users wanted specific error messages, not just pass/fail validation.
 **Relevance:** Not directly applicable to minesweeper but good practice.
 **Lessons learned:** Contextual error messages improve UX.
@@ -651,62 +764,84 @@ public function testRendererOutput(): void
 
 1. **Implement undo/redo system**
    - Leverage immutable architecture
+
    - Simple history stack in Game model
+
    - Keyboard shortcuts: `u` (undo), `y` (redo)
 
 2. **Add comprehensive snapshot tests**
    - Renderer output tests
+
    - Game state tests
+
    - Serialization round-trip tests
 
 3. **Document algorithm decisions**
    - O(1) win detection rationale
+
    - First-click safety implementation
+
    - Iterative vs recursive tradeoffs
 
 ## Medium-Term Improvements (Next Quarter)
 
 4. **AI solver / hint system**
    - Basic constraint propagation solver
+
    - Highlight safe cells option
+
    - "Show hint" command
 
 5. **Achievement system**
    - Milestone tracking
+
    - Toast notifications
+
    - Persistent storage
 
 6. **Replay system**
    - Move recording
+
    - Variable-speed playback
+
    - Shareable replay files
 
 7. **Command palette**
    - Integrate with candy-kit
+
    - Fuzzy search actions
+
    - Keyboard navigation
 
 ## Major Architectural Upgrades (Future)
 
 8. **Event system for extensibility**
    - onBeforeReveal / onAfterReveal hooks
+
    - Plugin architecture for custom rules
+
    - Achievement triggers
 
 9. **Extract strategy interfaces**
    - MinePlacer interface
+
    - CellRevealer interface
+
    - WinDetector interface
 
 10. **Web rendering path**
     - Only if strategic need identified
+
     - Significant complexity
 
 ## Experimental Ideas
 
 - Hexagonal grid variant
+
 - Pascal's triangle shaped board
+
 - Multiplayer via shared state
+
 - AI vs AI competition mode
 
 ---
@@ -743,15 +878,20 @@ The **AI solver/hint system** is more ambitious but would differentiate candy-mi
 Looking at the broader TUI ecosystem, several lessons from `charmbracelet/bubbletea` and `textualize/textual` are directly applicable:
 
 1. **Testing infrastructure is a gap** — SugarCraft could lead with first-class testing support
+
 2. **GC management matters** — weak references for parent links, cache lifecycle management
+
 3. **Documentation of edge cases** — explicit contracts prevent user confusion
 
 The main risk is scope creep — minesweeper is a simple game and should remain simple. The focus should be on polish and reliability rather than feature bloat.
 
 For a v1 release, the priority should be:
 1. Undo/redo (high impact, low complexity)
+
 2. Snapshot tests (reliability)
+
 3. Achievement system (engagement)
+
 4. Documentation (onboarding)
 
 After v1, the replay system and AI solver represent the most valuable additions for long-term engagement.

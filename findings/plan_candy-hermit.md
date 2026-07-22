@@ -27,6 +27,7 @@ Address all 20 findings from the candy-hermit code review, fixing 2 critical iss
 **File:** `src/History/FileHistory.php:28-32` and `:42-75`
 
 **What is expected:**
+
 - `all()` method needs shared lock (`LOCK_SH`) around the read operation
 - `append()` method needs exclusive lock (`LOCK_EX`) around the write operation using `fopen()` with `'a'` mode instead of `file_put_contents()`
 - Both methods must use proper flock() semantics with LOCK_UN before fclose()
@@ -37,10 +38,12 @@ The current `FILE_APPEND | LOCK_EX` only provides atomic writes for the single `
 **Severity:** critical
 
 **Conditions for success:**
+
 - Run concurrent read/write test: multiple processes writing while one reads simultaneously should never produce corrupt data
 - All existing FileHistoryTest tests pass
 
 **Related code locations:**
+
 - `src/History/FileHistory.php:28-32` (append method)
 - `src/History/FileHistory.php:42-75` (all method)
 
@@ -71,10 +74,12 @@ Duplicate documentation creates maintenance confusion and wastes lines. The docb
 **Severity:** critical
 
 **Conditions for success:**
+
 - `src/Hermit.php` should have only one docblock for `applyRankedFilter()` at lines 610-616
 - All existing tests pass
 
 **Related code locations:**
+
 - `src/Hermit.php:610-616` (first docblock - keep)
 - `src/Hermit.php:617-623` (duplicate - remove)
 
@@ -124,10 +129,12 @@ For large item lists, creating a new Highlighter object on every call allocates 
 **Severity:** high
 
 **Conditions for success:**
+
 - Benchmark: highlightFuzzy called 1000 times should show measurable improvement
 - All existing tests pass
 
 **Related code locations:**
+
 - `src/Hermit.php:10` (Highlighter import)
 - `src/Hermit.php:817` (highlightFuzzy method)
 - `src/Hermit.php:801-821` (highlightFuzzy full method)
@@ -172,10 +179,12 @@ Creating anonymous class + Parser on every call is expensive for large item list
 **Severity:** high
 
 **Conditions for success:**
+
 - Benchmark render loop performance with 1000 items
 - All existing tests pass
 
 **Related code locations:**
+
 - `src/Hermit.php:711-760` (printableText method)
 - `src/Hermit.php:507-509` (calls from View - calls printableText twice per item)
 
@@ -205,10 +214,12 @@ Despite being typed as `array` (not `&array`), callers could mutate the internal
 **Severity:** high
 
 **Conditions for success:**
+
 - Verify: calling `$bar->segments()['key'] = 'value'` does not affect the original StatusBar
 - All existing tests pass
 
 **Related code locations:**
+
 - `src/StatusBar.php:92-96` (segments method)
 - `src/StatusBar.php:19-20` (segments property)
 
@@ -235,10 +246,12 @@ Same mutation risk as StatusBar::segments(). Both store internal state that coul
 **Severity:** high
 
 **Conditions for success:**
+
 - Verify: calling `$bar->shortcuts()['key'] = 'value'` does not affect the original HelpBar
 - All existing tests pass
 
 **Related code locations:**
+
 - `src/HelpBar.php:67-71` (shortcuts method)
 - `src/HelpBar.php:15-16` (shortcuts property)
 
@@ -274,10 +287,12 @@ private function compositeOver(array $overlayLines, string $background, int $win
 **Severity:** medium
 
 **Conditions for success:**
+
 - All existing tests pass
 - No behavioral change
 
 **Related code locations:**
+
 - `src/Hermit.php:476` (View - computeWidth call)
 - `src/Hermit.php:830` (compositeOver - computeWidth call)
 - `src/Hermit.php:692-704` (computeWidth method)
@@ -310,10 +325,12 @@ Re-applies the filter, but if `filterText` is empty (most common case), this sti
 **Severity:** medium
 
 **Conditions for success:**
+
 - All existing tests pass
 - Verify empty filterText path returns allItems without extra filtering overhead
 
 **Related code locations:**
+
 - `src/Hermit.php:122-129` (withItems method)
 - `src/Hermit.php:582-608` (applyFilter method)
 
@@ -349,10 +366,12 @@ private function applyFilter(string $text): array
 **Severity:** medium
 
 **Conditions for success:**
+
 - All existing tests pass
 - No behavioral change
 
 **Related code locations:**
+
 - `src/Hermit.php:582-608` (applyFilter method)
 
 ---
@@ -390,10 +409,12 @@ OR add a docblock noting the design decision:
 **Severity:** medium
 
 **Conditions for success:**
+
 - All existing tests pass
 - CJK/emoji strings still work correctly
 
 **Related code locations:**
+
 - `src/Hermit.php:845-869` (replaceSegment method)
 
 ---
@@ -423,10 +444,12 @@ No validation that `backgroundView` has enough lines for the overlay. If `yOffse
 **Severity:** medium
 
 **Conditions for success:**
+
 - All existing tests pass
 - Edge case behavior documented
 
 **Related code locations:**
+
 - `src/Hermit.php:468-548` (View method)
 - `src/Hermit.php:823-843` (compositeOver method)
 
@@ -453,10 +476,12 @@ When `windowWidth` is not explicitly set (0), `computeWidth()` runs on every `Vi
 **Severity:** medium
 
 **Conditions for success:**
+
 - All existing tests pass
 - Same fix as 3.1 addresses this
 
 **Related code locations:**
+
 - `src/Hermit.php:476` (View - computeWidth call)
 - `src/Hermit.php:830` (compositeOver - computeWidth call)
 - `src/Hermit.php:692-704` (computeWidth method)
@@ -487,10 +512,12 @@ The `count-1` could be -1 for empty list, then gets clamped to 0. This works but
 **Severity:** low
 
 **Conditions for success:**
+
 - All existing tests pass
 - Same behavior for empty list (cursor stays at 0)
 
 **Related code locations:**
+
 - `src/Hermit.php:380-386` (cursorBottom method)
 
 ---
@@ -522,10 +549,12 @@ public function type(string $char): self
 **Severity:** low
 
 **Conditions for success:**
+
 - All existing tests pass
 - Long filter text is rejected at 256 characters
 
 **Related code locations:**
+
 - `src/Hermit.php:328-335` (type method)
 - `src/Hermit.php:31-32` (where constants would be added)
 
@@ -552,10 +581,12 @@ public function selected(): ?Item
 **Severity:** low
 
 **Conditions for success:**
+
 - All existing tests pass
 - Docblock accurately describes behavior
 
 **Related code locations:**
+
 - `src/Hermit.php:407-412` (selected method)
 
 ---
@@ -590,10 +621,12 @@ The signal handler captures the original `$hermit` instance (before clone), not 
 **Severity:** low
 
 **Conditions for success:**
+
 - All existing tests pass
 - Comment added explaining the capture pattern
 
 **Related code locations:**
+
 - `src/Hermit.php:269-286` (attachSigwinch method)
 
 ---
@@ -619,10 +652,12 @@ Magic numbers like `5` in `Width::of($this->prompt) + Width::of($this->filterTex
 **Severity:** low
 
 **Conditions for success:**
+
 - All existing tests pass
 - No behavioral change
 
 **Related code locations:**
+
 - `src/Hermit.php:692-704` (computeWidth method)
 - `src/Hermit.php:31-32` (where constants would be added)
 
@@ -674,10 +709,12 @@ HelpBar and StatusBar have nearly identical patterns: both store `bool $visible`
 **Severity:** low
 
 **Conditions for success:**
+
 - All existing tests pass
 - StatusBar and HelpBar both use the trait
 
 **Related code locations:**
+
 - `src/StatusBar.php:13-120`
 - `src/HelpBar.php:13-90`
 - New: `src/Concerns/Visible.php` (to be created)
@@ -699,10 +736,12 @@ Every setter does: `$clone = clone $this; $clone->property = $value; return $clo
 **Severity:** low
 
 **Conditions for success:**
+
 - This is a refactoring suggestion, not a required fix
 - Document as post-1.0 consideration
 
 **Related code locations:**
+
 - All `with*()` methods in `src/Hermit.php`, `src/StatusBar.php`, `src/HelpBar.php`
 - `candy-core/src/Concerns/Mutable.php` (existing trait)
 
@@ -744,10 +783,12 @@ final class ItemFactory
 **Severity:** low
 
 **Conditions for success:**
+
 - All existing tests pass
 - Hermit::coerceItems() delegates to ItemFactory
 
 **Related code locations:**
+
 - `src/Hermit.php:563-572` (coerceItems method)
 - New: `src/ItemFactory.php` (to be created)
 

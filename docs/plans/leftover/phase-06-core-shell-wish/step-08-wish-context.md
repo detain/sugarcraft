@@ -13,17 +13,20 @@ can chain timeouts and metadata.
 ## Files
 
 **Create:**
+
 - `candy-wish/src/Context.php` — immutable; `withValue($k, $v)`,
   `withDeadline(\DateTimeImmutable)`, `withCancelable()`, `cancel()`,
   `done(): bool`, `err(): ?\Throwable`.
 
 **Modify:**
+
 - `candy-wish/src/Middleware/Middleware.php` interface —
   `handle(Context $ctx, Session $sess, callable $next): void`.
 - Every existing middleware adjusted (signature change).
 - `candy-wish/src/Server.php` — constructs root Context.
 
 **Tests:**
+
 - `candy-wish/tests/ContextTest.php`.
 - `candy-wish/tests/MiddlewareContextTest.php` — middleware that
   cancels the context aborts downstream handlers.

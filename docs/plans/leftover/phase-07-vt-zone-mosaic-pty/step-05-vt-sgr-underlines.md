@@ -12,6 +12,7 @@ handled.
 ## Files
 
 **Modify:**
+
 - `candy-vt/src/SgrState.php` (in candy-core, actually — check;
   candy-vt likely has its own copy) — add `UnderlineStyle` enum
   field. SgrState becomes immutable+fluent for it.

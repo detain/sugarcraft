@@ -1,6 +1,7 @@
 # charmbracelet/fang
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/fang
 - **Language:** Go
 - **Stars:** ~500-600 (estimate based on Charm ecosystem popularity)
@@ -8,6 +9,7 @@
 - **Description:** CLI starter kit — a small, experimental library for batteries-included Cobra applications. Provides fancy styled help/usage pages, styled errors, automatic `--version` support, manpage generation via `mango`, shell completions, and themeable output.
 
 ## Feature List
+
 - **Fancy help output** — fully styled help and usage pages with ANSI colors
 - **Fancy errors** — fully styled error messages with header and details
 - **Automatic `--version`** — automatically wires `--version` flag to build info or custom version
@@ -22,11 +24,13 @@
 ## Key Classes and Methods
 
 ### `fang.go`
+
 - `Execute(ctx, root *cobra.Command, options ...Option)` — Main entry point; applies fang to a Cobra command tree
 - `buildVersion(opts)` — Constructs version string from build info or explicit version/commit
 - `getKey(info, key)` — Extracts VCS revision from `debug.BuildInfo.Settings`
 
 ### `help.go`
+
 - `helpFn(cobra.Command, *colorprofile.Writer, Styles)` — Renders the styled help output
 - `DefaultErrorHandler(io.Writer, Styles, error)` — Default error rendering with styled header
 - `isUsageError(error)` — Detects usage errors via string prefix matching (hack for Cobra)
@@ -40,6 +44,7 @@
 - `calculateSpace([]string, []string)` — Calculates column spacing for alignment
 
 ### `theme.go`
+
 - `ColorScheme` struct — Defines colors for: Base, Title, Description, Codeblock, Program, DimmedArgument, Comment, Flag, FlagDefault, Command, QuotedString, Argument, Help, Dash, ErrorHeader, ErrorDetails
 - `DefaultColorScheme(lipgloss.LightDarkFunc)` — Returns default Charm-themed colorscheme
 - `AnsiColorScheme(lipgloss.LightDarkFunc)` — Returns ANSI-compatible colorscheme
@@ -50,6 +55,7 @@
 - `titleFirstWord(string)` — Capitalizes first word while preserving whitespace
 
 ### Option Functions (fang.go)
+
 - `WithoutCompletions()` — Disables shell completion generation
 - `WithoutManpage()` — Disables man page generation
 - `WithoutVersion()` — Disables automatic version flag
@@ -60,9 +66,11 @@
 - `WithNotifySignal(...os.Signal)` — Sets signals that interrupt execution
 
 ### Platform-Specific (fang_windows.go, fang_other.go)
+
 - `enableVirtualTerminalProcessing(io.Writer)` — Enables Windows VT processing (Windows only, no-op on others)
 
 ## Notable Algorithms / Named Patterns
+
 - **Option pattern** — Functional options (`type Option func(*settings)`) for deferred configuration
 - **Lazy terminal width** — `sync.OnceValue` caching for terminal size detection with `__FANG_TEST_WIDTH` override
 - **Iter.Seq2 iteration** — Go 1.25 iter package usage for command/flag rendering
@@ -72,6 +80,7 @@
 - **ANSI truncation** — Uses `ansi.Truncate` for example text overflow handling
 
 ## Strengths
+
 - Minimal API surface — single `Execute()` entry point with clean option pattern
 - Themeable — separate `ColorScheme` and `Styles` for full customization
 - Light/dark auto-detection — respects terminal's color scheme via `lipgloss.HasDarkBackground`
@@ -82,6 +91,7 @@
 - Small and focused — single responsibility for styled CLI output
 
 ## Weaknesses
+
 - Cobra-only — no support for other CLI frameworks (kingpin, urfave/cli, etc.)
 - Experimental — self-described as "small, experimental library"
 - No `fang.Printf`/`fang.Log` — purely presentation layer, not a logging library

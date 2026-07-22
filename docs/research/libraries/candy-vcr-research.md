@@ -5,6 +5,7 @@
 **candy-vcr** is a PHP port of charmbracelet/x/vcr for recording/replaying candy-core TUI sessions. This research compares approaches across Go (upstream), Rust, and other ecosystems to identify improvements and priorities.
 
 **Current Status:** candy-vcr is functionally complete with:
+
 - JSONL + YAML cassette formats
 - ByteAssertion + ScreenAssertion (via candy-vt)
 - CLI tools: inspect, replay, diff
@@ -12,6 +13,7 @@
 - Streaming JSONL recorder with crash-safety
 
 **Key Gaps vs Upstream:**
+
 - No Shirley (Go TUI session recorder companion to vcr)
 - No hooks/filters for sanitization
 - No custom matcher support
@@ -56,6 +58,7 @@
 ### 1.3 Playback Accuracy
 
 Current approach uses `stream_socket_pair` for IPC:
+
 - Input written to socket → program reads via stream watcher
 - Raw byte input bypasses stream watcher via `InputReader::parse()` + `program->send()`
 - Output captured via `php://memory` stream
@@ -98,6 +101,7 @@ Go library for HTTP recording/playback — not TUI-specific. candy-vcr ports its
 **Repository:** `github.com/charmbracelet/x/exp/teatest`
 
 Not VCR per se, but the TUI testing companion:
+
 - `NewTestModel()` — wraps tea.Model in test harness
 - `WaitFor()` — poll output until predicate
 - `FinalOutput()` — captured after Quit
@@ -110,16 +114,19 @@ Not VCR per se, but the TUI testing companion:
 ## 3. Go VCR: Shirley (TUI Session Recorder)
 
 **Note:** "Shirley" appears in search results but no exact match in charmbracelet/x. May be:
+
 1. An internal/codename that didn't ship
 2. Misidentified reference to vcr or teatest
 
 **Search Result Evidence:**
+
 - `teatest: Obtaining final state of terminal · Issue #212` discusses terminal state capture
 - `Issue #11: Improve testing for model` requests intermediate snapshot capability
 
 ### 3.1 What Shirley Would Need (Based on candy-vcr Gaps)
 
 If Shirley exists or is planned, it would provide:
+
 - TTY session recording (not HTTP)
 - PTY-based input capture
 - Timing preservation for replay
@@ -136,6 +143,7 @@ If Shirley exists or is planned, it would provide:
 **The** terminal session recorder. Rewritten in Rust (v3.0.0).
 
 #### asciicast v3 Format
+
 ```json
 {"version": 3, "term": {"width": 220, "height": 50}, "timestamp": 1700000000}
 [0.248, "o", "$ "]
@@ -150,6 +158,7 @@ If Shirley exists or is planned, it would provide:
 - **Compression:** raw format (`.raw`) stores stdout only
 
 #### Key Features
+
 | Feature | Status |
 |---------|--------|
 | Record to file | ✅ |
@@ -161,6 +170,7 @@ If Shirley exists or is planned, it would provide:
 | Library API | Partial (asciicast crate) |
 
 #### What candy-vcr Could Learn
+
 - **Idle time trimming:** skip long pauses in SPEED_REALTIME
 - **Environment capture:** record ENV for replay fidelity
 - **Exit status event:** `x` event captures session exit code
@@ -254,15 +264,18 @@ let contents = harness.screen_contents();
 ### 5.3 Recommendations for Format Improvements
 
 **Priority 1: Timestamp Precision & Relative Mode**
+
 - Add relative timestamp mode (like asciinema v3 interval) for easier editing
 - Configurable: `CassetteHeader::$timestampMode = 'absolute' | 'relative'`
 
 **Priority 2: Streaming Compression**
+
 - Add optional gzip/zstd compression for JSONL
 - Stream compressor wrapper that flushes per-line
 - See: `replay_rs` binary format approach
 
 **Priority 3: Environment Block**
+
 - Capture `ENV` snapshot in header (like asciinema `--env` option)
 - Useful for deterministic replay of environment-dependent TUIs
 
@@ -291,10 +304,12 @@ $changes = $expectedScreen->diff($actualScreen);
 **Source:** `candy-vcr/src/Assert/ScreenAssertion.php:L41-L59`
 
 **Strengths:**
+
 - Cell-grid equality tolerates ANSI reordering
 - Detects semantically invisible differences
 
 **Gaps:**
+
 - No partial match / contains assertion
 - No regex/pattern assertion on output
 - No diff output save (only summary string)
@@ -328,6 +343,7 @@ final class ContainsAssertion implements Assertion {
 ```
 
 **Priority 3: Annotated Diff Output**
+
 - Save full unified diff to file on failure
 - Show before/after ANSI-colored output
 
@@ -363,22 +379,32 @@ $this->commands = [
 ```bash
 candy-vcr stats session.cas
 # Events: 47 (input: 12, output: 33, resize: 1, quit: 1)
+
+
 # Duration: 4.232s
+
 # Input msgs: KeyMsg(8), MouseClickMsg(4)
+
 # Output bytes: 2,847
+
 # Avg output/event: 86.3 bytes
+
 ```
 
 **Priority 2: Add `record` subcommand**
 ```bash
 candy-vcr record --output session.cas -- php examples/myapp.php
+
 # Attaches recorder to Program, writes cassette
+
 ```
 
 **Priority 3: Add `filter` subcommand**
 ```bash
 candy-vcr filter input.cas output.cas --remove-env --sanitize-keys=API_KEY
+
 # Apply transforms to cassette for sharing
+
 ```
 
 ---
@@ -690,6 +716,7 @@ public function testImportAsciinemaCast(): void
 ### 14.3 Key Learned Patterns
 
 From `CALIBER_LEARNINGS.md`:
+
 - **Do NOT close recorder on QuitMsg** — teardown bytes must land in cassette
 - **5ms yield in INSTANT mode** — without it, render tick never fires
 - **Bypass stream watcher for raw-byte input** — async race avoidance

@@ -22,6 +22,7 @@ This research analyzes dual-pane file managers across Go, Rust, and Python to id
 ### 1.1 Go Implementations
 
 #### superfile (upstream)
+
 - **Repository:** github.com/yorukot/superfile
 - **Stars:** ~9k (estimated)
 - **Language:** Go
@@ -36,6 +37,7 @@ This research analyzes dual-pane file managers across Go, Rust, and Python to id
 **Source:** [superfile GitHub](https://github.com/yorukot/superfile) | [Documentation](https://superfile.dev/)
 
 #### lf (list files)
+
 - **Repository:** github.com/gokcehan/lf
 - **Stars:** ~8.9k
 - **Language:** Go
@@ -50,6 +52,7 @@ This research analyzes dual-pane file managers across Go, Rust, and Python to id
 **Source:** [lf GitHub](https://github.com/gokcehan/lf)
 
 #### nnn
+
 - **Repository:** github.com/jarun/nnn
 - **Stars:** ~15k (estimated)
 - **Language:** C
@@ -67,6 +70,7 @@ This research analyzes dual-pane file managers across Go, Rust, and Python to id
 ### 1.2 Rust Implementations
 
 #### yazi
+
 - **Repository:** github.com/sxyazi/yazi
 - **Stars:** ~32k (estimated, rapidly growing)
 - **Language:** Rust
@@ -84,6 +88,7 @@ This research analyzes dual-pane file managers across Go, Rust, and Python to id
 **Source:** [yazi GitHub](https://github.com/sxyazi/yazi) | [Why is Yazi Fast?](https://yazi-rs.github.io/blog/why-is-yazi-fast)
 
 #### xplr
+
 - **Repository:** github.com/sl哪里73/xplr
 - **Language:** Rust
 - **Architecture:** Pipable, scriptable
@@ -95,6 +100,7 @@ This research analyzes dual-pane file managers across Go, Rust, and Python to id
 ### 1.3 Python Implementation
 
 #### ranger
+
 - **Repository:** github.com/ranger/ranger
 - **Stars:** ~9k (estimated)
 - **Language:** Python
@@ -298,6 +304,7 @@ case KeyType::Char && $msg->rune === 'o'
 ### 3.1 High Priority (MVP Enhancements)
 
 #### 3.1.1 Copy Operation
+
 **Effort:** 2-3 hours
 **Pattern:** Shell `cp` with symlink handling
 
@@ -331,10 +338,12 @@ private function put(): self {
 ```
 
 #### 3.1.2 Move Operation
+
 **Effort:** 2 hours
 **Pattern:** Shell `mv` with rename fallback for cross-filesystem
 
 #### 3.1.3 Bulk Rename
+
 **Effort:** 6-8 hours
 **Pattern:** Visual mode + input prompt with regex replacement
 
@@ -347,6 +356,7 @@ case KeyType::Char && $msg->rune === 'R'
 ### 3.2 Medium Priority (User Experience)
 
 #### 3.2.1 Progress Feedback for Operations
+
 **Effort:** 4 hours
 **Pattern:** Async with progress callback
 
@@ -365,10 +375,12 @@ private function copyWithProgress(string $dest, string $name): void {
 ```
 
 #### 3.2.2 Text Preview Panel
+
 **Effort:** 4 hours
 **Pattern:** Separate render mode with syntax highlighting via `highlight` or `bat`
 
 #### 3.2.3 Bookmarks
+
 **Effort:** 5 hours
 **Pattern:** Persist to config, quick-jump with `'`
 
@@ -383,14 +395,17 @@ case KeyType::Char && $msg->rune === "'"
 ### 3.3 Low Priority (Polish)
 
 #### 3.3.1 Image Preview (Kitty/Sixel)
+
 **Effort:** 8-10 hours
 **Requires:** Terminal-specific protocol support
 
 #### 3.3.2 Git Integration
+
 **Effort:** 12 hours
 **Pattern:** Spawn `git status`/`git diff` on demand, cache results
 
 #### 3.3.3 Async File Operations
+
 **Effort:** 10-15 hours (requires architecture change)
 **Pattern:** ReactPHP Process pool with progress UI
 
@@ -445,6 +460,7 @@ enum ClipboardOp {
 **Current super-candy:** Silent failure with error count in status
 
 **Better pattern from superfile:**
+
 1. Detailed error messages per-file
 2. Option to abort on first error
 3. Error log accessible post-operation
@@ -475,6 +491,7 @@ private function performFileOp(array $items, string $dest, ClipboardOp $op): int
 ## 5. Recommended Implementation Roadmap
 
 ### Phase 1: Core Operations (Week 1)
+
 | Task | Hours | Acceptance Criteria |
 |------|-------|---------------------|
 | Copy (yank) | 2 | `y` key yanks, internal clipboard stores paths |
@@ -483,6 +500,7 @@ private function performFileOp(array $items, string $dest, ClipboardOp $op): int
 | Error reporting | 1 | Status shows "copied 3 items" or "copy failed: permission denied" |
 
 ### Phase 2: Enhanced Navigation (Week 2)
+
 | Task | Hours | Acceptance Criteria |
 |------|-------|---------------------|
 | Path display | 1 | Full path visible, clickable path segments |
@@ -491,6 +509,7 @@ private function performFileOp(array $items, string $dest, ClipboardOp $op): int
 | Quick navigation | 2 | `gc` goes to config, `gd` goes to downloads, etc. |
 
 ### Phase 3: Preview System (Week 3-4)
+
 | Task | Hours | Acceptance Criteria |
 |------|-------|---------------------|
 | Text preview | 4 | `i` toggles preview pane, syntax highlighted |
@@ -498,6 +517,7 @@ private function performFileOp(array $items, string $dest, ClipboardOp $op): int
 | Archive preview | 4 | List archive contents without extraction |
 
 ### Phase 4: Polish (Week 5+)
+
 | Task | Hours | Acceptance Criteria |
 |------|-------|---------------------|
 | Bulk rename | 6 | Visual regex replacement |
@@ -510,6 +530,7 @@ private function performFileOp(array $items, string $dest, ClipboardOp $op): int
 ## 6. References
 
 ### Upstream Sources
+
 - **superfile:** https://github.com/yorukot/superfile | https://superfile.dev/
 - **yazi:** https://github.com/sxyazi/yazi | https://yazi-rs.github.io/
 - **ranger:** https://github.com/ranger/ranger | https://ranger.fm/
@@ -517,12 +538,14 @@ private function performFileOp(array $items, string $dest, ClipboardOp $op): int
 - **nnn:** https://github.com/jarun/nnn | https://github.com/jarun/nnn/wiki
 
 ### Key Documentation Links
+
 - superfile hotkeys: https://superfile.dev/configure/custom-hotkeys/
 - yazi features: https://yazi-rs.github.io/features
 - ranger scope.sh: https://github.com/ranger/ranger/blob/master/examples/scope.sh
 - nnn plugins: https://github.com/jarun/nnn/tree/master/plugins
 
 ### Architecture References
+
 - **Yazi async design:** https://yazi-rs.github.io/blog/why-is-yazi-fast
 - **ReactPHP for async PHP:** https://reactphp.org/
 
@@ -531,6 +554,7 @@ private function performFileOp(array $items, string $dest, ClipboardOp $op): int
 ## Appendix A: super-candy Current Implementation
 
 ### File Structure
+
 ```
 super-candy/
 ├── src/
@@ -553,6 +577,7 @@ super-candy/
 ```
 
 ### Current Capabilities
+
 - ✅ Dual panes (left/right)
 - ✅ Tab management (new, close, cycle)
 - ✅ Navigation (enter, back, home, end)
@@ -565,6 +590,7 @@ super-candy/
 - ✅ Refresh
 
 ### Missing Capabilities (Priority Order)
+
 1. ❌ Copy (yank/paste)
 2. ❌ Move (cut/paste)
 3. ❌ Rename

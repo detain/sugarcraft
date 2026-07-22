@@ -14,6 +14,7 @@ Four enhancements:
 ## Files
 
 **Create:**
+
 - `candy-log/src/CallerFormatter.php`.
 - `candy-log/src/PsrBridge.php`.
 - `candy-log/src/Hook/Hook.php` (interface) + `HookRegistry.php`.

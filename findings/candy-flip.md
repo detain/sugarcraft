@@ -316,6 +316,7 @@ Tests are comprehensive and well-structured:
 | `GoldenRenderTest.php` | Byte-exact ANSI snapshot (3×3 density render) |
 
 **Gaps**:
+
 - No test for `DISPOSAL_PREVIOUS` (method 3) compositing correctness — it is recognized and stored but the resulting rendered output is not verified.
 - `Lang` class is not directly tested (but its parent is tested elsewhere in the ecosystem).
 

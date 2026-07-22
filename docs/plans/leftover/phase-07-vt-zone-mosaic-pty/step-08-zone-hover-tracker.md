@@ -12,6 +12,7 @@ messages on boundary crossings.
 ## Files
 
 **Create:**
+
 - `candy-zone/src/ZoneHoverTracker.php` — wraps `Manager`; tracks
   `?string $currentZone` across consecutive move events; emits Msg
   on transitions.

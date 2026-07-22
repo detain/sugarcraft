@@ -44,11 +44,13 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/SpringChain.php:63-81`
 
 **Conditions for success**:
+
 - `vendor/bin/phpunit honey-bounce/tests/SpringChainTest.php` passes
 - `tick()` return type is `array{0: list<float>, 1: bool, 2: self}` (verified via `php -l`)
 - Existing tests use new return shape without breaking call sites
 
 **Investigation notes**:
+
 - Current return at line 65-66: `return [$this->currentPositions(), true];`
 - Current mutation at line 77-78: `$this->stages[$this->activeIndex][1] = $newPos;`
 - `isSettled()` at line 113 uses magic `0.001` threshold
@@ -68,11 +70,13 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/SpringCollection.php:56-68`
 
 **Conditions for success**:
+
 - `vendor/bin/phpunit honey-bounce/tests/SpringCollectionTest.php` passes
 - `tick()` returns `SpringCollection` instance
 - Calling `tick()` twice on same instance yields different results on second call (immutability check)
 
 **Investigation notes**:
+
 - Current mutation at lines 64-65: `$this->positions[$id] = $pos; $this->velocities[$id] = $vel;`
 - `add()` at line 30 stores in `$this->springs`, `$this->positions`, `$this->velocities`, `$this->targets`
 - `remove()` at line 41 uses `unset()` — safe no-op if key missing (confirmed by test at line 91-95)
@@ -91,12 +95,14 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/Easing/CubicBezier.php:40-47`
 
 **Conditions for success**:
+
 - `new CubicBezier(-0.5, 0.0, 0.5, 1.0)` throws `\InvalidArgumentException`
 - `new CubicBezier(0.0, 0.0, 1.5, 1.0)` throws `\InvalidArgumentException`
 - Valid cases (`new CubicBezier(0.0, 0.0, 1.0, 1.0)`) still work
 - Existing tests pass
 
 **Investigation notes**:
+
 - Constructor at line 40-47: no validation of x1, x2 ranges despite doc comment on line 35-38 noting "CSS requires 0 ≤ x1 ≤ 1"
 - Newton-Raphson at line 113-126: `for ($i = 0; $i < self::NEWTON_ITERATIONS; $i++)` — 8 iterations max
 - Binary subdivision fallback at line 128-148: `while ($lower < $upper)` — could loop indefinitely if epsilon reached
@@ -115,12 +121,14 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/SpringConfig.php:33`
 
 **Conditions for success**:
+
 - `new SpringConfig(tension: 100, friction: 10, mass: 0.0)` throws `\InvalidArgumentException`
 - `new SpringConfig(tension: 100, friction: 10, mass: -1.0)` throws `\InvalidArgumentException`
 - `new SpringConfig(tension: 100, friction: 10, mass: 1.0)` still works
 - Existing tests pass (note: no test currently passes mass = 0, so no test should break)
 
 **Investigation notes**:
+
 - Constructor body lines 28-43: `$safeMass = max(0.001, $mass)` silently substitutes 0.001
 - `tension` is also silently clamped at line 34: `$safeTension = max(0.0, $tension)` — this may also warrant throwing for negative tension (but less critical since tension < 0 has physical meaning of "negative stiffness" which is unstable but numerically safe)
 - The readonly properties `angularFrequency` and `dampingRatio` at line 20-21 are assigned in constructor body (not promoted) — inconsistency noted in item 21
@@ -142,12 +150,14 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/Spring.php:34-38, 112-116`
 
 **Conditions for success**:
+
 - `new Spring(dt, ω, ζ, reducedMotionOverride: true)` ignores env vars and always snaps to target
 - `new Spring(dt, ω, ζ, reducedMotionOverride: false)` always animates
 - `new Spring(dt, ω, ζ)` (no override) falls back to `Probe::reducedMotion()` call — backward compatible
 - `vendor/bin/phpunit honey-bounce/tests/ReducedMotionTest.php` still passes
 
 **Investigation notes**:
+
 - `Probe::reducedMotion()` at line 115-128 in `candy-palette/src/Probe.php` reads `REDUCE_MOTION` then `PREFERS_REDUCED_MOTION` env vars
 - `Spring::update()` at line 112 calls `Probe::reducedMotion()` on every frame
 - `Probe::_reset()` at line 246 exists for testing — but not helpful for per-frame performance
@@ -165,11 +175,13 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/SpringChain.php:115`
 
 **Conditions for success**:
+
 - `isSettled()` uses `self::SETTLING_THRESHOLD` instead of hardcoded `0.001`
 - `new SpringChain($stages, settlingThreshold: 0.0001)` allows finer-grained threshold
 - Existing tests still pass at default threshold
 
 **Investigation notes**:
+
 - `isSettled()` at line 113-116: `return abs($pos - $target) < 0.001 && abs($vel) < 0.001;`
 - `SpringConfig` uses `1e-12` at line 37 for "near zero" sqrt check
 - `Spring` uses `1e-9` EPSILON at line 22 for angular frequency near-zero check
@@ -179,6 +191,7 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 ### 2.3 `Vector` missing `lengthSquared()`, `normalize()`, `lerp()` → Add methods
 
 **What**: Add to `Vector` class:
+
 - `lengthSquared(): float` — returns `$this->x * $this->x + $this->y * $this->y + $this->z * $this->z` (avoids `sqrt()`)
 - `normalize(): self` — returns `scale(1.0 / length())`; should throw if length is zero
 - `lerp(self $other, float $t): self` — returns `new self($this->x + ($other->x - $this->x) * $t, ...)` for linear interpolation
@@ -190,6 +203,7 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/Vector.php`
 
 **Conditions for success**:
+
 - `Vector` has all three new public methods
 - `lengthSquared()` returns correct squared length
 - `normalize()` returns unit vector; throws `\RuntimeException` if called on zero vector
@@ -197,6 +211,7 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 - Existing tests pass
 
 **Investigation notes**:
+
 - Current `Vector` methods: `add()`, `sub()`, `scale()`, `length()`, `dot()`, `cross()`
 - `Point::distance()` at line 34 already exists — uses `sqrt()` internally
 - `Vector` is already immutable (`readonly` properties, `add()`/`sub()`/`scale()` all return new instances)
@@ -206,6 +221,7 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 ### 2.4 `SpringChain` and `SpringCollection` not declared `final` → Add `final`
 
 **What**: Add `final` keyword to both class declarations:
+
 - `final class SpringChain` at `honey-bounce/src/SpringChain.php:14`
 - `final class SpringCollection` at `honey-bounce/src/SpringCollection.php:13`
 
@@ -216,10 +232,12 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/SpringChain.php:14`, `honey-bounce/src/SpringCollection.php:13`
 
 **Conditions for success**:
+
 - Both classes are declared `final`
 - `vendor/bin/phpunit` still passes
 
 **Investigation notes**:
+
 - `final class Spring` at line 20 of `Spring.php`
 - `final readonly class SpringConfig` at line 18 of `SpringConfig.php`
 - `final class Projectile` at line 36 of `Projectile.php`
@@ -239,11 +257,13 @@ Address all 29 findings from the honey-bounce code audit, starting with critical
 **Source file**: `honey-bounce/src/Easing/Easing.php:14`, new file `honey-bounce/src/Easing/EasingFunction.php`
 
 **Conditions for success**:
+
 - `EasingFunction` interface exists with `ease(float $t): float` method
 - `enum Easing implements EasingFunction` — verified by `php -l`
 - Custom class implementing `EasingFunction` can be used in existing code expecting easing
 
 **Investigation notes**:
+
 - Current `Easing` at line 14: `enum Easing` — no interface implementation
 - PHP 8.1+ allows backed enums to implement interfaces
 - `CubicBezier` class also has `evaluate(float $t): float` — could also implement `EasingFunction` for consistency
@@ -287,11 +307,13 @@ public function __toString(): string
 **Source file**: `honey-bounce/src/Point.php`, `honey-bounce/src/Vector.php`, `honey-bounce/src/SpringConfig.php`, `honey-bounce/src/Spring.php`
 
 **Conditions for success**:
+
 - `echo (string)$point` produces readable string for each class
 - GoldenFile snapshot tests still pass (no string output changes)
 - Existing `echo` calls in examples/debug output become readable
 
 **Investigation notes**:
+
 - `Point` at line 14: `final class Point` with promoted readonly `x, y, z`
 - `Vector` at line 18: `final class Vector` with promoted readonly `x, y, z`
 - `SpringConfig` at line 18: `final readonly class SpringConfig` — angularFrequency/dampingRatio NOT promoted (item 21)
@@ -320,6 +342,7 @@ public function __toString(): string
 **Source file**: `honey-bounce/src/Gravity.php`
 
 **Conditions for success**:
+
 - Doc comment added explaining delegation pattern and maintenance coupling
 - `vendor/bin/phpunit` passes
 
@@ -336,11 +359,13 @@ public function __toString(): string
 **Source file**: `honey-bounce/src/SpringChain.php:34-37`, `honey-bounce/tests/SpringChainTest.php:15,24,45,73,94,104`
 
 **Conditions for success**:
+
 - `::build()` removed (or renamed to `::new()`) — verified by `php -l`
 - All test call sites updated to use constructor directly (or `::new()`)
 - Example files updated if they use `::build()`
 
 **Investigation notes**:
+
 - Tests use `SpringChain::build([])` and `SpringChain::build([[$spring, ...]])` extensively
 - Constructor at line 24: `public function __construct(array $stages)` — already public
 
@@ -357,11 +382,13 @@ public function __toString(): string
 **Source file**: `honey-bounce/src/Point.php`, `honey-bounce/src/Vector.php`
 
 **Conditions for success**:
+
 - `json_encode($point)` produces valid JSON
 - `json_encode($vector)` produces valid JSON
 - GoldenFile tests still pass
 
 **Investigation notes**:
+
 - `Point` and `Vector` already use promoted readonly properties
 - `JsonSerializable` interface requires `jsonSerialize(): mixed`
 - `candy-vcr` uses `JsonSerializable` on `UserJsonableMsg` as reference pattern (found via grep)
@@ -379,11 +406,13 @@ public function __toString(): string
 **Source file**: `honey-bounce/src/Spring.php:125-131`
 
 **Conditions for success**:
+
 - `Spring::fps(60)` still returns `1.0 / 60.0`
 - `Spring::fps(59.94)` returns `1.0 / 59.94`
 - `Spring::fps(0)` still throws `\InvalidArgumentException`
 
 **Investigation notes**:
+
 - Current signature: `public static function fps(int $n): float`
 - Validation at line 127-129: `if ($n <= 0)` throws exception — float comparison with 0 is valid
 - Changing to `float $n` would still work: `0.0` would be caught by `if ($n <= 0.0)`
@@ -397,6 +426,7 @@ public function __toString(): string
 ### 4.1 No test for cubic bezier invalid control points → Add test cases
 
 **What**: Add test cases to `CubicBezierTest.php`:
+
 - `$this->expectException(\InvalidArgumentException::class)` for `new CubicBezier(-0.5, 0.0, 0.5, 1.0)`
 - `$this->expectException(\InvalidArgumentException::class)` for `new CubicBezier(0.0, 0.0, 1.5, 1.0)`
 - After implementing item 1.3, these tests should pass (TDD approach)
@@ -406,6 +436,7 @@ public function __toString(): string
 **Source file**: `honey-bounce/tests/CubicBezierTest.php`
 
 **Conditions for success**:
+
 - New tests throw `\InvalidArgumentException` for out-of-range x values
 - Existing tests still pass
 
@@ -420,6 +451,7 @@ public function __toString(): string
 **Source file**: `honey-bounce/tests/SpringCollectionTest.php`
 
 **Conditions for success**:
+
 - New test passes
 - `unset()` at line 43 of `SpringCollection.php` is safe for non-existent keys
 
@@ -436,6 +468,7 @@ public function __toString(): string
 **Source file**: `honey-bounce/tests/ReducedMotionTest.php:10-25`
 
 **Conditions for success**:
+
 - `@group parallel-unsafe` annotation present on test class
 - Tests still pass when run individually
 
@@ -452,6 +485,7 @@ public function __toString(): string
 **Source file**: `honey-bounce/examples/spring.php:11`, `honey-bounce/examples/projectile.php:12`
 
 **Conditions for success**:
+
 - Examples work when run from project root: `php honey-bounce/examples/spring.php`
 - Examples work when run from examples dir: `php examples/spring.php`
 
@@ -468,6 +502,7 @@ public function __toString(): string
 **Source file**: `honey-bounce/src/SpringConfig.php:20-21`
 
 **Conditions for success**:
+
 - Doc comment added explaining why these properties are not promoted
 - Code behavior unchanged
 

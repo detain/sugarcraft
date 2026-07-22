@@ -75,6 +75,7 @@ const (
 ### 2.2 Rust: Ratatui + tui-widgets Popup
 
 **Sources:**
+
 - [ratatui/ratatui](https://ratatui.rs) - Core library
 - [ratatui/tui-widgets](https://github.com/ratatui/tui-widgets/tree/main/tui-popup) - Popup widget
 - [jharsono/tui-overlay](https://github.com/jharsono/tui-overlay) - Third-party composable overlay
@@ -648,16 +649,19 @@ Week 7-8: Stack for multiple overlays
 ## 8. Considerations & Constraints
 
 ### ANSI Limitation
+
 - True alpha blending not supported in ANSI terminals
 - Workaround: Use "dim" SGR codes or simulated alpha via color halving
 - Some terminals (iTerm2, WezTerm, Kitty) support true color with transparency via extensions
 
 ### PHP Nature
+
 - Sugar-veil is **stateless** (pure string compositor) by design
 - Stateful features (animation, events) should be optional layer on top
 - Don't break the simple `Veil::composite()` API
 
 ### Compatibility
+
 - Maintain backward compatibility with current Position enum values
 - New features should be additive (new methods, new classes)
 - UTF-8 handling already correct via `mb_str_split`

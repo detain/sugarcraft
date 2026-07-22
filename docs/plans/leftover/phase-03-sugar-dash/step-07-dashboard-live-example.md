@@ -13,6 +13,7 @@ canonical one: `examples/dashboard-live.php`.
 ## Files
 
 **Create:**
+
 - `sugar-dash/examples/dashboard-live.php` — wires:
   - `\SugarCraft\Core\Program` running the event loop.
   - `\SugarCraft\Pty\TermiosFactory` + `SignalForwarder` for raw mode
@@ -32,6 +33,7 @@ canonical one: `examples/dashboard-live.php`.
   interactive demo.
 
 **Modify:**
+
 - `.github/workflows/vhs.yml` — add `dashboard-live` to the
   hand-maintained `all=(...)` matrix.
 - `sugar-dash/README.md` — link to `.vhs/dashboard-live.gif` and the

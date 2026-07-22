@@ -12,10 +12,12 @@
 ## Files
 
 **Modify:**
+
 - `candy-metrics/src/Backend/PrometheusFileBackend.php` — emit
   `*_bucket{le="..."}` for histogram metrics.
 
 **Create:**
+
 - `candy-metrics/src/Descriptor.php` — registration DTO with name, help,
   type, label keys.
 - `candy-metrics/src/Registry.php` — `register(Descriptor)`.

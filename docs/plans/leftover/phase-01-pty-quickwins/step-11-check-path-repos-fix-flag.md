@@ -14,6 +14,7 @@ inserting it into the affected `composer.json` `repositories[]`.
 ## Files
 
 **Modify:**
+
 - `tools/check-path-repos.php` — add `--fix` arg parsing. When set,
   for each `<lib>` with a `sugarcraft/*` require missing a path-repo
   entry, insert:
@@ -29,6 +30,7 @@ inserting it into the affected `composer.json` `repositories[]`.
   JSON_UNESCAPED_SLASHES`.
 
 **Create:**
+
 - `tools/tests/CheckPathReposTest.php` — fixture-based test:
   - Set up a temp dir with two libs (lib-a requires lib-b but missing
     the path-repo).

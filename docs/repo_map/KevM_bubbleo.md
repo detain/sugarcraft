@@ -1,6 +1,7 @@
 # KevM/bubbleo
 
 ## Metadata
+
 - **URL**: https://github.com/KevM/bubbleo
 - **Language**: Go
 - **Stars**: 69
@@ -22,6 +23,7 @@
 ## Key Classes and Methods
 
 ### navstack.Model
+
 - `New(w *window.Model)` — Creates a new navigation stack with window dimensions
 - `Push(item NavigationItem) tea.Cmd` — Pushes item onto stack, calls Closable.Close() on previous top, sends WindowSizeMsg to new top
 - `Pop() tea.Cmd` — Pops top item, calls Closable.Close() if implemented, sends WindowSizeMsg to new top, or Quit if empty
@@ -31,6 +33,7 @@
 - `Update(msg tea.Msg) tea.Cmd` — Routes messages to topmost item, handles PushNavigation/PopNavigation internally
 
 ### navstack.NavigationItem
+
 - `Title string` — Display title for breadcrumbs
 - `Model tea.Model` — The actual component model
 - `Init() tea.Cmd` — Delegates to Model.Init()
@@ -38,12 +41,14 @@
 - `View() string` — Delegates to Model.View()
 
 ### navstack.Messages
+
 - `PushNavigation{Item NavigationItem}` — Message to push onto stack
 - `PopNavigation{}` — Message to pop from stack
 - `ReloadCurrent{}` — Message to reload current item
 - `PushNavigationCmd(item) / PopNavigationCmd()` — Command constructors via utils.Cmdize
 
 ### menu.Model
+
 - `New(title string, choices []Choice, selected *Choice)` — Creates menu with choices
 - `SetChoices(choices []Choice, selected *Choice)` — Updates menu choices and selection
 - `SelectChoice(choice Choice) (Model, tea.Cmd)` — Returns command to push choice onto navstack
@@ -53,35 +58,42 @@
 - `handleKeyMsg()` — Handles enter/esc/?/q keys
 
 ### menu.Choice
+
 - `Title string` — Display title
 - `Description string` — Item description
 - `Model tea.Model` — Model to push onto stack when selected
 
 ### breadcrumb.Model
+
 - `New(n *navstack.Model)` — Creates breadcrumb linked to navstack
 - `View() string` — Renders "title1 > title2 > title3" trail using lipgloss frame
 
 ### shell.Model
+
 - `New()` — Creates shell with window, navstack, and breadcrumb wired together
 - `Init() tea.Cmd` — Calculates frame offsets and sends initial WindowSizeMsg
 - `Update(msg tea.Msg)` — Delegates to Navstack.Update()
 - `View() string` — Renders breadcrumb + navstack using lipgloss
 
 ### window.Model
+
 - `New(width, height, topOffset, sideOffset int)` — Creates window with dimensions
 - `GetWindowSizeMsg() tea.WindowSizeMsg` — Returns size minus offsets for child components
 
 ### styles.Styles
+
 - `ListTitleStyle` — Margin-left, foreground color 230, bold
 - `BreadCrumbFrameStyle` — Foreground color 229, margin 1
 - `HelpStyle` — Padding 1,2
 
 ### utils.Utils
+
 - `Cmdize[T any](t T) tea.Cmd` — Generic utility to wrap any value in a tea.Cmd
 
 ## Notable Algorithms / Named Patterns
 
 ### Stack-based Hierarchical Navigation
+
 The core pattern is a classic stack data structure where:
 1. Components are pushed onto the stack via `PushNavigation` message
 2. The topmost item's `Update()` and `View()` receive all traffic
@@ -89,6 +101,7 @@ The core pattern is a classic stack data structure where:
 4. If stack empties, `tea.Quit` is automatically sent
 
 ### Closable Interface Pattern
+
 ```go
 type Closable interface {
     Close() error
@@ -97,9 +110,11 @@ type Closable interface {
 Items implementing `Closable` have `Close()` called when popped, enabling resource cleanup (e.g., closing files, canceling goroutines, releasing handles).
 
 ### Sequential Command Ordering
+
 Uses `tea.Sequence(pop, cmd)` instead of `tea.Batch` to ensure pop executes before subsequent command, ensuring proper state: pop first → navstack updates → new top gets message.
 
 ### Cmdize Pattern
+
 ```go
 func Cmdize[T any](t T) tea.Cmd {
     return func() tea.Msg { return t }
@@ -108,9 +123,11 @@ func Cmdize[T any](t T) tea.Cmd {
 Type-safe wrapper converting any value into a `tea.Cmd` without type assertions.
 
 ### Offset-based Layout
+
 The `window.Model` tracks offsets (TopOffset, SideOffset) to allow parent components (breadcrumbs) to reserve screen space before child components render. Subtracts offsets from incoming `WindowSizeMsg` before passing to children.
 
 ### Tea.Model Interface
+
 All components implement `tea.Model` (Init/Update/View) from [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea), following the Elm-inspired architecture.
 
 ## Strengths
@@ -152,6 +169,7 @@ The architecture maps well to SugarCraft's TUI component philosophy:
 | `Cmdize` utility | `SugarCraft\Core\Utils` | Message/command factory utilities |
 
 **Many-to-many mapping notes**:
+
 - `navstack` → `sugar-prompt` (navigation metaphor), `candy-shell` (view composition)
 - `menu` → `sugar-bits` (list widget), `sugar-charts` (item selection from collections)
 - `breadcrumb` → could be standalone breadcrumb lib or part of `sugar-prompt`

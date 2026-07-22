@@ -107,6 +107,7 @@ type Model struct {
 ```
 
 **Key Patterns from Pop:**
+
 - **TUI-first design** — Bubble Tea framework with clear Model/Update/View separation
 - **State machine** — `State` enum for `idle`, `pickingFile`, `sendingEmail`, `hoveringSendButton`
 - **Markdown body** — Body textarea converts markdown to HTML before sending
@@ -140,6 +141,7 @@ perch/
 ```
 
 **Key Features:**
+
 - **Three-panel layout:** Accounts left, Timeline center, Post detail right
 - **Cross-posting:** Single post to multiple networks simultaneously
 - **Vim keybindings:** `j/k` navigation, `n` new post, `r` refresh
@@ -165,6 +167,7 @@ perch schedule daemon --interval 30                # Run scheduler
 **Stars:** N/A | **Language:** Python
 
 **Key Features:**
+
 - **Multi-column layout:** Home, Local, Federated, Mentions side-by-side
 - **Multi-profile support:** Each account has isolated config, keymap, credentials
 - **SQLite cache:** Persistent timeline cache for offline reading
@@ -173,6 +176,7 @@ perch schedule daemon --interval 30                # Run scheduler
 - **CSS theming:** Custom theme overrides per profile
 
 **Technology Stack:**
+
 - Textual framework
 - Mastodon.py API client
 - httpx for HTTP
@@ -186,6 +190,7 @@ perch schedule daemon --interval 30                # Run scheduler
 **Stars:** 1,301 | **Language:** Python
 
 **Key Features:**
+
 - **Curses-based TUI** with `toot tui`
 - **Image display:** Block graphic, Kitty, iTerm2 protocols
 - **Account switching:** `toot activate` for multiple accounts
@@ -200,6 +205,7 @@ perch schedule daemon --interval 30                # Run scheduler
 **Stars:** 3 | **Language:** Rust
 
 **Key Features:**
+
 - **LLM rage filter:** Local Ollama filters rage-bait before rendering
 - **TUI + CLI dual mode:** `unrager` for TUI, `unrager home -n 20` for CLI
 - **Session persistence:** Source, selection, split width survive restarts
@@ -214,6 +220,7 @@ perch schedule daemon --interval 30                # Run scheduler
 **Stars:** 7 | **Language:** Rust
 
 **Key Features:**
+
 - **AI summarization** of links and tweets (`s` key)
 - **TTS voice reading** of summaries (`v` key)
 - **Multiple AI providers** support
@@ -227,6 +234,7 @@ perch schedule daemon --interval 30                # Run scheduler
 **Language:** Go
 
 **Key Features:**
+
 - **OAuth login** with browser-based auth
 - **Home timeline** from followed users
 - **Custom hashtag tab** for topic tracking
@@ -243,6 +251,7 @@ perch schedule daemon --interval 30                # Run scheduler
 **Language:** Python
 
 **Key Features:**
+
 - **Web UI parity:** Home, Notifications, Explore, Bookmarks, Favorites, Lists
 - **CSS-based theming** with hot-reload
 - **Fuzzy search** command palette
@@ -256,6 +265,7 @@ perch schedule daemon --interval 30                # Run scheduler
 **Repository:** https://github.com/AllanLotta/instagram-cli (TypeScript) and https://github.com/hadvand/instagram-cli (Python)
 
 **Key Features:**
+
 - **Full keyboard navigation** with vim-style bindings
 - **Image rendering protocols:** ASCII, halfBlock, Braille, Kitty, iTerm2, Sixel
 - **Chat interface** with threads
@@ -345,6 +355,7 @@ final class Composer {
 ```
 
 **Key Features to Implement:**
+
 1. **Character counter** — With network-specific limits (500 for Mastodon, 280 for X)
 2. **Content warning toggle** — Show/hide sensitive content
 3. **Visibility selector** — Public, Unlisted, Private, Direct
@@ -482,6 +493,7 @@ For either option, adopt this layered architecture:
 ```
 
 **Key Architectural Principles:**
+
 1. **Immutable value objects** — Already implemented for Email/Attachment
 2. **Transport interface** — Already implemented, extend for social APIs
 3. **Service layer** — Add for complex operations (timeline, composer)

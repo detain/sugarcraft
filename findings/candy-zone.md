@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — `Zone::collide()` edge case: point exactly on boundary
+
 **Severity:** LOW  
 **Location:** `src/Zone.php:58-62`
 ```php
@@ -30,6 +31,7 @@ Uses half-open interval `[x, x+width)` for both dimensions. This is correct for 
 ---
 
 ### Finding 2 — `Stack::current()` returns null Zone on empty stack
+
 **Severity:** MEDIUM  
 **Location:** `src/Stack.php:55-58`
 ```php
@@ -45,6 +47,7 @@ If `current()` is called when `$this->zones` is empty, it returns `null`. Caller
 ---
 
 ### Finding 3 — `Stack::switchTo()` does not validate index bounds
+
 **Severity:** MEDIUM  
 **Location:** `src/Stack.php:99-103`
 ```php
@@ -65,6 +68,7 @@ if ($index < 0 || $index >= \count($this->zones)) {
 ---
 
 ### Finding 4 — `Stack::switchUp()` / `switchDown()` wrap around
+
 **Severity:** LOW  
 **Location:** `src/Stack.php:105-117`
 ```php
@@ -82,6 +86,7 @@ Wrapping is documented and intentional. No bug.
 ---
 
 ### Finding 5 — No `Countable` or `Iterator` on Stack
+
 **Severity:** LOW  
 **Location:** `src/Stack.php`
 `Stack` has `count()` method but doesn't implement `Countable`. `$stack->count()` works but `\count($stack)` would not.
@@ -93,6 +98,7 @@ Wrapping is documented and intentional. No bug.
 ## 2. Performance Problems
 
 ### Finding 6 — `Stack::switchTo()` always creates new instance even if index unchanged
+
 **Severity:** LOW  
 **Location:** `src/Stack.php:99-103`
 ```php
@@ -111,6 +117,7 @@ if ($index === $this->index) return $this;
 ---
 
 ### Finding 7 — No N+1 issues
+
 **Severity:** N/A  
 No nested loops or repeated traversals.
 
@@ -119,6 +126,7 @@ No nested loops or repeated traversals.
 ## 3. Memory Leaks
 
 ### Finding 8 — No memory leaks detected
+
 **Severity:** N/A  
 All objects are immutable value types. No streams, resources, or callbacks.
 
@@ -127,6 +135,7 @@ All objects are immutable value types. No streams, resources, or callbacks.
 ## 4. Security
 
 ### Finding 9 — No security concerns
+
 **Severity:** N/A  
 No user input, no file operations, no shell execution. Pure computation library.
 
@@ -135,6 +144,7 @@ No user input, no file operations, no shell execution. Pure computation library.
 ## 5. Complexity
 
 ### Finding 10 — Complexity is appropriate
+
 **Severity:** N/A  
 Clean, minimal implementation. Each class has a single responsibility.
 
@@ -143,6 +153,7 @@ Clean, minimal implementation. Each class has a single responsibility.
 ## 6. Missing Features / Incomplete Ports
 
 ### Finding 11 — No zone focus/blur lifecycle events
+
 **Severity:** LOW  
 Location: `src/Stack.php`
 
@@ -153,6 +164,7 @@ Gum's `zone` has `onFocus` / `onBlur` callbacks that fire when a zone becomes ac
 ---
 
 ### Finding 12 — No `Zone::contains()` method (only `collidesWithPoint`)
+
 **Severity:** LOW  
 Location: `src/Zone.php`
 
@@ -163,6 +175,7 @@ Only point-in-rectangle check exists. No rect-vs-rect intersection.
 ---
 
 ### Finding 13 — No `examples/` directory
+
 **Severity:** LOW  
 No example usage files.
 
@@ -171,6 +184,7 @@ No example usage files.
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 14 — Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 Uses `readonly`, promoted constructors, `match` expressions, `final class`. No issues.
 
@@ -179,6 +193,7 @@ Uses `readonly`, promoted constructors, `match` expressions, `final class`. No i
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 15 — No async improvements needed
+
 **Severity:** N/A  
 This is a pure data model library. No natural async boundaries.
 

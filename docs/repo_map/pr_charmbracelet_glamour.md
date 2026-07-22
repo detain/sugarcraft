@@ -12,6 +12,7 @@
 - **Key Consumers**: GitHub CLI (`go-gh`), GitLab CLI (`glab`), Glow, Charm Crush, Chezmoi, trufflehog
 
 ### Version History Context
+
 The v2.0.0 release (March 2026) represents a major architectural migration:
 - Dropped `termenv` dependency entirely, replaced with Lip Gloss v2
 - Removed auto-style detection (terminal background probing)
@@ -50,6 +51,7 @@ The first-stage analysis identified these gaps in glamour that SugarCraft should
 ## 4. High-Signal Open Issues
 
 ### Issue #505: wordwrap edge case (Feb 2026, open)
+
 **Severity**: Medium | **Author**: rsteube (GitHub CLI contributor)
 
 Trailing punctuation (`.` or `,`) at wrap boundaries gets incorrectly dropped during wordwrap. The `lipgloss.Wrap` call in glamour uses hardcoded break characters `" ,.;-+|"` and when a sentence like `"- one two three one two three f.\n- one two"` wraps, the period is lost.
@@ -61,6 +63,7 @@ Trailing punctuation (`.` or `,`) at wrap boundaries gets incorrectly dropped du
 ---
 
 ### Issue #486: Table width calculation (Nov 2025, open)
+
 **Severity**: Medium | **Author**: stuta
 
 Tables truncate unexpectedly unless both specific style AND large `word_wrap` values are provided. Root cause analysis shows `ansi/blockstack.go:65` uses multiplication instead of subtraction for width calculation:
@@ -78,6 +81,7 @@ return uint(ctx.options.WordWrap) - s.Indent() - s.Margin()
 ---
 
 ### Issue #503: `\\~` incorrectly outputting (Feb 2026, open)
+
 **Severity**: Low | **Author**: fragmede
 
 Backslash-escaped tilde sequences (`\\\~foo\\\~`) render literally instead of stripping the backslashes. The fix is a one-line change in `ansi/elements.go:173` — glamour reads raw source bytes via `n.Segment.Value(source)` and never strips backslash escapes before passing to the ANSI renderer.
@@ -89,6 +93,7 @@ Backslash-escaped tilde sequences (`\\\~foo\\\~`) render literally instead of st
 ---
 
 ### Issue #407: Line wrapping with command-line options (Mar 2025, open)
+
 **Severity**: High | **Author**: bingzhang00
 
 Line wrapping fails when text contains `--option` style hyphens. Triggered by a commit (`5f5965e`) that swapped the word-wrapping library from `muesli/reflow/wordwrap` to `charmbracelet/x/ansi`. The hyphen character causes incorrect wrap points.
@@ -100,6 +105,7 @@ Line wrapping fails when text contains `--option` style hyphens. Triggered by a 
 ---
 
 ### Issue #331: Extra newlines between list items (Aug 2024, open)
+
 **Severity**: Medium | **Author**: rwinkhart
 
 Introduced in v0.8.0, list items get extra blank lines between them when word wrap is set to terminal width. Analysis found the root cause was `BlockStack.Width()` using multiplication instead of addition:
@@ -119,6 +125,7 @@ The margin calculation issue (`*2` vs not) compounds with nested structures.
 ---
 
 ### Issue #149: Wrapped hyperlinks are broken (May 2022, closed Mar 2025)
+
 **Severity**: High | **Author**: EricAndrechek | **Reactions**: 👍1 👀1
 
 Long URLs break when wrapped across lines — the OSC 8 hyperlink escape sequence only wraps correctly if the URL stays on a single line. This is a fundamental limitation of OSC 8 hyperlinks: the escape sequence must not be split.
@@ -130,6 +137,7 @@ Long URLs break when wrapped across lines — the OSC 8 hyperlink escape sequenc
 ---
 
 ### Issue #405: Weird interaction between bubbletea/glamour/bubble (Mar 2025, open)
+
 **Severity**: Medium | **Author**: pme-openai
 
 When using `auto` style with the textinput bubble, the TUI gets wedged and produces OSC escape code noise on screen. Lip Gloss and Glamour were "fighting over stdout" to perform dark background detection, causing lock-ups and leakage.
@@ -143,6 +151,7 @@ When using `auto` style with the textinput bubble, the TUI gets wedged and produ
 ---
 
 ### Issue #235: `Render` fills shorter lines with spaces (May 2023, open)
+
 **Severity**: Medium | **Author**: gsalvatella
 
 Shorter lines get padded with spaces to WordWrap width. This prevents `lipgloss.Width()` from measuring actual rendered size. Blocks centering and other layout operations.
@@ -150,6 +159,7 @@ Shorter lines get padded with spaces to WordWrap width. This prevents `lipgloss.
 **Maintainer response**: "We pad the content to ensure the background color gets rendered."
 
 **Strategic note**: This is a deliberate trade-off — padding enables background color rendering but breaks layout measurements. SugarCraft should either:
+
 1. Document this behavior and provide trim helpers
 2. Offer a "compact" mode that doesn't pad
 
@@ -158,17 +168,20 @@ Shorter lines get padded with spaces to WordWrap width. This prevents `lipgloss.
 ## 5. Important Closed Issues
 
 ### Issue #84: Line break/new line with 2+ spaces not working (Apr 2020, open since 2020)
+
 **Severity**: Medium | **Reactions**: 👍9 (high signal)
 
 Markdown's standard 2-space trailing newline-to-`<br>` conversion doesn't work because glamour re-flows text. `WithPreservedNewLines()` was mentioned as a workaround, but the issue remained open for years.
 
 **Strategic note**: Hard line breaks (CommonMark spec) are distinct from semantic line breaks. SugarCraft should support both:
+
 - Hard line breaks: `  \n` at end of line (or `\`)
 - Semantic line breaks: normal text wrapping
 
 ---
 
 ### Issue #117: Alignment not supported in tables (Aug 2021, closed Jul 2024)
+
 **Severity**: Low | **Reactions**: 👍5
 
 Table column alignment (via GFM `---:` syntax) wasn't rendered. Fixed in PR #284 (merged) and further improved in v2.
@@ -176,11 +189,13 @@ Table column alignment (via GFM `---:` syntax) wasn't rendered. Fixed in PR #284
 ---
 
 ### Issue #87: Table centering not working (Oct 2020, closed Oct 2022)
+
 **Severity**: Low | Duplicated to #117, fixed with alignment support.
 
 ---
 
 ### Issue #316: Links in tables broken (Nov 2022, closed Jul 2024)
+
 **Severity**: High | **Reactions**: 👍1
 
 Links inside tables weren't clickable/rendering properly. Fixed via PR #317 (many rendering fixes) and later PR #406 (footer links for tables).
@@ -188,6 +203,7 @@ Links inside tables weren't clickable/rendering properly. Fixed via PR #317 (man
 ---
 
 ### Issue #149 (detailed): Hyperlinks broken when wrapped
+
 This issue demonstrates a recurring pattern in glamour's development:
 1. User reports broken hyperlinks with long URLs
 2. Maintainer acknowledges the issue
@@ -199,6 +215,7 @@ This issue demonstrates a recurring pattern in glamour's development:
 ## 6. Recurring Pain Points
 
 ### A. Word Wrap Edge Cases
+
 Word wrapping is the #1 pain point in glamour issues:
 - Hyphenated words causing incorrect breaks (#407)
 - Trailing punctuation being lost (#505)
@@ -213,6 +230,7 @@ Word wrapping is the #1 pain point in glamour issues:
 ---
 
 ### B. Table Rendering Complexity
+
 Tables consistently cause issues:
 - Alignment not working (#117, fixed)
 - Links inside tables broken (#316)
@@ -222,6 +240,7 @@ Tables consistently cause issues:
 - Links taking too much space (solved via footer links)
 
 **Pattern**: Tables are complex because they require coordinating:
+
 - Column width calculation
 - Cell content wrapping
 - Link handling (inline vs footer)
@@ -233,6 +252,7 @@ Tables consistently cause issues:
 ---
 
 ### C. Link Rendering
+
 Multiple issues (82, 85, 114, 149, 178, 204, 260, 361) all relate to link rendering:
 - Links too long breaking layout
 - Custom link formatting requested (LinkStyler)
@@ -242,6 +262,7 @@ Multiple issues (82, 85, 114, 149, 178, 204, 260, 361) all relate to link render
 **Pattern**: Link handling was incrementally improved over 5+ years. The `LinkStyler` abstraction was proposed but never fully implemented before v2.
 
 **SugarCraft Implication**: `candy-shell` should provide a flexible link abstraction that supports:
+
 - Text-only rendering
 - Full hyperlink (OSC 8)
 - Custom link formatters (per-link-type: GitHub, issue refs, etc.)
@@ -249,6 +270,7 @@ Multiple issues (82, 85, 114, 149, 178, 204, 260, 361) all relate to link render
 ---
 
 ### D. Terminal Probe/Race Conditions
+
 Auto-style detection caused real-world bugs:
 - Lip Gloss and Glamour fighting over stdout (#405)
 - Terminal probing at render time caused crashes
@@ -263,6 +285,7 @@ Auto-style detection caused real-world bugs:
 ## 7. Frequently Requested Features
 
 ### A. Custom Word Wrap Per Element (#445)
+
 Users want different word wrap widths for different markdown elements. Currently global. **Status**: Not implemented. Workaround is to use multiple renderers and concatenate output.
 
 **SugarCraft Opportunity**: Implement per-element width constraints in the block stack.
@@ -270,6 +293,7 @@ Users want different word wrap widths for different markdown elements. Currently
 ---
 
 ### B. LinkStyler / Custom Link Formatting (#361)
+
 Users want to customize how links render: full URL, text-only, shortened GitHub format (`owner/repo#123`). **Status**: Partially addressed in v0.10 with `WithInlineTableLinks`, but no general `LinkStyler` API.
 
 **SugarCraft Opportunity**: Provide a `LinkStyler` interface that users can implement to customize link rendering.
@@ -277,6 +301,7 @@ Users want to customize how links render: full URL, text-only, shortened GitHub 
 ---
 
 ### C. GitHub-Style Alerts (#300)
+
 `> [!note]`, `> [!warning]` etc. blockquote alerts that GitHub renders specially. **Status**: Not implemented. Goldmark doesn't support it yet, but can be handled via extension or post-processing.
 
 **SugarCraft Opportunity**: Implement as a glamour-independent extension that can be wired into the rendering pipeline.
@@ -284,6 +309,7 @@ Users want to customize how links render: full URL, text-only, shortened GitHub 
 ---
 
 ### D. Image Rendering (#501)
+
 Support rendering actual images in terminals (using iTerm2 inline images, sixel, etc.). **Status**: Not implemented. "Not widespread" and "compatibility is important" per maintainers.
 
 **SugarCraft Opportunity**: Consider supporting at least iTerm2 inline images protocol for image rendering in `sugar-bits`.
@@ -291,6 +317,7 @@ Support rendering actual images in terminals (using iTerm2 inline images, sixel,
 ---
 
 ### E. Template Format for Other Elements (#480)
+
 Template formatting (`{left}`, `{mid}`, `{right}`) is only available for hyperlinks. Users want it for all elements for interactive document creation.
 
 **SugarCraft Opportunity**: Allow template functions in style definitions for all elements.
@@ -298,6 +325,7 @@ Template formatting (`{left}`, `{mid}`, `{right}`) is only available for hyperli
 ---
 
 ### F. Accessible Color Options (#395)
+
 GitHub CLI needed to support `terminal16` (16-color) formatter for accessibility. Glamour added `WithChromaFormatter` and `WithOptions` to support this. **Status**: Implemented.
 
 **SugarCraft Implication**: Must support color profile/accessible color options for code syntax highlighting.
@@ -307,6 +335,7 @@ GitHub CLI needed to support `terminal16` (16-color) formatter for accessibility
 ## 8. Important PRs
 
 ### PR #408: (v2) migrate to v2 packages (merged Mar 2026)
+
 The v2 migration PR. 41 commits, +1688/-990 lines. Key changes:
 - Replace termenv with Lip Gloss v2
 - Remove auto style detection
@@ -318,6 +347,7 @@ This is the defining PR for glamour v2. Study it carefully for v2's architectura
 ---
 
 ### PR #406: feat(table): add ability to render links at the bottom (merged Apr 2025)
+
 Major table improvement. Solves the "long links in tables" problem by rendering link list at table footer with numbered references.
 
 **Key design pattern**: `collectLinksAndImages()` walks the table AST during rendering, collecting links/images, then `printTableLinks()` renders them at the end.
@@ -327,6 +357,7 @@ Major table improvement. Solves the "long links in tables" problem by rendering 
 ---
 
 ### PR #465: perf(ansi): ensure all PenWriter instances are closed (merged Aug 2025)
+
 Performance fix. `PenWriter` uses `x/ansi.Parser` instances which allocate large buffers. Not closing them caused GC pressure. This is performance-critical for complex applications like Charm Crush.
 
 **Key fix**: Add `Close()` calls on all `MarginWriter`/`IndentWriter`/`PaddingWriter` instances.
@@ -336,11 +367,13 @@ Performance fix. `PenWriter` uses `x/ansi.Parser` instances which allocate large
 ---
 
 ### PR #452: A bug in word wrapping (open since Jun 2025)
+
 Pinpointed double-wrapping bug. The `ansi.Wordwrap` call was being passed already-wrapped content. Fix involved vendoring reflow/wordwrap and making targeted fix.
 
 ---
 
 ### PR #411: Hyperlink support (merged with #408)
+
 Added OSC 8 hyperlink support for terminals that support it.
 
 ---
@@ -374,6 +407,7 @@ Added OSC 8 hyperlink support for terminals that support it.
 ## 10. Performance Discussions
 
 ### Crush Performance Issues (Issue #2223, Feb 2026)
+
 Charm Crush had severe performance degradation (500-600% CPU) when rendering markdown in a chat UI. Root causes identified:
 1. **`renderMarkdown()` recreates a new `TermRenderer` on every call** — expensive for large/many messages
 2. **`ScrollToBottomAndAnimate()` triggers re-render cascade** — each call invalidates render cache
@@ -381,16 +415,19 @@ Charm Crush had severe performance degradation (500-600% CPU) when rendering mar
 4. **PubSub broker drops events** when buffer overflows, making tools appear "stuck"
 
 **Key insight**: The pattern of recreating renderers is expensive. SugarCraft should:
+
 - Maintain renderer instances, recreate only when style changes
 - Cache render results
 - Batch updates to reduce re-render cascades
 
 ### Rendering Performance (PR #2258, Feb 2026)
+
 Charm Crush PR fixing assistant message rendering performance. Root cause: using `lipgloss.Render` for applying styles to message content involves expensive wrapping logic for long messages.
 
 **Fix**: Direct ANSI styling without the full `lipgloss.Render` call.
 
 ### Gitignore Pattern Matching (PR #2199)
+
 Not directly glamour-related but demonstrates the performance risk of:
 - Compiling regex patterns that don't need to be regex
 - Not caching pattern matchers
@@ -401,6 +438,7 @@ Not directly glamour-related but demonstrates the performance risk of:
 ## 11. Extensibility Discussions
 
 ### LinkStyler Design (Issue #361, PR #204)
+
 Users want to customize how links render. Ayman Bagabas proposed:
 
 ```go
@@ -419,6 +457,7 @@ var TextLinkStyler LinkStyler // renders as: text only
 ---
 
 ### Template Format for All Elements (Issue #480)
+
 Users want `format` option (currently only for links) to work for all elements. They want to emit ANSI escape codes around specific elements for terminal emulator integration.
 
 **Status**: Not implemented.
@@ -428,6 +467,7 @@ Users want `format` option (currently only for links) to work for all elements. 
 ---
 
 ### Custom Chroma Formatter (Issue #395)
+
 GitHub CLI needed to support accessible color formatters. Glamour added `WithChromaFormatter` option and `WithOptions` combinator.
 
 **SugarCraft Implication**: Must support custom syntax highlighters for code blocks. Provide `WithSyntaxFormatter` option that accepts formatter name.
@@ -437,6 +477,7 @@ GitHub CLI needed to support accessible color formatters. Glamour added `WithChr
 ## 12. API/UX Complaints
 
 ### 1. Backward Compatibility Aggressiveness
+
 Users complaint that v2 was too breaking:
 - Import path change requires rewriting all imports
 - `WithAutoStyle()` removal means apps lose auto light/dark switching
@@ -447,6 +488,7 @@ Users complaint that v2 was too breaking:
 ---
 
 ### 2. Checksum Mismatch for v0.10.0 (Issue #483)
+
 Go module checksum mismatch for v0.10.0 because the same tag was reused with different content. Caused builds to fail for GitHub CLI, GitLab CLI, and other tools.
 
 **SugarCraft Lesson**: Never retag a released version. Create new tags for fixes.
@@ -454,6 +496,7 @@ Go module checksum mismatch for v0.10.0 because the same tag was reused with dif
 ---
 
 ### 3. File Path Not Expanded in Style Config (Issue #545)
+
 `~/.config/glow/styles/tokyo-night.json` wasn't being expanded — tilde paths don't work with `os.ReadFile`.
 
 **SugarCraft Lesson**: Always call `os.UserHomeDir()` or use `filepath.Clean()` with expansion for file paths.
@@ -461,6 +504,7 @@ Go module checksum mismatch for v0.10.0 because the same tag was reused with dif
 ---
 
 ### 4. Style Switching Doesn't Update Code Blocks (Issue #436)
+
 Changing styles at runtime doesn't affect code blocks because syntax highlighting theme is determined at renderer creation.
 
 **SugarCraft Lesson**: Code block styles must be re-evaluated at render time if themes can change dynamically.
@@ -470,6 +514,7 @@ Changing styles at runtime doesn't affect code blocks because syntax highlightin
 ## 13. Migration Problems
 
 ### v2 Upgrade Guide Pain Points
+
 The upgrade guide covers:
 1. Import path changes (manual find-replace)
 2. Remove `WithAutoStyle()` calls
@@ -484,6 +529,7 @@ The upgrade guide covers:
 ---
 
 ### Checksum Mismatch Impact (Issue #483, #516)
+
 v0.10.0 checksum mismatch affected:
 - GitHub CLI 2.83.1
 - GitLab CLI v1.78.3
@@ -499,6 +545,7 @@ Users had to add `GONOSUMDB=github.com/charmbracelet/glamour` to bypass security
 ## 14. Clever Fixes & Workarounds
 
 ### Footer Links for Tables (PR #406)
+
 When a table contains links, instead of putting the full URL in the cell (taking many lines), glamour now:
 1. Walks the table AST and collects all links/images
 2. Renders cells with short reference numbers like `[1]`, `[2]`
@@ -511,6 +558,7 @@ When a table contains links, instead of putting the full URL in the cell (taking
 ---
 
 ### Shortened GitHub URLs (PR c9af045)
+
 GitHub links inside tables are shortened to `owner/repo#123` format instead of full URL. This was implemented via an `autolink` package that detects and shortens GitHub URLs.
 
 **SugarCraft Opportunity**: Implement URL shortening for common hosting platforms (GitHub, GitLab, Bitbucket) for cleaner output.
@@ -518,6 +566,7 @@ GitHub links inside tables are shortened to `owner/repo#123` format instead of f
 ---
 
 ### Hard Line Break Preservation
+
 `WithPreservedNewLines()` option (from v0.8.0) was added specifically to address the 2-space line break issue. This allows users who want precise markdown fidelity to opt-in.
 
 **SugarCraft Implication**: Provide preservation options for users who need exact markdown semantics vs. those who want reflow.
@@ -525,6 +574,7 @@ GitHub links inside tables are shortened to `owner/repo#123` format instead of f
 ---
 
 ### Accessible Colors via WithOptions (PR #395)
+
 GitHub CLI needed to compose multiple options:
 ```go
 return glamour.WithOptions(
@@ -540,6 +590,7 @@ The `WithOptions` combinator allows composing multiple options into one. This pa
 ## 15. Community Workarounds
 
 ### Multiple Renderers for Different Widths (#445)
+
 Users who want different word wrap widths for different elements work around by creating multiple renderers:
 ```go
 r1, _ := glamour.NewTermRenderer(glamour.WithWordWrap(40))
@@ -552,6 +603,7 @@ r2, _ := glamour.NewTermRenderer(glamour.WithWordWrap(80))
 ---
 
 ### Recreating Renderer on Style Change (#436)
+
 When changing styles at runtime, users work around by recreating the entire renderer. The workaround in the issue:
 ```go
 // When style changes:
@@ -566,6 +618,7 @@ renderer, err := glamour.NewTermRenderer(
 ---
 
 ### Manual Terminal Detection (#405)
+
 Users experiencing the Lip Gloss/glamour stdout race work around it by detecting terminal background themselves:
 ```go
 isDark := lipgloss.HasDarkBackground()
@@ -581,6 +634,7 @@ r, _ := glamour.NewTermRenderer(glamour.WithStylePath(style))
 ## 16. Maintainer Guidance Patterns
 
 ### Probing Terminal at Render Time is Wrong
+
 On issue #405, maintainers explicitly stated:
 > Lip Gloss and Glamour are fighting over stdout to perform dark background detection, causing lock-ups and leakage. The fix is to have Lip Gloss manually perform the background color detection for Glamour prior to starting your program, storing the result on your model, then passing the detected style to Glamour.
 
@@ -589,6 +643,7 @@ On issue #405, maintainers explicitly stated:
 ---
 
 ### Table Rendering is Complex
+
 Maintainers acknowledged multiple times that table rendering is "not as trivial as I'd like, because the table rendering (by tablewriter) doesn't properly handle ANSI escape sequences."
 
 **Principle**: Use Lip Gloss's table.Builder for tables rather than custom implementation. SugarCraft should use the same approach.
@@ -596,6 +651,7 @@ Maintainers acknowledged multiple times that table rendering is "not as trivial 
 ---
 
 ### Links and Tables are Intertwined
+
 Multiple issues about links were actually about table rendering. Maintainers eventually fixed both at once (PR #406) because they're deeply coupled.
 
 **Principle**: Treat related rendering problems holistically rather than fixing symptoms individually.
@@ -605,6 +661,7 @@ Multiple issues about links were actually about table rendering. Maintainers eve
 ## 17. Rejected Ideas Worth Revisiting
 
 ### A. Inline Link Rendering by Default
+
 Early discussion (issue #85) centered on whether links should be inline or text-only by default. Users wanted options. Maintainers initially suggested "tweak your style" rather than add API.
 
 **What happened**: Eventually `WithInlineTableLinks` option was added, but there's still no general `LinkStyler`.
@@ -614,6 +671,7 @@ Early discussion (issue #85) centered on whether links should be inline or text-
 ---
 
 ### B. Anchor-Style Hyperlinks
+
 Issue #114 requested anchor-style hyperlinks (like `[text](#anchor)`) which was never implemented. The feature request was closed as "out of scope."
 
 **SugarCraft decision**: Don't implement anchor links — they're HTML-specific and don't make sense in ANSI context.
@@ -621,6 +679,7 @@ Issue #114 requested anchor-style hyperlinks (like `[text](#anchor)`) which was 
 ---
 
 ### C. Per-Element Custom Renderers
+
 Users wanted to provide custom renderers for specific elements. Maintainers rejected this as too complex, suggesting instead that you process markdown before passing to glamour.
 
 **SugarCraft decision**: Consider a processor chain pattern where markdown can be pre-processed (e.g., transform `> [!note]` to special styled blockquote) before rendering.
@@ -630,6 +689,7 @@ Users wanted to provide custom renderers for specific elements. Maintainers reje
 ## 18. Problems Likely Relevant To SugarCraft
 
 ### A. Word Wrap Bugs
+
 SugarCraft will implement word wrapping. The glamour bug history shows:
 - Hardcoded break characters cause edge case failures
 - CJK/emoji width needs special handling
@@ -637,6 +697,7 @@ SugarCraft will implement word wrapping. The glamour bug history shows:
 - Trailing punctuation gets lost at wrap points
 
 **Mitigation**: Use a well-tested word-wrap algorithm. Test extensively with:
+
 - CJK characters
 - Emoji
 - Hyphenated words
@@ -646,6 +707,7 @@ SugarCraft will implement word wrapping. The glamour bug history shows:
 ---
 
 ### B. Resource Management in Writers
+
 Glamour's v2 requires calling `.Close()` on all writers. Failure to do so causes resource leaks and GC pressure.
 
 **Mitigation**: SugarCraft writers should implement `__destruct` or use try-finally to ensure cleanup. Consider making writers implement `CloseableInterface`.
@@ -653,6 +715,7 @@ Glamour's v2 requires calling `.Close()` on all writers. Failure to do so causes
 ---
 
 ### C. Terminal Probe Races
+
 Glamour's auto-style detection caused real bugs when Lip Gloss and Glamour both probed stdout simultaneously.
 
 **Mitigation**: Always pass detected terminal capabilities explicitly to renderers. Never probe at render time.
@@ -660,6 +723,7 @@ Glamour's auto-style detection caused real bugs when Lip Gloss and Glamour both 
 ---
 
 ### D. Cascading Style Inheritance is Non-Obvious
+
 The `cascadeStyle()` function merges parent/child styles recursively. Understanding which properties inherit is non-trivial.
 
 **Mitigation**: Document the style inheritance model clearly. Provide helpers to debug style resolution.
@@ -669,6 +733,7 @@ The `cascadeStyle()` function merges parent/child styles recursively. Understand
 ## 19. Features SugarCraft Should Consider
 
 ### A. Footer Links for Tables
+
 The pattern from PR #406 is directly applicable and valuable:
 1. Collect links/images during table rendering
 2. Render short reference numbers in cells
@@ -679,6 +744,7 @@ The pattern from PR #406 is directly applicable and valuable:
 ---
 
 ### B. LinkStyler Interface
+
 Allow users to customize how links render:
 
 ```php
@@ -697,6 +763,7 @@ LinkStyler::githubStyle() // owner/repo#123
 ---
 
 ### C. Per-Element Width Constraints
+
 Allow stylesheet to specify different word wrap widths per element type:
 
 ```json
@@ -712,6 +779,7 @@ Allow stylesheet to specify different word wrap widths per element type:
 ---
 
 ### D. GitHub-Style Blockquote Alerts
+
 Support `> [!note]`, `> [!warning]`, etc. styled blockquotes:
 
 ```php
@@ -729,6 +797,7 @@ Support `> [!note]`, `> [!warning]`, etc. styled blockquotes:
 ---
 
 ### E. OSC 8 Hyperlink Support
+
 Implement proper ANSI hyperlinks:
 
 ```php
@@ -742,6 +811,7 @@ Implement proper ANSI hyperlinks:
 ---
 
 ### F. Custom Syntax Highlighting Formatter
+
 Allow users to specify Chroma formatter for code blocks:
 
 ```php
@@ -754,6 +824,7 @@ renderer->withSyntaxFormatter('terminal16')
 ---
 
 ### G. Hard Line Break Preservation
+
 Support CommonMark hard line breaks:
 - `  \n` at end of line → preserve break
 - `\` followed by newline → preserve break
@@ -763,6 +834,7 @@ Support CommonMark hard line breaks:
 ---
 
 ### H. Render Result Caching
+
 Cache rendered markdown to avoid re-rendering identical content. Glamour's Crush consumer had this problem.
 
 **Effort**: Medium | **Value**: High — performance critical
@@ -772,6 +844,7 @@ Cache rendered markdown to avoid re-rendering identical content. Glamour's Crush
 ## 20. Architectural Lessons
 
 ### A. Purity vs. Capability Trade-off
+
 Glamour v2 made the renderer "pure" (same input = same output) by moving color downsampling to Lip Gloss. This makes the renderer:
 - More predictable
 - More testable
@@ -782,6 +855,7 @@ Glamour v2 made the renderer "pure" (same input = same output) by moving color d
 ---
 
 ### B. Two-Phase Rendering Enables Nesting
+
 The Entering/Exiting (Renderer/Finisher) two-phase pattern is essential for correct nested element rendering. Each element:
 1. Enters: pushes itself onto block stack, sets up state
 2. Exiting: tears down, pops from block stack
@@ -791,6 +865,7 @@ The Entering/Exiting (Renderer/Finisher) two-phase pattern is essential for corr
 ---
 
 ### C. Block Stack Pattern for Dynamic Width
+
 The BlockStack computes available width as `WordWrap - Indent*2 - Margin` dynamically. This allows deeply nested elements to get correct widths without passing state through the visitor.
 
 **Lesson**: Block stack pattern is correct and portable.
@@ -798,6 +873,7 @@ The BlockStack computes available width as `WordWrap - Indent*2 - Margin` dynami
 ---
 
 ### D. Writer Pattern for Layout
+
 Custom io.Writer implementations (MarginWriter, PaddingWriter, IndentWriter) separate layout from content. This allows:
 - Testing layout independently
 - Composing layout primitives
@@ -808,6 +884,7 @@ Custom io.Writer implementations (MarginWriter, PaddingWriter, IndentWriter) sep
 ---
 
 ### E. Cascading Style is Not CSS
+
 Glamour's cascading style is a custom recursive merge, not CSS inheritance. Each element can override any property without affecting parent or siblings.
 
 **Lesson**: Implement cascading style as explicit recursive merge, not delegation. Document the merge order clearly.
@@ -817,6 +894,7 @@ Glamour's cascading style is a custom recursive merge, not CSS inheritance. Each
 ## 21. Defensive Design Lessons
 
 ### A. Never Trust Input Width
+
 The glamour bug in issue #331 involved multiplying `Indent * Margin` instead of adding them. Always verify width calculations with edge cases:
 - Very small widths (1-5)
 - Zero indent/margin
@@ -825,6 +903,7 @@ The glamour bug in issue #331 involved multiplying `Indent * Margin` instead of 
 ---
 
 ### B. UTF-8 Handling Must Be Explicit
+
 Glamour had a bug with CJK character width handling that was only fixed in v2. All character width calculations must be UTF-8 aware:
 - Use `mb_strwidth()` in PHP
 - Never assume 1 byte = 1 character
@@ -833,6 +912,7 @@ Glamour had a bug with CJK character width handling that was only fixed in v2. A
 ---
 
 ### C. Escape Sequence Handling at the Right Layer
+
 The `\\\~` escape issue (#503) demonstrates that escape processing must happen:
 1. Before style application
 2. At the markdown parsing layer
@@ -843,6 +923,7 @@ The `\\\~` escape issue (#503) demonstrates that escape processing must happen:
 ---
 
 ### D. Writer Resource Lifetime
+
 In v2, not calling `.Close()` on writers causes resource leaks. Writers that allocate should:
 - Implement `Close()` method
 - Use defensive cleanup (destructor, finally block)
@@ -853,6 +934,7 @@ In v2, not calling `.Close()` on writers causes resource leaks. Writers that all
 ---
 
 ### E. Module Publishing Discipline
+
 The checksum mismatch issue demonstrates: never retag a released version. Use sequential versioning:
 - `v1.0.0`, then if you need to fix: `v1.0.1`
 - Never reuse a tag
@@ -862,6 +944,7 @@ The checksum mismatch issue demonstrates: never retag a released version. Use se
 ## 22. Ecosystem Trends
 
 ### A. Terminal Capabilities Are Improving
+
 OSC 8 hyperlinks are now supported in most modern terminals (iTerm2, kitty, Windows Terminal, Alacritty, WezTerm). This trend toward richer terminals means:
 - More features can assume hyperlink support
 - But still need fallbacks for older terminals
@@ -871,6 +954,7 @@ OSC 8 hyperlinks are now supported in most modern terminals (iTerm2, kitty, Wind
 ---
 
 ### B. Markdown Rendering is Expected Everywhere
+
 Glamour's adoption by GitHub CLI, GitLab CLI, Glow, Crush, chezmoi shows markdown rendering is now expected in CLI tools. This validates SugarCraft's decision to port glamour components.
 
 **Trend**: CLI tools need GitHub-quality markdown rendering.
@@ -878,6 +962,7 @@ Glamour's adoption by GitHub CLI, GitLab CLI, Glow, Crush, chezmoi shows markdow
 ---
 
 ### C. Accessibility Is a First-Class Concern
+
 The GitHub CLI accessible colors work (#395) shows accessibility is now a mainstream requirement, not an afterthought. Terminal apps should support:
 - 16-color mode for users with color vision deficiencies
 - High contrast modes
@@ -888,6 +973,7 @@ The GitHub CLI accessible colors work (#395) shows accessibility is now a mainst
 ---
 
 ### D. Separation of Parsing and Rendering
+
 Glamour cleanly separates goldmark (parsing) from glamour (rendering). This pattern allows:
 - Swapping parsers without changing renderers
 - Testing rendering independently
@@ -900,6 +986,7 @@ Glamour cleanly separates goldmark (parsing) from glamour (rendering). This patt
 ## 23. Strategic Opportunities
 
 ### A. PHP-Native Word Wrap Implementation
+
 Glamour struggled with word wrapping for years, switching libraries multiple times. SugarCraft can learn from this:
 - Use a well-tested algorithm (like reflow's or Go's x/ansi)
 - Don't hardcode break characters — make them configurable
@@ -910,6 +997,7 @@ Glamour struggled with word wrapping for years, switching libraries multiple tim
 ---
 
 ### B. Better Extension Points
+
 Glamour's extension API is limited. SugarCraft can provide:
 - `LinkStyler` interface for custom link rendering
 - `ElementProcessor` for pre/post element rendering
@@ -921,6 +1009,7 @@ Glamour's extension API is limited. SugarCraft can provide:
 ---
 
 ### C. Unified Render + Style System
+
 Glamour and Lip Gloss are separate packages that must be composed. SugarCraft can unify them:
 - Styles are part of the renderer
 - Color adaptation is automatic
@@ -931,6 +1020,7 @@ Glamour and Lip Gloss are separate packages that must be composed. SugarCraft ca
 ---
 
 ### D. First-Class Table Support
+
 Glamour's table support evolved over years. SugarCraft can implement the learned patterns from day one:
 - Footer links
 - Per-column width constraints
@@ -945,6 +1035,7 @@ Glamour's table support evolved over years. SugarCraft can implement the learned
 ## 24. Cross-Ecosystem Pattern Matches
 
 ### A. Markdown Rendering Libraries All Struggle with Same Issues
+
 The patterns in glamour's GitHub issues match other markdown libraries:
 - Word wrap edge cases (common)
 - Table layout complexity (common)
@@ -956,6 +1047,7 @@ The patterns in glamour's GitHub issues match other markdown libraries:
 ---
 
 ### B. Terminal UI Libraries Convergence
+
 Charm ecosystem (glamour, lipgloss, bubbletea, bubbles) demonstrates a mature pattern:
 - Pure rendering (glamour)
 - Styling (lipgloss)
@@ -967,6 +1059,7 @@ Charm ecosystem (glamour, lipgloss, bubbletea, bubbles) demonstrates a mature pa
 ---
 
 ### C. Auto-Detection Leads to Problems
+
 The auto-style detection removal in v2 reflects a broader pattern: probing terminal capabilities at runtime causes races in concurrent applications. Most mature TUI frameworks have moved to:
 - Probe once at startup
 - Store capabilities explicitly
@@ -979,6 +1072,7 @@ The auto-style detection removal in v2 reflects a broader pattern: probing termi
 ## 25. High ROI Recommendations
 
 ### 1. Implement Block Stack Pattern First
+
 The block stack is the heart of glamour's rendering. SugarCraft should implement it correctly first, before attempting element rendering.
 
 **Effort**: Low | **Impact**: Critical — everything depends on it
@@ -986,6 +1080,7 @@ The block stack is the heart of glamour's rendering. SugarCraft should implement
 ---
 
 ### 2. Use lipgloss.Wrap or Equivalent
+
 Don't reimplement word wrapping. Either:
 - Port the Go `x/ansi` package's word-wrap to PHP
 - Use a PHP equivalent that handles CJK, emoji, hyphens correctly
@@ -995,6 +1090,7 @@ Don't reimplement word wrapping. Either:
 ---
 
 ### 3. Provide OSC 8 Hyperlink Support
+
 Hyperlinks are expected in modern CLI markdown renderers. Implement with FNV hash for URL IDs.
 
 **Effort**: Low | **Impact**: High — users expect this feature
@@ -1002,6 +1098,7 @@ Hyperlinks are expected in modern CLI markdown renderers. Implement with FNV has
 ---
 
 ### 4. Implement LinkStyler from Day One
+
 Don't wait years to add customization, as glamour did. Design and implement the `LinkStyler` interface from the start.
 
 **Effort**: Medium | **Impact**: High — addresses frequent request
@@ -1009,6 +1106,7 @@ Don't wait years to add customization, as glamour did. Design and implement the 
 ---
 
 ### 5. Provide Footnote/Link Footer Pattern for Tables
+
 The PR #406 footer links pattern is elegant. Implement it directly in `sugar-charts`.
 
 **Effort**: Medium | **Impact**: High — solves real pain point
@@ -1016,6 +1114,7 @@ The PR #406 footer links pattern is elegant. Implement it directly in `sugar-cha
 ---
 
 ### 6. Test Extensively with Edge Cases
+
 Glamour's bug history shows word wrap edge cases are numerous. Build a comprehensive test suite:
 - CJK characters
 - Emoji
@@ -1029,6 +1128,7 @@ Glamour's bug history shows word wrap edge cases are numerous. Build a comprehen
 ---
 
 ### 7. Document Style Inheritance Clearly
+
 The cascading style system is non-obvious. Document:
 - Merge order (child overrides parent)
 - Which properties inherit
@@ -1039,6 +1139,7 @@ The cascading style system is non-obvious. Document:
 ---
 
 ### 8. Provide Clean Upgrade Path for Any Breaking Changes
+
 Glamour's v2 migration was painful for some users. SugarCraft should:
 - Minimize breaking changes
 - Provide upgrade guides

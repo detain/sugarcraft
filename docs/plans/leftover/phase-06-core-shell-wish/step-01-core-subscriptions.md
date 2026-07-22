@@ -13,6 +13,7 @@ declare "this Model wants a tick every 1s". Add a `Subscription` /
 ## Files
 
 **Create:**
+
 - `candy-core/src/Subscription.php` — value object: kind (Tick / Key /
   Signal / Custom), parameters, message constructor.
 - `candy-core/src/Subscriptions.php` — collection wrapper with
@@ -21,6 +22,7 @@ declare "this Model wants a tick every 1s". Add a `Subscription` /
   the Program's subscription set.
 
 **Modify:**
+
 - `candy-core/src/Program.php` — accepts an optional
   `subscriptions(Model): Subscriptions` callback; reconciles between
   ticks (adds new subs, removes dropped ones, leaves stable subs alone).
@@ -28,6 +30,7 @@ declare "this Model wants a tick every 1s". Add a `Subscription` /
   default returns null.
 
 **Tests:**
+
 - `candy-core/tests/SubscriptionsReconcileTest.php` — fixture model
   whose subscription set changes per Msg; assert Program tracks the
   set correctly.

@@ -1,11 +1,17 @@
 # sugarcraft/candy-shell
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/candy-shell
+
 - **Language:** PHP 8.3+
+
 - **Stars:** N/A (internal SugarCraft monorepo package)
+
 - **License:** MIT
+
 - **Status:** 🟡 in progress
+
 - **Description:** PHP port of charmbracelet/gum — a composer-installable CLI of SugarCraft TUI primitives. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.
 
 ---
@@ -98,8 +104,11 @@ The package distinguishes between **interactive** and **non-interactive** comman
 
 Interactive commands implement the TEA (Terminal Elm Architecture) pattern via `SugarCraft\Core\Model`:
 - `init(): ?Closure` — returns initial async command
+
 - `update(Msg): array{Model, ?Closure}` — pure state transition
+
 - `view(): string` — renders ANSI output
+
 - `subscriptions(): ?Subscriptions` — recurring events
 
 Non-interactive commands execute synchronously and return formatted strings.
@@ -113,7 +122,9 @@ Non-interactive commands execute synchronously and return formatted strings.
 **Upstream:** `gum choose` — grid-based item picker with vim-style navigation
 
 **candy-shell implementation:**
+
 - `ChooseCommand.php` — CLI flag binding via Symfony Console
+
 - `ChooseModel.php` — TEA model wrapping `SugarCraft\Forms\ItemList\ItemList`
 
 **Options supported:**
@@ -135,9 +146,13 @@ Non-interactive commands execute synchronously and return formatted strings.
 ```
 
 **What differs from gum:**
+
 - gum uses `paginator.Model` + custom 2D grid navigation (hjkl/arrows in both dimensions)
+
 - candy-shell uses `ItemList` which is a 1D list with paging — no grid layout
+
 - gum supports `--cursor` prefix for unselected items, but also `--selected-prefix` and `--unselected-suffix`
+
 - candy-shell only has `--cursor-prefix` and `--unselected-prefix`
 
 **Component dependency:** `SugarCraft\Forms\ItemList\ItemList` → `SugarCraft\Forms\ItemList\StringItem`
@@ -149,7 +164,9 @@ Non-interactive commands execute synchronously and return formatted strings.
 **Upstream:** `gum confirm` — confirmation with exit code mapping
 
 **candy-shell implementation:**
+
 - `ConfirmCommand.php` — exit codes: 0=yes, 1=no, 2=abort
+
 - `ConfirmModel.php` — wraps `SugarCraft\Forms\Field\Confirm`
 
 **Options:**
@@ -181,7 +198,9 @@ const EXIT_ABORT  = 2;
 **Upstream:** `gum filter` — reads stdin lines, incremental filter, multi-select
 
 **candy-shell implementation:**
+
 - `FilterCommand.php` — reads from stdin
+
 - `FilterModel.php` — wraps `ItemList` in filter mode, sends `/` keystroke on init
 
 **Options:**
@@ -222,7 +241,9 @@ const EXIT_ABORT  = 2;
 **Upstream:** `gum input` — text input with placeholder/password/prompt
 
 **candy-shell implementation:**
+
 - `InputCommand.php`
+
 - `InputModel.php` — wraps `SugarCraft\Forms\TextInput\TextInput`
 
 **Options:**
@@ -250,7 +271,9 @@ const EXIT_ABORT  = 2;
 **Upstream:** `gum write` — textarea with Ctrl+D submit, Ctrl+E external editor
 
 **candy-shell implementation:**
+
 - `WriteCommand.php`
+
 - `WriteModel.php` — wraps `SugarCraft\Forms\TextArea\TextArea`
 
 **Options:**
@@ -283,7 +306,9 @@ const EXIT_ABORT  = 2;
 **Upstream:** `gum file` — filesystem tree navigation
 
 **candy-shell implementation:**
+
 - `FileCommand.php`
+
 - `FileModel.php` — wraps `SugarCraft\Forms\FilePicker\FilePicker`
 
 **Options:**
@@ -308,7 +333,9 @@ const EXIT_ABORT  = 2;
 **Upstream:** `gum pager` — read-only scrolling for long input
 
 **candy-shell implementation:**
+
 - `PagerCommand.php`
+
 - `PagerModel.php` — wraps `SugarCraft\Forms\Viewport\Viewport`
 
 **Options:**
@@ -324,7 +351,9 @@ const EXIT_ABORT  = 2;
 ```
 
 **Notable implementation:**
+
 - `--soft-wrap` uses `SugarCraft\Core\Util\Width::wrap()` to pre-wrap lines
+
 - `--match` uses `Ansi::REVERSE` for substring highlighting
 
 **Component dependency:** `SugarCraft\Forms\Viewport\Viewport`
@@ -336,8 +365,11 @@ const EXIT_ABORT  = 2;
 **Upstream:** `gum spin` — run command with spinner, capture output
 
 **candy-shell implementation:**
+
 - `SpinCommand.php` — spawns child process, manages spinner lifecycle
+
 - `SpinModel.php` — TEA model wrapping `SugarCraft\Forms\Spinner\Spinner` + `Process`
+
 - `Process/RealProcess.php` — wraps `SugarCraft\Pty\Posix\PosixProcess`
 
 **Options:**
@@ -358,7 +390,9 @@ const EXIT_ABORT  = 2;
 line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, ellipsis
 
 **Component dependency:**
+
 - `SugarCraft\Forms\Spinner\Spinner` + `SugarCraft\Forms\Spinner\Style`
+
 - `SugarCraft\Pty\Posix\PosixProcess` for child process management
 
 **Exit code:** Forwards child's exit code; 130 if interrupted (Ctrl-C)
@@ -370,7 +404,9 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 **Upstream:** `gum style` — apply lipgloss styling to text
 
 **candy-shell implementation:**
+
 - `StyleCommand.php` — non-interactive, no Program loop
+
 - `StyleBuilder.php` — pure function building `SugarCraft\Sprinkles\Style` from flags
 
 **Options:**
@@ -398,7 +434,9 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 
 **Color parsing:** `StyleBuilder::parseColor()` accepts:
 - hex: `#ff8000`, `#f80` (3 or 6 digit)
+
 - ANSI 0-15: `0` through `15`
+
 - ANSI 256: `16` through `255`
 
 **Component dependency:** `SugarCraft\Sprinkles\Style`
@@ -410,7 +448,9 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 **Upstream:** `gum format` — render markdown with glamour
 
 **candy-shell implementation:**
+
 - `FormatCommand.php` — non-interactive
+
 - Uses `SugarCraft\Shine\Renderer` for markdown, `Theme::byName()` for themes
 
 **Options:**
@@ -424,9 +464,13 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 ```
 
 **Types:**
+
 - `markdown` — Goldmark-equivalent → ANSI via Renderer
+
 - `code` — Wraps input in ```fences and pipes through markdown renderer
+
 - `template` — `{{VAR}}` expansion from environment variables
+
 - `emoji` — `:smile:` shortcode expansion (built-in map of 20 emojis)
 
 **Component dependency:** `SugarCraft\Shine\Renderer` + `SugarCraft\Shine\Theme`
@@ -438,7 +482,9 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 **Upstream:** `gum table` — render tabular data with optional border styling
 
 **candy-shell implementation:**
+
 - `TableCommand.php` — non-interactive, uses `SugarCraft\Sprinkles\Table\Table`
+
 - `parseRows()` uses `fgetcsv()` for proper CSV parsing with quoted fields
 
 **Options:**
@@ -466,6 +512,7 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 **Upstream:** `gum join` — horizontal/vertical text joining (lipgloss JoinHorizontal/JoinVertical)
 
 **candy-shell implementation:**
+
 - `JoinCommand.php` — non-interactive, pure PHP
 
 **Options:**
@@ -491,7 +538,9 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 **Upstream:** `gum log` — leveled log output with formatters
 
 **candy-shell implementation:**
+
 - `LogCommand.php` — non-interactive, pure PHP
+
 - `LogLevel.php` — PHP enum with `badge()`, `order()`, `style()`, `fromString()`
 
 **Options:**
@@ -511,8 +560,11 @@ line, dot, minidot, points, pulse, globe, meter, jump, moon, monkey, hamburger, 
 **Time format aliases (Go parity):** rfc822, rfc850, rfc1123, rfc3339, kitchen, stamp, ansic, unixdate, datetime, dateonly, timeonly, etc.
 
 **Formatters:**
+
 - `text` — `[timestamp] [prefix] LEVEL message`
+
 - `json` — `{"time":..., "level":..., "prefix":..., "message":...}`
+
 - `logfmt` — `time=... level=... prefix=... msg=...`
 
 **Component dependency:** None (pure PHP with `SugarCraft\Sprinkles\Style` for badge rendering)
@@ -710,10 +762,15 @@ $completion = match ($shell) {
 | Completion | kong compgen | custom Bash/Zsh/Fish generators |
 
 **Key gum features NOT in candy-shell:**
+
 1. **Grid-based choose** — gum's choose uses a 2D grid with left/right navigation; candy-shell uses 1D list
+
 2. **Fuzzy matching** — `--fuzzy` flag exists but is a no-op
+
 3. **External editor for write** — gum's write can invoke `$EDITOR`
+
 4. **Per-element style via dotted flags** — `--header.foreground=red` form
+
 5. **Bubble Tea subscriptions** — gum uses Tea.Batch for concurrent commands
 
 ### 5.2 charmbracelet/huh (Form/Prompt Library)
@@ -722,8 +779,11 @@ $completion = match ($shell) {
 
 Maps to `sugar-prompt` (not yet fully implemented in SugarCraft). huh provides:
 - Multi-field forms with pages (Groups)
+
 - Dynamic reactivity via `*Func()` methods with binding invalidation
+
 - Validation with inline error display
+
 - 7 field types: Input, Text, Select, MultiSelect, Confirm, FilePicker, Note
 
 **candy-shell gap:** huh's dynamic forms (fields that react to other fields' values) are not modeled. Each candy-shell command is a single-purpose prompt, not a composable form.
@@ -761,8 +821,11 @@ Similar scope (CLI application framework) but very different implementation:
 
 A standalone terminal application (not a library). Key innovations:
 - **Ternary Search Tree (TST)** for O(k) prefix search
+
 - **Bitmap tracking** for search match highlighting
+
 - **Three display modes:** line, column, tabulate
+
 - **Fuzzy/substring/prefix search** all via TST traversal
 
 **candy-shell gap:** `filter` uses simple substring matching via `ItemList` — no TST, no fuzzy search, no bitmap highlighting of matched characters.
@@ -778,7 +841,9 @@ Based on the README and codebase analysis:
 > "The audit lists upstream-gum flags that are not yet wired in CandyShell."
 
 - **`--style` dotted form** (`--header.foreground=red`) not wired across every command
+
 - **`--fuzzy` flag** is a no-op alias for `--strict` (substring matching)
+
 - **`--show-cursor-line`** on write command is a no-op
 
 ### 6.2 Missing Features vs gum
@@ -823,7 +888,9 @@ Despite being a port, candy-shell introduces some innovations not in upstream gu
 PHP 8.1 attributes provide a cleaner meta-programming story than Go's struct tags:
 ```php
 #[Command(name: 'choose', description: '...')]
+
 #[Alias('cho')]
+
 #[Example('choose a b c', 'Basic usage')]
 final class ChooseCommand extends Command { ... }
 ```
@@ -864,21 +931,34 @@ candy-shell
 
 **Source files:** 40 PHP files in `src/`
 - 1 Application
+
 - 13 Command classes
+
 - 8 Model classes
+
 - 5 Attribute classes
+
 - 3 Completion generators
+
 - 2 Help utilities
+
 - 1 CommandScanner
+
 - 1 LogLevel enum
+
 - 3 Process classes
+
 - 2 Style classes
+
 - 1 Lang class
 
 **Test files:** 23 PHP test files in `tests/`
 - Command tests: Choose, Confirm, Filter, Format, Join, Log, Spin, Style, Table
+
 - Model tests: Choose, Confirm, File, Filter, Input, Pager, Spin, Write
+
 - Unit tests: Attribute, Completion (Bash/Zsh/Fish), EnvVarFallback, Filter, Help, Log, Process, Style
+
 - 1 Fixtures directory with Alpha/Beta/DemoCommand
 
 **Languages:** 16 locales in `lang/` (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar)
@@ -890,34 +970,57 @@ candy-shell
 ## 10. Summary Assessment
 
 **Strengths:**
+
 - Complete 13-command implementation matching gum's surface area
+
 - Clean separation: Command (CLI layer) → Model (TEA layer) → Components (candy-forms)
+
 - PHP 8.3+ type safety throughout
+
 - Rich i18n support (16 locales)
+
 - Env var configuration fallback
+
 - Shell completion for 3 shells
+
 - VHS demos for all interactive commands
+
 - Comprehensive test coverage (23 test files)
 
 **Weaknesses:**
+
 - No fuzzy matching (filter's `--fuzzy` is no-op)
+
 - No 2D grid choose (only 1D list)
+
 - No external editor integration for write
+
 - No Bubble Tea-style subscriptions
+
 - CommandScanner requires pre-loaded classes
+
 - Enum option validation not wired
 
 **Compared to upstream gum:**
+
 - ~85% functional parity for typical shell script use cases
+
 - Missing the advanced filtering and layout features
+
 - PHP-specific advantages: Composer installable, attribute-based discovery, Levenshtein typo suggestions
 
 **Compared to other PHP CLI frameworks:**
+
 - More feature-complete than CLIFramework (no return types, singleton anti-pattern)
+
 - More modern than php-school/cli-menu (modern PHP 8.3+ vs older architecture)
 
 **Priority improvements:**
+
 1. Implement fuzzy matching in filter
+
 2. Wire per-element style flags (dotted form)
+
 3. Add external editor support to write
+
 4. Fix CommandScanner to use autoloader instead of get_declared_classes()

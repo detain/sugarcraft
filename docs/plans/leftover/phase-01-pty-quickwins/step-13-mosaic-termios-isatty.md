@@ -20,6 +20,7 @@ WezTerm detection bug (bundle)
 ## Files
 
 **Modify:**
+
 - `candy-mosaic/src/Detect.php`:
   - Lines ~236-237 — replace `posix_isatty(0) && posix_isatty(1)`
     with `Termios::isAtty(STDIN) && Termios::isAtty(STDOUT)` via
@@ -32,6 +33,7 @@ WezTerm detection bug (bundle)
   in `require` (likely transitive via candy-core).
 
 **Create (recommended):**
+
 - `candy-core/src/Util/TtyDetect.php` — static helper:
   `isAtty(resource $stream): bool` delegating to candy-pty. Single
   call site for every lib that needs "is this a TTY?". Other libs

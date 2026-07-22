@@ -230,6 +230,7 @@ T_SPIN_POINTS      = 400
 ```
 
 - **Full T-Spin:** ≥3 corners filled (including OOB/wall)
+
 - **T-Spin Mini:** Exactly 2 front corners filled (entry side based on rotation)
 
 **Test Coverage:** `tests/Scoring/TSpinTest.php` — 6 tests covering all corner configurations.
@@ -352,7 +353,9 @@ if ($this->lockDelayTicks > 0) {
 **File:** `src/Game.php:388-435`
 
 - Press `c` to swap current piece with held piece
+
 - `canHold` flag resets after each lock (allows one hold per piece)
+
 - If held piece can't fit, hold is rejected (no swap occurs)
 
 ```php
@@ -387,8 +390,11 @@ public const DEFAULT_ARR_US = 50_000;      // 50 ms
 ```
 
 - **DAS (Delayed Auto Shift):** Initial delay before auto-repeat begins
+
 - **ARR (Auto Repeat Rate):** Interval between repeated actions after DAS threshold
+
 - Key down resets accumulator for that direction
+
 - Key up clears accumulator (stops in-progress repeat)
 
 ### Game Controls
@@ -447,7 +453,9 @@ public function addGarbageRows(int $count, ?\Closure $rand = null): self
 ```
 
 - Pushes existing rows down by `$count`
+
 - Fills top `$count` rows with garbage (full rows with one random hole)
+
 - If current piece becomes invalid after adding garbage → game over
 
 ### Computer AI
@@ -464,9 +472,13 @@ private const WEIGHT_LINES   = 9.0;  // Reward completed rows
 ```
 
 **Evaluation functions:**
+
 - `aggregateHeight()` — sum of column heights from bottom
+
 - `countHoles()` — empty cells with blocks above
+
 - `countGaps()` — horizontal gaps in filled rows
+
 - `countCompleteLines()` — rows with all 10 cells filled
 
 ---
@@ -490,8 +502,11 @@ candy-tetris uses **discrete, frame-based gravity** (NES-style frames-per-row). 
 
 Currently **no direct integration** — candy-tetris implements its own discrete gravity via `Score::gravityIntervalUs()` and `GravityMsg` tick scheduling. honey-bounce could be used for:
 - Smooth piece falling animations (preview interpolation)
+
 - Particle effects on line clear
+
 - Animated ghost piece (spring-easing to landing position)
+
 - Camera shake on Tetris
 
 This is an **innovation opportunity**: spring-based ghost piece animation could provide smoother visual feedback than the current instant-ghost approach.
@@ -550,21 +565,33 @@ This is an **innovation opportunity**: spring-based ghost piece animation could 
 ### Already Implemented (Strengths)
 
 1. **Full Guideline Scoring** — T-Spin, B2B, Combo, Perfect Clear (supersedes upstream tetrigo)
+
 2. **DAS/ARR Input** — Professional-grade keyboard timing not in upstream
+
 3. **VS Computer Mode** — Garbage passing + AI opponent
+
 4. **Pure State Architecture** — Every class immutable, Game update returns `[nextGame, ?Cmd]`
+
 5. **Injectable RNG** — Deterministic testing without mocking global state
+
 6. **Clean Separation** — SrsKickTable, TSpin as independent, testable units
 
 ### Opportunities for Enhancement
 
 1. **Full SRS in Game Loop** — Wire `Piece::rotationsWithKicks()` into `Game::tryRotate()` (currently uses simplified horizontal-only kicks)
+
 2. **Soft Drop Scoring** — Currently soft drop moves piece but awards no points
+
 3. **Hard Drop Scoring** — 2 points per cell dropped (guideline standard)
+
 4. **honey-bounce Integration** — Spring-animated ghost piece, line-clear particles
+
 5. **Initial Rotation System (IRS)** — Allow rotation during ARE before piece appears
+
 6. **Initial Hold System (IHS)** — Allow hold during ARE
+
 7. **Diminishing Lock Delay** — Lock delay speeds up with each reset (guideline option)
+
 8. **Ghost Piece Toggle** — Allow hiding ghost per player preference
 
 ---

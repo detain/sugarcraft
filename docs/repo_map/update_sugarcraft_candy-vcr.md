@@ -1,9 +1,11 @@
 # Overview
+
 candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It records TUI sessions as JSONL cassettes with byte/cell-grid assertions, replays them deterministically, and renders VHS-format `.tape` files to animated GIFs via a full PHP pipeline (Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder). The biggest opportunities are in editor integration (tree-sitter grammar), richer visual output (border radius, window chrome), and additional output formats. The biggest missing capability is any interactive editing/debugging workflow for cassettes.
 
 # Internal Capability Summary
 
 ## Architecture
+
 - **Cassette formats**: JsonlFormat (default), CompressedJsonlFormat (gzip), RelativeFormat (delta timestamps, asciinema-style), YamlFormat, AsciinemaFormat (import only)
 - **Recording**: PTY-based via candy-pty, streaming JSONL with crash-safety, hook system (beforeSave/afterCapture), idle trimming, dual timestamps (t + tRaw)
 - **Replay**: SPEED_INSTANT (5ms yield between events) and SPEED_REALTIME modes, deterministic byte/cell-grid assertions
@@ -13,6 +15,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
 - **Msg serialization**: Registry with 19 built-in types + Jsonable catch-all
 
 ## Strengths
+
 - Streaming JSONL with crash-safety (only current event lost on crash)
 - Dual timestamps (t + tRaw) for idle trim with original timing preserved
 - Full hook system for sanitization and metadata injection
@@ -23,6 +26,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
 - Round-trip tape compiler (Lexer → Parser → Compiler → Decompiler)
 
 ## Weaknesses
+
 - Cell equality comparison is O(cols × rows) per frame (1920 comparisons at 30fps = 57,600/sec)
 - No tree-sitter grammar for .tape syntax highlighting
 - No SSH server for remote tape execution (unlike upstream VHS)
@@ -49,6 +53,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
 # Feature Gap Analysis
 
 ## Critical
+
 1. **Tree-sitter grammar for .tape files**
    - Description: No PHP tree-sitter grammar exists for `.tape` syntax highlighting in editors (Neovim, Helix, etc.)
    - Why it matters: Editor integration enables developers to author `.tape` files with full syntax highlighting, error reporting, and auto-formatting
@@ -58,6 +63,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
    - Expected impact: High developer experience improvement
 
 ## High Value
+
 2. **Wait command (screen-pattern-based synchronization)**
    - Description: VHS supports `Wait` directive that waits until a regex pattern appears on screen before proceeding
    - Why it matters: Enables more robust tape recordings that don't depend on exact timing
@@ -91,6 +97,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
    - Expected impact: Smaller outputs, wider format support
 
 ## Medium
+
 6. **Interactive cassette debugging/replay UI**
    - Description: No TUI for stepping through a recorded session event-by-event with diff inspection
    - Why it matters: When a replay assertion fails, developers need visual tools to debug
@@ -124,6 +131,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
    - Expected impact: Enables very long recordings
 
 ## Low Priority
+
 10. **Publishing to vhs.charm.sh-style service**
     - Description: VHS has built-in GIF publishing to shareable URLs
     - Why it matters: Easy sharing of demo GIFs
@@ -168,11 +176,13 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
 ## Current approach vs external approach
 
 **Cell equality comparison** (Current: O(cols × rows) per frame):
+
 - candy-vcr iterates all cells comparing `Cell::equals()` for frame dedup
 - At 80×24 × 30fps = 57,600 cell comparisons/sec
 - `docs/repo_map/sugarcraft_candy-vcr.md` documents this as a known bottleneck
 
 **External approach (hash-based dedup)**:
+
 - Compute SHA-256 of serialized grid+cursor state per frame
 - Hash comparison is O(1) vs O(n) cell iteration
 - Only on hash collision do you need to compare cells
@@ -180,6 +190,7 @@ candy-vcr is a mature v1-ready VHS recorder/player and .tape-to-GIF renderer. It
 - Tradeoff: Memory for hash storage; collision handling adds complexity
 
 **Textual's spatial map**:
+
 - Uses R-tree-like spatial indexing for O(log n) hit detection
 - Not directly applicable to frame comparison but useful for interactive debugging UI
 
@@ -192,10 +203,12 @@ $frameHash = hash('sha256', serialize($snapshot->grid) . serialize($snapshot->cu
 ```
 
 ## Ffmpeg VFR encoding
+
 - Current approach in `FfmpegGifEncoder` uses concat demuxer with process substitution — works well
 - No significant external improvements to borrow; the VFR technique is already state-of-art
 
 ## Glyph cache already well-optimized
+
 - 99.9% hit rate with fingerprint-based invalidation — no further optimization needed
 - Documented in `docs/repo_map/sugarcraft_candy-vcr.md` CALIBER_LEARNINGS.md section
 
@@ -323,34 +336,43 @@ $frameHash = hash('sha256', serialize($snapshot->grid) . serialize($snapshot->cu
 # Notable PRs / Issues / Discussions
 
 ## VHS (charmbracelet/vhs)
+
 **Theme fuzzy matching** (`docs/repo_map/charmbracelet_vhs.md`):
+
 - Uses Levenshtein distance for typo-tolerant theme lookup
 - `agnivade/levenshtein.ComputeDistance()` handles "draclua" → "dracula"
 - Lesson: defensive string matching improves DX significantly
 
 **Wait command** (`docs/repo_map/charmbracelet_vhs.md`):
+
 - `Wait <regex>` directive pauses until pattern appears on screen
 - Critical for cross-terminal reliability; exact timing varies by terminal emulator
 - Lesson: never rely solely on timing for synchronization
 
 **Loop offset** (`docs/repo_map/charmbracelet_vhs.md`):
+
 - Frame renaming during render shifts loop start point
 - Enables first GIF frame to be at an interesting animation state
 - Lesson: timing and framing are separate concerns
 
 ## tree-sitter-vhs (charmbracelet/tree-sitter-vhs)
+
 **Multi-language bindings** (`docs/repo_map/charmbracelet_tree-sitter-vhs.md`):
+
 - Generated parsers for Node.js, Go, Python, Rust, Swift, C
 - `grammar.js` produces `src/parser.c` which is compiled for each target
 - Lesson: invest in code generation infrastructure early
 
 **Semantic highlighting via highlights.scm** (`docs/repo_map/charmbracelet_tree-sitter-vhs.md`):
+
 - Tree-sitter query language maps nodes to highlight groups
 - Editor-agnostic; works in Neovim, Emacs, VS Code (via extensions)
 - Lesson: separate syntax from highlighting rules
 
 ## Bubble Tea teatest (charmbracelet/x)
+
 **Golden file testing** (`docs/repo_map/charmbracelet_x.md`):
+
 - `exp/golden` package with `Update()` method for auto-update
 - `exp/teatest` for Bubble Tea program testing with fixture assertions
 - Lesson: golden files need canonical update mechanism (not just manual)
@@ -358,6 +380,7 @@ $frameHash = hash('sha256', serialize($snapshot->grid) . serialize($snapshot->cu
 # Recommended Roadmap
 
 ## Immediate Wins (Next PR)
+
 1. Fuzzy theme matching (Levenshtein) — 1-2 days, high DX impact
 2. Loop offset for GIF rendering — 1 day, better demo output
 3. Fluent `with*()` setters on Player — 1 day, better DX
@@ -365,6 +388,7 @@ $frameHash = hash('sha256', serialize($snapshot->grid) . serialize($snapshot->cu
 5. Hash-based frame dedup (SHA-256 of grid+cursor) — 2 days, performance
 
 ## Medium-term Improvements (Next 3 PRs)
+
 6. Wait command (screen-pattern-based) — 1 week
 7. Interactive replay debugging UI — 1 week
 8. Iterator-based incremental cassette loading — 1 week
@@ -373,12 +397,14 @@ $frameHash = hash('sha256', serialize($snapshot->grid) . serialize($snapshot->cu
 11. Visual styling (border radius, margins, window bars) — 2 weeks
 
 ## Major Architectural Upgrades
+
 12. Pipeline interface extraction (Renderer/Encoder decoupling) — 2 weeks
 13. Full SSH server mode — 3+ weeks (requires PHP SSH2 server)
 14. VS Code / Neovim editor extensions — 2 weeks
 15. GitHub Action for cassette-based CI testing — 1 week
 
 ## Experimental Ideas
+
 16. MsgPack binary cassette format
 17. SVG rasterizer output
 18. Cassette append mode

@@ -19,6 +19,7 @@ Fix two ways:
 ## Files
 
 **Modify:**
+
 - `sugar-dash/src/Plugin/ExternalModule.php`:
   - Add `private array $pipes`.
   - Replace `proc_open(...)` with `new PosixProcess(...)`.
@@ -29,6 +30,7 @@ Fix two ways:
   `tools/check-path-repos.php`.
 
 **Create:**
+
 - `sugar-dash/tests/fixtures/echo-plugin.sh` — 20-line shell script
   reading line-delimited JSON from stdin, echoing back a valid
   `Response`.
@@ -37,6 +39,7 @@ Fix two ways:
   correct response shape on each. **No mocks** — real subprocess.
 
 **Mark existing for review:**
+
 - `sugar-dash/tests/Plugin/ExternalModuleTest.php` — if it exists and
   passed in spite of the bug, it must have been mocked. Either delete
   or rewrite as a unit test of pure DTO logic.

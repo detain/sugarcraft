@@ -7,9 +7,11 @@ updated: 2026-06-30
 # Implementation Plan: sugar-wishlist
 
 ## Goal
+
 Address all valid findings from the audit of sugar-wishlist, clarifying which findings apply to the actual SSH endpoint picker codebase vs. which are based on a non-existent `Wishlist.php`.
 
 ## Context & Decisions
+
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | sugar-wishlist is an SSH endpoint launcher (port of charmbracelet/wishlist), NOT a generic wishlist/item-selector | Verified via README.md, composer.json description, and source code examination | `sugar-wishlist/README.md:L16` |
@@ -25,6 +27,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding Claim:** `selectItem()` and `toggleItem()` in `src/Wishlist.php` accept any integer index without validation.
 
 **Investigation Notes:**
+
 - `src/Wishlist.php` does NOT exist in this codebase
 - The actual selection mechanism is `Picker::pick(array $endpoints): ?Endpoint` at `Picker.php:L49`
 - Picker uses a cursor (`$this->cursor`) that is bounds-checked at `Picker.php:L58-60`:
@@ -46,6 +49,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding Claim:** Adding the same item twice results in duplicate entries.
 
 **Investigation Notes:**
+
 - This is an SSH endpoint launcher, not a generic collection
 - `Config::load()` and `Config::parse()` at `Config.php:L42-65` do not enforce uniqueness
 - Endpoints are identified by name+host combination
@@ -63,6 +67,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding Claim:** Empty wishlist shows blank area rather than a placeholder message.
 
 **Investigation Notes:**
+
 - Picker already handles empty state at `Picker.php:L175-177`:
   ```php
   if ($matches === []) {
@@ -82,6 +87,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding Claim:** `selectedItems()` recomputes selection array on every call.
 
 **Investigation Notes:**
+
 - No `selectedItems()` method exists in this codebase
 - Picker uses single selection via cursor, not a selection array of bools
 - `Picker::pick()` returns a single `?Endpoint`, not a list of selected items
@@ -98,6 +104,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding 8:** Complexity is appropriate
 
 **Investigation Notes:**
+
 - All four findings state N/A — no issues found
 - Tests pass cleanly (109 tests, 302 assertions)
 - Code is well-structured with clear separation of concerns
@@ -111,6 +118,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding Claim:** Items can be added and selected but not removed (except through UI). No API to remove an item directly.
 
 **Investigation Notes:**
+
 - This is an SSH config reader/launcher, not a mutable wishlist
 - Endpoints are loaded from config files (YAML/JSON/SSH config)
 - The Picker provides a UI for selection, not for editing
@@ -127,6 +135,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding Claim:** Wishlist items only have selected/unselected state. No quantity, priority, or notes per item.
 
 **Investigation Notes:**
+
 - `Endpoint` already has a `description` field at `Endpoint.php:L29`
 - Endpoints are SSH connection targets, not items with quantities
 - Priority/ranking is handled by fuzzy match scoring in Picker
@@ -142,6 +151,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding Claim:** No `examples/` directory exists.
 
 **Investigation Notes:**
+
 - `examples/sample-wishlist.yml` EXISTS at `sugar-wishlist/examples/sample-wishlist.yml`
 - Contains sample YAML configuration demonstrating the format
 
@@ -157,6 +167,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 **Finding 13:** No async improvements needed
 
 **Investigation Notes:**
+
 - composer.json requires `"php": ">=8.3"`
 - Uses pcntl_exec for synchronous process replacement (inherently synchronous)
 - Async would not make sense for a process-replacing SSH launcher
@@ -172,6 +183,7 @@ Address all valid findings from the audit of sugar-wishlist, clarifying which fi
 Based on the investigation, the following improvements could be made to the library (not from the findings, but from actual code review):
 
 ### 2.1 — Endpoint deduplication option (LOW)
+
 Add optional deduplication in `Config::parse()` to warn or remove endpoints with duplicate name+host combinations.
 
 **Severity:** LOW  
@@ -180,6 +192,7 @@ Add optional deduplication in `Config::parse()` to warn or remove endpoints with
 ---
 
 ### 2.2 — Add IPv6 handling verification (LOW)
+
 The Picker accepts IPv6 addresses (tested in `PickerTest.php:L237-249`), but endpoint validation for IPv6 host format is minimal.
 
 **Severity:** LOW  
@@ -206,5 +219,6 @@ The Picker accepts IPv6 addresses (tested in `PickerTest.php:L237-249`), but end
 | 13. No async needed | N/A | VALID | None |
 
 ## Notes
+
 - 2026-06-30: Investigation reveals the findings file was likely generated for a different/misunderstood codebase. The `sugar-wishlist` library is a well-structured SSH endpoint picker with 109 passing tests and no significant issues found.
 - The findings reference `src/Wishlist.php` which does not exist. The closest equivalent is `src/Picker.php` which correctly handles all the concerns mentioned (bounds checking, empty state, etc.)

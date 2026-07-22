@@ -94,10 +94,15 @@ private static function build(): string {
 ```
 
 **Key differences from upstream:**
+
 - Adds a `Utf8` state (not in original Go)
+
 - OSC/DCS string ranges extend to 0xFF
+
 - `:` (0x3A) is a sub-parameter separator per VT500 spec
+
 - DEL executes in Ground (per upstream tweak)
+
 - ST C1 (0x9C) dispatches rather than ignores
 
 ### 2.3 Action Enum
@@ -196,6 +201,7 @@ private static function build(): string {
 
 **Renderer path (`OscHandlerImpl`)** only implements:
 - OSC 0/1/2 (window title)
+
 - OSC 8 (hyperlink)
 
 ### 3.4 SGR Attributes
@@ -400,12 +406,14 @@ final readonly class Mode {
 candy-vt is **orthogonal** to candy-core's renderer:
 
 - **candy-core** is the TUI runtime (Model/View/Update loop, event handling)
+
 - **candy-vt** is the ANSI byte stream → cell grid emulator
 
 **Integration point:** `candy-vcr` (VHS cassette recorder/player) uses candy-vt's `Terminal` + `Snapshot` to drive every rendered frame. The vcr pipeline feeds raw ANSI bytes into a `Terminal` instance and captures `Snapshot::of($terminal, $time)` for each frame.
 
 **No direct dependency** from candy-core on candy-vt. They serve different purposes:
 - candy-core: renders to terminal
+
 - candy-vt: parses terminal output
 
 ---
@@ -416,7 +424,9 @@ candy-vt is **orthogonal** to candy-core's renderer:
 
 The 4096-byte table is generated once at first use and cached in a static. Each byte processed requires:
 1. Table lookup: `self::$table[$state << 8 | $byte]`
+
 2. Unpack: `($entry >> 4)` for action, `($entry & 0x0F)` for next state
+
 3. Perform action via `match` statement
 
 **Complexity:** O(1) per byte
@@ -424,12 +434,17 @@ The 4096-byte table is generated once at first use and cached in a static. Each 
 ### 7.2 Cell Grid Mutations
 
 **Buffer (mutable path):**
+
 - Direct array index mutation: `$this->grid[$row][$col] = $cell`
+
 - No copy-on-write overhead
 
 **CellGrid (renderer path):**
+
 - Immutable: every `set()` returns a new instance
+
 - Array copy: `array_map(fn (array $r) => $r, $this->grid)` on each write
+
 - Dirty-region tracking avoids full-grid scans for rendering
 
 ### 7.3 Scroll Operations
@@ -463,14 +478,23 @@ Uses `SugarCraft\Core\Util\Width::string()` for wide-character detection. This i
 
 Comprehensive coverage of:
 - UTF-8 multi-byte (2/3/4 byte) print handling
+
 - Partial UTF-8 across feed() calls
+
 - C0/C1 control execution
+
 - CSI parsing (params, private prefix, intermediate bytes)
+
 - OSC parsing (BEL/ST terminators, partial across feeds)
+
 - DCS parsing
+
 - SOS/PM/APC dispatch
+
 - Cancellation (CAN/SUB mid-sequence)
+
 - Partial input across multiple feed() calls
+
 - Large mixed input volume test (3000 actions from 1000 iterations)
 
 ### 8.2 Handler Tests
@@ -561,13 +585,21 @@ Comprehensive coverage of:
 The `SugarCraft\Vt\Terminal` (renderer path) uses `CsiHandlerImpl` which is a **simplified subset**:
 
 - No hyperlink support
+
 - No BCE (background color erase) mode
+
 - No synchronized output batching
+
 - No alt screen
+
 - No tab stops
+
 - No focus events
+
 - No clipboard events
+
 - SGR 256-color support is simplified (no truecolor in `CsiHandlerImpl`)
+
 - Only basic cursor movement (no wide-char continuation handling)
 
 ---
@@ -606,15 +638,23 @@ Sequin is a **debugging tool** that decodes/explains ANSI sequences. It does NOT
 candy-vt is a **full emulator** that maintains state (cell grid, cursor, modes) and produces a renderable output.
 
 **Sequin has features candy-vt lacks:**
+
 - Sequence explanation/human-readable output
+
 - PTY execution for capturing real output
+
 - Theme support (Charm adaptive dark/light)
+
 - Golden file testing infrastructure
 
 **candy-vt has features sequin lacks:**
+
 - Terminal state emulation
+
 - Cell grid output
+
 - Scrollback buffer
+
 - Screen diffing
 
 ### 10.3 vs. php-tui/php-tui
@@ -627,14 +667,20 @@ candy-vt is specifically an **ANSI byte stream emulator** — it parses escape s
 
 Ratatui provides:
 - Widget system
+
 - Buffer diffing for efficient redraws
+
 - Cassowary constraint layout
+
 - Multiple backend support
 
 candy-vt provides:
 - ANSI byte stream parsing
+
 - Terminal state emulation
+
 - Scrollback
+
 - Screen diffing (in Screen::diff())
 
 The ratatui cell model is simpler:
@@ -682,7 +728,9 @@ public string $combining = '';
 
 1. **candy-vcr integration** — Already exists but could be enhanced with:
    - Frame deduplication improvements
+
    - Cassette compression
+
    - VCR assertions for mode/cursor verification
 
 2. **candy-shine integration** — Could use candy-vt to parse ANSI and feed into markdown rendering pipeline.
@@ -698,17 +746,25 @@ public string $combining = '';
 ### Strengths
 
 1. **Faithful upstream port** — 1:1 mapping of VT500 state machine, all major CSI/OSC sequences implemented
+
 2. **Comprehensive test coverage** — 36 test files covering parser, handlers, modes, integration
+
 3. **Immutable + fluent patterns** — All state objects use `with*()` pattern per SugarCraft conventions
+
 4. **Dual entry-points** — Separates full VT emulation from lightweight renderer path
+
 5. **Well-documented** — 542-line CALIBER_LEARNINGS.md with detailed implementation notes
+
 6. **Real upstream usage** — Powers candy-vcr's render pipeline
 
 ### Weaknesses
 
 1. **🟡 Incomplete status** — Several gaps (DCS no-op, mouse event emission, truecolor in renderer path)
+
 2. **PHP performance** — Per-byte iteration for parsing, immutable CellGrid copies on write
+
 3. **No Windows ConPTY support** — Not a target for this library specifically
+
 4. **Renderer path is simplified** — Missing many features from full path (hyperlinks, BCE, sync output)
 
 ### Comparison to Upstream Completeness
@@ -783,38 +839,71 @@ public string $combining = '';
 ### Test Files (36 total)
 
 - `tests/Parser/ParserTest.php` — Parser state machine
+
 - `tests/Parser/CsiHandlerImplTest.php` — Renderer CSI handler
+
 - `tests/Parser/OscHandlerImplTest.php` — Renderer OSC handler
+
 - `tests/Parser/SubparamTest.php` — Subparameter handling
+
 - `tests/Handler/ScreenHandlerTest.php` — Full handler integration
+
 - `tests/Handler/SgrHandlerTest.php` — SGR parsing
+
 - `tests/Handler/EraseHandlerTest.php` — Erase operations
+
 - `tests/Handler/ModeHandlerTest.php` — DEC mode handling
+
 - `tests/Handler/CursorHandlerTest.php` — Cursor movement
+
 - `tests/Handler/ScrollHandlerTest.php` — Scrolling
+
 - `tests/Handler/TabHandlerTest.php` — Tab stops
+
 - `tests/Handler/OscHandlerTest.php` — OSC dispatch
+
 - `tests/Handler/SyncOutputTest.php` — DEC 2026 batching
+
 - `tests/Handler/BceTest.php` — BCE erase
+
 - `tests/ModeTest.php` — Mode object
+
 - `tests/Mode/AutoWrapTest.php` — DECAWM
+
 - `tests/Mode/OriginModeTest.php` — DECOM
+
 - `tests/Mode/CursorShapeTest.php` — DECSCUSR
+
 - `tests/Mode/FocusEventTest.php` — Focus events
+
 - `tests/ScreenTest.php` — Screen snapshot + diff
+
 - `tests/Screen/ScrollbackTest.php` — Scrollback ring
+
 - `tests/BufferTest.php` — Buffer operations
+
 - `tests/CellTest.php` — Cell equality
+
 - `tests/Cell/CombiningTest.php` — Combining chars
+
 - `tests/TerminalTest.php` — Full Terminal facade
+
 - `tests/SnapshotTest.php` — Frame capture
+
 - `tests/SgrTest.php` — SGR state
+
 - `tests/SgrUnderlineStylesTest.php` — Underline styles
+
 - `tests/ThemeTest.php` — Theme palette
+
 - `tests/ColorTest.php` — Color resolution
+
 - `tests/CursorTest.php` — Cursor equality
+
 - `tests/HyperlinkTest.php` — Hyperlink parsing
+
 - `tests/WidthIntegrationTest.php` — Wide char + combining
+
 - `tests/FuzzerTest.php` — Random byte fuzzing
 
 ---

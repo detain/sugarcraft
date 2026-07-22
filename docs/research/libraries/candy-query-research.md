@@ -208,6 +208,7 @@ final class App implements Model
 **Why:** Users cannot see column types, indexes, or FK relationships. This is the most visible gap vs competitors.
 
 **Implementation:**
+
 1. Add `Database::columns(string $table): array<array{name,type,notnull,dflt_value,pk}>` using `PRAGMA table_info`
 2. Add `Database::indexes(string $table): array` using `PRAGMA index_list`
 3. Add `Database::foreignKeys(string $table): array` using `PRAGMA foreign_key_list`
@@ -223,6 +224,7 @@ final class App implements Model
 **Why:** Viewing only 100 rows is severely limiting. Every competitor supports pagination.
 
 **Implementation:**
+
 1. Add `page` and `pageSize` state to `App`
 2. Modify `Database::rows()` to accept `OFFSET` and `LIMIT`
 3. Add `<` / `>` or `PgUp`/`PgDn` key handling in rows pane
@@ -237,6 +239,7 @@ final class App implements Model
 **Why:** Read-only browsing is useful, but full CRUD is expected for a database browser.
 
 **Implementation:**
+
 1. Add `editMode`, `editRow`, `editCol` state to `App`
 2. Add `Database::update()` and `Database::delete()` methods
 3. Enter key or `e` enters edit mode on focused cell
@@ -252,6 +255,7 @@ final class App implements Model
 **Why:** Users re-run the same queries. History is not enough without naming.
 
 **Implementation:**
+
 1. Persist `queryFavorites` to JSON file in `~/.config/candy-query/`
 2. Add `S` key to open snippet browser overlay
 3. Named snippets with Enter to load
@@ -265,6 +269,7 @@ final class App implements Model
 **Why:** Users need to understand query performance.
 
 **Implementation:**
+
 1. Add `Database::explain(string $sql): array`
 2. Add `E` key in query pane for explain toggle
 3. Display `EXPLAIN QUERY PLAN` results in a formatted overlay
@@ -278,6 +283,7 @@ final class App implements Model
 **Why:** Tables with many columns cannot be read.
 
 **Implementation:**
+
 1. Track horizontal scroll offset in rows pane
 2. Add `h`/`l` or arrow keys for horizontal navigation
 3. Show column position in status: `[3/12]`
@@ -291,6 +297,7 @@ final class App implements Model
 **Why:** JSON data is unreadable when stored as strings.
 
 **Implementation:**
+
 1. Detect JSON strings with `json_decode` validation
 2. Pretty-print JSON in cell display
 3. Visual indicator for NULL values (e.g., `NULL` in dim color)

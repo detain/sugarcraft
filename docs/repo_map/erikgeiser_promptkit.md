@@ -1,6 +1,7 @@
 # erikgeiser/promptkit
 
 ## Metadata
+
 - **URL:** https://github.com/erikgeiser/promptkit
 - **Language:** Go
 - **Stars:** ~300-500 (GitHub API unavailable, repo appears moderately popular based on activity)
@@ -57,6 +58,7 @@
 **Source:** `erikgeiser/promptkit/selection/`
 
 **Prompt Struct:**
+
 - `Selection[T any]` — Main single-selection prompt config
   - `New[T any](prompt string, choices []T) *Selection[T]` — Factory
   - `RunPrompt() (T, error)` — Execute the prompt
@@ -64,6 +66,7 @@
   - Default styles: `DefaultSelectedChoiceStyle`, `DefaultFinalChoiceStyle`
 
 **Model Struct:**
+
 - `Model[T any]` — Bubbletea model for single selection
   - `Init() tea.Cmd` — Initialize model, validate, setup templates
   - `Update(msg tea.Msg) (tea.Model, tea.Cmd)` — Handle key events
@@ -72,6 +75,7 @@
   - `ValueAsChoice() (*Choice[T], error)` — Get choice with metadata
 
 **Multi-Selection:**
+
 - `MultiSelection[T any]` — Multi-selection config
   - `NewMulti[T any](prompt string, choices []T) *MultiSelection[T]`
   - `RunPrompt() ([]T, error)`
@@ -83,12 +87,14 @@
   - `ValuesAsChoices() ([]*Choice[T], error)` — Get choices in original order
 
 **Choice:**
+
 - `Choice[T any]` — Wraps a choice with string representation
   - `String string` — Display string
   - `Value T` — The actual value
   - `Index() int` — Position in original slice
 
 **KeyMap:**
+
 - `KeyMap` — Key bindings for single selection
   - `Down`, `Up`, `Select`, `Abort`, `ClearFilter`, `ScrollDown`, `ScrollUp`
   - `NewDefaultKeyMap()` — Sensible defaults
@@ -102,6 +108,7 @@
 **Source:** `erikgeiser/promptkit/textinput/`
 
 **TextInput Prompt:**
+
 - `TextInput` — Single-line text input config
   - `New(prompt string) *TextInput` — Factory
   - `RunPrompt() (string, error)` — Execute prompt
@@ -113,6 +120,7 @@
   - `Value() (string, error)` — Get input value
 
 **TextArea (Multi-line):**
+
 - `TextArea` — Multi-line text input config
   - `NewArea(prompt string) *TextArea` — Factory
   - `RunPrompt() (string, error)` — Execute
@@ -123,12 +131,14 @@
   - Auto-resize behavior with `prepareAutoResize()` and `autoResizeInput()`
 
 **KeyMap:**
+
 - `KeyMap` — Full set of text editing key bindings
   - Movement: `MoveBackward`, `MoveForward`, `JumpToBeginning`, `JumpToEnd`
   - Deletion: `DeleteBeforeCursor`, `DeleteUnderCursor`, `DeleteWordBeforeCursor`, `DeleteAllAfterCursor`, `DeleteAllBeforeCursor`
   - Other: `AutoComplete`, `Paste`, `Clear`, `Reset`, `Submit`, `Abort`
 
 **Auto-completion:**
+
 - `AutoCompleteFromSlice(choices []string) func(string) []string` — Case-insensitive
 - `CaseSensitiveAutoCompleteFromSlice` — Case-sensitive variant
 - `commonPrefix(suggestions []string) string` — Find common prefix for auto-complete
@@ -153,12 +163,14 @@
   - `Submit`, `Abort`
 
 **Built-in Templates:**
+
 - `TemplateArrow` — Shows `▸Yes  No` style indicator
 - `TemplateYN` — Classic `[Y/n]` style
 
 ## Notable Algorithms / Named Patterns
 
 ### Generic Type-Safe Prompts
+
 ```go
 // Source: erikgeiser/promptkit/selection/prompt.go:L214
 func New[T any](prompt string, choices []T) *Selection[T]
@@ -166,6 +178,7 @@ func New[T any](prompt string, choices []T) *Selection[T]
 Uses Go 1.18+ generics to provide type-safe selection without interface{} boxing.
 
 ### BubbleTea Model Pattern
+
 ```go
 // Source: erikgeiser/promptkit/selection/model.go:L54-L97
 func (m *Model[T]) Init() tea.Cmd { ... }
@@ -175,6 +188,7 @@ func (m *Model[T]) View() tea.View { ... }
 Implements the standard Charmbracelet BubbleTea MVC pattern (Model/Update/View).
 
 ### Template-Based Styling
+
 ```go
 // Source: erikgeiser/promptkit/selection/model.go:L99-L128
 func (m *Model[T]) initTemplate() (*template.Template, error) {
@@ -189,6 +203,7 @@ func (m *Model[T]) initTemplate() (*template.Template, error) {
 Template functions are composed from multiple sources (termenv, promptkit, custom).
 
 ### Auto-Pagination with Binary Search
+
 ```go
 // Source: erikgeiser/promptkit/selection/model.go:L258-L288
 func (m *Model[T]) forceUpdatePageSizeForHeight() {
@@ -203,6 +218,7 @@ func (m *Model[T]) forceUpdatePageSizeForHeight() {
 ```
 
 ### Common Prefix Auto-Complete
+
 ```go
 // Source: erikgeiser/promptkit/textinput/autocomplete.go:L78-L99
 func commonPrefix(suggestions []string) string {
@@ -220,6 +236,7 @@ func commonPrefix(suggestions []string) string {
 Uses sorting to reduce prefix comparison to just first and last elements.
 
 ### Choice String Representation Priority
+
 ```go
 // Source: erikgeiser/promptkit/selection/choice.go:L23-L40
 func newChoice[T any](item T) *Choice[T] {
@@ -235,6 +252,7 @@ func newChoice[T any](item T) *Choice[T] {
 Priority order for choosing display string: explicit field > string > Stringer interface > default formatting.
 
 ### Filtered and Paged Choices
+
 ```go
 // Source: erikgeiser/promptkit/selection/model.go:L396-L418
 func (m *Model[T]) filteredAndPagedChoices() ([]*Choice[T], int) {
@@ -295,6 +313,7 @@ func (m *Model[T]) filteredAndPagedChoices() ([]*Choice[T], int) {
 | WrapMode (WordWrap/HardWrap/Truncate) | `sugar-bits` | Text wrapping utilities |
 
 **Mapping Notes:**
+
 - **sugar-prompt** would be the primary target — this library is essentially a prompt/question framework
 - The generic `Selection[T]` / `MultiSelection[T]` pattern could inform SugarCraft's type-safe component design
 - Template-based rendering is similar to how SugarCraft uses PHP templates for rendering

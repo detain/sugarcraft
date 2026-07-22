@@ -1,6 +1,7 @@
 # alecrabbit/php-console-spinner
 
 ## Metadata
+
 - URL: https://github.com/alecrabbit/php-console-spinner
 - Language: PHP
 - Stars: Unknown (GitHub API did not return data; likely a niche but actively maintained library)
@@ -8,6 +9,7 @@
 - Description: An extremely flexible console spinner library for PHP CLI applications with support for both asynchronous (event-loop based) and synchronous modes.
 
 ## Feature List
+
 - **Dual-mode operation**: Asynchronous mode (via revolt/react event loops) and synchronous mode
 - **ANSI color support**: No color, 16 colors (ANSI4), 256 colors (ANSI8 - default), and true color (ANSI24)
 - **Auto cursor hide/show**: Automatically manages terminal cursor visibility
@@ -22,6 +24,7 @@
 ## Key Classes and Methods
 
 ### Facade (Main Entry Point)
+
 - `Facade::createSpinner(?ISpinnerSettings $settings = null): ISpinner` — Creates and optionally auto-attaches a spinner to the driver
 - `Facade::getDriver(): IDriver` — Retrieves the singleton driver instance
 - `Facade::getLoop(): ILoop` — Retrieves the event loop (throws if unavailable in sync mode)
@@ -30,44 +33,53 @@
 ### Core Classes
 
 **ISpinner (Spinner)**
+
 - `getFrame(?float $dt = null): IFrame` — Gets current frame for rendering
 - `getInterval(): IInterval` — Gets update interval
 - `add(IWidgetContext $element): IWidgetContext` — Adds a widget element (for composite widgets)
 - `remove(IWidgetContext $element): void` — Removes a widget element
 
 **IDriver (Driver)**
+
 - `add(ISpinner $spinner): void` — Registers a spinner with the driver
 - `remove(ISpinner $spinner): void` — Unregisters a spinner
 - `render(?float $dt = null): void` — Renders current frame to output
 - `has(ISpinner $spinner): bool` — Checks if spinner is registered
 
 **IDriverLinker (DriverLinker)**
+
 - `link(IDriver $driver): void` — Links driver to an event loop for automatic rendering
 
 **IContainer (Container)**
+
 - PSR-11 compatible DI container with custom service definition registry
 - Singleton and transient service support
 - Used internally to wire up all factory dependencies
 
 **Widget and WidgetRevolver**
+
 - `AWidget` — Base widget class managing frames and spacers
 - `Widget` — Concrete widget implementation
 - `WidgetRevolver` — Combines style and character revolvers into final frames
 
 **Frame System**
+
 - `ICharFrame` / `CharFrame` — Represents a character frame with sequence and width
 - `IStyleFrame` / `StyleFrame` — Represents a style frame with ANSI formatting
 - `IFrameCollection` / `FrameCollection` — Collection of frames
 
 **Palette System**
+
 - `ACharPalette` / `ICharPalette` — Character/spinner character sets
 - `AStylePalette` / `IStylePalette` — ANSI color styling
 - Built-in palettes: `Snake` (Unicode spinner chars), `Rainbow` (colorful styles), `NoStylePalette`, `NoCharPalette`
 
 **Pattern System**
+
 - `IPattern` / `Pattern` — Represents a spinner pattern (interval + frames)
 
 **Options/Enums**
+
 - `StylingMethodOption` — AUTO, NONE, ANSI4, ANSI8, ANSI24
 - `RunMethodOption` — SYNCHRONOUS, ASYNCHRONOUS
 - `SignalHandlingOption` — enables/disables signal handling
@@ -87,6 +99,7 @@
 - **Cursor Management**: ANSI escape sequences for cursor positioning and erasure (`\r`, `\e[K`, `\e[?25l`)
 
 ## Strengths
+
 - **Extremely flexible architecture**: 419 PHP files with clear separation of concerns
 - **Dual-mode support**: Works with or without event loops (ReactPHP, Revolt)
 - **Rich customization**: Extensible character palettes, style palettes, and spinner patterns
@@ -97,6 +110,7 @@
 - **Strict typing**: PHP 8.2+ with strict_types, readonly properties, and comprehensive interfaces
 
 ## Weaknesses
+
 - **Steep learning curve**: Highly abstracted architecture can be difficult to understand
 - **Incomplete documentation**: README notes "documentation is a bit clumsy at the moment and CAN BE MISLEADING"
 - **API not stable**: Pre-1.0 version; API subject to change until 1.0.0-BETA.0
@@ -108,20 +122,24 @@
 ## SugarCraft Mapping
 
 ### candy-core
+
 - **Relevant**: Yes — candy-core is the foundational TUI library for SugarCraft
 - **Mapping**: The spinner architecture (especially `Driver`, `Renderer`, `SequenceStateWriter`) provides patterns for rendering ANSI terminal output that could inform candy-core's TTY rendering infrastructure
 - **Note**: The `ConsoleCursor` and cursor hide/show management (`\e[?25l`, `\e[?25h`) is directly applicable
 
 ### sugar-bits
+
 - **Relevant**: Potential — sugar-bits is described as components/data/forms/apps
 - **Mapping**: A spinner/progress indicator component could be built as part of sugar-bits using patterns from this library
 - **Note**: This library is too low-level to be a direct sugar-bits dependency but could inspire component patterns
 
 ### honey-bounce
+
 - **Relevant**: No — honey-bounce is math/physics/motion
 - **No direct mapping**
 
 ### Other Observations
+
 - This library provides a reference implementation for ANSI terminal spinners that SugarCraft's TUI components could leverage
 - The factory/container architecture is more complex than SugarCraft's current patterns but shows how to build extensible terminal UI
 - Key relevant files: `src/Spinner/Core/Output/` (output buffering, cursor management) and `src/Spinner/Core/Driver/Renderer.php` (ANSI rendering)

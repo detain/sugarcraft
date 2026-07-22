@@ -40,11 +40,13 @@ Change `catch (\RuntimeException $e)` to `catch (\Throwable $e)` to prevent `\Er
 **Severity:** critical
 
 **Conditions for success:**
+
 1. `Model::new()->View()` on empty list returns `"NoItems: list has no items\n"` (not an exception bubbling up)
 2. `bufferFromOutput()` throwing `\TypeError` is caught and returned as a string, not propagated
 3. Verify with a test that passes an invalid object to `addItem()` and calls `View()` — no uncaught exception
 
 **Related code:**
+
 - `src/Model.php:448-477` — `View()` method
 - `src/Model.php:634-648` — `bufferFromOutput()` uses `Buffer::new()`, `Cell::new()`, `buffer->withCellAt()`
 - `src/Model.php:472-473` — `DiffEncoder::encode()`
@@ -66,11 +68,13 @@ Remove `case filtered;` from the `FilterState` enum and update the docblock tran
 **Severity:** critical
 
 **Conditions for success:**
+
 1. `FilterState` has only `unfiltered` and `filtering` cases
 2. All references to `FilterState::filtered` are removed from code and docs
 3. README state-transition table is updated to remove `filtering → filtered`
 
 **Related code:**
+
 - `src/FilterState.php:16-26` — enum definition with 3 cases
 - `src/Model.php:185` — sets `FilterState::filtering` in `withFilterFn()`
 - `src/Model.php:213` — sets `FilterState::unfiltered` in `withoutFilter()`
@@ -92,11 +96,13 @@ Add a fluent `setLineOffset(int $n): self` method that uses `mutate()`, consiste
 **Severity:** critical
 
 **Conditions for success:**
+
 1. `Model::new()->setLineOffset(10)` returns a new Model with `lineOffset === 10`
 2. Original model is unchanged (immutability verified)
 3. `setLineOffset()` chains with other fluent setters
 
 **Related code:**
+
 - `src/Model.php:45` — `public int $lineOffset = 5;`
 - `src/Model.php:142-145` — `setCursorOffset()` as fluent setter template
 - `src/Model.php:496-498` — `initPrefixer()` receives `$this->lineOffset`
@@ -118,11 +124,13 @@ Replace byte-level `strlen()`/`substr()` with grapheme-aware splitting. Use `Wid
 **Severity:** critical
 
 **Conditions for success:**
+
 1. A word containing CJK characters (e.g., "日本語") at `$maxWidth = 3` splits correctly without corrupting characters
 2. An emoji like "👍🏻" (5 bytes) is not split mid-grapheme when splitting at `$maxWidth = 2`
 3. Existing test `testLinesWithVeryLongWordExercisingSplitOverWidth` still passes
 
 **Related code:**
+
 - `src/Model.php:593-600` — uses `\strlen($word)` and `\substr($word, $i, $maxWidth)` — byte-level
 - `src/Model.php:552-586` — `hardWrap()` uses `preg_split('/\s+/u', ...)` with `u` flag (UTF-8 aware)
 - `candy-core/src/Util/Width.php:19-52` — `Width::string()` uses `grapheme_extract()` for proper grapheme handling
@@ -146,11 +154,13 @@ After `usort()`, build an `array_flip` map of `Item::$id => newIndex` instead of
 **Severity:** high
 
 **Conditions for success:**
+
 1. After sorting, the cursor correctly lands on the same logical item (verified by item ID, not object identity)
 2. No O(n) linear scan after sorting (verified by code inspection)
 3. Existing test `testSortWithLessFunc` still passes — cursor stays on 'z' item
 
 **Related code:**
+
 - `src/Model.php:264-284` — `sort()` method
 - `src/Model.php:269` — `$selected = $this->items[$this->cursorIndex] ?? null` — object identity preserved
 - `src/Model.php:275-281` — O(n) foreach linear search by object identity `===`
@@ -173,12 +183,14 @@ Add `\max(1, $width)` clamping (or explicit guards) in `setWidth()`, `setHeight(
 **Severity:** high
 
 **Conditions for success:**
+
 1. `setWidth(-10)` returns a model with `width === 1` (clamped)
 2. `setHeight(-5)` returns a model with `height === 1`
 3. `setCursorOffset(-3)` returns a model with `cursorOffset === 1`
 4. Existing tests that rely on zero/negative values (if any) still pass
 
 **Related code:**
+
 - `src/Model.php:127-169` — all dimension setters
 - `src/Model.php:376-378` — `lines()` checks `$this->width <= 0 || $this->height <= 0` but negative values pass this check
 - `src/Model.php:312` — `setCursor()` uses `\max(0, \min($index, ...))` — shows the clamping pattern
@@ -202,12 +214,14 @@ Add a `Sanitizer` interface or helper method that strips dangerous ANSI sequence
 **Severity:** high
 
 **Conditions for success:**
+
 1. A `Model` with item containing `\x1b[2J` (screen clear) renders safely (the sequence is stripped or escaped)
 2. `\x1b[?1049h` (alternate buffer switch) is stripped
 3. Invisible/ambiguous ANSI sequences are handled
 4. Documentation in class docblock explicitly notes the sanitization requirement
 
 **Related code:**
+
 - `src/Model.php:513` — `$rawLines = $this->hardWrap((string) $item->value, $contentWidth);`
 - `candy-core/src/Util/Ansi.php` — likely already has ANSI stripping utilities
 
@@ -230,12 +244,14 @@ Add `setLessFunc(\Closure $fn): self` and `setEqualsFunc(\Closure $fn): self` me
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `Model::new()->setLessFunc(fn($a, $b) => ...)` returns a new model with `lessFunc` set
 2. `Model::new()->setEqualsFunc(fn($a, $b) => ...)` returns a new model with `equalsFunc` set
 3. Chaining works: `->setLessFunc(...)->setEqualsFunc(...)`
 4. Existing tests that assign directly (`$model->lessFunc = ...`) continue to work (backward compat)
 
 **Related code:**
+
 - `src/Model.php:49-52` — `public ?\Closure $lessFunc = null;` and `public ?\Closure $equalsFunc = null;`
 - `tests/ModelTest.php:105` — `$this->model->lessFunc = fn($a, $b) => ...`
 - `tests/ModelTest.php:130` — `$this->model->equalsFunc = fn($a, $b) => ...`
@@ -258,11 +274,13 @@ Refactor `withFilterFn()` to use the `mutate()` helper internally instead of its
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `withFilterFn()` returns a new model (not `$this` when unchanged)
 2. `withFilterFn()` uses `mutate()` or delegates to a private `filterItems()` method that uses `mutate()`
 3. Existing tests pass, especially `testWithFilterFnReturnsNewInstance`
 
 **Related code:**
+
 - `src/Model.php:181-198` — current implementation does `clone $this` then direct mutation
 - `src/Model.php:101-106` — `mutate()` helper pattern
 - `src/Model.php:233-237` — `addItem()` as correct `mutate()` usage example
@@ -284,11 +302,13 @@ When `filterFn === null`, return via `mutate()` for consistency, or document why
 **Severity:** low
 
 **Conditions for success:**
+
 1. Without filter: same behavior (returns `$this` early) but via `mutate()` with identity function, OR
 2. With filter: returns new instance via `mutate()`
 3. Behavior unchanged; pattern consistent
 
 **Related code:**
+
 - `src/Model.php:208-210` — `if ($this->filterFn === null) { return $this; }`
 
 **Investigation notes:**
@@ -308,11 +328,13 @@ Build the new items array via `array_map` or `usort` on the clone, then assign i
 **Severity:** low
 
 **Conditions for success:**
+
 1. `sort()` still returns the correctly sorted items with correct cursor
 2. Uses `mutate()` consistently with other methods
 3. Existing tests pass
 
 **Related code:**
+
 - `src/Model.php:264-284` — current pattern with local `$items` copy + `usort` + `mutate()`
 - `src/Model.php:256-259` — `clear()` as a cleaner mutation pattern example
 
@@ -330,10 +352,12 @@ Either (a) add `withResetPreviousFrame(): self` returning a new instance, or (b)
 **Severity:** medium
 
 **Conditions for success:**
+
 1. Either `withResetPreviousFrame(): self` exists and is used instead, OR
 2. The method is documented as intentionally mutable with rationale
 
 **Related code:**
+
 - `src/Model.php:655-658` — `public function resetPreviousFrame(): void { $this->previousFrame = null; }`
 - `tests/ModelTest.php:698` — test calls `$m2->resetPreviousFrame()` on a model instance
 - `tests/ModelTest.php:681-701` — `testResetPreviousFrameForcesFullFrame`
@@ -355,12 +379,14 @@ On invalid index, return a cloned model (a no-op clone) instead of `$this`. Alte
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `removeItem(99)` returns a new Model instance (clone with no-op mutation), not `$this`
 2. `removeItem(-1)` returns a new Model instance
 3. `removeItem(validIndex)` returns a new Model instance with item removed
 4. All existing tests pass
 
 **Related code:**
+
 - `src/Model.php:242-251` — `if ($index < 0 || $index >= \count($this->items)) { return $this; }`
 - `tests/ModelTest.php:354-366` — tests `assertSame($m, $result)` which is the behavior to change
 
@@ -381,10 +407,12 @@ Choose one error handling strategy: either both throw exceptions, or both return
 **Severity:** medium
 
 **Conditions for success:**
+
 1. Either `View()` on empty model throws (not catches), OR `cursorItem()` returns a string/on-empty indicator
 2. Docblocks clearly document the error handling strategy for each method
 
 **Related code:**
+
 - `src/Model.php:302-308` — `cursorItem()` throws `\RuntimeException(Lang::t('list.no_items'))` on empty
 - `src/Model.php:474-476` — `View()` catches `\RuntimeException` and returns `$e->getMessage() . "\n"`
 - `lang/en.php:12` — `'list.no_items' => 'NoItems: list has no items'`
@@ -409,6 +437,7 @@ Add navigation methods:
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `cursorToStart()` moves cursor to index 0
 2. `cursorToEnd()` moves cursor to `length() - 1`
 3. `cursorPageUp()` moves up by viewport height (clamps at 0)
@@ -416,6 +445,7 @@ Add navigation methods:
 5. All methods are fluent and return new instances
 
 **Related code:**
+
 - `src/Model.php:315-323` — `cursorUp()` and `cursorDown()` as implementation templates
 
 **Investigation notes:**
@@ -437,12 +467,14 @@ Add:
 **Severity:** low
 
 **Conditions for success:**
+
 1. `itemAt(0)` returns the first item's value
 2. `itemAt(-1)` or `itemAt(999)` throws `\OutOfBoundsException`
 3. `tryItemAt(-1)` returns null
 4. `tryItemAt(0)` returns `?\Stringable`
 
 **Related code:**
+
 - `src/Model.php:343-359` — `find()` as a model method that queries items
 - `src/Model.php:302-308` — `cursorItem()` as a template for throwing on empty
 
@@ -462,11 +494,13 @@ Add:
 **Severity:** low
 
 **Conditions for success:**
+
 1. `addItems(new StringItem('a'), new StringItem('b'), new StringItem('c'))` adds 3 items
 2. `addItemsFromArray(['a', 'b', 'c'])` wraps strings in `StringItem` automatically
 3. Returns a single new instance (one clone, multiple pushes)
 
 **Related code:**
+
 - `src/Model.php:233-237` — `addItem()` for reference
 
 ---
@@ -483,11 +517,13 @@ Add a `scrollOffset(int $n): self` method to shift the visible viewport window i
 **Severity:** low
 
 **Conditions for success:**
+
 1. If implemented: `scrollOffset(5)` returns a model with a viewport shifted down by 5 lines
 2. Chaining with cursor movements works correctly
 3. The implementation does not break existing `cursorOffset` behavior
 
 **Related code:**
+
 - `src/Model.php:382-436` — `lines()` computes viewport dynamically from cursor + cursorOffset
 - `src/Model.php:45` — `public int $lineOffset = 5;` — the existing scroll anchor
 
@@ -510,6 +546,7 @@ Add optional `CancellationToken $token = null` parameters to `View()`, `lines()`
 **Severity:** low
 
 **Conditions for success:**
+
 1. `View()` accepts `?CancellationToken $token = null`
 2. `lines()` accepts `?CancellationToken $token = null`
 3. `sort()` accepts `?CancellationToken $token = null`
@@ -518,6 +555,7 @@ Add optional `CancellationToken $token = null` parameters to `View()`, `lines()`
 6. When token is null, behavior is unchanged
 
 **Related code:**
+
 - `composer.json:70-73` — `"sugarcraft/candy-async"` in repositories
 - `candy-async/src/CancellationToken.php:37-40` — `isCancelled()` method
 - `src/Model.php:371-439` — `lines()` — long-running loops at lines 384-393, 403-410, 426-434
@@ -540,11 +578,13 @@ Consider adding a `linesStream(): \Generator` that `yield`s lines one at a time,
 **Severity:** low
 
 **Conditions for success:**
+
 1. If implemented: `linesStream()` yields lines one at a time as `\Generator`
 2. Each yield point is a safe cancellation/interleaving point with the event loop
 3. Output is identical to `lines()` when consumed fully
 
 **Related code:**
+
 - `src/Model.php:371-439` — `lines()`
 
 **Investigation notes:**
@@ -564,6 +604,7 @@ Consider adding `matchAsync(string $query, array $items, ?CancellationToken $tok
 **Severity:** low
 
 **Conditions for success:**
+
 1. If implemented: `matchAsync()` returns a `React\Promise\Promise`
 2. Scoring is batched (e.g., 100 candidates per `futureTick`) to avoid blocking
 3. Cancellation via `CancellationToken` works mid-scoring
@@ -587,11 +628,13 @@ Remove `public static function ansiWidth(string $s): int` — it's a direct pass
 **Severity:** low
 
 **Conditions for success:**
+
 1. `DefaultPrefixer::ansiWidth()` is removed
 2. All call sites (`$this->sepWidth = self::ansiWidth($this->separator)` at line 59, etc.) use `Width::string()` directly
 3. `Width` is imported in `DefaultPrefixer.php`
 
 **Related code:**
+
 - `src/DefaultPrefixer.php:104-107` — `public static function ansiWidth(string $s): int { return Width::string($s); }`
 - `src/DefaultPrefixer.php:7` — `use SugarCraft\Core\Util\Width;` already imported
 
@@ -609,11 +652,13 @@ Replace `strtolower($query)` and `strtolower($candidate)` with `\mb_strtolower(.
 **Severity:** medium
 
 **Conditions for success:**
+
 1. `FuzzyMatch::score('ÉCLAIR', 'éclair')` returns a positive match score (case-insensitive match works)
 2. `FuzzyMatch::score('ΣΠΑ', 'σπα')` returns a positive match score (Greek letters work)
 3. Existing tests pass with ASCII input
 
 **Related code:**
+
 - `src/FuzzyMatch.php:40-41` — `$q = strtolower($query); $c = strtolower($candidate);`
 
 **Investigation notes:**
@@ -633,11 +678,13 @@ Extract scoring constants into a `ScoringProfile` class or pass as constructor p
 **Severity:** low
 
 **Conditions for success:**
+
 1. A `ScoringProfile` class or enum exists with the 5 constants
 2. `FuzzyMatch` can be constructed with a custom profile
 3. Default behavior unchanged with sensible defaults
 
 **Related code:**
+
 - `src/FuzzyMatch.php:15-19` — 5 private constants
 
 ---
@@ -654,6 +701,7 @@ Add optional `LoggerInterface $logger = null` parameter to `View()`. When an exc
 **Severity:** low
 
 **Conditions for success:**
+
 1. `View()` accepts `?LoggerInterface $logger = null`
 2. When an exception is caught and `$logger` is provided, the error is logged at WARNING level
 3. When `$logger` is null, behavior unchanged (no logging)
@@ -672,10 +720,12 @@ Use consistent access — either `mb_substr` with bounds checking, or iterate gr
 **Severity:** low
 
 **Conditions for success:**
+
 1. Code inspection confirms consistency
 2. Test with CJK/emoji content in items renders correctly
 
 **Related code:**
+
 - `src/Model.php:642` — `$char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';`
 - `src/Model.php:637` — `$lines = \explode("\n", $output);` — output is plain text
 
@@ -693,10 +743,12 @@ Add `getItemIds(): array` public method that returns the list of item IDs in ord
 **Severity:** low
 
 **Conditions for success:**
+
 1. `getItemIds()` returns `array<int>` of item IDs in order
 2. `testItemIdsAreUniqueAndIncreasing` can use the public method instead of reflection
 
 **Related code:**
+
 - `tests/ModelTest.php:707-727` — `testItemIdsAreUniqueAndIncreasing` uses reflection
 - `src/Item.php:16` — `public readonly int $id;`
 
@@ -716,6 +768,7 @@ Add a detailed docblock explanation for `$lineOffset` clarifying its semantic ef
 **Severity:** low
 
 **Conditions for success:**
+
 1. `src/Model.php:45` — `public int $lineOffset = 5;` has a detailed docblock
 2. Class docblock at line 14-35 mentions `lineOffset` and explains its role
 
@@ -733,6 +786,7 @@ Add a README or inline note about PHP 8.4 nullable parameter syntax. Current `?T
 **Severity:** low
 
 **Conditions for success:**
+
 1. A note in CALIBER_LEARNINGS.md or inline docblock clarifies the migration path for PHP 8.4 compatibility
 
 ---
@@ -749,9 +803,11 @@ Document that each Model instance has its own `$idCounter` starting at 0. Cloned
 **Severity:** informational
 
 **Conditions for success:**
+
 1. Either a docblock on `$idCounter` clarifies this, or CALIBER_LEARNINGS.md notes it
 
 **Related code:**
+
 - `src/Model.php:79` — `private int $idCounter = 0;`
 - `src/Model.php:103` — `mutate()` does `clone $this` — counter is also cloned (0)
 - `src/Model.php:235` — `$id = $this->idCounter++;`
@@ -770,10 +826,12 @@ Add an explicit note that mouse interaction (Finding #17) is deferred to `candy-
 **Severity:** informational
 
 **Conditions for success:**
+
 1. CALIBER_LEARNINGS.md has a note explicitly linking Finding #17 to candy-mouse integration intent
 2. The note documents the expected integration points (hit-testing, click handlers)
 
 **Related code:**
+
 - `CALIBER_LEARNINGS.md:11-13` — existing mouse integration note
 - `candy-mouse/src/ZoneClickTracker.php` — zone-based click tracking
 - `candy-mouse/src/Scanner.php` — mouse event scanning
@@ -787,16 +845,19 @@ The CALIBER_LEARNINGS.md already states "Mouse hit-testing self-contained via ca
 ## Verification
 
 ### Pre-flight
+
 ```bash
 cd /home/sites/sugarcraft/candy-lister && composer install
 ```
 
 ### Run tests
+
 ```bash
 cd /home/sites/sugarcraft/candy-lister && vendor/bin/phpunit
 ```
 
 ### Specific test files
+
 ```bash
 cd /home/sites/sugarcraft/candy-lister && vendor/bin/phpunit tests/ModelTest.php
 cd /home/sites/sugarcraft/candy-lister && vendor/bin/phpunit tests/FuzzyMatchTest.php
@@ -806,11 +867,13 @@ cd /home/sites/sugarcraft/candy-lister && vendor/bin/phpunit tests/ItemTest.php
 ```
 
 ### Composer validation
+
 ```bash
 cd /home/sites/sugarcraft/candy-lister && composer validate
 ```
 
 ### Path repo checker
+
 ```bash
 cd /home/sites/sugarcraft && php tools/check-path-repos.php
 ```

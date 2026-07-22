@@ -11,6 +11,7 @@
 Sugar-tick is a privacy-first coding-time tracker that ports the Go-based TakaTime to PHP, substituting MongoDB dependency with local JSONL files. It occupies a unique niche in SugarCraft as the only productivity/product analytics library and the sole application (vs. component library).
 
 **Biggest opportunities:**
+
 1. Interactive calendar view (high-demand feature from tock, trackWork)
 2. Productivity analytics (comparative week-over-week patterns)
 3. Event-sourcing model for retroactive edits (from oclock)
@@ -18,6 +19,7 @@ Sugar-tick is a privacy-first coding-time tracker that ports the Go-based TakaTi
 5. GitHub Actions integration for profile stats (from TakaTime)
 
 **Biggest missing capabilities:**
+
 1. No retroactive heartbeat editing (can detect gaps but not fill them)
 2. No interactive calendar navigation (only sparkline timeline)
 3. No concurrent write safety at application level
@@ -93,6 +95,7 @@ sugar-tick/
 ## Critical
 
 ### 1. No Interactive Calendar View
+
 - **Description:** Dashboard only shows sparkline timeline; no calendar navigation
 - **Why it matters:** Users cannot browse historical data interactively; tock's calendar view is repeatedly requested feature
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — tock calendar, trackWork timeline
@@ -104,6 +107,7 @@ sugar-tick/
 - **Impact:** High — competitive differentiator
 
 ### 2. No Retroactive Entry Editing
+
 - **Description:** GapsReport detects gaps but cannot fill them; cannot adjust past heartbeats
 - **Why it matters:** Users make mistakes (wrong project, forgot to track); oclock implements retroactive switching
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — oclock's retroactive task switching
@@ -115,6 +119,7 @@ sugar-tick/
 - **Impact:** High — user experience killer for data correction
 
 ### 3. Concurrent Write Safety
+
 - **Description:** Multiple editors writing to same .jsonl could cause interleaved lines
 - **Why it matters:** OS-level FILE_APPEND is atomic but partial JSON lines from concurrent writes corrupt file
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — rtw "concurrent writes unsafe"
@@ -128,6 +133,7 @@ sugar-tick/
 ## High
 
 ### 4. O(n*m) Timeline Lookup Performance
+
 - **Description:** Stats::timeline() uses nested loop (n heartbeats, m days)
 - **Why it matters:** Degrades for long date ranges (>30 days)
 - **Source:** `docs/repo_map/sugarcraft_sugar-tick.md` — "acceptable for 7-day windows"
@@ -139,6 +145,7 @@ sugar-tick/
 - **Impact:** Medium — performance regression on large datasets
 
 ### 5. Project Hierarchy
+
 - **Description:** Flat project namespace; no parent/child relationships
 - **Why it matters:** Real projects have sub-projects (e.g., "myapp-api", "myapp-web")
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — tock project + task + tags
@@ -150,6 +157,7 @@ sugar-tick/
 - **Impact:** Medium — nice-to-have for large codebases
 
 ### 6. Productivity Analytics
+
 - **Description:** No week-over-week comparison, no patterns analysis
 - **Why it matters:** Users want to see productivity trends; tock analyze command
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — tock analyze, rtimelogger surplus/deficit
@@ -163,6 +171,7 @@ sugar-tick/
 ## Medium
 
 ### 7. Encrypted Storage at Rest
+
 - **Description:** No encryption; sensitive project names visible in plaintext
 - **Why it matters:** Corporate environments may require at-rest encryption; trackWork approach
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — trackWork AES-256-GCM + Argon2id
@@ -174,6 +183,7 @@ sugar-tick/
 - **Impact:** Low — niche enterprise feature
 
 ### 8. GitHub Actions Integration
+
 - **Description:** No automated profile stats generation
 - **Why it matters:** TakaTime's taka-report generates GitHub README stats
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — TakaTime GitHub Actions
@@ -185,6 +195,7 @@ sugar-tick/
 - **Impact:** Medium — visibility/social proof
 
 ### 9. Issue Tracker Integration
+
 - **Description:** No integration with GitHub issues, Jira, etc.
 - **Why it matters:** Link coding time to specific issues; bugwarrior model
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — bugwarrior service model
@@ -196,6 +207,7 @@ sugar-tick/
 - **Impact:** Low — niche use case
 
 ### 10. Automatic Backup Integration
+
 - **Description:** AutoBackup exists but not integrated into main CLI
 - **Why it matters:** Users must run manually or via cron
 - **Source:** `docs/repo_map/sugarcraft_sugar-tick.md` — "AutoBackup exists but is not integrated"
@@ -209,6 +221,7 @@ sugar-tick/
 ## Low
 
 ### 11. Tags Filtering in Dashboard
+
 - **Description:** Tags stored but not displayed/filterable in dashboard
 - **Why it matters:** Timewarrior's tag model is proven; users expect tag filtering
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — Timewarrior tags
@@ -220,6 +233,7 @@ sugar-tick/
 - **Impact:** Low — secondary feature
 
 ### 12. Hourly Rate Tracking
+
 - **Description:** No billing/rate tracking like tmpo
 - **Why it matters:** Freelancers want to track billable hours
 - **Source:** `docs/research/libraries/sugar-tick-research.md` — tmpo hourly rates
@@ -255,16 +269,19 @@ foreach ($this->beats as $b) {
 ```
 
 **Why external better:**
+
 - Sorted data enables O(log n) lookup per heartbeat
 - SQLite indexed queries are O(1) for range selections
 - Pre-computed day index avoids repeated timezone calculations
 
 **Tradeoffs:**
+
 - Sorting adds O(n log n) upfront cost
 - SQLite requires additional storage path
 - Pre-computed index requires memory for large datasets
 
 **Applicability to sugar-tick:**
+
 - High — add `Stats::timelineOptimized()` using sorted beats
 - Medium — SQLite backend already supports indexed queries
 
@@ -375,6 +392,7 @@ foreach ($this->beats as $b) {
 # Notable PRs / Issues / Discussions
 
 ### From Bubble Tea (charmbracelet/bubbletea)
+
 - **Issue #1654:** Proposal: Testing Framework — confirms TUI testing is critical gap
   - *Lesson:* Build testing infrastructure early; VHS-based snapshot testing
 - **Issue #1627:** Terminal Escape Sequence Leak — capability queries race with exit
@@ -383,12 +401,14 @@ foreach ($this->beats as $b) {
   - *Lesson:* Memoize width calculations in any text rendering
 
 ### From Textual (textualize/textual)
+
 - **Issue #4959:** clear_panes memory leak — reference cycles in context vars
   - *Lesson:* Use weak references for parent/child references to prevent GC pressure
 - **Issue #6381:** MarkdownViewer GC stutter — large widget trees cause gen2 pauses
   - *Lesson:* Avoid creating excessive child widgets; batch updates
 
 ### From Ecosystem Intelligence Summary
+
 - **Pattern #4:** Shared Mutable Renderer State — race condition between input/render loops
   - *Lesson:* Protect shared state with mutex or immutable data structures
 - **Pattern #5:** Timeout Without Cancellation — timers created but never cancelled
@@ -399,23 +419,27 @@ foreach ($this->beats as $b) {
 # Recommended Roadmap
 
 ## Immediate Wins (0-2 weeks)
+
 1. **File locking on append** — Add flock() to Store::append() for concurrent safety
 2. **Stats timeline optimization** — Pre-sort beats, single-pass bucketing
 3. **Tags in dashboard** — Display and filter by tags in rankings
 4. **AutoBackup CLI integration** — Add `--backup` flag to push command
 
 ## Medium-Term (2-8 weeks)
+
 5. **Interactive calendar view** — Month navigation + day selection via sugar-stickers FlexBox
 6. **Retroactive editing** — Edit/delete past heartbeats via SQLite backend
 7. **Productivity analytics** — Week-over-week comparison in dashboard
 8. **GitHub Actions workflow** — Publish action for automated README stats
 
 ## Major Upgrades (2-3 months)
+
 9. **Event-sourcing model** — Append-only event log + derived state
 10. **Encrypted storage** — libsodium encryption for sensitive projects
 11. **Issue tracker integration** — GitHub issues → project mapping
 
 ## Experimental (3+ months)
+
 12. **Web dashboard** — Render sugar-tick data in browser (textual-web pattern)
 13. **Collaborative features** — Shared team dashboards via JSONL sync
 14. **ML-based insights** — Predict productivity patterns
@@ -447,11 +471,13 @@ Sugar-tick represents a well-executed privacy-first time tracker that successful
 **Competitive positioning:** Sugar-tick occupies a defensible niche as the only PHP-native, privacy-first, TUI-based coding time tracker. The TakaTime upstream requires MongoDB; Timewarrior lacks a TUI; tmpo/hours are Go-only. This leaves a clear market segment: PHP developers who want local-only, editor-agnostic time tracking with a polished Bubble Tea-style interface.
 
 **Critical risks:**
+
 1. **Concurrent write corruption** — The most pressing reliability issue; must be addressed before production use
 2. **Performance at scale** — O(n*m) timeline lookup will degrade as data grows
 3. **Feature parity with Go tools** — Calendar view and retroactive editing are expected features in this category
 
 **Key strategic recommendations:**
+
 1. **Prioritize concurrent safety** — Add flock() immediately; consider single-writer daemon model
 2. **Invest in calendar view** — This is the #1 most-requested feature and competitive differentiator
 3. **Build editor plugin ecosystem** — Provide SDK/templates for Vim, Neovim, VS Code; editor integration is the growth lever

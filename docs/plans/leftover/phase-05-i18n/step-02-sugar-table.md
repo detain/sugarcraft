@@ -12,14 +12,17 @@ header / pagination / empty-state strings, error messages.
 ## Files
 
 **Create:**
+
 - `sugar-table/lang/en.php` — keys for "No data", "Page X of Y", "Sort",
   "Filter", "Showing N of M rows", column-error strings.
 - `sugar-table/src/Lang.php` — `Lang::t()` wrapper.
 
 **Modify:**
+
 - Every PHP file in `sugar-table/src/` — replace inline English.
 
 **Tests:**
+
 - `sugar-table/tests/LangCoverageTest.php` — coverage assertion.
 
 ## Acceptance

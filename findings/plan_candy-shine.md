@@ -54,11 +54,13 @@ The `copy()` method (lines 276-298) creates a new `Renderer` instance via `new s
 **Severity:** HIGH — correctness bug causing incorrect rendering for reused renderers.
 
 **Conditions for success:**
+
 - New `Renderer` instance from `with*()` has fresh `blockStack` and `styleSheet`
 - Calling `render()` twice on the same `Renderer` instance produces correct output both times
 - Unit test verifies immutability of `blockStack`/`styleSheet` across multiple `render()` calls
 
 **Related code locations:**
+
 - `src/Renderer.php:76-82` — `blockStack` and `styleSheet` properties declared
 - `src/Renderer.php:84-114` — constructor (does NOT initialize blockStack/styleSheet)
 - `src/Renderer.php:276-298` — `copy()` method (no initialization of state properties)
@@ -113,6 +115,7 @@ return implode("\n", array_map(
 ```
 
 **Why the change should be done:**
+
 1. `explode()` + `implode()` creates full string copy
 2. `&$line` reference doesn't unset after loop — dangling reference bug
 3. String concat inside loop is O(n²)
@@ -120,11 +123,13 @@ return implode("\n", array_map(
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - `SyntaxHighlighter::highlight($code, $lang, $theme, true)` produces correctly numbered output
 - No reference variables used
 - Performance is O(n) not O(n²)
 
 **Related code locations:**
+
 - `src/SyntaxHighlighter.php:108-119` — highlight() method, line-number section
 
 **Investigation notes:**
@@ -162,10 +167,12 @@ PHP string concatenation with `.=` in a loop is O(n²) because strings are immut
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - Rendered output is byte-identical to current
 - Performance is O(n) not O(n²)
 
 **Related code locations:**
+
 - `src/Renderer.php:601-608` — renderChildren() method
 
 ### 2.3 SyntaxHighlighter Regex Compilation Caching
@@ -197,10 +204,12 @@ Regex compilation is expensive relative to the simple token replacement. For rep
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - Output is byte-identical to uncached version
 - Same language rendered twice uses cached regex (verified via static analysis)
 
 **Related code locations:**
+
 - `src/SyntaxHighlighter.php:125-136` — tokenise() method, pattern building at lines 130-136
 
 ### 2.4 renderList String Concatenation in Loop
@@ -243,10 +252,12 @@ Same O(n²) issue as renderChildren — PHP string concat in loop is quadratic.
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - Rendered output identical
 - Performance improved for large lists
 
 **Related code locations:**
+
 - `src/Renderer.php:769-797` — renderList() method, specifically lines 769-797
 
 ---
@@ -283,11 +294,13 @@ The `@` operator suppresses PHP warnings. If `file_get_contents()` fails due to 
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - Permission denied produces informative exception with actual PHP error message
 - Symlink loop produces informative exception
 - All existing ThemeTest tests still pass
 
 **Related code locations:**
+
 - `src/Theme.php:555-565` — fromJson() method, specifically line 560
 
 ### 3.2 JSON Decode Error Indistinguishable from Null
@@ -317,11 +330,13 @@ if (!is_array($data)) {
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Theme JSON with explicit `null` value is properly handled (throws appropriate error since null is not a valid Style)
 - Actual JSON decode errors (malformed JSON) throw informative exception
 - All existing ThemeTest tests still pass
 
 **Related code locations:**
+
 - `src/Theme.php:568-573` — fromJsonString() method
 
 ### 3.3 Redundant is_file() Check
@@ -361,10 +376,12 @@ Note: The `@` on `file_get_contents()` should also be removed as part of 3.1 fix
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Same behavior after removing is_file() check
 - All existing ThemeTest tests still pass
 
 **Related code locations:**
+
 - `src/Theme.php:555-565` — fromJson() method, specifically line 557
 
 ---
@@ -384,9 +401,11 @@ After `foreach` with `&$line`, the variable `$line` still holds a reference to t
 **Severity:** LOW
 
 **Conditions for success:**
+
 - After array_map refactor (2.1), no reference variables are used in line-number code path
 
 **Related code locations:**
+
 - `src/SyntaxHighlighter.php:108-119` — addressed by 2.1 fix
 
 ---
@@ -417,10 +436,12 @@ API design issue: if `$path` is user-controlled, a path traversal attack could r
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Docblock clearly documents trust requirement
 - `Theme::fromJsonString()` is available as the safe alternative
 
 **Related code locations:**
+
 - `src/Theme.php:555-565` — fromJson() method
 
 ---
@@ -457,10 +478,12 @@ The custom `mutate()` is necessary given the private no-arg constructor, but it 
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - Code is clearer after adding documentation
 - All existing StyleSheetTest tests pass
 
 **Related code locations:**
+
 - `src/Style/StyleSheet.php:123-128` — mutate() override
 
 **Investigation notes:**
@@ -500,11 +523,13 @@ Feature parity with upstream glamour, which has a `Write(markdown, options)` fun
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - `Renderer::write($md)` writes to STDOUT
 - `Renderer::write($md, $stream)` writes to provided stream
 - Returns byte count written
 
 **Related code locations:**
+
 - `src/Renderer.php` — new method (suggest placing after `renderMarkdown()` at line 131)
 
 ### 7.2 Limited Emoji Shortcode Map
@@ -537,10 +562,12 @@ Feature parity with glamour's broader emoji support; users expect more emoji sho
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - At least 30 common shortcodes supported
 - Existing emoji tests still pass
 
 **Related code locations:**
+
 - `src/Renderer.php:358-368` — expandEmojiShortcodes() method, `$map` array
 
 ### 7.3 No Streaming for Large Documents
@@ -554,9 +581,11 @@ The entire output string is built in memory before returning. For very large doc
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Documentation added to README or docblock noting streaming as future enhancement
 
 **Related code locations:**
+
 - `src/Renderer.php:300-348` — render() method
 
 ---
@@ -592,10 +621,12 @@ The regex `/:([a-z0-9_+-]+):/i` is compiled on every call to `expandEmojiShortco
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Output identical before and after
 - Regex compiled once not per-call
 
 **Related code locations:**
+
 - `src/Renderer.php:356-374` — expandEmojiShortcodes() method, regex at line 369
 
 ### 8.2 StyleSheet::for() Linear Scan — SKIPPED
@@ -617,6 +648,7 @@ N/A — skipped
 N/A — skipped
 
 **Related code locations:**
+
 - `src/Style/StyleSheet.php:66-83` — for() method
 
 ---

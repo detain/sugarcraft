@@ -4,6 +4,7 @@
 Replace the no-op `withExport()` stub in ReportsPage with actual CSV export using the existing CsvExporter class.
 
 ## Current State
+
 ```php
 // ReportsPage.php line 300-303
 public function withExport(): self
@@ -35,6 +36,7 @@ When `withExport()` is called:
 6. Return `$this` (immutable - export doesn't change page state)
 
 ### Alternative: Return the CSV as string
+
 ```php
 public function exportToCsv(): string
 {

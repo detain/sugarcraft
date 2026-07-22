@@ -123,6 +123,7 @@ if (!is_resource($proc)) {
 The `renderCell()` method is 56 lines and performs: most-distant-pair seed search (O(6) comparisons), luma comparison, 4-iteration grouping loop, integer division for averages, and ANSI SGR assembly. The method name does not reflect that it's doing both color grouping and glyph selection.
 
 **Recommendation**: Split into smaller methods:
+
 - `findSeedPair()` — returns indices of most-distant pair
 - `groupQuadrantsBySeed()` — assigns quadrants to fg/bg groups
 - `computeCellColors()` — computes averaged fg/bg colors

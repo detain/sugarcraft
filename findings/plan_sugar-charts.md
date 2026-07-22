@@ -7,9 +7,11 @@ updated: 2026-06-30
 # Implementation Plan: sugar-charts Code Review Findings
 
 ## Goal
+
 Address all 19 prioritized findings from the sugar-charts code review, organized into 5 phases from critical refactoring to missing features.
 
 ## Context & Decisions
+
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Extract `ChartExtras` trait instead of forcing inheritance | BarChart, Scatter, OHLCChart have different constructor signatures making direct extension complex | `src/Chart/Chart.php:L1-354` vs `src/BarChart/BarChart.php:L32-641` |
@@ -87,6 +89,7 @@ Address all 19 prioritized findings from the sugar-charts code review, organized
 ---
 
 ## Notes
+
 - Phase 1 tasks are blocking: fix code duplication before addressing performance
 - Each task should be verified with tests before considering complete
 - The plan covers all 19 prioritized items from the findings file (12 high/medium, 7 low)

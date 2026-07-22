@@ -12,6 +12,7 @@
 candy-metrics provides a clean Registry + Backend facade for Counters, Gauges, and Histograms with pluggable backends (InMemory, StatsD UDP, Prometheus textfile, JSON stream, MultiBackend fanout). The implementation is solid but **lacks several key Prometheus features** that would bring it to parity with upstream Go/Rust clients.
 
 **Highest-impact gaps:**
+
 1. **No histogram buckets** — PromExporter emits `summary` (count+sum only) instead of `histogram` with `le` bucket labels
 2. **No metric registration/description** — can't declare metrics upfront with help text, units, or type info
 3. **No label cardinality management** — no `remove()` / `clear()` on child metrics
@@ -206,6 +207,7 @@ meter_provider.add_view(
 ```
 # HELP http_request_duration_seconds A histogram of the request duration.
 # TYPE http_request_duration_seconds histogram
+
 http_request_duration_seconds_bucket{le="0.05"} 24054
 http_request_duration_seconds_bucket{le="0.1"} 33444
 http_request_duration_seconds_bucket{le="0.2"} 100392
@@ -267,6 +269,7 @@ candy-metrics/src/
 `PrometheusFileBackend::histogram()` emits:
 ```
 # TYPE lat summary
+
 lat_count 2
 lat_sum 0.400000
 ```
@@ -274,6 +277,7 @@ lat_sum 0.400000
 **Should emit (Prometheus classic histogram):**
 ```
 # TYPE lat histogram
+
 lat_bucket{le="0.1"} 1
 lat_bucket{le="0.25"} 2
 lat_bucket{le="0.5"} 2

@@ -1,6 +1,7 @@
 # charmbracelet/ultraviolet
 
 ## Metadata
+
 - **URL**: https://github.com/charmbracelet/ultraviolet
 - **Language**: Go
 - **Stars**: ~2.5k+ (charmbracelet ecosystem repo; exact star count not exposed in clone)
@@ -8,6 +9,7 @@
 - **Description**: Ultraviolet is a set of primitives for building terminal user interfaces in Go. It provides cell-based rendering, cross-platform input handling, and a diffing renderer inspired by ncurses—without the need for `terminfo` or `termcap` databases. Powers Bubble Tea v2 and Lip Gloss v2.
 
 ## Feature List
+
 - **Cell-based diffing renderer** — only redraws what changed; optimizes cursor movement; uses ECH/REP/ICH/DCH escape sequences when available; scroll optimizations; minimal bandwidth (critical for SSH)
 - **Universal input handling** — unified keyboard and mouse events across platforms; supports legacy encodings, Kitty keyboard protocol (with disambiguation, event types, alternate keys), SGR mouse encoding (including pixel coordinates), Windows Console input
 - **Cross-platform terminal support** — first-class Unix (termios + ANSI) and Windows (Console API) support; consistent behavior across terminal emulators; no terminfo/termcap dependency
@@ -176,34 +178,42 @@
 ## Notable Algorithms / Named Patterns
 
 ### Cassowary Constraint Solver Algorithm
+
 - **Source**: `internal/casso/solver.go` + `layout/layout.go`
 - The layout package implements the [Cassowary algorithm](https://en.wikipedia.org/wiki/Cassowary_(software)) for resolving competing layout constraints. Ultraviolet's implementation is a ~1:1 translation from Ratatui (Rust), adapted for Go. The solver uses symbolic variables with priority-tagged constraints and handles relaxation when constraints conflict. Priority order (highest to lowest): `Min > Max > Len > Percent > Ratio > Fill`.
 
 ### Cell-Based Diffing Renderer
+
 - **Source**: `terminal_renderer.go`, `RenderBuffer` in `buffer.go`
 - The `TerminalRenderer` compares the current and new screen state via touched-line metadata (tracked in `RenderBuffer.Touched`), generates minimal ANSI escape sequences for the delta. Uses a `capabilities` mask to determine which optimization sequences are available (ECH for character erase, REP for character repeat, ICH/DCH for insert/delete character, etc.).
 
 ### Style Diff Algorithm
+
 - **Source**: `StyleDiff()` in `cell.go:L258-L408`
 - Computes minimal SGR sequence to transition from one style to another, avoiding full resets when cheaper. Handles all attributes (bold, italic, underline variants, blink, reverse, conceal, strikethrough), foreground/background colors, and underline color with proper ordering to avoid terminal quirks.
 
 ### Touched-Line Tracking
+
 - **Source**: `RenderBuffer.TouchLine()` in `buffer.go:L660-L683`
 - Marks dirty regions as `[FirstCell, LastCell)` per line. `SetCell` compares old vs new cell before marking touched, avoiding unnecessary redraws. This is the foundation of the diffing optimization.
 
 ### Wide Character Handling
+
 - **Source**: `Line.Set()` in `buffer.go:L41-L98`
 - When overwriting part of a wide character (emoji, CJK), fills remaining width with blank cells to avoid rendering artifacts. Placeholder zero-width cells for wide char trailers are handled symmetrically.
 
 ### Kitty Keyboard Protocol
+
 - **Source**: `KeyboardEnhancements` in `uv.go:L139-L174`, `key_table.go`
 - Supports the full Kitty keyboard extension: disambiguation of ambiguous escape codes, key repeat/release reporting, alternate key values, report-all-keys-as-escape-codes, and associated text reporting.
 
 ### SGR Mouse Encoding
+
 - **Source**: `mouse.go`, `EncodeMouseMode()` / `EncodeMouseEncoding()` in `uv.go`
 - Supports Legacy (X10), SGR (extended), and SGR-Pixel coordinate encodings. Decodes button, modifier, and drag state from CSI mouse sequences.
 
 ### Color Profile Conversion
+
 - **Source**: `ConvertStyle()` in `cell.go:L427-L451`
 - Maps TrueColor to the terminal's supported profile (ANSI, ANSI256, or ASCII). Converts colors through `colorprofile.Profile` to prevent sending 24-bit color to incapable terminals.
 

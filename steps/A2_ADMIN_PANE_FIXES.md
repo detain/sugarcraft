@@ -1,7 +1,9 @@
 # Step A2: Fix Admin Pane to Page Mapping
 
 ## Goal
+
 Align the 6 AdminPane enum values to correctly map to the MySQL Workbench 6-section layout. Currently:
+
 - `ConnStats` → `DashboardPage` (wrong semantically)
 - `TableStats` → `ReportsPage` (misleading)
 
@@ -20,9 +22,11 @@ Align the 6 AdminPane enum values to correctly map to the MySQL Workbench 6-sect
    - `TableStats` → `PerfSchema` (wait, PerfSchema is step A1 - we need to think about this)
 
 ## Decision Needed Before Coding
+
 The current 6 panes are:
+
 - ProcessList → Connections
-- Variables → Variables  
+- Variables → Variables
 - Status → Server Status
 - QueryStats → Reports
 - ConnStats → ??? (should be Dashboard/Dashboard)

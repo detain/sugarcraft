@@ -36,6 +36,7 @@ if (!$pending['zone']->inBounds($event)) {
 The pending state is **not cleared** when a release occurs on a different zone. The code returns `null` and keeps the old zone pending. A subsequent release (without any new press) at the original zone would incorrectly emit a phantom click.
 
 **Scenario demonstrating the bug:**
+
 1. Press at zone A → `pending[btn] = {zone: A}`
 2. Release at zone B (different zone) → returns `null`, pending unchanged (`pending[btn] = {zone: A}`)
 3. No new press occurs
@@ -93,6 +94,7 @@ The comment at lines 83-86 acknowledges this: "O(n) scan of the zone list — ad
 For TUIs with many interactive zones (e.g., a table with many cells, a list with many items), this O(n) lookup could become a bottleneck if `hit()` is called frequently (e.g., on every mouse move event).
 
 **Recommendations:**
+
 1. Add an optional spatial index (e.g., a simple grid-based index partitioning the terminal into cells) for O(1) average-case lookups
 2. At minimum, sort zones by area and check smaller zones first (heuristic)
 3. Document the O(n) complexity and threshold recommendation
@@ -345,6 +347,7 @@ The test suite is comprehensive:
 - `MarkTest.php`: 13 tests covering sentinel insertion, static shortcut, round-trip via Scanner, and enabled/disabled states
 
 **Coverage gaps:**
+
 1. No integration tests with real terminal mouse event sequences
 2. No performance tests for Scanner::hit() with large zone counts
 3. No concurrency/reentrancy tests for Scan

@@ -70,6 +70,7 @@ if ($button === 96 || $button === 97) {
 **Why the change should be done:** Applications cannot distinguish Shift+scrollUp from plain scrollUp - this breaks basic modifier support for scroll events.
 
 **Conditions for success:**
+
 - Add test for Shift+scrollUp (`\x1b[<100;10;5M` = button 96+4 shift) expecting SHIFT modifier
 - Add test for Shift+scrollDown (`\x1b[<101;10;5M` = button 97+4 shift) expecting SHIFT modifier
 - Existing scroll tests still pass
@@ -77,6 +78,7 @@ if ($button === 96 || $button === 97) {
 **Investigation notes:** Modifier bits 4,8,16 are added to base button in SGR encoding. For scroll (96/97), adding Shift (4) gives 100/101. Current code only checks exact 96/97, so modified scroll events would fail to match. Need to extract modifiers BEFORE checking for scroll.
 
 **Related code locations:**
+
 - `src/EscapeDecoder.php:296-308` - scroll event return
 - `src/EscapeDecoder.php:310-317` - modifier extraction (currently unreachable for scroll)
 - `src/Event/MouseEvent.php:54-64` - scrollUp/scrollDown factories
@@ -121,6 +123,7 @@ public function __construct(
 **Why the change should be done:** `stream_set_blocking()` is a kernel system call that modifies stream state. Calling it on every read in a TUI event loop is wasteful and can cause performance degradation.
 
 **Conditions for success:**
+
 - `vendor/bin/phpunit tests/StreamInputDriverTest.php` passes
 - Confirm `stream_set_blocking` not called in `readNonBlocking()`
 - Stream remains non-blocking throughout driver lifetime
@@ -128,6 +131,7 @@ public function __construct(
 **Investigation notes:** `StreamInputDriverTest.php` creates pipe pairs with `stream_set_blocking($pair[0], false)` at construction (line 149-150), then passes to driver. Driver's redundant call is harmless but unnecessary.
 
 **Related code locations:**
+
 - `src/Driver/StreamInputDriver.php:27-31` - constructor
 - `src/Driver/StreamInputDriver.php:75-78` - readNonBlocking (remove call here)
 - `tests/StreamInputDriverTest.php:141-153` - test pipe setup
@@ -170,6 +174,7 @@ if ($ord >= 0x01 && $ord <= 0x1a) {
 **Investigation notes:** Traditional Unix convention maps Ctrl+A (0x01) to uppercase 'A'. This implementation produces lowercase 'a'. The tests expect lowercase ('c' for Ctrl+C), so changing behavior would break tests.
 
 **Related code locations:**
+
 - `src/EscapeDecoder.php:619-623` - decodeControlChar
 - `tests/EscapeDecoderTest.php` - Ctrl+letter tests expect lowercase
 
@@ -186,6 +191,7 @@ if ($ord >= 0x01 && $ord <= 0x1a) {
 **Why the change should be done:** The two-stage rescan loop (finding final byte, then alternate final byte if trailing byte detected) is a maintenance hazard. Extracting it makes the flow in `handleCsiKey()` much clearer and allows unit testing the logic in isolation.
 
 **Conditions for success:**
+
 - New `findFinalByte()` method created with clear interface
 - `handleCsiKey()` calls `findFinalByte()` instead of inline logic
 - Unit test for `findFinalByte()` covers edge cases: no final byte, alternate final byte, trailing bytes
@@ -193,6 +199,7 @@ if ($ord >= 0x01 && $ord <= 0x1a) {
 **Investigation notes:** The complexity exists because CSI sequences can have: parameters (digits/semicolons), intermediates (0x20-0x2F), and a final byte (0x40-0x7E). The code tries to find the "real" final byte when the last byte might be trailing.
 
 **Related code locations:**
+
 - `src/EscapeDecoder.php:472-528` - handleCsiKey unknown-CSI block
 - `src/EscapeDecoder.php:483-518` - final byte scanning logic to extract
 
@@ -233,6 +240,7 @@ public function equals(self $other): bool
 **Conditions for success:** equals() method retained with clear documentation; all existing tests pass
 
 **Related code locations:**
+
 - `src/KeyModifier.php:159-162` - equals method
 - `tests/KeyModifierTest.php:40-72` - equals tests
 
@@ -249,6 +257,7 @@ public function equals(self $other): bool
 **Current coverage:** Only `testFocusGained` and `testFocusLost` at lines 400-414 test basic `\x1b[I` and `\x1b[O`
 
 **Missing tests:**
+
 - Focus events with intermediate bytes (e.g., `\x1b[1I`)
 - Private mode prefix focus events (e.g., `\x1b[?1I` or `\x1b[?1004I`)
 - Focus events followed by other sequences
@@ -258,6 +267,7 @@ public function equals(self $other): bool
 **Conditions for success:** New tests pass alongside existing focus tests
 
 **Related code locations:**
+
 - `src/EscapeDecoder.php:240-246` - focus event handling
 - `tests/EscapeDecoderTest.php:400-414` - existing focus tests
 
@@ -299,6 +309,7 @@ public function equals(self $other): bool
 **Conditions for success:** Documentation clearly explains resize detection requires signal handling; no behavior change
 
 **Related code locations:**
+
 - `src/Event/ResizeEvent.php` - class definition
 - `src/EscapeDecoder.php` - does NOT handle SIGWINCH (correctly)
 
@@ -325,6 +336,7 @@ public function equals(self $other): bool
 **Conditions for success:** phpstan level 8+ passes with simplified type
 
 **Related code locations:**
+
 - `src/InputDriver.php:24` - interface method
 
 ---
@@ -354,6 +366,7 @@ public function equals(self $other): bool
 **Conditions for success:** README clearly documents limitations
 
 **Related code locations:**
+
 - `README.md` - documentation
 - `src/EscapeDecoder.php:235-238` - SGR 1006 only detection
 
@@ -404,6 +417,7 @@ Or via EscapeDecoderOptions class (see 3.6).
 **Conditions for success:** Applications can override paste size limit; existing tests pass
 
 **Related code locations:**
+
 - `src/Event/PasteEvent.php:20-33` - MAX_SIZE and truncate
 - `src/EscapeDecoder.php:548-554` - paste size check
 
@@ -433,6 +447,7 @@ final class EscapeDecoderOptions
 **Conditions for success:** Tests confirm disabled protocols skip parsing overhead
 
 **Related code locations:**
+
 - `src/EscapeDecoder.php` - needs options parameter in constructor
 - `src/EscapeDecoder.php:235-238` - mouse detection (guard with option)
 - `src/EscapeDecoder.php:240-246` - focus detection (guard with option)
@@ -475,6 +490,7 @@ final class ReactInputDriver implements ReadableStreamInterface
 **Conditions for success:** Can be used in ReactPHP async context; existing tests still pass
 
 **Related code locations:**
+
 - `src/Driver/StreamInputDriver.php` - existing synchronous implementation
 - `composer.json:31-32` - requires sugarcraft/candy-core (ReactPHP)
 
@@ -491,6 +507,7 @@ final class ReactInputDriver implements ReadableStreamInterface
 **Conditions for success:** Driver correctly emits ResizeEvent on SIGWINCH
 
 **Related code locations:**
+
 - `src/Event/ResizeEvent.php` - class definition
 - `src/InputDriver.php` - interface that could be extended
 
@@ -505,6 +522,7 @@ final class ReactInputDriver implements ReadableStreamInterface
 **What is expected:** Consolidate duplicate key maps into private class constants
 
 **Duplications found:**
+
 - `handleSS3()` lines 196-208: `$ss3Map` (F1-F4 + arrows + Home/End)
 - `handleCsiKey()` lines 416-417: `$arrowMap` (arrows only)
 - `handleCsiKey()` lines 441-462: `$specialKeys` and `$fKeys` arrays
@@ -536,6 +554,7 @@ private const SS3_ARROWS_HOME_END = [
 **Conditions for success:** Refactored code passes all existing tests
 
 **Related code locations:**
+
 - `src/EscapeDecoder.php:188-220` - handleSS3
 - `src/EscapeDecoder.php:376-470` - handleCsiKey
 - `src/EscapeDecoder.php:633-678` - kittyKeyCodeToName
@@ -566,6 +585,7 @@ $modifierBits = ($button >> 2) & 0x07;  // Extract bits 2-4 as 0-5 range
 **Conditions for success:** Tests confirm same modifier behavior with simpler formula
 
 **Related code locations:**
+
 - `src/EscapeDecoder.php:311-317` - modifier extraction
 - `src/KeyModifier.php:114-122` - fromSgrMouse which reverses the mapping
 
@@ -597,6 +617,7 @@ See [sugar-readline](./sugar-readline/README.md) for the readline integration.
 **Conditions for success:** README clearly explains relationship
 
 **Related code locations:**
+
 - `README.md:3` - description mentions "Unblocks sugar-readline"
 - `composer.json:3` - description mentions "Unblocks sugar-readline migration"
 
@@ -613,6 +634,7 @@ See [sugar-readline](./sugar-readline/README.md) for the readline integration.
 **Conditions for success:** Example code works with sugar-bits
 
 **Related code locations:**
+
 - candy-bits library (not yet integrated with candy-input per audit)
 
 ---
@@ -642,6 +664,7 @@ Or add comment if ^8.3 is intentional:
 **Conditions for success:** composer validate passes
 
 **Related code locations:**
+
 - `composer.json:31` - PHP version requirement
 
 ---

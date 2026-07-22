@@ -13,10 +13,12 @@
 ## Files
 
 **Modify:**
+
 - `candy-metrics/src/Registry.php` — track cardinality per metric;
   enforce cap.
 
 **Create:**
+
 - `candy-metrics/src/Instrument/{UpDownCounter,AsyncCounter,AsyncGauge}.php`.
 
 ## Tests

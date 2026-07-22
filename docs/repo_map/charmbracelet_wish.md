@@ -1,6 +1,7 @@
 # charmbracelet/wish
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/wish
 - **Language:** Go
 - **Stars:** 5,233
@@ -72,6 +73,7 @@ Wish is an SSH server library with sensible defaults and a collection of middlew
 ### Middleware Packages
 
 #### `bubbletea/tea.go`
+
 - `type Handler func(sess ssh.Session) (tea.Model, []tea.ProgramOption)` — User-defined TUI factory
 - `type ProgramHandler func(sess ssh.Session) *tea.Program` — Low-level program factory
 - `Middleware(handler Handler) wish.Middleware` — Attach Bubble Tea app to SSH
@@ -79,6 +81,7 @@ Wish is an SSH server library with sensible defaults and a collection of middlew
 - `MakeOptions(sess ssh.Session) []tea.ProgramOption` — Input/output options for SSH session
 
 #### `git/git.go`
+
 - `type AccessLevel int` — `NoAccess`, `ReadOnlyAccess`, `ReadWriteAccess`, `AdminAccess`
 - `type Hooks interface` — `AuthRepo(repo string, key ssh.PublicKey) AccessLevel`, `Push()`, `Fetch()`
 - `Middleware(repoDir string, gh Hooks) wish.Middleware` — Full git server
@@ -86,28 +89,34 @@ Wish is an SSH server library with sensible defaults and a collection of middlew
 - `Fatal(s ssh.Session, v ...interface{})` — Git pkt-line format error reporting
 
 #### `logging/logging.go`
+
 - `Middleware() wish.Middleware` — Basic printf-style logging
 - `MiddlewareWithLogger(logger Logger) wish.Middleware` — Custom logger
 - `StructuredMiddleware() wish.Middleware` — Structured key-value logging via charm.land/log
 - `StructuredMiddlewareWithLogger(logger *log.Logger, level log.Level) wish.Middleware`
 
 #### `accesscontrol/accesscontrol.go`
+
 - `Middleware(cmds ...string) wish.Middleware` — Whitelist allowed commands; reject others
 
 #### `activeterm/activeterm.go`
+
 - `Middleware() wish.Middleware` — Reject sessions without active PTY
 
 #### `ratelimiter/ratelimiter.go`
+
 - `type RateLimiter interface` — `Allow(s ssh.Session) error`
 - `Middleware(limiter RateLimiter) wish.Middleware`
 - `NewRateLimiter(r rate.Limit, burst int, maxEntries int) RateLimiter` — LRU-cached per-IP token bucket
 - `ErrRateLimitExceeded` — Error returned on limit exceeded
 
 #### `recover/recover.go`
+
 - `Middleware(mw ...wish.Middleware) wish.Middleware` — Panic recovery with stack trace logging
 - `MiddlewareWithLogger(logger Logger, mw ...wish.Middleware) wish.Middleware`
 
 #### `scp/` (full SCP protocol implementation)
+
 - `type Handler interface{ CopyToClientHandler, CopyFromClientHandler }`
 - `Middleware(rh CopyToClientHandler, wh CopyFromClientHandler) wish.Middleware`
 - `type Op byte` — `OpCopyToClient` ('f'), `OpCopyFromClient` ('t')
@@ -115,10 +124,12 @@ Wish is an SSH server library with sensible defaults and a collection of middlew
 - `FileEntry`, `DirEntry`, `RootEntry` — Protocol entry types with SCP wire format serialization
 
 #### `elapsed/elapsed.go`
+
 - `Middleware() wish.Middleware` — Logs session duration after completion
 - `MiddlewareWithFormat(format string) wish.Middleware`
 
 #### `comment/comment.go`
+
 - `Middleware(comment string) wish.Middleware` — Prints trailing text after session
 
 ## Notable Algorithms / Named Patterns

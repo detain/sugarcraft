@@ -13,6 +13,7 @@ TTY.
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/SignalForwarder.php` — add
   `attachSigwinchToFd(int $fd, ?\Closure $callback = null)` that
   resizes via `SizeIoctl` against a raw fd rather than a MasterPty.
