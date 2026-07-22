@@ -70,11 +70,11 @@ final class RendererTest extends TestCase
         $g = new class implements \SugarCraft\Stash\GitDriver {
             public function status(): array   { throw new \RuntimeException('fatal: not a git repository'); }
             public function branches(): array { return []; }
-            public function log(int $limit = 25): array { return []; }
+            public function log(int $_limit = 25): array { return []; }
             public function stage(string $path): void {}
             public function unstage(string $path): void {}
             public function checkout(string $branch): void {}
-            public function commit(string $message): void {}
+            public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
             public function diff(string $path): array { return []; }
@@ -83,21 +83,21 @@ final class RendererTest extends TestCase
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
-            public function deleteBranch(string $name): void {}
+            public function deleteBranch(string $_name): void {}
             public function merge(string $branch): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}
             public function rebaseSkip(): void {}
             public function reset(): void {}
             public function stashList(): array { return []; }
-            public function stashApply(string $stashRef): void {}
-            public function stashDrop(string $stashRef): void {}
-            public function cherryPick(string $commit): void {}
+            public function stashApply(string $_stashRef): void {}
+            public function stashDrop(string $_stashRef): void {}
+            public function cherryPick(string $_commit): void {}
             public function cherryPickContinue(): void {}
             public function cherryPickAbort(): void {}
             public function worktreeList(): array { return []; }
-            public function worktreeAdd(string $path, string $branch): void {}
-            public function worktreeRemove(string $path): void {}
+            public function worktreeAdd(string $_path, string $_branch): void {}
+            public function worktreeRemove(string $_path): void {}
             public function rebaseInProgress(): bool { return false; }
         };
         $a = App::start($g);
@@ -132,7 +132,7 @@ final class RendererTest extends TestCase
             public function stage(string $path): void {}
             public function unstage(string $path): void {}
             public function checkout(string $branch): void {}
-            public function commit(string $message): void {}
+            public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
             public function diff(string $path): array { return []; }
@@ -141,7 +141,7 @@ final class RendererTest extends TestCase
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
-            public function deleteBranch(string $name): void {}
+            public function deleteBranch(string $_name): void {}
             public function merge(string $branch): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}
@@ -178,7 +178,7 @@ final class RendererTest extends TestCase
             public function stage(string $path): void {}
             public function unstage(string $path): void {}
             public function checkout(string $branch): void {}
-            public function commit(string $message): void {}
+            public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
             public function diff(string $path): array { return []; }
@@ -187,7 +187,7 @@ final class RendererTest extends TestCase
             public function stagePatch(string $path, string $hunk): void {}
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
-            public function deleteBranch(string $name): void {}
+            public function deleteBranch(string $_name): void {}
             public function merge(string $branch): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}

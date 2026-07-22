@@ -212,8 +212,10 @@ final class Window implements \SugarCraft\Dash\Foundation\Sizer
             $adjusted[] = $line;
         }
 
-        while (count($adjusted) < $innerH - 1) {  // -1 for title bar
+        $adjustedCount = count($adjusted);
+        while ($adjustedCount < $innerH - 1) {  // -1 for title bar
             $adjusted[] = str_repeat(' ', $innerW);
+            $adjustedCount++;
         }
 
         return implode("\n", array_slice($adjusted, 0, max(1, $innerH - 1)));

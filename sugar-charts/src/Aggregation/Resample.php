@@ -228,18 +228,19 @@ final class Resample
 
         $result = [];
         $inputIdx = 0;
+        $count = count($timestampedValues);
         $currTs = $this->startTimestamp > 0 ? $this->startTimestamp : $timestampedValues[0]['ts'];
-        $endTs = $timestampedValues[count($timestampedValues) - 1]['ts'];
+        $endTs = $timestampedValues[$count - 1]['ts'];
 
         while ($currTs <= $endTs) {
             // Find the two input points that bracket currTs
-            while ($inputIdx < count($timestampedValues) - 1
+            while ($inputIdx < $count - 1
                 && $timestampedValues[$inputIdx + 1]['ts'] <= $currTs) {
                 $inputIdx++;
             }
 
             $p1 = $timestampedValues[$inputIdx];
-            $p2 = $timestampedValues[min($inputIdx + 1, count($timestampedValues) - 1)];
+            $p2 = $timestampedValues[min($inputIdx + 1, $count - 1)];
 
             if ($p1['ts'] === $p2['ts']) {
                 $interpolated = $p1['value'];

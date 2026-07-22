@@ -134,8 +134,9 @@ final class MovingAverage
         $alpha ??= 2.0 / ($windowSize + 1);
         $ema = (float) $values[0];
         $result = [$ema];
+        $valuesCount = count($values);
 
-        for ($i = 1; $i < count($values); $i++) {
+        for ($i = 1; $i < $valuesCount; $i++) {
             $ema = $alpha * (float) $values[$i] + (1 - $alpha) * $ema;
             $result[] = $ema;
         }

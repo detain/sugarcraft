@@ -104,12 +104,14 @@ final class Heatmap
         }
         $grid = $this->grid;
         // Pad rows up to y inclusive.
-        while (count($grid) <= $p->y) {
+        $targetRows = $p->y + 1;
+        while (count($grid) < $targetRows) {
             $grid[] = [];
         }
         $row = $grid[$p->y];
         // Pad columns within the row up to x inclusive.
-        while (count($row) <= $p->x) {
+        $targetCols = $p->x + 1;
+        while (count($row) < $targetCols) {
             $row[] = 0;
         }
         $row[$p->x] = $p->value;

@@ -135,8 +135,10 @@ final class Footer implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad to allocated height
-        while (count($lines) < ($this->height ?? 1)) {
+        $lineCount = count($lines);
+        while ($lineCount < ($this->height ?? 1)) {
             array_unshift($lines, str_repeat(' ', $useWidth));
+            $lineCount++;
         }
 
         // Apply background to all lines

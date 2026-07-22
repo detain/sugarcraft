@@ -112,7 +112,8 @@ final class Timeline implements \SugarCraft\Dash\Foundation\Sizer
             self::TypeDefault => Color::hex('#CBA6F7'),
         ];
 
-        for ($i = 0; $i < count($events); $i++) {
+        $eventCount = count($events);
+        for ($i = 0; $i < $eventCount; $i++) {
             $event = $events[$i];
             $type = $event['type'] ?? self::TypeDefault;
             $color = $event['color'] ?? ($defaultColors[$type] ?? $defaultColors[self::TypeDefault]);
@@ -140,7 +141,7 @@ final class Timeline implements \SugarCraft\Dash\Foundation\Sizer
             $line = $color->toFg(ColorProfile::TrueColor) . $lineContent . Ansi::reset();
 
             // Add connector line (except for last event)
-            if ($i < count($events) - 1) {
+            if ($i < $eventCount - 1) {
                 $result[] = $line;
                 $connectorLine = str_repeat($connectorChar, $useWidth);
                 $result[] = $connectorColor->toFg(ColorProfile::TrueColor) . $connectorLine . Ansi::reset();

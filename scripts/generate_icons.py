@@ -211,7 +211,7 @@ def _slug_accent(slug: str):
     prefix = slug.split("-", 1)[0]
     base = _HUE_FAMILY.get(prefix, _BRAND_HUE)
     tail = slug.split("-", 1)[1] if "-" in slug else slug
-    h = int(hashlib.sha1(tail.encode()).hexdigest(), 16)
+    h = int(hashlib.sha256(tail.encode()).hexdigest(), 16)
     hue = (base + ((h % 57) - 28)) % 360           # +/-28 deg jitter within family
     sat = 0.58 + (h >> 8 & 0xFF) / 255.0 * 0.14    # 0.58 .. 0.72
     return hue, sat, 0.90

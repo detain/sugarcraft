@@ -42,7 +42,7 @@
 | [charmbracelet/soft-serve](#charmbraceletsoft-serve) | Go | ~7000 | candy-serve |
 | [charmbracelet/ultraviolet](#charmbraceletultraviolet) | Go | ~200 | candy-core, sugar-bits |
 | [charmbracelet/vhs](#charmbraceletvhs) | Go | ~19800 | candy-core, candy-shine |
-| [charmbracelet/vhs-action](#charmbraceletvhs-action) | TypeScript | ~100 | (CI infrastructure) |
+| charmbracelet/vhs-action | TypeScript | ~100 | (CI infrastructure) |
 | [charmbracelet/wish](#charmbraceletwish) | Go | 5233 | candy-wish |
 | [charmbracelet/wishlist](#charmbraceletwishlist) | Go | ~700 | candy-shell, candy-pty, candy-core |
 | [charmbracelet/x](#charmbraceletx) | Go | 293 | candy-core, sugar-bits, candy-shine |
@@ -60,7 +60,7 @@
 | [textualize/textual](#textualizetextual) | Python | ~35000 | candy-core, sugar-bits, candy-sprinkles |
 | [treilik/bubbleboxer](#treilikbubbleboxer) | Go | 84 | candy-core, candy-shine, sugar-bits |
 | [treilik/bubblelister](#treilikbubblelister) | Go | 52 | sugar-bits, candy-core |
-| [WhispPHP/whisp](#wisphpwhisp) | PHP | ~200 | candy-pty, candy-core |
+| [WhispPHP/whisp](#whispphpwhisp) | PHP | ~200 | candy-pty, candy-core |
 | [76creates/stickers](#76createsstickers) | Go | ~500 | sugar-bits, sugar-table |
 | [daltonsw/bubbleup](#daltonswbubbleup) | Go | ~50 | sugar-toast |
 | [erikgeiser/promptkit](#erikgeiserpromptkit) | Go | ~200 | sugar-prompt |
@@ -68,12 +68,12 @@
 | [Genekkion/theHermit](#genekkionthehermit) | Go | 15 | sugar-bits |
 | [rmhubbert/bubbletea-overlay](#rmhubbertbubbletea-overlay) | Go | ~50 | sugar-bits |
 | [charmbracelet/bubbletea](#charmbraceletbubbletea) | Go | ~23000 | candy-core, sugar-bits, candy-shell |
-| [charmbracelet/meta](#charmbraceletmeta) | Go | ~100 | (CI infrastructure only) |
-| [charmbracelet/scoop-bucket](#charmbraceletscoop-bucket) | JSON/YAML | 29 | (distribution manifests) |
-| [charmbracelet/soft-serve-action](#charmbraceletsoft-serve-action) | TypeScript | ~30 | (GitHub Action) |
-| [charmbracelet/tree-sitter-vhs](#charmbracelettree-sitter-vhs) | Go/C | ~50 | (grammar, not TUI lib) |
-| [charmbracelet/winget-pkgs](#charmbraceletwinget-pkgs) | YAML | ~1000 | (Windows distribution manifests) |
-| [charmbracelet/git-lfs-transfer](#charmbraceletgit-lfs-transfer) | Go | ~50 | (Git infrastructure, not TUI) |
+| charmbracelet/meta | Go | ~100 | (CI infrastructure only) |
+| charmbracelet/scoop-bucket | JSON/YAML | 29 | (distribution manifests) |
+| charmbracelet/soft-serve-action | TypeScript | ~30 | (GitHub Action) |
+| charmbracelet/tree-sitter-vhs | Go/C | ~50 | (grammar, not TUI lib) |
+| charmbracelet/winget-pkgs | YAML | ~1000 | (Windows distribution manifests) |
+| charmbracelet/git-lfs-transfer | Go | ~50 | (Git infrastructure, not TUI) |
 | [charmbracelet/promwish](#charmbraceletpromwish) | Go | ~200 | candy-metrics |
 | [charmbracelet/sh](#charmbraceletsh) | Go | ~4000 | candy-shell |
 

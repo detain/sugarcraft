@@ -117,14 +117,15 @@ final class AvatarGroup implements \SugarCraft\Dash\Foundation\Sizer
         $avatarSize = $this->getAvatarSize();
 
         // Render avatars from left to right
-        for ($i = 0; $i < count($displayAvatars); $i++) {
+        $avatarCount = count($displayAvatars);
+        for ($i = 0; $i < $avatarCount; $i++) {
             $avatar = $displayAvatars[$i];
             if ($avatar instanceof \SugarCraft\Dash\Foundation\Sizer) {
                 $avatar = $avatar->setSize($avatarSize, 1);
             }
             $result .= $avatar->render();
 
-            if ($i < count($displayAvatars) - 1) {
+            if ($i < $avatarCount - 1) {
                 $result .= str_repeat(' ', max(0, $this->overlap));
             }
         }

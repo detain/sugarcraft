@@ -121,8 +121,9 @@ final class Ladder implements \SugarCraft\Dash\Foundation\Sizer
     {
         $result = [];
         $vLine = '│';
+        $stepCount = count($this->steps);
 
-        for ($i = 0; $i < count($this->steps); $i++) {
+        for ($i = 0; $i < $stepCount; $i++) {
             $step = $this->steps[$i];
             $status = $step['status'] ?? self::StatusPending;
             $color = $this->getColorForStatus($status);
@@ -139,7 +140,7 @@ final class Ladder implements \SugarCraft\Dash\Foundation\Sizer
             }
 
             // Connector line (except for last step)
-            if ($i < count($this->steps) - 1) {
+            if ($i < $stepCount - 1) {
                 $result[] = $colorStr . $vLine . ' │' . Ansi::reset();
             }
         }
@@ -154,10 +155,11 @@ final class Ladder implements \SugarCraft\Dash\Foundation\Sizer
     {
         $result = [];
         $hLine = '───';
+        $stepCount = count($this->steps);
 
         // Top line with nodes
         $topLine = '';
-        for ($i = 0; $i < count($this->steps); $i++) {
+        for ($i = 0; $i < $stepCount; $i++) {
             $step = $this->steps[$i];
             $status = $step['status'] ?? self::StatusPending;
             $color = $this->getColorForStatus($status);
@@ -165,7 +167,7 @@ final class Ladder implements \SugarCraft\Dash\Foundation\Sizer
 
             $topLine .= ' ' . $color->toFg(ColorProfile::TrueColor) . $nodeChar . ' ' . $step['label'] . Ansi::reset();
 
-            if ($i < count($this->steps) - 1) {
+            if ($i < $stepCount - 1) {
                 $topLine .= $hLine;
             }
         }
@@ -173,7 +175,8 @@ final class Ladder implements \SugarCraft\Dash\Foundation\Sizer
 
         // Bottom line with connectors
         $bottomLine = '';
-        for ($i = 0; $i < count($this->steps) - 1; $i++) {
+        $bottomCount = $stepCount - 1;
+        for ($i = 0; $i < $bottomCount; $i++) {
             $bottomLine .= '   ' . $hLine;
         }
         $result[] = $bottomLine;

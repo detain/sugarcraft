@@ -39,7 +39,8 @@ document.querySelectorAll('.lib-card .lib-github').forEach((pill) => {
         const newTab = e.metaKey || e.ctrlKey || e.button === 1;
         if (newTab) {
             window.open(href, '_blank', 'noopener');
-        } else {
+        } else if (href && (href.startsWith('http://') || href.startsWith('https://') || (href.startsWith('/') && !href.startsWith('//')))) {
+            // Only allow safe URL schemes or root-relative paths to prevent XSS
             window.location.href = href;
         }
     };

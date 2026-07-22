@@ -136,8 +136,10 @@ final class HexDump implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad remaining bytes if line is not full
-        while (count($hexPairs) < $bytesPerLine) {
+        $hexCount = count($hexPairs);
+        while ($hexCount < $bytesPerLine) {
             $hexPairs[] = '  ';
+            $hexCount++;
         }
 
         // Group by 4 for 16-byte lines, or all together for 8-byte lines

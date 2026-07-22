@@ -14,27 +14,27 @@ final class Enumerator
 {
     public static function dash(): \Closure
     {
-        return static fn(int $index, int $total): string => '-';
+        return static fn(int $_index, int $_total): string => '-';
     }
 
     public static function bullet(): \Closure
     {
-        return static fn(int $index, int $total): string => '•';
+        return static fn(int $_index, int $_total): string => '•';
     }
 
     public static function asterisk(): \Closure
     {
-        return static fn(int $index, int $total): string => '*';
+        return static fn(int $_index, int $_total): string => '*';
     }
 
     public static function arabic(): \Closure
     {
-        return static fn(int $index, int $total): string => ($index + 1) . '.';
+        return static fn(int $index, int $_total): string => ($index + 1) . '.';
     }
 
     public static function alphabet(): \Closure
     {
-        return static function (int $index, int $total): string {
+        return static function (int $index, int $_total): string {
             // Spreadsheet-style: A..Z, AA..AZ, BA..ZZ, ...
             $n = $index;
             $s = '';
@@ -48,7 +48,7 @@ final class Enumerator
 
     public static function none(): \Closure
     {
-        return static fn(int $index, int $total): string => '';
+        return static fn(int $_index, int $_total): string => '';
     }
 
     /**
@@ -56,7 +56,7 @@ final class Enumerator
      */
     public static function roman(): \Closure
     {
-        return static function (int $index, int $total): string {
+        return static function (int $index, int $_total): string {
             return self::toRoman($index + 1) . '.';
         };
     }
@@ -66,7 +66,7 @@ final class Enumerator
      */
     public static function romanUpper(): \Closure
     {
-        return static function (int $index, int $total): string {
+        return static function (int $index, int $_total): string {
             return strtoupper(self::toRoman($index + 1)) . '.';
         };
     }

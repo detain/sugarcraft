@@ -28,14 +28,14 @@ final class GameTest extends TestCase
 
     public function testCursorStartsAtOrigin(): void
     {
-        $g = Game::start(5, 5, 3, static fn(int $max): int => 0);
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
         $this->assertSame(0, $g->cursorX);
         $this->assertSame(0, $g->cursorY);
     }
 
     public function testArrowKeysMoveCursor(): void
     {
-        $g = Game::start(5, 5, 3, static fn(int $max): int => 0);
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Right));
         [$g, ] = $g->update(self::key(KeyType::Right));
         [$g, ] = $g->update(self::key(KeyType::Down));
@@ -45,7 +45,7 @@ final class GameTest extends TestCase
 
     public function testCursorClampsAtBoardEdges(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         for ($i = 0; $i < 10; $i++) {
             [$g, ] = $g->update(self::key(KeyType::Right));
         }
@@ -54,7 +54,7 @@ final class GameTest extends TestCase
 
     public function testHjklVimMovement(): void
     {
-        $g = Game::start(5, 5, 3, static fn(int $max): int => 0);
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Char, 'l'));
         [$g, ] = $g->update(self::key(KeyType::Char, 'j'));
         $this->assertSame(1, $g->cursorX);
@@ -63,7 +63,7 @@ final class GameTest extends TestCase
 
     public function testFlagToggle(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
         $this->assertTrue($g->board->cell(0, 0)->flagged);
         [$g, ] = $g->update(self::key(KeyType::Char, 'f'));
@@ -72,7 +72,7 @@ final class GameTest extends TestCase
 
     public function testRevealOnFirstClickPlacesMines(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Space));
         $this->assertTrue($g->board->minesPlaced);
         $this->assertTrue($g->board->cell(0, 0)->revealed);
@@ -80,21 +80,21 @@ final class GameTest extends TestCase
 
     public function testQuitProducesQuitCmd(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         [, $cmd] = $g->update(self::key(KeyType::Char, 'q'));
         $this->assertNotNull($cmd);
     }
 
     public function testEscalsoQuits(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         [, $cmd] = $g->update(self::key(KeyType::Escape));
         $this->assertNotNull($cmd);
     }
 
     public function testRestartResetsBoard(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Space));      // reveals + places mines
         [$g, ] = $g->update(self::key(KeyType::Char, 'r'));  // restart
         $this->assertFalse($g->board->minesPlaced);
@@ -104,7 +104,7 @@ final class GameTest extends TestCase
 
     public function testNonKeyMessagesAreIgnored(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         $msg = new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24);
         [$next, $cmd] = $g->update($msg);
         $this->assertSame($g, $next);
@@ -113,7 +113,7 @@ final class GameTest extends TestCase
 
     public function testViewIncludesStatusLine(): void
     {
-        $g = Game::start(4, 4, 2, static fn(int $max): int => 0);
+        $g = Game::start(4, 4, 2, static fn(int $_max): int => 0);
         $view = $g->view();
         $this->assertStringContainsString('mines: 2', $view);
     }
@@ -170,7 +170,7 @@ final class GameTest extends TestCase
 
     public function testTimerStartsOnFirstReveal(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
         $this->assertNull($g->startedAt);
         $this->assertNull($g->elapsed());
 
@@ -200,7 +200,7 @@ final class GameTest extends TestCase
         // Manually trigger a win state by modifying the board (not possible with immutable design)
         // Instead, test that recordResult updates stats for a known win condition
         // by creating a game that we can verify has isWon=true
-        $rand = static fn(int $max): int => 0;
+        $rand = static fn(int $_max): int => 0;
         $g = Game::withDifficulty(Difficulty::EASY, $rand);
 
         // Reveal cells - if we happen to win, great. If not, we still test the stats mechanism.
@@ -227,7 +227,7 @@ final class GameTest extends TestCase
 
     public function testRecordResultUpdatesStatsOnLoss(): void
     {
-        $rand = static fn(int $max): int => 0;
+        $rand = static fn(int $_max): int => 0;
         $g = Game::withDifficulty(Difficulty::EASY, $rand);
 
         // First reveal (safe)
@@ -299,7 +299,7 @@ final class GameTest extends TestCase
 
     public function testTimerUsesMicrotimePrecision(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
 
         // Before first reveal, elapsed is null.
         $this->assertNull($g->elapsed());
@@ -322,7 +322,7 @@ final class GameTest extends TestCase
 
     public function testRecordResultAcceptsFloatElapsed(): void
     {
-        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $_max): int => 0);
         [$g, ] = $g->update(self::key(KeyType::Space));
 
         // Record result with a float elapsed time.
@@ -367,7 +367,7 @@ final class GameTest extends TestCase
             board: $board,
             cursorX: 8,
             cursorY: 8,
-            rand: static fn(int $max): int => 0,
+            rand: static fn(int $_max): int => 0,
             startedAt: microtime(true),
             statsPath: $statsPath,
         );
@@ -401,7 +401,7 @@ final class GameTest extends TestCase
             $rows[] = $row;
         }
         $board = new Board(9, 9, 10, $rows, true, false, 0, 0);
-        $g = new Game($board, 0, 0, static fn(int $max): int => 0, microtime(true));
+        $g = new Game($board, 0, 0, static fn(int $_max): int => 0, microtime(true));
 
         // Revealing the mine explodes — update() must record the loss.
         [$g, ] = $g->update(self::key(KeyType::Space));
@@ -476,7 +476,7 @@ final class GameTest extends TestCase
 
         $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, false, 1);
         // Cursor starts at (1,1) — on the satisfied revealed number.
-        $game = new Game($board, 1, 1, static fn(int $max): int => 0);
+        $game = new Game($board, 1, 1, static fn(int $_max): int => 0);
 
         $this->assertFalse($game->board->cell(1, 2)->revealed);
 
@@ -498,7 +498,7 @@ final class GameTest extends TestCase
 
     public function testLeftClickRevealsResolvedCell(): void
     {
-        $g = Game::start(5, 5, 3, static fn(int $max): int => 0);
+        $g = Game::start(5, 5, 3, static fn(int $_max): int => 0);
 
         // Move to top-left and reveal to place mines.
         [$g, ] = $g->update(self::key(KeyType::Char, 'h'));  // left (cursor 0,0)
@@ -539,7 +539,7 @@ final class GameTest extends TestCase
         ];
 
         $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, false, 1);
-        $g = new Game($board, 2, 2, static fn(int $max): int => 0);  // cursor at (2,2) — safe, unrevealed
+        $g = new Game($board, 2, 2, static fn(int $_max): int => 0);  // cursor at (2,2) — safe, unrevealed
 
         $this->assertFalse($g->board->cell(2, 2)->revealed);
         $this->assertFalse($g->board->cell(2, 2)->mine);
@@ -563,7 +563,7 @@ final class GameTest extends TestCase
         ];
 
         $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, false, 1);
-        $g = new Game($board, 1, 1, static fn(int $max): int => 0);  // cursor on (1,1) — satisfied
+        $g = new Game($board, 1, 1, static fn(int $_max): int => 0);  // cursor on (1,1) — satisfied
 
         // Terminal coords for interior (1,1): x=4, y=3
         [$next, ] = $g->update(self::mouseClick(4, 3, MouseButton::Middle));
@@ -578,7 +578,7 @@ final class GameTest extends TestCase
 
     public function testClickOutsideBoardIsNoop(): void
     {
-        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
         $originalExploded = $g->board->exploded;
         $originalRevealedCount = $g->board->revealedCount;
 
@@ -601,7 +601,7 @@ final class GameTest extends TestCase
         ];
 
         $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, true, 1);  // exploded=true
-        $g = new Game($board, 2, 2, static fn(int $max): int => 0);
+        $g = new Game($board, 2, 2, static fn(int $_max): int => 0);
 
         $this->assertTrue($g->board->exploded);
 

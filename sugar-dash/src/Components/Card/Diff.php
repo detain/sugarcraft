@@ -87,9 +87,11 @@ final class Diff implements \SugarCraft\Dash\Foundation\Sizer
 
         $oldIndex = 0;
         $newIndex = 0;
+        $oldLineCount = count($oldLines);
+        $newLineCount = count($newLines);
 
-        while ($oldIndex < count($oldLines) || $newIndex < count($newLines)) {
-            if ($oldIndex >= count($oldLines)) {
+        while ($oldIndex < $oldLineCount || $newIndex < $newLineCount) {
+            if ($oldIndex >= $oldLineCount) {
                 // Remaining new lines are additions
                 $result[] = [
                     'type' => self::ADDED,
@@ -98,7 +100,7 @@ final class Diff implements \SugarCraft\Dash\Foundation\Sizer
                     'newLine' => $newIndex + 1,
                 ];
                 $newIndex++;
-            } elseif ($newIndex >= count($newLines)) {
+            } elseif ($newIndex >= $newLineCount) {
                 // Remaining old lines are removals
                 $result[] = [
                     'type' => self::REMOVED,

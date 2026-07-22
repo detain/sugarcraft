@@ -172,7 +172,7 @@ final class Dendrogram implements \SugarCraft\Dash\Foundation\Sizer
      */
     private function renderVertical(int $width, int $height): string
     {
-        [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
+        [$tl, $tr, $bl, $br, $_h, $v] = $this->getStyleChars();
 
         $nodeColor = $this->nodeColor ?? Color::hex('#89B4FA');
         $lineColor = $this->lineColor ?? Color::hex('#45475A');
@@ -238,15 +238,15 @@ final class Dendrogram implements \SugarCraft\Dash\Foundation\Sizer
                 $childPositions[] = $childX;
 
                 // Draw vertical line from parent to children
-                $childY = ($depth + 1) * $levelHeight + 1;
+                $_childY = ($depth + 1) * $levelHeight + 1;
 
                 if ($lineColor !== null) {
                     $result .= $lineColor->toFg(ColorProfile::TrueColor);
                 }
 
                 // Draw horizontal line at child level connecting all children
-                $lineStartX = min($childPositions);
-                $lineEndX = max($childPositions);
+                $_lineStartX = min($childPositions);
+                $_lineEndX = max($childPositions);
             }
 
             // Draw vertical connector from parent center to child line
@@ -379,7 +379,7 @@ final class Dendrogram implements \SugarCraft\Dash\Foundation\Sizer
         if ($isLeaf) {
             // Find leaf index
             $leafIndex = array_search($node, $allLeaves, true);
-            $nodeY = $startY + $leafIndex * $leafSpacing;
+            $_nodeY = $startY + $leafIndex * $leafSpacing;
 
             // Draw leaf node
             if ($color !== null) {

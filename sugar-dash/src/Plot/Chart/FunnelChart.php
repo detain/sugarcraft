@@ -113,7 +113,8 @@ final class FunnelChart implements \SugarCraft\Dash\Foundation\Sizer
         $result = [];
         $resultWidths = [];
 
-        for ($i = 0; $i < count($this->stages); $i++) {
+        $stageCount = count($this->stages);
+        for ($i = 0; $i < $stageCount; $i++) {
             $stage = $this->stages[$i];
             $value = $stage['value'];
             $label = $stage['label'];

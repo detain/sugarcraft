@@ -19,7 +19,7 @@ final class GameTest extends TestCase
 {
     private function deterministicGame(): Game
     {
-        return Game::start(new Bag(static fn(int $max): int => 0));
+        return Game::start(new Bag(static fn(int $_max): int => 0));
     }
 
     public function testStartSpawnsFirstPiece(): void
@@ -156,7 +156,7 @@ final class GameTest extends TestCase
     {
         // Create a game with lock delay to allow piece to be held twice
         // Bag order with rand=0 is: O, T, S, Z, J, L, I
-        $g = Game::startWithLockDelay(new Bag(static fn(int $max): int => 0), 100);
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 100);
         $this->assertSame(Tetromino::O, $g->piece->kind, 'First piece should be O');
 
         // First hold: piece O goes to hold, new piece T spawns
@@ -194,7 +194,7 @@ final class GameTest extends TestCase
     {
         // Start with lock delay of 3 ticks
         // Hard drop should lock immediately (no lock delay on hard drop)
-        $g = Game::startWithLockDelay(new Bag(static fn(int $max): int => 0), 3);
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 3);
         $this->assertSame(3, $g->lockDelayTicks);
 
         // Hard drop - should lock immediately, not wait for lock delay
@@ -206,7 +206,7 @@ final class GameTest extends TestCase
     public function testLockDelayCountsDownOnBottom(): void
     {
         // Start with lock delay of 2 ticks
-        $g = Game::startWithLockDelay(new Bag(static fn(int $max): int => 0), 2);
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 2);
         $this->assertSame(2, $g->lockDelayTicks);
 
         // Manually set piece at bottom and call gravity until lock
@@ -229,7 +229,7 @@ final class GameTest extends TestCase
 
     public function testMovementResetsLockDelay(): void
     {
-        $g = Game::startWithLockDelay(new Bag(static fn(int $max): int => 0), 2);
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 2);
 
         // Move piece to bottom by hard drop (which preserves lock delay setting but doesn't trigger it)
         // Actually, let's just verify the initial state and that hard drop works
@@ -243,7 +243,7 @@ final class GameTest extends TestCase
     public function testAddGarbageShiftsExistingRowsUp(): void
     {
         // Create a game and manually place a row of blocks on the board
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         $rows = $g->board->rows();
         // Place a complete row near the bottom (row 20, second-to-last visible row).
         // With ROWS=24 and HIDDEN_ROWS=2, visible rows are 0-21. Row 20 is visible.
@@ -255,7 +255,7 @@ final class GameTest extends TestCase
         $gWithRow = $g->mutate(['board' => $boardWithRow]);
 
         // Add 1 garbage row
-        $result = $gWithRow->addGarbageRows(1, static fn(int $max): int => 3);
+        $result = $gWithRow->addGarbageRows(1, static fn(int $_max): int => 3);
         $resultRows = $result->board->rows();
 
         // The previously placed row should now be at row 21 (shifted up by 1)
@@ -266,9 +266,9 @@ final class GameTest extends TestCase
 
     public function testAddGarbageInsertsOneHolePerRow(): void
     {
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         // Use deterministic rand that returns 2 for the hole position
-        $result = $g->addGarbageRows(2, static fn(int $max): int => 2);
+        $result = $g->addGarbageRows(2, static fn(int $_max): int => 2);
         $rows = $result->board->rows();
 
         // Each garbage row should have exactly one null (the hole)
@@ -290,7 +290,7 @@ final class GameTest extends TestCase
 
     public function testAddGarbageTopsOutWhenStackOverflows(): void
     {
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         $rows = $g->board->rows();
 
         // Fill rows 0 and 1 (the topmost rows that will be displaced by 2 garbage rows)
@@ -304,20 +304,20 @@ final class GameTest extends TestCase
         $gWithTopRows = $g->mutate(['board' => $boardWithTopRows]);
 
         // Adding 2 garbage rows should top-out because rows 0 and 1 have content
-        $result = $gWithTopRows->addGarbageRows(2, static fn(int $max): int => 0);
+        $result = $gWithTopRows->addGarbageRows(2, static fn(int $_max): int => 0);
 
         $this->assertTrue($result->over, 'Adding garbage when top rows are filled should set over=true');
     }
 
     public function testAddGarbageZeroOrNegativeCountIsNoOp(): void
     {
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         $originalBoard = $g->board;
 
-        $resultZero = $g->addGarbageRows(0, static fn(int $max): int => 0);
+        $resultZero = $g->addGarbageRows(0, static fn(int $_max): int => 0);
         $this->assertSame($originalBoard, $resultZero->board, 'addGarbageRows(0) should return same board');
 
-        $resultNeg = $g->addGarbageRows(-5, static fn(int $max): int => 0);
+        $resultNeg = $g->addGarbageRows(-5, static fn(int $_max): int => 0);
         $this->assertSame($originalBoard, $resultNeg->board, 'addGarbageRows(-5) should return same board');
     }
 
@@ -329,7 +329,7 @@ final class GameTest extends TestCase
         // With floor at row 23 and I height 1: I at y=22 → cells at row 23 (floor).
         // So I at y=21 → cells at row 22 (one above floor), first gravity fits.
         // I at y=22 → cells at row 23 (floor), can't move down → lock delay active.
-        $g = Game::startWithLockDelay(new Bag(static fn(int $max): int => 0), 2);
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 2);
 
         // Place I at y=22 (cells at floor row 23) with lockDelayTicks=1
         $iAtFloor = new Piece(Tetromino::I, 0, 3, 22);
@@ -366,7 +366,7 @@ final class GameTest extends TestCase
         // Tetromino::O at rot 0 (height 2, cells at y=0,1) spawns at y=0.
         // It falls until bottom cell (y+1) hits floor at row 23 → lands at y=22.
         // Fall distance = 22 cells × 2 = 44 points.
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         $pieceAtY0 = new Piece(Tetromino::O, 0, 3, 0);
         $game = $g->mutate(['piece' => $pieceAtY0, 'score' => new Score()]);
 
@@ -383,7 +383,7 @@ final class GameTest extends TestCase
     {
         // Create a game and manually set piece at y=0, then soft drop one cell.
         // Verify 1 point is awarded when the move succeeds.
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         $pieceAtY0 = new Piece(Tetromino::T, 0, 3, 0);
         $game = $g->mutate(['piece' => $pieceAtY0, 'score' => new Score()]);
 
@@ -402,7 +402,7 @@ final class GameTest extends TestCase
         // spawn zone so the *next* piece cannot fit after the current one
         // locks. Fill cols 1-9 of rows 0-1 (col 0 left empty → neither row is
         // full, so nothing clears on lock).
-        $g = Game::start(new Bag(static fn(int $max): int => 0)); // bag: O, T, ...
+        $g = Game::start(new Bag(static fn(int $_max): int => 0)); // bag: O, T, ...
         $rows = $g->board->rows();
         for ($r = 0; $r < 2; $r++) {
             for ($col = 1; $col < Board::COLS; $col++) {
@@ -427,7 +427,7 @@ final class GameTest extends TestCase
     {
         // End-to-end: complete a row by dropping a piece and assert the clear
         // propagates to Score (lines + points) via lockAndSpawn.
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         $rows = $g->board->rows();
         // Fill the floor row everywhere except cols 1-2 — exactly where an O
         // piece dropped from x=0 lands (O rot0 occupies cols x+1, x+2).
@@ -454,7 +454,7 @@ final class GameTest extends TestCase
         // (where the naive rotation always fits). Here the naive clockwise
         // rotation of a T collides with a locked block, and only the SRS
         // [-1,0] kick fits → the piece must shift left by one column.
-        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
         $rows = $g->board->rows();
         $rows[12][5] = Tetromino::I; // blocks the naive rot-1 cell (5,12) only
         $board = new Board($rows);

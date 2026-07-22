@@ -172,7 +172,8 @@ final class Shadow implements \SugarCraft\Dash\Foundation\Sizer
         $lines = explode("\n", $content);
         $adjusted = [];
 
-        for ($i = 0; $i < $height && $i < count($lines); $i++) {
+        $lineCount = count($lines);
+        for ($i = 0; $i < $height && $i < $lineCount; $i++) {
             $line = $lines[$i];
             $lineWidth = Width::string($line);
 
@@ -185,8 +186,10 @@ final class Shadow implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad with empty lines if needed
-        while (count($adjusted) < $height) {
+        $adjustedCount = count($adjusted);
+        while ($adjustedCount < $height) {
             $adjusted[] = str_repeat(' ', $width);
+            $adjustedCount++;
         }
 
         return implode("\n", array_slice($adjusted, 0, $height));

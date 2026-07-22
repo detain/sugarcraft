@@ -85,7 +85,8 @@ final class SmithWatermanMatcherTest extends TestCase
 
         $this->assertNotEmpty($results);
         // Should be sorted by score descending (higher scores first)
-        for ($i = 1; $i < count($results); $i++) {
+        $resultCount = count($results);
+        for ($i = 1; $i < $resultCount; $i++) {
             $this->assertGreaterThanOrEqual($results[$i]->score, $results[$i - 1]->score);
         }
     }
@@ -227,7 +228,8 @@ final class SmithWatermanMatcherTest extends TestCase
         }
 
         $scores = array_map(static fn(MatchResult $r) => $r->score, $results);
-        for ($i = 1; $i < count($scores); $i++) {
+        $scoreCount = count($scores);
+        for ($i = 1; $i < $scoreCount; $i++) {
             $this->assertGreaterThanOrEqual($scores[$i], $scores[$i - 1], 'Results must be sorted by score descending');
         }
     }

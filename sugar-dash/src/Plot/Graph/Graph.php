@@ -60,7 +60,6 @@ final class Graph implements \SugarCraft\Dash\Foundation\Sizer
     private ?float $maxValue = null;
     private bool $showGrid = true;
     private bool $showLegend = true;
-    private bool $showAxes = true;
 
     public function __construct(
         private readonly ?int $maxDataPoints = null,
@@ -173,16 +172,6 @@ final class Graph implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Show or hide axes.
-     */
-    public function withShowAxes(bool $show): self
-    {
-        $clone = clone $this;
-        $clone->showAxes = $show;
-        return $clone;
-    }
-
-    /**
      * Recalculate min/max values from data.
      */
     private function recalculateMinMax(): void
@@ -220,9 +209,7 @@ final class Graph implements \SugarCraft\Dash\Foundation\Sizer
 
         [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
 
-        $gridColor = $this->gridColor ?? Color::hex('#45475A');
         $textColor = $this->textColor ?? Color::hex('#CDD6F4');
-        $lineColor = $this->lineColor ?? Color::hex('#89B4FA');
 
         $result = '';
 
@@ -261,7 +248,6 @@ final class Graph implements \SugarCraft\Dash\Foundation\Sizer
     {
         $result = '';
         foreach ($this->series as $s) {
-            $color = $s['color'] ?? $this->lineColor ?? Color::hex('#89B4FA');
             $label = $s['label'];
             $entry = "◆ {$label} ";
             if (strlen($result) + strlen($entry) <= $width) {
@@ -295,8 +281,10 @@ final class Graph implements \SugarCraft\Dash\Foundation\Sizer
                 continue;
             }
 
-            while (count($lines) <= $lineIndex) {
+            $lineCount = count($lines);
+            while ($lineCount <= $lineIndex) {
                 array_unshift($lines, str_repeat(' ', $width));
+                $lineCount++;
             }
 
             if ($this->showGrid) {
@@ -306,13 +294,14 @@ final class Graph implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Ensure we have enough lines
-        while (count($lines) < $height - 1) {
+        $lineCount = count($lines);
+        while ($lineCount < $height - 1) {
             array_unshift($lines, str_repeat(' ', $width));
+            $lineCount++;
         }
 
         // Plot data
         $plotWidth = $width - 10; // Leave space for Y-axis labels
-        $plotArea = mb_substr($lines[count($lines) - 1] ?? '', $plotWidth) ?? '';
 
         foreach ($data as $index => $value) {
             if ($range == 0) {
@@ -354,7 +343,7 @@ final class Graph implements \SugarCraft\Dash\Foundation\Sizer
         $result = '';
         $labelWidth = intval($width / max(1, count($this->labels)));
 
-        foreach ($this->labels as $index => $label) {
+        foreach ($this->labels as $label) {
             $shortLabel = mb_substr($label, 0, $labelWidth - 1);
             $result .= str_pad($shortLabel, $labelWidth);
         }

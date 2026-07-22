@@ -432,8 +432,10 @@ final class PosterGrid
         if (count($lines) > $height) {
             $lines = array_slice($lines, 0, $height);
         }
-        while (count($lines) < $height) {
+        $lineCount = count($lines);
+        while ($lineCount < $height) {
             $lines[] = '';
+            $lineCount++;
         }
 
         foreach ($lines as $i => $line) {

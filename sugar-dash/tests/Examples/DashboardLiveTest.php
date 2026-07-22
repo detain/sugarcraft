@@ -124,11 +124,11 @@ final class DashboardLiveTest extends TestCase
 
         // Feed a tick to the clock module — it should still work.
         $tickMsg = new class implements Msg {};
-        [$next, $cmd] = $model->update($tickMsg);
+        [$next, ] = $model->update($tickMsg);
         $this->assertInstanceOf(DashboardModelForTest::class, $next);
 
         // Feed QuitMsg — update should return Cmd::quit().
-        [$next2, $quitCmd] = $model->update(new QuitMsg());
+        [$_, $quitCmd] = $model->update(new QuitMsg());
         $this->assertNotNull($quitCmd, 'QuitMsg should produce a quit Cmd');
     }
 
@@ -144,17 +144,17 @@ final class DashboardLiveTest extends TestCase
         // Initial focus is on first registered panel (address "0").
         // After Tab, focus should rotate to "1".
         $tabMsg = new KeyMsg(KeyType::Tab, '');
-        [$m1, $cmd1] = $model->update($tabMsg);
+        [$_, $cmd1] = $model->update($tabMsg);
         $this->assertNull($cmd1, 'Tab should not produce a Cmd');
 
         // After Shift+Tab, focus should go back to "0".
         $shiftTabMsg = new KeyMsg(KeyType::Tab, '', false, false, true);
-        [$m2, $cmd2] = $model->update($shiftTabMsg);
+        [$_, $cmd2] = $model->update($shiftTabMsg);
         $this->assertNull($cmd2, 'Shift+Tab should not produce a Cmd');
 
         // Arrow keys also cycle focus.
         $upMsg = new KeyMsg(KeyType::Up, '');
-        [$m3, $cmd3] = $model->update($upMsg);
+        [$_, $cmd3] = $model->update($upMsg);
         $this->assertNull($cmd3, 'ArrowUp should not produce a Cmd');
     }
 
@@ -177,7 +177,7 @@ final class DashboardLiveTest extends TestCase
         $this->assertNull($cmd, 'q key should not produce an immediate quit Cmd');
 
         // Feed QuitMsg directly — update should return Cmd::quit().
-        [$next2, $quitCmd] = $next->update(new QuitMsg());
+        [$_, $quitCmd] = $next->update(new QuitMsg());
         $this->assertNotNull($quitCmd, 'QuitMsg should produce a quit Cmd');
     }
 }
@@ -263,7 +263,6 @@ final class DashboardModelForTest implements Model
             $content = $module->view();
             $focused = ($addr === $focusedId);
             $prefix = $focused ? "[{$addr}]" : " {$addr} ";
-            $border = $focused ? '█' : '─';
 
             $lines[] = "{$prefix}{$content}";
         }

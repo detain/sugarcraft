@@ -143,9 +143,11 @@ final class AdaptiveImage
         $this->lru = array_values(array_filter($this->lru, static fn($k) => $k !== $key));
         array_unshift($this->lru, $key);
 
-        while (count($this->lru) > $this->maxCache) {
+        $lruCount = count($this->lru);
+        while ($lruCount > $this->maxCache) {
             $evicted = array_pop($this->lru);
             unset($this->cache[$evicted]);
+            $lruCount--;
         }
     }
 }

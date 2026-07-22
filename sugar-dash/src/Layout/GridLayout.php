@@ -168,7 +168,8 @@ final class GridLayout implements \SugarCraft\Dash\Foundation\Sizer
     ): string {
         $lines = array_fill(0, $totalHeight, '');
 
-        for ($i = 0; $i < count($this->items); $i++) {
+        $itemCount = count($this->items);
+        for ($i = 0; $i < $itemCount; $i++) {
             $item = $this->items[$i];
             $col = $i % $cols;
             $row = (int) floor($i / $cols);

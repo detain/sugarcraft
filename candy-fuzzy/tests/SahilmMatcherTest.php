@@ -61,7 +61,8 @@ final class SahilmMatcherTest extends TestCase
 
         $this->assertNotEmpty($results);
         // Should be sorted by score descending
-        for ($i = 1; $i < count($results); $i++) {
+        $resultCount = count($results);
+        for ($i = 1; $i < $resultCount; $i++) {
             $this->assertGreaterThanOrEqual($results[$i]->score, $results[$i - 1]->score);
         }
     }

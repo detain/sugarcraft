@@ -73,7 +73,8 @@ final class FuzzyMatcherTest extends TestCase
         $this->assertNotEmpty($result);
         // Results should be sorted by score descending
         $scores = array_column($result, 1);
-        for ($i = 1; $i < count($scores); $i++) {
+        $scoreCount = count($scores);
+        for ($i = 1; $i < $scoreCount; $i++) {
             $this->assertGreaterThanOrEqual($scores[$i], $scores[$i - 1]);
         }
     }

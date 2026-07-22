@@ -136,7 +136,6 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         // Calculate total natural width
         $totalGapWidth = ($this->gap * max(0, count($this->items) - 1));
         $naturalWidth = array_sum(array_column($itemSizes, 'width')) + $totalGapWidth;
-        $naturalHeight = max(array_column($itemSizes, 'height'));
 
         // Handle wrap if needed
         if ($this->wrap === FlexWrap::Wrap && $naturalWidth > $totalWidth) {
@@ -148,7 +147,6 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
 
         // Render each item and collect lines
         $lines = array_fill(0, $totalHeight, '');
-        $currentX = 0;
 
         foreach ($this->items as $index => $item) {
             $itemWidth = $itemWidths[$index];
@@ -200,7 +198,6 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
 
         foreach ($this->items as $index => $item) {
             $itemWidth = $itemSizes[$index]['width'];
-            $itemHeight = $itemSizes[$index]['height'];
 
             // Check if item fits in current line
             $itemWithGap = $currentLineWidth > 0 ? $this->gap : 0;
@@ -262,7 +259,6 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         $currentY = 0;
 
         foreach ($this->items as $index => $item) {
-            $itemWidth = max(array_column($itemSizes, 'width'));
             $itemHeight = $itemHeights[$index];
 
             if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
@@ -291,14 +287,17 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
             }
 
             // Pad with empty lines if needed
-            while (count($alignedLines) < $itemHeight) {
+            $alignedCount = count($alignedLines);
+            while ($alignedCount < $itemHeight) {
                 $alignedLines[] = str_repeat(' ', $totalWidth);
+                $alignedCount++;
             }
 
             $lines = array_merge($lines, $alignedLines);
 
             // Add gap after this item (except last)
-            if ($index < count($this->items) - 1 && $this->gap > 0) {
+            $itemCount = count($this->items);
+            if ($index < $itemCount - 1 && $this->gap > 0) {
                 for ($i = 0; $i < $this->gap; $i++) {
                     $lines[] = str_repeat(' ', $totalWidth);
                 }
@@ -312,8 +311,10 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad or truncate to totalHeight
-        while (count($result) < $totalHeight) {
+        $resultCount = count($result);
+        while ($resultCount < $totalHeight) {
             $result[] = str_repeat(' ', $totalWidth);
+            $resultCount++;
         }
 
         return implode("\n", array_slice($result, 0, $totalHeight));
@@ -424,11 +425,10 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         $gapCount = count($sizes) - 1;
-        $additionalPerGap = (int) floor($extraSpace / $gapCount);
-        $remainder = $extraSpace % $gapCount;
 
         $result = [];
-        for ($i = 0; $i < count($sizes); $i++) {
+        $sizeCount = count($sizes);
+        for ($i = 0; $i < $sizeCount; $i++) {
             $result[] = $sizes[$i];
             if ($i < $gapCount) {
                 // Extra space handled via gap in render

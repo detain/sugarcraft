@@ -10,47 +10,47 @@ namespace SugarCraft\Core\Util;
  */
 final class NullLogger
 {
-    public function emergency(\Stringable|string $message, array $context = []): void
+    public function emergency(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function alert(\Stringable|string $message, array $context = []): void
+    public function alert(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function critical(\Stringable|string $message, array $context = []): void
+    public function critical(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function error(\Stringable|string $message, array $context = []): void
+    public function error(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function warning(\Stringable|string $message, array $context = []): void
+    public function warning(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function notice(\Stringable|string $message, array $context = []): void
+    public function notice(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function info(\Stringable|string $message, array $context = []): void
+    public function info(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function debug(\Stringable|string $message, array $context = []): void
+    public function debug(\Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }
 
-    public function log(mixed $level, \Stringable|string $message, array $context = []): void
+    public function log(mixed $_level, \Stringable|string $_message, array $_context = []): void
     {
         // No-op
     }

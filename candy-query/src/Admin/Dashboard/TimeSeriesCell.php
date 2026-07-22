@@ -83,9 +83,11 @@ final class TimeSeriesCell
         $this->values[] = $value;
         $this->timestamps[] = $now;
 
-        while (count($this->values) > $this->windowSize) {
+        $valueCount = count($this->values);
+        while ($valueCount > $this->windowSize) {
             array_shift($this->values);
             array_shift($this->timestamps);
+            $valueCount--;
         }
 
         $this->maxSeen = max($this->maxSeen, $value);

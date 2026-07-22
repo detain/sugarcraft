@@ -195,8 +195,10 @@ final class Textarea implements \SugarCraft\Dash\Foundation\Sizer
                         . ($this->textColor?->toFg(ColorProfile::TrueColor) ?? '');
                 }
                 // Pad to maxLines
-                while (count($placeholderLines) < $maxLines) {
+                $placeholderCount = count($placeholderLines);
+                while ($placeholderCount < $maxLines) {
                     $placeholderLines[] = '';
+                    $placeholderCount++;
                 }
                 return array_slice($placeholderLines, 0, $maxLines);
             }
@@ -207,8 +209,10 @@ final class Textarea implements \SugarCraft\Dash\Foundation\Sizer
         $wrapped = $this->wrapText($value, $contentWidth - 1);
 
         // Pad or truncate to match rows
-        while (count($wrapped) < $maxLines) {
+        $wrappedCount = count($wrapped);
+        while ($wrappedCount < $maxLines) {
             $wrapped[] = '';
+            $wrappedCount++;
         }
 
         return array_slice($wrapped, 0, $maxLines);

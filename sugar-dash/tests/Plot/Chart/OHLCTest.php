@@ -169,15 +169,6 @@ final class OHLCTest extends TestCase
         $this->assertInstanceOf(OHLC::class, $result);
     }
 
-    public function testWithShowValues(): void
-    {
-        $ohlc = OHLC::new()
-            ->addPoint('AAPL', 150.0, 155.0, 149.0, 153.0);
-
-        $result = $ohlc->withShowValues(false);
-        $this->assertInstanceOf(OHLC::class, $result);
-    }
-
     public function testWithPriceRange(): void
     {
         $ohlc = OHLC::new()

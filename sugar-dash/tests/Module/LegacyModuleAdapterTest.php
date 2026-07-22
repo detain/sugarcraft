@@ -24,7 +24,7 @@ final class LegacyModuleAdapterTest extends TestCase
             public function name(): string { return 'legacy-test'; }
             public function init(): array { return ['name' => 'legacy-test', 'interval' => 0]; }
             public function update(array $state): array { $state['count'] = ($state['count'] ?? 0) + 1; return $state; }
-            public function view(array $state, int $width, int $height): string { return "count: {$state['count']}"; }
+            public function view(array $state, int $_width, int $_height): string { return "count: {$state['count']}"; }
             public function minSize(): array { return [10, 3]; }
         };
 
@@ -42,7 +42,7 @@ final class LegacyModuleAdapterTest extends TestCase
             public function name(): string { return 'test'; }
             public function init(): array { return ['name' => 'test', 'interval' => 1]; }
             public function update(array $state): array { return $state; }
-            public function view(array $state, int $width, int $height): string { return 'hello'; }
+            public function view(array $state, int $_width, int $_height): string { return 'hello'; }
             public function minSize(): array { return [20, 4]; }
         };
 
@@ -57,7 +57,7 @@ final class LegacyModuleAdapterTest extends TestCase
             public function name(): string { return 'test'; }
             public function init(): array { return ['name' => 'test', 'interval' => 0]; }
             public function update(array $state): array { $state['x'] = 42; return $state; }
-            public function view(array $state, int $width, int $height): string { return "x={$state['x']}"; }
+            public function view(array $state, int $_width, int $_height): string { return "x={$state['x']}"; }
             public function minSize(): array { return [10, 3]; }
         };
 
@@ -79,7 +79,7 @@ final class LegacyModuleAdapterTest extends TestCase
             public function name(): string { return 'test'; }
             public function init(): array { return ['name' => 'test', 'interval' => 0]; }
             public function update(array $state): array { $state['value'] = 'updated'; return $state; }
-            public function view(array $state, int $width, int $height): string { return "value={$state['value']}"; }
+            public function view(array $state, int $_width, int $_height): string { return "value={$state['value']}"; }
             public function minSize(): array { return [10, 3]; }
         };
 
@@ -103,7 +103,7 @@ final class LegacyModuleAdapterTest extends TestCase
             public function name(): string { return 'counter'; }
             public function init(): array { return ['name' => 'counter', 'interval' => 0]; }
             public function update(array $state): array { $this->counter++; $state['count'] = $this->counter; return $state; }
-            public function view(array $state, int $width, int $height): string { return "count={$state['count']}"; }
+            public function view(array $state, int $_width, int $_height): string { return "count={$state['count']}"; }
             public function minSize(): array { return [10, 3]; }
         };
 
@@ -133,7 +133,7 @@ final class LegacyModuleAdapterTest extends TestCase
             public function name(): string { return 'test'; }
             public function init(): array { return ['name' => 'test', 'interval' => 0]; }
             public function update(array $state): array { return $state; }
-            public function view(array $state, int $width, int $height): string { return ''; }
+            public function view(array $state, int $_width, int $_height): string { return ''; }
             public function minSize(): array { return [50, 10]; }
         };
 
@@ -148,7 +148,7 @@ final class LegacyModuleAdapterTest extends TestCase
             public function name(): string { return 'my-legacy-module'; }
             public function init(): array { return ['name' => 'my-legacy-module', 'interval' => 0]; }
             public function update(array $state): array { return $state; }
-            public function view(array $state, int $width, int $height): string { return ''; }
+            public function view(array $state, int $_width, int $_height): string { return ''; }
             public function minSize(): array { return [20, 4]; }
         };
 

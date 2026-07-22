@@ -178,7 +178,8 @@ final class CsiHandlerImpl implements CsiHandler
         }
 
         $i = 0;
-        while ($i < count($params)) {
+        $paramCount = count($params);
+        while ($i < $paramCount) {
             $p = (int) $params[$i];
             if ($p === -1) {
                 $p = 0;

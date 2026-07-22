@@ -228,8 +228,9 @@ final class StreamingInspectorTest extends TestCase
         $allStreaming = array_merge($segs1, $segs2, $segs3);
         $oneShot = Inspector::parse("ab\x07cd");
 
-        $this->assertSame(count($oneShot), count($allStreaming));
-        for ($i = 0; $i < count($oneShot); $i++) {
+        $oneShotCount = count($oneShot);
+        $this->assertSame($oneShotCount, count($allStreaming));
+        for ($i = 0; $i < $oneShotCount; $i++) {
             $this->assertSame($oneShot[$i]->raw(), $allStreaming[$i]->raw());
         }
     }
@@ -246,8 +247,9 @@ final class StreamingInspectorTest extends TestCase
         $allStreaming = array_merge($segs1, $segs2, $streaming->finish());
         $oneShot = Inspector::parse("\x1b_Gi=1,s=1,v=1\x1b\\");
 
-        $this->assertSame(count($oneShot), count($allStreaming));
-        for ($i = 0; $i < count($oneShot); $i++) {
+        $oneShotCount = count($oneShot);
+        $this->assertSame($oneShotCount, count($allStreaming));
+        for ($i = 0; $i < $oneShotCount; $i++) {
             $this->assertSame($oneShot[$i]->raw(), $allStreaming[$i]->raw());
         }
     }

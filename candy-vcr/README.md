@@ -17,8 +17,8 @@ equality via [candy-vt](../candy-vt/), with byte-equality fallback).
 - [Status](#status) · [Use cases](#use-cases) · [Install](#install)
 - [Cassette formats](#cassette-formats) — Jsonl / CompressedJsonl / Relative / Yaml / Asciinema
 - [PHP API](#php-api) — `Cassette`, `Recorder`, `Player`, `Player::loadAny()`
-- [Assertion classes](#assertion-classes) — Byte / Screen / Contains / Regex
-- [Matcher classes](#matcher-classes) — Passthrough / Content / TimingTolerant
+- [Assertion classes](#replay-pr4) — Byte / Screen / Contains / Regex
+- [Matcher classes](#matcher-classes-l3--replay-side-flexibility) — Passthrough / Content / TimingTolerant
 - [Hook system](#hook-system-l4) · [Migration system](#cassette-migration)
 - [CLI commands](#cli) — `record` · `inspect` · `replay` · `diff` · `stats` · `migrate` · `render-tape` · `render-batch`
 - [Tape DSL](#tape-compiler-pr8) — Lexer / Parser / Compiler / Decompiler / full directive table

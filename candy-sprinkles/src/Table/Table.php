@@ -408,8 +408,10 @@ final class Table
     /** @param list<string> $row @return list<string> */
     private function padRow(array $row, int $colCount): array
     {
-        while (count($row) < $colCount) {
+        $rowCount = count($row);
+        while ($rowCount < $colCount) {
             $row[] = '';
+            $rowCount++;
         }
         return $row;
     }

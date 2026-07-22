@@ -143,14 +143,16 @@ final class Sixel
         // Add cube colours up to the cap.
         $extra = $paletteSize - 16;
         $axis  = max(2, (int) ceil(pow($extra, 1 / 3)));
-        for ($r = 0; $r < $axis && count($palette) < $paletteSize; $r++) {
-            for ($g = 0; $g < $axis && count($palette) < $paletteSize; $g++) {
-                for ($b = 0; $b < $axis && count($palette) < $paletteSize; $b++) {
+        $paletteCount = count($palette);
+        for ($r = 0; $r < $axis && $paletteCount < $paletteSize; $r++) {
+            for ($g = 0; $g < $axis && $paletteCount < $paletteSize; $g++) {
+                for ($b = 0; $b < $axis && $paletteCount < $paletteSize; $b++) {
                     $palette[] = [
                         (int) round($r * 255 / max(1, $axis - 1)),
                         (int) round($g * 255 / max(1, $axis - 1)),
                         (int) round($b * 255 / max(1, $axis - 1)),
                     ];
+                    $paletteCount++;
                 }
             }
         }

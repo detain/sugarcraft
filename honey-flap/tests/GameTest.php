@@ -17,7 +17,7 @@ final class GameTest extends TestCase
 {
     public function testInitialBirdPositionIsCentered(): void
     {
-        $g = Game::start(static fn(int $max): int => 0);
+        $g = Game::start(static fn(int $_max): int => 0);
         $this->assertSame(Game::BIRD_COL, $g->bird->x);
         $this->assertEqualsWithDelta(Game::HEIGHT / 2, $g->bird->body->position->y, 0.01);
         $this->assertSame(0, $g->score);
@@ -27,7 +27,7 @@ final class GameTest extends TestCase
 
     public function testPipeSpawnsEveryNTicks(): void
     {
-        $g = Game::start(static fn(int $max): int => 0)->tickN(Game::PIPE_EVERY);
+        $g = Game::start(static fn(int $_max): int => 0)->tickN(Game::PIPE_EVERY);
         $this->assertCount(1, $g->pipes);
         // The pipe is appended at WIDTH-1 in the same tick that increments
         // the existing pipes, so its first observed x is exactly WIDTH-1.
@@ -36,7 +36,7 @@ final class GameTest extends TestCase
 
     public function testFlapResetsVelocity(): void
     {
-        $g = Game::start(static fn(int $max): int => 0);
+        $g = Game::start(static fn(int $_max): int => 0);
         $beforeY = $g->bird->row();
         // Without flap, the bird drops over ~0.5s (15 ticks). Gravity is
         // gentle enough now that a handful of ticks barely shifts the
@@ -52,14 +52,14 @@ final class GameTest extends TestCase
 
     public function testQuitOnQuit(): void
     {
-        $g = Game::start(static fn(int $max): int => 0);
+        $g = Game::start(static fn(int $_max): int => 0);
         [, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertNotNull($cmd);
     }
 
     public function testRestartFromCrashedState(): void
     {
-        $g = Game::start(static fn(int $max): int => 0);
+        $g = Game::start(static fn(int $_max): int => 0);
         // Drop into the floor by ticking many frames.
         $g = $g->tickN(80);
         $this->assertTrue($g->crashed);
@@ -71,10 +71,10 @@ final class GameTest extends TestCase
 
     public function testCrashStopsBirdFromMovingAfterFurtherTicks(): void
     {
-        $g = Game::start(static fn(int $max): int => 0)->tickN(80);
+        $g = Game::start(static fn(int $_max): int => 0)->tickN(80);
         $this->assertTrue($g->crashed);
-        $rowAtCrash = $g->bird->row();
-        $g2 = $g->tickN(10);
+        $_rowAtCrash = $g->bird->row();
+        $_g2 = $g->tickN(10);
         // tickN bypasses the crashed gate (it's a test helper that drives
         // advance() directly), so the bird keeps falling past the floor —
         // but the runtime gate in update(TickMsg) will not advance the model.
@@ -99,7 +99,7 @@ final class GameTest extends TestCase
     public function testHighScoreReturnsZeroWhenNoScores(): void
     {
         $g = new Game(
-            bird: Game::start(static fn(int $max): int => 0)->bird,
+            bird: Game::start(static fn(int $_max): int => 0)->bird,
             pipes: [],
             highScores: [],
         );
@@ -109,7 +109,7 @@ final class GameTest extends TestCase
     public function testWithHighScoreIsImmutable(): void
     {
         $g = new Game(
-            bird: Game::start(static fn(int $max): int => 0)->bird,
+            bird: Game::start(static fn(int $_max): int => 0)->bird,
             pipes: [],
             highScores: [5, 10],
         );
@@ -127,7 +127,7 @@ final class GameTest extends TestCase
     public function testWithHighScoreOnlyMergesWhenHigher(): void
     {
         $g = new Game(
-            bird: Game::start(static fn(int $max): int => 0)->bird,
+            bird: Game::start(static fn(int $_max): int => 0)->bird,
             pipes: [],
             highScores: [5, 10],
         );
@@ -153,7 +153,7 @@ final class GameTest extends TestCase
     public function testWithHighScoreKeepsSortedOrder(): void
     {
         $g = new Game(
-            bird: Game::start(static fn(int $max): int => 0)->bird,
+            bird: Game::start(static fn(int $_max): int => 0)->bird,
             pipes: [],
             highScores: [5, 15],
         );
@@ -178,7 +178,7 @@ final class GameTest extends TestCase
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', json_encode([3, 7, 5]));
-        $g = Game::start(static fn(int $max): int => 0, $tmp);
+        $g = Game::start(static fn(int $_max): int => 0, $tmp);
         $this->assertSame(7, $g->highScore());
         $this->assertSame([3, 5, 7], $g->highScores());
         // Clean up.
@@ -193,7 +193,7 @@ final class GameTest extends TestCase
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', '42');
         $this->expectException(\RuntimeException::class);
-        Game::start(static fn(int $max): int => 0, $tmp);
+        Game::start(static fn(int $_max): int => 0, $tmp);
     }
 
     public function testReadScoresRejectsNonArrayScalarViaSharedGuard(): void
@@ -211,7 +211,7 @@ final class GameTest extends TestCase
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', '"corrupt"');
         try {
-            Game::start(static fn(int $max): int => 0, $tmp);
+            Game::start(static fn(int $_max): int => 0, $tmp);
             $this->fail('Expected a non-array saved-state top level to be rejected');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('Invalid high score file format', $e->getMessage());
@@ -240,7 +240,7 @@ final class GameTest extends TestCase
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', '{not valid json');
         try {
-            Game::start(static fn(int $max): int => 0, $tmp);
+            Game::start(static fn(int $_max): int => 0, $tmp);
             $this->fail('Expected malformed saved-state JSON to be rejected');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('Invalid high score file format', $e->getMessage());
@@ -258,7 +258,7 @@ final class GameTest extends TestCase
         // the SSOT migration and still seed an empty high-score list.
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         mkdir($tmp, 0755, true);
-        $g = Game::start(static fn(int $max): int => 0, $tmp);
+        $g = Game::start(static fn(int $_max): int => 0, $tmp);
         $this->assertSame([], $g->highScores());
         $this->assertSame(0, $g->highScore());
         @rmdir($tmp);
@@ -269,7 +269,7 @@ final class GameTest extends TestCase
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', json_encode([1, 'x', 2, null, 3]));
-        $g = Game::start(static fn(int $max): int => 0, $tmp);
+        $g = Game::start(static fn(int $_max): int => 0, $tmp);
         $this->assertSame([1, 2, 3], $g->highScores());
         // Clean up.
         unlink($tmp . '/.honey-flap/scores.json');
@@ -330,7 +330,7 @@ final class GameTest extends TestCase
         // Ten existing scores; a new record must drop the lowest so the
         // retained list never exceeds MAX_HIGH_SCORES.
         $g = new Game(
-            bird: Game::start(static fn(int $max): int => 0)->bird,
+            bird: Game::start(static fn(int $_max): int => 0)->bird,
             pipes: [],
             highScores: range(1, Game::MAX_HIGH_SCORES), // [1..10]
         );
@@ -386,7 +386,7 @@ final class GameTest extends TestCase
             // The leaderboard was written to the configured dir …
             $this->assertFileExists($tmp . '/.honey-flap/scores.json');
             // … and a fresh game reads it back.
-            $reloaded = Game::start(static fn(int $max): int => 0, $tmp);
+            $reloaded = Game::start(static fn(int $_max): int => 0, $tmp);
             $this->assertSame([7], $reloaded->highScores());
             $this->assertSame(7, $reloaded->highScore());
         } finally {
@@ -401,7 +401,7 @@ final class GameTest extends TestCase
         // Create an unwritable config dir.
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         mkdir($tmp, 0000, true);
-        $g = Game::start(static fn(int $max): int => 0, $tmp)->tickN(80);
+        $g = Game::start(static fn(int $_max): int => 0, $tmp)->tickN(80);
         $this->assertTrue($g->crashed);
         // update() should not throw even though the dir is unwritable.
         // The persist runs via Cmd which swallows exceptions.

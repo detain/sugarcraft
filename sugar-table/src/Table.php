@@ -1320,7 +1320,6 @@ final class Table
      */
     private function renderToBuffer(): Buffer
     {
-        $colCount = \count($this->columns);
         $totalWidth = $this->computeTotalWidth();
         $rows = $this->pagedRows();
 
@@ -1556,7 +1555,7 @@ final class Table
         return $buffer;
     }
 
-    private function fillHeaderRow(Buffer $buffer, int $row, int $contentWidth, array $computedWidths): Buffer
+    private function fillHeaderRow(Buffer $buffer, int $row, int $_contentWidth, array $computedWidths): Buffer
     {
         $style = $this->parseAnsiToStyle($this->headerStyle);
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
@@ -1609,7 +1608,7 @@ final class Table
         return $this->writeRightEdge($buffer, $row, $col, $style);
     }
 
-    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths, array $visibleColumnIndices): Buffer
+    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, array $visibleColumnIndices): Buffer
     {
         // Determine row-level style
         $rowStyle = '';
@@ -1766,7 +1765,7 @@ final class Table
      * all cells). Cells with fewer lines are padded vertically with empty space.
      * Row borders span the full row height.
      */
-    private function fillDataRowLines(Buffer $buffer, int $startRow, Row $row, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices): Buffer
+    private function fillDataRowLines(Buffer $buffer, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices): Buffer
     {
         // Determine row-level style
         $rowStyle = '';
@@ -1856,7 +1855,7 @@ final class Table
             [$buffer, $col] = $this->writeLeftEdge($buffer, $bufferRow, $style);
 
             // Render each visible cell
-            foreach ($this->columns as $ci => $column) {
+        foreach ($this->columns as $ci => $_column) {
                 if (!\in_array($ci, $visibleColumnIndices, true)) {
                     $col += $computedWidths[$ci] ?? $column->width;
                     continue;
@@ -2214,7 +2213,7 @@ final class Table
     /**
      * Convert a 256-color index to RGB.
      */
-    private function color256ToRgb(int $idx, bool $isFg): int
+    private function color256ToRgb(int $idx, bool $_isFg): int
     {
         if ($idx < 16) {
             // Standard colors (same as 30-37 / 40-47)

@@ -370,7 +370,8 @@ TAPE;
         $cassette = $this->compiler->compile($result['ast'], '/test.tape');
 
         $times = array_column($cassette->events, 't');
-        for ($i = 1; $i < count($times); $i++) {
+        $timeCount = count($times);
+        for ($i = 1; $i < $timeCount; $i++) {
             $this->assertGreaterThanOrEqual($times[$i - 1], $times[$i]);
         }
     }

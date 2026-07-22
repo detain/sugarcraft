@@ -114,6 +114,8 @@ final class Application extends SymfonyApplication
             try {
                 $input->bind($command->getDefinition());
             } catch (\Symfony\Component\Console\Exception\RuntimeException) {
+                // Input binding failed (e.g., unrecognized options); continue
+                // with env-var fallback which applies values best-effort.
             }
             $this->applyEnvVarFallbackToInput($input, $command);
         }

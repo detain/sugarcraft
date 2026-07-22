@@ -167,11 +167,14 @@ final class Modal implements \SugarCraft\Dash\Foundation\Sizer
 
         // Pad to allocated height with empty lines
         $renderedLines = explode("\n", rtrim($result, "\n"));
-        while (count($renderedLines) < $modalH) {
+        $renderedCount = count($renderedLines);
+        while ($renderedCount < $modalH) {
             array_unshift($renderedLines, '');
+            $renderedCount++;
         }
-        while (count($renderedLines) > $modalH) {
+        while ($renderedCount > $modalH) {
             array_shift($renderedLines);
+            $renderedCount--;
         }
 
         // Build the full output with centering
@@ -187,8 +190,10 @@ final class Modal implements \SugarCraft\Dash\Foundation\Sizer
             $output[] = $padding . str_pad($line, $modalW, ' ') . str_repeat(' ', $allocW - $leftPad - $modalW);
         }
 
-        while (count($output) < $allocH) {
+        $outputCount = count($output);
+        while ($outputCount < $allocH) {
             $output[] = str_repeat(' ', $allocW);
+            $outputCount++;
         }
 
         return implode("\n", array_slice($output, 0, $allocH));

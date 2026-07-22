@@ -38,7 +38,8 @@ final class Format
         $suffixes = ['', 'K', 'M', 'G', 'T'];
         $i = 0;
         $v = (float) $value;
-        while ($v >= 1024 && $i < count($suffixes) - 1) {
+        $suffixCount = count($suffixes);
+        while ($v >= 1024 && $i < $suffixCount - 1) {
             $v /= 1024;
             $i++;
         }
@@ -61,7 +62,8 @@ final class Format
         $suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
         $i = 0;
         $v = (float) $bytes;
-        while ($v >= 1000 && $i < count($suffixes) - 1) {
+        $suffixCount = count($suffixes);
+        while ($v >= 1000 && $i < $suffixCount - 1) {
             $v /= 1000;
             $i++;
         }

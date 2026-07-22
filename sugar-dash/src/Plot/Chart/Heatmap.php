@@ -18,9 +18,6 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class Heatmap implements \SugarCraft\Dash\Foundation\Sizer
 {
-    private ?int $width = null;
-    private ?int $sizerHeight = null;
-
     /**
      * Block characters for heat levels (cold to hot).
      */
@@ -98,10 +95,7 @@ final class Heatmap implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
-        $clone = clone $this;
-        $clone->width = $width;
-        $clone->sizerHeight = $height;
-        return $clone;
+        return clone $this;
     }
 
     /**
@@ -177,13 +171,13 @@ final class Heatmap implements \SugarCraft\Dash\Foundation\Sizer
             return '';
         }
 
-        $rows = count($this->data);
-        $cols = count($this->data[0]);
+        $_rows = count($this->data);
+        $_cols = count($this->data[0]);
 
         $result = '';
 
         // Render the heat map grid
-        foreach ($this->data as $rowIndex => $row) {
+        foreach ($this->data as $_rowIndex => $row) {
             $rowStr = '';
             foreach ($row as $value) {
                 if ($this->showValues) {

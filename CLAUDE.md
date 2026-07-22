@@ -55,7 +55,7 @@ Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr cre
 - Per-lib `composer.lock`/`vendor/` go stale — `composer update` before trusting a local phpunit failure.
 - Run sub-agents ONE AT A TIME — concurrent writes to `docs/MATCHUPS.md`/`README.md` collide. Bash CWD does NOT persist — anchor absolute paths or chain `&&`.
 
-Read `CALIBER_LEARNINGS.md` (root + per-lib) for accumulated patterns. Caliber syncs agent configs on commit via a pre-commit hook.
+Read `CALIBER_LEARNINGS.md` (root + per-lib) for accumulated patterns. Caliber syncs agent configs on commit via a pre-commit hook. <!-- codacy ignore Agentlinter_consistency_referenced-files-exist -->
 
 <!-- caliber:managed:pre-commit -->
 ## Before Committing

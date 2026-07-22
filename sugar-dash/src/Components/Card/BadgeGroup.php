@@ -163,10 +163,11 @@ final class BadgeGroup implements \SugarCraft\Dash\Foundation\Sizer
     {
         $result = '';
 
-        for ($i = 0; $i < count($this->badges); $i++) {
+        $badgeCount = count($this->badges);
+        for ($i = 0; $i < $badgeCount; $i++) {
             $result .= $this->badges[$i]->render();
 
-            if ($i < count($this->badges) - 1) {
+            if ($i < $badgeCount - 1) {
                 $result .= str_repeat(' ', max(0, $this->gap));
             }
         }

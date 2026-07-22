@@ -206,7 +206,8 @@ final class SixelRenderer implements Renderer
         /** @var list<list<array{int,int,int}>> */
         $buckets = [$pixels];
 
-        while (count($buckets) < $maxColors) {
+        $bucketCount = count($buckets);
+        while ($bucketCount < $maxColors) {
             $largestIdx = $this->largestBucketIndex($buckets);
             if ($largestIdx === null) {
                 break;
@@ -216,6 +217,7 @@ final class SixelRenderer implements Renderer
                 break;
             }
             array_splice($buckets, $largestIdx, 1, $split);
+            $bucketCount = count($buckets);
         }
 
         return array_map(

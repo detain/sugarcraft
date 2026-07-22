@@ -23,9 +23,6 @@ use SugarCraft\Core\Util\Width;
  */
 final class Dropdown implements \SugarCraft\Dash\Foundation\Sizer
 {
-    private ?int $width = null;
-    private ?int $height = null;
-
     /**
      * @param array<int, array{label: string, icon?: string}> $items
      */
@@ -64,10 +61,7 @@ final class Dropdown implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
-        $clone = clone $this;
-        $clone->width = $width;
-        $clone->height = $height;
-        return $clone;
+        return clone $this;
     }
 
     /**

@@ -421,8 +421,8 @@ final class Decoder
         // Determine effective color table for this frame.
         $hasGlobal = $header['hasGct'];
         $globalBytes = $header['gctBytes'];
-        $effectiveHasColorTable = $hasGlobal || $hasLct;
-        $effectiveColorTableBytes = $hasGlobal ? $globalBytes : $lctBytes;
+        $_effectiveHasColorTable = $hasGlobal || $hasLct;
+        $_effectiveColorTableBytes = $hasGlobal ? $globalBytes : $lctBytes;
 
         // Build a minimal single-frame GIF in memory:
         //   GIF header (13 bytes) + effective color table + one GCE block
@@ -481,10 +481,10 @@ final class Decoder
         int $disposal,
         bool $transparent,
         int $transparentIndex,
-        bool $hasLct,
-        int $lctBytes,
-        string $bytes,
-        int $frameOffset,
+        bool $_hasLct,
+        int $_lctBytes,
+        string $_bytes,
+        int $_frameOffset,
     ): Frame {
         $w = imagesx($img);
         $h = imagesy($img);

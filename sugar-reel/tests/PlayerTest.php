@@ -610,7 +610,8 @@ final class PlayerTest extends TestCase
 
         // Cycle through every mode once (7 presses) and confirm the decoded
         // frame height tracks the mode each time.
-        for ($i = 0; $i < count(Mode::cases()); $i++) {
+        $modeCount = count(Mode::cases());
+        for ($i = 0; $i < $modeCount; $i++) {
             [$player,] = $player->update($m);
 
             $mode = $this->getPlayerProperty($player, 'mode');

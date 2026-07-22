@@ -114,8 +114,10 @@ final class ListComponent implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad with empty lines if needed
-        while (count($result) < $h) {
+        $resultCount = count($result);
+        while ($resultCount < $h) {
             $result[] = str_repeat(' ', $w);
+            $resultCount++;
         }
 
         return implode("\n", array_slice($result, 0, $h));

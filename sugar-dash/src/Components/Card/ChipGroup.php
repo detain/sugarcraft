@@ -163,10 +163,11 @@ final class ChipGroup implements \SugarCraft\Dash\Foundation\Sizer
     {
         $result = '';
 
-        for ($i = 0; $i < count($this->chips); $i++) {
+        $chipCount = count($this->chips);
+        for ($i = 0; $i < $chipCount; $i++) {
             $result .= $this->chips[$i]->render();
 
-            if ($i < count($this->chips) - 1) {
+            if ($i < $chipCount - 1) {
                 $result .= str_repeat(' ', max(0, $this->gap));
             }
         }

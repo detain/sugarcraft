@@ -275,8 +275,9 @@ final class RadarChart implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Draw lines between points
-        for ($i = 0; $i < count($points); $i++) {
-            $next = ($i + 1) % count($points);
+        $pointCount = count($points);
+        for ($i = 0; $i < $pointCount; $i++) {
+            $next = ($i + 1) % $pointCount;
             [$x1, $y1] = $points[$i];
             [$x2, $y2] = $points[$next];
             $this->drawLine($grid, $x1, $y1, $x2, $y2, '─', $color);

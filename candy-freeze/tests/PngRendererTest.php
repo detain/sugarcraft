@@ -135,8 +135,9 @@ final class PngRendererTest extends TestCase
         }
 
         $values = array_values($outputs);
-        for ($i = 0; $i < count($values); $i++) {
-            for ($j = $i + 1; $j < count($values); $j++) {
+        $valueCount = count($values);
+        for ($i = 0; $i < $valueCount; $i++) {
+            for ($j = $i + 1; $j < $valueCount; $j++) {
                 $this->assertNotSame(
                     $values[$i],
                     $values[$j],

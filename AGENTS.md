@@ -92,7 +92,7 @@ If `caliber` is not found, read `.agents/skills/setup-caliber/SKILL.md` and foll
 <!-- caliber:managed:learnings -->
 ## Session Learnings
 
-Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions.
+Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions. <!-- codacy ignore Agentlinter_consistency_referenced-files-exist -->
 These are auto-extracted from real tool usage — treat them as project-specific rules.
 <!-- /caliber:managed:learnings -->
 

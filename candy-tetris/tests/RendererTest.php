@@ -15,7 +15,7 @@ final class RendererTest extends TestCase
     private function deterministicGame(): Game
     {
         // Bag with deterministic sequence: cycle through I, O, T...
-        $bag = new Bag(static fn(int $max): int => 0);
+        $bag = new Bag(static fn(int $_max): int => 0);
         return Game::start($bag);
     }
 

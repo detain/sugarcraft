@@ -472,8 +472,10 @@ final class Node implements Item
             }
 
             // Pad to target height
-            while (count($lines) < $targetHeight) {
+            $lineCount = count($lines);
+            while ($lineCount < $targetHeight) {
                 $lines[] = str_repeat(self::SPACE, $child->width);
+                $lineCount++;
             }
 
             $childLines[] = $lines;
