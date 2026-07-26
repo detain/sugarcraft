@@ -219,6 +219,66 @@ echo $driver->view(); // renders first frame immediately
 
 `AnimationDriver` composes `Animation` + current frame index + paused flag. Call `withIndex()` / `withPaused()` / `withImageId()` for fluent state changes. On Kitty-capable terminals, `KittyRenderer::renderFrame($image, $width, $height, $imageId)` renders a single frame with a stable id that `delete($imageId)` can later target.
 
+## ImageLayer — image boxes in a text frame
+
+`ImageLayer` is the turnkey way to put real images inside a text UI. Instead of
+emitting pixel bytes into the frame (which would wreck the layout), you reserve a
+cell-sized **marker block** where the image belongs and hand the collected bytes
+to the `View`. The runtime paints each marker it finds.
+
+```php
+use SugarCraft\Core\View;
+use SugarCraft\Mosaic\ImageLayer;
+
+$layer = new ImageLayer();
+
+// Reserve a 20x10 box and stash the rendered bytes.
+$cell = $layer->place($ansiBytes, 20, 10);
+
+// ...compose $cell into the frame like any other text...
+return new View($frame, images: $layer->placements());
+```
+
+Identical bytes register once — dedup is by content hash (`xxh3`), so the same
+image shown in several places shares one id and paints at every marker. The id
+space is the Private-Use-Area window (`ImageOverlay::MAX_IMAGES`, 6400); once it
+is exhausted, further placements get a blank block of the requested size rather
+than a wrong image.
+
+### Getting the assigned id: `placeTracked()`
+
+Some widgets need the overlay id as well as the marker — for example a poster
+card that takes `withImage($bytes, $id)`, or code that wants to surgically clear
+just the cells one image occupied. `placeTracked()` returns both as a
+`PlacedImage`:
+
+```php
+$placed = $layer->placeTracked($ansiBytes, 20, 10);
+
+if ($placed->imageId !== null) {
+    $card = $card->withImage($ansiBytes, $placed->imageId);
+}
+
+$frame = $placed->marker; // same string place() would have returned
+```
+
+`place()` keeps its plain `string` return and is simply a delegate to
+`placeTracked()`, so frame-composition callers are unaffected.
+
+Two things about `PlacedImage::$imageId` are worth knowing:
+
+- It is `null` **exactly when** the id space is exhausted, and then `$marker` is
+  a blank block. `null` never means "unknown" — it means "this will not paint".
+- It identifies the **content**, not the call. Because dedup is by byte hash, the
+  same bytes always get the same id regardless of size, order, or repetition. If
+  you previously keyed ids by something call-shaped (a URL, a requested cell
+  size, a list index), that mapping does not survive.
+
+Do **not** try to recover the id from `array_key_last($layer->placements())`. A
+dedup hit re-assigns an existing key without moving it, so that reports the
+highest id rather than the one just placed; and the exhaustion path writes no
+placement at all, so it reports a stale unrelated id.
+
 ## Architecture
 
 ```
@@ -226,11 +286,13 @@ SugarCraft\Mosaic
 ├── Animation              # Immutable frame sequence value object
 ├── AnimationDriver        # Model; drives Animation onto a Renderer via tick()
 ├── FrameTickMsg          # Internal Msg for frame-advance ticks
+├── ImageLayer             # Per-frame image registry: marker blocks + placements
 ├── ImageSource            # Image bytes + metadata (bytes, format, aspect ratio)
 ├── KittyOptions           # Kitty protocol options (transmit / place / compress)
 ├── Lang                   # i18n facade
 ├── Mosaic                 # Facade: probe / builder / render
 ├── PixelGrid              # 2-D cell grid (foreground, background, alpha, char)
+├── PlacedImage            # placeTracked() result: marker block + assigned id
 └── Renderer
     ├── ChafaRenderer      # External command renderer
     ├── HalfBlockRenderer  # Unicode ▀ with 24-bit fg/bg
