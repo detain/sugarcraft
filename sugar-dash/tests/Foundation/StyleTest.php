@@ -133,7 +133,7 @@ final class StyleTest extends TestCase
         $newStyle = $style->withForeground(Color::hex('#FF0000'));
 
         $this->assertNotSame($style, $newStyle);
-        $this->assertSame(Color::hex('#FF0000'), $newStyle->foreground);
+        $this->assertEquals(Color::hex('#FF0000'), $newStyle->foreground);
         $this->assertNull($style->foreground);
     }
 
@@ -143,7 +143,7 @@ final class StyleTest extends TestCase
         $newStyle = $style->withBackground(Color::hex('#00FF00'));
 
         $this->assertNotSame($style, $newStyle);
-        $this->assertSame(Color::hex('#00FF00'), $newStyle->background);
+        $this->assertEquals(Color::hex('#00FF00'), $newStyle->background);
         $this->assertNull($style->background);
     }
 
@@ -164,7 +164,7 @@ final class StyleTest extends TestCase
 
         $this->assertTrue($newStyle->bold);
         $this->assertTrue($newStyle->italic);
-        $this->assertSame(Color::hex('#FF0000'), $newStyle->foreground);
+        $this->assertEquals(Color::hex('#FF0000'), $newStyle->foreground);
     }
 
     public function testImmutabilityWithMultipleWithers(): void
@@ -178,8 +178,8 @@ final class StyleTest extends TestCase
         $this->assertNull($original->foreground);
         $this->assertNull($s1->background);
         $this->assertFalse($s1->bold);
-        $this->assertSame(Color::hex('#FF0000'), $s3->foreground);
-        $this->assertSame(Color::hex('#00FF00'), $s3->background);
+        $this->assertEquals(Color::hex('#FF0000'), $s3->foreground);
+        $this->assertEquals(Color::hex('#00FF00'), $s3->background);
         $this->assertTrue($s3->bold);
     }
 }
