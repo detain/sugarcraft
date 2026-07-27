@@ -334,7 +334,7 @@ final class Node implements Item
      * @param array<string, Item> $modelMap Map of address to content items
      * @return list<string>|SizeError
      */
-    public function renderTree(array $modelMap, int $width, int $height): array|string
+    public function renderTree(array $modelMap, int $width, int $height): array|string|\SugarCraft\Dash\Layout\Boxer\SizeError
     {
         $node = $this->setSize($width, $height);
 

@@ -13,7 +13,7 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * (tmp+flock+rename SSOT) so a reader never observes a partially-written file,
  * while keeping this class's `{version, data}` wrapper as the on-disk shape.
  */
-final class Persistence
+class Persistence
 {
     /**
      * Save state atomically: write to temp file then rename to target.

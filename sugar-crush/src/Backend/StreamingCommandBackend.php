@@ -153,6 +153,8 @@ final class StreamingCommandBackend implements Backend
                     $resolve($message);
                 } catch (\Throwable $e) {
                     $reject($e);
+                } finally {
+                    Loop::stop();
                 }
             });
         });

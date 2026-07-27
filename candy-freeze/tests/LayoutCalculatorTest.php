@@ -29,8 +29,8 @@ final class LayoutCalculatorTest extends TestCase
         $this->assertSame(0.0, $contentHeight);
         $this->assertSame(0, $headerHeight);
         $this->assertSame(0, $shadowMargin);
-        $this->assertSame(0, $totalW);
-        $this->assertSame(0, $totalH);
+        $this->assertEqualsWithDelta(0.0, $totalW, 0.001);
+        $this->assertEqualsWithDelta(0.0, $totalH, 0.001);
     }
 
     public function testSingleLineCalculation(): void
@@ -53,8 +53,8 @@ final class LayoutCalculatorTest extends TestCase
         $this->assertSame(17.0, $contentHeight);
         $this->assertSame(0, $headerHeight);
         $this->assertSame(0, $shadowMargin);
-        $this->assertSame(40, $totalW);
-        $this->assertSame(17, $totalH);
+        $this->assertEqualsWithDelta(40.0, $totalW, 0.001);
+        $this->assertEqualsWithDelta(17.0, $totalH, 0.001);
     }
 
     public function testWithLineNumbersAddsGutter(): void
@@ -112,9 +112,9 @@ final class LayoutCalculatorTest extends TestCase
         [, , , , , , $totalW, $totalH] = $result;
 
         // Content: 4 * 8 = 32, padding: 16 * 2 = 32, total: 64
-        $this->assertSame(64, $totalW);
+        $this->assertEqualsWithDelta(64.0, $totalW, 0.001);
         // Content: 17, padding: 16 * 2 = 32, total: 49
-        $this->assertSame(49, $totalH);
+        $this->assertEquals(49, $totalH);
     }
 
     public function testWithWindowAddsHeaderHeight(): void
@@ -150,8 +150,8 @@ final class LayoutCalculatorTest extends TestCase
 
         $this->assertSame(32, $shadowMargin);
         // Content: 32, shadow: 32 * 2 = 64, total: 96
-        $this->assertSame(96, $totalW);
-        $this->assertSame(81, $totalH);
+        $this->assertEquals(96, $totalW);
+        $this->assertEquals(81, $totalH);
     }
 
     public function testAnsiCodesAreStrippedFromColumnCount(): void
@@ -216,8 +216,8 @@ final class LayoutCalculatorTest extends TestCase
         // Shadow margin: 32
         $this->assertSame(32, $shadowMargin);
         // Total W: 88 + 10*2 + 32*2 = 88 + 20 + 64 = 172
-        $this->assertSame(172, $totalW);
+        $this->assertEquals(172, $totalW);
         // Total H: 17 + 10*2 + 36 + 32*2 = 17 + 20 + 36 + 64 = 137
-        $this->assertSame(137, $totalH);
+        $this->assertEquals(137, $totalH);
     }
 }

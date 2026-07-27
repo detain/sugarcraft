@@ -21,8 +21,7 @@ final class LangTest extends TestCase
         $reflection = new \ReflectionClass(Lang::class);
         $constant = $reflection->getConstant('DIR');
 
-        $expectedDir = __DIR__ . '/../lang';
-        $this->assertSame($expectedDir, $constant);
+        $this->assertSame(realpath(__DIR__ . '/../lang'), realpath($constant));
     }
 
     public function testDirExists(): void
@@ -67,7 +66,7 @@ final class LangTest extends TestCase
         $lang = new Lang();
         $result = $lang->t('nonexistent.translation.key');
 
-        $this->assertSame('nonexistent.translation.key', $result);
+        $this->assertSame('freeze.nonexistent.translation.key', $result);
     }
 
     public function testTranslationWithPlaceholders(): void

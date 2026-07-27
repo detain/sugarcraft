@@ -8,8 +8,27 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Mosaic\Capability;
 use SugarCraft\Mosaic\CellSize;
 
+use ReflectionClass;
+
 final class CapabilityTest extends TestCase
 {
+    /**
+     * Helper: instantiate Capability bypassing the private constructor.
+     * Used only for testing edge-case flag combinations that no factory produces.
+     *
+     * @param array{sixel: bool, kitty: bool, iterm2: bool, halfblock: bool, chafa: bool, cellSize: ?CellSize, inTmux: bool} $flags
+     */
+    private function createCapability(array $flags): Capability
+    {
+        $rc = new ReflectionClass(Capability::class);
+        $ctor = $rc->getConstructor();
+        $ctor->setAccessible(true);
+        $cap = $rc->newInstanceWithoutConstructor();
+        $ctor->invoke($cap, ...array_values($flags));
+
+        return $cap;
+    }
+
     public function testUniversalHasAllProtocolsEnabled(): void
     {
         $cap = Capability::universal();
@@ -125,8 +144,16 @@ final class CapabilityTest extends TestCase
 
     public function testDetectSummaryReturnsChafaWhenKittyAndSixelAndIterm2AreFalse(): void
     {
-        // Only chafa is true
-        $cap = new Capability(false, false, false, true, true, null, false);
+        // Only chafa is true (edge case — no factory produces this exact combo)
+        $cap = $this->createCapability([
+            'sixel' => false,
+            'kitty' => false,
+            'iterm2' => false,
+            'halfblock' => false,
+            'chafa' => true,
+            'cellSize' => null,
+            'inTmux' => false,
+        ]);
         $this->assertSame('Chafa', $cap->detectSummary());
     }
 
@@ -138,8 +165,16 @@ final class CapabilityTest extends TestCase
 
     public function testDetectSummaryReturnsUnknownWhenNoProtocolsAreTrue(): void
     {
-        // Build an instance with everything false
-        $cap = new Capability(false, false, false, false, false, null, false);
+        // Build an instance with everything false (edge case — no factory produces this)
+        $cap = $this->createCapability([
+            'sixel' => false,
+            'kitty' => false,
+            'iterm2' => false,
+            'halfblock' => false,
+            'chafa' => false,
+            'cellSize' => null,
+            'inTmux' => false,
+        ]);
         $this->assertSame('Unknown', $cap->detectSummary());
     }
 
