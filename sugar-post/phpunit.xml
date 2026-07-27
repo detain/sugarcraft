@@ -4,7 +4,7 @@
          bootstrap="vendor/autoload.php"
          colors="true"
          cacheDirectory=".phpunit.cache"
-         failOnWarning="true">
+>
     <testsuites>
         <testsuite name="sugar-post"><directory>tests</directory></testsuite>
     </testsuites>

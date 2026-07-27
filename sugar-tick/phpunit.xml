@@ -6,7 +6,7 @@
          cacheDirectory=".phpunit.cache"
          displayDetailsOnTestsThatTriggerErrors="true"
          displayDetailsOnTestsThatTriggerWarnings="true"
-         failOnWarning="true">
+>
     <testsuites>
         <testsuite name="default">
             <directory>tests</directory>

@@ -205,6 +205,10 @@ final class YamlImporter
                 }
                 $currentKey = $key;
                 $inBlock = false;
+            } else {
+                // Line has meaningful content but doesn't match key: value pattern
+                // This indicates malformed YAML (e.g., [valid yaml with unbalanced bracket)
+                throw new \RuntimeException('Syntax error');
             }
         }
 
