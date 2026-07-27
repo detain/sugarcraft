@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Fuzzy\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(SahilmMatcher::class)]
 final class SahilmMatcherTest extends TestCase
 {
     private SahilmMatcher $matcher;
@@ -17,6 +20,7 @@ final class SahilmMatcherTest extends TestCase
         $this->matcher = new SahilmMatcher();
     }
 
+    #[Test]
     public function testMatchReturnsMatchResult(): void
     {
         $result = $this->matcher->match('hello', 'hello');
@@ -24,6 +28,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertInstanceOf(MatchResult::class, $result);
     }
 
+    #[Test]
     public function testMatchWithExactMatch(): void
     {
         $result = $this->matcher->match('hello', 'hello');
@@ -32,6 +37,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertGreaterThan(0, $result->score);
     }
 
+    #[Test]
     public function testMatchNoMatchReturnsNull(): void
     {
         $result = $this->matcher->match('xyz', 'hello');
@@ -39,6 +45,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testMatchEmptyQueryReturnsNull(): void
     {
         $result = $this->matcher->match('', 'hello');
@@ -46,6 +53,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testMatchEmptyCandidateReturnsNull(): void
     {
         $result = $this->matcher->match('hello', '');
@@ -53,6 +61,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testMatchAllReturnsSortedResults(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
@@ -67,6 +76,7 @@ final class SahilmMatcherTest extends TestCase
         }
     }
 
+    #[Test]
     public function testMatchAllEmptyQueryReturnsEmpty(): void
     {
         $results = $this->matcher->matchAll('', ['hello', 'world']);
@@ -74,6 +84,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([], $results);
     }
 
+    #[Test]
     public function testMatchAllEmptyCandidatesReturnsEmpty(): void
     {
         $results = $this->matcher->matchAll('hello', []);
@@ -81,6 +92,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([], $results);
     }
 
+    #[Test]
     public function testFirstCharBonus(): void
     {
         $result = $this->matcher->match('a', 'apple');
@@ -89,6 +101,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([0], $result->indices());
     }
 
+    #[Test]
     public function testSeparatorBonus(): void
     {
         // 'bar' after separator should score well
@@ -98,6 +111,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([4, 5, 6], $result->indices());
     }
 
+    #[Test]
     public function testCamelCaseBonus(): void
     {
         // 'fb' in fooBar should match with camelCase bonus
@@ -106,6 +120,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNotNull($result);
     }
 
+    #[Test]
     public function testConsecutiveMatchBonus(): void
     {
         $result = $this->matcher->match('foo', 'foo');
@@ -114,6 +129,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([0, 1, 2], $result->indices());
     }
 
+    #[Test]
     public function testPartialMatch(): void
     {
         $result = $this->matcher->match('app', 'apple');
@@ -122,6 +138,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([0, 1, 2], $result->indices());
     }
 
+    #[Test]
     public function testAllCharsMustMatch(): void
     {
         $result = $this->matcher->match('appl', 'app');
@@ -129,6 +146,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testCaseInsensitiveByDefault(): void
     {
         $result = $this->matcher->match('HELLO', 'hello');
@@ -137,6 +155,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame('hello', $result->haystack);
     }
 
+    #[Test]
     public function testCaseSensitiveWhenEnabled(): void
     {
         $matcher = new SahilmMatcher(true);
@@ -145,6 +164,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testUtf8Characters(): void
     {
         $result = $this->matcher->match('中', '中文测试');
@@ -153,6 +173,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertContains(0, $result->indices());
     }
 
+    #[Test]
     public function testMatchAllExcludesNonMatches(): void
     {
         $candidates = ['hello', 'world', 'xyz'];
@@ -162,6 +183,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame('xyz', $results[0]->haystack);
     }
 
+    #[Test]
     public function testSeparatorBonusRaisesScore(): void
     {
         // Separator bonus (+10) fires when a query char matches after '_'.
@@ -173,6 +195,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertGreaterThan($withoutSep->score, $withSep->score);
     }
 
+    #[Test]
     public function testFirstCharBonusRaisesScore(): void
     {
         // First-char bonus (+15) fires when the first candidate char is matched.
@@ -184,6 +207,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertGreaterThan($notFirst->score, $firstChar->score);
     }
 
+    #[Test]
     public function testConsecutiveBonusRaisesScore(): void
     {
         // Consecutive bonus (+5) fires when adjacent query chars match adjacently.
@@ -195,6 +219,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertGreaterThan($scattered->score, $consecutive->score);
     }
 
+    #[Test]
     public function testCaseSensitiveMatchStillScores(): void
     {
         // SahilmMatcher(true) activates the case-sensitive MATCH path.
@@ -206,6 +231,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([0, 1, 2, 3, 4], $result->indices());
     }
 
+    #[Test]
     public function testNonAsciiLowerCaseBonusFires(): void
     {
         // After Step 7 (Unicode-aware case classification), lowercase chars earn
@@ -220,11 +246,12 @@ final class SahilmMatcherTest extends TestCase
         $this->assertGreaterThan($upperCase->score, $lowerCase->score);
     }
 
+    #[Test]
     public function testCamelCaseBonusRaisesScore(): void
     {
         // The camelCase bonus (+10) fires when a matched lowercase char follows
         // an uppercase char in the original (non-lowercased) candidate.
-        // 'b' in 'fooBar' matches 'B' at index 3 (uppercase), so no lowercase bonus;
+        // 'b' in 'fooBar' matches 'B' at index 3 (uppercase), so no camel bonus;
         // the preceding 'o' (index 2) is lowercase, so no camelCase bonus either.
         // 'b' in 'foobar' matches 'b' at index 2 (lowercase), so gets +1 lowercase bonus.
         // To properly test camelCase bonus: match 'B' in 'fooBar' vs 'B' in 'foobar'.
@@ -240,6 +267,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertGreaterThan(0, $foobar->score);
     }
 
+    #[Test]
     public function testNonAsciiCamelBonusFires(): void
     {
         // After Step 7 (Unicode-aware case classification), the round-trip check
@@ -257,6 +285,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertGreaterThanOrEqual($plain->score, $accented->score);
     }
 
+    #[Test]
     public function testGreedyFirstOccurrenceNoBacktrack(): void
     {
         // Greedy matching: advances on first occurrence of each query char,
@@ -268,6 +297,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertSame([0, 2, 6], $result->indices());
     }
 
+    #[Test]
     public function testMatchAllRespectsLimit(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
@@ -276,6 +306,7 @@ final class SahilmMatcherTest extends TestCase
         $this->assertCount(2, $results);
     }
 
+    #[Test]
     public function testMatchAllRespectsMinScore(): void
     {
         // Build a list with varied scores
@@ -288,6 +319,7 @@ final class SahilmMatcherTest extends TestCase
         }
     }
 
+    #[Test]
     public function testMatchAllWithNoLimitOrMinScoreIsUnchanged(): void
     {
         // Verify the default behavior (no limit, minScore=1) returns same results

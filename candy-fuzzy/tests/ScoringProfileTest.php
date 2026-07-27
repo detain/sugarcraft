@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Fuzzy\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\ScoringProfile;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(ScoringProfile::class)]
 final class ScoringProfileTest extends TestCase
 {
+    #[Test]
     public function testDefaultValuesMatchHistoricalConstants(): void
     {
         // These MUST equal the pre-SSOT hard-coded SmithWatermanMatcher constants
@@ -24,11 +28,13 @@ final class ScoringProfileTest extends TestCase
         $this->assertSame(5, $p->adjacentBonus);
     }
 
+    #[Test]
     public function testConstructorDefaultsEqualDefaultFactory(): void
     {
         $this->assertEquals(new ScoringProfile(), ScoringProfile::default());
     }
 
+    #[Test]
     public function testNewFactoryEqualsConstructor(): void
     {
         $this->assertEquals(
@@ -37,6 +43,7 @@ final class ScoringProfileTest extends TestCase
         );
     }
 
+    #[Test]
     public function testStrictValues(): void
     {
         $p = ScoringProfile::strict();
@@ -48,6 +55,7 @@ final class ScoringProfileTest extends TestCase
         $this->assertSame(6, $p->adjacentBonus);
     }
 
+    #[Test]
     public function testLenientValues(): void
     {
         $p = ScoringProfile::lenient();
@@ -59,6 +67,7 @@ final class ScoringProfileTest extends TestCase
         $this->assertSame(3, $p->adjacentBonus);
     }
 
+    #[Test]
     public function testProfilesAreDistinct(): void
     {
         $this->assertNotEquals(ScoringProfile::default(), ScoringProfile::strict());
@@ -66,6 +75,7 @@ final class ScoringProfileTest extends TestCase
         $this->assertNotEquals(ScoringProfile::strict(), ScoringProfile::lenient());
     }
 
+    #[Test]
     public function testWithMatchScoreIsImmutable(): void
     {
         $base = ScoringProfile::default();
@@ -77,6 +87,7 @@ final class ScoringProfileTest extends TestCase
         $this->assertSame($base->adjacentBonus, $mutated->adjacentBonus);
     }
 
+    #[Test]
     public function testAllWithersReturnNewInstances(): void
     {
         $base = ScoringProfile::default();

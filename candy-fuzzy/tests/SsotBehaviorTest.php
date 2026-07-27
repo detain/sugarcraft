@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Fuzzy\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\ScoringProfile;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Covers the candy-fuzzy SSOT capabilities added on top of the base matcher:
- * ctor-injected ScoringProfile (with bit-equivalent default), DoS length caps
- * with Sahilm fallback, the score() fast path, and matchAllGenerator parity.
- */
+#[CoversClass(SmithWatermanMatcher::class)]
+#[CoversClass(SahilmMatcher::class)]
+#[CoversClass(ScoringProfile::class)]
 final class SsotBehaviorTest extends TestCase
 {
     /**
@@ -39,9 +40,8 @@ final class SsotBehaviorTest extends TestCase
 
     // ---- Bit-equivalence: default profile == historical behavior ----
 
-    /**
-     * @dataProvider corpus
-     */
+    #[Test]
+    #[DataProvider('corpus')]
     public function testDefaultProfileReproducesPinnedOutput(string $q, string $c, ?int $score, ?array $indices): void
     {
         $result = (new SmithWatermanMatcher())->match($q, $c);
@@ -56,9 +56,8 @@ final class SsotBehaviorTest extends TestCase
         $this->assertSame($indices, $result->indices());
     }
 
-    /**
-     * @dataProvider corpus
-     */
+    #[Test]
+    #[DataProvider('corpus')]
     public function testNoProfileEqualsExplicitDefaultProfile(string $q, string $c): void
     {
         $implicit = (new SmithWatermanMatcher())->match($q, $c);
@@ -67,6 +66,7 @@ final class SsotBehaviorTest extends TestCase
         $this->assertEquals($implicit, $explicit);
     }
 
+    #[Test]
     public function testFactoryNewAlsoBitEquivalent(): void
     {
         $this->assertEquals(
@@ -75,6 +75,7 @@ final class SsotBehaviorTest extends TestCase
         );
     }
 
+    #[Test]
     public function testProfileAccessor(): void
     {
         $this->assertEquals(ScoringProfile::default(), (new SmithWatermanMatcher())->profile());
@@ -83,6 +84,7 @@ final class SsotBehaviorTest extends TestCase
 
     // ---- Profiles produce differing scores / rankings ----
 
+    #[Test]
     public function testProfilesScoreSameMatchDifferently(): void
     {
         $default = new SmithWatermanMatcher();
@@ -100,6 +102,7 @@ final class SsotBehaviorTest extends TestCase
         $this->assertNotSame($d, $l);
     }
 
+    #[Test]
     public function testProfileThresholdChangesResultSet(): void
     {
         // A scattered match ('a_b_c') scores much lower than a contiguous one
@@ -118,9 +121,8 @@ final class SsotBehaviorTest extends TestCase
 
     // ---- score() fast path == full path ----
 
-    /**
-     * @dataProvider corpus
-     */
+    #[Test]
+    #[DataProvider('corpus')]
     public function testScoreFastPathEqualsFullPathDefault(string $q, string $c, ?int $score): void
     {
         $m = new SmithWatermanMatcher();
@@ -133,9 +135,8 @@ final class SsotBehaviorTest extends TestCase
         }
     }
 
-    /**
-     * @dataProvider corpus
-     */
+    #[Test]
+    #[DataProvider('corpus')]
     public function testScoreFastPathEqualsFullPathAcrossProfiles(string $q, string $c): void
     {
         foreach ([ScoringProfile::strict(), ScoringProfile::lenient()] as $profile) {
@@ -145,6 +146,7 @@ final class SsotBehaviorTest extends TestCase
         }
     }
 
+    #[Test]
     public function testScoreEmptyInputsReturnZero(): void
     {
         $m = new SmithWatermanMatcher();
@@ -154,6 +156,7 @@ final class SsotBehaviorTest extends TestCase
 
     // ---- DoS length caps delegate to SahilmMatcher ----
 
+    #[Test]
     public function testOverCandidateCapDelegatesToSahilm(): void
     {
         $capped = new SmithWatermanMatcher(maxCandidateLength: 3);
@@ -163,6 +166,7 @@ final class SsotBehaviorTest extends TestCase
         $this->assertEquals($sahilm->match('ab', 'abcdef'), $capped->match('ab', 'abcdef'));
     }
 
+    #[Test]
     public function testOverQueryCapDelegatesToSahilm(): void
     {
         $capped = new SmithWatermanMatcher(maxQueryLength: 2);
@@ -172,6 +176,7 @@ final class SsotBehaviorTest extends TestCase
         $this->assertEquals($sahilm->match('abc', 'abcdef'), $capped->match('abc', 'abcdef'));
     }
 
+    #[Test]
     public function testUnderCapStaysOnSmithWaterman(): void
     {
         $capped = new SmithWatermanMatcher(maxCandidateLength: 100, maxQueryLength: 100);
@@ -182,6 +187,7 @@ final class SsotBehaviorTest extends TestCase
         $this->assertNotEquals((new SahilmMatcher())->match('ab', 'abcdef'), $capped->match('ab', 'abcdef'));
     }
 
+    #[Test]
     public function testScoreRespectsCapDelegation(): void
     {
         $capped = new SmithWatermanMatcher(maxCandidateLength: 3);
@@ -191,12 +197,14 @@ final class SsotBehaviorTest extends TestCase
         $this->assertSame($expected, $capped->score('ab', 'abcdef'));
     }
 
+    #[Test]
     public function testInvalidCapThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         new SmithWatermanMatcher(maxQueryLength: 0);
     }
 
+    #[Test]
     public function testInvalidCandidateCapThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -205,6 +213,7 @@ final class SsotBehaviorTest extends TestCase
 
     // ---- Early-exit prune preserves results ----
 
+    #[Test]
     public function testEarlyExitPrunePreservesResults(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot', 'banana', 'cherry'];
@@ -222,12 +231,14 @@ final class SsotBehaviorTest extends TestCase
 
     // ---- matchAllGenerator parity ----
 
+    #[Test]
     public function testMatchAllGeneratorReturnsGenerator(): void
     {
         $gen = (new SmithWatermanMatcher())->matchAllGenerator('app', ['apple', 'apply']);
         $this->assertInstanceOf(\Generator::class, $gen);
     }
 
+    #[Test]
     public function testMatchAllGeneratorMatchesMatchAll(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
@@ -239,6 +250,7 @@ final class SsotBehaviorTest extends TestCase
         $this->assertEquals($eager, $lazy);
     }
 
+    #[Test]
     public function testMatchAllGeneratorHonorsLimitAndMinScore(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
@@ -251,6 +263,7 @@ final class SsotBehaviorTest extends TestCase
         $this->assertLessThanOrEqual(2, count($lazy));
     }
 
+    #[Test]
     public function testMatchAllGeneratorEmptyQueryYieldsNothing(): void
     {
         $lazy = iterator_to_array((new SmithWatermanMatcher())->matchAllGenerator('', ['a', 'b']), false);

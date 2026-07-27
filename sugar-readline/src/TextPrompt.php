@@ -151,7 +151,7 @@ final class TextPrompt
     public function withValidator(callable $fn): self
     {
         $clone = clone $this;
-        $clone->validator = $fn;
+        $clone->_validator = $fn;
         return $clone;
     }
 
@@ -236,8 +236,8 @@ final class TextPrompt
         $clone->cursor++;
         $clone->error = '';
         // Reset history navigation so ↑ goes back to the start of history.
-        $clone->historyPosition = -1;
-        $clone->bufferBeforeHistory = null;
+        $clone->_historyPosition = -1;
+        $clone->_bufferBeforeHistory = null;
         return $clone;
     }
 
@@ -303,7 +303,7 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
-        if ($clone->validator !== null && !($clone->validator)($clone->buffer)) {
+        if ($clone->_validator !== null && !($clone->_validator)($clone->buffer)) {
             $clone->error = 'Invalid input';
             return $clone;
         }
@@ -386,40 +386,40 @@ final class TextPrompt
         }
 
         if ($key === Key::Up) {
-            if ($clone->historyPosition === -1) {
+            if ($clone->_historyPosition === -1) {
                 // Starting history navigation: save current buffer.
                 if ($clone->buffer !== '') {
-                    $clone->bufferBeforeHistory = $clone->buffer;
+                    $clone->_bufferBeforeHistory = $clone->buffer;
                 }
                 $entry = $clone->history->getPrevious();
                 if ($entry !== null) {
-                    $clone->historyPosition = 0;
+                    $clone->_historyPosition = 0;
                     $clone->buffer = $entry;
                     $clone->cursor = self::charCount($entry);
                 }
             } else {
                 $entry = $clone->history->getPrevious();
                 if ($entry !== null) {
-                    $clone->historyPosition++;
+                    $clone->_historyPosition++;
                     $clone->buffer = $entry;
                     $clone->cursor = self::charCount($entry);
                 }
             }
         } else {
             // Key::Down
-            if ($clone->historyPosition === -1) {
+            if ($clone->_historyPosition === -1) {
                 // Already at live buffer — nothing to navigate.
                 return $clone;
             }
             $entry = $clone->history->getNext();
             if ($entry === null) {
                 // Exhausted history; restore saved buffer.
-                $clone->buffer = $clone->bufferBeforeHistory ?? '';
+                $clone->buffer = $clone->_bufferBeforeHistory ?? '';
                 $clone->cursor = self::charCount($clone->buffer);
-                $clone->historyPosition = -1;
-                $clone->bufferBeforeHistory = null;
+                $clone->_historyPosition = -1;
+                $clone->_bufferBeforeHistory = null;
             } else {
-                $clone->historyPosition--;
+                $clone->_historyPosition--;
                 $clone->buffer = $entry;
                 $clone->cursor = self::charCount($entry);
             }

@@ -4,20 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Fuzzy\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Performance regression guard for the hot-loop mb_substr/O(n²-n³) issue.
- *
- * These are NOT benchmarks — they are loose tripwires that fail hard if
- * the per-character mb_substr pattern re-emerges in the matchers.  The
- * thresholds are generous enough to never flake on slow CI runners.
- *
- * Mirrors the finding: "Repeated mb_substr/mb_strtolower inside the
- * Smith-Waterman/Sahilm matrix loop — High".
- */
+#[CoversClass(SmithWatermanMatcher::class)]
+#[CoversClass(SahilmMatcher::class)]
 final class PerformanceTest extends TestCase
 {
     private SmithWatermanMatcher $sw;
@@ -29,6 +23,7 @@ final class PerformanceTest extends TestCase
         $this->sm = new SahilmMatcher();
     }
 
+    #[Test]
     public function testSmithWatermanLongCandidateCompletesInReasonableTime(): void
     {
         // ~2000 char candidate; O(n²) matrix becomes ~4M cells.
@@ -56,6 +51,7 @@ final class PerformanceTest extends TestCase
         ));
     }
 
+    #[Test]
     public function testSahilmMatcherLongCandidateCompletesInReasonableTime(): void
     {
         // ~2000 char candidate; O(n) single pass with mb_substr would be O(n²).
@@ -80,6 +76,7 @@ final class PerformanceTest extends TestCase
         ));
     }
 
+    #[Test]
     public function testSmithWatermanMatchAllOnLargeListCompletesInReasonableTime(): void
     {
         // ~2000 medium candidates; matchAll calls compute() for each.
@@ -108,6 +105,7 @@ final class PerformanceTest extends TestCase
         ));
     }
 
+    #[Test]
     public function testSahilmMatcherMatchAllOnLargeListCompletesInReasonableTime(): void
     {
         // ~2000 medium candidates; Sahilm is O(queryLen + candidateLen) per candidate.

@@ -132,4 +132,165 @@ final class CellTest extends TestCase
         $viaCtor = new Cell("\x1b[0m", null, null, 1);
         $this->assertSame("\x1b[0m", $viaCtor->rune());
     }
+
+    public function testSerializeDefault(): void
+    {
+        $cell = Cell::new();
+
+        $data = $cell->__serialize();
+
+        $this->assertSame(' ', $data['rune']);
+        $this->assertNull($data['style']);
+        $this->assertNull($data['link']);
+        $this->assertSame(1, $data['width']);
+    }
+
+    public function testSerializeWithStyleAndLink(): void
+    {
+        $style = Style::new(0xff0000, 0x0000ff, Style::ATTR_BOLD);
+        $link = Hyperlink::new('https://test.com', 'xid');
+        $cell = Cell::new('X', $style, $link, 1);
+
+        $data = $cell->__serialize();
+
+        $this->assertSame('X', $data['rune']);
+        $this->assertSame(0xff0000, $data['style']['fg']);
+        $this->assertSame(0x0000ff, $data['style']['bg']);
+        $this->assertSame(Style::ATTR_BOLD, $data['style']['attrs']);
+        $this->assertSame('https://test.com', $data['link']['url']);
+        $this->assertSame('xid', $data['link']['id']);
+        $this->assertSame(1, $data['width']);
+    }
+
+    public function testSerializeWideChar(): void
+    {
+        $cell = Cell::new('中', null, null, 2);
+
+        $data = $cell->__serialize();
+
+        $this->assertSame('中', $data['rune']);
+        $this->assertSame(2, $data['width']);
+    }
+
+    public function testUnserializeRoundTrip(): void
+    {
+        $style = Style::new(0x123456, 0xabcdef, Style::ATTR_ITALIC | Style::ATTR_UNDERLINE);
+        $link = Hyperlink::new('https://example.com/path', 'session');
+        $original = Cell::new('中', $style, $link, 2);
+
+        $data = $original->__serialize();
+        $reconstituted = new Cell(
+            $data['rune'],
+            $data['style'] !== null ? new Style(
+                $data['style']['fg'],
+                $data['style']['bg'],
+                $data['style']['attrs']
+            ) : null,
+            $data['link'] !== null ? new Hyperlink(
+                $data['link']['url'],
+                $data['link']['id']
+            ) : null,
+            $data['width']
+        );
+
+        $this->assertSame($original->rune(), $reconstituted->rune());
+        $this->assertSame($original->width(), $reconstituted->width());
+        $this->assertTrue($original->equals($reconstituted));
+    }
+
+    public function testJsonSerialize(): void
+    {
+        $cell = Cell::new('A', Style::bold());
+
+        $json = json_encode($cell);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame('A', $decoded['rune']);
+        $this->assertSame(Style::ATTR_BOLD, $decoded['style']['attrs']);
+        $this->assertSame(1, $decoded['width']);
+    }
+
+    public function testJsonSerializeWideChar(): void
+    {
+        $cell = Cell::new('日', null, null, 2);
+
+        $json = json_encode($cell);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame('日', $decoded['rune']);
+        $this->assertSame(2, $decoded['width']);
+    }
+
+    public function testJsonSerializeNullLinkAndStyle(): void
+    {
+        $cell = Cell::new('B');
+
+        $json = json_encode($cell);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame('B', $decoded['rune']);
+        $this->assertNull($decoded['style']);
+        $this->assertNull($decoded['link']);
+        $this->assertSame(1, $decoded['width']);
+    }
+
+    public function testConstructorWithAllArguments(): void
+    {
+        $style = Style::new(0xff0000);
+        $link = Hyperlink::new('https://test.com');
+        $cell = new Cell('R', $style, $link, 2);
+
+        $this->assertSame('R', $cell->rune());
+        $this->assertSame($style, $cell->style());
+        $this->assertSame($link, $cell->link());
+        $this->assertSame(2, $cell->width());
+    }
+
+    public function testNewWithExplicitNullStyle(): void
+    {
+        $cell = Cell::new('X', null);
+
+        $this->assertNull($cell->style());
+    }
+
+    public function testEqualsWithBothNullStyles(): void
+    {
+        $a = Cell::new('x');
+        $b = Cell::new('x');
+
+        $this->assertTrue($a->equals($b));
+    }
+
+    public function testEqualsNullStyleVsNonNullStyle(): void
+    {
+        $a = Cell::new('x');
+        $b = Cell::new('x', Style::bold());
+
+        $this->assertFalse($a->equals($b));
+    }
+
+    public function testEqualsDifferentRune(): void
+    {
+        $a = Cell::new('A');
+        $b = Cell::new('B');
+
+        $this->assertFalse($a->equals($b));
+    }
+
+    public function testEqualsDifferentWidth(): void
+    {
+        $a = Cell::new('X', null, null, 1);
+        $b = Cell::new('X', null, null, 2);
+
+        $this->assertFalse($a->equals($b));
+    }
+
+    public function testEqualsSameStyleDifferentInstances(): void
+    {
+        $a = Cell::new('x', Style::bold());
+        $b = Cell::new('x', Style::bold());
+
+        $this->assertTrue($a->equals($b));
+        $this->assertNotSame($a->style(), $b->style());
+    }
 }

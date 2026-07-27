@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Fuzzy\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\MatchResult;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(MatchResult::class)]
 final class MatchResultTest extends TestCase
 {
+    #[Test]
     public function testConstruction(): void
     {
         $result = new MatchResult('foo', 'foobar', 42, [0, 1, 2]);
@@ -19,6 +23,7 @@ final class MatchResultTest extends TestCase
         $this->assertSame([0, 1, 2], $result->matchedIndices);
     }
 
+    #[Test]
     public function testIsEmptyWithEmptyIndices(): void
     {
         $result = new MatchResult('xyz', 'foobar', 0, []);
@@ -26,6 +31,7 @@ final class MatchResultTest extends TestCase
         $this->assertTrue($result->isEmpty());
     }
 
+    #[Test]
     public function testIsEmptyWithNonEmptyIndices(): void
     {
         $result = new MatchResult('foo', 'foobar', 10, [0, 1, 2]);
@@ -33,6 +39,7 @@ final class MatchResultTest extends TestCase
         $this->assertFalse($result->isEmpty());
     }
 
+    #[Test]
     public function testIsMatchedWithPositiveScore(): void
     {
         $result = new MatchResult('foo', 'foobar', 10, [0, 1, 2]);
@@ -40,6 +47,7 @@ final class MatchResultTest extends TestCase
         $this->assertTrue($result->isMatched());
     }
 
+    #[Test]
     public function testIsMatchedWithZeroScore(): void
     {
         $result = new MatchResult('foo', 'foobar', 0, [0, 1, 2]);
@@ -47,6 +55,7 @@ final class MatchResultTest extends TestCase
         $this->assertFalse($result->isMatched());
     }
 
+    #[Test]
     public function testIndices(): void
     {
         $indices = [0, 1, 2, 5, 6];
@@ -55,6 +64,7 @@ final class MatchResultTest extends TestCase
         $this->assertSame($indices, $result->indices());
     }
 
+    #[Test]
     public function testIndicesReturnsNewArray(): void
     {
         $result = new MatchResult('foo', 'foobar', 10, [0, 1, 2]);

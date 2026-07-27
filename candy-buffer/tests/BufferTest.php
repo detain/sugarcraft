@@ -948,4 +948,367 @@ final class BufferTest extends TestCase
         $filled2 = $buf->fill(new Region(Position::new(0, 0), 3, 0), Cell::new('X'));
         $this->assertSame($before, $filled2->toAnsi());
     }
+
+    // ─── copy() ────────────────────────────────────────────────────────
+
+    public function testCopyReturnsNewInstance(): void
+    {
+        $buf = Buffer::new(5, 3)->withCellAt(2, 1, Cell::new('X'));
+
+        $copy = $buf->copy($buf->region());
+
+        $this->assertNotSame($buf, $copy);
+        $this->assertSame('X', $copy->cellAt(2, 1)->rune());
+        // Original is unchanged (immutable copy)
+        $this->assertSame('X', $buf->cellAt(2, 1)->rune());
+    }
+
+    public function testCopyExactRegion(): void
+    {
+        $buf = Buffer::new(5, 3)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 0, Cell::new('B'))
+            ->withCellAt(0, 1, Cell::new('C'))
+            ->withCellAt(1, 1, Cell::new('D'));
+
+        $copy = $buf->copy(new Region(Position::new(0, 0), 2, 2));
+
+        $this->assertSame(2, $copy->width());
+        $this->assertSame(2, $copy->height());
+        $this->assertSame('A', $copy->cellAt(0, 0)->rune());
+        $this->assertSame('B', $copy->cellAt(1, 0)->rune());
+        $this->assertSame('C', $copy->cellAt(0, 1)->rune());
+        $this->assertSame('D', $copy->cellAt(1, 1)->rune());
+    }
+
+    public function testCopyRegionWithOffset(): void
+    {
+        $buf = Buffer::new(5, 4)
+            ->withCellAt(2, 1, Cell::new('X'))
+            ->withCellAt(3, 2, Cell::new('Y'));
+
+        $copy = $buf->copy(new Region(Position::new(2, 1), 2, 2));
+
+        $this->assertSame(2, $copy->width());
+        $this->assertSame(2, $copy->height());
+        $this->assertSame('X', $copy->cellAt(0, 0)->rune());
+        $this->assertSame('Y', $copy->cellAt(1, 1)->rune());
+        $this->assertSame(' ', $copy->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $copy->cellAt(0, 1)->rune());
+    }
+
+    public function testCopyClipsOutOfBoundsSource(): void
+    {
+        // 3x3 buffer; copy 5x5 region starting at (2,2) → only (2,2) is in bounds
+        $buf = Buffer::new(3, 3)->withCellAt(2, 2, Cell::new('Z'));
+
+        $copy = $buf->copy(new Region(Position::new(2, 2), 5, 5));
+
+        $this->assertSame(5, $copy->width());
+        $this->assertSame(5, $copy->height());
+        $this->assertSame('Z', $copy->cellAt(0, 0)->rune());
+        // Out-of-bounds positions in source → blank cells
+        $this->assertSame(' ', $copy->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $copy->cellAt(0, 1)->rune());
+        $this->assertSame(' ', $copy->cellAt(1, 1)->rune());
+    }
+
+    public function testCopyNegativeOriginUsesBlankCells(): void
+    {
+        // Region with negative origin: cells at negative source coords
+        // should use blank cells.
+        $buf = Buffer::new(3, 2)->withCellAt(0, 0, Cell::new('A'));
+
+        $copy = $buf->copy(new Region(Position::new(-1, -1), 3, 2));
+
+        $this->assertSame(3, $copy->width());
+        $this->assertSame(2, $copy->height());
+        // The source at (-1,-1) is out of bounds → blank
+        // (0,0) in copy maps to source (-1,-1) → blank
+        $this->assertSame(' ', $copy->cellAt(0, 0)->rune());
+    }
+
+    public function testCopyZeroAreaRegionThrows(): void
+    {
+        // Buffer::fromGrid requires positive dimensions; copy() uses fromGrid.
+        $buf = Buffer::new(5, 3)->withCellAt(2, 1, Cell::new('X'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $buf->copy(new Region(Position::new(0, 0), 0, 0));
+    }
+
+    public function testCopyPreservesCellStyles(): void
+    {
+        $style = Style::new(0xff0000, 0x0000ff, Style::ATTR_BOLD);
+        $buf = Buffer::new(3, 1)->withCellAt(1, 0, Cell::new('S', $style));
+
+        $copy = $buf->copy(new Region(Position::new(0, 0), 3, 1));
+
+        $cell = $copy->cellAt(1, 0);
+        $this->assertSame('S', $cell->rune());
+        $this->assertNotNull($cell->style());
+        $this->assertSame(0xff0000, $cell->style()->fg());
+        $this->assertSame(0x0000ff, $cell->style()->bg());
+        $this->assertTrue($cell->style()->hasBold());
+    }
+
+    public function testCopyPreservesHyperlinks(): void
+    {
+        $link = Hyperlink::new('https://example.com');
+        $buf = Buffer::new(2, 1)->withCellAt(1, 0, Cell::new('L', null, $link));
+
+        $copy = $buf->copy(new Region(Position::new(0, 0), 2, 1));
+
+        $cell = $copy->cellAt(1, 0);
+        $this->assertNotNull($cell->link());
+        $this->assertSame('https://example.com', $cell->link()->url());
+    }
+
+    public function testCopyPreservesWideChars(): void
+    {
+        $buf = Buffer::new(4, 1)
+            ->withCellAt(0, 0, Cell::new('中', null, null, 2))
+            ->withCellAt(1, 0, Cell::continuation());
+
+        $copy = $buf->copy(new Region(Position::new(0, 0), 4, 1));
+
+        $this->assertSame('中', $copy->cellAt(0, 0)->rune());
+        $this->assertSame(2, $copy->cellAt(0, 0)->width());
+        $this->assertSame('', $copy->cellAt(1, 0)->rune());
+        $this->assertSame(0, $copy->cellAt(1, 0)->width());
+    }
+
+    // ─── fill edge cases ───────────────────────────────────────────────
+
+    public function testFillSingleCell(): void
+    {
+        $buf = Buffer::new(3, 3);
+        $filled = $buf->fill(new Region(Position::new(1, 1), 1, 1), Cell::new('X'));
+
+        $this->assertSame('X', $filled->cellAt(1, 1)->rune());
+        $this->assertSame(' ', $filled->cellAt(0, 0)->rune());
+        $this->assertSame(' ', $filled->cellAt(2, 2)->rune());
+    }
+
+    public function testFillNegativeOriginIsClipped(): void
+    {
+        $buf = Buffer::new(3, 3);
+        $filled = $buf->fill(new Region(Position::new(-1, -1), 3, 3), Cell::new('X'));
+
+        // Only cells at non-negative positions within bounds get filled
+        $this->assertSame('X', $filled->cellAt(0, 0)->rune());
+        $this->assertSame(' ', $filled->cellAt(2, 2)->rune());
+    }
+
+    public function testFillPartialOverflowClipped(): void
+    {
+        $buf = Buffer::new(3, 3);
+        $filled = $buf->fill(new Region(Position::new(2, 2), 5, 5), Cell::new('X'));
+
+        // Only (2,2) is in bounds among the 5x5 region
+        $this->assertSame('X', $filled->cellAt(2, 2)->rune());
+        $this->assertSame(' ', $filled->cellAt(0, 0)->rune());
+    }
+
+    // ─── toAnsi edge cases ────────────────────────────────────────────
+
+    public function testToAnsiStyleTransitionMidRow(): void
+    {
+        $buf = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 0, Cell::new('B', Style::bold()))
+            ->withCellAt(2, 0, Cell::new('C'));
+
+        $ansi = $buf->toAnsi();
+
+        // B must have bold SGR between A and C
+        $this->assertStringContainsString("\x1b[0;1m", $ansi);
+        $this->assertStringContainsString('B', $ansi);
+    }
+
+    public function testToAnsiHyperlinkTransitionMidRow(): void
+    {
+        $link1 = Hyperlink::new('https://a.com');
+        $link2 = Hyperlink::new('https://b.com');
+        $buf = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('L', null, $link1))
+            ->withCellAt(1, 0, Cell::new('M', null, $link2))
+            ->withCellAt(2, 0, Cell::new('N'));
+
+        $ansi = $buf->toAnsi();
+
+        // Both URLs must appear; close before switching links
+        $this->assertStringContainsString('https://a.com', $ansi);
+        $this->assertStringContainsString('https://b.com', $ansi);
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $ansi);
+    }
+
+    public function testToAnsiResetBetweenRows(): void
+    {
+        // Two rows with different styles: SGR should be emitted at row boundary
+        $buf = Buffer::new(2, 2)
+            ->withCellAt(0, 0, Cell::new('A', Style::bold()))
+            ->withCellAt(1, 1, Cell::new('B', Style::new(0xff0000)));
+
+        $ansi = $buf->toAnsi();
+
+        // Row 0 has bold; row 1 has fg=red — bold must be reset before new style
+        $this->assertStringContainsString("\x1b[0;38;2;255;0;0m", $ansi);
+    }
+
+    public function testToAnsiHyperlinkClosesBeforeStyleTransition(): void
+    {
+        $link = Hyperlink::new('https://example.com');
+        // L has hyperlink; following cells do not
+        $buf = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('L', null, $link))
+            ->withCellAt(1, 0, Cell::new(' '))
+            ->withCellAt(2, 0, Cell::new(' '));
+
+        $ansi = $buf->toAnsi();
+
+        // Hyperlink opens at L; since subsequent cells have no link,
+        // the link is closed before them.
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $ansi);
+        $this->assertStringContainsString('https://example.com', $ansi);
+    }
+
+    public function testToAnsiRowWithAllBlankCells(): void
+    {
+        // A row of all blank cells must still produce a \n separator
+        $buf = Buffer::new(3, 2);
+
+        $ansi = $buf->toAnsi();
+
+        // Should have exactly one newline between two rows of 3 spaces
+        $this->assertSame("   \n   ", $ansi);
+    }
+
+    public function testToAnsiEmptyBuffer(): void
+    {
+        $buf = Buffer::new(1, 1);
+        $ansi = $buf->toAnsi();
+
+        $this->assertSame(' ', $ansi);
+    }
+
+    public function testToAnsiStyledCellThenBlank(): void
+    {
+        // Styled cell followed by blank must emit reset before blank
+        $buf = Buffer::new(2, 1)
+            ->withCellAt(0, 0, Cell::new('X', Style::bold()))
+            ->withCellAt(1, 0, Cell::new(' '));
+
+        $ansi = $buf->toAnsi();
+
+        // After 'X' with bold, the space must be preceded by SGR reset
+        $this->assertStringContainsString("\x1b[0m", $ansi);
+    }
+
+    public function testToAnsiMultipleStyleChangesInRow(): void
+    {
+        $buf = Buffer::new(4, 1)
+            ->withCellAt(0, 0, Cell::new('A', Style::bold()))
+            ->withCellAt(1, 0, Cell::new('B'))
+            ->withCellAt(2, 0, Cell::new('C', Style::new(0xff0000)))
+            ->withCellAt(3, 0, Cell::new('D'));
+
+        $ansi = $buf->toAnsi();
+
+        // Bold SGR before A
+        $this->assertStringContainsString("\x1b[0;1m", $ansi);
+        // After B (no style), must reset before red
+        $this->assertStringContainsString("\x1b[0;38;2;255;0;0m", $ansi);
+        // D after red must reset to default (no SGR for D)
+    }
+
+    // ─── serialization ────────────────────────────────────────────────
+
+    public function testSerializeAndUnserialize(): void
+    {
+        $buf = Buffer::new(3, 2)
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 0, Cell::new('B', Style::bold()))
+            ->withCellAt(2, 1, Cell::new('C', Style::new(0xff0000)));
+
+        $data = $buf->__serialize();
+
+        $this->assertSame(3, $data['width']);
+        $this->assertSame(2, $data['height']);
+        $this->assertCount(6, $data['grid']); // 3*2 cells
+
+        // Reconstruct
+        $reconstituted = Buffer::fromGrid($data['width'], $data['height'], array_map(
+            fn($cellData) => new Cell(
+                $cellData['rune'],
+                $cellData['style'] !== null ? new Style(
+                    $cellData['style']['fg'],
+                    $cellData['style']['bg'],
+                    $cellData['style']['attrs']
+                ) : null,
+                $cellData['link'] !== null ? new Hyperlink(
+                    $cellData['link']['url'],
+                    $cellData['link']['id']
+                ) : null,
+                $cellData['width']
+            ),
+            $data['grid']
+        ));
+
+        $this->assertSame('A', $reconstituted->cellAt(0, 0)->rune());
+        $this->assertSame('B', $reconstituted->cellAt(1, 0)->rune());
+        $this->assertTrue($reconstituted->cellAt(1, 0)->style()->hasBold());
+        $this->assertSame('C', $reconstituted->cellAt(2, 1)->rune());
+        $this->assertSame(0xff0000, $reconstituted->cellAt(2, 1)->style()->fg());
+    }
+
+    public function testJsonSerialize(): void
+    {
+        $buf = Buffer::new(2, 1)->withCellAt(0, 0, Cell::new('X', Style::bold()));
+
+        $json = json_encode($buf);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame(2, $decoded['width']);
+        $this->assertSame(1, $decoded['height']);
+        $this->assertCount(2, $decoded['grid']);
+        $this->assertSame('X', $decoded['grid'][0]['rune']);
+        $this->assertSame(1, $decoded['grid'][0]['style']['attrs']);
+    }
+
+    public function testSerializeWideCharCell(): void
+    {
+        $buf = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('日', null, null, 2))
+            ->withCellAt(1, 0, Cell::continuation());
+
+        $data = $buf->__serialize();
+
+        $this->assertSame('日', $data['grid'][0]['rune']);
+        $this->assertSame(2, $data['grid'][0]['width']);
+        $this->assertSame('', $data['grid'][1]['rune']);
+        $this->assertSame(0, $data['grid'][1]['width']);
+    }
+
+    public function testSerializeHyperlinkCell(): void
+    {
+        $link = Hyperlink::new('https://test.com', 'xid');
+        $buf = Buffer::new(1, 1)->withCellAt(0, 0, Cell::new('L', null, $link));
+
+        $data = $buf->__serialize();
+
+        $this->assertSame('https://test.com', $data['grid'][0]['link']['url']);
+        $this->assertSame('xid', $data['grid'][0]['link']['id']);
+    }
+
+    public function testFillPreservesOtherCells(): void
+    {
+        $buf = Buffer::new(3, 2)->withCellAt(0, 0, Cell::new('A'));
+
+        $filled = $buf->fill(new Region(Position::new(1, 0), 1, 1), Cell::new('B'));
+
+        $this->assertSame('A', $filled->cellAt(0, 0)->rune());
+        $this->assertSame('B', $filled->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $filled->cellAt(2, 0)->rune());
+    }
 }

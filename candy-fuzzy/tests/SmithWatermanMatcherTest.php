@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Fuzzy\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(SmithWatermanMatcher::class)]
 final class SmithWatermanMatcherTest extends TestCase
 {
     private SmithWatermanMatcher $matcher;
@@ -17,6 +20,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->matcher = new SmithWatermanMatcher();
     }
 
+    #[Test]
     public function testMatchReturnsMatchResult(): void
     {
         $result = $this->matcher->match('hello', 'hello');
@@ -24,6 +28,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertInstanceOf(MatchResult::class, $result);
     }
 
+    #[Test]
     public function testMatchWithExactMatch(): void
     {
         $result = $this->matcher->match('hello', 'hello');
@@ -34,6 +39,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame('hello', $result->haystack);
     }
 
+    #[Test]
     public function testMatchWithSubstringMatch(): void
     {
         $result = $this->matcher->match('ell', 'hello');
@@ -44,6 +50,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame('hello', $result->haystack);
     }
 
+    #[Test]
     public function testMatchNoMatchReturnsNull(): void
     {
         $result = $this->matcher->match('xyz', 'hello');
@@ -51,6 +58,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testMatchEmptyQueryReturnsNull(): void
     {
         $result = $this->matcher->match('', 'hello');
@@ -58,6 +66,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testMatchEmptyCandidateReturnsNull(): void
     {
         $result = $this->matcher->match('hello', '');
@@ -65,6 +74,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertNull($result);
     }
 
+    #[Test]
     public function testQueryLongerThanCandidateReturnsMatch(): void
     {
         // Smith-Waterman is local alignment — it finds the best matching
@@ -77,6 +87,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame([0], $result->matchedIndices);
     }
 
+    #[Test]
     public function testMatchAllReturnsSortedResults(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
@@ -91,6 +102,7 @@ final class SmithWatermanMatcherTest extends TestCase
         }
     }
 
+    #[Test]
     public function testMatchAllEmptyQueryReturnsEmpty(): void
     {
         $results = $this->matcher->matchAll('', ['hello', 'world']);
@@ -98,6 +110,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame([], $results);
     }
 
+    #[Test]
     public function testMatchAllEmptyCandidatesReturnsEmpty(): void
     {
         $results = $this->matcher->matchAll('hello', []);
@@ -105,6 +118,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame([], $results);
     }
 
+    #[Test]
     public function testMatchedIndicesForExactMatch(): void
     {
         $result = $this->matcher->match('foo', 'foobar');
@@ -114,6 +128,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame([0, 1, 2], $result->indices());
     }
 
+    #[Test]
     public function testMatchedIndicesForPartialMatch(): void
     {
         $result = $this->matcher->match('oba', 'foobar');
@@ -124,6 +139,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertContains($result->indices()[0], [1, 2]); // First match could be at different positions
     }
 
+    #[Test]
     public function testMatchedIndicesForConsecutiveMatches(): void
     {
         $result = $this->matcher->match('ello', 'hello');
@@ -133,6 +149,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame([1, 2, 3, 4], $result->indices());
     }
 
+    #[Test]
     public function testCaseInsensitiveScoring(): void
     {
         $scoreLower = $this->matcher->match('hello', 'hello');
@@ -143,6 +160,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame($scoreLower->score, $scoreMixed->score);
     }
 
+    #[Test]
     public function testConsecutiveMatchesScoreHigher(): void
     {
         $scoreConsec = $this->matcher->match('ello', 'hello');
@@ -153,6 +171,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertGreaterThan($scoreNonConsec->score, $scoreConsec->score);
     }
 
+    #[Test]
     public function testFullMatchScoresHigherThanPartial(): void
     {
         $fullScore = $this->matcher->match('hello', 'hello');
@@ -163,6 +182,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertGreaterThan($partialScore->score, $fullScore->score);
     }
 
+    #[Test]
     public function testUtf8Characters(): void
     {
         $result = $this->matcher->match('中', '中文测试');
@@ -171,6 +191,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertContains(0, $result->indices());
     }
 
+    #[Test]
     public function testUtf8PartialMatch(): void
     {
         $result = $this->matcher->match('文测', '中文测试');
@@ -179,6 +200,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame([1, 2], $result->indices());
     }
 
+    #[Test]
     public function testMatchResultIsEmpty(): void
     {
         $result = $this->matcher->match('xyz', 'hello');
@@ -186,6 +208,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertNull($result); // No match returns null
     }
 
+    #[Test]
     public function testMatchResultIsMatched(): void
     {
         $result = $this->matcher->match('hello', 'hello');
@@ -194,6 +217,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertTrue($result->isMatched());
     }
 
+    #[Test]
     public function testMatchAllExcludesNonMatches(): void
     {
         $candidates = ['hello', 'world', 'xyz'];
@@ -203,6 +227,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame('xyz', $results[0]->haystack);
     }
 
+    #[Test]
     public function testMatchAllTiebreakByCandidateAscending(): void
     {
         // 'app' should match both but 'app' should come before 'applet' alphabetically
@@ -214,6 +239,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertSame('app', $results[0]->haystack);
     }
 
+    #[Test]
     public function testAmbiguousQueryAbOrderingAndIndices(): void
     {
         $candidates = ['alpha', 'ablation', 'label'];
@@ -234,6 +260,7 @@ final class SmithWatermanMatcherTest extends TestCase
         }
     }
 
+    #[Test]
     public function testAmbiguousQueryAbIndicesAreByteOffsets(): void
     {
         $candidates = ['alpha', 'ablation', 'label'];
@@ -251,6 +278,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertNotEmpty($resultMap['label']->indices());
     }
 
+    #[Test]
     public function testMatchAllRespectsLimit(): void
     {
         $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
@@ -259,6 +287,7 @@ final class SmithWatermanMatcherTest extends TestCase
         $this->assertCount(2, $results);
     }
 
+    #[Test]
     public function testMatchAllRespectsMinScore(): void
     {
         // Build a list with varied scores
@@ -271,6 +300,7 @@ final class SmithWatermanMatcherTest extends TestCase
         }
     }
 
+    #[Test]
     public function testMatchAllWithNoLimitOrMinScoreIsUnchanged(): void
     {
         // Verify the default behavior (no limit, minScore=1) returns same results

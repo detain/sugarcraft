@@ -134,4 +134,81 @@ final class RegionTest extends TestCase
         $this->assertSame(5, $zeroHeight->width());
         $this->assertSame(0, $zeroHeight->height());
     }
+
+    public function testSerialize(): void
+    {
+        $region = Region::new(Position::new(2, 3), 10, 20);
+
+        $data = $region->__serialize();
+
+        $this->assertSame(2, $data['origin']['col']);
+        $this->assertSame(3, $data['origin']['row']);
+        $this->assertSame(10, $data['width']);
+        $this->assertSame(20, $data['height']);
+    }
+
+    public function testSerializeNegativeOrigin(): void
+    {
+        $region = new Region(Position::new(-1, -1), 3, 4);
+
+        $data = $region->__serialize();
+
+        $this->assertSame(-1, $data['origin']['col']);
+        $this->assertSame(-1, $data['origin']['row']);
+        $this->assertSame(3, $data['width']);
+        $this->assertSame(4, $data['height']);
+    }
+
+    public function testSerializeZeroArea(): void
+    {
+        $region = Region::new(Position::new(0, 0), 0, 0);
+
+        $data = $region->__serialize();
+
+        $this->assertSame(0, $data['width']);
+        $this->assertSame(0, $data['height']);
+    }
+
+    public function testUnserializeRoundTrip(): void
+    {
+        $original = Region::new(Position::new(5, 7), 12, 14);
+        $data = $original->__serialize();
+
+        $reconstituted = new Region(
+            new Position($data['origin']['col'], $data['origin']['row']),
+            $data['width'],
+            $data['height'],
+        );
+
+        $this->assertSame($original->origin()->col(), $reconstituted->origin()->col());
+        $this->assertSame($original->origin()->row(), $reconstituted->origin()->row());
+        $this->assertSame($original->width(), $reconstituted->width());
+        $this->assertSame($original->height(), $reconstituted->height());
+        $this->assertSame($original->right(), $reconstituted->right());
+        $this->assertSame($original->bottom(), $reconstituted->bottom());
+    }
+
+    public function testJsonSerialize(): void
+    {
+        $region = Region::new(Position::new(1, 2), 5, 6);
+
+        $json = json_encode($region);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame(1, $decoded['origin']['col']);
+        $this->assertSame(2, $decoded['origin']['row']);
+        $this->assertSame(5, $decoded['width']);
+        $this->assertSame(6, $decoded['height']);
+    }
+
+    public function testJsonSerializeNegativeOrigin(): void
+    {
+        $region = new Region(Position::new(-3, -4), 2, 2);
+
+        $json = json_encode($region);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame(-3, $decoded['origin']['col']);
+        $this->assertSame(-4, $decoded['origin']['row']);
+    }
 }

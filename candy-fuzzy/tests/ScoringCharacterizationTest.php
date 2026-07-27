@@ -4,18 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Fuzzy\Tests;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Characterization tests pinning exact score and index output.
- *
- * These encode the CURRENT behavior (not ideal behavior) so that
- * performance refactors in Steps 2 & 3 can be verified byte-equivalent.
- *
- * Mirrors charmbracelet/fuzzy output contract.
- */
+#[CoversClass(SmithWatermanMatcher::class)]
+#[CoversClass(SahilmMatcher::class)]
 final class ScoringCharacterizationTest extends TestCase
 {
     private SmithWatermanMatcher $sw;
@@ -65,9 +62,8 @@ final class ScoringCharacterizationTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider smithWatermanCases
-     */
+    #[Test]
+    #[DataProvider('smithWatermanCases')]
     public function testSmithWatermanPinnedOutput(string $query, string $candidate, ?int $expectedScore, ?array $expectedIndices): void
     {
         $result = $this->sw->match($query, $candidate);
@@ -81,9 +77,8 @@ final class ScoringCharacterizationTest extends TestCase
         }
     }
 
-    /**
-     * @dataProvider sahilmMatcherCases
-     */
+    #[Test]
+    #[DataProvider('sahilmMatcherCases')]
     public function testSahilmMatcherPinnedOutput(string $query, string $candidate, ?int $expectedScore, ?array $expectedIndices): void
     {
         $result = $this->sm->match($query, $candidate);
@@ -97,6 +92,7 @@ final class ScoringCharacterizationTest extends TestCase
         }
     }
 
+    #[Test]
     public function testSahilmMatcherCaseSensitiveMatch(): void
     {
         $result = $this->smCS->match('Hello', 'Hello');
@@ -106,6 +102,7 @@ final class ScoringCharacterizationTest extends TestCase
         $this->assertSame([0, 1, 2, 3, 4], $result->indices());
     }
 
+    #[Test]
     public function testSahilmMatcherCaseSensitiveNoMatch(): void
     {
         $result = $this->smCS->match('hello', 'Hello');

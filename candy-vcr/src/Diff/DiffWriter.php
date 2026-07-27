@@ -249,7 +249,7 @@ final class DiffWriter
      * @param list<string> $lines
      * @param int $startLine
      * @param int $context
-     * @param string $which 'exp' or 'act'
+     * @param string $_which 'exp' or 'act'
      */
     private function addContext(array &$hunkContents, array $lines, int $startLine, int $context, string $_which): void
     {
