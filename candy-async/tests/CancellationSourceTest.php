@@ -10,7 +10,6 @@ use SugarCraft\Async\Cancellable;
 
 /**
  * @covers \SugarCraft\Async\CancellationSource
- * @covers \SugarCraft\Async\Cancellable
  */
 final class CancellationSourceTest extends TestCase
 {

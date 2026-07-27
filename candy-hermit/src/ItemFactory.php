@@ -19,10 +19,11 @@ final class ItemFactory
     public function coerce(array $items): array
     {
         $result = [];
-        foreach (\array_values($items) as $i => $item) {
+        $stringIndex = 0;
+        foreach (\array_values($items) as $item) {
             $result[] = $item instanceof Item
                 ? $item
-                : new FilteredItem($i + 1, (string) $item);
+                : new FilteredItem(++$stringIndex, (string) $item);
         }
         return $result;
     }
