@@ -35,7 +35,8 @@ final class ReplayCommand implements Command
         $speed = 'instant';
         $noTrim = false;
         $idleTrim = null;
-        for ($i = 0; $i < count($args); $i++) {
+        $argCount = count($args);
+        for ($i = 0; $i < $argCount; $i++) {
             $arg = $args[$i];
             if (str_starts_with($arg, '--speed=')) {
                 $speed = substr($arg, 8);

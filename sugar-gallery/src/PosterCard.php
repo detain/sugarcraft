@@ -272,8 +272,10 @@ final readonly class PosterCard
             $rows = array_slice($rows, 0, $posterHeight);
         }
 
-        while (count($rows) < $posterHeight) {
+        $rowCount = count($rows);
+        while ($rowCount < $posterHeight) {
             $rows[] = str_repeat(' ', $width);
+            $rowCount++;
         }
 
         // Width-normalise every row so the card upholds the render invariant:

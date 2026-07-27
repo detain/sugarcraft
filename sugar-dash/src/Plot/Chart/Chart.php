@@ -351,7 +351,8 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Draw line segments
-        for ($i = 0; $i < count($points) - 1; $i++) {
+        $pointCount = count($points);
+        for ($i = 0; $i < $pointCount - 1; $i++) {
             [$x1, $y1] = $points[$i];
             [$x2, $y2] = $points[$i + 1];
 

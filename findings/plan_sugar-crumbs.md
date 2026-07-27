@@ -38,10 +38,12 @@ Address all HIGH and MEDIUM severity findings from the sugar-crumbs code audit, 
 **Why:** Callers can mutate the returned array and corrupt the NavStack's internal state, leading to unpredictable behavior.
 
 **Related Code:**
+
 - `src/NavStack.php:139-142` — `items()` method returning `$this->items` directly
 - `tests/NavStackTest.php:69-78` — existing test for items() that would need updating
 
 **Investigation Notes:**
+
 - The `items()` method at line 139-142 directly returns `$this->items`
 - Existing test `testItemsReturnsAllItems()` at NavStackTest.php:69-78 does NOT test immutability
 - `Shell.php:32,45,57,77` uses `$this->stack->items()` as input to `setItems()` — these all create copies via `setItems()` anyway
@@ -57,6 +59,7 @@ public function items(): array
 ```
 
 **Conditions for Success:**
+
 - [ ] `NavStackTest::testItemsReturnsAllItems` passes
 - [ ] New test: mutate returned array, verify NavStack is unaffected
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
@@ -72,6 +75,7 @@ public function items(): array
 **Why:** The Closable interface and NavigationItem's implementations exist but are dead code; lifecycle events never fire, making the interface useless.
 
 **Related Code:**
+
 - `src/NavStack.php:52-56` — `push()` method
 - `src/NavStack.php:64-70` — `pop()` method
 - `src/NavigationItem.php:27-39` — `onEnter()`/`onLeave()` implementations
@@ -79,6 +83,7 @@ public function items(): array
 - `tests/ClosableTest.php` — existing tests for Closable (only test no-op behavior)
 
 **Investigation Notes:**
+
 - `NavigationItem` implements `Closable` and provides no-op defaults for `onEnter()`/`onLeave()`
 - No code in `NavStack` ever calls these methods
 - `popTo()` should also call `onLeave()` on all popped items
@@ -107,6 +112,7 @@ public function pop(): ?NavigationItem
 ```
 
 **Conditions for Success:**
+
 - [ ] New test: verify onEnter is called when item becomes current
 - [ ] New test: verify onLeave is called when item leaves current state
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
@@ -122,6 +128,7 @@ public function pop(): ?NavigationItem
 **Why:** A NavStack with items `['A › B', 'C']` and separator `" › "` would render incorrectly as two separate crumbs rather than one escaped crumb.
 
 **Related Code:**
+
 - `src/Breadcrumb.php:156-181` — `render()` method
 - `src/Breadcrumb.php:173-175` — where title is assigned but not escaped
 - `src/Escape.php:18-21` — `Escape::title()` implementation
@@ -129,6 +136,7 @@ public function pop(): ?NavigationItem
 - `tests/BreadcrumbTest.php:268-291` — test `testTruncationWithScannerZoneCountMatchesVisibleCrumbs`
 
 **Investigation Notes:**
+
 - `Escape::title()` escapes the hardcoded separator `' > '` (from `Escape::SEPARATOR`)
 - BUT `Breadcrumb` uses separator `' › '` by default (defined at Breadcrumb.php:44)
 - **CRITICAL FINDING:** There's a SEPARATOR MISMATCH — `Escape::title()` escapes `' > '` but `Breadcrumb::render()` uses `' › '` as default separator
@@ -146,6 +154,7 @@ $title = Escape::title($item->title);  // Escape using ACTUAL separator
 ```
 
 **Conditions for Success:**
+
 - [ ] `tests/BreadcrumbTest::testBreadcrumbTitleContainingSeparatorRendersCorrectly` passes
 - [ ] `tests/BreadcrumbTest::testTruncationWithScannerZoneCountMatchesVisibleCrumbs` passes
 - [ ] New test: title containing Breadcrumb's actual separator renders as ONE crumb
@@ -162,6 +171,7 @@ $title = Escape::title($item->title);  // Escape using ACTUAL separator
 **Why:** `lang/en.php` defines `separator` and `truncator` keys, but `Breadcrumb` hardcodes `' › '` and `'… '` directly, making the i18n infrastructure dead code.
 
 **Related Code:**
+
 - `src/Breadcrumb.php:44-45` — hardcoded defaults:
   ```php
   private string $separator  = ' › ';
@@ -172,6 +182,7 @@ $title = Escape::title($item->title);  // Escape using ACTUAL separator
 - `tests/LangCoverageTest.php` — tests that lang/en.php exists and has keys
 
 **Investigation Notes:**
+
 - `Breadcrumb` has no dependency on `Lang` — the defaults are hardcoded strings
 - The `Lang::t()` method in `src/Lang.php` extends `SugarCraft\Core\I18n\Lang::t()` which handles translation lookup
 - Wiring Lang would require adding the dependency to Breadcrumb
@@ -189,6 +200,7 @@ private string $truncator  = Lang::t('truncator');  // uses i18n
 ```
 
 **Conditions for Success:**
+
 - [ ] `LangCoverageTest` still passes (lang/en.php has the keys)
 - [ ] `BreadcrumbTest` tests pass (no behavior change with en.php defaults)
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
@@ -206,9 +218,11 @@ private string $truncator  = Lang::t('truncator');  // uses i18n
 **Why:** Empty string `''` or whitespace `'   '` passes and renders confusing output like `"Home ›  › Settings"`.
 
 **Related Code:**
+
 - `src/NavStack.php:52-56` — `push()` method with no validation
 
 **Investigation Notes:**
+
 - `NavStack::push()` directly creates a `NavigationItem` without any title validation
 - A test for this does not exist in NavStackTest
 
@@ -226,6 +240,7 @@ public function push(string $title, mixed $data = null): self
 ```
 
 **Conditions for Success:**
+
 - [ ] New test: `push('')` throws InvalidArgumentException
 - [ ] New test: `push('   ')` (whitespace) throws InvalidArgumentException
 - [ ] New test: `push('Valid Title')` works normally
@@ -242,10 +257,12 @@ public function push(string $title, mixed $data = null): self
 **Why:** Validation checks for empty string `''` and newlines, but allows whitespace-only strings like `'   '`, producing an invisible breadcrumb.
 
 **Related Code:**
+
 - `src/Breadcrumb.php:57-67` — `setSeparator()` method
 - `tests/BreadcrumbTest.php:168-180` — existing tests for setSeparator validation
 
 **Investigation Notes:**
+
 - Current validation at line 59 checks `$s === ''` and rejects newlines at line 62
 - But whitespace-only strings pass through since `'   ' !== ''` evaluates to true
 
@@ -266,6 +283,7 @@ public function setSeparator(string $s): self
 ```
 
 **Conditions for Success:**
+
 - [ ] New test: `setSeparator('   ')` (whitespace-only) throws InvalidArgumentException
 - [ ] Existing test `testSetSeparatorRejectsEmpty` still passes
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
@@ -281,10 +299,12 @@ public function setSeparator(string $s): self
 **Why:** `popTo(-5)` silently produces an empty stack instead of signaling an error. However, the docblock already documents this behavior, and there is an existing test.
 
 **Related Code:**
+
 - `src/NavStack.php:91-95` — `popTo()` method with clamping
 - `tests/NavStackTest.php:303-328` — existing test `testPopToClampsOutOfRange` that explicitly tests clamping
 
 **Investigation Notes:**
+
 - The existing test `testPopToClampsOutOfRange` (NavStackTest.php:316-328) already tests both positive clamping (`popTo(99)`) and negative clamping (`popTo(-5)`)
 - The test at line 326-327 explicitly asserts `popTo(-5)` clamps to empty stack
 - So the behavior is INTENTIONAL and TESTED — the finding is about documentation clarity
@@ -320,6 +340,7 @@ public function setSeparator(string $s): self
 ```
 
 **Conditions for Success:**
+
 - [ ] Existing test `testPopToClampsOutOfRange` passes (already does)
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
 
@@ -336,6 +357,7 @@ public function setSeparator(string $s): self
 **Why:** `NavStack::depth()` exists but `count($navStack)` does not work; implementing Countable makes the class more ergonomic.
 
 **Related Code:**
+
 - `src/NavStack.php:31` — class declaration
 - `src/NavStack.php:121-124` — `depth()` method
 
@@ -355,6 +377,7 @@ final class NavStack implements \Countable
 ```
 
 **Conditions for Success:**
+
 - [ ] New test: `count($navStack)` works after implementing Countable
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
 
@@ -369,6 +392,7 @@ final class NavStack implements \Countable
 **Why:** Without `getIterator()`/`IteratorAggregate`, consumers must call `items()` to iterate; adding IteratorAggregate enables `foreach ($navStack as $item)` syntax.
 
 **Related Code:**
+
 - `src/NavStack.php:31` — class declaration
 
 **Implementation:**
@@ -386,6 +410,7 @@ final class NavStack implements \Countable, \IteratorAggregate
 ```
 
 **Conditions for Success:**
+
 - [ ] New test: `foreach ($navStack as $item)` works
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
 
@@ -402,6 +427,7 @@ final class NavStack implements \Countable, \IteratorAggregate
 **Why:** `setItemRenderer(\Closure $fn)` has no corresponding reset method; once set, the only way to restore default rendering is to instantiate a new `Breadcrumb`.
 
 **Related Code:**
+
 - `src/Breadcrumb.php:88-92` — `setItemRenderer()` method
 - `tests/BreadcrumbTest.php:149-159` — existing test for custom itemRenderer
 
@@ -416,6 +442,7 @@ public function setItemRenderer(?\Closure $fn): self
 ```
 
 **Conditions for Success:**
+
 - [ ] New test: `setItemRenderer(null)` resets to default rendering
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
 
@@ -432,9 +459,11 @@ public function setItemRenderer(?\Closure $fn): self
 **Why:** Each `withPush`/`withPop`/`withPopTo` creates a new NavStack, copies ALL items, then mutates. For a stack of depth N, every navigation operation is O(N).
 
 **Related Code:**
+
 - `src/Shell.php:30-60` — `withPush()`, `withPop()`, `withPopTo()` methods
 
 **Investigation Notes:**
+
 - `withPush`: `new NavStack()->setItems($this->stack->items())` — O(n) copy
 - `withPop`: same O(n) copy pattern
 - `withPopTo`: same O(n) copy pattern
@@ -459,6 +488,7 @@ public function setItemRenderer(?\Closure $fn): self
 ```
 
 **Conditions for Success:**
+
 - [ ] Docblock on Shell class documents O(n) performance
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
 
@@ -518,6 +548,7 @@ public static function parse(string $path): NavStack
 ```
 
 **Conditions for Success:**
+
 - [ ] Docblocks updated to note consumer responsibility
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
 
@@ -566,6 +597,7 @@ final class NavStack implements \Countable, \IteratorAggregate, \JsonSerializabl
 ```
 
 **Conditions for Success:**
+
 - [ ] New test: `json_encode($navStack)` works
 - [ ] `vendor/bin/phpunit sugar-crumbs` passes
 

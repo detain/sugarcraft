@@ -436,14 +436,17 @@ However, these are **advanced features** that may not be needed for typical TUI 
 ## Priority Recommendations
 
 ### High Priority
+
 1. **Remove dead code** in `Highlighter::highlight()` (lines 31-33)
 
 ### Medium Priority
+
 2. **Document SahilmMatcher case-sensitive bonus behavior** or add `useBonuses` flag
 3. **Add async/generator variant** of `matchAll()` for large datasets
 4. **Add MatcherFactory** for convenient instantiation by name
 
 ### Low Priority
+
 5. Extract shared `MatchResultSorter` utility
 6. Add configurable scoring constants to SahilmMatcher
 7. Rename `$prevCandidateLower` to `$prevCharLower`

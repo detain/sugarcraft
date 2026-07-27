@@ -55,6 +55,7 @@ The first-stage analysis identified:
 **Finding: NONE** — The repository has **0 open issues**. This is a critical signal in itself.
 
 **Interpretation**:
+
 - The project is either so niche that almost no one uses it in production
 - OR the maintainer addresses issues rapidly before they're filed
 - OR the scope is so narrow that there are genuinely few bugs
@@ -74,6 +75,7 @@ The first-stage analysis identified:
 **Solution**: Check both Sodium AND OpenSSL capabilities before advertising AES-256-GCM support.
 
 **Direct Risk to SugarCraft**: 
+
 - **HIGH** — `candy-pty` relies on FFI and crypto operations. Cross-platform crypto detection is a known pain point.
 - SugarCraft should implement fallback detection for crypto primitives on Apple Silicon.
 
@@ -86,6 +88,7 @@ The first-stage analysis identified:
 Since there are no open issues, I analyzed **commit history** for recurring technical pain points:
 
 ### 1. PTY Output Processing (Oct 2025 - 3 commits)
+
 ```
 "Don't disable opost"
 "Fix disabling OPOST"  
@@ -98,6 +101,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 **SugarCraft Risk**: Similar issues in `candy-pty` could cause terminal rendering artifacts.
 
 ### 2. Signal Handling Tests Failing in CI (Apr 2025 - Multiple commits)
+
 ```
 "tests: Skip SIGINT test on GitHub :grin:"
 "tests: Don't skip SIGINT test"
@@ -113,6 +117,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 **SugarCraft Risk**: **MEDIUM** — Signal handling is already identified as a candy-pty concern. CI environments may mask real signal issues.
 
 ### 3. Inactivity Timeout Bugs (Apr 2025)
+
 ```
 "add test for disconnecting on inactivity"
 "Fix inactive disconnect using months instead of minutes"
@@ -125,6 +130,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 **SugarCraft Risk**: **HIGH** — Any timer-based features in candy-pty could suffer similar issues.
 
 ### 4. Channel EOF Handling (Apr 2025)
+
 ```
 "fix: don't close channel when we're told EOF"
 ```
@@ -133,6 +139,7 @@ Since there are no open issues, I analyzed **commit history** for recurring tech
 **SugarCraft Risk**: **MEDIUM** — TUI applications that receive EOF need graceful handling.
 
 ### 5. Resource Cleanup (Apr 2025)
+
 ```
 "Check process is still a resource before attempting to close"
 ```
@@ -159,6 +166,7 @@ However, **commit history reveals implicit feature development**:
 | `feat: add memory usage logging every 30 seconds` | Built-in monitoring |
 
 **SugarCraft Opportunity**: These features represent natural extensions for `candy-pty`:
+
 1. Non-interactive process execution
 2. Environment variable passing
 3. Signal-based hot reload
@@ -223,11 +231,13 @@ The AES-256-GCM fix established a pattern: **detect multiple backends and fall b
 **Finding**: No explicit performance discussions in issues.
 
 **Implicit Performance Observations from Commits**:
+
 - Socket select timeout tuning: increased from 1s to larger values
 - Memory logging interval increased (less overhead)
 - Process forking model acknowledged as limitation
 
 **Performance Bottleneck (Acknowledged in First Stage)**:
+
 - Process per connection is memory-intensive
 - Single-threaded parent loop could be a bottleneck
 
@@ -240,6 +250,7 @@ The AES-256-GCM fix established a pattern: **detect multiple backends and fall b
 **Finding**: No visible extensibility discussions.
 
 **Implicit Extensibility via Commits**:
+
 - App auto-discovery in `apps/` directory with parameterized routes
 - Environment variable injection for app communication
 - PSR-3 logger injection
@@ -260,6 +271,7 @@ Server → Connection → Channel → Pty → CommandRunner
 **Finding**: No visible complaints.
 
 **Implicit API Observations**:
+
 - The SSH server is command-line driven (no config file API visible)
 - Environment variables as the primary configuration mechanism
 - Auto-discovery convention over configuration
@@ -273,6 +285,7 @@ Server → Connection → Channel → Pty → CommandRunner
 **Finding**: No visible migration problems (no issues or discussions).
 
 **Implicit Migration Path**:
+
 - Version history is clean (no breaking changes visible in commits)
 - Semantic versioning implied by maintainer discipline
 
@@ -317,6 +330,7 @@ Server → Connection → Channel → Pty → CommandRunner
 **Single Maintainer**: ashleyhindle (GitHub)
 
 **Guidance Style Observations**:
+
 - Quick merging (PR #3 merged same day as submission)
 - Pragmatic acceptance of workarounds (CI test skips)
 - Direct communication (no long issue threads)
@@ -330,6 +344,7 @@ Server → Connection → Channel → Pty → CommandRunner
 **Finding**: No visible rejected ideas.
 
 **Possible Rejected/Not Implemented Based on First-Stage Analysis**:
+
 - Windows support (architectural barrier)
 - SFTP/scp/port forwarding (scope creep)
 - ECDSA host keys (security trade-off, Ed25519 preferred)
@@ -412,6 +427,7 @@ Server → Connection → Channel → Pty → CommandRunner
 **Observation**: Whisp has multiple commits around process cleanup (resource validation, force stopping, EOF handling).
 
 **SugarCraft Application**: `candy-pty` needs robust process lifecycle management:
+
 - Startup: open PTY, fork
 - Runtime: monitor, forward I/O
 - Shutdown: graceful termination, zombie reaping
@@ -477,6 +493,7 @@ if ($channelType === 'direct-tcpip') {
 **Whisp represents a specific niche**: Pure PHP SSH server with FFI-based PTY.
 
 **Ecosystem Trend**: PHP is being used for increasingly system-level tasks:
+
 - SSH servers (Whisp)
 - Terminal emulators (SugarCraft)
 - FFI bindings (php-tui, candy-pty)

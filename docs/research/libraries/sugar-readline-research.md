@@ -155,6 +155,7 @@ session = PromptSession(
     auto_suggest=AutoSuggestFromHistory()
 )
 # As user types "git ", shows "git commit", "git push" etc.
+
 ```
 
 **liner (Go) - `PromptWithSuggestion`:**
@@ -315,6 +316,7 @@ private static function sliceChars(string $s, int $start, ?int $length = null): 
 ## 5. Implementation Roadmap
 
 ### Phase 1: History Foundation (Week 1)
+
 ```
 Goal: Add persistent history to TextPrompt
 
@@ -328,6 +330,7 @@ Goal: Add persistent history to TextPrompt
 **Deliverable:** `TextPrompt` with working history that persists across sessions.
 
 ### Phase 2: Key Binding Modes (Week 2)
+
 ```
 Goal: Add vi/emacs mode switching
 
@@ -340,6 +343,7 @@ Goal: Add vi/emacs mode switching
 **Deliverable:** `TextPrompt::withEditMode(EditMode::vi())` etc.
 
 ### Phase 3: Auto-Suggest & Completion (Week 3)
+
 ```
 Goal: Enhanced suggestion UX
 
@@ -350,6 +354,7 @@ Goal: Enhanced suggestion UX
 ```
 
 ### Phase 4: Advanced Features (Week 4+)
+
 ```
 Goal: Match upstream feature parity
 

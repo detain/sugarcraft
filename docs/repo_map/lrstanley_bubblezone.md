@@ -1,6 +1,7 @@
 # lrstanley/bubblezone
 
 ## Metadata
+
 - **URL:** https://github.com/lrstanley/bubblezone
 - **Language:** Go
 - **Stars:** 880+
@@ -8,6 +9,7 @@
 - **Description:** A helper utility for BubbleTea that enables easy mouse event tracking. It wraps TUI components in zero-printable-width ANSI escape sequence identifiers, allowing precise hit-detection for mouse clicks without impacting lipgloss width calculations.
 
 ## Feature List
+
 - **Zone-based mouse event tracking** — Wrap any rendered component in a named "zone" and query whether mouse events fall within its bounds
 - **Zero-width ANSI markers** — Injects invisible ANSI escape sequences around zone content; these are stripped from output and ignored by `lipgloss.Width()` calculations
 - **Global or per-instance manager** — Use a package-level global manager (`NewGlobal()`) for simple apps, or create explicit `Manager` instances for library code
@@ -21,6 +23,7 @@
 ## Key Classes and Methods
 
 ### `Manager` (manager.go)
+
 - `New()` — Creates a new non-global zone manager with its own goroutine worker
 - `Mark(id, v string) string` — Wraps `v` with start/end ANSI markers; returns `v` unchanged if manager is disabled or if either argument is empty. Caches generated marker IDs to reuse them across renders.
 - `Scan(v string) string` — Entry point at the root model's `View()`. Runs the state-machine scanner over `v`, strips all ANSI markers, sends zone coordinates to the background worker, and returns the clean string.
@@ -30,6 +33,7 @@
 - `NewPrefix() string` — Returns `"zone_N__"` where N is an auto-incremented atomic counter, guaranteeing uniqueness across sibling components
 
 ### `Manager` globals (manager_global.go)
+
 - `NewGlobal()` — Initializes `DefaultManager` (idempotent, safe to call multiple times)
 - `Close()` — Stops the background worker
 - `Mark()`, `Scan()`, `Get()`, `Clear()`, `NewPrefix()`, `SetEnabled()`, `Enabled()` — Mirror the instance methods on the global manager
@@ -37,6 +41,7 @@
 - `AnyInBoundsAndUpdate(model tea.Model, mouse tea.MouseMsg) (tea.Model, tea.Cmd)` — Same as above but propagates `Update()` results through `tea.Batch()`
 
 ### `ZoneInfo` (zoneinfo.go)
+
 - `StartX, StartY` — Coordinates of the top-left cell of the zone (0-based)
 - `EndX, EndY` — Coordinates of the bottom-right cell of the zone
 - `InBounds(msg tea.MouseMsg) bool` — Box-based collision test; returns false for invalid (zero) zones, inverted bounds, or out-of-bounds mouse position
@@ -44,11 +49,13 @@
 - `IsZero() bool` — Returns true if the zone has no ID set (i.e., not yet registered or explicitly empty)
 
 ### `scanner` (scanner.go)
+
 - State-machine parser with two states: `scanMain` (scanning for printable text / newlines / ANSI start) and `scanID` (reading a numeric marker between `[` and `z`)
 - `emit()` — Called when a matching end marker is found; computes `EndX`/`EndY` via `printableRuneWidth()` accounting for ANSI escape sequences, sends `ZoneInfo` to the manager's `setChan`; or if only a start marker was seen, stores a pending `ZoneInfo` for later
 - `printableRuneWidth(s string) int` — Counts visible cell width by skipping ANSI escape sequences (using the 0x40-0x5A / 0x61-0x7A terminator rule) and summing `go-runewidth.RuneWidth()` for all other runes
 
 ### `MsgZoneInBounds` (messages.go)
+
 - `Zone *ZoneInfo` + `Event tea.MouseMsg` — Message type sent to models via `AnyInBounds` when a zone is under the mouse
 
 ## Notable Algorithms / Named Patterns
@@ -92,6 +99,7 @@
 | `ZoneInfo.Pos()` relative coordinates | `sugar-bits` (cursor/selection tracking) | Relative mouse position within a focused region |
 
 **Many-to-many mapping:**
+
 - `candy-core` — Ports the BubbleTea `Model`/`Msg`/`Cmd` architecture; would be the natural host for mouse event handling and zone dispatch
 - `sugar-bits` — Ports bubbletea components (list, spinner, etc.); would need zone integration for interactive child components
 - `sugar-charts` — If it has interactive/clickable chart elements, would use zone-based hit testing

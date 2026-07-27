@@ -10,6 +10,9 @@
 
 # SugarToast
 
+
+
+
 PHP port of [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) — floating alert notification component for terminal UIs. Alerts float to the top of your TUI like bubbles in soda.
 
 ## Features
@@ -28,11 +31,17 @@ PHP port of [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) — floati
 
 ## Install
 
+
+
+
 ```bash
 composer require sugarcraft/sugar-toast
 ```
 
 ## Quick Start
+
+
+
 
 ```php
 use SugarCraft\Toast\{Position, Toast, ToastType};
@@ -52,6 +61,9 @@ echo $toast->View($bg);
 
 ## Alert Types
 
+
+
+
 ```php
 ToastType::Error
 ToastType::Warning
@@ -68,6 +80,9 @@ throws `InvalidArgumentException`.
 
 ## Positions
 
+
+
+
 ```php
 Position::TopLeft
 Position::TopCenter
@@ -82,6 +97,9 @@ Position::BottomRight
 
 ## Overflow & Concurrency
 
+
+
+
 ```php
 Overflow::DropOldest  // remove oldest alert to make room (default)
 Overflow::DropNewest  // discard the new alert instead of enqueueing
@@ -89,12 +107,19 @@ Overflow::Enqueue     // allow queue to exceed maxConcurrent
 ```
 
 Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null)`:
+
 - Pass an integer to cap the queue size
 - Pass `null` for unlimited (default)
+
+
+
 
 When the cap is reached, the configured `Overflow` strategy determines behaviour.
 
 ## Persistent Alerts
+
+
+
 
 By default, alerts inherit `withDuration()` for auto-dismiss timing. Pass
 `null` as the `$expiresAt` argument to `alert()` to create a persistent alert
@@ -107,6 +132,9 @@ $toast = $toast->alert(ToastType::Info, 'Connected', null);  // never expires
 Persistent alerts are dismissed only via `dismiss()`, `clear()`, or `pruneExpired()`.
 
 ## Loop integration
+
+
+
 
 Expired alerts are removed by `pruneExpired()`, but something has to *call* it.
 Rather than poll on a fixed interval, ask the toast when the next prune is due and
@@ -127,12 +155,22 @@ if ($toast->hasActiveAlert()) {
 ```
 
 - **`nextExpiry(): ?float`** — the soonest expiry instant (seconds since epoch)
+
+
+
   among queued alerts that auto-dismiss, or `null` if none expire. May be in the
   past when an alert is already due.
+
 - **`secondsUntilNextExpiry(): ?float`** — the same as a delay from now, clamped
+
+
+
   to `>= 0.0` (an already-due alert yields `0.0`), or `null` if nothing expires.
 
 ## Internationalization
+
+
+
 
 User-facing strings are internationalized via `SugarCraft\Toast\Lang::t()`.
 All translatable strings live in `lang/en.php` under the `'toast'` namespace.
@@ -182,6 +220,9 @@ $counter = Lang::t('count', ['count' => $n]);
 
 ## Progress Toasts
 
+
+
+
 Add a progress bar beneath the message body using `progressToast()`:
 
 ```php
@@ -194,6 +235,9 @@ $toast = $toast->progressToast(ToastType::Info, 'Downloading...', 0.80);
 progress value (0.0–1.0) is clamped automatically.
 
 ## Action Buttons
+
+
+
 
 Attach clickable buttons to an alert via `Alert::withActions()`:
 
@@ -217,6 +261,9 @@ $toast = $toast->alert(ToastType::Error, 'Connection lost')
 
 ## History Log
 
+
+
+
 `Toast` maintains an immutable history of every dismissed alert via
 `HistoryLog`:
 
@@ -237,6 +284,9 @@ updated log; prior instances are unchanged.
 
 ## Animations
 
+
+
+
 ```php
 $toast = $toast->withAnimationDuration(0.25);
 ```
@@ -247,6 +297,9 @@ wired but deferred — the `animationDuration` field is a functional stub
 for now.
 
 ## API Summary
+
+
+
 
 | Method | Description |
 |--------|-------------|
@@ -293,11 +346,21 @@ for now.
 ## Shared foundations
 
 - **[candy-buffer](https://github.com/sugarcraft/candy-buffer)** — alert queue
+
+
+
   composited via `Buffer`; each toast is a sub-`Buffer` composited into the
   screen `Buffer` for per-cell positioning and overlap resolution.
+
 - **[candy-testing](https://github.com/sugarcraft/candy-testing)** — golden-file
+
+
+
   snapshot tests via `assertGoldenAnsi()` pin canonical queue layouts.
 
 ## License
+
+
+
 
 [MIT](LICENSE)

@@ -1,6 +1,7 @@
 # charmbracelet/x
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/x
 - **Language:** Go
 - **Stars:** 293
@@ -10,6 +11,7 @@
 ## Feature List
 
 ### Core Terminal Packages
+
 - **ansi** — ANSI escape sequence parser, constants, and generators (ECMA-48 compliant)
 - **term** — Platform-independent terminal/TTY interfaces (raw mode, window size, password input)
 - **termios** — Unified Termios API for Unix systems
@@ -18,6 +20,7 @@
 - **cellbuf** — Cell-based terminal display buffer with line wrapping and scrolling
 
 ### Color & Graphics
+
 - **colors** — Color utilities
 - **charmtone** — Charm color palette utilities
 - **toner** — Color toning utilities
@@ -25,16 +28,19 @@
 - **ansi/kitty** — Kitty graphics protocol implementation (terminal images)
 
 ### Input Handling
+
 - **input** — Terminal event input handler and driver with escape sequence parsing
 - **input/clipboard** — Clipboard event handling
 - **input/key.go** — Key event definitions and parsing
 
 ### Testing Utilities
+
 - **teatest** — Testing library for Bubble Tea programs with fixture-based assertions
 - **golden** — Golden file equality verification
 - **vcr** — HTTP recording and playback for testing
 
 ### Data & Utilities
+
 - **json** — JSON parsing with generics
 - **maps** — Generic map utilities
 - **slice** — Generic slice utilities
@@ -45,6 +51,7 @@
 - **gitignore** — Gitignore pattern matching
 
 ### Specialized Packages
+
 - **pony** — Declarative type-safe markup language for building TUIs using Go templates and Bubble Tea
 - **powernap** — LSP client utilities
 - **sshkey** — SSH key parsing with passphrase prompts
@@ -57,6 +64,7 @@
 ## Key Classes and Methods
 
 ### ansi Package
+
 - **Color types:** `BasicColor`, `IndexedColor`, `RGBColor`, `TrueColor` — implement `color.Color` interface
 - **Constants:** `SaveCursor`, `RestoreCursor`, `CUU1`, `CUD1`, `CUF1`, etc. for cursor movement
 - **Functions:** `CursorUp(n)`, `CursorDown(n)`, `CursorForward(n)`, `CursorBack(n)`, `ClearScreen()`, `ClearLine()`
@@ -64,37 +72,44 @@
 - **Kitty graphics:** `kitty.Writer`, `kitty.Encoder`, `kitty.Options` for terminal image rendering
 
 ### vt Package (Virtual Terminal)
+
 - **Emulator:** `NewEmulator(w, h)` creates terminal with full CSI/ESC/DCS parsing
 - **Screen:** `Bounds()`, `Touched()`, `String()`, `Render()` for screen content access
 - **Handlers:** `Callbacks` struct for events like title changes, color requests, bell
 
 ### cellbuf Package
+
 - **Cell:** `NewCell(r rune, comb ...rune)`, `NewCellString(s)`, `NewGraphemeCell(s)`
 - **Line:** `Width()`, `Len()`, `String()`, `At(x)`, `Set(x, cell)` methods
 - **Buffer:** Cell-based buffer with grapheme cluster support, wide char handling
 
 ### term Package
+
 - **State:** `IsTerminal(fd)`, `MakeRaw(fd)`, `GetState(fd)`, `SetState(fd, state)`, `Restore(fd, oldState)`
 - **Size:** `GetSize(fd)` returns (width, height)
 - **Password:** `ReadPassword(fd)` reads without local echo
 
 ### xpty Package
+
 - **Pty interface:** `Resize(w, h)`, `Size()`, `Name()`, `Start(cmd)` methods
 - **Factory:** `NewPty(width, height, opts...)` returns Unix or ConPTY based on OS
 - **Types:** `UnixPty`, `ConPty` concrete implementations
 
 ### input Package
+
 - **Driver:** `NewDriver()`, `ReadEvents()`, `Stop()` for input event handling
 - **Key parsing:** `parseKeyEvent()`, `parseEscapeSequence()` for ANSI key codes
 - **Clipboard:** `ReadClipboard()`, `WriteClipboard()` support
 
 ### pony Package
+
 - **Template:** `MustParse[T](tmpl)` parses markup into typed template
 - **Render:** `Render(data, width, height)` outputs ANSI-rendered string
 - **Elements:** `vstack`, `hstack`, `text`, `box`, `scrollview`, `divider`, `spacer`, `slot`
 - **Styling:** `foreground-color`, `background-color`, `font-weight`, `font-style` attributes
 
 ### exp/teatest Package
+
 - **T:** `NewT(m *testing.T)` wraps test harness
 - **Send:** `Send(msg)` sends message to program
 - **Assert:** `RequireEqual()`, `RequireOutput()` for output assertions
@@ -102,6 +117,7 @@
 ## Notable Algorithms / Named Patterns
 
 ### ECMA-48 ANSI Parser
+
 The `ansi` package implements a strict ECMA-48 compliant parser using a state machine (`ansi.Parser`) that handles:
 - C0/C1 control codes
 - CSI (Control Sequence Introducer) sequences with parameterized SGR, cursor, mode commands
@@ -110,24 +126,28 @@ The `ansi` package implements a strict ECMA-48 compliant parser using a state ma
 - Kitty graphics protocol extensions
 
 ### Cell-Based Rendering with Damage Tracking
+
 The `vt` package uses a cell-based screen model where:
 - Each cell holds a rune, width, and style attributes
 - Damage tracking via `Touched()` returns only modified lines for efficient redraws
 - Wide character handling with placeholder cells
 
 ### Grapheme-Aware Width Calculation
+
 The `cellbuf` package uses:
 - `runewidth.RuneWidth()` for standard width calculation
 - `uniseg.FirstGraphemeClusterInString()` for grapheme cluster detection
 - Combining character support in cells for visual width accuracy
 
 ### Golden File Testing Pattern
+
 The `exp/golden` package implements snapshot testing:
 - Compare output against stored `.golden` files
 - Auto-update capability with `Update()` method
 - Line-break normalization for cross-platform tests
 
 ### Declarative Markup with Go Templates
+
 The `pony` package combines:
 - XML-like markup syntax for layout definition
 - Go `text/template` for dynamic content interpolation
@@ -159,6 +179,7 @@ The `pony` package combines:
 The SugarCraft project ports Charmbracelet ecosystem Go libraries to PHP. The `charmbracelet/x` monorepo maps to several potential SugarCraft libs:
 
 ### Direct Ports
+
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
 | `ansi` | `candy-core` (planned) | ANSI escape sequences, cursor control, color SGR sequences |
@@ -168,6 +189,7 @@ The SugarCraft project ports Charmbracelet ecosystem Go libraries to PHP. The `c
 | `wcwidth` | `candy-core` | Wide char width calculation |
 
 ### Color/Graphics
+
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
 | `colors` | `sugar-bits` (existing) | Color parsing and manipulation |
@@ -177,18 +199,21 @@ The SugarCraft project ports Charmbracelet ecosystem Go libraries to PHP. The `c
 | `ansi/kitty` | None yet | Kitty graphics protocol |
 
 ### Input Handling
+
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
 | `input` | `candy-core` (planned) | Terminal event input driver |
 | `input/key` | `candy-core` | Key event definitions |
 
 ### Testing
+
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
 | `teatest` | `candy-core` tests | Bubble Tea testing patterns |
 | `golden` | `candy-core` tests | Snapshot/golden file testing |
 
 ### Utilities
+
 | Package | SugarCraft Lib | Notes |
 |---------|---------------|-------|
 | `json` | `candy-core` | JSON parsing with generics (native PHP) |
@@ -197,6 +222,7 @@ The SugarCraft project ports Charmbracelet ecosystem Go libraries to PHP. The `c
 | `termios` | `candy-pty` | Termios wrapper |
 
 ### Not Applicable (Go-specific or deprecated)
+
 | Package | Reason |
 |---------|--------|
 | `pony` | AI-generated experiment, declarative TUI markup specific to Go |

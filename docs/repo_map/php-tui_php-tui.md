@@ -1,6 +1,7 @@
 # php-tui/php-tui
 
 ## Metadata
+
 - URL: https://github.com/php-tui/php-tui
 - Language: PHP (port of Rust's Ratatui)
 - Stars: Unknown (gh API unavailable)
@@ -8,6 +9,7 @@
 - Description: Comprehensive TUI library heavily influenced by Ratatui. A PHP port of the Rust TUI crate that provides widgets, terminal control, and layout algorithms for building rich command-line interfaces.
 
 ## Feature List
+
 - **Widget System**: Full port of Ratatui widgets including Paragraph, Block, List, Table, Chart, BarChart, Sparkline, Gauge, Scrollbar, Tabs, Canvas, Grid, Buffer
 - **Terminal Backend**: Pluggable backend architecture with PhpTermBackend for ANSI terminal control
 - **Layout Engine**: Cassowary constraint solver algorithm for flex-style layouts via `php-tui/cassowary`
@@ -24,12 +26,14 @@
 ## Key Classes and Methods
 
 ### Core Entry Point
+
 - `DisplayBuilder`: Fluent builder for creating Display instances with extensions, backends, and viewports
   - `DisplayBuilder::default(?Backend)` — Creates a display with CoreExtension pre-loaded
   - `DisplayBuilder::fullscreen()` / `inline(int)` / `fixed(int,int,int,int)` — Viewport modes
   - `DisplayBuilder::addExtension()` / `addShapePainter()` / `addWidgetRenderer()` — Extend the display
 
 ### Display & Rendering
+
 - `Display`: Main render loop coordinator
   - `Display::draw(Widget)` — Render a widget and flush to terminal
   - `Display::flush()` — Commit buffer changes to backend
@@ -55,6 +59,7 @@
 - `Area`: Rectangular region defined by position + width + height
 
 ### Layout System
+
 - `Layout`: Flex-like layout using Cassowary constraint solver
   - `Layout::default()` — Creates layout with CassowaryConstraintSolver
   - `Layout::direction(Direction)` — Vertical or horizontal
@@ -67,6 +72,7 @@
   - `Constraint::min(int)` / `Constraint::max(int)` — Bounded
 
 ### Widgets (all implement `Widget` interface)
+
 - `ParagraphWidget`: Rich text with alignment and wrapping
 - `BlockWidget`: Container with borders, titles, and padding
 - `ListWidget`: Scrollable list with highlight spacing
@@ -82,12 +88,14 @@
 - `BufferWidget`: Raw buffer display widget
 
 ### Widget Rendering
+
 - `WidgetRenderer` (interface): `render(WidgetRenderer, Widget, Buffer, Area)`
 - `AggregateWidgetRenderer`: Combines multiple renderers
 - `NullWidgetRenderer`: No-op renderer for outermost context
 - Per-widget renderers: `ParagraphRenderer`, `BlockRenderer`, `ListRenderer`, `TableRenderer`, etc.
 
 ### Style System
+
 - `Style`: Foreground/background colors, underline, additive/subtractive modifiers
   - `Style::default()`, `Style::fg(Color)`, `Style::bg(Color)`, `Style::addModifier()`
   - `Style::patchStyle(Style)` — Merge styles
@@ -101,6 +109,7 @@
 - `Modifier`: Bitmask constants (BOLD, ITALIC, UNDERLINED, REVERSED, DIM, HIDDEN, SLOWBLINK, RAPIDBLINK, CROSSEDOUT)
 
 ### Text System
+
 - `Text`: Collection of lines with utility constructors
 - `Line`: Single row with spans
 - `Span`: Styled substring
@@ -108,6 +117,7 @@
 - `Title`: Block title with position
 
 ### Shapes & Canvas
+
 - `Shape` (interface): `paint(CanvasContext, Area)`
 - `CircleShape`, `RectangleShape`, `LineShape`, `PointsShape`, `MapShape`, `SpriteShape`, `ClosureShape`
 - `ShapePainter` (interface): `paint(Shape, CanvasContext, Area)`
@@ -116,12 +126,14 @@
 - `CanvasGrid`: Pixel grid for canvas rendering
 
 ### Extensions
+
 - `CoreExtension`: Built-in widgets and shapes (CirclePainter, LinePainter, RectanglePainter, etc.)
 - `BdfExtension`: Bitmap font text rendering
 - `ImageMagickExtension`: Image rendering via PHP's imagick
 - `DisplayExtension` (interface): `widgetRenderers()` / `shapePainters()`
 
 ### Terminal Integration (php-tui/term)
+
 - `Terminal`: Wraps php://stdin/stdout with action queueing
 - `Actions`: Static factory for terminal actions (cursorHide, alternateScreenEnable, moveCursor, etc.)
 - `Events`: Async event stream from terminal (key, mouse, resize events)
@@ -130,36 +142,43 @@
 ## Notable Algorithms / Named Patterns
 
 ### Cassowary Constraint Solver
+
 The layout system uses the Cassowary algorithm (via `php-tui/cassowary`) to solve flex-style constraints. The `CassowaryConstraintSolver` bridges to the external Cassowary library. This is the same algorithm used by Apple Auto Layout and Rust's Ratatui.
 
 **Source:** `src/Bridge/Cassowary/CassowaryConstraintSolver.php:L13-L60`
 
 ### Double Buffering with Diff
+
 The `Display` maintains two buffers and computes a diff on `flush()` to determine the minimal set of cells that changed. Only changed cells are sent to the terminal backend, minimizing redraw work.
 
 **Source:** `src/Display/Buffer.php:L96-L116` (the `diff()` method)
 
 ### Visitor Pattern for Widget Rendering
+
 Widget renderers use a visitor-like pattern where `WidgetRenderer::render()` receives itself as the "outer" renderer, allowing nested widget rendering (e.g., a List containing Paragraphs).
 
 **Source:** `src/Widget/WidgetRenderer.php:L10-L13`
 
 ### Extension/Plugin Architecture
+
 The `DisplayExtension` interface allows adding widget renderers and shape painters without modifying core code. The `CoreExtension` is the default, but `BdfExtension` and `ImageMagickExtension` add optional functionality.
 
 **Source:** `src/Display/DisplayExtension.php`
 
 ### Bitmask Modifiers
+
 Text modifiers use PHP integer bitmask operations for efficient storage and application of multiple modifiers (bold+italic+underline simultaneously).
 
 **Source:** `src/Style/Style.php:L19-L21` and `src/Bridge/PhpTerm/PhpTermBackend.php:L209-L232`
 
 ### Unicode Width-Aware Text
+
 Text rendering accounts for Unicode character width (East Asian wide characters take 2 cells) using `mb_strwidth()`.
 
 **Source:** `src/Display/Buffer.php:L112` and `src/Display/Buffer.php:L166`
 
 ## Strengths
+
 - **Faithful Ratatui Port**: Nearly complete port of the Rust Ratatui API, giving PHP developers access to a mature, well-designed TUI architecture
 - **Comprehensive Widget Suite**: 15+ widgets covering most CLI app needs (lists, tables, charts, gauges, etc.)
 - **Extensible Architecture**: Extension system allows adding custom widgets, renderers, and shape painters
@@ -170,6 +189,7 @@ Text rendering accounts for Unicode character width (East Asian wide characters 
 - **Active Maintenance**: Regular updates, changelog, CI/CD, and documentation
 
 ## Weaknesses
+
 - **External Dependency on Cassowary**: Layout requires `php-tui/cassowary` as a separate package
 - **External Dependency on php-tui/term**: Terminal control abstracted to a separate `php-tui/term` package
 - **No Windows Support**: Explicitly stated limitation — developer doesn't have Windows access
@@ -181,6 +201,7 @@ Text rendering accounts for Unicode character width (East Asian wide characters 
 ## SugarCraft Mapping
 
 ### candy-core (Terminal/Display Foundation)
+
 php-tui maps directly to the core TUI foundation. The `DisplayBuilder` → `Display` → `Backend` architecture, the `Buffer`/`Cell`/`Area` model, and the `Widget`/`WidgetRenderer` interface pattern are all foundational elements that `candy-core` would provide.
 
 Key classes to port:
@@ -191,6 +212,7 @@ Key classes to port:
 - `ClearType`, `ViewportType`
 
 ### candy-sprinkles (Styling & Decoration)
+
 The style system maps to `candy-sprinkles`:
 - `Style`, `Styleable` trait, `Color` hierarchy (`AnsiColor`, `RgbColor`, `LinearGradient`)
 - `Modifier` bitmask constants
@@ -198,11 +220,13 @@ The style system maps to `candy-sprinkles`:
 - Borders and alignment (`Borders`, `BorderType`, `Borders`, `HorizontalAlignment`, `VerticalAlignment`)
 
 ### honey-bounce (Layout Algorithm)
+
 The Cassowary constraint solver integration maps to `honey-bounce`:
 - `Layout`, `Constraint` hierarchy, `ConstraintSolver` interface
 - `Direction`, `Margin`
 
 ### Leaf Widget Libraries
+
 Individual widget extensions map to leaf libraries:
 - `sugar-bits`: `ParagraphWidget`, `ParagraphRenderer` (text rendering)
 - `candy-sprinkles`: `BlockWidget` (borders, titles, padding)

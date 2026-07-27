@@ -22,6 +22,7 @@ Sugar-stickers currently provides FlexBox and Table layout components but lacks 
 **Source**: https://github.com/76creates/stickers
 
 **Current Components**:
+
 - `FlexBox` — CSS flexbox-like responsive grid (row/column, justify, align, gap, ratio, wrap)
 - `Table` — Sortable, filterable, x/y scrollable table with cursor tracking
 
@@ -69,6 +70,7 @@ type Model struct {
 **Sticky Positioning**: Viewport does NOT provide sticky — it provides SCROLLING with a `YPosition` for embedding in larger layouts. The sticky behavior is achieved by composing Viewport within a layout that doesn't scroll certain areas.
 
 **Key Patterns**:
+
 - `YPosition int` — vertical position in terminal for high-performance rendering
 - `SetContent(content string)` — sets scrollable content
 - `ScrollDown(n int)`, `ScrollUp(n int)` — relative scroll
@@ -122,10 +124,12 @@ Scroll traits and widgets for ratatui. Provides:
 **Docking (Sticky Equivalent)**:
 ```python
 # Dock a widget to edge - removes from layout, fixes position
+
 widget.styles.dock = "top"  # or "right", "bottom", "left"
 ```
 
 **Key Properties**:
+
 - Docked widgets do NOT scroll out of view
 - Ideal for sticky headers, footers, sidebars
 - Multiple widgets to same edge → overlap (z-order by compose order)
@@ -148,6 +152,7 @@ class ScrollView(Widget):
 **Pin to Bottom Pattern** (Issue #5671):
 ```python
 # Common for chat UIs - scroll to bottom unless user scrolled up
+
 class VerticalScrollPinToBottom(VerticalScroll):
     async def update_with_scrolling(self, callback):
         # Run callback that increases content height
@@ -160,6 +165,7 @@ class VerticalScrollPinToBottom(VerticalScroll):
 ```python
 # Textual's Log widget handles pin-to-bottom automatically
 # Uses scroll_end when new content arrives and user is at bottom
+
 ```
 
 ---
@@ -208,6 +214,7 @@ class VerticalScrollPinToBottom(VerticalScroll):
 ## 5. Gap Analysis: What Sugar-Stickers Needs
 
 ### Current State
+
 - ✅ FlexBox (layout container)
 - ✅ Table (sort, filter, cursor)
 - ❌ Viewport (scrollable content region)
@@ -266,6 +273,7 @@ final class Viewport {
 **Effort**: ~3-4 hours
 
 **Sources**:
+
 - BubbleTea Viewport: https://github.com/charmbracelet/bubbles/blob/master/viewport/viewport.go
 - PHP implementation would need ANSI-aware line breaking for soft wrap
 
@@ -294,6 +302,7 @@ final class FlexItem {
 **Effort**: ~2 hours
 
 **Note**: True sticky requires two-pass rendering:
+
 1. First pass: calculate sticky dimensions
 2. Second pass: render sticky regions fixed, then scrollable content
 

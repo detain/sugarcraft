@@ -40,7 +40,7 @@ final class InputValidationTest extends TestCase
     public function testWithValidatorNoErrorWhenClosureReturnsNull(): void
     {
         $field = $this->focusInput(Input::new('email'))
-            ->withValidator(static fn (string $v): ?string => null);
+            ->withValidator(static fn (string $_v): ?string => null);
 
         // Trigger validation via update()
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
@@ -51,7 +51,7 @@ final class InputValidationTest extends TestCase
     public function testWithValidatorSetsErrorWhenClosureReturnsString(): void
     {
         $field = $this->focusInput(Input::new('email'))
-            ->validator(static fn (string $v): ?string => 'Invalid email address');
+            ->validator(static fn (string $_v): ?string => 'Invalid email address');
 
         // Trigger validation via update()
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
@@ -104,8 +104,8 @@ final class InputValidationTest extends TestCase
     public function testWithValidatorChainsMultipleValidators(): void
     {
         $field = $this->focusInput(Input::new('name'))
-            ->validator(static fn (string $v): ?string => 'Error 1')
-            ->validator(static fn (string $v): ?string => 'Error 2');
+            ->validator(static fn (string $_v): ?string => 'Error 1')
+            ->validator(static fn (string $_v): ?string => 'Error 2');
 
         // Trigger validation
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
@@ -133,7 +133,7 @@ final class InputValidationTest extends TestCase
     public function testWithValidationSetsErrorWhenPredicateReturnsFalse(): void
     {
         $field = $this->focusInput(Input::new('age'))
-            ->validation(static fn (string $v): bool => false, 'Age is required');
+            ->validation(static fn (string $_v): bool => false, 'Age is required');
 
         // Trigger validation (predicate always returns false)
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
@@ -194,7 +194,7 @@ final class InputValidationTest extends TestCase
     public function testValidateRunsOnUpdateWithFocusedField(): void
     {
         $field = $this->focusInput(Input::new('name'))
-            ->validator(static fn (string $v): ?string => 'Always invalid');
+            ->validator(static fn (string $_v): ?string => 'Always invalid');
 
         // Initial update triggers validation
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
@@ -243,7 +243,7 @@ final class InputValidationTest extends TestCase
     {
         // When error doesn't change between updates, validate() returns same instance
         $field = $this->focusInput(Input::new('name'))
-            ->validator(static fn (string $v): ?string => 'Static error');
+            ->validator(static fn (string $_v): ?string => 'Static error');
 
         // Trigger validation with 'x' - error is set to 'Static error'
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
@@ -339,7 +339,7 @@ final class InputValidationTest extends TestCase
     public function testErrorPersistsAfterWithTitle(): void
     {
         $field = $this->focusInput(Input::new('email'))
-            ->validator(static fn (string $v): ?string => 'Invalid email')
+            ->validator(static fn (string $_v): ?string => 'Invalid email')
             ->withTitle('Email Address');
 
         // Trigger validation
@@ -353,7 +353,7 @@ final class InputValidationTest extends TestCase
     public function testErrorPersistsAfterWithDescription(): void
     {
         $field = $this->focusInput(Input::new('email'))
-            ->validator(static fn (string $v): ?string => 'Invalid email')
+            ->validator(static fn (string $_v): ?string => 'Invalid email')
             ->withDescription('Enter your email address');
 
         // Trigger validation
@@ -366,7 +366,7 @@ final class InputValidationTest extends TestCase
     public function testErrorPersistsAfterWithPlaceholder(): void
     {
         $field = $this->focusInput(Input::new('email'))
-            ->validator(static fn (string $v): ?string => 'Invalid email')
+            ->validator(static fn (string $_v): ?string => 'Invalid email')
             ->withPlaceholder('you@example.com');
 
         // Trigger validation
@@ -379,7 +379,7 @@ final class InputValidationTest extends TestCase
     {
         // Create a field with validator that produces error, then create fresh one without validator
         $field = Input::new('name')
-            ->validator(static fn (string $v): ?string => 'Error');
+            ->validator(static fn (string $_v): ?string => 'Error');
 
         $freshField = Input::new('name');
 
@@ -400,7 +400,7 @@ final class InputValidationTest extends TestCase
     {
         // Validator that always returns error (doesn't check value)
         $field = $this->focusInput(Input::new('required'))
-            ->validator(static fn (string $v): ?string => 'This field is required');
+            ->validator(static fn (string $_v): ?string => 'This field is required');
 
         // Trigger validation
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
@@ -437,7 +437,7 @@ final class InputValidationTest extends TestCase
     public function testShortAliasValidatorWorks(): void
     {
         $field = $this->focusInput(Input::new('email'))
-            ->validator(static fn (string $v): ?string => 'Invalid');
+            ->validator(static fn (string $_v): ?string => 'Invalid');
 
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
 
@@ -447,7 +447,7 @@ final class InputValidationTest extends TestCase
     public function testShortAliasValidationWorks(): void
     {
         $field = $this->focusInput(Input::new('count'))
-            ->validation(static fn (string $v): bool => false, 'Error message');
+            ->validation(static fn (string $_v): bool => false, 'Error message');
 
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
 
@@ -461,7 +461,7 @@ final class InputValidationTest extends TestCase
     public function testViewShowsErrorWithExclamationMarkPrefix(): void
     {
         $field = $this->focusInput(Input::new('field'))
-            ->validator(static fn (string $v): ?string => 'Some error');
+            ->validator(static fn (string $_v): ?string => 'Some error');
 
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
 
@@ -474,7 +474,7 @@ final class InputValidationTest extends TestCase
         $field = $this->focusInput(Input::new('email'))
             ->withTitle('Email')
             ->withDescription('Enter your email')
-            ->validator(static fn (string $v): ?string => 'Error');
+            ->validator(static fn (string $_v): ?string => 'Error');
 
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
 
@@ -491,7 +491,7 @@ final class InputValidationTest extends TestCase
     {
         $field = $this->focusInput(Input::new('name'))
             ->withTitle('Name')
-            ->validator(static fn (string $v): ?string => null);
+            ->validator(static fn (string $_v): ?string => null);
 
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
 
@@ -511,7 +511,7 @@ final class InputValidationTest extends TestCase
     {
         // Validation only runs when update() is called, not at construction
         $field = Input::new('email')
-            ->validator(static fn (string $v): ?string => 'Error');
+            ->validator(static fn (string $_v): ?string => 'Error');
 
         // Without calling update(), error should be null
         $this->assertNull($field->getError());

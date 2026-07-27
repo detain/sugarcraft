@@ -10,6 +10,7 @@ VHS tapes for the headline interactive demos. Hand-curated, not bulk.
 ## Files
 
 **Create:**
+
 - `sugar-dash/.vhs/dashboard-live.tape` — drives `dashboard-live.php`
   through quit-from-rotation, focus tab, panel collapse.
 - `sugar-dash/.vhs/plot-braille.tape` — same data with `MarkerDot`
@@ -19,6 +20,7 @@ VHS tapes for the headline interactive demos. Hand-curated, not bulk.
   focus rotation.
 
 **Modify:**
+
 - `.github/workflows/vhs.yml` — add the four new tape names to the
   hand-maintained `all=(...)` matrix.
 - `sugar-dash/README.md` — embed the rendered `.gif`s.

@@ -109,8 +109,10 @@ final class Center
         }
 
         // Add bottom padding
-        while (count($result) < $height) {
+        $resultCount = count($result);
+        while ($resultCount < $height) {
             $result[] = str_repeat(' ', $width);
+            $resultCount++;
         }
 
         return implode("\n", array_slice($result, 0, $height));

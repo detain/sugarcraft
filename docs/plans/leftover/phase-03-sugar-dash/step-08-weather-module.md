@@ -12,6 +12,7 @@ network failure.
 ## Files
 
 **Create:**
+
 - `sugar-dash/src/Modules/Weather/WeatherModule.php` — implements
   `Module` per the contract from step 02.04. State includes:
   - `?WeatherSnapshot $current` (temp, condition, location, ts).
@@ -23,11 +24,13 @@ network failure.
   hitting `wttr.in/<location>?format=j1`.
 
 **Modify:**
+
 - `sugar-dash/examples/dashboard-live.php` — replace the stub Weather
   with the real WeatherModule. If `WEATHER_LOCATION` env var is set,
   use it; otherwise default to "auto" (wttr.in detects from IP).
 
 **Cache:**
+
 - `~/.cache/sugar-dash/weather.json` — atomic save via tmp+rename
   (per Homedash pattern). TTL 30 min.
 

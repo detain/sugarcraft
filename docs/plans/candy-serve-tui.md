@@ -757,15 +757,18 @@ the wire-protocol port — the marquee TUI feature has not been built.
 ## 12. References
 
 ### Upstream
+
 - soft-serve repo: <https://github.com/charmbracelet/soft-serve>
 - soft-serve docs: <https://pkg.go.dev/github.com/charmbracelet/soft-serve>
 
 ### Research
+
 - `docs/research/libraries/candy-serve-research.md` — full survey;
   §3.1 (HIGH PRIORITY — Interactive SSH TUI) is the direct input for
   this plan.
 
 ### Existing candy-serve code
+
 - `candy-serve/src/SSH/SSHServer.php:L1–L232` — current SSH listener
   (ext-ssh2)
 - `candy-serve/src/Repo.php:L1–L284` — bare-repo model, `readme()`,
@@ -778,6 +781,7 @@ the wire-protocol port — the marquee TUI feature has not been built.
 - `candy-serve/bin/soft-serve` — current CLI entry point
 
 ### Monorepo libs consumed by this plan
+
 - `candy-wish/src/Server.php` + `candy-wish/src/Channel/` —
   SSH server + channel API.
 - `candy-core/src/Program.php` + `candy-core/src/Model.php` — Bubble
@@ -798,6 +802,7 @@ the wire-protocol port — the marquee TUI feature has not been built.
 - `sugar-stash/src/Git.php` (`GitDriver` impl) — git shell-out.
 
 ### This plan's own step file
+
 - `plans/leftover/phase-11-strategic-plans/step-02-candy-serve-tui.md`
 
 ---

@@ -24,6 +24,7 @@
 ---
 
 ## 1. HIGH: Undefined Variable $cassette in TapeToGif
+
 **Location:** src/TapeToGif.php:70-71
 
 ```php
@@ -38,6 +39,7 @@ Recommendation: Move lines 70-71 after line 81, or compute after $cassette is av
 ---
 
 ## 2. HIGH: ImagickRasterizer Shared Tile Cache Between Clones
+
 **Location:** src/ImagickRasterizer.php:58-66
 
 ```php
@@ -51,6 +53,7 @@ Recommendation: Deep-clone the cache array or implement copy-on-write.
 ---
 
 ## 3. MEDIUM: FrameStream Mutation During Iteration
+
 **Location:** src/TapeToGif.php:104-106
 
 FrameStream has public properties $pendingScreenshotPath and $captureCursor mutated by generator during iteration. External code reads these mid-iteration — data race.
@@ -60,6 +63,7 @@ Recommendation: Snapshot state before iteration or expose via generator method.
 ---
 
 ## 4. MEDIUM: Negative dt Validation Missing
+
 **Location:** src/RelativeFormat.php:201
 
 ```php
@@ -74,6 +78,7 @@ Recommendation: Validate $dt >= 0.
 ---
 
 ## 5. MEDIUM: preg_replace Error Handling Wrong
+
 **Location:** src/SanitizingHook.php:81
 
 ```php
@@ -87,6 +92,7 @@ Recommendation: === false check instead of ??.
 ---
 
 ## 6. MEDIUM: Double Iteration in InspectCommand
+
 **Location:** src/InspectCommand.php:137-142
 
 First iteration renders frames. Second iteration re-creates entire rendering pipeline just to count deduped frames. Doubles rendering cost.
@@ -96,6 +102,7 @@ Recommendation: Collect frames during first iteration and compute dedup count in
 ---
 
 ## 7. MEDIUM: PHP 8.3 Only mb_str_split()
+
 **Location:** src/Compiler.php:190
 
 ```php
@@ -107,6 +114,7 @@ mb_str_split() added in PHP 8.3. composer.json requires ^8.3 so this is correct.
 ---
 
 ## 8. MEDIUM: Blocking fflush() on Every Event
+
 **Location:** src/Recorder.php:306
 
 ```php
@@ -121,6 +129,7 @@ Recommendation: Batch N events before flush or use background writer with pipe.
 ---
 
 ## 9. MEDIUM: Blocking Process::run() in FfmpegGifEncoder
+
 **Location:** src/FfmpegGifEncoder.php:90-92
 
 100 sequential ffmpeg invocations for batch rendering.
@@ -130,6 +139,7 @@ Recommendation: Process::start() with async event loop integration, or parallel 
 ---
 
 ## 10. MEDIUM: Blocking stream_socket_pair() and fopen()
+
 **Location:** src/Player.php:186-196
 
 Synchronous blocking calls. Multiple Player::play() calls can't run concurrently.
@@ -139,6 +149,7 @@ Recommendation: Consider async Player::playAsync() using ReactPHP promises.
 ---
 
 ## 11. LOW: LZW Pixel Encoding Performance
+
 **Location:** src/PhpGifEncoder.php:151-156
 
 String concatenation per pixel in loop. 384,000 iterations for 800x480 GIF.
@@ -148,6 +159,7 @@ Recommendation: Preallocate string or use pack() with pre-built format.
 ---
 
 ## 12. LOW: FIFO Eviction O(n)
+
 **Location:** src/Glyphs.php:146-158
 
 array_key_first() is O(n) on associative arrays. Combined with MAX_CACHE_TILES=4096.
@@ -157,6 +169,7 @@ Recommendation: Use SplQueue or index-based FIFO for O(1) eviction.
 ---
 
 ## 13. LOW: ImagickRasterizer Clone Sharing
+
 **Location:** src/ImagickRasterizer.php:58-66
 
 Same as HIGH finding 2 — shared tileCache between clones.
@@ -164,6 +177,7 @@ Same as HIGH finding 2 — shared tileCache between clones.
 ---
 
 ## 14. LOW: Variable Shadowing in formatHunk
+
 **Location:** src/DiffWriter.php:167-310
 
 Parameter names $expCount and $actCount overwritten by local variables.
@@ -171,6 +185,7 @@ Parameter names $expCount and $actCount overwritten by local variables.
 ---
 
 ## 15. LOW: DiffWriter Complexity
+
 **Location:** src/DiffWriter.php
 
 formatHunk() has confusing variable reuse. Consider renaming to $expCountOut, $actCountOut.
@@ -178,6 +193,7 @@ formatHunk() has confusing variable reuse. Consider renaming to $expCountOut, $a
 ---
 
 ## 16. LOW: V1ToV2Migrator Incomplete
+
 **Location:** src/V1ToV2Migrator.php
 
 migrateHeader() only sets numeric version to 2. Doesn't add documented v2 fields (formatVersion, migrationMeta).
@@ -185,6 +201,7 @@ migrateHeader() only sets numeric version to 2. Doesn't add documented v2 fields
 ---
 
 ## 17. LOW: Missing MouseScrollMsg and FocusMoveMsg Handlers
+
 **Location:** src/BuiltinSerializer.php
 
 Some candy-core Msg types fall through to JsonableSerializer. Should be documented.
@@ -192,6 +209,7 @@ Some candy-core Msg types fall through to JsonableSerializer. Should be document
 ---
 
 ## 18. LOW: Screenshot Path Confinement Race
+
 **Location:** src/TapeToGif.php:166-196
 
 realpath() returns false for non-existent paths. Check at line 179 throws. If path exists and is symlink, realpath() resolves it. Check at 181 catches this. Adequately secured.

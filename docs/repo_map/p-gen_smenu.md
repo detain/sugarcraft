@@ -1,6 +1,7 @@
 # p-gen/smenu
 
 ## Metadata
+
 - **URL:** https://github.com/p-gen/smenu
 - **Language:** C
 - **Stars:** ~900+ (estimated based on repo age and activity)
@@ -9,6 +10,7 @@
 - **Description:** A terminal-based selection filter that reads words from stdin or files and presents them in a scrolling window with cursor-based selection. Designed for menu creation and general text selection in terminal UIs.
 
 ## Feature List
+
 - **Input Modes:** Read from stdin or file; supports word/token parsing from structured or unstructured text
 - **Display Modes:**
   - Line mode (`-l`) — horizontal single-line items
@@ -109,15 +111,18 @@
 ## Notable Algorithms / Named Patterns
 
 ### Ternary Search Tree (TST)
+
 Used for word indexing and search. Each terminal node stores a linked list of positions where that word occurs in the input array. This enables:
 - O(k) prefix search where k = key length
 - Efficient fuzzy/substring search via tree traversal
 - Multiple occurrences of same word tracked via position lists
 
 ### Bitmap Tracking for Search Highlighting
+
 Each `word_t` contains a `bitmap` field where each bit corresponds to a glyph position that matches the current search. This allows efficient rendering of highlighted matches without re-scanning.
 
 ### Fuzzy Search Algorithm
+
 Uses a search list of `sub_tst_t` nodes. Each node stores an array of TST nodes representing potential matches. As each glyph is entered:
 1. First glyph searched from TST root
 2. First children of matches added to array in search list node
@@ -125,6 +130,7 @@ Uses a search list of `sub_tst_t` nodes. Each node stores an array of TST nodes 
 4. Process repeats, building match candidate sets
 
 ### Bit Array Macros (public domain, by Scott Dudley, Auke Reitsma, Bob Stout)
+
 ```c
 #define BIT_OFF(a, x) ((void)((a)[(x) >> SHIFT] &= ~(1 << ((x) & MASK))))
 #define BIT_ON(a, x) ((void)((a)[(x) >> SHIFT] |= (1 << ((x) & MASK))))
@@ -134,9 +140,11 @@ Uses a search list of `sub_tst_t` nodes. Each node stores an array of TST nodes 
 Supports CHAR_BIT of 8, 16, or 32 via SHIFT calculation.
 
 ### Timer/Timeout System
+
 Uses `setitimer()` with `SECOND/FREQ` granularity (100ms ticks via `TCK`). Multiple independent timers for search, forgotten-help, window-resize, direct-access.
 
 ## Strengths
+
 - **Non-destructive:** Does not clear terminal; overlays at cursor position
 - **Flexible display:** Line, column, and tabulate modes in one tool
 - **Powerful search:** Three search modes (prefix, fuzzy, substring) with incremental/forgetful variants
@@ -148,6 +156,7 @@ Uses `setitimer()` with `SECOND/FREQ` granularity (100ms ticks via `TCK`). Multi
 - **Extensive test suite:** 38 test directories covering all features
 
 ## Weaknesses
+
 - **Single-user focus:** No multi-user or server-oriented features
 - **No async I/O:** Blocking read architecture limits use in event-driven apps
 - **C-only:** No library bindings for other languages
@@ -160,14 +169,17 @@ Uses `setitimer()` with `SECOND/FREQ` granularity (100ms ticks via `TCK`). Multi
 ## SugarCraft Mapping
 
 ### sugar-bits (Low-level components)
+
 The TST implementation in `index.c` maps to tree-based data structures. The bitmap tracking for search matches is a notable pattern. However, `smenu` is a full application, not a library, so this is only a partial conceptual match.
 
 **Relevant components:**
+
 - Ternary Search Tree index structure
 - Bit array utilities
 - Linked list implementation
 
 ### sugar-prompt / candy-shine (TUI elements)
+
 `smenu` is itself a TUI selection widget. SugarCraft has no direct equivalent yet for terminal-based selection menus. A port would be a significant undertaking requiring:
 - Terminal capability detection
 - Keyboard/mouse event handling
@@ -175,14 +187,17 @@ The TST implementation in `index.c` maps to tree-based data structures. The bitm
 - Search with highlighting
 
 **What would map:**
+
 - Word/tag selection model pattern
 - Scrollable window rendering
 - Search with real-time highlighting
 
 ### honey-bounce (Animation/motion)
+
 The scrolling behavior and cursor movement in `smenu` could inform animation timing, but there's no direct SugarCraft equivalent.
 
 ### Overall Assessment
+
 `smenu` is a **standalone terminal application**, not a reusable library. SugarCraft currently focuses on TUI *libraries* (components for building apps), not finished applications. A SugarCraft port would likely be a `sugar-select` or `candy-pick` component that provides the selection filtering capability for use within other PHP TUI applications — essentially extracting the core algorithm (TST-based filtering with fuzzy search) into a reusable library.
 
 **SugarCraft gap identified:** No existing lib handles TST-based prefix/fuzzy filtering of large word lists — this would be a novel contribution.

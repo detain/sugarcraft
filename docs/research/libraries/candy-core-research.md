@@ -46,12 +46,14 @@
 ### 1.3 Current Effect System
 
 **Strengths:**
+
 - Clean Elm-style `Model → update(Msg) → [Model, ?Cmd]` pattern
 - First-class async via `AsyncCmd` wrapping `React\Promise\PromiseInterface`
 - `Cmd::batch()` for concurrent commands, `Cmd::sequence()` for ordered execution
 - `TickRequest` enables recurring timers via `Cmd::every()` / `Cmd::tick()`
 
 **Gaps (see Section 3):**
+
 - No Elm-style **Subscriptions** for model-driven continuous event streams
 - No **Screen Stack** (modal dialogs, sub-screens)
 - No **Component Composition** framework beyond interface contract
@@ -153,16 +155,19 @@ final class Subscriptions {
 ```
 
 **Runtime changes:**
+
 - `Program` adds `addTimer` for each active subscription
 - Re-evaluates `model->subscriptions()` after each `update()` dispatch
 - Reconciles subscription set delta (cancel removed, add new)
 - Enables dynamic enabling/disabling based on model state (e.g., disable timer when paused)
 
 **Source references:**
+
 - Elm subscriptions: https://guide.elm-lang.org/effects/time
 - Bubbletea workaround: Uses `Every` + re-subscription in `Update` (no native subscription reconciliation)
 
 **Effort:** Medium (3-5 sessions)
+
 - Add `Subscription` class + `Subscriptions` container
 - Modify `Program::dispatch()` to track and reconcile subscriptions
 - Add tests for subscription lifecycle
@@ -192,15 +197,18 @@ final class Program {
 ```
 
 **Runtime changes:**
+
 - `update()` dispatches to top screen only
 - Screen can call `Program::pushScreen()` / `Program::popScreen()` via special `Msg`
 - Track `screen_stack` property for introspection
 
 **Source references:**
+
 - Textual API: `push_screen()`, `pop_screen()`, `switch_screen()`, `screen_stack: list[Screen[Any]]`
 - Textual `stack_updates: Reactive[int]` — reactive screen change tracking
 
 **Effort:** Medium (4-6 sessions)
+
 - Define `Screen` interface mirroring `Model`
 - Add `ScreenStack` class managing `array<Screen>`
 - Modify `Program` dispatch loop to route to active screen
@@ -226,15 +234,18 @@ abstract class Component {
 ```
 
 **With support for:**
+
 - Child components via `compose()` method
 - `on_mount()` / `on_unmount()` lifecycle hooks (Textual pattern)
 - Context passing via `provide_context()` / `use_context()`
 
 **Source references:**
+
 - Textual: `on_mount()`, `on_unmount()` event handlers
 - Textual `compose()` returns widget tree
 
 **Effort:** Medium (3-4 sessions)
+
 - Define `Component` abstract class
 - Add lifecycle hooks
 - Add example in `sugar-bits` tests
@@ -288,6 +299,7 @@ if ($this->loading) {
 ```
 
 **Source references:**
+
 - Leptos `Suspense` component with `fallback` ViewFnOnce
 - Dioxus `GlobalSignal::global()` + error boundaries
 
@@ -348,12 +360,14 @@ if ($this->loading) {
 ## 6. Key Source References
 
 ### Bubble Tea (Go - upstream)
+
 - **Model interface:** `type Model interface { Init() Cmd; Update(Msg) (Model, Cmd); View() string }`
 - **Batch/Sequence:** `tea.Batch()`, `tea.Sequence()` for concurrent/sequential commands
 - **No subscriptions:** Uses `Every()` + re-subscription pattern
 - **Source:** https://pkg.go.dev/github.com/charmbracelet/bubbletea
 
 ### Textual (Python)
+
 - **Screen stack:** `push_screen()`, `pop_screen()`, `switch_screen()`, `screen_stack`
 - **Workers:** `@work(thread=True)` for background tasks
 - **Reactive:** `@reactive` decorator + `data_bind()`
@@ -361,16 +375,19 @@ if ($this->loading) {
 - **Source:** https://textual.textualize.io/api/app
 
 ### Elm (original)
+
 - **Subscriptions:** `subscriptions: Model → Sub Msg` — separate from commands
 - **Time subscription:** `Time.every 1000 Tick`
 - **Source:** https://guide.elm-lang.org/effects/time
 
 ### Dioxus (Rust)
+
 - **Global signals:** `GlobalSignal::global()` for app-wide state
 - **Memos:** `Memo::global()` for derived state
 - **Source:** https://dioxuslabs.github.io/dioxus/
 
 ### candy-core (PHP - current)
+
 - **Program:** `/home/sites/sugarcraft/candy-core/src/Program.php`
 - **Model:** `/home/sites/sugarcraft/candy-core/src/Model.php`
 - **Cmd:** `/home/sites/sugarcraft/candy-core/src/Cmd.php`

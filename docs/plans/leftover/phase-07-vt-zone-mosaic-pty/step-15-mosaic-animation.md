@@ -15,12 +15,14 @@ sequence of frames from candy-flip and drives the renderer.
 ## Files
 
 **Create:**
+
 - `candy-mosaic/src/Animation.php` — readonly: array of frames + per-frame
   delays. Methods to play / pause / step.
 - `candy-mosaic/src/AnimationDriver.php` — drives an Animation onto a
   Renderer; uses candy-core `Cmd::tick(...)` for frame timing.
 
 **Modify:**
+
 - `candy-mosaic/src/Renderer/KittyRenderer.php` — `renderFrame()` /
   `deletePrevious()` API for animation.
 - `candy-mosaic/composer.json` — add `"sugarcraft/candy-flip": "@dev"`

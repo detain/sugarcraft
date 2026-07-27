@@ -12,6 +12,10 @@ contain at most one BC stub).
 ## Files
 
 **Move event-plumbing files** from `src/Grid/`:
+
+
+
+
 - `Event.php`, `EventDispatcher.php`, `EventHandler.php` →
   `src/Events/`
 - `FocusEvent.php`, `KeyEvent.php`, `MouseEvent.php`,
@@ -21,6 +25,7 @@ contain at most one BC stub).
   `src/Events/Focus.php` for the event-bus version
 
 **Move state widgets:**
+
 - `State.php` → split per step 03.12 (deferred to that step; for now
   just move the file as-is into `src/State/State.php` if not already
   there).
@@ -34,6 +39,8 @@ is clean (no files left), drop the directory entirely.
 **Update** all imports.
 
 ## Acceptance
+
+
 
 - `find sugar-dash/src/Grid -type f` returns nothing (or one BC stub
   with a comment).
@@ -51,6 +58,8 @@ is clean (no files left), drop the directory entirely.
 ---
 
 ## Process reminders
+
+
 
 - `unset GITHUB_TOKEN` before every `gh` invocation. Always.
 - End on `master` with clean working tree (commit → push → `gh pr create` → `gh pr merge --merge --delete-branch` → `git checkout master && git pull --ff-only`). See `_templates/process_reminders.md`.

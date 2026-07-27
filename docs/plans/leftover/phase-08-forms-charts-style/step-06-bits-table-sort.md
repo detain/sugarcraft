@@ -11,9 +11,11 @@
 ## Files
 
 **Modify:**
+
 - `sugar-bits/src/Table/Table.php` — sort state, comparator chain.
 
 **Create:**
+
 - `sugar-bits/src/Table/SortDirection.php` (enum).
 - `sugar-bits/src/Table/SortState.php` (DTO).
 

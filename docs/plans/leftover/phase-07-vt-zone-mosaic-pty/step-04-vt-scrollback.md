@@ -12,10 +12,12 @@ ring-buffer scrollback with configurable size (default 1000 lines).
 ## Files
 
 **Create:**
+
 - `candy-vt/src/Screen/Scrollback.php` — ring buffer of `Row[]`.
   Configurable max size; default 1000.
 
 **Modify:**
+
 - `candy-vt/src/Screen/Screen.php` — `scrollUp(int $n)` pushes the
   evicted rows into `Scrollback` before dropping them. Add accessor
   `scrollback(): Scrollback`.

@@ -58,12 +58,15 @@ Ship-as-you-go cadence (per CLAUDE.md / saved memory):
 
 ```bash
 # Per-lib (most common):
+
 cd /home/sites/sugarcraft/candy-pty && composer install && vendor/bin/phpunit
 
 # Without watchdog (only for non-PTY work):
+
 cd <lib> && vendor/bin/phpunit
 
 # Path-repo closure check (CI gate added in P4.5):
+
 php /home/sites/sugarcraft/tools/check-path-repos.php
 ```
 

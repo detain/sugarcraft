@@ -1,6 +1,7 @@
 # Evertras/bubble-table
 
 ## Metadata
+
 - **URL:** https://github.com/Evertras/bubble-table
 - **Language:** Go
 - **Stars:** ~600-800 (estimated based on repo activity; GitHub API did not return data)
@@ -28,6 +29,7 @@
 ## Key Classes and Methods
 
 ### `table.Model` (main table model)
+
 - `New(columns []Column) Model` — Factory creating a new table with given columns
 - `Init() tea.Cmd` — Bubble Tea initialization (returns nil)
 - `Update(msg tea.Msg) (Model, tea.Cmd)` — Bubble Tea update; handles keyboard input, filter text, pagination
@@ -53,42 +55,51 @@
   - `GetHeaderVisibility() bool`
 
 ### `table.Column` (column definition)
+
 - `NewColumn(key, title string, width int) Column` — Fixed-width column factory
 - `NewFlexColumn(key, title string, flexFactor int) Column` — Flexible width column
 - Accessors: `Title()`, `Key()`, `Width()`, `FlexFactor()`, `IsFlex()`, `Filterable()`, `Style()`, `FmtString()`
 - Modifiers: `WithStyle(s)`, `WithFiltered(bool)`, `WithFormatString(fmt)`
 
 ### `table.Row` (table row)
+
 - `NewRow(data RowData) Row` — Factory; copies RowData, assigns unique atomic ID
 - `WithStyle(style lipgloss.Style) Row` — Apply row-level style
 - `Selected(selected bool) Row` — Toggle selection state (returns new Row)
 
 ### `table.RowData` (row data container)
+
 - Type: `map[string]any` — arbitrary data keyed by column string keys
 
 ### `table.Border` (border styling)
+
 - Fields: 12 Unicode border characters (Top, Left, Right, Bottom, corners, junctions, inner divider)
 - `generateStyles()` — Pre-computes lipgloss border styles for all table configurations
 - Pre-built: `borderDefault` (heavy box), `borderRounded` (light rounded)
 
 ### `table.StyledCell` (styled cell wrapper)
+
 - `NewStyledCell(data any, style lipgloss.Style) StyledCell` — Simple styled cell
 - `NewStyledCellWithStyleFunc(data any, fn StyledCellFunc) StyledCell` — Dynamic style function
 - `StyleFunc`: `func(StyledCellFuncInput) lipgloss.Style` — receives Data, Column, Row, GlobalMetadata
 
 ### `table.KeyMap` (keyboard bindings)
+
 - `DefaultKeyMap() KeyMap` — Sensible defaults: up/down/j/k, space/enter, left/right/pgup/pgdn, home/end, `/` filter
 - Full help: `FullHelp() [][]key.Binding`, `ShortHelp() []key.Binding`
 
 ### `table.FilterFunc` / `FilterFuncInput`
+
 - `type FilterFunc func(FilterFuncInput) bool` — Return true to include row
 - Built-in: `filterFuncContains` (case-insensitive contains on filterable columns), `filterFuncFuzzy` (subsequence match)
 
 ### `table.SortColumn` / `SortDirection`
+
 - `SortDirectionAsc` / `SortDirectionDesc` constants
 - Multi-column stable sort via Go's `sort.Stable`
 
 ### `table.UserEvent` types
+
 - `UserEventHighlightedIndexChanged{PreviousRowIndex, SelectedRowIndex int}`
 - `UserEventRowSelectToggled{RowIndex int, IsSelected bool}`
 - `UserEventFilterInputFocused{}`, `UserEventFilterInputUnfocused{}`
@@ -157,6 +168,7 @@ SugarCraft already has a direct port: **`sugar-table`**
 | `WithMissingDataIndicator` | `withMissingIndicator()` | Missing cell placeholder |
 
 ### Additional sugar-table Features (not in bubble-table):
+
 - `ColumnWidth` enum: `Fixed`, `Percent`, `Dynamic`, `Content` — column width specification
 - `WrapMode` enum: `None`, `WordWrap`, `Character` — text wrapping behavior
 - `viewportHeight` / `withViewportHeight()` — viewport virtualization for large tables
@@ -164,6 +176,7 @@ SugarCraft already has a direct port: **`sugar-table`**
 - Direct `SelectNext()`, `SelectPrevious()`, `SelectPage()` navigation methods
 
 ### Related SugarCraft Libraries:
+
 - **`sugar-prompt`:** Shares `KeyMap` concept and some input handling patterns
 - **`sugar-charts`:** For rendering data visualizations alongside tables
 - **`candy-core`:** Lower-level ANSI rendering primitives (`Ansi` utility class)

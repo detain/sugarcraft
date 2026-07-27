@@ -12,8 +12,9 @@ In docs/lib/candy-query.html around line 156:
 ```
 
 This static factory method doesn't exist. The correct usage is:
+
 ```php
-$provider = $flavor === Flavor::MySQL 
+$provider = $flavor === Flavor::MySQL
     ? MysqlAdminProvider::new($serverContext)
     : PostgresAdminProvider::new($db);
 ```

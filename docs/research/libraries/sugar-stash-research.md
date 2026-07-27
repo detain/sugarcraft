@@ -11,6 +11,7 @@
 SugarStash currently implements a minimal three-pane git TUI (status/branches/log) with basic staging via `git add`/`git restore --staged`. This research identifies **20+ improvements** across file staging, diff viewing, commit handling, branch management, and keyboard shortcuts, drawing from lazygit (upstream), gitui (Rust), gitu (Rust), and Python alternatives.
 
 **Recommended Priority Order:**
+
 1. **P0 (MVP gaps):** Commit creation, context-sensitive help, branch checkout
 2. **P1 (Core UX):** Diff viewer panel, hunk/line staging, discard changes, stage-all
 3. **P2 (Power features):** Undo/redo, amend commits, interactive rebase basics
@@ -23,6 +24,7 @@ SugarStash currently implements a minimal three-pane git TUI (status/branches/lo
 **Source:** `/home/sites/sugarcraft/sugar-stash/src/`
 
 ### What SugarStash Has
+
 - ✅ Three-pane layout: Status (left), Branches (top-right), Log (bottom-right)
 - ✅ Tab cycling between panes
 - ✅ `j/k` and arrow key navigation
@@ -33,6 +35,7 @@ SugarStash currently implements a minimal three-pane git TUI (status/branches/lo
 - ✅ Fixture-based test pattern via `GitDriver` interface
 
 ### What SugarStash Is Missing
+
 - ❌ Commit creation
 - ❌ Diff viewing
 - ❌ Hunk/line-level staging
@@ -48,6 +51,7 @@ SugarStash currently implements a minimal three-pane git TUI (status/branches/lo
 ## 2. File Staging/Unstaging
 
 ### Current State (sugar-stash)
+
 - **Single file only** via `git add <path>` and `git restore --staged -- <path>`
 - No hunk or line-level staging
 - No stage-all or discard functionality
@@ -79,6 +83,7 @@ public function unstage(string $path): void
 | `o` | Open file in editor |
 
 **Hunk/Line staging:**
+
 - `Enter` on file opens split diff view
 - `Space` stages/unstages selected line
 - `a` stages/unstages entire hunk
@@ -112,14 +117,17 @@ reset_hunk(&repo_path, "src/main.rs", hunk.header_hash, None)?;  // discard
 ### Implementation Approaches for SugarStash
 
 **Option A: Parse `git diff --cached` / `git diff` output**
+
 - Pros: No new dependencies, works with existing git CLI
 - Cons: Complex parsing, fragile to git output format changes
 
 **Option B: Use `git add -p` (interactive patch mode)**
+
 - Pros: Git handles hunk parsing
 - Cons: Not suitable for TUI integration (requires stdin/stdout)
 
 **Option C: PHP-native diff parsing via regex**
+
 - Parse `git diff` output to extract hunks and lines
 - Requires implementing hunk boundaries (`^@@.*@@` pattern)
 - Pros: Full control, no external deps
@@ -142,6 +150,7 @@ reset_hunk(&repo_path, "src/main.rs", hunk.header_hash, None)?;  // discard
 ## 3. Diff Viewing
 
 ### Current State (sugar-stash)
+
 - ❌ No diff viewing at all
 - Status pane only shows file paths with index/work status indicators
 
@@ -184,12 +193,15 @@ pygitzen shows commits panel with auto-updating patch panel:
 **Git commands for diff retrieval:**
 ```bash
 # Staged diff (what would be committed)
+
 git diff --cached [--no-color] [path]
 
 # Unstaged diff (working tree changes)
+
 git diff [--no-color] [path]
 
 # Commit diff
+
 git show <sha> [--no-color] [--format=]
 ```
 
@@ -219,6 +231,7 @@ $hunks = $this->parseDiffHunks($output);
 ## 4. Commit Handling
 
 ### Current State (sugar-stash)
+
 - ❌ No commit creation
 - ❌ No commit amending
 - ❌ No commit message input
@@ -235,6 +248,7 @@ $hunks = $this->parseDiffHunks($output);
 | `Ctrl+f` | Find base commit for fixup |
 
 **Commit message input:**
+
 - Popup with two panels: summary + description
 - `Tab` toggles between panels
 - `↑/↓` cycles through previous commit messages
@@ -301,6 +315,7 @@ $this->run(['commit']);
 ## 5. Branch Management
 
 ### Current State (sugar-stash)
+
 - ✅ Shows branch list with current branch highlighted
 - ❌ No branch checkout
 - ❌ No branch creation/deletion

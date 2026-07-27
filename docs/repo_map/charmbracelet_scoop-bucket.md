@@ -1,6 +1,7 @@
 # charmbracelet/scoop-bucket
 
 ## Metadata
+
 - **URL**: https://github.com/charmbracelet/scoop-bucket
 - **Language**: JSON (bucket manifests) + PowerShell (Scoop internals)
 - **Stars**: 29

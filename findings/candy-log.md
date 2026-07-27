@@ -16,6 +16,7 @@
 ## Files Reviewed
 
 ### Source (`src/`)
+
 - `Log.php` — Static facade / panic handler installer
 - `Logger.php` — Core logger implementation
 - `Level.php` — Syslog-aligned int enum
@@ -35,6 +36,7 @@
 - `Lang.php` — i18n translation facade
 
 ### Tests (`tests/`)
+
 - `LoggerTest.php`, `LogTest.php`, `TextFormatterTest.php`, `JsonFormatterTest.php`
 - `LevelTest.php`, `StylesTest.php`, `PartsOrderTest.php`
 - `PsrBridgeTest.php`, `HookRegistryTest.php`, `StandardLogAdapterTest.php`
@@ -101,6 +103,7 @@ Both methods accept `mixed` and only validate via `is_resource()`. The exception
 The library depends on `react/promise` and `react/event-loop` (both present in vendor) but **never uses them**. All I/O is blocking `fwrite()` calls. A logging library in a ReactPHP ecosystem should offer an async sink that writes to a stream in a non-blocking manner.
 
 **Missing features:**
+
 - No async logger wrapper (e.g., `AsyncLogger` that queues writes to a ReactPHP stream)
 - No `LoopInterface` integration
 - No Promise-based log dispatch
@@ -174,6 +177,7 @@ foreach ($this->redactPaths as $path) {
 Wait — `str_replace($path, '[redacted]', (string) $frameFile)` DOES replace all occurrences because `str_replace` replaces all by default. However, `str_replace` is case-sensitive and paths on different case-sensitive filesystems might not match. Also there's no check for path separator normalization (e.g., `/etc/secrets` won't match `\etc\secrets` on Windows).
 
 **Recommendation:** 
+
 1. Remove the unnecessary `(string)` cast — `$frameFile` is already `string`.
 2. Add a comment noting that path redaction is case-sensitive and filesystem-dependent.
 3. Consider using `realpath()` normalization before comparison if cross-platform support is needed.
@@ -500,16 +504,19 @@ The 5 Laws of Elegant Defense (from code-philosophy skill):
 ## Recommendations Summary (By Priority)
 
 ### Immediate (Before Next Release)
+
 1. Fix `setReportCaller`/`setReportTimestamp` to pass `$this->styles` and `$this->partsOrder` when rebuilding `TextFormatter` (`Logger.php:263-269, 277-283`)
 2. Add `?resource` type hint to `Logger::$stream` property and constructor parameter (`Logger.php:29, 30, 56`)
 3. Apply path redaction to `$file` in `PanicFormatter::formatBacktrace()` (`PanicFormatter.php:122`)
 
 ### Soon (Next Sprint)
+
 4. Extract duplicated `JsonFormatter::coerceValue()` logic into shared `ValueCoercion::coerce()` method
 5. Add working `HookRegistry::remove(int $id)` method for hook cleanup in long-running processes
 6. Document the "hooks only via PsrBridge" design decision prominently in README
 
 ### Eventually (Post-1.0)
+
 7. Add ReactPHP async logger wrapper (`AsyncLogger` with `LoopInterface` integration)
 8. Add optional `SplFileObject`/`WritableStreamInterface` support for stream abstraction (PHP 8.4+ resource deprecation)
 9. Add `Styles::default()` static cache to avoid repeated `Style` instantiation

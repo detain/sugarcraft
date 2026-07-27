@@ -24,6 +24,7 @@ the two are byte-equivalent (or the Plot version is newer); update any
 external `use` references; delete the Grid version.
 
 **Move (no Plot duplicate exists):**
+
 - `src/Grid/Graph.php` → `src/Plot/Graph/Graph.php`
 - `src/Grid/Image.php`, `Picture.php`, `Video.php`, `Audio.php` →
   `src/Components/Media/`

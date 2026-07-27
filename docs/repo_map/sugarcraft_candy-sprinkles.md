@@ -1,10 +1,15 @@
 # SugarCraft/candy-sprinkles
 
 ## Metadata
+
 - **Package:** `sugarcraft/candy-sprinkles`
+
 - **Namespace:** `SugarCraft\Sprinkles`
+
 - **Description:** Declarative styling and layout for terminal UIs. PHP port of the Go charmbracelet/lipgloss ecosystem.
+
 - **PHP:** `^8.3`
+
 - **Status:** 🟢 Active
 
 ---
@@ -70,10 +75,15 @@ candy-sprinkles/src/
 `Style` is the central artifact — an immutable value object with ~40 `with*()` setters. Key architectural decisions:
 
 1. **All setters return new instance** — no mutation; `copy()` for explicit shallow clone
+
 2. **`propsSet` array tracks explicitly-set properties** — enables `inherit()` to correctly skip properties the child already set
+
 3. **CSS shorthand expansion** — `padding(1)` → `[1,1,1,1]`, `padding(1,2)` → `[1,2,1,2]`, `padding(1,2,3,4)` → full
+
 4. **Adaptive/Complete color slots** — resolve at render time via `resolveAdaptive()` / `resolveProfile()`
+
 5. **Hyperlink OSC 8 wrapping** — injected at render() final output stage
+
 6. **Transform callback** — applied post-border, pre-margin as a last-mile rewrite hook
 
 Render pipeline (innermost to outermost):
@@ -90,59 +100,96 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 The crown jewel. Key capabilities:
 
 **Color system:**
+
 - `foreground(?Color)` + `foregroundAdaptive(Color $light, Color $dark)` + `foregroundComplete(Color $tc, Color $c256, Color $ansi)`
+
 - `background()` + `backgroundAdaptive()` + `backgroundComplete()` — same triad
+
 - `colorProfile(ColorProfile)` — downsample tier (TrueColor/Ansi256/Ansi/NoTty)
+
 - `resolveAdaptive(bool $isDark)` + `resolveProfile()` — collapse adaptive/complete slots
+
 - `Color::parse()` lookup (38 CSS/ANSI names, case-insensitive)
 
 **Modifiers:**
+
 - Bold, Italic, Underline (with `UnderlineStyle` sub-parameter + `underlineColor()`), Strikethrough, Faint/Dim, Blink, RapidBlink, Reverse, Overline, Invisible
+
 - `underlineStyle(UnderlineStyle::Curly)` emits SGR `4:3` for wavy spell-check underlines
 
 **Geometry:**
+
 - `width(?int)` / `height(?int)` — fixed dimensions
+
 - `maxWidth(?int)` / `maxHeight(?int)` — hard caps without padding expansion
+
 - `padding(...int)` / `margin(...int)` — CSS shorthand (1/2/4 args)
+
 - `paddingChar(string)` / `marginChar(string)` — fill characters
+
 - `align(Align)` / `verticalAlign(VAlign)` — content alignment
 
 **Borders:**
+
 - `border(?Border, bool ...$sides)` — CSS shorthand side toggles
+
 - `borderForeground(?Color)` / `borderBackground(?Color)` — uniform border color
+
 - `borderTopForeground()` / `borderRightForeground()` / `borderBottomForeground()` / `borderLeftForeground()` — per-side
+
 - `borderForegroundBlend(Color $start, Color $end)` — CIELAB-style LERP gradient around perimeter
+
 - `borderTop(bool)` / ... `borderLeft(bool)` — per-side toggles
 
 **Advanced:**
+
 - `hyperlink(string $url, string $id = '')` — OSC 8 wrapper
+
 - `transform(?Closure): string` — last-mile post-border rewrite
+
 - `marginBackground(?Color)` — paint margin area with background color
+
 - `colorWhitespace(bool)` — toggle whether padding/margin inherits SGR
+
 - `tabWidth(int)` — tab expansion (default 4, 0 = literal)
+
 - `inline(bool)` — force single-line, collapse vertical padding/margin
+
 - `inherit(self $parent)` — unset-only merge (explicit child wins)
+
 - `patch(self $other)` — incremental merge (only $other's explicit props apply)
 
 ### Layout System
 
 **Package-level primitives** (`Layout.php`):
 - `joinHorizontal(float $pos, string ...$blocks)` — side-by-side with vertical anchor
+
 - `joinHorizontalWithSpacing(float $pos, ?int $spacing, string ...$blocks)` — with gap
+
 - `joinVertical(float $pos, string ...$blocks)` — top-to-bottom with horizontal anchor
+
 - `joinVerticalWithSpacing(float $pos, ?int $spacing, string ...$blocks)` — with gap
+
 - `place(int $width, int $height, float $hPos, float $vPos, string $block, string $fill = ' ')` — place in rectangle
+
 - `placeHorizontal(int $width, float $pos, string $block, string $fill = ' ')` — horizontal only
+
 - `placeVertical(int $height, float $pos, string $block, string $fill = ' ')` — vertical only
+
 - `width(string $block): int` — cell width of block
+
 - `height(string $block): int` — line count
+
 - `size(string $block): array` — `[width, height]`
 
 **Constraint-based solver** (`Layout/` sub-namespace):
 Mirrors ratatui's Cassowary-lite solver without the full Cassowary algorithm:
 - `Layout::horizontal([Constraint ...])→split(Rect): Rect[]` — column split
+
 - `Layout::vertical([Constraint ...])→split(Rect): Rect[]` — row split
+
 - Constraint types: `Length(n)` (fixed), `Min(n)` (floor), `Max(n)` (ceiling), `Percentage(n)` (0-100 of total), `Ratio(n, d)` (proportion), `Fill(weight)` (remaining space)
+
 - One-pass greedy algorithm: Length/Percentage/Ratio → reserved; Min → floor; Fill → proportional remainder; Max → greedy with clamp-and-redistribute
 
 ### Border System (`Border.php`)
@@ -156,52 +203,82 @@ Mirrors ratatui's Cassowary-lite solver without the full Cassowary algorithm:
 ### Table (`Table/Table.php`)
 
 - `headers(string ...)` + `row(string ...)` / `rows(iterable)` / `data(Data)`
+
 - `border(?Border)` + `borderTop/Bottom/Left/Right(bool)` per-side toggles
+
 - `borderHeader(bool)` / `borderRow(bool)` / `borderColumn(bool)` interior separators
+
 - `headerAlign(Align)` / `rowAlign(Align)` per-section alignment
+
 - `styleFunc(Closure(int $row, int $col): Style)` — per-cell styling callback
+
 - `width(?int)` — cap rendered width with truncation
+
 - `offset(int)` — skip first N body rows (pagination)
+
 - `wrap(?Closure)` — cell overflow callback returning `list<string>`
+
 - `clearRows()` — drop body rows, keep headers
+
 - `Table::HEADER_ROW = -1` sentinel for styleFunc
 
 ### Tree (`Tree/Tree.php`)
 
 - `root(string)` + `child(Tree|string)` / `children(...$c)`
+
 - `enumerator(Enumerator)` — connector character set (default/rounded/ascii)
+
 - `indenter(Closure(bool $isLast): string)` — continuation prefix override
+
 - `rootStyle(?Style)` / `itemStyle(?Style)` / `enumeratorStyle(?Style)`
+
 - `offset(int $start, int $end)` — half-open range render
+
 - `hide(bool)` — suppress root rendering (for nested composition)
+
 - Inherits enumerator/indenter/style from parent when not explicitly set on child
 
 ### List / ItemList (`Listing/ItemList.php`)
 
 - `items(iterable)` / `item(string|ItemList)` — items or nested ItemList
+
 - `enumerator(Closure(int $index, int $total): string)` — marker generator
+
 - `itemStyle(?Style)` / `enumeratorStyle(?Style)` / `itemStyleFunc(Closure(int, string): Style)`
+
 - `indent(string)` — prepended to every line of nested sublists
+
 - Markers right-padded to widest one for text alignment
+
 - Multi-line items preserve indentation on continuation lines
 
 ### Canvas / Layer (`Canvas.php` + `Layer.php`)
 
 - `Canvas::new()->addLayer(Layer)->render(): string`
+
 - Layer: `Layer::new(string $content)->withX(int)->withY(int)->withZ(int)`
+
 - Sort by z-index (insertion order breaks ties)
+
 - Compose by splicing each layer's lines into base grid at (x, y)
+
 - ANSI-safe cut via `Width::truncateAnsi()` + `Width::dropAnsi()`
+
 - SGR reset at splice boundaries (`\x1b[0m`) prevents bleed
 
 ### Renderer (`Renderer.php`)
 
 Bundles `ColorProfile` + `hasDarkBackground` flag:
 - `Renderer::new()` — TrueColor + dark
+
 - `Renderer::fromEnvironment()` — auto-detect profile, default dark
+
 - `withColorProfile(ColorProfile)` / `withHasDarkBackground(bool)`
+
 - `newStyle(): Style` — pre-configured Style instance
+
 - `lightDark(): Closure` — `fn(Color $light, Color $dark): Color`
+
 - `resolveAdaptive(AdaptiveColor): Color`
 
 ### Theme (`Theme.php`)
@@ -321,9 +398,13 @@ Bundles `ColorProfile` + `hasDarkBackground` flag:
 **Immutability pattern:** Consistent — `with()` private method with sentinel booleans (`fieldSet: true`) and `propsSet` tracking. The `withUnset()` / `withUnsetProp()` variants handle property reset. `copy()` for explicit shallow clone.
 
 **Composition patterns:**
+
 - `Style::inherit($parent)` — parent props fill unset slots in child
+
 - `Style::patch($other)` — only explicitly-set props in `$other` apply
+
 - `Style::resolveAdaptive(bool)` — collapse adaptive slots at runtime
+
 - `Style::resolveProfile()` — collapse complete-color slots at render time
 
 **Namespace ergonomics:** `SugarCraft\Sprinkles` for main types; `SugarCraft\Sprinkles\Layout` for constraint solver; `SugarCraft\Sprinkles\Border` for border-specific types; `SugarCraft\Sprinkles\Table` / `Tree` / `Listing` for structured renderers.
@@ -478,8 +559,11 @@ lipgloss's `Blend2D` uses CIELAB interpolation at rotated positions — the algo
 
 ratatui's `Flex` enum (Legacy/Centered/SpaceBetween/SpaceAround) distributes slack differently:
 - `Legacy`: First child absorbs all slack
+
 - `Centered`: Slack split evenly left/right (or top/bottom)
+
 - `SpaceBetween`: First and last child flush to edges, slack distributed evenly between remaining
+
 - `SpaceAround`: Half-slack on each end, rest distributed evenly
 
 **File reference:** `candy-sprinkles/src/Layout/Solver.php` — distribute slack section (lines 102-149)
@@ -654,8 +738,11 @@ Adopting a subset of textual's TCSS syntax (`display: flex; flex-direction: row;
 
 Replacing the current string-composition model with a `Buffer` class (grid of cells with fg color, bg color, modifiers, and rune) would enable:
 - Efficient partial redraw (only changed cells written)
+
 - True alpha blending between layers
+
 - Mouse hit-testing via spatial index
+
 - Eventually, a proper widget rendering system
 
 ### Integration with sugar-bits interactive components
@@ -732,37 +819,53 @@ PHP could achieve similar via fluent methods on `Style` (already present) but ex
 ### Phase 1: Polish & Parity (1-2 PRs)
 
 1. Add `Flex::SpaceBetween|SpaceAround` alignment to `Solver` (quick win)
+
 2. Add CIELAB blending mode to `BorderGradientBlend`
+
 3. Add `Table::columnWidth(Constraint)` per-column constraint
+
 4. Add `Style::marginBackground(string $char)` char fill variant
+
 5. Add `Color::blend2D()` for heatmap gradients
+
 6. Fix `Solver` so `Min` takes extra slack proportionally (currently under-explains — see `testMinWithExtraSlack` comment in `LayoutSolverTest.php`)
 
 ### Phase 2: Word-Wrap + Text Model (2-3 PRs)
 
 1. Create `WrapWriter` class tracking ANSI state across newlines
+
 2. Integrate `Width::wrap()` into `Style::render()` when `width()` is set
+
 3. Create `Text`/`Line`/`Span` hierarchy
+
 4. Refactor `Markup::parse()` to return `Text` instead of `list<Cell>`
+
 5. Add `StyleRunes` implementation
 
 ### Phase 3: Layout Engine (2-3 PRs)
 
 1. Add layout margin support to `Layout::split()`
+
 2. Implement `Border::GetTopSize()` grapheme-aware measurement
+
 3. Add `Layout::gap(int)` for inter-element spacing (sugar-baked gap handling)
+
 4. Consider extracting constraint solver to separate package for reuse
 
 ### Phase 4: Canvas Enhancements (1-2 PRs)
 
 1. Add x/y spatial map for hit-testing mouse events on layers
+
 2. Implement `Canvas::diff()` for efficient partial redraws
+
 3. Add `Layer::withContent(string)` for in-place layer content updates
 
 ### Phase 5: Advanced Layout (Future)
 
 1. Cassowary constraint solver for inter-constraint ratios
+
 2. CSS flexbox layout parser + engine
+
 3. Full TCSS stylesheet parser
 
 ---

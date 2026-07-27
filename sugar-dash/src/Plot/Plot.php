@@ -225,7 +225,8 @@ final class Plot implements Sizer, Drawable
             $yLabels = $this->generateYLabels($innerHeight);
 
             // Y-axis labels (left column, 2 chars wide)
-            for ($y = 0; $y < $innerHeight && $y < count($yLabels); $y++) {
+            $yLabelCount = count($yLabels);
+            for ($y = 0; $y < $innerHeight && $y < $yLabelCount; $y++) {
                 $posY = $rect->minY + 1 + $y;
                 if ($posY > $rect->maxY) {
                     break;

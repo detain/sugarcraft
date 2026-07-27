@@ -3,17 +3,27 @@
 candy-log is a well-executed PHP port of charmbracelet/log — a minimal, colorful leveled logging library with structured context, multiple formatters (Text/JSON/Logfmt), sub-loggers, and standard log/PSR-3 adapters. It is v1 ready and part of the SugarCraft ecosystem for terminal applications.
 
 **Biggest opportunity areas:**
+
 - Log rotation and file handling integration
+
 - Multiline value formatting with proper indentation (like Go upstream)
+
 - ANSI sequence escaping in message values
+
 - Context propagation improvements for request-scoped logging
+
 - Enhanced hook system for observability integrations
 
 **Biggest missing capabilities:**
+
 - No slog.Handler equivalent (PHP has no standard structured logging interface)
+
 - No context.Context propagation (fundamental Go vs PHP difference)
+
 - No log rotation built-in
+
 - No max-width message wrapping
+
 - No helper function marking (Go-specific pattern without PHP equivalent)
 
 ---
@@ -47,13 +57,21 @@ candy-log/src/
 ## Current Features
 
 1. **Leveled Logging**: Debug (-4), Info (0), Warn (4), Error (8), Fatal (12) with syslog-aligned integer values
+
 2. **Three Formatters**: TextFormatter (ANSI-colored), JsonFormatter (JSON Lines), LogfmtFormatter (key=value pairs)
+
 3. **Structured Context**: Key=value pairs merged via `with()` sub-loggers
+
 4. **Probe-Driven Colors**: Respects `NO_COLOR`/`FORCE_COLOR` via candy-palette's Probe
+
 5. **Hook System**: Per-level callback registry for middleware-style interception
+
 6. **Panic Handler**: Exception beautification with backtrace, path redaction, terminal restoration
+
 7. **PSR-3 Bridge**: Full LoggerInterface compatibility
+
 8. **PartsOrder Config**: Configurable log-part ordering (default, syslog, messageFirst)
+
 9. **Caller Reporting**: debug_backtrace-based call-site detection
 
 ## APIs
@@ -81,27 +99,41 @@ $logger->withMinLevel(Level $level)
 ## Extension Systems
 
 1. **Formatter Interface**: Implement `format(Level, string, array, DateTimeImmutable, ?string, ?string): string` for custom output
+
 2. **Hook Interface**: Implement `onLevel(Level, string, string, array): void` for log interception
+
 3. **Styles**: Per-level and per-field Style customization
 
 ## Strengths
 
 1. Clean API design with static facade + instance logger duality
+
 2. Multiple formatters covering human, machine, and aggregator formats
+
 3. Immutable + fluent `with()` pattern for safe composition
+
 4. Full PSR-3 bridge for drop-in integration
+
 5. Hook system for observability middleware
+
 6. Probe-driven color intelligence
+
 7. Beautiful panic handler for CLI debugging
+
 8. Comprehensive tests (9 files, 200+ assertions)
 
 ## Weaknesses
 
 1. No slog.Handler equivalent (PHP platform limitation)
+
 2. No context propagation (PHP doesn't have context.Context)
+
 3. No log rotation built-in
+
 4. No multiline handling (values with newlines get collapsed)
+
 5. No ANSI sequence escaping in message values
+
 6. No max-width message wrapping
 
 ---
@@ -125,6 +157,7 @@ $logger->withMinLevel(Level $level)
 ## Critical Priority
 
 ### 1. Multiline Value Handling
+
 **Title:** TextFormatter lacks multiline value formatting
 
 **Description:** When context values contain newlines, the Go upstream properly indents continuation lines with `│` visual guide. The PHP port collapses arrays to `[item1 item2]` but doesn't handle raw multiline strings.
@@ -134,8 +167,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/charmbracelet_log.md` — "Multiline Support: Text formatter properly handles multiline values with visual indentation"
 
 **Implementation ideas:**
+
 - Detect newlines in formatted values
+
 - Add indented continuation with visual guide character
+
 - Match upstream's `│` prefix for continuation lines
 
 **Estimated complexity:** Medium (formatter modification, testing edge cases)
@@ -145,6 +181,7 @@ $logger->withMinLevel(Level $level)
 ---
 
 ### 2. ANSI Sequence Escaping in Values
+
 **Title:** TextFormatter doesn't escape ANSI sequences in message values
 
 **Description:** Go upstream detects ANSI escape sequences in values and properly quotes them to prevent terminal escape injection and visual corruption. PHP port has no such handling.
@@ -154,8 +191,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/charmbracelet_log.md` — "String Escaping: Comprehensive handling of non-printable chars and ANSI sequences"
 
 **Implementation ideas:**
+
 - Detect ANSI sequences in message and context values
+
 - Quote or strip problematic sequences
+
 - Apply same logic to caller information
 
 **Estimated complexity:** Medium (need to define escape rules, handle edge cases)
@@ -167,6 +207,7 @@ $logger->withMinLevel(Level $level)
 ## High Value
 
 ### 3. Log Rotation / File Output
+
 **Title:** No built-in log rotation or structured file output
 
 **Description:** The Go upstream relies on external `io.MultiWriter` for log rotation. PHP has no equivalent built-in. Users must implement their own file rotation logic or rely on external tools like logrotate.
@@ -176,9 +217,13 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/charmbracelet_log.md` — "No Log Rotation: Built-in file rotation not supported; must wrap with io.MultiWriter or external solution"
 
 **Implementation ideas:**
+
 - Add RotatingFileHandler as a new class
+
 - Support size-based rotation (rotate when file exceeds N bytes)
+
 - Support time-based rotation (daily, hourly)
+
 - Maintain indexed old logs (app.log.1, app.log.2, etc.)
 
 **Estimated complexity:** Medium-High (file handling, naming conventions, cleanup)
@@ -188,6 +233,7 @@ $logger->withMinLevel(Level $level)
 ---
 
 ### 4. Log Levels 6-7 (Trace/Print enhancement)
+
 **Title:** Only 5 levels vs pterm's 7 levels
 
 **Description:** pterm/pterm has 7 levels including TRACE and PRINT. candy-log has only 5 levels but does have a `print()` method that uses Info under the hood.
@@ -197,8 +243,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/sugarcraft_candy-log.md` — "pterm Logger | 7 (TRACE/DEBUG/INFO/WARN/ERROR/FATAL/PRINT) | 5 (Debug/Info/Warn/Error/Fatal)"
 
 **Implementation ideas:**
+
 - Add Level::Trace with value -8 below Debug
+
 - Ensure print() has distinct behavior (no level prefix at all)
+
 - Consider EMERGENCY/ALERT/CRITICAL mapping in PSR-3 bridge (already maps to Fatal)
 
 **Estimated complexity:** Low (enum addition, minimal testing)
@@ -208,6 +257,7 @@ $logger->withMinLevel(Level $level)
 ---
 
 ### 5. Max-Width Message Wrapping
+
 **Title:** Long messages aren't wrapped
 
 **Description:** pterm's logger supports max-width wrapping for long messages. PHP port has no equivalent.
@@ -217,8 +267,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/sugarcraft_candy-log.md` — "Max-width wrapping | ✅ | ❌"
 
 **Implementation ideas:**
+
 - Add `maxWidth` constructor option to Logger
+
 - Implement word-wrap in TextFormatter
+
 - Allow formatters to opt into width-aware formatting
 
 **Estimated complexity:** Medium (word-wrap algorithm, terminal width detection)
@@ -230,6 +283,7 @@ $logger->withMinLevel(Level $level)
 ## Medium Priority
 
 ### 6. Context Propagation Improvements
+
 **Title:** PHP lacks context.Context equivalent
 
 **Description:** Go's charmbracelet/log supports `WithContext()`/`FromContext()` for storing loggers in `context.Context`. PHP has no equivalent request-scoped context mechanism.
@@ -239,8 +293,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/charmbracelet_log.md` — "Context Integration: Proper propagation via standard context.Context"
 
 **Implementation ideas:**
+
 - Document limitation as platform difference
+
 - Create optional RequestContext holder using PHP's `Context` (similar to ReactPHP patterns)
+
 - Use `$GLOBALS` or static properties as workaround
 
 **Estimated complexity:** N/A (platform limitation, would need PSR-18/20 equivalent)
@@ -250,6 +307,7 @@ $logger->withMinLevel(Level $level)
 ---
 
 ### 7. Helper Function Skip Pattern
+
 **Title:** No Go-like Helper() function marking
 
 **Description:** Go's charmbracelet/log has `Helper()` that marks functions as "helpers" for caller skip (like `testing.TB.Helper()`). PHP has no equivalent.
@@ -259,8 +317,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/charmbracelet_log.md` — "Helper Function Skip Map: Uses sync.Map to track functions marked as helpers"
 
 **Implementation ideas:**
+
 - Document as non-portable feature
+
 - Could implement a static analysis tool to detect wrapper functions
+
 - CallerFormatter::find() already handles some cases via DEBUG_BACKTRACE_IGNORE_ARGS
 
 **Estimated complexity:** N/A (no PHP equivalent pattern)
@@ -270,6 +331,7 @@ $logger->withMinLevel(Level $level)
 ---
 
 ### 8. Verbosity Groups
+
 **Title:** Textualize-style verbosity groups
 
 **Description:** textualize/textual has per-app logger with verbosity levels and groups for structured log filtering.
@@ -279,8 +341,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/textualize_textual.md` — "Thread-safe Logging: Per-app logger with verbosity levels and groups"
 
 **Implementation ideas:**
+
 - Add LoggerGroup class to manage multiple named loggers
+
 - Each group has its own minLevel
+
 - Groups can be enabled/disabled collectively
 
 **Estimated complexity:** Medium (new class, integration with facade)
@@ -292,6 +357,7 @@ $logger->withMinLevel(Level $level)
 ## Low Priority
 
 ### 9. Time Function Customization
+
 **Title:** No custom time function like Go upstream
 
 **Description:** Go upstream allows `SetTimeFunction(f TimeFunction)` for custom time sourcing. PHP port uses `DateTimeImmutable` directly.
@@ -299,8 +365,11 @@ $logger->withMinLevel(Level $level)
 **Why it matters:** Testing and time-sensitive applications benefit from fake clocks.
 
 **Implementation ideas:**
+
 - Add `setTimeFunction(callable $timeFn): void` to Logger
+
 - Use closure for time source
+
 - Default remains `fn() => new \DateTimeImmutable()`
 
 **Estimated complexity:** Low
@@ -310,6 +379,7 @@ $logger->withMinLevel(Level $level)
 ---
 
 ### 10. String Escaping Improvements
+
 **Title:** LogfmtFormatter has escaping but could be more robust
 
 **Description:** LogfmtFormatter has basic escaping for `[\s="]` but Go's logfmt handling is more comprehensive.
@@ -317,8 +387,11 @@ $logger->withMinLevel(Level $level)
 **Source:** `docs/repo_map/charmbracelet_log.md` — "String Escaping: Comprehensive handling of non-printable chars and ANSI sequences"
 
 **Implementation ideas:**
+
 - Add comprehensive non-printable character escaping
+
 - Handle Unicode properly
+
 - Quote values containing special characters
 
 **Estimated complexity:** Medium
@@ -349,14 +422,18 @@ $logger->withMinLevel(Level $level)
 ## Tradeoffs
 
 - **Thread-safety**: Not an issue in PHP (single-threaded request lifecycle)
+
 - **Memory allocation**: PHP's request-based lifecycle means allocations are freed after each request
+
 - **sync.Pool equivalent**: Would add complexity without measurable benefit in PHP
 
 ## Applicability
 
 Most Go optimizations don't translate to PHP due to architectural differences. Focus on:
 1. Algorithmic improvements within PHP's constraints
+
 2. Caching expensive operations (caller detection could be cached per call site)
+
 3. Reducing allocations in hot paths (formatters called on every log)
 
 ---
@@ -368,7 +445,9 @@ Most Go optimizations don't translate to PHP due to architectural differences. F
 Currently Logger has multiple responsibilities: logging, formatting, styling, output. Consider extracting:
 
 - **Handler Interface**: For output destinations (stream, rotating file, syslog)
+
 - **Processor Interface**: For pre/post processing (filtering, enrichment)
+
 - **Renderer Interface**: Already exists as Formatter
 
 ```php
@@ -465,15 +544,21 @@ $log->info('User logged in', (new FieldBag())->string('user', $user)->int('attem
 ## 1. Tutorial: Logging in CLI Apps
 
 - Basic setup with global logger
+
 - Configuring formatters for development vs production
+
 - Using sub-loggers for component tracking
+
 - Panic handler integration for debugging
 
 ## 2. Tutorial: Logging in TUI Apps
 
 - Integrating with Bubble Tea (candy-core)
+
 - Capturing logs to file with tea.LogToFile pattern
+
 - Using hook system for progress indicators
+
 - Coloring strategies for different log levels
 
 ## 3. Cookbook: Common Patterns
@@ -503,7 +588,9 @@ $hooks->onLevel(Level::Warn, function($level, $psrLevel, $message, $context) {
 ## 4. API Reference Improvements
 
 - Add parameter types and return types for all methods
+
 - Include PHPStan/PHPStorm stubs
+
 - Generate HTML docs from PHPDoc
 
 ---
@@ -544,7 +631,9 @@ final class TtyProgressHook implements Hook {
 ## 3. Better Panic Output
 
 - Add `--json` flag support for machine-parseable panic output
+
 - Show memory usage at panic time
+
 - Show goroutine-equivalent (current include files)
 
 ---
@@ -578,8 +667,11 @@ public function testTextFormatterOutput(): void
 Use PHPPropertyTest or similar for formatter edge cases:
 
 - Empty strings, Unicode strings, ANSI sequences
+
 - Very long strings, strings with newlines
+
 - Special characters in keys and values
+
 - Nested arrays, objects with __toString
 
 ## 3. Integration Testing
@@ -604,9 +696,13 @@ public function testLogToFileAndBack(): void
 
 Add benchmarks for:
 - Empty log (level filtered)
+
 - Simple message (no context)
+
 - Message with context (10 fields)
+
 - Formatter switching
+
 - Sub-logger creation
 
 ---
@@ -681,6 +777,7 @@ final class CandyLogServiceProvider extends ServiceProvider
 # Notable PRs / Issues / Discussions
 
 ## 1. charmbracelet/log#70 — slog.Handler Discussion
+
 **Summary:** Addition of slog.Handler interface for Go 1.21+ stdlib compatibility
 
 **Relevance:** The PHP port cannot implement this interface due to PHP lacking an equivalent standard library interface. This is a fundamental platform difference.
@@ -688,6 +785,7 @@ final class CandyLogServiceProvider extends ServiceProvider
 **Lessons learned:** When porting Go ecosystem libraries to PHP, the standard library interfaces (context, slog, etc.) often have no PHP equivalent. Document these as "platform limitations" rather than missing features.
 
 ## 2. charmbracelet/log#45 — Helper Function Skip
+
 **Summary:** Implementation of helper function marking for accurate caller reporting
 
 **Relevance:** The Go version uses `sync.Map` to track functions marked as helpers, skipping them when finding the "real" caller for location reporting.
@@ -697,6 +795,7 @@ final class CandyLogServiceProvider extends ServiceProvider
 **Adaptation:** Could add a static analysis pass or attribute-based system in PHP to mark helper functions, but complexity outweighs benefit.
 
 ## 3. pterm/pterm#150 — Max-Width Wrapping
+
 **Summary:** Adding configurable max-width with word wrapping
 
 **Relevance:** pterm's logger supports wrapping long messages at a configured max width.
@@ -712,16 +811,23 @@ final class CandyLogServiceProvider extends ServiceProvider
 ## Immediate Wins (0-2 sprints)
 
 1. **Multiline value formatting** — Improve context value formatting for multiline content
+
 2. **ANSI sequence escaping** — Add security-conscious escaping for user-controlled content
+
 3. **Enhanced PSR-3 bridge** — Ensure complete PSR-3 compatibility
+
 4. **Documentation cookbook** — Add common patterns and recipes
 
 ## Medium-Term Improvements (2-4 sprints)
 
 5. **Log rotation handler** — Add RotatingFileHandler for production use
+
 6. **Logger factory** — Create contextual logger factories for web/CLI
+
 7. **Log level expansion** — Add Trace level (value -8)
+
 8. **Max-width wrapping** — Terminal-width aware message formatting
+
 9. **Fluent setters** — Make all setters return new instances for true immutability
 
 ## Major Architectural Upgrades (4+ sprints)
@@ -769,28 +875,45 @@ final class CandyLogServiceProvider extends ServiceProvider
 candy-log is a mature, well-designed logging library that successfully ports the charmbracelet/log API to PHP with valuable additions (hook system, panic handler, parts order). The implementation follows PHP best practices and SugarCraft conventions.
 
 **Key strengths:**
+
 - Clean API with static facade + instance logger duality
+
 - Immutable + fluent design via `with()` pattern
+
 - Three formatters covering all major use cases
+
 - Comprehensive PSR-3 bridge
+
 - Hook system for extensibility
+
 - Excellent test coverage
 
 **Key limitations to address:**
+
 - Multiline value handling is the most impactful gap vs upstream
+
 - ANSI sequence escaping is a security/reliability gap
+
 - No log rotation limits production readiness
+
 - Missing max-width wrapping affects TUI integration
 
 **Platform limitations (not fixable):**
+
 - No slog.Handler equivalent (PHP has no standard structured logging interface)
+
 - No context.Context propagation (PHP has no equivalent)
 
 **Recommendations:**
+
 1. Prioritize multiline handling and ANSI escaping as security/reliability fixes
+
 2. Add log rotation handler for production deployment
+
 3. Expand test coverage with property-based testing for formatters
+
 4. Document all platform limitations clearly
+
 5. Consider creating a "candy-log" integration library for common frameworks (Laravel, Symfony)
 
 The library is production-ready for development and reasonable for production with the current feature set. The identified improvements would enhance production readiness and feature parity with the Go upstream.

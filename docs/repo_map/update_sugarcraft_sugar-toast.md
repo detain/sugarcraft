@@ -21,6 +21,7 @@
 SugarToast is a floating alert notification component for terminal UIs, ported from Go's `daltonsw/bubbleup` and significantly enhanced beyond the upstream. It provides toast-style notifications that "float" to screen edges with features like queue-based multi-alert management, progress bars, action buttons, history logging, and internationalization support. The biggest opportunities lie in completing the animation system (fade animations with CubicBezier easing), adding custom alert type registration (upstream feature missing in SugarToast), and implementing markdown rendering support for toast messages.
 
 **Biggest Missing Capabilities:**
+
 1. Real fade animations (stub only, CubicBezier deferred)
 2. Custom alert type registration (present in upstream bubbleup, absent in SugarToast)
 3. Interactive action button keyboard navigation (buttons render but no auto-trigger)
@@ -125,6 +126,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `docs/repo_map/sugarcraft_sugar-toast.md` (internal), `pr_charmbracelet_harmonica.md`
 
 **Implementation Ideas**:
+
 - Integrate `honey-bounce` `CubicBezier` class for timing curves
 - Use `harmonica` LAB color blending concept for fade transitions
 - Implement character-reveal animation during `animationDuration > 0`
@@ -144,6 +146,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `docs/repo_map/sugarcraft_sugar-toast.md`
 
 **Implementation Ideas**:
+
 - Add static registry: `ToastType::register(string $key, AlertDefinition $def): void`
 - Store custom types in static array accessible via `ToastType::fromKey(string $key)`
 - Support i18n keys for custom type labels
@@ -165,6 +168,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `docs/repo_map/sugarcraft_sugar-toast.md`
 
 **Implementation Ideas**:
+
 - Add `Toast::withSelectedAction(int $index)` to track focused action
 - Add `Toast::keyPress(KeyMsg $msg): ?Action` to process key events
 - Support Tab/Shift+Tab to cycle through actions, Enter to trigger
@@ -184,6 +188,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_bubbletea.md`, `pr_charmbracelet_harmonica.md`
 
 **Implementation Ideas**:
+
 - Implement LAB color space conversion in `candy-core` or `candy-palette`
 - Use `SugarCraft\Core\Color\Lab` value object with `blend(Lab $other, float $t)` method
 - Apply to background/border colors during fade animation
@@ -203,6 +208,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `docs/repo_map/sugarcraft_sugar-toast.md`
 
 **Implementation Ideas**:
+
 - Add `Alert::$id: string` with UUID generation in constructor
 - Add `Toast::dismissById(string $id): Toast` (returns clone)
 - Add `Toast::removeById(string $id): Toast` (returns clone, doesn't record to history)
@@ -224,6 +230,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_bubbles.md`
 
 **Implementation Ideas**:
+
 - Add `Alert::withGradient(array $colors)` for multi-stop gradient
 - Use `SugarCraft\Core\Color\Gradient` class to compute color at each position
 - Render partial blocks with interpolated colors
@@ -243,6 +250,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_bubbles.md` (Issue #395)
 
 **Implementation Ideas**:
+
 - Calculate remainder after filling width with whole blocks
 - Use partial block characters to represent fractional progress
 - Add `ProgressBar::usePartialBlocks(bool)` option
@@ -262,6 +270,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_lipgloss.md` (Issue #593)
 
 **Implementation Ideas**:
+
 - Add `Toast::withColorProfile(ColorProfile $profile)` option
 - Use `SugarCraft\Core\Terminal\ColorProfile` detection
 - Strip ANSI when profile is `NoColor` or output is non-TTY
@@ -281,6 +290,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_harmonica.md`
 
 **Implementation Ideas**:
+
 - Animate each toast's y-position from off-screen or overlapping position
 - Use `honey-bounce` spring animation for natural easing
 - Stagger animation start times for visual appeal
@@ -302,6 +312,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_glow.md`
 
 **Implementation Ideas**:
+
 - Add `Toast::withMarkdown(bool $enabled)` option
 - Use `candy-shine` for markdown→ANSI rendering
 - Support bold, italic, code, and links in message body
@@ -321,6 +332,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_glow.md` (Issue #237)
 
 **Implementation Ideas**:
+
 - Add `Alert::withLink(string $url, string $label)` method
 - Render using OSC 8 sequences: `\x1b]8;;URL\x1b\\Label\x1b]8;;\x1b\\`
 - Require terminal support detection
@@ -340,6 +352,7 @@ Toast::View($background, $viewportWidth, $viewportHeight)
 **Source**: `pr_charmbracelet_glow.md` (Issue #942)
 
 **Implementation Ideas**:
+
 - Use `candy-vt` terminal dimension detection
 - Default maxWidth to terminal width minus margins
 - Provide `withMaxWidth(null)` for auto-detection
@@ -365,10 +378,12 @@ SugarToast uses Unix timestamps (`microtime(true)`) for expiry checking and rend
 Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments `curLerpStep` for LAB color animation during fade.
 
 **Why External Is Better**:
+
 - Tick-based animation allows smooth frame interpolation
 - Timestamp-based expiry only checks on render, not continuously
 
 **Tradeoffs**:
+
 - Tick-based requires running timer/command
 - SugarToast's pure renderer architecture intentionally avoids this complexity
 
@@ -445,11 +460,13 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 ## From bubbleup (primary upstream)
 
 ### Issue: Custom Alert Type Registration
+
 **Finding**: bubbleup has `RegisterNewAlertType()` allowing runtime alert type registration with custom colors and icons. SugarToast dropped this feature, replacing Debug with Success.
 
 **Lesson**: Custom alert types are an extensibility feature some users need. SugarToast should re-add this capability.
 
 ### Issue: Fade Animation via LAB Color Blending
+
 **Finding**: bubbleup implements fade animation using LAB color space blending with 100ms tick intervals.
 
 **Lesson**: The animation approach in bubbleup works but requires timer-based updates. SugarToast's pure renderer approach intentionally avoids this, but the fade animation itself should still be implemented using honey-bounce's CubicBezier curves.
@@ -457,26 +474,31 @@ Bubbleup uses 100ms tick intervals with `tickCmd()` → `tickMsg` and increments
 ## From charmbracelet ecosystem
 
 ### Issue #593 (lipgloss): TTY Detection for Color Output
+
 **Finding**: v2 architecture separates render (always full ANSI) from output (downsample based on TTY). Non-TTY output must strip ANSI codes.
 
 **Lesson**: SugarToast should follow v2 pattern — render always emits full ANSI; output layer handles TTY detection and color stripping. `docs/repo_map/pr_charmbracelet_lipgloss.md`
 
 ### Issue #1655 (bubbletea): DevTools Proposal
+
 **Finding**: Proposal for interactive inspector showing message log, state viewer, component tree.
 
 **Lesson**: For complex TUI apps using SugarToast, debugging visibility is critical. Consider SugarToast-specific introspection helpers.
 
 ### Issue #810 (bubbles): String Concatenation Performance
+
 **Finding**: List paginator with 8000+ items lagged due to O(n) string concatenation. Fixed with `strings.Builder`.
 
 **Lesson**: Any string building in loops must use builders. SugarToast's `View()` loop should use `SugarCraft\Core\Util\StringBuilder` if PHP's string concatenation proves slow. `docs/repo_map/pr_charmbracelet_bubbles.md`
 
 ### Issue #1652 (bubbles): TextArea Infinite Loop
+
 **Finding**: `wordLeft()` on empty textarea spins forever due to missing boundary check.
 
 **Lesson**: Always validate boundary conditions before entering navigation loops. SugarToast's action button navigation should include similar guards. `docs/repo_map/pr_charmbracelet_bubbles.md`
 
 ### Issue #85 (lipgloss): Text Wrap Loses Styles
+
 **Finding**: 3+ year old bug — wrapped text loses color/style after first line.
 
 **Lesson**: Implement wrapping that preserves style state across line breaks. If SugarToast adds word-wrapping to messages, must follow this pattern. `docs/repo_map/pr_charmbracelet_lipgloss.md`
@@ -544,12 +566,14 @@ SugarToast represents a **significant enhancement** over its upstream bubbleup, 
 **Strategic Position**: SugarToast fills a niche in the SugarCraft ecosystem as a pure notification/rendering component that can be embedded in any TUI framework. Unlike sugar-bits components which implement full TEA models, SugarToast intentionally remains a pure renderer, making it framework-agnostic.
 
 **Key Differentiators from Competitors**:
+
 1. Display-cell aware slicing (fixes UTF-8 multibyte bugs present in Go implementations)
 2. i18n support from day one
 3. Queue overflow strategies (DropOldest/DropNewest/Enqueue)
 4. Immutable + fluent API following SugarCraft conventions
 
 **Key Gaps to Address**:
+
 1. **Animation is the #1 gap** — The stub must become real using honey-bounce
 2. **Custom alert types** — Restoring upstream's extensibility feature
 3. **Action button keyboard handling** — Making buttons actually usable without consumer boilerplate

@@ -1,11 +1,17 @@
 # SugarCraft/honey-flap
 
 ## Metadata
+
 - **Package**: `sugarcraft/honey-flap`
+
 - **Upstream**: [kbrgl/flapioca](https://github.com/kbrgl/flapioca) (72 stars, Go)
+
 - **Language**: PHP 8.3+
+
 - **Namespace**: `SugarCraft\Flap`
+
 - **Status**: 🟢 v1 ready (public API + tests + docs + demo)
+
 - **Role**: Flappy Bird-style arcade game demonstrating HoneyBounce projectile physics in a TUI
 
 ## Overview
@@ -42,9 +48,13 @@ honey-flap/bin/
 ### Design Principles
 
 - **Physics-first**: Bird motion is a HoneyBounce `Projectile` with gravity and velocity kick — not integer increment/decrement
+
 - **Immutable state**: Every `update()` / `tick()` / `flap()` returns a new instance
+
 - **PRNG injection**: Deterministic pipe layouts in tests via `\Closure(int): int`
+
 - **Separation of concerns**: `Game` is pure state (no rendering), `Renderer` is pure view (no logic), `Bird` is pure physics (no game knowledge)
+
 - **TEA pattern**: Full `Model::init()/update()/view()` contract via candy-core
 
 ## Feature Inventory
@@ -87,8 +97,11 @@ honey-flap/bin/
 ## HoneyBounce Physics Integration
 
 ### Source Files
+
 - **Bird.php**: `honey-flap/src/Bird.php:22-71`
+
 - **Projectile.php**: `honey-bounce/src/Projectile.php:36-120`
+
 - **Spring.php**: `honey-bounce/src/Spring.php:20-144`
 
 ### Projectile Configuration
@@ -133,6 +146,7 @@ public function update(): self
 
 This is **Euler integration**:
 - `pos += vel * dt` → position advances by velocity over deltaTime
+
 - `vel += acc * dt` → velocity changes by acceleration over deltaTime
 
 ### Flap Mechanics (Bird.php:51-65)
@@ -162,9 +176,13 @@ public function flap(): self
 `GRAVITY = 70.0 cells/sec²` is deliberately tuned for game feel:
 
 - Real-world gravity: 9.81 m/s²
+
 - honey-flap gravity: 70 cells/sec² ≈ 7.1× real-world (tuned for 30 fps gameplay)
+
 - At 30 fps: `vel += 70 * (1/30) ≈ 2.33` cells/sec per frame
+
 - After 1 second of falling: velocity ≈ 70 cells/sec downward
+
 - After ~9 frames (0.3 sec): bird falls ~3 rows — fast enough to require quick reactions
 
 ## Game Loop Architecture
@@ -251,6 +269,7 @@ The game runs **forever** via recursive `Cmd::tick` scheduling. Each `TickMsg` t
 ### Note on Tick Rate vs Upstream
 
 - **flapioca**: `tea.Tick(time.Second/5, ...)` = 5 Hz tick rate (200ms per frame)
+
 - **honey-flap**: `Cmd::tick(0.033, ...)` ≈ 30 Hz tick rate (33ms per frame)
 
 honey-flap is 6× more granular, giving smoother physics and more responsive controls.
@@ -272,16 +291,24 @@ public function collides(int $col, int $row): bool
 ```
 
 **Algorithm**:
+
 1. Check if bird is in the same column as the pipe
+
 2. Compute gap boundaries: gap is centred at `gapY` with half-height `intdiv($gapHeight, 2)`
+
 3. Bird collides if row is **above the top** OR **below the bottom** of the gap
+
 4. Rows inside `[top, bottom]` (inclusive) are the open air — no collision
 
 **Example** (gapY=8, gapHeight=6):
 - `top = 8 - 3 = 5`
+
 - `bottom = 8 + 3 = 11`
+
 - `collides(10, 0)` → `0 < 5` → true (above gap)
+
 - `collides(10, 7)` → `7 >= 5 && 7 <= 11` → false (inside gap)
+
 - `collides(10, 12)` → `12 > 11` → true (below gap)
 
 ### Collision Sources in Game.php
@@ -354,8 +381,11 @@ private static function cellGlyph(Game $g, int $x, int $y, int $birdX, int $bird
 
 **Rendering order** (first match wins):
 1. Bird cell — always renders `>` at bird position
+
 2. Pipe cell — renders `▓` if `collides()` is true, else ` ` (air in gap)
+
 3. Background — parallax dot every 12 columns offset by tickIndex
+
 4. Empty cell
 
 ### Score Display (Renderer.php:40-59)
@@ -367,7 +397,9 @@ $score = Style::new()->bold()->foreground(Color::hex('#fde68a'))
 
 When crashed:
 - If new high score: green highlight + trophy emoji
+
 - If not new but has high score: muted "best: N"  
+
 - Always shows crash hint: "💥 splat — press r to flap again, q to quit"
 
 ## Comparison with Upstream (kbrgl/flapioca)
@@ -431,7 +463,9 @@ Both use the same algorithm (column check + gap boundary check). honey-flap uses
 
 honey-flap demonstrates a **physics-as-a-service** pattern:
 - `honey-bounce/Projectile` is a pure kinematics engine (no rendering, no collision)
+
 - `Game` is a physics consumer that wraps physics state in a TEA Model
+
 - `Renderer` consumes physics state to produce ANSI output
 
 This separation means honey-bounce physics can power other games without game-specific knowledge. The pattern is:
@@ -502,7 +536,9 @@ The gap shrinks by 1 cell every 5 points, starting at 6, floor at 3. This create
 
 Every state transition returns a new `Game` instance. The previous state is preserved for:
 - Debugging / replay
+
 - Undo functionality (future)
+
 - Testing via `tickN()` helper
 
 ## Test Coverage
@@ -564,38 +600,58 @@ public function testCellsAboveAndBelowGapCollide(): void
 ## Strengths
 
 1. **Clean physics integration**: Bird motion correctly uses HoneyBounce Projectile — gravity, velocity kick, 30fps timestep
+
 2. **Proper TEA pattern**: Full `Model::init()/update()/view()` contract, testable without rendering
+
 3. **Deterministic tests**: PRNG injection enables reproducible pipe layouts
+
 4. **Difficulty scaling**: Gap shrinkage keeps game challenging without becoming impossible
+
 5. **Immutable state**: All mutations return new instances — no spooky action
+
 6. **High score persistence**: JSON-based score tracking across sessions
+
 7. **Real arcade feel**: 30fps physics vs upstream's 5Hz — much more responsive
+
 8. **Separation of concerns**: Physics layer (honey-bounce) is framework-agnostic
 
 ## Weaknesses
 
 1. **No sound**: Classic Flappy Bird had audio feedback (flap, score, crash)
+
 2. **No animation**: Bird is always `>` — no wing-flap animation during fall/rise
+
 3. **Pipe gap is integer cells**: Real physics would use float positions and sub-cell collision
+
 4. **No pause**: Game runs continuously until quit or crash
+
 5. **Single player**: No multi-player or leaderboard comparison
+
 6. **Terminal-dependent rendering**: Assumes ANSI SGR + Unicode support
+
 7. **No high score sync**: JSON file only, no cloud backup
+
 8. **Euler integration drift**: First-order Euler accumulates error over many frames (minor at 30fps)
 
 ## Comparison with Other Game Clones
 
 ### kbrgl/flapioca (Go, 72 stars)
+
 - **Physics**: None (integer stepping)
+
 - **Tick rate**: 5 Hz
+
 - **Difficulty**: Fixed gap aperture (5)
+
 - **High score**: None
+
 - **Verdict**: honey-flap is a strict superset with physics, 6× faster tick, difficulty scaling
 
 ### Other TUI Games in Ecosystem
 
 The SugarCraft monorepo contains other game-related ports:
 - **candy-tetris**: Tetris clone (no physics library use)
+
 - **sugar-crush**: Match-3 game (no physics)
 
 honey-flap is unique in its use of honey-bounce physics for game motion — all other games use integer-grid movement only.
@@ -603,19 +659,31 @@ honey-flap is unique in its use of honey-bounce physics for game motion — all 
 ## Potential Enhancements
 
 ### Short-term (v1.x)
+
 1. **Wing animation**: Alternate bird glyph `>` / `<` based on velocity direction (rising vs falling)
+
 2. **Sound effects**: Play ANSI bell + speak text on flap/score/crash via `exec('printf \\a')`
+
 3. **Particle trail**: Render trailing dots when bird is moving fast
 
 ### Medium-term (v2.0)
+
 1. **Mutable Bird physics**: Add `ProjectileMutable` variant for zero-allocation per-tick (game use case)
+
 2. **Animated death**: Show bird rotation + fall when crashing
+
 3. **Pause/resume**: Space bar toggles pause (stops tick scheduling)
+
 4. **High score API**: Optional HTTP POST to submit scores to a leaderboard endpoint
+
 5. **Pipe variety**: Different pipe colors/styles, moving obstacles, wind gusts
 
 ### Long-term
+
 1. **Verlet integration**: Upgrade from Euler to Verlet for better numerical stability
+
 2. **Physics-based level elements**: Moving platforms, bouncy pads, wind zones
+
 3. **Particle system**: Explosion on crash, confetti on new high score
+
 4. **Multiplayer**: Local two-player via split-screen or networked via WebSocket

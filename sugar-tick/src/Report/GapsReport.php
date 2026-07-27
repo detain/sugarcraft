@@ -33,7 +33,8 @@ final class GapsReport
         usort($sorted, static fn(Heartbeat $a, Heartbeat $b): int => $a->time <=> $b->time);
 
         $result = [];
-        for ($i = 1; $i < count($sorted); $i++) {
+        $sortedCount = count($sorted);
+        for ($i = 1; $i < $sortedCount; $i++) {
             $prev = $sorted[$i - 1];
             $curr = $sorted[$i];
             $gap = $curr->time - ($prev->time + $prev->duration);

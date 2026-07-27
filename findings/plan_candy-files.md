@@ -47,11 +47,13 @@ Replace predictable `microtime(true) . uniqid('', true)` with `bin2hex(random_by
 Current trash path `sys_get_temp_dir() . '/candyfiles-trash-' . getmypid() . '/' . microtime(true) . '_' . uniqid('', true) . '_' . basename` is predictable. An attacker knowing PID could pre-create symlinks for symlink attacks.
 
 **Conditions for success:**
+
 - Trash path uses `bin2hex(random_bytes(16))` (32 hex chars, 128 bits of entropy)
 - No code relies on predictable trash path format
 - Unit tests pass with new format
 
 **Related code locations:**
+
 - `src/Manager.php:448-456` - `trashPath()` method
 - `src/Manager.php:417-425` - `performDelete()` uses `trashPath()`
 - `src/Manager.php:1104-1123` - `redoDelete()` uses `trashPath()`
@@ -80,11 +82,13 @@ After validating the new name string, also validate that the resolved destinatio
 Current check `str_contains($newName, '/') || str_contains($newName, '\\') || str_contains($newName, '..')` only validates the name string, not the full resolved path.
 
 **Conditions for success:**
+
 - `Phar::canonicalize()` used to normalize path before joining
 - Full resolved path validated to stay within source directory
 - Edge cases like `../etc/passwd` rejected
 
 **Related code locations:**
+
 - `src/Manager.php:709-750` - `performRename()` method
 - `src/Manager.php:728` - Current path traversal check
 
@@ -120,12 +124,14 @@ Add `$concurrency` parameter (default 4–8) to `copyManyAsync()` that uses a pr
 For 1000 files, firing 1000 concurrent promises causes severe performance degradation on spinning disks or network filesystems.
 
 **Conditions for success:**
+
 - Default concurrency of 4-8 established
 - Promise queue implementation limits concurrent copies
 - All existing tests pass
 - New concurrency test added
 
 **Related code locations:**
+
 - `src/AsyncOps.php:98-122` - Current `copyManyAsync()` fires unlimited promises
 - `candy-async/src/AsyncOps.php` - Has retry mechanism but no concurrency queue
 - ReactPHP has `React\Promise\Queue` for this purpose
@@ -168,11 +174,13 @@ Register a shutdown function via `register_shutdown_function()` to clean up the 
 Trash directories at `sys_get_temp_dir() . '/candyfiles-trash-PID'` accumulate over time, consuming disk space.
 
 **Conditions for success:**
+
 - Shutdown handler registered in `Manager` constructor or `start()`
 - Shutdown handler removes `$trashDir` recursively
 - Works for both normal exit and fatal error scenarios
 
 **Related code locations:**
+
 - `src/Manager.php:48-68` - `__construct()` method
 - `src/Manager.php:73-97` - `start()` factory method
 - `src/Manager.php:906-924` - `removePath()` already exists for recursive deletion
@@ -203,10 +211,12 @@ Derive `isLink` and `isDir` from `lstat()` mode bits instead of issuing separate
 After `lstat()`, two additional syscalls are made per entry. File type can be extracted directly from mode bits.
 
 **Conditions for success:**
+
 - Mode bits used to determine `isLink` and `isDir`
 - Tests pass with real filesystem verification
 
 **Related code locations:**
+
 - `src/FsLister.php:27-33` - Current implementation
 
 **Implementation:**
@@ -234,11 +244,13 @@ Extract a private helper `withMutatedState(array $overrides): self` that applies
 Every `with*` method constructs `Manager` with 16 arguments, modifying only 1–2 values. This is error-prone and verbose.
 
 **Conditions for success:**
+
 - Helper method extracted
 - All `with*` methods use the helper
 - Tests pass without modification
 
 **Related code locations:**
+
 - `src/Manager.php:229-250` - `withActive()`
 - `src/Manager.php:255-294` - `withActivePane()`
 - `src/Manager.php:758-767` - `withConfirm()`
@@ -297,12 +309,14 @@ Extract groups of match arms into private methods: `dispatchNavigation()`, `disp
 60-line `match` statement handling navigation, tab management, search, undo/redo, confirm dialogs, copy/move/delete/rename all in one method creates high cognitive load.
 
 **Conditions for success:**
+
 - `dispatchNavigation()` handles Up/Down/k/j, Home/g/End/G, Enter/Right, Left/h, Tab
 - `dispatchTabManagement()` handles t, Ctrl+w, Ctrl+Tab, Ctrl+Shift+Tab
 - `dispatchFileOperations()` handles d, c, m, R, r
 - `dispatch()` becomes a clean routing method
 
 **Related code locations:**
+
 - `src/Manager.php:166-227` - Current `dispatch()` method
 
 **Implementation:**
@@ -354,11 +368,13 @@ Split `resolveConfirm()` into `resolveTextEntryConfirm()` (handles `RenameSelect
 Method conflates two fundamentally different interaction models: text-entry sub-mode vs simple y/n confirmations.
 
 **Conditions for success:**
+
 - `resolveTextEntryConfirm()` handles Backspace, Enter, Escape, Char for RenameSelected
 - `resolveSimpleConfirm()` handles y/n for DeleteSelected, CopySelected, MoveSelected
 - `resolveConfirm()` becomes a clean routing method
 
 **Related code locations:**
+
 - `src/Manager.php:343-401` - Current `resolveConfirm()` method
 
 **Implementation:**
@@ -390,12 +406,14 @@ Extract to a shared `processUndoAction(UndoAction $action, bool $isReverse): voi
 `reverseAction()` and `redoAction()` have identical `match` on `UndoActionType` with same case list, differing only in which implementation method they call.
 
 **Conditions for success:**
+
 - Single `processUndoAction()` method handles both reverse and redo
 - `reverseAction()` delegates to `processUndoAction($action, true)`
 - `redoAction()` delegates to `processUndoAction($action, false)`
 - All implementation methods unchanged
 
 **Related code locations:**
+
 - `src/Manager.php:1079-1092` - `redoAction()`
 - `src/Manager.php:1177-1191` - `reverseAction()`
 
@@ -440,12 +458,14 @@ Add `copyWithRetry(int $attempts = 3, float $delay = 0.5)` method that wraps `co
 Network-mounted filesystems or heavily-loaded disks benefit from transparent retry with exponential backoff.
 
 **Conditions for success:**
+
 - `copyWithRetry()` method added to `AsyncOps`
 - Uses `SugarCraft\Async\AsyncOps::retry()` with exponential backoff
 - CancellationToken support for aborting retries
 - Test verifies retry behavior
 
 **Related code locations:**
+
 - `candy-files/src/AsyncOps.php:27-42` - `copyAsync()` method
 - `candy-async/src/AsyncOps.php:86-148` - `retry()` implementation
 - `candy-async/src/CancellationToken.php` - CancellationToken class
@@ -489,11 +509,13 @@ Add optional `CancellationToken` support to `copyManyAsync()` using `candy-async
 Once `copyManyAsync()` is called, there is no mechanism to cancel it. `candy-async` provides `CancellationToken` support.
 
 **Conditions for success:**
+
 - `CancellationToken|null $token = null` parameter added
 - Token checked between each copy operation
 - Cancellation aborts remaining operations cleanly
 
 **Related code locations:**
+
 - `src/AsyncOps.php:98-122` - Current implementation
 - `candy-async/src/AsyncOps.php:86-148` - CancellationToken usage in retry
 
@@ -521,11 +543,13 @@ Add `use React\EventLoop\Loop;` to imports and use `Loop::futureTick()` without 
 Currently uses `\React\EventLoop\Loop::futureTick(...)` which works but is inconsistent with other imports.
 
 **Conditions for success:**
+
 - Import added
 - All `Loop::futureTick()` calls use short form
 - Tests pass
 
 **Related code locations:**
+
 - `src/AsyncOps.php:32` - Current fully-qualified call
 - `src/AsyncOps.php:55` - Also uses fully-qualified call
 
@@ -557,11 +581,13 @@ Add a progress callback parameter or emit streaming results so the TUI can displ
 `performCopyAsync()` performs asynchronous file copies without emitting progress events. Large directory copies give no user feedback until completion.
 
 **Conditions for success:**
+
 - Progress callback parameter added
 - Each completed file triggers callback with count/total
 - TUI can display progress bar during copy
 
 **Related code locations:**
+
 - `src/Manager.php:631-670` - `performCopyAsync()` method
 - `src/AsyncOps.php:98-122` - `copyManyAsync()` could emit progress
 
@@ -596,11 +622,13 @@ Document the known limitation that if copying 5 files and file 3 fails, files 1�
 If copying 5 files and file 3 fails, files 1–2 are already copied and the undo stack records all 5 as "copied". The partial copy remains on disk.
 
 **Conditions for success:**
+
 - Clear documentation added to method PHPDoc
 - User-facing message mentions potential for partial copies on failure
 - Known limitation explicitly documented
 
 **Related code locations:**
+
 - `src/Manager.php:585-620` - `performCopy()` (sync version)
 - `src/Manager.php:631-670` - `performCopyAsync()` (async version)
 
@@ -636,11 +664,13 @@ Use only `mb_substr($s, 0, -1, 'UTF-8')` since it is purpose-built for this oper
 The regex `/.$/us` with `/u` flag handles UTF-8 properly. The `??` fallback suggests uncertainty about regex behavior, and `mb_substr($s, 0, -1)` uses byte-based offset which is ambiguous.
 
 **Conditions for success:**
+
 - Only `mb_substr($s, 0, -1, 'UTF-8')` used
 - Fallback removed
 - Tests pass
 
 **Related code locations:**
+
 - `src/Manager.php:895-903` - Current implementation with regex fallback
 
 **Implementation:**
@@ -669,10 +699,12 @@ Replace `$msg = $msg;` self-assignment with a comment explaining why the variabl
 Self-assignment `$msg = $msg;` is intentional but unusual. The variable is not used because state is managed by the command itself.
 
 **Conditions for success:**
+
 - Comment added explaining state management
 - Self-assignment removed
 
 **Related code locations:**
+
 - `src/Manager.php:112-121` - Current handling
 
 **Implementation:**
@@ -701,10 +733,12 @@ Extract tab cycling literals (`"\t"`, `" "`) into named constants like `TAB_CYCL
 Various string literals used for tab cycling could use named constants for improved readability.
 
 **Conditions for success:**
+
 - `TAB_CYCLE_DELIMITER` constant added for `"\t"`
 - Constants used in `dispatch()` method
 
 **Related code locations:**
+
 - `src/Manager.php:40` - `UNDO_LIMIT` constant exists
 - `src/Manager.php:192` - Space used for selection toggle
 - `src/Manager.php:217-222` - Tab key literals used
@@ -732,11 +766,13 @@ Add `"sugarcraft/candy-async": "dev-master"` to the `require` section since the 
 The `candy-async` path repository is listed in `repositories` but `sugarcraft/candy-async` is not listed in `require`. The library uses `candy-async` concepts but the dependency is not explicit, risking silent breakage.
 
 **Conditions for success:**
+
 - `sugarcraft/candy-async` added to `require` section
 - `composer validate` passes
 - Tests pass with new dependency
 
 **Related code locations:**
+
 - `candy-files/composer.json:32-37` - Current `require` section
 - `candy-files/composer.json:60-66` - Path repo for candy-async exists
 
@@ -768,11 +804,13 @@ Consider making the constructor `private` and forcing callers through `Manager::
 The constructor takes 16 parameters and is `public`, which could be misused with incorrect argument ordering. The builder exists but is not enforced.
 
 **Conditions for success:**
+
 - Constructor changed to `private`
 - All call sites use `start()` or `builder()->build()`
 - Tests pass (some tests may need updating)
 
 **Related code locations:**
+
 - `src/Manager.php:48-68` - Current public constructor
 - `src/Manager.php:73-97` - `start()` factory exists
 - `src/Manager.php:107-110` - `builder()` exists
@@ -807,11 +845,13 @@ Add a test that explicitly documents the known limitation that copy undo is a no
 `testCanUndoAfterDelete` verifies delete undo. There is no test documenting the known limitation that copy undo is a no-op.
 
 **Conditions for success:**
+
 - `testUndoCopyIsNoOp()` test added
 - Test verifies that undoing a copy does NOT delete the destination
 - Comment documents this as an intentional behavior
 
 **Related code locations:**
+
 - `tests/ManagerTest.php:418-472` - `testCanUndoAfterDelete()` reference
 - `src/Manager.php:1033-1042` - Copy undo returns no-op message
 
@@ -845,11 +885,13 @@ Add test case that simulates a partial failure (e.g., source file disappears mid
 Tests exist for success cases but there are no tests for what happens when a copy partially fails.
 
 **Conditions for success:**
+
 - Test simulates source file disappearing mid-copy
 - Verifies partial results returned correctly
 - No unhandled exceptions or inconsistent state
 
 **Related code locations:**
+
 - `tests/AsyncOpsTest.php:155-179` - `testCopyManyAsyncCopiesMultipleFiles()` reference
 - `src/AsyncOps.php:98-122` - Current implementation
 
@@ -890,11 +932,13 @@ Add an integration test that queues 50+ concurrent copy operations and verifies 
 No test verifies behavior when many async operations are queued simultaneously, particularly to validate that concurrency limits function correctly.
 
 **Conditions for success:**
+
 - Test queues 50+ concurrent copy operations
 - All complete without error
 - File descriptors not exhausted
 
 **Related code locations:**
+
 - `tests/AsyncOpsTest.php:149-179` - Reference test for copyManyAsync
 
 **Implementation:**
@@ -930,10 +974,12 @@ Add a code comment documenting that the TOCTOU race between `scandir` and `lstat
 Between `scandir` and `lstat`, files could be modified, deleted, or created. This is a fundamental race condition inherent to any filesystem listing.
 
 **Conditions for success:**
+
 - Comment added explaining acceptable trade-off
 - Notes narrow window and limited impact
 
 **Related code locations:**
+
 - `src/FsLister.php:27-28` - Current implementation
 
 **Implementation:**
@@ -962,10 +1008,12 @@ Document that `candy-files/AsyncOps` and `candy-async/AsyncOps` serve different 
 `candy-files/AsyncOps` provides file-specific operations (copy, move, rename). `candy-async/AsyncOps` provides generic async utilities (retry, debounce, throttle). Merging would add file-system concerns to the generic async library.
 
 **Conditions for success:**
+
 - Comment in `candy-files/src/AsyncOps.php` clarifying relationship
 - `candy-async` noted as providing `retry()` for use by `copyWithRetry()`
 
 **Related code locations:**
+
 - `candy-files/src/AsyncOps.php` - File operations
 - `candy-async/src/AsyncOps.php` - Generic utilities
 
@@ -988,10 +1036,12 @@ final class AsyncOps
 ## Summary: Implementation Priority Order
 
 ### High Priority (Security & Performance)
+
 1. **1.1** Predictable trash path (#6) - Security issue
 2. **2.1** copyManyAsync concurrency limiting (#9) - Prevents resource exhaustion
 
 ### Medium Priority (Code Quality & Missing Features)
+
 3. **3.1** withMutatedState() helper (#1)
 4. **3.2** dispatch() split (#2)
 5. **3.3** resolveConfirm() split (#3)
@@ -1001,6 +1051,7 @@ final class AsyncOps
 9. **7.2** Constructor privacy (#22)
 
 ### Low Priority (Incremental Improvements)
+
 10. **2.2** Trash cleanup on shutdown (#11)
 11. **2.3** FsLister syscall optimization (#10)
 12. **6.1** dropLast() simplification (#18)
@@ -1012,6 +1063,7 @@ final class AsyncOps
 18. **8.4** TOCTOU documentation (#8)
 
 ### Minor (Compatibility & Documentation)
+
 19. **1.2** Path traversal validation (#7)
 20. **4.3** Loop import (#17)
 21. **5.1** Progress reporting (#13)

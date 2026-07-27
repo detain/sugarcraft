@@ -5,9 +5,13 @@
 **candy-mold** is the `composer create-project` bootstrap scaffold for the SugarCraft monorepo — a PHP port of the Go [charmbracelet/bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) ecosystem. It is **not a library** — it is a starter template that developers fork to bootstrap new SugarCraft TUI applications. It ships a runnable counter `Model` wired through `Program`, demonstrating every architectural concept a SugarCraft developer needs to understand.
 
 **Key statistics:**
+
 - **5 files** in the scaffold (`bin/start`, `src/Counter.php`, `tests/CounterTest.php`, `composer.json`, `phpunit.xml`)
+
 - **1 demo Model** (`Counter`) implementing the full TEA triad
+
 - **0 external library deps beyond core** — only `candy-core` + `candy-sprinkles`
+
 - **Status**: v1 ready (🟢 in MATCHUPS.md)
 
 ---
@@ -53,9 +57,13 @@ use SugarCraft\Core\Program;
 
 **Exactly 3 meaningful lines** (excluding boilerplate path-searching and panic handler comments). The `Program` harness owns:
 - Event loop (ReactPHP `addReadStream`/`addPeriodicTimer`)
+
 - Raw mode setup / alt screen lifecycle
+
 - Signal handling (SIGINT/SIGWINCH/SIGTSTP)
+
 - Frame rendering tick + diffing
+
 - Input parsing via `InputReader`
 
 The developer writes only the `Model`. This is the same design philosophy as bubbletea's `tea.NewProgram(initialModel()).Run()` — the framework handles all terminal plumbing.
@@ -100,9 +108,13 @@ final class Counter implements Model
 **Immutability**: The `readonly int $n` is the only state. Every state transition returns a **new** `Counter` instance rather than mutating `$this`. This is the Elm architecture principle: state lives in value objects, transitions are pure functions.
 
 **TEA Pattern Demonstration:**
+
 1. **`init()`** — Returns `null` (no startup command). A real app might return `Cmd::tick(1.0, fn() => new TickMsg())` here for a clock.
+
 2. **`update(Msg $msg): array`** — Pure state transition. `[$nextModel, $nextCmd] = $counter->update($keyMsg)`. The array destructuring is how PHP simulates Go tuples.
+
 3. **`view(): string`** — Declarative rendering. Returns ANSI string with rounded border + padding via `candy-sprinkles`.
+
 4. **`subscriptions()`** — Returns `null` (no background subscriptions). A real app might return tick timers here.
 
 ### Test Suite: `tests/CounterTest.php`
@@ -134,13 +146,21 @@ final class CounterTest extends TestCase
 ```
 
 **7 tests total:**
+
 1. `testStartsAtZero` — default state
+
 2. `testUpIncrementsCount` — KeyMsg → new Counter
+
 3. `testDownDecrementsCount` — KeyMsg with initial value
+
 4. `testQuitDispatchesQuitCmd` — `q` key → `Cmd::quit()`
+
 5. `testNonKeyMessageIgnored` — `WindowSizeMsg` passes through unchanged
+
 6. `testInitReturnsNoCmd` — `init()` returns null
+
 7. `testViewContainsCount` — `view()` includes count + help text
+
 8. `testUpdateIsPure` — immutability check
 
 **Key insight**: No event loop, no terminal, no mocking. Direct `->update($msg)` calls asserting the returned `[Model, ?Cmd]` tuple. This is the testing pattern for Elm-architecture models — deterministic, synchronous unit tests.
@@ -184,23 +204,32 @@ The counter demonstrates **The Elm Architecture** (also called The TEA Pattern):
 
 **The Model** (`Counter`) is a value object with:
 - `public readonly int $n` — immutable state
+
 - `init(): ?Closure` — startup command (null here)
+
 - `update(Msg $msg): array` — pure transition function
+
 - `view(): string` — renders current state as ANSI string
+
 - `subscriptions(): ?Subscriptions` — background subscriptions (null here)
 
 **The Message** (`KeyMsg`):
 - Carries key type (`Up`/`Down`/`Char`) and rune (`'q'`)
+
 - Dispatched by `InputReader` when ↑/↓/q keys are pressed
 
 **The Command** (`Cmd::quit()`):
 - A `Closure(): ?Msg` factory for side effects
+
 - `Cmd::quit()` returns a closure that produces `QuitMsg`, signaling program exit
+
 - Other commands (`Cmd::tick()`, `Cmd::batch()`, `Cmd::exec()`) handle timers, concurrency, shell-out
 
 **The View** (`Style::new()->border(Border::rounded())->padding(1, 2)->render($body)`):
 - Uses `candy-sprinkles` (port of `lipgloss`) for declarative ANSI styling
+
 - `Border::rounded()` produces `╭──╮│  │╰──╯` style box
+
 - `padding(1, 2)` adds 1 line top/bottom, 2 cols left/right
 
 ---
@@ -245,10 +274,15 @@ php candy-mold/vendor/bin/phpunit -c candy-mold/phpunit.xml --colors=never
 | Dependencies | `bubbletea v1.3.10`, `bubbles v1.0.0`, `lipgloss v1.1.0` | `candy-core dev-master`, `candy-sprinkles dev-master` |
 
 **Key differences:**
+
 - candy-mold demonstrates **immutability** explicitly (`readonly int $n`, `with*()` pattern implied by `new self($this->n + 1)`)
+
 - candy-mold includes a **full test suite**; the Go template has no tests
+
 - The Go template shows **sub-component composition** (spinner within model); candy-mold shows a **single Model** — simpler but less illustrative of composition
+
 - The Go template uses `key.NewBinding` for declarative key bindings; candy-mold uses direct `KeyType` matching
+
 - candy-mold documents the TEA pattern extensively in the `Counter.php` docblock (~20 lines of explanation)
 
 **Verdict**: Both serve the same purpose (demonstrate TEA pattern for newcomers). candy-mold adds immutability documentation and PHPUnit testing. The Go template adds sub-component composition and production CI/CD.
@@ -430,6 +464,7 @@ foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php'] as $candid
 
 This searches two locations (sibling `vendor/` and parent `vendor/`) so the script works both:
 - When invoked as `./bin/start` from the project root (autoload is at `./vendor/autoload.php`)
+
 - When invoked as `php bin/start` from the project root (path is the same)
 
 ### 4. The optional panic handler
@@ -497,8 +532,11 @@ SugarCraft/candy-mold (PHP scaffold)  ◀── Entry point for PHP developers
 
 Without candy-mold, a PHP developer would have to:
 1. Read the `candy-core` README
+
 2. Understand the `Model` interface contract
+
 3. Know to create `bin/start` with `Program::run()`
+
 4. Wire up `composer.json` with path-repo dependencies
 
 candy-mold gives them a **working running app** in 30 seconds via `composer create-project sugarcraft/candy-mold my-app`.

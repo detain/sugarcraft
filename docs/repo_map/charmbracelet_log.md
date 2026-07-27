@@ -1,6 +1,7 @@
 # charmbracelet/log
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/log
 - Language: Go
 - Stars: ~700+ (estimate based on repo age and activity)
@@ -8,6 +9,7 @@
 - Description: A minimal and colorful Go logging library that provides leveled structured human readable logging with a small API. Uses Lip Gloss for styling/coloring output and implements slog.Handler for stdlib compatibility.
 
 ## Feature List
+
 - **Leveled Logging**: Debug, Info, Warn, Error, Fatal + level-agnostic Print
 - **Structured Key-Value Logging**: All log methods accept arbitrary key-value pairs
 - **Three Output Formatters**:
@@ -29,6 +31,7 @@
 ## Key Classes and Methods
 
 ### Logger (struct)
+
 - `Log(level Level, msg any, keyvals ...any)` — core logging method
 - `Logf(level Level, format string, args ...any)` — formatted logging
 - `Debug/Info/Warn/Error/Fatal(msg any, keyvals ...any)` — level-specific logging
@@ -44,6 +47,7 @@
 - `StandardLog(opts ...StandardLogOptions) *log.Logger` — return stdlib adapter
 
 ### Package-Level Functions
+
 - `New(w io.Writer) *Logger` — create new logger with defaults
 - `NewWithOptions(w io.Writer, o Options) *Logger` — create with custom options
 - `Default() *Logger` — get global default logger
@@ -59,6 +63,7 @@
 - `StandardLog(opts ...StandardLogOptions) *log.Logger` — global stdlib adapter
 
 ### Options (struct)
+
 - `TimeFunction TimeFunction` — custom time func (default: `time.Now`)
 - `TimeFormat string` — time format string (default: `"2006/01/02 15:04:05"`)
 - `Level Level` — minimum log level (default: `InfoLevel`)
@@ -71,27 +76,33 @@
 - `Formatter Formatter` — output format (Text/JSON/Logfmt)
 
 ### Level (type)
+
 - Constants: `DebugLevel = -4`, `InfoLevel = 0`, `WarnLevel = 4`, `ErrorLevel = 8`, `FatalLevel = 12`
 - `String() string` — string representation
 - `ParseLevel(string) (Level, error)` — parse from string
 
 ### Styles (struct)
+
 - `DefaultStyles() *Styles` — create default styled set
 - Fields: `Timestamp`, `Caller`, `Prefix`, `Message`, `Key`, `Value`, `Separator`, `Levels`, `Keys`, `Values`
 
 ### CallerFormatter (type)
+
 - `ShortCallerFormatter(file string, line int, fn string) string` — 2-level path + line
 - `LongCallerFormatter(file string, line int, fn string) string` — full path + line
 
 ### TimeFunction (type)
+
 - `NowUTC(t time.Time) time.Time` — convert to UTC
 
 ### StandardLogOptions (struct)
+
 - `ForceLevel Level` — force all output to specific level
 
 ## Notable Algorithms / Named Patterns
 
 ### Caller Path Trimming (from zap)
+
 ```go
 // trimCallerPath returns the last n segments of the path
 // Uses forward slash even on Windows (runtime.Caller returns forward slashes)
@@ -99,6 +110,7 @@ func trimCallerPath(path string, n int) string
 ```
 
 ### String Builder Pool
+
 ```go
 var bufPool = sync.Pool{
     New: func() any { return new(strings.Builder) },
@@ -107,6 +119,7 @@ var bufPool = sync.Pool{
 Reused via `bufPool.Get()`/`bufPool.Put()` to reduce allocations during string escaping.
 
 ### Atomic Level Checking
+
 ```go
 if atomic.LoadInt64(&l.level) > int64(level) {
     return  // level filtered, skip logging
@@ -115,6 +128,7 @@ if atomic.LoadInt64(&l.level) > int64(level) {
 Thread-safe level comparison without mutex lock.
 
 ### Helper Function Skip Map
+
 ```go
 func (l *Logger) helper(skip int) {
     var pcs [1]uintptr
@@ -127,6 +141,7 @@ func (l *Logger) helper(skip int) {
 Uses `sync.Map` to track functions marked as helpers, skipping them when finding the "real" caller for location reporting.
 
 ### Slog Handler Implementation
+
 Logger implements `slog.Handler` interface (Go 1.21+) with:
 - `Enabled(ctx context.Context, level slog.Level) bool`
 - `Handle(ctx context.Context, record slog.Record) error`
@@ -134,6 +149,7 @@ Logger implements `slog.Handler` interface (Go 1.21+) with:
 - `WithGroup(name string) slog.Handler`
 
 ### Text Formatter Value Escaping
+
 Handles:
 - Unicode printable characters
 - ANSI escape sequences (detected and properly quoted)
@@ -142,6 +158,7 @@ Handles:
 - Quoting detection for values containing spaces/special chars
 
 ### StdLog Adapter Pattern
+
 ```go
 func (l *stdLogWriter) Write(p []byte) (n int, err error) {
     // Parse standard log prefixes (DEBUG, INFO, WARN, ERROR, ERR)
@@ -193,11 +210,13 @@ The charmbracelet/log library maps to several SugarCraft libraries for TUI/loggi
 | Standard log adapter | `candy-core` | Adapter/wrapper patterns |
 
 ### Direct Port Candidates
+
 - **`sugar-log`** (new lib): A direct PHP port of `charmbracelet/log` would provide leveled structured logging with Text/JSON/Logfmt formatters
 - **`sugar-log-styles`** (extension): Lip Gloss-style styling system for log levels/keys/values
 - **`candy-logger`** (new lib): Could wrap PSR-3 or provide native leveled logging with charm's API
 
 ### SugarCraft lib Relevance
+
 - **sugar-bits**: Core output/rendering — shares concepts of buffered output, formatting
 - **candy-shine**: ANSI styling — directly ports Lip Gloss styling concepts
 - **candy-core**: Utilities and patterns — context, adapter patterns

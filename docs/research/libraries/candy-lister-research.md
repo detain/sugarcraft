@@ -19,6 +19,7 @@ candy-lister currently provides list rendering with cursor navigation, but **lac
 **Source:** `/home/sites/sugarcraft/candy-lister/src/Model.php`
 
 ### Capabilities
+
 - Viewport-based rendering with configurable width/height
 - Cursor navigation (up/down with clamping)
 - Prefix/suffix hooks for custom styling (DefaultPrefixer, DefaultSuffixer)
@@ -27,6 +28,7 @@ candy-lister currently provides list rendering with cursor navigation, but **lac
 - Item finding by equality function
 
 ### Gaps (Missing Filter Functionality)
+
 - **No filtering** — items cannot be filtered by a search term
 - **No fuzzy matching** — exact string comparison only
 - **No result ranking** — items appear in insertion order
@@ -87,12 +89,14 @@ Unfiltered --[press filter key]--> Filtering --[press Enter/accept]--> FilterApp
 ```
 
 ### Strengths
+
 - Clean separation between filter algorithm and UI
 - Async filtering via tea.Cmd — doesn't block render loop
 - Built-in status bar showing "X filtered"
 - Full help system integration
 
 ### Weaknesses
+
 - Depends on `sahilm/fuzzy` — not a native Go implementation
 - Uses sorted ranks, not scored matches (loses score granularity)
 
@@ -103,12 +107,14 @@ Unfiltered --[press filter key]--> Filtering --[press Enter/accept]--> FilterApp
 **Source:** [github.com/treilik/bubblelister](https://github.com/treilik/bubblelister)
 
 ### Overview
+
 - Lightweight wrapper around bubbles/list
 - Focuses on struct-to-list conversion for Bubble Tea
 - Stars: 52 | MIT License
 - Last updated: 2023-04-29
 
 ### Relationship to candy-lister
+
 candy-lister ports the **model/view rendering** from bubblelister, but not the filtering subsystem. The filtering in Go bubbles/list is actually independent of bubblelister — it's in the base `list` component.
 
 ---
@@ -162,12 +168,14 @@ assert_eq!(indices, [0, 2, 4]);  // positions of matched chars
 ```
 
 ### Strengths
+
 - **Superior ranking** — Smith-Waterman produces better-ordered results
 - **Typo tolerance** — gap penalties handle transpositions/misspellings
 - **Configurable** — every scoring parameter is tunable
 - **Thread-local caching** — performance via `ThreadLocal<RefCell<>>`
 
 ### Weaknesses
+
 - Complex algorithm (800+ lines for SkimMatcherV2)
 - No PHP equivalent exists
 
@@ -215,12 +223,14 @@ class FuzzySearch:
 ```
 
 ### Strengths
+
 - **Simple** — ~150 lines, readable and maintainable
 - **Fast substring exit** — O(n) for literal substring matches
 - **LRU caching** — `LRUCache` for repeated queries
 - **Good enough** — heuristic performs well for command palette use
 
 ### Weaknesses
+
 - Doesn't handle typos/gaps as well as Smith-Waterman
 - Grouping heuristic is simplistic
 
@@ -285,7 +295,9 @@ similar_text($needle, $haystack, $percent);  // Similarity ratio
 
 ```php
 /**
+
  * Filter result — index + matched character positions.
+
  */
 final readonly class FilterMatch
 {
@@ -297,11 +309,13 @@ final readonly class FilterMatch
 }
 
 /**
+
  * Filter function signature — pluggable algorithm.
  *
  * @param string $term User's search term
  * @param list<string> $targets FilterValue() strings from items
  * @return list<FilterMatch> Matched items with indices and positions, sorted by relevance
+
  */
 type FilterFunc = callable(string $term, array $targets): array;
 ```
@@ -312,9 +326,11 @@ type FilterFunc = callable(string $term, array $targets): array;
 
 ```php
 /**
+
  * Fuzzy matcher producing score + matched positions.
  *
  * Mirrors skim-rs/fuzzy-matcher SkimMatcherV2.
+
  */
 final class FuzzyMatch
 {
@@ -330,6 +346,7 @@ final class FuzzyMatch
      * Match term against a single candidate.
      *
      * @return array{score: int, indices: list<int>}|null null if no match
+
      */
     public function match(string $candidate): ?array
     {
@@ -425,6 +442,7 @@ public function filterPrompt(string $prompt = 'Filter: '): string
 candy-lister has a solid rendering foundation. The missing piece is filtering. The Go bubbles/list provides the cleanest architectural reference — a pluggable `FilterFunc` that returns ranked matches. For the actual algorithm, a PHP port of skim V2's Smith-Waterman approach would provide the best user experience (typo tolerance, good ranking), though a Textual-style heuristic would be faster to implement and "good enough" for most use cases.
 
 **Recommended Path:**
+
 1. Define `FilterFunc` interface + `FilterMatch` DTO
 2. Implement a `FuzzyMatch` class (start with Textual-style heuristic, upgrade to skim V2 later)
 3. Integrate filter state machine into Model

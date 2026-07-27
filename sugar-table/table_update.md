@@ -2,6 +2,9 @@
 
 ## Overview
 
+
+
+
 This plan addresses the comprehensive update and fix of the sugar-table library. The library has good bones but has several broken features that are advertised but not implemented, and several missing features that users would expect from a terminal table component.
 
 ## Current State Assessment
@@ -47,33 +50,63 @@ This plan addresses the comprehensive update and fix of the sugar-table library.
 ## Phases
 
 ### Phase 1: Wire computeColumnWidths into Rendering
+
+
+
 Fix the disconnect between computed column widths and actual rendering.
 
 ### Phase 2: Implement Frozen Columns
+
+
+
 Make frozen columns actually work - columns stay fixed while others scroll.
 
 ### Phase 3: Implement Multiline Mode
+
+
+
 Fix multiline mode so rows render with proper multi-line height.
 
 ### Phase 4: Implement Horizontal Scroll
+
+
+
 Fix scrollX so it actually scrolls columns horizontally.
 
 ### Phase 5: Add Global Search
+
+
+
 Implement search across all columns at once.
 
 ### Phase 6: Add Row Expansion/Collapse
+
+
+
 Add expandable row functionality.
 
 ### Phase 7: Add "Showing Rows" Footer
+
+
+
 Implement the existing i18n key for row count display.
 
 ### Phase 8: Add Keyboard Navigation
+
+
+
 Add keyboard-based scrolling to viewport.
 
 ### Phase 9: Add Remaining Polish
+
+
+
 Add padding control, column visibility toggle, table auto-width, data formatters.
 
 ### Phase 10: Final Review and Polish
+
+
+
 Documentation sweep, test coverage, final verification.
 
 ## Each Phase Contains These Steps
@@ -84,11 +117,20 @@ Documentation sweep, test coverage, final verification.
 5. Update documentation step (scribe/coder subagent)
 
 ## Updates File
+
+
+
 All subagents should use `/home/sites/sugarcraft/sugar-table/.plans/updates.md` to communicate progress, issues, and blockers.
 
 ## Agent Instructions Location
+
+
+
 Supervisor instructions: `/home/sites/sugarcraft/sugar-table/.plans/supervisor/instructions.md`
 Step instructions: `/home/sites/sugarcraft/sugar-table/.plans/steps/{phase}-{step}/instructions.md`
 
 ## How to Run
+
+
+
 The supervisor should be started with the prompt from the supervisor instructions file.

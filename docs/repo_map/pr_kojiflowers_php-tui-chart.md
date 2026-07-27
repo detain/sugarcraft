@@ -24,6 +24,7 @@
 The repository has **zero community footprint**: no issues filed, no PRs submitted, no discussions initiated, no labels applied. The standard GitHub labels exist but were never used, suggesting the maintainer set them up preemptively but never engaged with any community feedback. The live demo infrastructure has been decommissioned, leaving only broken links.
 
 ### Commit History Summary
+
 1. **Apr 24, 2018** — Initial commit with composer autoloading setup
 2. **Apr 25, 2018** — Added Draw class, DataPrep trait, initial bar chart support
 3. **May 23, 2018** — release_v1.0: renamed Builder to use TUI chart names, added line/column/bar examples
@@ -94,21 +95,25 @@ The most likely interpretation: users tried it, found it didn't work (broken CDN
 Since there are no issues to analyze, pain points must be inferred from code analysis and the library's failure mode:
 
 ### Pain Point 1: Deprecated/Abandoned CDN Dependencies
+
 The library's examples reference `https://rawgit.com/nhnent/tui.code-snippet/v1.3.0/dist/tui-code-snippet.js` and similar URLs. **rawgit.com was decommissioned in 2018.** This means any user copy-pasting the README examples gets broken code out of the box.
 
 **Direct Risk to SugarCraft**: SugarCraft has **no external CDN dependencies** — it renders natively in PHP to ANSI sequences. This failure mode is completely irrelevant to sugar-charts.
 
 ### Pain Point 2: No Composer Package
+
 The library uses a manual autoloader (`PhpTuiChart/` classmap) rather than a proper Composer package with PSR-4. Users must manually include the autoloader. In 2018 this was more acceptable, but today it creates friction.
 
 **Direct Risk to SugarCraft**: sugar-charts uses proper Composer/PSR-4. This is a non-issue.
 
 ### Pain Point 3: Dead Demo Infrastructure
+
 `projects.kojiflowers.com/php-tui-chart/` is unreachable. The only live examples that once existed are gone, leaving prospective users with no way to evaluate the library's output.
 
 **Direct Risk to SugarCraft**: sugar-charts has `.vhs/` demo files and rendered GIFs in the repo. The CI/CD pipeline maintains these. This is a model SugarCraft should continue.
 
 ### Pain Point 4: JavaScript Output Security
+
 The library constructs JavaScript via string concatenation:
 ```php
 $tui_chart_init_code .= "var chart = tui.chart.{$this->type}({$this->container_id}, {$this->chart_data_json}, {$options});";
@@ -118,11 +123,13 @@ If `$this->chart_data_json` contains user-controlled data with quotes or special
 **Direct Risk to SugarCraft**: sugar-charts outputs ANSI escape sequences, not JavaScript. However, the **data transformation layer** (Aggregation, keypair reorganization) could still be a vector if it accepts unsanitized input. sugar-charts should ensure its data transformation utilities validate and sanitize inputs.
 
 ### Pain Point 5: Zero Test Coverage
+
 The library has not a single test. Users have no way to verify the library works correctly before deploying.
 
 **Direct Risk to SugarCraft**: sugar-charts has comprehensive PHPUnit test suites per AGENTS.md requirements. This is already better.
 
 ### Pain Point 6: Limited Extensibility
+
 The `keypair` transformation is the only data reorganization option. Adding custom transformations requires modifying the Builder class directly. There's no plugin architecture or extension points.
 
 **Direct Risk to SugarCraft**: sugar-charts' Aggregation classes use a more extensible pattern with typed inputs and outputs. However, sugar-charts could benefit from documenting extension patterns for community contributions.
@@ -198,16 +205,19 @@ From code analysis:
 From source code inspection, the library has minimal extensibility:
 
 **Non-extensible patterns:**
+
 - `Builder` class does everything in a single monolithic method chain
 - `DataPrep` trait methods are defined but never called in normal flow
 - No interface or abstract class defining extension points
 - Chart types are hardcoded strings validated only at render time
 
 **Potentially extensible:**
+
 - The `keypair` data reorganization could be swapped for custom transformations by subclassing
 - Default options could be overridden by extending classes
 
 **Direct Risk to SugarCraft**: sugar-charts uses a more extensible architecture with:
+
 - Canvas/Graph abstraction separating primitives from chart logic
 - Aggregation classes that can be composed
 - Theme system via Sprinkles that can be extended
@@ -314,18 +324,23 @@ These feel like features started but never finished. For SugarCraft, this is a r
 Despite the different domains (browser JS vs terminal ANSI), several problems from php-tui-chart are relevant to sugar-charts:
 
 ### Problem 1: Silent Failure on Bad Data
+
 php-tui-chart's `__toString()` returns empty string on failure. sugar-charts' `view()` methods should throw exceptions or return error indicators rather than silent empty output.
 
 ### Problem 2: No Validation Until Build Time
+
 php-tui-chart doesn't validate required keys until `buildChart()` is called. sugar-charts should validate data at input boundaries (in constructors/factories) to fail fast with clear error messages.
 
 ### Problem 3: Deprecated External Dependencies
+
 php-tui-chart relied on external CDN URLs that have since died. sugar-charts has no such dependencies (pure PHP), but if sugar-charts ever adds optional external resources (fonts, icons), they should be bundled or have clear fallbacks.
 
 ### Problem 4: Dead Code in Traits
+
 `DataPrep` trait methods are defined but never called. sugar-charts' Aggregation classes should ensure all public methods are used or removed.
 
 ### Problem 5: Inconsistent Type Handling
+
 php-tui-chart has no type safety. sugar-charts uses strict types — this is already better, and should remain a priority.
 
 ---
@@ -335,18 +350,22 @@ php-tui-chart has no type safety. sugar-charts uses strict types — this is alr
 From analyzing php-tui-chart's patterns (even abandoned ones), SugarCraft should consider:
 
 ### Consider 1: Keypair-Style Data Transposition for Multi-Series
+
 php-tui-chart's `keypair` mode is a useful pattern for handling row-oriented data transforming to series-oriented output. sugar-charts' Aggregation layer could benefit from a similar utility that transposes multi-series data.
 
 ### Consider 2: Data Range Detection Utilities
+
 `findDataRanges()` in php-tui-chart attempts to detect data ranges per series. SugarCraft could use similar utilities for:
 - Auto-scaling axes
 - Normalizing data for heatmaps
 - Detecting outliers for scatter plots
 
 ### Consider 3: CSV/TSV File Parsing
+
 php-tui-chart has `prepCsv()`/`prepTsv()` methods (though unused). If sugar-charts adds file input utilities, the pattern is available to model after.
 
 ### Consider 4: `__toString()` Error Handling
+
 The `__toString()` magic method pattern is convenient but hides errors. SugarCraft models that implement `__toString()` should ensure errors surface clearly rather than producing silent empty output.
 
 ---
@@ -354,16 +373,19 @@ The `__toString()` magic method pattern is convenient but hides errors. SugarCra
 ## 20. Architectural Lessons
 
 ### Lesson 1: Thin Wrappers Die with Their Dependencies
+
 php-tui-chart is essentially a configuration DSL for a JavaScript library. When TUI Chart changed, or when rawgit.com died, the PHP wrapper had no value proposition. The library wasn't self-contained.
 
 **SugarCraft's strength**: sugar-charts is self-contained. It renders with ANSI escape sequences that any terminal can interpret. No external runtime dependencies.
 
 ### Lesson 2: No Community = No Feedback Loop
+
 With zero issues, there's no way to know what users wanted. The maintainer had no signal to guide development. A library without community engagement tends to drift toward abandonment.
 
 **SugarCraft's practice**: The monorepo structure, PHPUnit tests, VHS demo pipeline, and documented contribution workflow all foster community. This should continue.
 
 ### Lesson 3: Dead Code Signals Neglect
+
 The `DataPrep` trait methods being defined but never called is a red flag. It suggests either:
 - Features started and abandoned
 - Design confused about where logic should live
@@ -371,11 +393,13 @@ The `DataPrep` trait methods being defined but never called is a red flag. It su
 **SugarCraft's practice**: Regular codebase audits to remove dead code. The PATH_REPO_CLOSURE skill and php-best-practices skill encourage clean code.
 
 ### Lesson 4: Examples Must Be Maintained
+
 The live demo at projects.kojiflowers.com dying without replacement left prospective users with no way to evaluate the library. Code examples in README.md are static — if they rely on dead URLs, they teach users to build broken things.
 
 **SugarCraft's practice**: VHS demos are auto-rendered to GIFs and committed to the repo. README.md examples are tested via the demo pipeline. This must continue.
 
 ### Lesson 5: Magic Methods Hide Failures
+
 `__toString()` returning empty string on error is an anti-pattern. Errors should be surfaced, not swallowed.
 
 **SugarCraft's practice**: Model errors should throw exceptions. If rendering fails, developers need to know.
@@ -385,21 +409,26 @@ The live demo at projects.kojiflowers.com dying without replacement left prospec
 ## 21. Defensive Design Lessons
 
 ### Defensive Lesson 1: Validate Early, Fail Fast
+
 php-tui-chart accepts any array as `$chart_data` and only fails when trying to build. SugarCraft should validate:
 - Required array keys exist
 - Data types are correct
 - Values are within expected ranges
 
 ### Defensive Lesson 2: No External Dependencies for Core Functionality
+
 The rawgit.com shutdown broke php-tui-chart's examples permanently. SugarCraft's core rendering has no external dependencies — this is a design strength to preserve.
 
 ### Defensive Lesson 3: Remove Dead Code
+
 Unused methods in `DataPrep` trait (never called by Builder) create confusion and suggest design instability. SugarCraft should have a policy of removing or wiring up all defined methods.
 
 ### Defensive Lesson 4: Type Safety Prevents Subtle Bugs
+
 php-tui-chart's complete lack of type declarations allowed subtle bugs to hide until runtime. SugarCraft's strict types are a defensive measure that reduces bugs.
 
 ### Defensive Lesson 5: Document Extension Points
+
 With no interface hierarchy, extending php-tui-chart required modifying the core Builder class. SugarCraft's Canvas/Graph/Aggregation separation provides natural extension points that should be documented.
 
 ---
@@ -424,12 +453,15 @@ SugarCraft occupies a different niche: **terminal output where JavaScript can't 
 ## 23. Strategic Opportunities
 
 ### Opportunity 1: Data Transformation as a Service
+
 php-tui-chart's `keypair` reorganization pattern is genuinely useful — it solves a real problem (developers think in rows, charting libraries want series). SugarCraft could offer a standalone data-transformation utility that works with any charting system, not just sugar-charts.
 
 ### Opportunity 2: File Input for Charts
+
 If sugar-charts added CSV/TSV/JSON parsing (modeled after php-tui-chart's DataPrep trait but properly integrated), it would lower the barrier to entry. Users could load data from files rather than constructing arrays in code.
 
 ### Opportunity 3: Documentation of Anti-Patterns
+
 This report itself is a contribution — documenting what NOT to do based on a failed library. SugarCraft's documentation could include a "lessons from abandoned libraries" section to guide contributors away from common mistakes.
 
 ---
@@ -437,6 +469,7 @@ This report itself is a contribution — documenting what NOT to do based on a f
 ## 24. Cross-Ecosystem Pattern Matches
 
 ### Pattern Match 1: thin-wrapper-around-remote-service
+
 php-tui-chart wraps a JavaScript library. Other examples in the PHP ecosystem:
 - `wp_enqueue_script` style wrappers
 - PHP-JS bridge libraries
@@ -444,11 +477,13 @@ php-tui-chart wraps a JavaScript library. Other examples in the PHP ecosystem:
 These all fail when the remote service/dependency changes or dies. SugarCraft avoids this by owning the entire rendering stack.
 
 ### Pattern Match 2: hobby-project-without-community
+
 A single developer creates something useful for themselves, shares it, but never builds the feedback loop needed for sustainability. The labels were set up (bug, enhancement, etc.) but never used — a classic sign.
 
 SugarCraft's multi-maintainer structure, monorepo with shared tooling, and documented contribution process helps avoid this pattern.
 
 ### Pattern Match 3: dead-cdn-kills-library
+
 Depending on external CDNs for core functionality is dangerous. When rawgit.com died, php-tui-chart broke. The lesson: **bundle what you need or own the delivery mechanism**.
 
 SugarCraft's ANSI escape sequences require no external delivery — they're native to terminals. This is a structural advantage.
@@ -460,21 +495,27 @@ SugarCraft's ANSI escape sequences require no external delivery — they're nati
 Given php-tui-chart's complete failure mode (zero community, dead infrastructure, abandoned), the highest-value recommendations for SugarCraft are:
 
 ### Recommendation 1: Maintain the Demo Pipeline (HIGH ROI)
+
 php-tui-chart died in part because its demos died. SugarCraft's VHS demo pipeline produces committed GIFs that never go stale. **Continue investing in this pipeline.** Consider adding automated screenshot testing of rendered chart output.
 
 ### Recommendation 2: Enforce Strict Types Everywhere (HIGH ROI)
+
 php-tui-chart had zero type safety. Every SugarCraft class should use `declare(strict_types=1)` and typed properties/methods. This prevents subtle bugs and improves IDE support.
 
 ### Recommendation 3: Remove Dead Code (MEDIUM ROI)
+
 The unused `DataPrep` methods suggest incomplete refactoring. Conduct a periodic audit to remove or wire up all defined methods. PHPStorm's "unused method" inspection or `phpstan --DeadCode` can automate this.
 
 ### Recommendation 4: Validate Inputs Early (HIGH ROI)
+
 Add input validation to sugar-charts constructors and factory methods. Fail fast with clear error messages rather than silently producing broken output. This would have saved php-tui-chart users hours of debugging.
 
 ### Recommendation 5: Document Extension Points (MEDIUM ROI)
+
 php-tui-chart had no documented way to extend it. sugar-charts' Canvas/Graph/Aggregation separation provides natural extension points. Documenting these (in CALIBER_LEARNINGS.md per lib) would help the community contribute meaningfully.
 
 ### Recommendation 6: Consider Data Transformation Utilities (LOW-MEDIUM ROI)
+
 The `keypair` transposition pattern is genuinely useful and could be extracted into a standalone `sugar-data` or `SugarCraft\Data` utility. However, this should be prioritized after core library stability is confirmed.
 
 ---

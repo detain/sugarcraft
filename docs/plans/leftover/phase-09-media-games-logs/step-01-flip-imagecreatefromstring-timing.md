@@ -12,6 +12,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-flip/src/GifDecoder.php` (or equivalent) — in-memory frame
   decode; parse GCE for `delay` field per frame.
 

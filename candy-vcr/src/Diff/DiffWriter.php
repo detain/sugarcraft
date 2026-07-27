@@ -94,7 +94,7 @@ final class DiffWriter
             $actLine = $actualLines[$i] ?? '';
             $isSame = $expLine === $actLine;
             $color = $isSame ? Ansi::sgr(32) : Ansi::sgr(31); // Green for same, Red for diff
-            $prefix = $isSame ? ' ' : '!';
+            $_prefix = $isSame ? ' ' : '!';
             fwrite($output, sprintf(
                 "%s│ %-{$maxWidth}s │" . Ansi::reset() . "\n",
                 $color,
@@ -134,7 +134,7 @@ final class DiffWriter
      *
      * @return array{haves: list<string>, lacks: list<string>, changes: list<array{type: string, line: int, exp: string, act: string}>}
      */
-    private function generateUnifiedDiffLines(array $expected, array $actual, int $context): array
+    private function generateUnifiedDiffLines(array $expected, array $actual, int $_context): array
     {
         $changes = [];
         $maxLines = max(count($expected), count($actual));
@@ -164,7 +164,7 @@ final class DiffWriter
      *
      * @param array{haves: list<string>, lacks: list<string>, changes: list<array{type: string, line: int, exp: string, act: string}>} $diff
      */
-    private function formatUnifiedDiff(array $diff, string $expected, string $actual): string
+    private function formatUnifiedDiff(array $diff, string $_expected, string $_actual): string
     {
         $expectedFile = 'expected.txt';
         $actualFile = 'actual.txt';
@@ -206,7 +206,7 @@ final class DiffWriter
         $hunkStart = null;
         $hunkContents = [];
 
-        foreach ($changes as $i => $change) {
+        foreach ($changes as $_i => $change) {
             $lineNo = $change['line'];
 
             if ($hunkStart === null) {
@@ -251,7 +251,7 @@ final class DiffWriter
      * @param int $context
      * @param string $which 'exp' or 'act'
      */
-    private function addContext(array &$hunkContents, array $lines, int $startLine, int $context, string $which): void
+    private function addContext(array &$hunkContents, array $lines, int $startLine, int $context, string $_which): void
     {
         $endLine = min(count($lines), $startLine + $context);
         for ($j = $startLine; $j < $endLine; $j++) {
@@ -265,7 +265,7 @@ final class DiffWriter
     /**
      * Format a single hunk in unified diff format.
      */
-    private function formatHunk(int $start, array $contents, int $expCount, int $actCount): string
+    private function formatHunk(int $_start, array $contents, int $expCount, int $actCount): string
     {
         // Find the ranges for the hunk
         $expStart = null;

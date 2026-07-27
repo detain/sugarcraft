@@ -1,11 +1,17 @@
 # SugarCraft/sugar-post
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-post
+
 - **Language:** PHP 8.3+
+
 - **License:** MIT
+
 - **Status:** 🟢 v1.0 Ready
+
 - **Upstream:** [charmbracelet/pop](https://github.com/charmbracelet/pop) (Go, ~2.8k stars, MIT)
+
 - **Description:** PHP port of charmbracelet/pop — send emails from PHP via Resend API or direct SMTP. Compose from STDIN, attach files, CC/BCC routing, HTML + plain-text multipart, fluent immutable interface.
 
 ---
@@ -61,7 +67,9 @@ public readonly ?string $signature;    // Appended to body
 **Constructor (lines 41–63):** Trims all address fields via `array_map('trim', $from)`.
 
 **Factory methods:**
+
 - `Email::make($from, $to, $subject, $body)` — Variadic convenience for simple emails
+
 - `Email::make('a@b.com', 'c@d.com')` → single-sender/single-recipient shortcut
 
 **Fluent builders (with* methods, lines 86–214):**
@@ -80,15 +88,21 @@ public readonly ?string $signature;    // Appended to body
 ```
 
 **Derived accessors:**
+
 - `bodyWithSignature(): ?string` — Returns body + "\n\n" + signature (line 223)
+
 - `allRecipients(): list<string>` — to + cc + bcc deduplicated (line 239)
 
 **Private helper (line 253):** `with(string $prop, mixed $value)` for simple single-field replacements.
 
 **Comparison to upstream Go pop:**
+
 - Go `pop` uses a `NewEmail()` constructor struct with all fields, then builder-style `With*()` methods
+
 - PHP port uses named constructor params (PHP 8 named args) as primary API
+
 - Go has a `Send()` method directly on Email that auto-selects transport; PHP separates `Mailer::send()`
+
 - Go has Gmail smart-default detection in SMTP; PHP does not (the CLI does via env check in `bin/pop`)
 
 ### 2. Attachment (`src/Attachment.php` — 174 lines)
@@ -130,6 +144,7 @@ public function getContent(): string {
 
 **MIME detection (line 128):** Two-tier detection:
 1. `mime_content_type()` if available and not `application/octet-stream`
+
 2. Extension-based fallback using `EXT_TO_MIME` map of 35 common extensions (line 143)
 
 **MIME type map (selection):**
@@ -146,8 +161,11 @@ public function getContent(): string {
 **Error handling:** File read failures (missing files) return null content and empty string from `getContent()` — no exceptions thrown at construction.
 
 **Comparison to upstream Go pop:**
+
 - Go uses `os.ReadFile` which panics on missing files; PHP suppresses and gracefully degrades
+
 - Go uses `http.DetectContentType` for sniffing; PHP uses `mime_content_type` + extension map
+
 - Go inline attachments use `attachment{...}` struct directly; PHP has `Attachment::inline()` factory
 
 ### 3. Transport Interface (`src/Transport.php` — 22 lines)
@@ -203,9 +221,13 @@ curl_setopt_array($ch, [
 ```
 
 **Comparison to upstream Go pop:**
+
 - Go uses `resend.SendEmailRequest` struct with `From`, `To[]`, `Cc[]`, `Bcc[]`, `Subject`, `HtmlBody`, `TextBody`, `ReplyTo`, `Attachments[]`
+
 - Go attachments use `resend.Attachment{Filename, Content}` (base64-encoded []byte)
+
 - Go uses official `resend-go` client library; PHP uses raw curl — no SDK dependency
+
 - PHP does NOT implement Gmail smart-default detection (Go has this in `sendSMTPEmail()`)
 
 ### 5. SmtpTransport (`src/SmtpTransport.php` — 323 lines)
@@ -316,11 +338,17 @@ if ($code !== $expectedCode) { throw new RuntimeException(...); }
 **Error handling:** All socket errors throw `\RuntimeException` via Lang::t() with i18n messages.
 
 **Comparison to upstream Go pop:**
+
 - Go uses `xhit/go-simple-mail/v2` library for SMTP; PHP implements protocol directly
+
 - Go supports `sendSMTPEmail()` with `smtp.Username/Password/TLSConfig`
+
 - PHP uses `stream_socket_client` for connection; Go uses `net/smtp.Dial`
+
 - Both implement AUTH LOGIN and STARTTLS
+
 - Go uses `strings.Builder` for MIME; PHP uses `\implode("\r\n", $lines)`
+
 - PHP does not implement the Gmail smart-default (Go auto-fills `smtp.gmail.com:587` for `@gmail.com` usernames)
 
 ### 6. Mailer (`src/Mailer.php` — 45 lines)
@@ -348,8 +376,11 @@ final class Mailer {
 **Validation:** Checks at least one recipient exists and from address is set. Note: SMTP transport would fail anyway at RCPT TO stage, but this provides fast validation before network I/O.
 
 **Comparison to upstream Go pop:**
+
 - Go `pop` has `pop.Send()` that auto-selects transport and sends directly (no separate Mailer class)
+
 - Go does validation inline; PHP separates Mailer as a distinct layer
+
 - Go has `pop.SendEmail()` for direct send without TUI; PHP's Mailer is the equivalent
 
 ### 7. CLI (`bin/pop` — 221 lines)
@@ -413,11 +444,17 @@ if ($signature !== null) { $email = $email->withSignature($signature); }
 ```
 
 **Comparison to upstream Go pop CLI:**
+
 - Go uses Cobra for argument parsing; PHP uses manual parsing
+
 - Go has `pop < message.md --from ... --to ...` pipe mode via `hasStdin()` check
+
 - Go has interactive TUI mode (Bubble Tea); PHP has no TUI (this is a library-only port)
+
 - Go has `pop man` for man page generation; PHP has no equivalent
+
 - Go has `pop completion` for shell completions; PHP has no equivalent
+
 - Go saves failed emails to temp files; PHP has no equivalent
 
 ---
@@ -427,37 +464,59 @@ if ($signature !== null) { $email = $email->withSignature($signature); }
 **5 test files, ~373 lines total:**
 
 ### EmailTest (`tests/EmailTest.php` — 156 lines)
+
 - Construction: basic, whitespace trimming
+
 - with* builders: from, to, cc, bcc, subject, body, htmlBody, replyTo, signature
+
 - Derived: bodyWithSignature (with/without body, with/without signature), allRecipients (dedup)
 
 ### SmtpTransportTest (`tests/SmtpTransportTest.php` — 58 lines)
+
 - Name formatting: host:port, custom port, default port
+
 - Constructor credential storage
+
 - TLS flag: port 465 sets tls=true, port 587=tls=false
 
 ### ResendTransportTest (`tests/ResendTransportTest.php` — 36 lines)
+
 - Name returns 'resend'
+
 - Constructor stores API key
 
 ### AttachmentTest (`tests/AttachmentTest.php` — 93 lines)
+
 - fromContent: filename, mimeType, encoding, content, cid=null
+
 - fromPath: filename, content
+
 - fromPath with custom filename
+
 - MIME detection (PNG header detection)
+
 - inline attachment: cid, filename
+
 - withCid: returns new instance with cid
+
 - inline overrides cid on fromContent
 
 ### EmailFactoryTest (`tests/EmailFactoryTest.php` — 77 lines)
+
 - Email::make: full args, minimal args
+
 - withAttachment: adds attachment, uses path for MIME, filename-only fallback
+
 - Edge: AttachmentEdgeTest (empty content, missing file, unknown extension, explicit MIME)
 
 **Notable gaps:**
+
 - No mock tests for actual send() behavior (no HTTP mock for ResendTransport, no socket mock for SmtpTransport)
+
 - No tests for CC/BCC merge behavior in Email
+
 - No tests for MIME message output (snapshot or otherwise)
+
 - No integration tests
 
 ---
@@ -468,16 +527,27 @@ if ($signature !== null) { $email = $email->withSignature($signature); }
 
 **Translation keys** (lang/en.php, 36 lines):
 - `mailer.no_recipient` — "Email must have at least one recipient (to, cc, or bcc)"
+
 - `mailer.no_from` — "Email must have a from address"
+
 - `smtp.send_failed` — "SMTP send failed: {message}"
+
 - `smtp.connect_failed` — "Cannot connect to {addr}: {errstr} ({errno})"
+
 - `smtp.starttls_failed` — "STARTTLS negotiation failed"
+
 - `smtp.not_connected` — "Not connected"
+
 - `smtp.no_response` — "Server sent no response"
+
 - `smtp.unexpected_response` — "SMTP unexpected response: {response}"
+
 - `resend.network_error` — "Resend network error: {error}"
+
 - `resend.api_error` — "Resend API error ({status}): {body}"
+
 - `cli.error`, `cli.transport_error`, `cli.send_failed`, `cli.email_sent`
+
 - `cli.no_to_recipient`, `cli.attachment_not_found`, `cli.no_transport`
 
 **Lang.php facade (src/Lang.php, 22 lines):**
@@ -518,13 +588,21 @@ Delegates to `SugarCraft\Core\I18n\T` with 'post' namespace baked in.
 ## Gaps vs Upstream Go pop
 
 1. **No TUI** — Go pop is a full Bubble Tea TUI application; sugar-post is library-only
+
 2. **No Markdown → HTML conversion** — Go uses goldmark; PHP has no markdown rendering
+
 3. **No Gmail smart defaults** — Auto-detecting `@gmail.com` and pre-filling `smtp.gmail.com:587`
+
 4. **No failed-email temp file recovery** — Go saves failed email bodies to `pop-YYYY-MM-DD-*.txt`
+
 5. **No shell completion** — Go has `pop completion bash/zsh/fish`
+
 6. **No man page generation** — Go has `pop man`
+
 7. **No interactive filepicker** — Go uses Bubble Tea's filepicker; PHP has no TUI for this
+
 8. **No CC/BCC hiding** — Go hides Bcc field by default; PHP sends all addresses explicitly
+
 9. **No SMTP `localhost` fallback** — Go has `gmailSuffix`/`gmailSMTPHost`/`gmailSMTPPort` constants
 
 ---
@@ -532,37 +610,61 @@ Delegates to `SugarCraft\Core\I18n\T` with 'post' namespace baked in.
 ## File References
 
 ### Source Files
+
 - `/home/sites/sugarcraft/sugar-post/src/Email.php` — 271 lines
+
 - `/home/sites/sugarcraft/sugar-post/src/Attachment.php` — 174 lines
+
 - `/home/sites/sugarcraft/sugar-post/src/Transport.php` — 22 lines
+
 - `/home/sites/sugarcraft/sugar-post/src/ResendTransport.php` — 116 lines
+
 - `/home/sites/sugarcraft/sugar-post/src/SmtpTransport.php` — 323 lines
+
 - `/home/sites/sugarcraft/sugar-post/src/Mailer.php` — 45 lines
+
 - `/home/sites/sugarcraft/sugar-post/bin/pop` — 221 lines
+
 - `/home/sites/sugarcraft/sugar-post/src/Lang.php` — 22 lines
 
 ### Test Files
+
 - `/home/sites/sugarcraft/sugar-post/tests/EmailTest.php` — 156 lines
+
 - `/home/sites/sugarcraft/sugar-post/tests/AttachmentTest.php` — 93 lines
+
 - `/home/sites/sugarcraft/sugar-post/tests/EmailFactoryTest.php` — 77 lines
+
 - `/home/sites/sugarcraft/sugar-post/tests/AttachmentEdgeTest.php` — 49 lines
+
 - `/home/sites/sugarcraft/sugar-post/tests/SmtpTransportTest.php` — 58 lines
+
 - `/home/sites/sugarcraft/sugar-post/tests/ResendTransportTest.php` — 36 lines
 
 ### Examples
+
 - `/home/sites/sugarcraft/sugar-post/examples/basic.php` — Resend API quickstart
+
 - `/home/sites/sugarcraft/sugar-post/examples/smtp.php` — SMTP with credentials
+
 - `/home/sites/sugarcraft/sugar-post/examples/attachments.php` — File attachment demo
+
 - `/home/sites/sugarcraft/sugar-post/examples/html-email.php` — HTML + CC/BCC
+
 - `/home/sites/sugarcraft/sugar-post/examples/pipeline.php` — STDIN compose
+
 - `/home/sites/sugarcraft/sugar-post/examples/showcase.php` — Full showcase
 
 ### i18n
+
 - `/home/sites/sugarcraft/sugar-post/lang/en.php` — 36 keys
+
 - `/home/sites/sugarcraft/sugar-post/lang/` — 15 additional locales
 
 ### Config
+
 - `/home/sites/sugarcraft/sugar-post/phpunit.xml` — PHPUnit 10 config
+
 - `/home/sites/sugarcraft/sugar-post/composer.json` — Package metadata
 
 ---
@@ -572,34 +674,59 @@ Delegates to `SugarCraft\Core\I18n\T` with 'post' namespace baked in.
 **sugar-post** is a focused, well-structured PHP port of the email-sending portion of charmbracelet/pop. It deliberately omits the TUI (Bubble Tea interactive interface) and focuses on the library-level email composition and sending logic, which is what most PHP applications need.
 
 **Strengths:**
+
 - Clean immutable Email/Attachment value objects with readonly properties
+
 - Dual transport abstraction (Resend API + raw SMTP) with a minimal interface
+
 - Pure PHP SMTP implementation without external dependencies
+
 - Full CC/BCC/Reply-To support with proper MIME multipart construction
+
 - Graceful error handling with i18n error messages
+
 - 16-language i18n support
+
 - STDIN compose for shell pipeline use
+
 - Lazy attachment content loading
+
 - No external SMTP library dependency (self-contained protocol implementation)
 
 **Design decisions consistent with SugarCraft patterns:**
+
 - `final` classes throughout
+
 - `declare(strict_types=1)` on every file
+
 - `readonly` properties for immutable state
+
 - `with*()` fluent builders returning new instances
+
 - Private `mutate()` helper pattern for immutable updates
+
 - PSR-4 namespaced under `SugarCraft\Post`
+
 - PHPUnit 10 tests with behavior/coercion patterns
+
 - `Lang::t()` wrapping for i18n
 
 **Weaknesses:**
+
 - No mock-based tests for send() behavior (transport tests only cover name() and constructor)
+
 - No MIME message snapshot tests
+
 - No markdown support (upstream goldmark pipeline)
+
 - No Gmail smart defaults
+
 - No failed-email recovery (temp file saving)
+
 - SmtpTransport reads entire attachment content into memory (same as Go)
+
 - No SMTP Keep-Alive or connection pooling
+
 - No async/ReactPHP support for concurrent sending
 
 **Strategic position:** sugar-post fills a genuine gap in the PHP ecosystem — a lightweight, dependency-free email sending library with both SMTP and Resend API support. It is not trying to be a full邮件 client (no TUI), focusing instead on the library portion that PHP applications actually need. The pure-PHP SMTP implementation is particularly valuable as it removes the need for `ext-mail` or external libraries like PHPMailer/SwiftMailer for simple use cases.
@@ -609,5 +736,7 @@ Delegates to `SugarCraft\Core\I18n\T` with 'post' namespace baked in.
 ## Related Reports
 
 - `/home/sites/sugarcraft/repo_map/charmbracelet_pop.md` — Primary upstream (Go, full TUI email client)
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-shell.md` — Shell wrapper patterns relevant to CLI design
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-shine.md` — Styling, note: upstream pop uses goldmark for Markdown→ANSI (related to HTML body concept)

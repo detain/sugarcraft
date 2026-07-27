@@ -9,6 +9,7 @@
 ### Current Architecture
 
 The library uses a **stratified alias pattern**:
+
 - **Aliases** (from `candy-forms`): `TextInput`, `ItemList`, `Viewport`, `FilePicker`, `Spinner`, `Cursor`, `TextArea`, `Scrollbar`
 - **Original implementations**: `Table` (720 lines), `Tree` (364 lines), `Tabs` (602 lines), `Help` (311 lines), `Paginator` (225 lines), `Timer` (177 lines), `Stopwatch` (141 lines), `Progress` (434 lines), `AnimatedProgress`, `Key\Binding`
 
@@ -233,6 +234,7 @@ The `p-gen/smenu` C library uses a Ternary Search Tree for indexing words, enabl
    - Extend to Table (`headers()`, `rows()`, `pageSize()`), Tree (`nodes()`, `height()`), Tabs (`items()`, `active()`)
 
 2. **Add `CommonPrefix` auto-complete helper** (per promptkit)
+
    ```php
    // Sorts suggestions, compares first and last only
    public static function commonPrefix(array $suggestions): string
@@ -248,6 +250,7 @@ The `p-gen/smenu` C library uses a Ternary Search Tree for indexing words, enabl
    - Extend to all components
 
 5. **Add `FilterMatch` struct** for fuzzy results
+
    ```php
    final readonly class FilterMatch {
        public function __construct(
@@ -300,6 +303,7 @@ The `p-gen/smenu` C library uses a Ternary Search Tree for indexing words, enabl
    - Enables user-defined keybinding collections with polymorphic help
 
 4. **Add `Viewable` interface** for overlay system
+
    ```php
    interface Viewable {
        public function view(): string;
@@ -361,31 +365,37 @@ The `p-gen/smenu` C library uses a Ternary Search Tree for indexing words, enabl
 ## Notable PRs / Issues / Discussions
 
 ### charmbracelet/bubbles #246 (Per-cell styling for Table)
+
 - **Summary**: Long-requested feature to style individual cells based on content
 - **Relevance**: sugar-bits already implemented `styleFunc` as a SugarCraft enhancement
 - **Lesson**: This was a legitimate upstream gap that SugarCraft identified and filled proactively
 
 ### charmbracelet/bubbles #233 (Tree component)
+
 - **Summary**: Tree was a community-contributed feature (by Genekkion)
 - **Relevance**: sugar-bits mirrors this implementation
 - **Lesson**: Community contributions can fill ecosystem gaps
 
 ### pterm InteractiveSelect fuzzy search (lithammer/fuzzysearch)
+
 - **Summary**: Ranked fuzzy filtering with real-time update as user types
 - **Relevance**: Directly comparable to ItemList filtering gap
 - **Lesson**: Fuzzy ranking is standard expectation for interactive filtering
 
 ### stickers ratio-based layout (calculateRatioWithMinimum)
+
 - **Summary**: Recursive algorithm for distributing space with minimum constraints
 - **Relevance**: Core algorithmic contribution; must be faithfully ported
 - **Lesson**: Layout algorithms from Go ports need careful translation for PHP
 
 ### smenu bitmap tracking
+
 - **Summary**: Each matched word stores bitmap of matched character positions
 - **Relevance**: Enables efficient highlighted rendering without re-scanning
 - **Lesson**: Match metadata structures enable sophisticated UI without re-computation
 
 ### promptkit commonPrefix algorithm
+
 - **Summary**: Sort once, compare first and last elements only
 - **Relevance**: O(n log n) sort + O(k) compare vs O(n*k) naive
 - **Lesson**: Sorting enables elegant optimization for prefix detection

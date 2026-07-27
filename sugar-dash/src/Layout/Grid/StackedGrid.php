@@ -222,8 +222,10 @@ final class StackedGrid implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad to $height with blank lines
-        while (count($styledLines) < $height) {
+        $styledCount = count($styledLines);
+        while ($styledCount < $height) {
             $styledLines[] = str_repeat(' ', $width);
+            $styledCount++;
         }
 
         return implode("\n", $styledLines);

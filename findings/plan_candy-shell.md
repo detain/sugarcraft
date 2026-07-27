@@ -39,11 +39,13 @@ A value like `foo'bar` becomes `foo\'bar` after escapeshellarg, then `foo\bar` a
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - [ ] Env vars with special characters (quotes, backslashes, spaces) are correctly passed as option values
 - [ ] Existing tests in `tests/EnvVarFallbackTest.php` still pass
 - [ ] New test added for edge case: env value containing single quotes
 
 **Related code locations:**
+
 - `src/Application.php:110-151` — `applyEnvVarFallbackToInput()` method
 - `src/Application.php:137-141` — problematic code block
 - `tests/EnvVarFallbackTest.php` — existing test coverage
@@ -70,6 +72,7 @@ The current implementation at lines 97-104 substitutes ANY environment variable 
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - [ ] `--sandbox-env` option added to configure() with appropriate description
 - [ ] `renderTemplate()` checks against allowlist when sandbox is active
 - [ ] Clear error message or empty string when variable not in allowlist
@@ -77,6 +80,7 @@ The current implementation at lines 97-104 substitutes ANY environment variable 
 - [ ] New test: sandboxed env var returns empty string
 
 **Related code locations:**
+
 - `src/Command/FormatCommand.php:25-38` — configure() method
 - `src/Command/FormatCommand.php:97-104` — renderTemplate() method
 
@@ -95,11 +99,13 @@ When in filter mode with multi-select enabled, pressing space should add to the 
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [ ] Space key appends to filter buffer in filter mode
 - [ ] Space key toggles selection only when NOT in filter mode
 - [ ] Test confirms space in filter mode doesn't toggle selection
 
 **Related code locations:**
+
 - `src/Model/FilterModel.php:139-143` — Tab handling for multi-select
 - `src/Model/FilterModel.php:145` — list->update() call
 - `candy-forms/src/ItemList/ItemList.php:451-485` — updateFilter() method
@@ -137,11 +143,13 @@ Inputs like `#1`, `#12`, `#1234`, `#12345` fall through and get generic "unrecog
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [x] New `parseHexColor()` method handles 3-digit expansion
 - [x] Clear error message indicates digit count requirement
 - [x] Test cases: `#abc` → `#aabbcc`, `#1` throws specific error
 
 **Related code locations:**
+
 - `src/Style/StyleBuilder.php:150-170` — `parseColorWithProfile()` method
 - `src/Style/StyleBuilder.php:166-168` — problematic regex check
 
@@ -158,10 +166,12 @@ After `terminate()` is called, subsequent `close()` calls would invoke `wait()` 
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [x] `terminate()` sets `$this->closed = true`
 - [x] Test: call terminate() then close() — should not call wait() twice
 
 **Related code locations:**
+
 - `src/Process/RealProcess.php:63-71` — terminate() method
 
 ---
@@ -179,12 +189,14 @@ Add caching to `computeFuzzyResults()` — early return if `$filterText` is unch
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [x] Fuzzy results cached by filter text
 - [x] Early return if filter text unchanged
 - [x] Cache invalidated when items change
 - [x] Performance test: filter text "abc" typed twice only computes once
 
 **Related code locations:**
+
 - `src/Model/FilterModel.php:99-113` — constructor with matcher
 - `src/Model/FilterModel.php:161-178` — computeFuzzyResults()
 - `src/Model/FilterModel.php:148-150` — call site
@@ -202,11 +214,13 @@ For large CSV data, php://memory could exhaust RAM. php://temp with maxmemory se
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [x] Large CSV input (>8MB) doesn't exhaust memory
 - [x] Existing CSV parsing tests still pass
 - [x] Test with large dataset
 
 **Related code locations:**
+
 - `src/Command/TableCommand.php:168` — memory stream creation
 
 ---
@@ -224,11 +238,13 @@ When `withTheme()` is called, `tileCache` points to the same array as the origin
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [ ] Calling `withTheme()` creates independent tileCache
 - [ ] Clearing cache on one instance doesn't affect the other
 - [ ] Test: clone rasterizer, clear cache on clone, verify original intact
 
 **Related code locations:**
+
 - `candy-vcr/src/Raster/ImagickRasterizer.php:58-67` — withTheme()
 - `candy-vcr/src/Raster/ImagickRasterizer.php:69-82` — withFont()
 
@@ -247,11 +263,13 @@ Gum's choose has `--no-selected` which prints message when no items selected. Th
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [x] `--no-selected="message"` option added to configure()
 - [x] When no selection made and --no-selected is set, output message and fail
 - [x] Test: --no-selected outputs message when no selection
 
 **Related code locations:**
+
 - `src/Command/ChooseCommand.php:24-41` — configure() method
 - `src/Command/ChooseCommand.php:86-88` — aborted/not-submitted handling
 
@@ -268,11 +286,13 @@ Gum's filter has `--print-query` which outputs current filter text. Needed for p
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [x] `--print-query` option added to configure()
 - [x] When --print-query is set, print filter text before exiting
 - [x] Test: --print-query outputs the typed filter text
 
 **Related code locations:**
+
 - `src/Command/FilterCommand.php:27-49` — configure() method
 - `src/Command/FilterCommand.php:87-95` — execute() result handling
 
@@ -289,11 +309,13 @@ Use `highlightIndices()` result in `view()` to render highlighted characters in 
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - [x] view() renders highlighted characters when fuzzy matching
 - [x] Test: fuzzy search "bna" shows "b**an**ana" with match highlighted
 - [x] Non-fuzzy mode not affected
 
 **Related code locations:**
+
 - `src/Model/FilterModel.php:214-223` — view() method
 - `src/Model/FilterModel.php:272-289` — highlightIndices() method
 - `src/Style/StyleBuilder.php` — SGR escape sequences for bold/highlight
@@ -313,6 +335,7 @@ Uses readonly, promoted constructors, match expressions, final class. No PHP 8.4
 **Severity:** N/A
 
 **Conditions for success:**
+
 - [ ] Library passes PHPStan level 8+ on PHP 8.3
 - [ ] All tests pass on PHP 8.3 and 8.4
 

@@ -1,6 +1,7 @@
 # charmbracelet/gum
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/gum
 - Language: Go
 - Stars: ~8.7k (as of 2024)

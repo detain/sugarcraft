@@ -12,16 +12,19 @@ are scattered through transport code.
 ## Files
 
 **Create:**
+
 - `candy-wish/src/Channel/ChannelHandler.php` — interface.
 - `candy-wish/src/Channel/DefaultChannelHandler.php` — wires the
   common case (pty + shell).
 - `candy-wish/src/Channel/Msg/{PtyReq,WindowChange,Shell,Exec,Signal,Env,Break}Msg.php`.
 
 **Modify:**
+
 - `candy-wish/src/Transport/InProcessTransport.php` — dispatches
   channel messages to the handler instead of inline logic.
 
 **Tests:**
+
 - `candy-wish/tests/Channel/DefaultChannelHandlerTest.php` — feed each
   Msg type, assert correct downstream effect.
 

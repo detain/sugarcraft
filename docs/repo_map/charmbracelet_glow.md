@@ -1,6 +1,7 @@
 # charmbracelet/glow
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/glow
 - **Language:** Go
 - **Stars:** ~15k-20k (part of popular charmbracelet ecosystem)
@@ -8,6 +9,7 @@
 - **Description:** A terminal-based markdown reader designed from the ground up to bring beauty and power to the CLI. Glow renders markdown with pizzazz and discovers local markdown files in subdirectories or Git repositories.
 
 ## Feature List
+
 - **Dual-Mode Interface:** TUI (Text User Interface) for interactive browsing, CLI for single-file rendering
 - **Markdown Rendering:** Uses glamour for ANSI-aware markdown rendering with syntax highlighting
 - **GitHub/GitLab Integration:** Fetches README files directly from GitHub and GitLab repositories via their APIs
@@ -25,6 +27,7 @@
 ## Key Classes and Methods
 
 ### main.go — Entry Point & Command Logic
+
 - `main()` — Application entry point; initializes logging and executes cobra root command
 - `execute()` — Routes to TUI or CLI mode based on arguments
 - `executeCLI()` — Renders markdown to ANSI output via glamour, optionally through pager
@@ -35,6 +38,7 @@
 - `tryLoadConfigFromDefaultPlaces()` — Discovers config in XDG_CONFIG_HOME, GLOW_CONFIG_HOME, or platform default
 
 ### ui/ui.go — Main TUI Model (Bubble Tea MVC)
+
 - `NewProgram(cfg, content)` — Creates a Bubble Tea program with alt screen and optional mouse support
 - `model` struct — Contains `commonModel`, `state` (stash/document), `stashModel`, `pagerModel`, file finder channel
 - `newModel()` — Factory; initializes stash or document view based on path
@@ -45,6 +49,7 @@
 - `localFileToMarkdown()` — Converts gitcha.SearchResult to internal markdown representation
 
 ### ui/pager.go — Document Viewer Model
+
 - `pagerModel` struct — Contains viewport (bubbles), currentDocument, statusMessage, watcher (fsnotify)
 - `newPagerModel()` — Initializes viewport with high-performance rendering option
 - `update()` — Handles navigation keys (g/G/home/end, d/u for half-page), clipboard copy (c), reload (r), editor open (e), help (?)
@@ -55,6 +60,7 @@
 - `showStatusMessage()` — Displays temporary success/error messages with timeout
 
 ### ui/stash.go — File Listing Model
+
 - `stashModel` struct — Contains spinner, filterInput (textinput), viewState (ready/loading/error), markdowns slice, paginator, sections
 - `newStashModel()` — Initializes spinner (Line style), filter input with "Find:" prompt
 - `update()` — Routes to handleDocumentBrowsing or handleFiltering based on filterState
@@ -65,33 +71,40 @@
 - `view()` — Renders logo, header with document count, populated list, pagination, help
 
 ### ui/markdown.go — Data Model
+
 - `markdown` struct — Fields: `localPath`, `filterValue`, `Body`, `Note`, `Modtime`
 - `buildFilterValue()` — Normalizes filename for filtering (removes diacritics)
 - `normalize()` — Unicode NFD decomposition, removes nonspacing marks (Mn), NFC recomposition
 - `relativeTime()` — Humanizes timestamps (dustin/go-humanize with custom magnitudes)
 
 ### ui/stashitem.go — Individual File Row Rendering
+
 - `stashItemView()` — Renders a single file listing row with gutter, icon, title, date; applies selection/filter styling
 - `styleFilteredText()` — Highlights matched characters in filtered text using fuzzy.MatchedIndexes
 
 ### ui/stashhelp.go — Help System
+
 - `helpView()` — Returns mini or full help based on showFullHelp state
 - `miniHelpView()` — Single-line help with truncation
 - `fullHelpView()` — Multi-column help with proper alignment
 - `mergeColumns()` — Combines help columns side-by-side
 
 ### ui/styles.go — Lipgloss Color Palette
+
 - Adaptive colors: `normalDim`, `gray`, `midGray`, `darkGray`, `brightGray`, `dimBrightGray`
 - Accent colors: `yellowGreen`, `fuchsia`, `dimFuchsia`, `dullFuchsia`, `green`, `red`
 - Styled render functions: `greenFg()`, `fuchsiaFg()`, `grayFg()`, `dimGreenFg()`, etc.
 
 ### ui/config.go — TUI Configuration
+
 - `Config` struct — `ShowAllFiles`, `ShowLineNumbers`, `GlamourMaxWidth`, `GlamourStyle`, `EnableMouse`, `PreserveNewLines`, `Path`, `HighPerformancePager`, `GlamourEnabled`
 
 ### ui/editor.go — External Editor Integration
+
 - `openEditor(path, lineno)` — Opens file at specific line in $EDITOR using charmbracelet/x/editor
 
 ### utils/utils.go — Utility Functions
+
 - `RemoveFrontmatter()` — Strips YAML frontmatter (--- delimiters) from markdown
 - `detectFrontmatter()` — Returns [start, end] indices of frontmatter block using regex
 - `ExpandPath()` — Expands ~ and environment variables in paths
@@ -100,21 +113,26 @@
 - `GlamourStyle()` — Returns glamour.TermRendererOption from style name (auto/dark/light/pink/notty/dracula/TokyoNight)
 
 ### github.go — GitHub README Fetcher
+
 - `findGitHubREADME()` — Calls GitHub API for repo readme, follows download_url
 
 ### gitlab.go — GitLab README Fetcher
+
 - `findGitLabREADME()` — Calls GitLab API v4 for project readme, converts blob URL to raw URL
 
 ### url.go — URL Routing
+
 - `readmeURL()` — Parses URL, routes to GitHub or GitLab handler based on hostname
 - `githubReadmeURL()` / `gitlabReadmeURL()` — Handles custom protocol prefixes (github://, gitlab://)
 - `isURL()` — Checks if string is a parseable URL with scheme
 
 ### config_cmd.go — Config File Management
+
 - `configCmd` cobra command — Opens config in $EDITOR via charmbracelet/x/editor
 - `ensureConfigFile()` — Creates default config if missing
 
 ### log.go — Logging Setup
+
 - `setupLog()` — Sets up file-based logging to cache/glow.log with debug level
 - `getLogFilePath()` — Resolves cache directory via muesli/go-app-paths
 

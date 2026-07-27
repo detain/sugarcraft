@@ -56,10 +56,12 @@ private function distribute(int $available, array $weights, int $totalWeight, in
 ```
 
 **Conditions for success:**
+
 - Add test: horizontal/vertical layout with all-zero `minWidth`/`minHeight` children renders without NaN/crash
 - Existing `testManyFixedChildrenNarrowViewportNoVanish` still passes
 
 **Investigation notes:**
+
 - `distribute()` called from `renderHorizontal` (line 243) and `renderVertical` (line 302)
 - In `renderHorizontal` line 241: `$weights = \array_map(fn(Node $c) => $c->minWidth > 0 ? $c->minWidth : 1, $children)` — minWidth=0 becomes 1, so `$totalWeight` won't be 0 via that path
 - However, `renderVertical` line 300 uses `minHeight` with same fallback, and `distribute()` is also called from `distributeFlex` indirectly
@@ -92,12 +94,14 @@ public function render(Node $root, int $width, int $height): string
 ```
 
 **Conditions for success:**
+
 - Add test: `render($layout, -1, 10)` throws `\InvalidArgumentException`
 - Add test: `render($layout, 10, -1)` throws `\InvalidArgumentException`
 - Add test: `render($layout, 0, 10)` throws `\InvalidArgumentException`
 - Add test: valid dimensions still work (existing tests cover this)
 
 **Investigation notes:**
+
 - Line 92: `$cells = \array_fill(0, $height, \array_fill(0, $width, ' '));` — `array_fill(0, 0, ...)` returns empty array per Finding 17, but `$width = 0` would create empty inner arrays causing downstream issues
 - The early-return guards at line 139 (`if ($w <= 0 || $h <= 0) return;`) return silently — this is the silent failure mentioned
 
@@ -151,11 +155,13 @@ private function placeLine(string $line, int $x, int $y, int $w, array &$cells):
 ```
 
 **Conditions for success:**
+
 - Add test: adversarial input with 200 combining chars doesn't cause memory issues (compare `strlen($carry)`)
 - Normal combining character sequences (e.g., accent + letter) still work correctly
 - Test at the boundary: exactly 100 combining chars is accepted, 101 is truncated
 
 **Investigation notes:**
+
 - `$carry` holds combining characters (zero-width graphemes) when they appear before any base character
 - When `$lastCol < 0` (no base cell yet), carry accumulates until a base char arrives
 - The cap of 100 graphemes allows most legitimateCombining sequences while preventing DoS
@@ -192,6 +198,7 @@ public function withMargin(int $top, ?int $right = null, ?int $bottom = null, ?i
 ```
 
 **Conditions for success:**
+
 - Existing tests `testNodeWithMargin*` all pass
 - `withMargin(1)` → [1,1,1,1]
 - `withMargin(1, 2)` → [1,2,1,2]
@@ -200,6 +207,7 @@ public function withMargin(int $top, ?int $right = null, ?int $bottom = null, ?i
 - `withMargin(0, 0, 0, 0)` → [0,0,0,0]
 
 **Investigation notes:**
+
 - The existing `testNodeWithMarginExplicitZeroSides` test at line 550-558 shows the current behavior
 - CSS-style shorthand: if fewer than 4 args, missing values are copied from the opposite axis (top→bottom, right→left)
 - The proposed implementation preserves this behavior exactly
@@ -252,11 +260,13 @@ final class SugarBoxer
 ```
 
 **Conditions for success:**
+
 - Performance benchmark: render 1000 frames with same Style object, SGR prefix computed only once
 - Visual output identical before/after (SGR prefix unchanged)
 - WeakMap auto-GCs entries when Style has no other references
 
 **Investigation notes:**
+
 - `Style` object from candy-sprinkles is immutable and reusable
 - WeakMap was introduced in PHP 8.1, compatible with the ^8.3 requirement
 - The `render(' ')` call returns `SGR-open + ' ' + SGR-close`, split on `\x00` sentinel to get only the opening SGR
@@ -301,6 +311,7 @@ if ($this->hasFlex($children)) {
 Also apply the same optimization to `renderVertical()` at lines 293-298.
 
 **Conditions for success:**
+
 - Same output as before (no behavioral change)
 - `hasFlex()` still called separately (early exit optimization for non-flex case)
 - Existing flex tests pass (FlexLayoutTest.php)
@@ -341,6 +352,7 @@ private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, ar
 Similarly for `renderVertical()` at lines 274-325.
 
 **Conditions for success:**
+
 - Behavior unchanged (no code change)
 - Tests pass (no behavior change)
 - Documentation visible in IDE/type hints
@@ -459,6 +471,7 @@ final class Node
 Update all `self::nop()` calls to `self::preserve()`.
 
 **Conditions for success:**
+
 - All existing tests pass
 - `instanceof Preserve` check used instead of identity comparison
 

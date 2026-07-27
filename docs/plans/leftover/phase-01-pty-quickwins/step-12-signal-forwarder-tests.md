@@ -20,6 +20,7 @@ Three integration tests that have been Risk-flagged but never written:
 ## Files
 
 **Create:**
+
 - `candy-pty/tests/SignalForwarderReactLoopTest.php`:
   - Boot a `React\EventLoop\Loop::get()`.
   - Attach `SignalForwarder::attachSigwinch($master, $cb)`.
@@ -40,6 +41,7 @@ Three integration tests that have been Risk-flagged but never written:
   - Kill with SIGTERM, clean up.
 
 **Modify:**
+
 - `candy-pty/composer.json` — `require-dev` `react/event-loop` for the
   ReactPHP test. Path-repo not needed (it's a Packagist dep).
 

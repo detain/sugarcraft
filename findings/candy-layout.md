@@ -58,6 +58,7 @@ interface LayoutSolver
 ```
 
 **Problems:**
+
 - Violates Interface Segregation Principle — callers must know about concrete implementations
 - Factory methods on an interface are unusual ( factories are typically separate)
 - `cassowary()` on GreedySolver returns CassowarySolver (跨-class factory)

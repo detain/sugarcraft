@@ -3,6 +3,7 @@
 CandyShell is a PHP port of `charmbracelet/gum` (~8.7k stars, Go) — a composer-installable CLI providing 13 subcommands for interactive TUI primitives in shell scripts. The package sits at the **application framework tier** (`Candy-` prefix per naming conventions), wrapping foundation libs (`candy-core`, `candy-forms`, `candy-sprinkles`, `candy-shine`, `candy-pty`) with a Symfony Console surface. It provides ~85% functional parity with gum for typical shell script use cases.
 
 **Biggest opportunity areas:**
+
 - Fuzzy matching implementation (filter's `--fuzzy` is a no-op)
 - 2D grid choose (candy-shell only has 1D list navigation)
 - External editor integration for write command
@@ -10,6 +11,7 @@ CandyShell is a PHP port of `charmbracelet/gum` (~8.7k stars, Go) — a composer
 - Bubble Tea-style subscriptions for concurrent async commands
 
 **Biggest missing capabilities:**
+
 - No TST-based or bitmap-tracked search algorithms
 - No Cassowary constraint solver for responsive layouts
 - No proper enum validation for CLI option constraints
@@ -126,6 +128,7 @@ candy-shell
 ## Critical Priority
 
 ### 1. Fuzzy Matching in Filter
+
 - **Title:** Implement real fuzzy matching algorithm for `filter` command
 - **Description:** The `--fuzzy` flag currently maps to `--strict` (substring matching). gum uses `sahilm/fuzzy` library; smenu uses TST-based fuzzy traversal.
 - **Why it matters:** Fuzzy matching is a core feature for interactive filtering — without it, users cannot find items that don't exactly match their input prefix.
@@ -139,6 +142,7 @@ candy-shell
 - **Expected impact:** High — makes filter useful for real-world fuzzy scenarios
 
 ### 2. 2D Grid Choose
+
 - **Title:** Add 2D grid-based item selection to `choose` command
 - **Description:** gum's choose uses `paginator.Model` with left/right navigation for 2D grid layout. candy-shell's choose uses 1D ItemList with up/down only.
 - **Why it matters:** Grid choose is essential for selecting from large numbers of items efficiently (e.g., emoji picker, file picker from many files).
@@ -152,6 +156,7 @@ candy-shell
 - **Expected impact:** High — enables vim-style grid navigation
 
 ### 3. Per-Element Style Flags
+
 - **Title:** Wire complete dotted-style per-element flags (`--cursor.foreground=red`)
 - **Description:** The `SubStyleParser` exists but `--style "element.property=value"` is not fully wired across all commands. gum supports `--header.foreground`, `--cursor.bold`, etc.
 - **Why it matters:** Per-element styling is a key gum feature for customization.
@@ -165,6 +170,7 @@ candy-shell
 ## High Priority
 
 ### 4. External Editor for Write
+
 - **Title:** Implement `$EDITOR` integration for write command (Ctrl+E)
 - **Description:** gum's write uses `charmbracelet/x/editor` to open external editor on Ctrl+E. candy-shell has no editor integration.
 - **Why it matters:** Multi-line text editing in terminal is painful without external editor fallback.
@@ -177,6 +183,7 @@ candy-shell
 - **Expected impact:** Medium — enables real text editing workflows
 
 ### 5. Command Scanner Fix
+
 - **Title:** Replace `get_declared_classes()` with proper autoloader-based discovery
 - **Description:** `CommandScanner::scan()` only finds already-loaded classes. Commands must be autoloaded or required before scanning.
 - **Why it matters:** Auto-discovery doesn't work reliably with Composer's PSR-4 autoloading.
@@ -189,6 +196,7 @@ candy-shell
 - **Expected impact:** High — makes auto-discovery actually work
 
 ### 6. Enum Option Validation
+
 - **Title:** Wire live validation for `#[Flag(enum: ...)]` attribute constraints
 - **Description:** `Flag::$enum` holds class-string but Symfony InputOption has no native validation. User can pass invalid values without error.
 - **Why it matters:** Type safety for CLI options is a core promise of the attribute system.
@@ -203,6 +211,7 @@ candy-shell
 ## Medium Priority
 
 ### 7. Bubble Tea Subscriptions
+
 - **Title:** Implement `subscriptions()` return value in TEA models
 - **Description:** `subscriptions()` currently returns null on all models. gum uses `Tea.Batch` for concurrent commands (e.g., spinner + timeout).
 - **Why it matters:** Enables time-based recurring events, timeouts, and concurrent async operations.
@@ -215,6 +224,7 @@ candy-shell
 - **Expected impact:** Medium — enables timeouts and animated spinners
 
 ### 8. Command Palette
+
 - **Title:** Add fuzzy command lookup with `candyshell` (no subcommand)
 - **Description:** textual has excellent command palette pattern. gum has none. Could add as candy-shell enhancement.
 - **Why it matters:** Improves discoverability for new users and power users who can't remember all 13 commands.
@@ -226,6 +236,7 @@ candy-shell
 - **Expected impact:** Low-Medium — nice-to-have for discoverability
 
 ### 9. Logfmt Formatter Enhancement
+
 - **Title:** Enhance logfmt formatter with proper key ordering and escaping
 - **Description:** Current logfmt is basic. gum's log uses structured fields with proper escaping.
 - **Source repo:** `charmbracelet/gum` log implementation
@@ -239,6 +250,7 @@ candy-shell
 ## Low Priority
 
 ### 10. Go Template Functions
+
 - **Title:** Add Go-style template functions to format --type template
 - **Description:** gum's template mode supports `upper`, `lower`, `default`, etc. candy-shell only has lightweight `{{VAR}}` expansion.
 - **Source repo:** `charmbracelet/gum` (format/formats.go template functions)
@@ -246,6 +258,7 @@ candy-shell
 - **Expected impact:** Low — most users only need variable substitution
 
 ### 11. Hyperlink Support
+
 - **Title:** Add OSC 8 hyperlink support to styles
 - **Description:** lipgloss supports hyperlinks via `Transform(func(string) string)`. candy-sprinkles does not.
 - **Source repo:** `charmbracelet/lipgloss` hyperlink support
@@ -261,6 +274,7 @@ candy-shell
 **Current approach:** Substring matching via `ItemList` — `stripos($haystack, $needle) !== false`
 
 **External approach (gum/sahilm/fuzzy):**
+
 - Uses fuzzy scoring algorithm that ranks matches by:
   - Consecutive character match bonus
   - Start-of-word bonus
@@ -268,21 +282,25 @@ candy-shell
 - Returns matches sorted by score with character positions for highlighting
 
 **External approach (smenu/TST):**
+
 - Ternary Search Tree for O(k) prefix search where k = key length
 - Bitmap tracking for match highlighting per character position
 - Fuzzy traversal builds candidate sets incrementally as user types
 
 **Why external is better:**
+
 - Substring matching fails when user doesn't know exact substring
 - Fuzzy matching is expected behavior for interactive filtering
 - TST provides sublinear performance for large lists
 
 **Tradeoffs:**
+
 - Fuzzy algorithm requires more computation per keystroke
 - TST requires building index structure (good for repeated use)
 - For small lists (<100 items), substring may be faster
 
 **Applicability:**
+
 - Most applicable to `filter` command — core use case
 - Could also enhance `choose` with fuzzy pre-filtering
 
@@ -291,21 +309,25 @@ candy-shell
 **Current approach:** Full re-render on every frame via `view()` returning ANSI string
 
 **External approach (ratatui, php-tui, bubbletea):**
+
 - Maintain two buffers (previous and current)
 - Compute diff at cell level — only changed cells sent to terminal
 - Uses ANSI 2026 synchronized output for atomic updates
 
 **Why external is better:**
+
 - Reduces terminal I/O significantly for large viewports
 - Eliminates flicker on complex UIs
 - Critical for performance with many components
 
 **Tradeoffs:**
+
 - More complex implementation
 - Requires tracking previous buffer state
 - Most candy-shell commands are simple (single component)
 
 **Applicability:**
+
 - Would primarily benefit `pager` command with large content
 - Would benefit `choose` with many visible items
 - Not critical for most shell script use cases
@@ -315,14 +337,17 @@ candy-shell
 **Current approach:** `Width::wrap()` handles ANSI stripping but may not handle all Unicode edge cases
 
 **External approach (displaywidth library):**
+
 - Uses `clipperhouse/displaywidth` for correct Unicode width
 - Handles combining characters, emoji, CJK width properly
 
 **Why external is better:**
+
 - Correct handling of exotic Unicode in terminal width calculation
 - Avoids layout bugs with emoji in content
 
 **Tradeoffs:**
+
 - Additional dependency
 - Most shell script content is ASCII
 
@@ -347,6 +372,7 @@ foreach ($model->subscriptions() ?? [] as $subscription) {
 ```
 
 This matches bubbletea's subscription model and enables:
+
 - Timeouts on interactive commands
 - Spinner animation alongside process execution
 - Periodic UI updates without blocking
@@ -356,6 +382,7 @@ This matches bubbletea's subscription model and enables:
 **Current state:** Each command wraps a single component in its TEA model.
 
 **Proposed improvement:** Allow composing multiple components in one model:
+
 - `choose` + `filter` combination for searchable grids
 - `pager` + `input` for search-within-content
 - Modal overlays using layer compositing
@@ -367,6 +394,7 @@ This would draw from lipgloss's `Compositor` concept.
 **Current state:** No formal extension system; commands are discovered via attributes.
 
 **Proposed improvement:** Add extension points:
+
 - Pre/post execute hooks
 - Custom formatter registration
 - Custom component factory injection
@@ -382,6 +410,7 @@ This would draw from CLIFramework's extension system pattern.
 **Current:** Typo suggestion only for command names (distance ≤ 2).
 
 **Proposed:** Extend typo suggestion to:
+
 - Flag names within a command
 - Subcommand paths (e.g., "Did you mean `candyshell filter`?")
 - Enum value names
@@ -406,6 +435,7 @@ final class ChooseCommand extends Command
 **Current:** Basic completion for command names only.
 
 **Proposed:** Add dynamic completion from `#[Flag(enum: ...)]`:
+
 - Complete enum values when cursor is on a flag
 - Complete file paths for `--file` flags
 - Complete directory paths for `--cwd` flags
@@ -417,6 +447,7 @@ final class ChooseCommand extends Command
 ## 1. Shell Scripting Guide
 
 candy-shell's primary purpose is shell script integration. Documentation should include:
+
 - Basic usage examples for each command
 - Pipeline compositions (`candyshell filter | candyshell choose`)
 - Exit code handling in scripts
@@ -425,6 +456,7 @@ candy-shell's primary purpose is shell script integration. Documentation should 
 ## 2. Custom Command Tutorial
 
 Creating custom commands with `#[Command]` attribute is documented but could use:
+
 - Step-by-step tutorial building a custom prompt
 - Example of composing multiple components
 - Testing strategies for custom commands
@@ -432,6 +464,7 @@ Creating custom commands with `#[Command]` attribute is documented but could use
 ## 3. Migration Guide from gum
 
 Users coming from gum need a quick reference:
+
 - Flag name differences (all caps vs lowercase)
 - Env var prefix differences (`GUM_CHOOSE_HEIGHT` vs `CANDYSHELL_HEIGHT`)
 - Behavioral differences (2D grid vs 1D list, fuzzy vs substring)
@@ -445,6 +478,7 @@ Users coming from gum need a quick reference:
 **Current:** Limited `--cursor-mode` support (blink/static/hidden).
 
 **Proposed:** Support for cursor shapes (block/underline/bar) via candy-vt or direct ANSI:
+
 - Block cursor: `\x1b[2 q`
 - Underline: `\x1b[4 q`
 - Beam: `\x1b[6 q`
@@ -454,6 +488,7 @@ Users coming from gum need a quick reference:
 **Current:** Mouse events not handled in most commands.
 
 **Proposed:** Add mouse support similar to bubbletea:
+
 - Click to position cursor in choose/filter
 - Click to select in choose
 - Scroll wheel in pager
@@ -465,6 +500,7 @@ Users coming from gum need a quick reference:
 **Current:** No focus tracking.
 
 **Proposed:** Handle terminal focus gained/lost for:
+
 - Clearing sensitive input on focus loss
 - Refreshing stale content on focus regain
 
@@ -477,6 +513,7 @@ Users coming from gum need a quick reference:
 **Current:** Some golden tests exist.
 
 **Proposed:** Expand snapshot tests for:
+
 - Each command's `--help` output
 - ANSI rendering across themes
 - Error message formatting
@@ -486,6 +523,7 @@ Users coming from gum need a quick reference:
 **Current:** Limited fuzzing of input parsing.
 
 **Proposed:** Add fuzz testing for:
+
 - Unicode input handling
 - Large input files (filter/pager)
 - Malformed CSV/TSV in table command
@@ -495,6 +533,7 @@ Users coming from gum need a quick reference:
 **Current:** `FakeProcess` exists for unit tests.
 
 **Proposed:** Add integration tests that actually spawn processes:
+
 - Spin command with real and fake processes
 - Signal handling (SIGINT → exit code 130)
 - Timeout behavior
@@ -506,6 +545,7 @@ Users coming from gum need a quick reference:
 ## 1. Integration with sugar-bits
 
 candy-shell currently uses candy-forms directly but could also expose sugar-bits components:
+
 - `TreeView` for hierarchical file picker
 - `SelectionList` with custom renderers
 
@@ -527,16 +567,19 @@ Could add `--theme` flag to more commands that respects terminal color profile d
 ## charmbracelet/gum Issues
 
 ### Fuzzy Matching Implementation
+
 - gum uses `sahilm/fuzzy` for real fuzzy matching
 - candy-shell's `--fuzzy` maps to substring matching (known gap)
 - **Lesson:** Porting surface API is easier than porting algorithms
 
 ### External Editor Integration
+
 - gum's write uses `charmbracelet/x/editor` for `$EDITOR` integration
 - This is a Go library port that would need to be recreated in PHP
 - **Lesson:** Some gaps are due to upstream Go-specific dependencies
 
 ### Grid Choose vs 1D List
+
 - gum's choose uses paginator with 2D grid layout
 - Requires `bubbles/paginator` which maps to a future sugar-bits component
 - **Lesson:** Some features require upstream component ports first
@@ -544,11 +587,13 @@ Could add `--theme` flag to more commands that respects terminal color profile d
 ## p-gen/smenu Insights
 
 ### TST-Based Search
+
 - TST provides O(k) prefix search and O(n*k) fuzzy search
 - Bitmap tracking for highlighting is memory-efficient
 - **Lesson:** Could enhance filter with TST indexing for large datasets
 
 ### Display Modes
+
 - smenu supports line/column/tabulate modes
 - candy-shell filter could benefit from similar display flexibility
 - **Lesson:** Multi-mode display is a useful pattern for selection tools
@@ -556,11 +601,13 @@ Could add `--theme` flag to more commands that respects terminal color profile d
 ## textualize/textual Insights
 
 ### Command Palette
+
 - textual's command palette is extensive with provider pattern
 - Fuzzy search over commands with live filtering
 - **Lesson:** Could enhance candy-shell with optional palette mode
 
 ### CSS Layout
+
 - textual's TCSS implementation is comprehensive
 - Could inspire enhanced layout in candy-shell's non-interactive commands
 - **Lesson:** Web developer familiarity is a major DX win
@@ -623,12 +670,14 @@ Could add `--theme` flag to more commands that respects terminal color profile d
 candy-shell represents a well-executed port of charmbracelet/gum to PHP, achieving ~85% functional parity while introducing PHP-specific innovations (attributes, Levenshtein typo suggestion, env var global prefix). The architecture is clean — Symfony Console surface over TEA models over candy-forms components — and the codebase demonstrates good PHP 8.3+ practices throughout.
 
 **Key differentiators vs upstream gum:**
+
 - Composer-installable PHP library (vs Go binary)
 - Attribute-based discovery (vs struct tags)
 - Levenshtein typo correction (vs shell completion only)
 - Global env var prefix (vs per-command)
 
 **Key gaps vs upstream:**
+
 - Fuzzy matching (algorithm, not just API)
 - 2D grid navigation (requires new component)
 - External editor integration (requires upstream port of x/editor)
@@ -638,10 +687,12 @@ candy-shell represents a well-executed port of charmbracelet/gum to PHP, achievi
 candy-shell sits at the application framework tier, serving as the **CLI entry point** for the SugarCraft TUI ecosystem. It depends on foundation libs (candy-core, candy-forms, candy-sprinkles, candy-shine, candy-pty) and provides no components itself — only command wrappers. This is the correct architecture: the foundation libs are reusable in custom TUI applications, while candy-shell provides the gum-compatible CLI surface for shell scripts.
 
 **Comparison with other PHP CLI frameworks:**
+
 - **vs c9s/CLIFramework:** candy-shell is more modern (PHP 8.3+ strict typing, attributes), has better TUI integration, but lacks CLIFramework's hierarchical command groups and extension system
 - **vs php-tui:** Different focus (php-tui is a widget library for building TUIs; candy-shell is a ready-made CLI tool)
 
 **Recommended focus areas:**
+
 1. **Fuzzy matching** — highest impact gap for real-world usability
 2. **CommandScanner fix** — makes auto-discovery actually work with Composer
 3. **Mouse support** — modern terminals expect click-to-select

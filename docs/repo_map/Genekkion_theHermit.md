@@ -1,6 +1,7 @@
 # Genekkion/theHermit
 
 ## Metadata
+
 - **URL:** https://github.com/Genekkion/theHermit
 - **Language:** Go
 - **Stars:** 15
@@ -8,6 +9,7 @@
 - **Description:** A quick fix list model for the Charm BubbleTea ecosystem, inspired by Neovim's quick fix lists. It wraps the main view, replacing characters at certain areas with list content, enabling the background view to continue updating while the list is shown.
 
 ## Feature List
+
 - Quick fix list overlay for BubbleTea TUI applications
 - Wraps existing fullscreen views (list content overlaid on background)
 - Background view continues updating while list is displayed
@@ -22,17 +24,21 @@
 ## Key Classes and Methods
 
 ### `Model` struct (`list/model.go:L8-L47`)
+
 Main model struct with fields for dimensions, styles, items, cursor, offset.
 
 **Constructors:**
+
 - `New(height, width int, items []Item) Model` — L86-117: Creates a Model with specified dimensions and items
 - `NewDefault(items []Item) Model` — L50-83: Creates a Model with sensible defaults (81x14, dark theme)
 
 **tea.Model Interface:**
+
 - `Init() tea.Cmd` — L119-121: Returns nil (no initialization needed)
 - `Update(message tea.Msg) (tea.Model, tea.Cmd)` — L123-172: Handles WindowSizeMsg and KeyMsg (up/down)
 
 **Setters/Getters (list/misc.go):**
+
 - `SetView(view string)`, `GetView()` — L84-90: Set the underlying view to wrap
 - `SetIsShown(isShown bool)`, `GetIsShown()` — L15-21: Toggle list visibility
 - `SetItems(items []Item)`, `GetItems()` — L72-74, L68-70: Item management
@@ -49,6 +55,7 @@ Main model struct with fields for dimensions, styles, items, cursor, offset.
 - `SetIsNumbered(bool)` — L11-13: Toggle numbering
 
 ### `Item` interface (`list/item.go:L4-L6`)
+
 Simple interface requiring a `Title()` method — mirrors bubble's list.item interface.
 
 ```go
@@ -60,33 +67,39 @@ type Item interface {
 ### View Rendering (`list/views.go`)
 
 **Border Functions:**
+
 - `topBorder(line *string) string` — L100-149: Renders top border with optional centered title
 - `bottomBorder(line *string) string` — L153-170: Renders bottom border
 - `middleBorder(line *string, item *Item, index int) string` — L174-234: Renders a single item row
 - `middleSpacer(line *string) string` — L237-261: Renders empty spacer rows when items < rows
 
 **Padding Functions:**
+
 - `writeLeftPadding(stringBuilder *strings.Builder, chars *[]string)` — L18-32: Writes left padding accounting for ANSI codes
 - `writeRightPadding(stringBuilder *strings.Builder, chars *[]string, line *string)` — L57-96: Writes right padding with ANSI code preservation
 - `paddingLength(array []string) int` — L36-42: Helper to calculate visual length
 - `isCode(regexMatches [][]int, index int) bool` — L47-54: Checks if an index falls within an ANSI escape code range
 
 **Main View:**
+
 - `View() string` — L264-321: Main rendering function that overlays list onto background view
 
 ## Notable Algorithms / Named Patterns
 
 ### ANSI-Aware Width Calculation
+
 The library uses `lipgloss.Width()` instead of naive `utf8.RuneCountInString()` to correctly handle ANSI escape sequences when calculating padding and text widths.
 
 **Source:** `list/views.go:L24` — `lipgloss.Width(stringBuilder.String())`
 
 ### ANSI Escape Code Detection
+
 Uses regex `colorRegex = regexp.MustCompile("\033\\[[0-9;]+m")` (L14) to find and skip ANSI codes when extracting character positions for padding.
 
 **Source:** `list/views.go:L14, L66` — `colorRegex.FindAllStringIndex()`
 
 ### Cursor Clamping
+
 ```go
 model.cursor = max(min(cursor, len(model.items)-1), 0)
 ```
@@ -95,6 +108,7 @@ Ensures cursor never goes below 0 or above the last item index.
 **Source:** `list/misc.go:L64`
 
 ### Overlay Positioning Algorithm
+
 The list is centered vertically in the window using:
 ```go
 midPoint1 := model.windowHeight/2 - model.height/2 + 1
@@ -104,6 +118,7 @@ midPoint2 := midPoint1 + model.height
 **Source:** `list/views.go:L279-280`
 
 ### Offset-Based Pagination
+
 For scrolling through longer lists, the model maintains an `offset` field and slices visible items:
 ```go
 items = model.items[model.offset : model.offset+model.height-1]
@@ -112,6 +127,7 @@ items = model.items[model.offset : model.offset+model.height-1]
 **Source:** `list/views.go:L286-289`
 
 ## Strengths
+
 - Clean API that follows BubbleTea's conventions (tea.Model interface)
 - Proper ANSI/UTF-8 handling for international character width calculation
 - Good separation of concerns (model, views, item interface)
@@ -123,6 +139,7 @@ items = model.items[model.offset : model.offset+model.height-1]
 - Actively maintained and contributed to charmbracelet/bubbles
 
 ## Weaknesses
+
 - Currently tested with **fullscreen views only** — not flexible for child component dimensions (explicitly documented as TODO)
 - **No fuzzy filtering** (noted as "Coming Soon")
 - **No pagination** — uses simple offset-based scrolling
@@ -146,6 +163,7 @@ items = model.items[model.offset : model.offset+model.height-1]
 | tea.Model interface (Init/Update/View) | `candy-core` | Core TUI component contract |
 
 **Mapping Notes:**
+
 - The Hermit is a **wrapper/overlay pattern** that doesn't directly map to a single SugarCraft lib — it would span multiple:
   - `sugar-bits` for the item/component model
   - `candy-shine` for lipgloss-based styling  

@@ -1,12 +1,19 @@
 # SugarCraft/candy-wish
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/candy-wish
+
 - **Package:** `sugarcraft/candy-wish`
+
 - **Language:** PHP 8.3+
+
 - **Status:** 🟢 v1 ready
+
 - **Namespace:** `SugarCraft\Wish`
+
 - **Upstream:** [charmbracelet/wish](https://github.com/charmbracelet/wish) (MIT, Go, 5.2k stars)
+
 - **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-pty`, `react/event-loop`, `react/promise-timer`
 
 ## Description
@@ -110,8 +117,11 @@ interface Middleware
 
 The interface mirrors PSR-15 / Express-style middleware. Middleware receives the current `Context`, `Session`, and a `$next` continuation. Each middleware can:
 - Inspect / log the session
+
 - Short-circuit by NOT calling `$next`
+
 - Mutate the `Context` (via `withValue()`, `withCancelable()`, etc.)
+
 - Return a `PromiseInterface` for async operations (LDAP, OAuth, database auth)
 
 ### Middleware Stack Execution Order
@@ -164,10 +174,15 @@ Two concrete implementations ship:
 The default transport since PR5. Allocates a `candy-pty` master/slave pair via `PtySystemFactory::default()`, spawns the user's cmd as a subprocess with `controllingTerminal: true`, and pumps bytes between the supervisor's STDIN/STDOUT and the PTY master via `PosixPump`.
 
 **Key integration points with candy-pty:**
+
 - `PtySystemFactory::default()` resolves `PosixPtySystem` on Linux/macOS
+
 - `PosixPump::run($master, $stdin, $stdout, $child, $opts)` drives the byte pump
+
 - `SignalForwarder::attachSigwinch()` forwards host PTY resize → `WindowChangeMsg` → `master->resize()`
+
 - SIGHUP → explicit `posix_kill()` teardown sequence (no auto-delivery on Linux master close)
+
 - `PumpOptions::sshDefault()` provides SSH-appropriate timeouts and idle callbacks
 
 **SIGWINCH forwarding** (`InProcessTransport::runChild()` lines 244-259):
@@ -191,7 +206,9 @@ $sigwinchAttached = SignalForwarder::attachSigwinch(
 
 The pre-PTY-upgrade architecture. Runs the middleware chain inline in the supervisor process, where STDIN/STDOUT are the slave side of sshd's PTY. Use this when:
 - You want zero subprocess overhead
+
 - Your terminal middleware is `BubbleTea` (mounts a SugarCraft Program directly)
+
 - You have an existing entry script that reads STDIN/echoes STDOUT directly
 
 **Compatibility note:** `BubbleTea` middleware explicitly detects InProcessTransport via duck-typed `setTransport(ChildSpawner)` injection and throws a migration error, because mounting a Program inline would collide with the InProcessTransport's byte pump.
@@ -315,10 +332,15 @@ The `RateLimit` middleware uses a token-bucket algorithm with file-persisted sta
 
 **Algorithm** (`RateLimit::take()`):
 1. Open state file with `fopen($path, 'c+')` — creates if missing
+
 2. `flock($fh, LOCK_EX)` — exclusive lock for atomicity across sibling processes
+
 3. `stream_get_contents()` → `json_decode()` → map
+
 4. For entry `$key`: `tokens = min($burst, $tokens + ($now - $last) * $ratePerSec)`
+
 5. If `tokens < 1.0`: reject, write back updated entry
+
 6. Otherwise: `tokens -= 1.0`, write back, accept
 
 **Tuning:** `$burst` controls maximum concurrent tokens per IP; `$ratePerSec` controls refill rate. File locking (`LOCK_EX`) serializes concurrent updates. For high-volume deployments the persistence backend can be swapped for Redis.
@@ -341,11 +363,17 @@ The `RateLimit` middleware uses a token-bucket algorithm with file-persisted sta
 
 ```
 1. $pair = $this->system->open($cols, $rows)       // open master/slave
+
 2. $master = $pair->master(); $slave = $pair->slave();
+
 3. stream_set_blocking($master->stream(), false);   // non-blocking I/O
+
 4. $child = $slave->spawn($cmd, $env, $cols, $rows, controllingTerminal: true);
+
 5. SIGWINCH forwarding attached if pcntl + SIGWINCH available
+
 6. PosixPump::run() pumps bytes until child exits or EOF
+
 7. Teardown: SIGHUP → 200ms grace → SIGKILL → close master → child->wait()
 ```
 

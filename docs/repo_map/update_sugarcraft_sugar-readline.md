@@ -20,6 +20,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 ```
 
 **Prompt types:**
+
 - `TextPrompt` (612 lines) — single-line input, password mode, completions, char limit, validator, history, Vi/Emacs modes, undo/redo, auto-suggest, syntax highlight stub
 - `ConfirmationPrompt` (144 lines) — yes/no, decoupled select/submit (y/n changes selection, Enter commits)
 - `SelectionPrompt` (239 lines) — filtered single-choice list with pagination
@@ -27,6 +28,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - `TextareaPrompt` (260 lines) — multi-line input, line/col cursor, max-lines cap
 
 **Key systems:**
+
 - `Key` class — symbolic string constants for all supported keys
 - `ModeInterface` — ViMode (insert/normal/visual) and EmacsMode implementations
 - `HistoryInterface` — InMemoryHistory (newest-first) and FileHistory (append-only with `flock`)
@@ -81,6 +83,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 ## Critical Priority
 
 ### 1. Input Driver / TTY Integration
+
 - **Title:** No way to read actual terminal keypresses
 - **Description:** `sugar-readline` only processes symbolic key names. It has no mechanism to decode terminal escape sequences into `Key` constants. A higher-level driver (like ReactPHP stream reader or PTY loop) is needed.
 - **Why it matters:** Without this, the library cannot be used for real interactive CLI tools — only demo/testing scenarios with simulated input.
@@ -94,6 +97,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** High — requires understanding of terminal escape sequences, PTY/raw mode, and async I/O
 
 ### 2. Style System Overhaul
+
 - **Title:** Hardcoded ANSI SGR codes instead of proper style objects
 - **Description:** Styles like `$labelStyle = '1;36'` are bare SGR strings. Compare to `candy-sprinkles` which has a proper `Style` class with chainable methods and CIELAB color blending.
 - **Why it matters:** Cannot customize prompt appearance without manipulating raw ANSI strings; no color adaptability for light/dark terminals; no border/box model
@@ -107,6 +111,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** Medium
 
 ### 3. Cursor Blink
+
 - **Title:** No cursor blink animation on TextPrompt
 - **Description:** TextPrompt renders cursor as static reverse video. Real cursor blink (on/off every ~530ms) makes TUI feel alive.
 - **Why it matters:** Static cursor is a noticeable regression from what users expect from interactive prompts
@@ -122,6 +127,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 ## High Value
 
 ### 4. Mouse Support
+
 - **Title:** No mouse interaction for positioning or selection
 - **Description:** SelectionPrompt and MultiSelectPrompt don't respond to mouse clicks for cursor positioning or item selection. No mouse wheel scrolling.
 - **Why it matters:** Modern terminal apps expect mouse interaction (click to position, wheel to scroll)
@@ -135,6 +141,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** Medium
 
 ### 5. Textarea Soft-Wrap
+
 - **Title:** TextareaPrompt stores each line as a separate array entry with no word-wrap
 - **Description:** Long input lines are stored as one array entry. There is no soft-wrap at a given column width. Compare to `candy-forms/TextArea` which has `withDynamic(true)` for auto-growing height.
 - **Why it matters:** Multi-line text input without wrapping is unusable for real text editing
@@ -148,6 +155,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** High — cursor tracking across wrapped lines is complex
 
 ### 6. Fuzzy/Advanced Filtering
+
 - **Title:** SelectionPrompt and MultiSelectPrompt use case-insensitive substring filter only
 - **Description:** Filter is `stripos($clone->choices[$i], $needle) !== false`. No fuzzy matching, no diacritic folding, no regex.
 - **Why it matters:** Users expect fuzzy finding (substr in any position, not just consecutive). `candy-forms` has Smith-Waterman fuzzy matching.
@@ -161,6 +169,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** Medium — fuzzy matching algorithm exists in candy-forms
 
 ### 7. Built-in Help View
+
 - **Title:** No Help component showing keybindings per prompt type
 - **Description:** Users must reference documentation to know keybindings. Bubbles' `Help` component generates help text from `KeyMap` interface introspection.
 - **Why it matters:** Discoverability is poor without inline help; users don't know what keys are available
@@ -176,6 +185,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 ## Medium Priority
 
 ### 8. sugar-glow Syntax Highlighting Integration
+
 - **Title:** Highlight.php is a no-op stub returning single unstyled span
 - **Description:** Full syntax highlighting via sugar-glow integration is planned (step 10.24) but not implemented.
 - **Why it matters:** Users cannot do syntax-highlighted code input; limits use cases for developer tooling
@@ -189,6 +199,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** Medium (depends on sugar-glow)
 
 ### 9. Vi Visual Mode Selection Range
+
 - **Title:** ViMode enters visual mode (v key) but tracks no selection state
 - **Description:** `handleVisualMode()` is a placeholder that only changes mode indicator but doesn't store selection start/end.
 - **Why it matters:** Visual mode for selecting and operating on text regions is a core vim feature
@@ -201,6 +212,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** Medium
 
 ### 10. Confirmation Submit Feedback
+
 - **Title:** MultiSelect::submit() silently stays pending when canSubmit() returns false
 - **Description:** When user presses Enter but min selections not met, the prompt just stays in pending state with no indication why.
 - **Why it matters:** Poor UX — user doesn't know why Enter didn't work
@@ -215,6 +227,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 ## Low Priority
 
 ### 11. Partial Block Progress Indicator
+
 - **Title:** No progress bar component in sugar-readline
 - **Description:** sugar-readline doesn't have a progress indicator. If needed, user would need to integrate `sugar-bits/Progress`.
 - **Why it matters:** Some interactive prompts may need progress feedback
@@ -223,6 +236,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 - **Estimated complexity:** N/A — may not belong in readline
 
 ### 12. Undo/Redo for MultiSelect
+
 - **Title:** UndoManager is TextPrompt-only; MultiSelectPrompt has no undo/redo
 - **Description:** Undo/redo is only available for TextPrompt via withUndoManager(). MultiSelect marks are not undoable.
 - **Why it matters:** Users may accidentally mark/unmark items and want to undo
@@ -235,18 +249,21 @@ if ($this->submitted || $this->aborted) { return $this; }
 # Algorithm / Performance Opportunities
 
 ## Textarea Soft-Wrap Memoization
+
 - **Current approach:** No wrapping — long lines stored as-is
 - **Better approach from `pr_charmbracelet_bubbles.md`:** `TextArea memoization reduced 42s→3s for pasting 1000 chars`. Wrap computation is expensive and must be memoized keyed by (content, width) pair.
 - **Tradeoffs:** Memoization adds memory overhead; must invalidate on content/width change
 - **Applicability:** Directly applicable to TextareaPrompt when soft-wrap is implemented
 
 ## List/Selection String Building
+
 - **Current approach:** Uses PHP array ops and string concatenation in filter rendering
 - **Better approach from `pr_charmbracelet_bubbles.md`:** Issue #810 — string concatenation in loops (for pagination dots) caused lag with 8000 items. Fix: `strings.Builder` pattern equivalent in PHP: use `implode()` with array instead of `.=` in loops.
 - **Tradeoffs:** PHP doesn't have strings.Builder; array + implode() is equivalent
 - **Applicability:** SelectionPrompt pagination rendering
 
 ## Escape Sequence Stripping for Truncation
+
 - **Current approach:** Direct string operations may not handle ANSI codes in text
 - **Better approach from `pr_charmbracelet_bubbles.md`:** Always strip ANSI sequences before measuring/truncating text, then reapply. Pattern: `preg_replace('/\x1b\[[^m]*m/', '', $text)`.
 - **Tradeoffs:** Adds overhead per truncation; needed for correctness with colored text
@@ -257,6 +274,7 @@ if ($this->submitted || $this->aborted) { return $this; }
 # Architecture Improvements
 
 ## 1. Input Driver Separation
+
 The most critical architectural improvement is separating input decoding from prompt logic. Currently `sugar-readline` has no input mechanism at all. Consider:
 
 ```php
@@ -275,6 +293,7 @@ class TtyInputDriver {
 This mirrors how `charmbracelet/bubbletea` separates input handling from model logic.
 
 ## 2. Style Object Integration
+
 Replace hardcoded ANSI codes with `SugarCraft\Sprinkles\Style` objects:
 
 ```php
@@ -294,6 +313,7 @@ public function withLabelStyle(Style $style): self {
 This enables color profile adaptation (light/dark terminals), CSS-like styling, and proper composition.
 
 ## 3. Rendering Loop Wrapper
+
 For cursor blink and real-time updates, consider a `PromptRenderer` class:
 
 ```php
@@ -312,6 +332,7 @@ This provides the "real app" experience while keeping prompts stateless.
 # API / Developer Experience Improvements
 
 ## 1. Consistent Return Types
+
 Currently the `submit()` method returns `$this` (self) when validation fails or when MultiSelect can't submit. Consider:
 
 ```php
@@ -324,6 +345,7 @@ public function submit(): Result { ... }
 ```
 
 ## 2. Factory Method Naming
+
 Sugar-readline uses `new()` as the primary factory (`TextPrompt::new('label')`). Consider also adding `::prompt()` alias for familiarity with other SugarCraft libs:
 
 ```php
@@ -332,6 +354,7 @@ public static function new(string $label): self { ... }  // existing
 ```
 
 ## 3. Type-Safe Key Handling
+
 Currently all keys are strings. Consider using string enum backed by constants for better IDE support:
 
 ```php
@@ -343,6 +366,7 @@ public function handleKey(Key::UP|Key::DOWN|Key::ENTER|... $key): self
 ```
 
 ## 4. Prompt Composition
+
 Allow composing multiple prompts (e.g., a form with Text + Confirm + Select):
 
 ```php
@@ -359,23 +383,30 @@ This would bridge sugar-readline's lightweight prompts with the fuller form syst
 # Documentation / Cookbook Opportunities
 
 ## 1. Interactive CLI Tool Tutorial
+
 Create a step-by-step guide building a real CLI tool (e.g., `todo CLI` or `contact manager`) using sugar-readline prompts. Show:
+
 - Reading real terminal input
 - Building a prompt loop
 - Handling submit/abort
 - Persisting history to file
 
 ## 2. Keybinding Reference Card
+
 Create a reference card showing all keybindings for each prompt type, organized by mode (default/Vi/Emacs).
 
 ## 3. History Backend Examples
+
 Show examples of custom `HistoryInterface` implementations:
+
 - SQLite-backed history for persistent cross-session history
 - Network-fetched history (e.g., company knowledge base suggestions)
 - Signed/encrypted history for sensitive input
 
 ## 4. Input Driver Implementation Guide
+
 Document how to wire up different input sources:
+
 - Raw TTY stdin for simple cases
 - PTY for advanced (including subprocess input)
 - ReactPHP stream reader for async integration
@@ -385,18 +416,22 @@ Document how to wire up different input sources:
 # UX / TUI Improvements
 
 ## 1. Cursor Style Options
+
 - Block cursor (current default, reverse video)
 - Underline cursor (`_`)
 - Bar cursor (`|`)
 - Blinking variants of each
 
 ## 2. Loading/Spinner During Async Operations
+
 For prompts that do async work (history fetch, completion lookup), show a spinner via `sugar-bits/Spinner` integration.
 
 ## 3. Transition Animations
+
 Smooth transitions between prompt states (submit confirmation flash, error shake).
 
 ## 4. Sound/Haptic Feedback
+
 Optional audio cues for submit, error, completion match (via terminal bell or notification daemon).
 
 ---
@@ -404,6 +439,7 @@ Optional audio cues for submit, error, completion match (via terminal bell or no
 # Testing / Reliability Improvements
 
 ## 1. Golden File Snapshot Tests
+
 Currently tests use programmatic assertions. Add golden file tests for `view()` output:
 
 ```php
@@ -416,16 +452,20 @@ public function testTextPromptView(): void {
 ```
 
 ## 2. Property-Based Testing
+
 Add Hypothesis-style property tests for:
+
 - Multibyte input (emoji, CJK, ZWJ sequences)
 - Very long input (10k+ characters)
 - History edge cases (empty, single entry, duplicates)
 - Undo/redo at boundaries
 
 ## 3. Fuzz Testing for Input Decoding
+
 Fuzz test the input driver with random byte sequences to ensure no crashes or hangs.
 
 ## 4. Terminal Compatibility Matrix
+
 Test on multiple terminals: xterm, gnome-terminal, Konsole, Windows Terminal, iTerm2, macOS Terminal.app. Document known issues.
 
 ---
@@ -433,6 +473,7 @@ Test on multiple terminals: xterm, gnome-terminal, Konsole, Windows Terminal, iT
 # Ecosystem / Integration Opportunities
 
 ## 1. sugar-glow Integration
+
 `sugar-readline` is the natural input library for sugar-glow-powered syntax highlighting. When sugar-glow is ready, the integration is:
 ```php
 $prompt = TextPrompt::new('Enter code: ')
@@ -440,6 +481,7 @@ $prompt = TextPrompt::new('Enter code: ')
 ```
 
 ## 2. sugar-prompt / candy-forms Bridge
+
 sugar-readline prompts could serve as low-level inputs for `candy-forms` field types:
 ```php
 // sugar-readline TextPrompt as candy-forms Input field source
@@ -450,9 +492,11 @@ class ReadlineInputField implements Field {
 ```
 
 ## 3. candy-kit Command Palette Integration
+
 The command palette in `candy-kit` could use sugar-readline prompts for fuzzy-filtered command selection.
 
 ## 4. ReactPHP Integration
+
 For async completion/suggestion fetching:
 ```php
 // Async suggestion provider
@@ -469,34 +513,40 @@ $prompt = TextPrompt::new('Search: ')
 ## From `charmbracelet/bubbles` ecosystem:
 
 ### Issue #1652: Textarea infinite loop on empty input word navigation (Critical)
+
 - **Summary:** `wordLeft()` has unconditional loop with only exit being finding non-space rune. When textarea empty, infinite loop.
 - **Relevance:** SugarCraft TextareaPrompt has same loop structure — boundary check before iteration is essential
 - **Fix:** Add `if ($this->row === 0 && $this->col === 0) { return; }` before navigation loops
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbles.md`
 
 ### Issue #263: Control characters in clipboard input cause corruption
+
 - **Summary:** Bracketed paste support needed; control characters corrupt state
 - **Relevance:** SugarCraft must sanitize clipboard input before processing
 - **Fix:** Implement bracketed paste mode detection and control char stripping
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbles.md`
 
 ### Issue #301: Textarea performance — 42s → 3s via memoization
+
 - **Summary:** Pasting 1000 chars at 72 char width took 42 seconds. Memoizing wrap() results reduced to 3s (93% improvement)
 - **Relevance:** When TextareaPrompt implements soft-wrap, memoization is critical for performance
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbles.md`
 
 ### Issue #810: List paginator string concatenation performance
+
 - **Summary:** 8000 item list had lag due to string concatenation in pagination dots
 - **Fix:** Use `strings.Builder` (or PHP `implode()` from array)
 - **Relevance:** SelectionPrompt pagination uses similar pattern
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbles.md`
 
 ### Issue #566: AdaptiveColor causing freezes
+
 - **Summary:** `AdaptiveColor` style detection during `View()` caused hangs
 - **Lesson:** Never compute styles during `View()` — pre-compute and cache
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbles.md`
 
 ### Issue #823: Viewport softwrap performance refactor (35% CPU, 38% mem reduction)
+
 - **Summary:** Inefficient allocations, re-invocations of heavy methods, re-processing data
 - **Lesson:** Profile before optimizing; cache wrapped lines; invalidate only on content/width change
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbles.md`
@@ -504,12 +554,14 @@ $prompt = TextPrompt::new('Search: ')
 ## From `charmbracelet/bubbletea` ecosystem:
 
 ### Issue #1627: Terminal capability query leak on short-lived programs
+
 - **Summary:** Async capability queries (mode 2026, mode 2027) leak escape sequences after exit
 - **Relevance:** If sugar-readline queries terminal capabilities, same leak could occur
 - **Fix:** Handle capability queries synchronously or provide opt-out
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbletea.md`
 
 ### Issue #1599 / #1690: Data races in renderer
+
 - **Summary:** `lastView` read without mutex in `onMouse()` caused race with render loop
 - **Lesson:** Any state shared between input and render loops needs mutex protection
 - **Source:** `docs/repo_map/pr_charmbracelet_bubbletea.md`
@@ -576,12 +628,14 @@ The most critical gap is **input handling** — the library cannot read actual t
 The second most impactful improvement is the **style system** — hardcoded ANSI codes are a maintainability liability and prevent proper theming, color profile adaptation, and visual polish. Adopting `candy-sprinkles/Style` would bring sugar-readline in line with the rest of the ecosystem.
 
 **Key differentiators to preserve:**
+
 1. True immutability — unique among TUI prompt libraries
 2. Pure PHP, zero external dependencies
 3. Unicode-aware throughout
 4. ModeInterface abstraction for Vi/Emacs/custom modes
 
 **Key differentiators to build:**
+
 1. First-class input driver story (vs bubbles' Go-specific event loop)
 2. Better PHP integration (generators for history, WeakMap for memoization)
 3. ReactPHP async integration for suggestions/history

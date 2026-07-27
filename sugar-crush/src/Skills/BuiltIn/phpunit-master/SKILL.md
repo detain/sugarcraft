@@ -12,6 +12,7 @@ paths:
 When writing PHPUnit tests:
 
 ## Test Structure
+
 - One assertion per test when possible
 - Descriptive test names: testMethodNameDoesExpectedBehavior
 - Follow Arrange-Act-Assert pattern
@@ -24,6 +25,7 @@ When writing PHPUnit tests:
 - Avoid mocking what you're testing
 
 ## Data Providers
+
 - Use data providers for parameterized tests
 - Keep provider methods private or in same class
 - Name data sets descriptively

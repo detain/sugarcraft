@@ -1,6 +1,7 @@
 # EthanEFung/bubble-datepicker
 
 ## Metadata
+
 - URL: https://github.com/EthanEFung/bubble-datepicker
 - Language: Go
 - Stars: ~40 (estimate based on repo activity and age)
@@ -8,6 +9,7 @@
 - Description: A custom interactive datepicker bubble component for Bubbletea (Charmbracelet's TUI framework), inspired by the jQuery Datepicker widget.
 
 ## Feature List
+
 - Interactive monthly calendar view with date selection
 - Keyboard navigation (arrow keys, Tab/Shift+Tab for focus switching, Ctrl+C/Q to quit)
 - Three focus zones: HeaderMonth, HeaderYear, and Calendar
@@ -21,12 +23,14 @@
 - Two-way data binding support with other bubbles (e.g., textinput)
 
 ## Key Classes and Methods
+
 - `Focus` (type int): Enum for focus states — `FocusNone`, `FocusHeaderMonth`, `FocusHeaderYear`, `FocusCalendar`
 - `KeyMap`: Struct holding key bindings (`Up`, `Down`, `Left`, `Right`, `FocusPrev`, `FocusNext`, `Quit`)
 - `Styles`: Struct holding lipgloss styles (`Header`, `Date`, `HeaderText`, `Text`, `SelectedText`, `FocusedText`)
 - `Model`: Main struct satisfying `tea.Model` — fields: `Time`, `KeyMap`, `Styles`, `Focused`, `Selected`
 
 ### Key Methods
+
 - `New(time.Time) Model`: Factory constructor
 - `Init() tea.Cmd`: Interface method (returns nil)
 - `Update(tea.Msg) (Model, tea.Cmd)`: Main update logic, handles key events
@@ -41,12 +45,14 @@
 - `LastYear()` / `NextYear()`: Move ±1 year
 
 ## Notable Algorithms / Named Patterns
+
 - **Bubbletea Component Pattern**: Follows Charmbracelet's `tea.Model` interface convention (Init/Update/View) — the canonical pattern for all Bubbletea bubbles
 - **Focus State Machine**: Three-tier focus system (HeaderMonth → HeaderYear → Calendar) navigated via Tab/Shift+Tab, each focus zone accepts different key inputs
 - **Calendar Grid Algorithm**: The `View()` method computes a 7-column grid spanning multiple weeks by: (1) finding first day of month, (2) walking backward to last Sunday, (3) walking forward to first Sunday of next month, (4) rendering each day with appropriate styles based on selection state
 - **Immutable Style Derivation**: Uses `lipgloss.Style.Copy().Inherit()` pattern to create variant styles without mutating originals
 
 ## Strengths
+
 - Clean, well-structured implementation following Go idioms and Bubbletea conventions
 - Comprehensive key binding support (vim-style hjkl + arrow keys + standard bindings)
 - Proper separation of concerns: styles, keymaps, and state are separate structs
@@ -56,6 +62,7 @@
 - Uses lipgloss for consistent Charmbracelet ecosystem styling
 
 ## Weaknesses
+
 - Single-file implementation (~360 lines) — no internal package organization
 - No programmatic date limit (min/max date constraints)
 - Limited view customization (no custom day formatter, fixed week headers "Su Mo Tu...")
@@ -67,6 +74,7 @@
 - Generated `focus_string.go` file committed (should be gitignored or generated at build)
 
 ## SugarCraft Mapping
+
 This is a **Bubbletea port candidate** — a Go TUI framework that maps directly to the Charmbracelet ecosystem that SugarCraft ports.
 
 | EthanEFung/bubble-datepicker | SugarCraft Lib | Notes |

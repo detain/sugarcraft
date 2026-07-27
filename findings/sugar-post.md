@@ -155,6 +155,7 @@ The current `SmtpTransport::send()` is synchronous and returns `void`. It cannot
 | Low | 7+ | Duplicated address extraction, getenv vs $_ENV, no TLS tests, etc. |
 
 **Top Fixes:**
+
 1. Fix the attachment read failure to throw instead of silently returning `false`
 2. Add `fwrite()` return value checks to `SmtpTransport::sendRaw()`
 3. Refactor `buildMimeMessage()` into smaller composable methods

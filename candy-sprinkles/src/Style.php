@@ -1036,14 +1036,10 @@ final class Style
         $contentWidth = $pL + $innerWidth + $pR;
         if ($this->colorWhitespace) {
             $padBlank = $sgr . str_repeat($padCh, $contentWidth) . $reset;
-            $padLeftStr  = $sgr . str_repeat($padCh, $pL);
-            $padRightStr = str_repeat($padCh, $pR) . $reset;
             $linePrefix = $sgr;
             $lineSuffix = $reset;
         } else {
             $padBlank = str_repeat($padCh, $contentWidth);
-            $padLeftStr  = str_repeat($padCh, $pL);
-            $padRightStr = str_repeat($padCh, $pR);
             $linePrefix = $sgr;
             $lineSuffix = $reset;
         }
@@ -1299,7 +1295,6 @@ final class Style
 
         // Build the line by splitting at each title position
         $available = $contentWidth;
-        $line = '';
 
         // Left section: corner + left title
         $leftSection = $left ? $b->topLeft : '';
@@ -1421,7 +1416,7 @@ final class Style
      */
     private function renderTitlesAtAnchor(
         array $titleList,
-        TitleSgr $position,
+        TitleSgr $_position,
         string $titleSgr,
         string $titleReset,
     ): string {

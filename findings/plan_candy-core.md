@@ -7,9 +7,11 @@ updated: 2026-06-30
 # Implementation Plan
 
 ## Goal
+
 Fix all critical and medium-severity issues in candy-core (undefined variable, misleading docblock) and implement low-priority improvements (Countable, inline comment)
 
 ## Context & Decisions
+
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | `$len` is reassigned inside the UTF-8 block so line 195's comparison against undefined `$len_of_buf` is a real bug | The `$len` variable is set to `strlen($this->buf)` at line 57, but then reassigned to the expected UTF-8 sequence length (2/3/4) at line 186 inside the `$code >= 0x80` block. Line 195 uses `$len_of_buf` which is never defined. | `ref:inputreader-investigation` |
@@ -99,6 +101,7 @@ Fix all critical and medium-severity issues in candy-core (undefined variable, m
 | 3.1–3.6 | — | — | No action (documented) | N/A |
 
 ## Notes
+
 - 2026-06-30: Plan created based on `findings/candy-core.md` code review
 - All file:line references based on current codebase at time of investigation
 - Changes are backward-compatible; `ScreenStack implements \Countable` is purely additive

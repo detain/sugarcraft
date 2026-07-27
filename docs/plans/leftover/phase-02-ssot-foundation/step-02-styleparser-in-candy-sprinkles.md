@@ -15,6 +15,7 @@ copy in step 03.05.
 ## Files
 
 **Create:**
+
 - `candy-sprinkles/src/StyleParser.php` — verbatim port of the
   sugar-dash version, except:
   - Namespace becomes `SugarCraft\Sprinkles`.
@@ -23,6 +24,7 @@ copy in step 03.05.
   - Color values via `\SugarCraft\Core\Util\Color`.
 
 **Tests:**
+
 - `candy-sprinkles/tests/StyleParserTest.php` — ported from
   `sugar-dash/tests/Foundation/StyleParserTest.php`. Cases:
   - Nested `[[x]]` parsing.
@@ -34,6 +36,7 @@ copy in step 03.05.
   - Long input (~1MB) — performance smoke.
 
 **Note:**
+
 - Do NOT delete `sugar-dash/src/Foundation/StyleParser.php` in this
   step. That deletion is step 03.05's job. Two parallel parsers ship
   briefly; they are byte-for-byte identical so consumer code is

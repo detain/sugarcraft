@@ -1,6 +1,7 @@
 # charmbracelet/skate
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/skate
 - Language: Go
 - Stars: ~1.8k–2k
@@ -8,6 +9,7 @@
 - Description: A personal key-value store. 🛼
 
 ## Feature List
+
 - **Key-Value Storage**: Store and retrieve string/binary data by key
 - **Multiple Databases**: Support for named databases via `KEY@DB` syntax (e.g., `secret@passwords`)
 - **List Operations**: List all keys, all values, or key-value pairs with configurable delimiter
@@ -20,6 +22,7 @@
 - **Local-Only**: As of v1.0.0, no longer syncs to Charm Cloud — fully local operation
 
 ## Key Classes and Methods
+
 - `main.go` (443 lines, single-file CLI):
   - `set()` — Store a key-value pair (from args or stdin)
   - `get()` — Retrieve a value by key
@@ -36,6 +39,7 @@
   - `errDBNotFound` — Custom error type carrying Levenshtein suggestions
 
 ## Notable Algorithms / Named Patterns
+
 - **Levenshtein Distance**: Used in `findDb()` to suggest close database names when a lookup fails (line 286: `levenshtein.ComputeDistance(name, db)`)
 - **Badger KV Store**: Underlying storage engine — a fast, embeddable key-value database written in Go (Dgraph.io)
 - **go-app-paths**: Cross-platform app data directory resolution (`~/.local/share/charm/kv/`)
@@ -43,6 +47,7 @@
 - **Transaction Pattern**: `wrap()` helper creates a Badger transaction, executes a function, and handles commit/discard
 
 ## Strengths
+
 - **Zero-configuration**: Data directory created automatically on first use
 - **Simple CLI interface**: Familiar syntax (`set`, `get`, `list`, `delete`, `list-dbs`, `delete-db`)
 - **Multi-database isolation**: Logical separation via `@db` suffix without extra setup
@@ -54,6 +59,7 @@
 - **Privacy-focused post-v1.0**: Cloud sync removed — fully local
 
 ## Weaknesses
+
 - **No encryption at rest**: Data stored in plain files in the app data directory
 - **No authentication/access control**: Anyone with file access can read all databases
 - **No atomic multi-key operations**: No transaction support across multiple keys
@@ -63,6 +69,7 @@
 - **No sync/export/import**: No built-in way to migrate data between machines or back up databases
 
 ## SugarCraft Mapping
+
 - **SugarSkate** (`sugar-skate/`): The direct PHP port of `charmbracelet/skate`
   - Role: Personal key/value store
   - Subdir: `sugar-skate/`

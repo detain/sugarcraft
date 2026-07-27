@@ -145,8 +145,10 @@ final class Sidebar implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad to allocated height
-        while (count($lines) < $useHeight) {
+        $lineCount = count($lines);
+        while ($lineCount < $useHeight) {
             $lines[] = str_repeat(' ', $useWidth);
+            $lineCount++;
         }
 
         // Reset ANSI

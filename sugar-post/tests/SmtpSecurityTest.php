@@ -243,6 +243,7 @@ final class SmtpSecurityTest extends TestCase
         if ($pid <= 0) {
             return;
         }
+        $status = 0;
         $deadline = \microtime(true) + 5.0;
         while (\microtime(true) < $deadline) {
             $res = \pcntl_waitpid($pid, $status, \WNOHANG);

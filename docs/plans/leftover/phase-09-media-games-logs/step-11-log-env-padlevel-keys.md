@@ -14,6 +14,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-log/src/Logger.php` — Probe-driven color decision.
 - `candy-log/src/Level.php` — numeric values.
 - `candy-log/src/Styles.php` — Keys map.

@@ -11,6 +11,7 @@
 ### 1. Layout System Comparison
 
 #### sugar-dash Current Approach
+
 - **`Layout.php`** — Flex-like HStack/VStack with `flex` weights, gap, and alignment
 - **`GridLayout.php`** — CSS Grid-style with columns/rows, gap support, cell-based placement
 - **`TileLayout.php`** — Bubble Tea tile layout pattern with `Size` constraints (min/max/fixed)
@@ -20,6 +21,7 @@
 **Key interfaces:** `Item` (render), `Sizer` (setSize + getInnerSize), `Drawable` (setRect + draw to Buffer)
 
 #### Ratatui (Rust) — Superior Layout System
+
 **Source:** [ratatui/layout](https://docs.rs/ratatui/latest/ratatui/layout/)
 
 Ratatui uses a **Constraint-based layout** with a Cassowary constraint solver:
@@ -59,12 +61,14 @@ let layout = Layout::default()
 ```
 
 **Why it's better:**
+
 1. **Declarative constraints** — sizes expressed as rules, not raw values
 2. **Priority-based resolution** — Min/Max before Length/Percentage prevents overflow/underflow
 3. **Flex distribution** — SpaceBetween/SpaceAround handle gaps elegantly
 4. **Composable** — Constraints can be mixed (e.g., `Constraint::from_percentages([25, 50, 25])`)
 
 #### tview (Go) — Grid and Flex Layouts
+
 **Source:** [tview Grid](https://github.com/rivo/tview/wiki/Grid), [tview Flex](https://github.com/rivo/tview/wiki/Flex)
 
 ```go
@@ -80,6 +84,7 @@ grid.AddItem(menu, 1, 0, 1, 1, 0, 100, true) // Shown when > 100 cols
 ```
 
 #### Lipgloss (Go) — Style-Based Layout
+
 **Source:** [lipgloss](https://context7.com/charmbracelet/lipgloss/llms.txt)
 
 ```go
@@ -100,10 +105,12 @@ warningStyle := style.Background(lipgloss.Color("#FF5733"))
 **Key insight:** Lipgloss combines styling AND sizing in one declarative chain — no separate layout computation pass.
 
 #### Textual (Python) — CSS Layout
+
 **Source:** [textual layout](https://textual.textualize.io/guide/reactivity)
 
 ```python
 # CSS-like layout in Python
+
 class MyApp(App):
     CSS = """
     Screen {
@@ -151,12 +158,14 @@ final class GaugeChart implements \SugarCraft\Dash\Foundation\Sizer
 ```
 
 **Issues identified:**
+
 1. **Verbose withers** — Every property copied manually in each wither
 2. **Clone-then-mutate** — readonly properties cause runtime errors (documented in CALIBER_LEARNINGS.md)
 3. **No state management** — Components are pure render-only; no concept of selection/focus state
 4. **Missing lifecycle** — No mount/unmount, no event hooks
 
 #### Ratatui StatefulWidget Pattern
+
 **Source:** [StatefulWidget](https://docs.rs/ratatui/latest/ratatui/widgets/trait.StatefulWidget.html)
 
 ```rust
@@ -183,6 +192,7 @@ frame.render_stateful_widget(list, area, &mut events.state);
 **Key insight:** State is managed OUTSIDE the widget, passed in during render. Widgets are pure render functions with external state.
 
 #### Textual Reactive Pattern
+
 **Source:** [textual reactivity](https://textual.textualize.io/guide/reactivity)
 
 ```python
@@ -193,12 +203,14 @@ class Counter(Widget):
         self.query_one(Label).update(str(counter_value))
 
 # Watch external objects
+
 self.watch(self.query_one(Counter), "counter", update_progress)
 ```
 
 **Key insight:** `reactive` decorator auto-calls `watch_<attr>` when attribute changes. `watch()` on external objects enables cross-widget state sync.
 
 #### Ink (React for CLI) Component Pattern
+
 **Source:** [ink](https://context7.com/vadimdemedes/ink/llms.txt)
 
 ```jsx
@@ -228,6 +240,7 @@ const Counter = () => {
 **Key insight:** Full React patterns (hooks, state, effects) work in CLI. `Static` component for persistent scrollback.
 
 #### Blessed (Node.js) Event Pattern
+
 **Source:** [blessed events](https://github.com/chjj/blessed/blob/master/README.md)
 
 ```javascript
@@ -260,9 +273,11 @@ box.enableKeys();
 ### 3. Event Handling Comparison
 
 #### sugar-dash Current: None
+
 Sugar-dash components are **pure render-only** — they have no event handling built in. Events are handled externally (in the candy-core runtime).
 
 #### Ratatui: External Loop + StatefulWidget
+
 **Source:** [ratatui backend](https://docs.rs/ratatui/latest/ratatui/prelude/backend/trait.Backend.html)
 
 ```rust
@@ -286,6 +301,7 @@ loop {
 **Key insight:** Event handling is 100% external; widget just renders.
 
 #### Textual: Message Passing
+
 **Source:** [textual events](https://textual.textualize.io/guide/app)
 
 ```python
@@ -300,6 +316,7 @@ def on_key(self, event: events.Key) -> None:
 **Key insight:** Events auto-dispatch to `on_<event_type>` methods. `on_mount` for initialization.
 
 #### Blessed: Element-Level Events
+
 ```javascript
 screen.on('keypress', function(ch, key) {
     if (key.name === 'q') process.exit(0);
@@ -317,11 +334,13 @@ screen.on('mouse', function(data) {
 ### 4. Data Visualization Comparison
 
 #### sugar-dash (`src/Grid/`)
+
 - `GaugeChart.php` — Bar-style gauge with color zones
 - `TableBordered.php` — Box-drawing table with headers
 - `TableChart.php` — Tabular chart
 
 #### Ratatui Widgets
+
 **Source:** [ratatui widgets](https://docs.rs/ratatui/latest/ratatui/widgets/index.html)
 
 ```rust
@@ -347,6 +366,7 @@ let table = Table::new(rows)
 **Key insight:** Ratatui's `Block` wraps any widget with borders/padding — composable decoration.
 
 #### bubble-grid (Go) — Stacked Grid
+
 **Source:** [bubble-grid](https://github.com/shahar3/bubble-grid)
 
 ```go
@@ -364,12 +384,14 @@ grid.NewStackedGrid(grid.FitScreen(true))
 ### 5. Styling/Theming Comparison
 
 #### sugar-dash: Inline Color Objects
+
 ```php
 private readonly ?Color $color = null;
 $output .= $this->color->toFg(ColorProfile::TrueColor) . $text . Ansi::reset();
 ```
 
 #### Lipgloss (Go): Declarative Styles
+
 **Source:** [lipgloss styling](https://context7.com/charmbracelet/lipgloss/llms.txt)
 
 ```go
@@ -388,11 +410,13 @@ lipgloss.Println(style.Render("Hello, World!"))
 ```
 
 **Key features:**
+
 1. **Fluent API** — Chainable style methods
 2. **Auto color downsampling** — `lipgloss.Println` handles 256-color vs truecolor automatically
 3. **Copy by assignment** — `warningStyle := style.Background(...)` creates independent copy
 
 #### Textual: CSS Theming
+
 ```python
 DEFAULT_CSS = """
 Counter { height: auto; }
@@ -720,6 +744,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 **Why:** This is foundational — better layout leads to cleaner composition throughout.
 
 **Implementation:**
+
 1. Create `Constraint` enum with Min/Max/Length/Percentage/Ratio/Fill variants
 2. Create `Flex` enum with Legacy/Start/End/Center/SpaceBetween/SpaceAround/SpaceEvenly
 3. Create `ConstraintLayout` class that resolves constraints against available space
@@ -734,6 +759,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 **Why:** Many components (List, Table, Tabs) need selection state that should be external.
 
 **Implementation:**
+
 1. Create `SelectionState` class with `select()`, `selected()`, `offset()`
 2. Create `ListComponent` that takes items + SelectionState
 3. Update existing components to support `renderWithState()` variant
@@ -747,6 +773,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 **Why:** Enables cleaner state propagation without manual subscription management.
 
 **Implementation:**
+
 1. Create `Reactive` value class with `get()`, `set()`, `watch()`
 2. Add `ReactiveProperty` attribute for auto-watcher naming convention
 3. Update components to use Reactive for properties that trigger re-renders
@@ -760,6 +787,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 **Why:** DRYs up border/padding/title rendering that's currently duplicated in each component.
 
 **Implementation:**
+
 1. Create `Block` class mirroring ratatui Block
 2. Update `TableBordered`, `Card`, `Panel` to use Block internally or wrap with Block
 3. Deprecate manual border rendering in individual components
@@ -773,6 +801,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 **Why:** Current time-based animation is hard to test and control.
 
 **Implementation:**
+
 1. Add `tick()` method to Spinner
 2. Add `setFrame(int $index)` for testing
 3. Keep backward compat: `getCurrentFrame()` still works but tests can control
@@ -786,6 +815,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 **Why:** Enables proper init/cleanup for components that need resources.
 
 **Implementation:**
+
 1. Create `LifecycleAware` interface with `onMount()`, `onUnmount()`
 2. Update Layout to call lifecycle methods when adding/removing children
 3. Document which components should implement (Cursor, Editor with terminal modes)
@@ -799,6 +829,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 **Why:** More intuitive API than current Layout with flex weights.
 
 **Implementation:**
+
 1. Create `FlexBox` class with `JustifyContent` and `AlignItems` enums
 2. Deprecate `Layout` in favor of FlexBox for new code
 3. Keep `Layout` for backward compatibility
@@ -837,6 +868,7 @@ final class Card implements Composable, \SugarCraft\Dash\Foundation\Sizer
 ## Appendix: sugar-dash Current Architecture
 
 ### Directory Structure
+
 ```
 sugar-dash/src/
 ├── Components/

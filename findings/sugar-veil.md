@@ -23,6 +23,7 @@ A well-structured, immutable+fluent PHP library. No critical bugs or security is
 ---
 
 ## 1. MEDIUM: Duplicate Docblock on dimLine()
+
 **Location:** src/Veil.php:539-561
 
 Two PHP docblocks on dimLine() describing different implementations. Duplicate creates confusion.
@@ -32,6 +33,7 @@ Recommendation: Remove the first docblock, keep only the truecolor description.
 ---
 
 ## 2. MEDIUM: Fade Animation is Functionally a No-Op
+
 **Location:** src/Animation/Fade.php:43-48
 
 Fade::apply() returns foreground unchanged due to "terminal limitations". The opacity() method exists but is never called. Users expecting visual fade get nothing.
@@ -41,6 +43,7 @@ Recommendation: Document prominently that FADE is a visual placeholder, or imple
 ---
 
 ## 3. MEDIUM: isClickOutside() Returns False for Unscanned State
+
 **Location:** src/Veil.php:326-336
 
 When lastRendered === null (no scan data), isClickOutside() returns false. This hides indeterminate state — outside clicks appear as inside clicks.
@@ -50,6 +53,7 @@ Recommendation: Throw exception or return sentinel when scan() hasn't been calle
 ---
 
 ## 4. LOW: RenderSession Accumulates State Forever
+
 **Location:** src/RenderSession.php:23-26
 
 previousFrame Buffer and previousOutput string persist for lifetime of RenderSession. In long-running apps, memory could grow.
@@ -59,6 +63,7 @@ Recommendation: Add maximum history limit or provide release() method.
 ---
 
 ## 5. LOW: Scanner State Persists Across Frames
+
 **Location:** src/Veil.php:348-352
 
 Scanner mutated in-place and passed to new Veil via mutate(). Old zone data persists in long-running apps.
@@ -68,6 +73,7 @@ Recommendation: Document that resetPreviousFrame() does not reset scanner state.
 ---
 
 ## 6. LOW: Deprecated Manager Parameter Serves No Function
+
 **Location:** src/Veil.php:62-63, 284-298
 
 $manager property stored but never used for hit-testing. Deprecated BC path.
@@ -77,6 +83,7 @@ Recommendation: Remove if BC not actually needed, or document preserved function
 ---
 
 ## 7. LOW: VeilStack::compositeAll() Comment Describes Non-Behavior
+
 **Location:** src/VeilStack.php:95-106
 
 Documentation describes what is NOT happening rather than the actual use case.
@@ -84,6 +91,7 @@ Documentation describes what is NOT happening rather than the actual use case.
 ---
 
 ## 8. LOW: isClickOutside() Returns False for Unscanned State
+
 **Location:** src/Veil.php:326-336
 
 Same as Finding 3 above.
@@ -91,6 +99,7 @@ Same as Finding 3 above.
 ---
 
 ## 9. LOW: isset() on String Offset Unusual
+
 **Location:** src/Veil.php:573
 
 Using isset($line[0]) to check string boundaries is valid but unusual.

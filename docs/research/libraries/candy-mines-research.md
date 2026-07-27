@@ -3,6 +3,7 @@
 **Date:** 2026-05-13
 **Upstream:** [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep) (54 stars, Go + Bubble Tea TUI)
 **Reference Implementations:**
+
 - [sweeprs](https://docs.rs/sweeprs/latest/sweeprs/) (Rust engine)
 - [minesweeprs](https://docs.rs/minesweeprs/latest/minesweeprs/) (Rust solver)
 - [JSMinesweeper](https://github.com/DavidNHill/JSMinesweeper) (JS solver/analyser)
@@ -14,6 +15,7 @@
 ## 1. Current Implementation Analysis
 
 ### Source Files
+
 | File | Role |
 |------|------|
 | `src/Cell.php` | Value object: `mine`, `revealed`, `flagged`, `adjacent` |
@@ -24,6 +26,7 @@
 | `src/Stats.php` | Per-difficulty: games, wins, best time |
 
 ### Design Strengths
+
 - **Immutable value objects** — every transition returns a fresh instance
 - **Injected PRNG** — `Closure(int):int` enables deterministic snapshot tests
 - **First-click safety** — mines placed AFTER first click, excluding 3×3 neighbourhood
@@ -31,6 +34,7 @@
 - **Clean win detection** — every non-mine cell revealed = win
 
 ### Test Coverage (from `tests/`)
+
 - `BoardTest.php`: 8 tests (blank, invalid dims, first-reveal safety, flood, flag, explode, win)
 - `GameTest.php`: 20 tests (cursor, keys, flag, reveal, quit, restart, timer, stats)
 - `DifficultyTest.php`, `CellTest.php`, `StatsTest.php` also present
@@ -40,6 +44,7 @@
 ## 2. Flood Fill Algorithm Comparison
 
 ### candy-mines (Current)
+
 ```php
 // Board.php:L158-195 — iterative BFS with explicit stack
 private function floodReveal(int $sx, int $sy): self
@@ -82,11 +87,13 @@ private function floodReveal(int $sx, int $sy): self
 **Source:** `/home/sites/sugarcraft/candy-mines/src/Board.php:L158-195`
 
 ### Go-sweep (Upstream)
+
 Uses recursive DFS via `g.Click()` — potential stack overflow on large boards.
 
 **Source:** [xqm32 gist - Minesweeper Game in Go](https://gist.github.com/xqm32/a5c85ce46cd51a4edc80e7f4479acf62)
 
 ### Web Implementations (React)
+
 ```javascript
 // BFS with queue — reveals in "waves" outward from click
 const queue = [[startRow, startCol]];
@@ -112,6 +119,7 @@ while (queue.length > 0) {
 **Source:** [Building Minesweeper in React — BFS Flood Fill](https://dev.to/shaishav_patel_271fdcd61a/building-minesweeper-in-react-bfs-flood-fill-safe-first-click-and-responsive-scale-to-fit-4d3o)
 
 ### Rust sweeprs
+
 ```rust
 let mut board = Board::new(9, 9, 10);
 board.open(4, 4);
@@ -139,6 +147,7 @@ match board.state() {
 ## 3. First-Click Safety
 
 ### candy-mines (Current) ✅ CORRECT
+
 ```php
 // Board.php:L109-156
 private function placeMines(int $sx, int $sy, \Closure $rand): self
@@ -161,6 +170,7 @@ private function placeMines(int $sx, int $sy, \Closure $rand): self
 **Source:** `/home/sites/sugarcraft/candy-mines/src/Board.php:L109-120`
 
 ### Web Pattern (Same Approach)
+
 ```javascript
 const safeSet = new Set();
 if (safeRow !== null && safeCol !== null) {
@@ -175,6 +185,7 @@ if (safeRow !== null && safeCol !== null) {
 **Source:** [Building Minesweeper With a Pure-Function Game Engine](https://dev.to/sendotltd/building-minesweeper-with-a-pure-function-game-engine-and-bfs-flood-fill-33f7)
 
 ### Key Findings
+
 - **candy-mines is correct** — 3×3 safe zone (9 cells) matches industry standard
 - go-sweep likely does the same (implicit in most implementations)
 - Some older implementations relocate mine if first click hits it; the 3×3 exclusion is better UX
@@ -184,6 +195,7 @@ if (safeRow !== null && safeCol !== null) {
 ## 4. Flag Handling
 
 ### candy-mines (Current)
+
 ```php
 // Board.php:L94-106
 public function toggleFlag(int $x, int $y): self
@@ -210,6 +222,7 @@ public function toggleFlag(): self
 **Source:** `/home/sites/sugarcraft/candy-mines/src/Board.php:L94-106`, `Cell.php:L41-47`
 
 ### JSMinesweeper (Advanced)
+
 - Flags are considered mines by the solver
 - Placing/removing flags automatically adjusts revealed tile values
 - Supports "flagging" style (flag all mines) vs "no flagging" style
@@ -217,20 +230,25 @@ public function toggleFlag(): self
 **Source:** [DavidNHill/JSMinesweeper README](https://github.com/DavidNHill/JSMinesweeper)
 
 ### Missing Feature: Chord Clicks
+
 **Not implemented in candy-mines.** Classic Minesweeper allows:
+
 - **Middle-click or double-click on a revealed number**
 - **If flag count === adjacent mine count**, auto-reveal all unflagged neighbours
 - **If any flag is wrong**, game over
 
 ```
 Multi Click Algorithm:
+
 1. If all neighbor hasFlag=true cells are hasMine=true, call reveal on all unflagged neighbours
 2. If any flag is wrong → game over
+
 ```
 
 **Source:** [DZone: Minesweeper Algorithms Explained](https://dzone.com/articles/minesweeper-algorithms-explained)
 
 ### Key Findings
+
 - Basic flagging is correct
 - **Missing**: chord clicks (chording) — major UX feature from original Minesweeper
 
@@ -239,6 +257,7 @@ Multi Click Algorithm:
 ## 5. Win Detection
 
 ### candy-mines (Current) ✅ CORRECT
+
 ```php
 // Board.php:L198-209
 public function isWon(): bool
@@ -258,6 +277,7 @@ public function isWon(): bool
 **Source:** `/home/sites/sugarcraft/candy-mines/src/Board.php:L198-209`
 
 ### Optimized Approach (wesmar/C++)
+
 ```cpp
 // Pre-calculate: g_TargetRevealed = (Width * Height) - Mines
 // O(1) check: revealed count == target
@@ -266,6 +286,7 @@ public function isWon(): bool
 **Source:** [wesmar/minesweeper](https://github.com/wesmar/minesweeper)
 
 ### Key Findings
+
 - Current O(w×h) scan is fine for typical board sizes (9×9 to 30×16)
 - O(1) counter optimization is micro-optimization; not needed unless board is huge
 - **Flags don't need to match mine count** — win is based solely on revealing all non-mine cells
@@ -275,6 +296,7 @@ public function isWon(): bool
 ## 6. Additional Features from Reference Implementations
 
 ### From JSMinesweeper
+
 1. **Probability engine** — calculates safest tile when no certain moves exist
 2. **50/50 detection** — identifies unavoidable guess situations
 3. **Brute force analysis** — for small solution spaces (<750 combos)
@@ -282,11 +304,13 @@ public function isWon(): bool
 5. **Secondary safety** — likelihood of surviving current AND next move
 
 ### From vsego.org Minesweeper
+
 1. **"Easy start" option** — ensures first clicked tile has no neighbouring mines
 2. **Chording** — right/double-click on number to auto-reveal neighbours
 3. **Events API** — `onOpenTiles`, `onGameWon`, `onGameLost`, etc.
 
 ### From sweeprs (Rust)
+
 ```rust
 match board.state() {
     BoardState::Playing => {},
@@ -296,6 +320,7 @@ match board.state() {
 ```
 
 ### From gazpachoking/minesweeper
+
 1. **"Niceness" modes**: `cruel|normal|fair|nice`
    - `nice`: any click that could be empty IS empty
    - `fair`: if guessing is only option, you won't guess wrong
@@ -338,6 +363,7 @@ match board.state() {
 ## 8. Implementation Plan for Chord Clicks
 
 ### Algorithm
+
 ```
 chord(x, y):
     cell = board.cell(x, y)
@@ -357,11 +383,13 @@ chord(x, y):
 ```
 
 ### Key Bindings
+
 - **Middle mouse button** (if available in terminal)
 - **Ctrl+Click** or **Shift+Click** on number cell
 - **Double-click** on number cell (like classic Windows)
 
 ### Code Location
+
 - Add `chord(int $x, int $y): self` method to `Board`
 - Modify `Game::update()` to handle chord input
 - Add key binding (e.g., `c` for chord or Shift+Space)
@@ -383,13 +411,17 @@ chord(x, y):
 ## 10. Verification Commands
 
 ```bash
+
 # Run existing tests
+
 cd /home/sites/sugarcraft/candy-mines && composer install && vendor/bin/phpunit
 
 # Test flood fill specifically
+
 cd /home/sites/sugarcraft/candy-mines && vendor/bin/phpunit --filter FloodFill
 
 # Test first-click safety
+
 cd /home/sites/sugarcraft/candy-mines && vendor/bin/phpunit --filter FirstReveal
 ```
 

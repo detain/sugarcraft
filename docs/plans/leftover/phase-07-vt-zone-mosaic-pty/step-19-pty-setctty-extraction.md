@@ -13,10 +13,12 @@ without running the shim.
 ## Files
 
 **Create:**
+
 - `candy-pty/src/ControllingTerminal.php` — static class with
   `claim(int $fd): void` (calls `setsid()` + `ioctl(TIOCSCTTY)`).
 
 **Modify:**
+
 - `candy-pty/bin/pty-shim.php` — delegate to `ControllingTerminal::claim`
   so logic lives in one place.
 

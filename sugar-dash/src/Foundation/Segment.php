@@ -132,9 +132,9 @@ final class Segment implements \SugarCraft\Dash\Foundation\Sizer
         $segmentG = str_repeat('━', $width); // Middle horizontal
 
         // Calculate horizontal positions
-        $hPos = (int) floor(($width - 1) / 2);
-        $fPos = 0;
-        $bPos = $width - 1;
+        $_hPos = (int) floor(($width - 1) / 2);
+        $_fPos = 0;
+        $_bPos = $width - 1;
 
         $rows = [
             0 => '',

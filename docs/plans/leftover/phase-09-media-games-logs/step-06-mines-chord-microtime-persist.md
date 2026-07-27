@@ -13,6 +13,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-mines/src/Board.php` — `chord(int $x, int $y): self`.
 - `candy-mines/src/Timer.php` — microtime.
 - `candy-mines/src/Stats/DifficultyStats.php` — atomic JSON

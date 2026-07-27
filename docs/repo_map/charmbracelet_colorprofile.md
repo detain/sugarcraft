@@ -1,6 +1,7 @@
 # charmbracelet/colorprofile
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/colorprofile
 - Language: Go
 - Stars: ~111
@@ -8,6 +9,7 @@
 - Description: A simple, powerful—and at times magical—package for detecting terminal color profiles and performing color (and CSI) degradation.
 
 ## Feature List
+
 - **Terminal Color Profile Detection**: Detects 5 profile levels: NoTTY, ASCII, ANSI (4-bit/16 colors), ANSI256 (8-bit/256 colors), and TrueColor (24-bit/16M colors)
 - **Environment Variable Respect**: Honors `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and `COLORTERM` environment variables per no-color.org and clicolor.org standards
 - **Terminfo Database Queries**: Uses the terminfo database (via `Tc` and `RGB` capabilities) to determine terminal color support
@@ -22,12 +24,14 @@
 ## Key Classes and Methods
 
 ### `Profile` (type byte)
+
 - `Detect(output io.Writer, env []string) Profile` — Detects color profile from terminal output and environment variables
 - `Env(env []string) Profile` — Detects color profile from environment alone (no TTY required)
 - `Convert(c color.Color) color.Color` — Converts a color to the profile's supported color space with caching
 - `String() string` — Returns string representation of the profile
 
 ### `Profile` constants
+
 - `NoTTY` — No terminal/TTY support
 - `ASCII` — No color, text decoration only
 - `ANSI` — 16 colors (4-bit)
@@ -35,17 +39,20 @@
 - `TrueColor` — 16 million colors (24-bit)
 
 ### `Writer` struct
+
 - `NewWriter(w io.Writer, environ []string) *Writer` — Creates a new auto-downsampling writer
 - `Write(p []byte) (int, error)` — Writes bytes, auto-downsampling ANSI sequences as needed
 - `WriteString(s string) (n int, err error)` — Convenience wrapper for string writing
 - `Profile Profile` — Public field to manually set the profile (can override detected profile)
 
 ### Environment Detection Functions
+
 - `Terminfo(term string) Profile` — Queries terminfo database for color capabilities
 - `Tmux(env []string) Profile` — Detects color profile via `tmux info` command
 - `windowsColorProfile(env map[string]string) (Profile, bool)` — Windows API-based detection
 
 ## Notable Algorithms / Named Patterns
+
 - **Color Conversion with Thread-Safe Caching**: Uses `sync.RWMutex` protected cache map (`map[Profile]map[color.Color]color.Color`) to memoize color conversions, avoiding recomputation for repeated colors
 - **Environment Precedence Hierarchy**: NO_COLOR > CLICOLOR_FORCE > CLICOLOR > TERM capabilities > terminfo > tmux
 - **Profile Maximum Selection**: When in tmux with a real terminal, takes `max(env, terminfo, tmux)` to ensure highest common denominator
@@ -54,6 +61,7 @@
 - **SGR Parameter Iteration**: Iterates through SGR parameters handling color codes (30-37 foreground, 38 24-bit foreground, 40-47 background, 48 24-bit background, 58 underline color, 90-97 bright foreground, 100-107 bright background)
 
 ## Strengths
+
 - **Standards Compliant**: Properly respects `NO_COLOR` (no-color.org) and `CLICOLOR`/`CLICOLOR_FORCE` (bixense.com/clicolors) standards
 - **Comprehensive Terminal Detection**: Multiple detection mechanisms (environment, terminfo, tmux, Windows API) ensure accurate detection across diverse terminals
 - **High-Quality Color Downsampling**: Uses `go-colorful` library for perceptually accurate color quantization when converting 24-bit to 8-bit/4-bit colors
@@ -63,6 +71,7 @@
 - **Well-Tested**: Comprehensive test suite covering environment variable combinations, caching behavior, and cross-platform scenarios
 
 ## Weaknesses
+
 - **Unix-Only Terminfo by Default**: On non-Windows platforms without `TERM` set and not in a known terminal, detection may fall back to conservative defaults
 - **Tmux Detection Requires External Command**: `Tmux()` function spawns `tmux info` subprocess, which adds latency compared to environment variable checks
 - **No Automatic Re-Detection**: The `Writer.Profile` is set once at creation; if terminal capabilities change mid-stream, detection doesn't adapt
@@ -70,6 +79,7 @@
 - **Cache Memory Growth Risk**: In applications with many unique colors over long runtimes, the color conversion cache could grow unbounded (no eviction policy)
 
 ## SugarCraft Mapping
+
 The SugarCraft mapping is **indirect** — `colorprofile` deals with terminal detection and ANSI sequence manipulation at a lower level than typical TUI component libs. The closest SugarCraft equivalents are:
 
 - **`candy-core`**: The foundational TUI framework. Terminal capability detection and color management are foundational concerns that `candy-core` would need to address. SugarCraft's equivalent would handle terminal detection for proper rendering.

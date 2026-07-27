@@ -10,6 +10,7 @@
 ## 1. SECURITY ISSUES
 
 ### HIGH: Shell Injection in Env-Var Fallback
+
 **Location:** src/Application.php:137-141
 
 ```php
@@ -25,6 +26,7 @@ Recommendation: Build argv array instead of string manipulation.
 ---
 
 ### HIGH: Unrestricted Env Var Access in Template Mode
+
 **Location:** src/FormatCommand.php:99-102
 
 ```php
@@ -44,6 +46,7 @@ Recommendation: Add --sandbox-env flag restricting substitution to safe allowlis
 ## 2. BUGS
 
 ### MEDIUM: Space Key Routing in Filter Mode
+
 **Location:** src/FilterModel.php:59-67
 
 When typing a space into filter buffer, KeyType::Space is sent. In filter mode, this may be consumed by multi-select toggle instead of filter buffer.
@@ -53,6 +56,7 @@ Recommendation: Verify ItemList::update() routes KeyType::Space to filter buffer
 ---
 
 ### MEDIUM: Incomplete Hex Color Validation
+
 **Location:** src/StyleBuilder.php:166-168
 
 3-digit hex shorthand not properly expanded. 1, 2, 4, 5-digit strings fall through to regex but error message doesn't indicate digit-count requirement.
@@ -62,6 +66,7 @@ Recommendation: Dedicated parseHexColor() method that expands 3-digit shorthand 
 ---
 
 ### MEDIUM: $this->closed Not Set in terminate()
+
 **Location:** src/RealProcess.php:63-71
 
 After terminate(), subsequent close() would call wait() on already-terminated process.
@@ -73,6 +78,7 @@ Recommendation: Add $this->closed = true inside terminate().
 ## 3. PERFORMANCE
 
 ### MEDIUM: O(n·m) Fuzzy Recomputation on Every Keystroke
+
 **Location:** src/Model/FilterModel.php:161-178
 
 computeFuzzyResults() runs SmithWatermanMatcher::matchAll() on every character change. No caching.
@@ -82,6 +88,7 @@ Recommendation: Cache results keyed by filter text. Early return if filterText u
 ---
 
 ### MEDIUM: php://Memory Without Size Limit
+
 **Location:** src/TableCommand.php:168
 
 For large CSV data, php://memory could exhaust RAM. Use php://temp with maxmemory setting.
@@ -91,6 +98,7 @@ For large CSV data, php://memory could exhaust RAM. Use php://temp with maxmemor
 ## 4. MEMORY
 
 ### MEDIUM: ImagickRasterizer Shared Tile Cache Between Clones
+
 **Location:** src/ImagickRasterizer.php:58-66
 
 When withTheme() is called, tileCache points to same array as original. If either calls clearTileCache(), destroys tiles the other needs.
@@ -102,6 +110,7 @@ Recommendation: Clone the cache array or implement copy-on-write.
 ## 5. MISSING FEATURES
 
 ### MEDIUM: Missing --no-selected Option
+
 **Location:** src/ChooseCommand.php
 
 Gum's choose has --no-selected which prints message when no items selected. Not implemented.
@@ -109,6 +118,7 @@ Gum's choose has --no-selected which prints message when no items selected. Not 
 ---
 
 ### MEDIUM: Missing --print-query Option
+
 **Location:** src/FilterCommand.php
 
 Gum's filter has --print-query which outputs current filter text. Not implemented.
@@ -116,6 +126,7 @@ Gum's filter has --print-query which outputs current filter text. Not implemente
 ---
 
 ### MEDIUM: Fuzzy Match Highlighting Not Rendered
+
 **Location:** src/Model/FilterModel.php
 
 highlightIndices() computes match indices but view doesn't use them for highlighted characters.

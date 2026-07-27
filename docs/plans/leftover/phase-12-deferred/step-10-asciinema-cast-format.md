@@ -13,6 +13,7 @@ request — record in candy-vcr, replay in asciinema (or vice versa).
 ## Files
 
 **Create:**
+
 - `candy-vcr/src/Format/AsciinemaV2Format.php` — already exists as
   `AsciinemaFormat`; verify the conversion is bidirectional or extend.
 - `candy-vcr/src/Cli/{CastImportCommand,CastExportCommand}.php`.

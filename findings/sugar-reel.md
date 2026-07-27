@@ -11,6 +11,7 @@ The code is generally well-structured with good documentation, comprehensive CAL
 ## Critical Issues (file:line format)
 
 ### 1. `AudioPlayer.php:122-128` — SIGSTOP pause mechanism likely ineffective
+
 ```php
 public function pause(): void
 {
@@ -25,6 +26,7 @@ public function pause(): void
 **Recommended fix**: Use a pause flag that prevents reading from the decoder pipe, or use SIGTTOU/SIGTTIN to gently suspend without the harsh SIGSTOP. Alternatively, kill and recreate the audio subprocess on pause/resume (like the seek path does) — though this adds latency.
 
 ### 2. `AudioPlayer.php:135-141` — SIGCONT resume same concerns
+
 ```php
 public function resume(): void
 {
@@ -37,6 +39,7 @@ public function resume(): void
 Same issues as pause. SIGCONT may not reliably wake a process that was SIGSTOP'd under a PTY.
 
 ### 3. `AudioPlayer.php:95-104` — stop() calls proc_close without checking exit status
+
 ```php
 public function stop(): void
 {
@@ -51,6 +54,7 @@ public function stop(): void
 `proc_close()` returns the exit code but it is discarded. A non-zero exit code may indicate an abnormal termination (killed by signal). The exit code should be checked and potentially logged.
 
 ### 4. `FfmpegDecoder.php:355-362` — Same issue: exit code discarded in close()
+
 ```php
 if ($this->process !== null && is_resource($this->process)) {
     $exitCode = proc_close($this->process);
@@ -67,6 +71,7 @@ The comment acknowledges the issue. A non-zero exit from ffmpeg may indicate cor
 ## High Severity Issues
 
 ### 5. `Player.php:902-920` — `/fake` test path embedded in production rebuildDecoderAt()
+
 ```php
 private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $frameIndex): array
 {
@@ -85,6 +90,7 @@ Every call to `rebuildDecoderAt()` pays the cost of a string comparison `=== '/f
 **Recommended fix**: Use a `DecoderInterface` that exposes a `reopen()` method only in the test implementation, or inject a `DecoderFactory` seam that returns a spy in tests.
 
 ### 6. `Player.php:1089-1099` — `frameAt()` creates orphaned decoder process
+
 ```php
 public function frameAt(float $sec): ?RgbFrame
 {
@@ -322,30 +328,39 @@ $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
 ## Missing Features
 
 ### 27. No seeking progress callback/UI
+
 The player supports seeking (keyboard-driven and programmatic via `withSeek()`/`seekToSeconds()`) but there is no callback or event emitted when a seek occurs. A host application cannot display a progress indicator during seek without inspecting the Player's internals.
 
 ### 28. No frame callback (for screenshot/export)
+
 There is no `frameAt()` equivalent that returns the current rendered output (as ANSI string) rather than the decoded `RgbFrame`. Applications that want to capture a screenshot of the current frame cannot do so without re-implementing the render path.
 
 ### 29. No audio volume control
+
 `AudioPlayer` has no volume API. The ffplay/mpv subprocesses inherit system volume with no way to adjust from the Player.
 
 ### 30. No playback rate independent of wall-clock sync
+
 Speed changes (`[` and `]` keys) are implemented as speed multipliers on the wall-clock accumulation. This means actual playback rate is proportional to `delta * speed`. There's no option for a "frame-rate-locked" mode where speed changes adjust the effective FPS rather than the time multiplier.
 
 ### 31. No subtitle styling options
+
 `WebVtt::parse()` strips all cue settings (alignment, position, etc.) and renders subtitles as plain single-line text at the bottom of the screen. There is no way to customize the subtitle appearance (color, position, font).
 
 ### 32. No support for external audio tracks
+
 The player only plays audio embedded in the video file. There's no option to load a separate audio file (e.g., music + silent video) for music visualization use cases.
 
 ### 33. No API to query supported rendering modes
+
 `RendererFactory::autoMode()` and `RendererFactory::auto()` probe at runtime to pick a mode, but there is no public API for a host application to query "what modes does this terminal support?" beyond the `Mosaic::diagnose()` call embedded in `updateKey()`.
 
 ### 34. No graceful degradation when graphics-mode decoder fails
+
 If `GraphicsRenderer` fails (e.g., chafa not available and pure-PHP SixelRenderer throws), the Player has no fallback to a text mode. It should fall back to the best available text mode.
 
 ### 35. No frame timestamp metadata
+
 `RgbFrame` carries no timestamp information. For subtitle sync and seeking accuracy, knowing the PTS (presentation time stamp) of each frame would be valuable. Currently subtitle sync relies solely on `videoTime` computed from wall clock + speed, not actual frame timestamps from the decoder.
 
 ---
@@ -353,9 +368,11 @@ If `GraphicsRenderer` fails (e.g., chafa not available and pure-PHP SixelRendere
 ## Duplicated Logic / Refactoring Opportunities
 
 ### 36. Audio rebuild in `withSeek()` and `seekToSeconds()` — DUPLICATED
+
 Already noted in High Severity #7. Extract to `private function makeAudioAt(?int $startMs): ?AudioPlayer`.
 
 ### 37. Luma computation `(77*R + 150*G + 29*B) >> 8` — DUPLICATED in 4 places
+
 The BT.601 luma formula appears in:
 - `Player.php:724` — `LumaRamp::char()` call uses it internally via `LumaRamp::compute()`
 - `Player.php:763` — inline in `quarterCell()` `$luma = static fn (array $c): int => (($c[0] * 77) + ($c[1] * 150) + ($c[2] * 29)) >> 8`
@@ -365,18 +382,23 @@ The BT.601 luma formula appears in:
 The `quarterCell()` lambda at line 763 inlines the formula rather than calling `LumaRamp::compute()`. This should call `LumaRamp::compute()` directly.
 
 ### 38. Player constructor call repeated across `withSeek()`, `withNewFrame()`, `mutate()`
+
 All three create a new `Player` instance with 18 fields. The `withNewFrame()` at line 1150-1182 is nearly identical to `mutate()` but cannot use `mutate()` because it needs to pass a new `decoder`. Consider a builder or a named constructor.
 
 ### 39. `pixelRgb()` and `rgbToStyleColor()` in Player could be static utilities
+
 Both are instance methods but use only their parameters and `$this->cellsW` (for `pixelRgb`, indirectly). They could be static helpers, reducing confusion about whether they depend on mutable state.
 
 ### 40. `rebuildDecoderAt()` and `rebuildDecoderAtSeconds()` — nearly identical structure
+
 Both: close old decoder, create new one via factory (or reopen for fake), advance to frame/index, return `[decoder, frame]`. Could be one method with a strategy parameter, or a `DecoderRunner` abstraction.
 
 ### 41. `AsciiRenderer` and `GraphicsRenderer` don't implement `cellDimensions()` consistently
+
 `AsciiRenderer::cellDimensions()` returns `[1, 1]` for all modes. `GraphicsRenderer::cellDimensions()` returns `[1, 1]`. Only `HalfBlockRenderer` and `QuarterBlockRenderer` return meaningful values. The interface contract is unclear — `cellDimensions(Mode $mode)` takes a Mode but the renderer already knows its mode via constructor. This is redundant.
 
 ### 42. `DecoderFactory::create()` creates decoder then immediately calls `open()`
+
 ```php
 $decoder = new GifDecoder($cellPxW, $cellPxH);  // or FfmpegDecoder
 $decoder->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
@@ -400,6 +422,7 @@ This `renderDirect` vs `frameToBuffer` branch is a dispatch on mode. This could 
 In `Player::rgbToStyleColor()` and `RgbFrame::toGd()`. Extract to `Color::pack()` or a shared utility.
 
 ### 45. `FfmpegDecoder::buildCommand()` duplicated partially in `AudioPlayer::buildCommand()`
+
 Both build ffmpeg-family command arrays. The ffplay path in `AudioPlayer` is similar to the ffmpeg path in `FfmpegDecoder`. The reconnect options, the `-ss` input-seek approach, and the array-based command building are all similar. A shared `FfmpegCommandBuilder` utility could reduce duplication.
 
 ---
@@ -411,18 +434,21 @@ Both build ffmpeg-family command arrays. The ffplay path in `AudioPlayer` is sim
 On Windows, `where` is used via `shell_exec()` in `Probe::which()`. On some Windows configurations, `shell_exec()` may be disabled or restricted, causing the probe to fail. The graceful fallback (returning default VideoSource) works, but probe results may be wrong.
 
 ### 47. `AudioPlayer.php:71` — Windows NUL device handling
+
 ```php
 $devNull = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
 ```
 This is correct, but on Windows the `NUL` device may be ambiguous if a file named `NUL` exists in the current directory (Windows device name resolution order can be confusing). Using `\\.\NUL` or proper handle configuration would be more robust.
 
 ### 48. `FfmpegDecoder.php:256-259` — HTTP source regex may not cover all URL forms
+
 ```php
 return preg_match('#^https?://#i', $source) === 1;
 ```
 This covers `http://` and `https://` but misses `rtsp://`, `rtmp://`, `mms://` streams that ffmpeg supports. The reconnect options would also not be applied to those protocols. At minimum, the reconnect options being skipped for non-HTTP sources may be intentional (not all protocols support reconnect), but the behavior should be documented.
 
 ### 49. `Player.php:361-362` — Window size clamp values are magic numbers
+
 ```php
 $cols = max(10, min($cols, 200));
 $rows = max(5, min($rows, 80));
@@ -434,6 +460,7 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 `Reel::play()` calls `(new Program($player, $options))->run()` which blocks the calling thread. In a ReactPHP context (this is an async ecosystem), blocking the event loop is problematic. There is no async-compatible entry point.
 
 ### 51. SIGSTOP/SIGCONT not available on Windows
+
 `AudioPlayer::pause()` and `resume()` check `\defined('SIGSTOP')` and `\defined('SIGCONT')` and return silently on Windows. This means audio pause/resume is completely non-functional on Windows — audio continues playing when the video is paused. This should be documented explicitly.
 
 ---

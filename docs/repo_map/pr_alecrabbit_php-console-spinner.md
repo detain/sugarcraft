@@ -95,6 +95,7 @@ From documentation analysis and library structure:
 ## 8. Important PRs
 
 **Open PRs (5)**: All are dependabot dependency updates — no feature PRs
+
 - Bump phpunit/phpunit from 10.5.1 to 10.5.7 (#95)
 - Bump fakerphp/faker from 1.23.0 to 1.23.1 (#94)
 - Bump symfony/console from 6.4.1 to 6.4.2 (#93)
@@ -104,6 +105,7 @@ From documentation analysis and library structure:
 **Closed PRs**: 84 total, predominantly dependency updates. No community-contributed feature PRs visible.
 
 **Notable Historical PRs**:
+
 - #17, #16: Alpha release merge to master
 - #31: Dependency bump (nunomaduro/collision)
 - #15: Contribution from damienlagae (only visible community PR)
@@ -113,6 +115,7 @@ From documentation analysis and library structure:
 ## 9. Architectural Changes
 
 **Version History**:
+
 - `0.55.0`: Older version available on branch `0.55.x`
 - `1.0.0-ALPHA.1+BUILD.1`: Initial alpha (March 2023)
 - `1.0.0-ALPHA.2+BUILD.0`: Added RainyWeather, Ascii, StromyWeather spinners; structural changes
@@ -120,6 +123,7 @@ From documentation analysis and library structure:
 - `Unreleased`: Current master
 
 **Architecture Evolution**: 
+
 - Significant structural changes between 0.55.x and 1.0.x
 - Zero-dependency mode introduced to reduce friction
 - Event loop adapters (Revolt, ReactPHP) added for async support
@@ -138,6 +142,7 @@ From documentation analysis and library structure:
 **No visible performance discussions** in issues or PRs. The library uses `hrtime(true)` for high-resolution timing, which is a solid choice. The architecture with factories and containers adds overhead but is appropriate for the flexibility goal.
 
 **Key Performance-Related Decisions**:
+
 - Uses `hrtime(true)` for sub-millisecond precision in interval control
 - Two-buffer system adds memory overhead but ensures clean overwrites
 - Factory/container pattern adds instantiation overhead (acceptable trade-off for extensibility)
@@ -153,6 +158,7 @@ From documentation analysis and library structure:
 - Factory builders for complex objects (DriverConfigBuilder, WidgetRevolverConfigBuilder)
 
 **Extras Ecosystem**: The maintainer explicitly created `php-console-spinner-extras` as the extension point:
+
 - Separate package for progress bars, status messages, additional spinners
 - WIP status — not stable
 - Only 77 commits, 0 stars, 0 community contributions
@@ -193,6 +199,7 @@ Yet **zero community complaints** are visible. This suggests either:
 4. **Frame width**: User must manually set in zero-dep mode
 
 **Underlying Technical Fixes**:
+
 - Signal handling via `ext-pcntl` for graceful SIGINT/SIGTERM
 - Pipe detection for graceful degradation when output is piped
 - Stream redirection support
@@ -215,6 +222,7 @@ Yet **zero community complaints** are visible. This suggests either:
 ## 16. Maintainer Guidance Patterns
 
 **Documentation Style**:
+
 - Explicit warnings about known problems (limitations.md, known_issues.md)
 - Honest admission: "documentation is a bit clumsy at the moment and CAN BE MISLEADING"
 - Links to external limitations documentation
@@ -382,6 +390,7 @@ The absence of community issues/PRs suggests the library is maintained in isolat
 7. **Watchdog/timer patterns** — These are useful for long-running operations and should be part of SugarCraft's toolkit
 
 **Positioning**:
+
 - Don't position as "more flexible" — that ships the wrong values
 - Position as "simpler, better-documented, more reliable"
 - Lean into the charmbracelet model which is already simpler and better-designed
@@ -432,6 +441,7 @@ The absence of community issues/PRs suggests the library is maintained in isolat
 ## Conclusion
 
 **Key Takeaway**: This is a cautionary tale of **over-engineering without community feedback**. The library has:
+
 - Zero community issues
 - Zero community PRs (feature-related)
 - Acknowledged documentation problems

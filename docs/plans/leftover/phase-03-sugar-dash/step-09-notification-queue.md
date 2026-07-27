@@ -15,12 +15,14 @@ NotificationQueue per Homedash's pattern:
 ## Files
 
 **Create:**
+
 - `sugar-dash/src/Components/Toast/NotificationQueue.php` — final,
   immutable, fluent.
 - `sugar-dash/src/Components/Toast/Level.php` — enum: `Info`,
   `Warning`, `Error`.
 
 **Modify:**
+
 - `sugar-dash/src/Components/Toast/Notification.php` — keep as the
   single-notification DTO that the queue holds.
 - `sugar-dash/src/Components/Toast/Toast.php` — adapter that wraps

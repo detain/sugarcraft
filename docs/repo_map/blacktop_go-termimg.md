@@ -1,6 +1,7 @@
 # blacktop/go-termimg
 
 ## Metadata
+
 - **URL:** https://github.com/blacktop/go-termimg
 - **Language:** Go
 - **Stars:** 57
@@ -10,12 +11,14 @@
 ## Feature List
 
 ### Universal Protocol Support
+
 - **Kitty Protocol** - Fast graphics with virtual images, z-index, compression, Unicode placeholders, animation support
 - **Sixel Protocol** - High-quality with palette optimization and dithering
 - **iTerm2 Protocol** - Native inline images with ECH (Erase Character) clearing
 - **Halfblocks** - Unicode fallback using mosaic rendering (works everywhere)
 
 ### Image Processing
+
 - Smart scaling modes: Auto, Fit, Fill, Stretch, None
 - Advanced dithering: Floyd-Steinberg, Stucki (via dither/v2 library)
 - Quality vs speed control
@@ -23,24 +26,28 @@
 - Center cropping
 
 ### Terminal Integration
+
 - Automatic protocol detection with environment-based fallbacks
 - Terminal font size detection via CSI queries (CSI 14t, 16t, 18t)
 - Tmux passthrough support (wraps escape sequences properly)
 - Screen/Tmux environment detection
 
 ### TUI Framework Integration
+
 - ImageWidget for Bubbletea (Charmbracelet TUI framework)
 - StatefulImageWidget with async background rendering
 - ImageGallery for grid layouts
 - TUIHelper for protocol selection
 
 ### Performance Optimizations
+
 - Font size caching to avoid repeated terminal queries
 - Resize caching with LRU eviction
 - Parallel Base64 encoding with worker pool
 - Buffer reuse for encoding operations
 
 ### Command Line Tools
+
 - `imgcat` - Terminal image viewer with protocol/size options
 - `gallery` - Interactive TUI demo using Bubbletea
 
@@ -178,6 +185,7 @@
 ### Tmux Support
 
 **tmux.go**
+
 - `inTmux()` - Check if running inside tmux
 - `ForceTmux()` - Force tmux passthrough mode
 - `enableTmuxPassthrough()` - Sets `allow-passthrough on`
@@ -186,22 +194,26 @@
 ## Notable Algorithms / Named Patterns
 
 ### Unicode Placeholder Encoding (Kitty)
+
 - Uses private-use character `U+10EEEE` as placeholder
 - 297 combining diacritical marks encode row/column/id positions
 - Image ID encoded in foreground RGB color using `\x1b[38;2;R;G;Bm`
 
 ### LRU Cache with RWMutex
+
 ```go
 // Access order tracked for eviction
 // Write lock only on modification, read lock on access
 ```
 
 ### Parallel Protocol Detection
+
 - Environment check first (fast path)
 - Falls back to terminal queries with 100ms timeout
 - Queries run in parallel via goroutines with mutex-protected result collection
 
 ### Tmux Passthrough Wrapping
+
 ```
 Original:  ESC [ params
 Wrapped:  ESC P tmux ; ESC ESC [ params ESC \
@@ -209,11 +221,13 @@ Wrapped:  ESC P tmux ; ESC ESC [ params ESC \
 All ESC characters doubled inside tmux wrapper.
 
 ### Async Render Pipeline
+
 - Request coalescing: identical requests deduplicated
 - Queue overflow: oldest request dropped when full
 - Result buffer: drains to surface most recent output
 
 ### Font Size Detection Fallback Chain
+
 1. Protocol-specific queries (Kitty CSI, iTerm2 OSC)
 2. Generic CSI 16t
 3. Terminal-specific TERM variable matching
@@ -269,6 +283,7 @@ All ESC characters doubled inside tmux wrapper.
 ## SugarCraft Mapping
 
 ### Primary Mapping: `candy-mosaic`
+
 The halfblocks rendering functionality directly maps to SugarCraft's `candy-mosaic` library which provides Unicode block character rendering for terminal graphics. Both:
 - Use the Charmbracelet `x/cellbuf` and `x/mosaic` packages
 - Render images as Unicode block characters
@@ -276,12 +291,14 @@ The halfblocks rendering functionality directly maps to SugarCraft's `candy-mosa
 - Support dithering for quality
 
 ### Secondary Mapping: Image Protocol Rendering
+
 If SugarCraft were to port the full protocol implementations:
 - `candy-kitty` - Kitty graphics protocol port
 - `candy-sixel` - Sixel protocol port
 - `candy-iterm2` - iTerm2 inline images port
 
 ### Relevant SugarCraft Patterns
+
 The `Image` struct's fluent API pattern with `with*()` methods mirrors SugarCraft's immutable builder pattern:
 ```go
 // Go-termimg

@@ -20,6 +20,7 @@ candy-freeze currently renders ANSI-colored text to SVG/PNG but lacks true synta
 ### 1.1 Go Ecosystem
 
 #### charmbracelet/freeze (Upstream) ⭐
+
 **Stars:** ~4K | **License:** MIT | **Language:** Go
 
 | Aspect | Details |
@@ -47,6 +48,7 @@ tokens := highlighter.Tokenize(string(code), lang, theme)
 ---
 
 #### coalaura/codeview (Go)
+
 **License:** MIT | **Purpose:** GitHub preview images
 
 | Aspect | Details |
@@ -61,6 +63,7 @@ tokens := highlighter.Tokenize(string(code), lang, theme)
 ### 1.2 Rust Ecosystem
 
 #### silicon ⭐
+
 **Stars:** ~2.6K | **License:** MIT | **Language:** Rust
 
 | Aspect | Details |
@@ -93,6 +96,7 @@ let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
 ---
 
 #### codesnap ⭐
+
 **Stars:** ~554 | **License:** MIT | **Language:** Rust
 
 | Aspect | Details |
@@ -115,6 +119,7 @@ let html = styled_line_to_highlighted_html(line, style, IncludeBackground::IfDif
 ---
 
 #### rucr
+
 **Status:** Not found in mainstream search. Likely a niche/archived tool.
 
 ---
@@ -122,6 +127,7 @@ let html = styled_line_to_highlighted_html(line, style, IncludeBackground::IfDif
 ### 1.3 Python Ecosystem
 
 #### code2image
+
 **License:** MIT | **Approach:** Pygments + Pillow
 
 | Aspect | Details |
@@ -142,6 +148,7 @@ img.save('output.png')
 ---
 
 #### code_nitro
+
 **License:** MIT | **Purpose:** CLI tool, online + offline
 
 | Aspect | Details |
@@ -153,6 +160,7 @@ img.save('output.png')
 ---
 
 #### pycodesnap ⭐
+
 **License:** MIT | **Purpose:** Modern code screenshots
 
 | Aspect | Details |
@@ -172,6 +180,7 @@ snap.save("output.png")
 ---
 
 #### carbon-api / py-carbon
+
 **Approach:** Web scraper wrappers for carbon.now.sh
 
 | Aspect | Details |
@@ -187,6 +196,7 @@ snap.save("output.png")
 ### 1.4 TypeScript/JavaScript Ecosystem
 
 #### shiki ⭐⭐⭐
+
 **Stars:** ~13K | **License:** MIT | **Language:** TypeScript
 
 | Aspect | Details |
@@ -226,6 +236,7 @@ const svgRenderer = await getSVGRenderer({
 ---
 
 #### shiki-image
+
 **Purpose:** Convert code snippets to images
 
 ```javascript
@@ -325,6 +336,7 @@ const buffer = await codeToImage('console.log("hello")', {
 ### 4.1 High Priority
 
 #### 4.1.1 Language Detection
+
 **Effort:** Medium | **Impact:** High
 
 Add automatic language detection similar to freeze's approach:
@@ -360,6 +372,7 @@ final class LanguageDetector
 ```
 
 #### 4.1.2 Background Color Support
+
 **Effort:** Low | **Impact:** Medium
 
 Update `AnsiParser.php` to track background colors:
@@ -392,6 +405,7 @@ $svg .= sprintf(
 ```
 
 #### 4.1.3 Theme Format Compatibility
+
 **Effort:** High | **Impact:** High
 
 Add support for VS Code / chroma theme JSON format:
@@ -402,11 +416,13 @@ final class VsCodeTheme
 {
     /**
      * Load from VS Code JSON theme file.
+
      */
     public static function fromJson(string $path): self { /* ... */ }
 
     /**
      * Convert to candy-freeze Theme format.
+
      */
     public function toTheme(): Theme { /* ... */ }
 }
@@ -419,6 +435,7 @@ This enables using any of shiki's 100+ themes or syntect's Sublime themes.
 ### 4.2 Medium Priority
 
 #### 4.2.1 Font Embedding in SVG
+
 **Effort:** Medium | **Impact:** Medium
 
 Similar to how freeze embeds TTF fonts:
@@ -442,6 +459,7 @@ public function renderWithEmbeddedFont(string $text, string $fontPath): string
 **Reference:** freeze uses `github.com/charmbracelet/fontlib` to embed fonts in SVG.
 
 #### 4.2.2 Ligature Support
+
 **Effort:** Low | **Impact:** Low-Medium
 
 Add `--font-ligatures` flag (like freeze):
@@ -461,9 +479,11 @@ if ($this->theme->ligatures) {
 ```
 
 #### 4.2.3 Additional Window Styles
+
 **Effort:** Low | **Impact:** Low
 
 Add more window chrome styles:
+
 - Ubuntu style
 - VS Code style
 - Custom title bar with text
@@ -473,14 +493,17 @@ Add more window chrome styles:
 ### 4.3 Lower Priority
 
 #### 4.3.1 PNG Optimization
+
 **Effort:** Medium | **Impact:** Medium
 
 The current `PngRenderer` uses GD's built-in bitmap fonts. Consider:
+
 - Adding TTF support via `imagettftext()`
 - Adding `imagepng()` quality/compression options
 - Adding WebP export support
 
 #### 4.3.2 Line Highlighting
+
 **Effort:** Low | **Impact:** Low
 
 Like silicon's `--highlight-lines "3-7;12"`:
@@ -497,6 +520,7 @@ $lineBg = $isHighlighted ? '#3a3a3a' : $this->theme->background;
 ```
 
 #### 4.3.3 Interactive CLI Mode
+
 **Effort:** High | **Impact:** Medium
 
 freeze has an interactive TUI for customization:
@@ -640,24 +664,29 @@ final class SvgRenderer
 ## 7. References
 
 ### Upstream
+
 - **charmbracelet/freeze:** https://github.com/charmbracelet/freeze
 - **chroma:** https://github.com/alecthomas/chroma
 
 ### Rust Tools
+
 - **silicon:** https://github.com/Aloxaf/silicon
 - **syntect:** https://github.com/trishume/syntect
 - **codesnap:** https://github.com/mistricky/codesnap
 
 ### Python Tools
+
 - **code2image:** https://github.com/axju/code2image
 - **pycodesnap:** https://pypi.org/project/pycodesnap/
 
 ### TypeScript Tools
+
 - **shiki:** https://github.com/shikijs/shiki
 - **shiki-renderer-svg:** https://www.npmjs.com/package/shiki-renderer-svg
 - **shiki-image:** https://github.com/syntax-syndicate/shiki-image
 
 ### Theme Resources
+
 - **VS Code Themes:** https://github.com/themegrill/vscode-theme-collection
 - **Catppuccin:** https://github.com/catppuccin/catppuccin
 - **Chroma Themes:** https://github.com/chroma-graphql/chroma-themes
@@ -761,6 +790,7 @@ final class ThemeConverter
      * Convert a VS Code JSON theme to candy-freeze Theme.
      *
      * @param array $vsCodeTheme Parsed JSON from VS Code theme file
+
      */
     public static function fromVsCode(array $vsCodeTheme): Theme
     {

@@ -1,6 +1,7 @@
 # charmbracelet/git-lfs-transfer
 
 ## Metadata
+
 - URL: https://github.com/charmbracelet/git-lfs-transfer
 - Language: Go
 - Stars: Not publicly available (GitHub API credentials unavailable)
@@ -22,6 +23,7 @@
 ## Key Classes and Methods
 
 ### `transfer.Processor` (transfer/processor.go)
+
 Core protocol processor handling all LFS transfer operations:
 - `NewProcessor(handler, backend, logger)` — factory
 - `Version()` — negotiate protocol version
@@ -34,6 +36,7 @@ Core protocol processor handling all LFS transfer operations:
 - `ProcessCommands(op)` — main command dispatch loop with error handling
 
 ### `transfer.Pktline` (transfer/pktline.go)
+
 Git packet line protocol handler wrapping `github.com/git-lfs/pktline`:
 - `NewPktline(r, w, logger)` — factory
 - `SendError(status, message)` — send error response
@@ -42,6 +45,7 @@ Git packet line protocol handler wrapping `github.com/git-lfs/pktline`:
 - `Reader()` / `Writer()` — get pktline reader/writer
 
 ### `local.LocalBackend` (internal/local/backend.go)
+
 Filesystem-based LFS object storage backend:
 - `New(lfsPath, umask, timestamp)` — factory
 - `Batch(op, pointers, args)` — check object presence, return action (upload/download/noop)
@@ -51,6 +55,7 @@ Filesystem-based LFS object storage backend:
 - `LockBackend(args)` — return lock backend instance
 
 ### `local.localLockBackend` (internal/local/backend.go)
+
 File-based lock manager:
 - `Create(path, refname)` — create lock with hash-based ID
 - `FromID(id)` / `FromPath(path)` — retrieve lock
@@ -58,6 +63,7 @@ File-based lock manager:
 - `Range(cursor, limit, func)` — iterate locks with cursor pagination
 
 ### `localBackendLock` (internal/local/lock.go)
+
 Individual lock representation:
 - `HashFor(path)` — SHA-256 based lock ID
 - `Parse(data)` — deserialize lock file
@@ -65,6 +71,7 @@ Individual lock representation:
 - `Unlock()` — delete lock file
 
 ### Supporting Types (transfer/*.go)
+
 - `Pointer` — LFS pointer with OID + Size, validation, relative path computation
 - `BatchItem` — pointer + Present flag + optional Args
 - `Status` — interface for protocol responses (code, args, messages, reader)
@@ -76,9 +83,11 @@ Individual lock representation:
 ## Notable Algorithms / Named Patterns
 
 ### SHA-256 Object Storage Layout
+
 Objects stored at `{lfsPath}/objects/{oid[0:2]}/{oid[2:4]}/{oid}` — the standard Git LFS directory sharding pattern for filesystem scalability.
 
 ### Atomic Upload Pattern
+
 ```
 tempFile = os.Create(incomplete/{oid}{randomBytes})
 io.Copy(tempFile, r)
@@ -87,12 +96,15 @@ os.Link(tempFile, destPath)  // hardlink for efficiency
 Ensures readers never see partial content; cleanup on error.
 
 ### Lock ID = SHA-256(version + ":" + path)
+
 Prevents lock ID collisions and provides deterministic naming from path.
 
 ### VerifyingReader Hash Verification
+
 At EOF, compares computed SHA-256 and byte count against expected values; returns `ErrCorruptData` on mismatch. Ensures end-to-end integrity.
 
 ### Command Dispatch Loop
+
 Pattern matching on `msgs[0]` against protocol commands with exhaustive error mapping to HTTP-like status codes.
 
 ## Strengths

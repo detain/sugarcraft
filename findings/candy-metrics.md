@@ -379,24 +379,31 @@ Both are absent. This means warnings don't fail the build locally vs in CI.
 ## Positive Observations
 
 ### 🟢 Well-designed backend interface
+
 `src/Backend.php` is a clean, focused interface with clear method contracts. The split between synchronous (counter/gauge/histogram/upDownCounter) and asynchronous (asyncCounter/asyncGauge) is thoughtful and matches the OpenTelemetry model.
 
 ### 🟢 Comprehensive test coverage
+
 41 tests covering Registry, all 5 backends, all instruments, cardinality management, histogram buckets, and the SessionMetrics middleware. Tests use proper Arrange-Act-Assert patterns.
 
 ### 🟢 Good Prometheus textfile format compliance
+
 Atomic rename with flock, proper HELP/TYPE ordering, bucket ordering, label escaping, name sanitization, and summary TYPE emission (without quantile lines) all correctly implemented.
 
 ### 🟢 Cardinality protection with FIFO eviction
+
 The label-value cache with per-metric cardinality limits and FIFO eviction (lines 256-260 in Registry.php) is a robust defense against memory exhaustion from unbounded label combinations.
 
 ### 🟢 Proper use of PHP 8.1+ features
+
 Readonly classes, constructor property promotion, named arguments, first-class callables, and strict_types are used consistently.
 
 ### 🟢 Idempotent descriptor registration
+
 `Registry::register()` (line 68-75) correctly guards against duplicate registration, preventing double-emit of TYPE/HELP lines.
 
 ### 🟢 Extensive i18n support
+
 16 language translation files covering en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar — well above the typical library investment.
 
 ---
@@ -406,6 +413,7 @@ Readonly classes, constructor property promotion, named arguments, first-class c
 ### ⚠️ candy-wish hard-coupling (covered above as Critical #1)
 
 ### ⚠️ Histogram values unbounded in InMemoryBackend
+
 `src/Backend/InMemoryBackend.php:46-49` — histogram samples are stored as a `list<float>` with no sampling or aggregation. For high-volume metrics, this can exhaust memory. No `exponential histogram` or `HR timestamp histogram` support (OTel compatible).
 
 **Recommendation:** Consider adding a sampling strategy or aggregated histogram mode.
@@ -417,6 +425,7 @@ Readonly classes, constructor property promotion, named arguments, first-class c
 ### Current async pattern: callback-based observation
 
 **How it works:**
+
 - `AsyncCounter` / `AsyncGauge` are created with a `\Closure(): float` callback
 - Application code calls `observe()` to read the callback and record the value
 - No automatic periodic collection; caller controls when to observe
@@ -437,6 +446,7 @@ final class Collector
 ```
 
 ### StatsdBackend blocking I/O
+
 `src/Backend/StatsdBackend.php:51` — `fsockopen` with 1s timeout and synchronous `fwrite`. For high-throughput scenarios, this could block. Consider:
 - Non-blocking I/O via ReactPHP socket
 - Fire-and-forget with `stream_socket_sendto` 

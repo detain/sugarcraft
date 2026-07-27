@@ -1,6 +1,7 @@
 # kojiflowers/php-tui-chart
 
 ## Metadata
+
 - **URL:** https://github.com/kojiflowers/php-tui-chart
 - **Language:** PHP
 - **Stars:** Unknown (likely very few - personal hobby project)
@@ -8,6 +9,7 @@
 - **Description:** A PHP wrapper class for generating [Toast UI Charts](https://nhnent.github.io/tui.chart/latest/tutorial-example03-01-line-chart-basic.html) - a JavaScript chart library. This wrapper generates the necessary JavaScript boilerplate from PHP, allowing developers to define chart data in PHP and emit JavaScript that renders charts in the browser.
 
 ## Feature List
+
 - **Line Chart** - Time series / multi-series line visualization via `lineChart` type
 - **Bar Chart** - Horizontal bar chart via `barChart` type
 - **Column Chart** - Vertical bar chart via `columnChart` type
@@ -22,6 +24,7 @@
 ## Key Classes and Methods
 
 ### `PhpTuiChart\Draw`
+
 The main entry point class.
 
 - **`__construct($type, $chart_data = array())`** — Instantiates chart of given type (`lineChart`, `barChart`, `columnChart`) and immediately renders
@@ -29,6 +32,7 @@ The main entry point class.
 - **`__toString() : string`** — Magic method proxying to `render()`
 
 ### `PhpTuiChart\Builder\Builder`
+
 Core chart builder that constructs JavaScript output.
 
 - **`__construct($type, $chart_data)`** — Processes data and assigns chart type; calls `processChartData()`, `assignChart()`, `buildChart()`
@@ -41,6 +45,7 @@ Core chart builder that constructs JavaScript output.
 - **`assignChart()`** — Sets the TUI Chart initialization snippet: `tui.chart.{$type}(container, data, options);`
 
 ### `PhpTuiChart\Builder\DataPrep`
+
 Trait providing data import and transformation utilities.
 
 - **`run($data_file, $file_type = false) : bool|string`** — Router for `prepTsv()`, `prepCsv()`, `prepJson()`, `prepArray()`
@@ -53,9 +58,11 @@ Trait providing data import and transformation utilities.
 ## Notable Algorithms / Named Patterns
 
 ### Builder Pattern
+
 `Builder` class orchestrates construction of complex JavaScript output. It uses a fluent-like approach internally, chaining `processChartData()` → `assignChart()` → `buildChart()`.
 
 ### Data Reorganization (Key-Pair Mode)
+
 When `keypair => true`, the `buildChartDataSeries()` method transforms data from row-oriented format:
 ```php
 // Input (rows per category)
@@ -73,12 +80,15 @@ When `keypair => true`, the `buildChartDataSeries()` method transforms data from
 ```
 
 ### Default Options Merging
+
 `buildChartOptions()` applies user overrides to a `$default_options` array rather than building from scratch. Pattern: merge user values into defaults.
 
 ### Magic `__toString()`
+
 Both `Draw` and `Builder` implement `__toString()` enabling direct echo/print output of rendered JavaScript.
 
 ## Strengths
+
 - **Simple API** — One class, one method call to generate a working chart
 - **Data format flexibility** — Supports arrays, CSV, TSV, JSON file input
 - **Familiar TUI Chart types** — Uses exact Toast UI Chart type names (lineChart, barChart, columnChart) making original docs applicable
@@ -86,6 +96,7 @@ Both `Draw` and `Builder` implement `__toString()` enabling direct echo/print ou
 - **`__toString()` magic** — Clean output pattern: `echo new Draw('lineChart', $data)`
 
 ## Weaknesses
+
 - **No tests** — Zero test coverage; no PHPUnit or any testing framework
 - **Hardcoded defaults** — `$default_options` is a protected property, not configurable from outside
 - **No type safety** — No `declare(strict_types=1)`, no return types, no property types
@@ -102,6 +113,7 @@ Both `Draw` and `Builder` implement `__toString()` enabling direct echo/print ou
 ## SugarCraft Mapping
 
 ### `sugar-charts`
+
 **Direct competitor** — Both are chart libraries, but for fundamentally different environments:
 
 | Aspect | php-tui-chart | SugarCraft/sugar-charts |
@@ -116,6 +128,7 @@ Both `Draw` and `Builder` implement `__toString()` enabling direct echo/print ou
 **SugarCraft's `sugar-charts`** is a native PHP terminal charting library producing ANSI escape sequences. **php-tui-chart** is a PHP wrapper that generates JavaScript for a browser-based third-party charting library.
 
 ### Specific sugar-charts components that cover similar ground:
+
 - `BarChart\BarChart` — vertical bar chart (corresponds to php-tui-chart's `columnChart`)
 - `BarChart\Bar` — single bar value object (comparable to php-tui-chart's internal data normalization)
 - `Canvas\Canvas` + `Canvas\Graph` — drawing primitives (php-tui-chart has none)

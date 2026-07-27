@@ -1,6 +1,7 @@
 # charmbracelet/bubbles
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/bubbles
 - **Language:** Go
 - **Stars:** ~2,000+ (MIT licensed)
@@ -8,6 +9,7 @@
 - **Description:** A collection of pre-built, composable TUI components for Bubble Tea applications. Provides 14 components (Spinner, TextInput, TextArea, Table, Progress, Paginator, Viewport, List, FilePicker, Timer, Stopwatch, Help, Key, Cursor) used in production by Charm tools like Crush.
 
 ## Feature List
+
 - **Spinner** — Animated loading indicator with 12 built-in frames (Line, Dot, MiniDot, Jump, Pulse, Points, Globe, Moon, Monkey, Meter, Hamburger, Ellipsis)
 - **TextInput** — Single-line text entry with echo modes (normal/password/none), validation, suggestions, clipboard paste, word/character navigation, undo/redo, and virtual cursor
 - **TextArea** — Multi-line text input with line numbers, soft-wrapping, clipboard paste, transpose characters, case transforms (upper/lower/capitalize), and extensive keybindings
@@ -26,6 +28,7 @@
 ## Key Components
 
 ### Spinner
+
 - `New(opts ...Option) Model` — Creates spinner with options
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)` — Tea update loop
 - `Model.View() string` — Renders current frame
@@ -33,6 +36,7 @@
 - `WithSpinner(Spinner)` / `WithStyle(lipgloss.Style)` — Option functions
 
 ### TextInput
+
 - `New() Model` — Creates with defaults
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)` — Handles keypresses, paste, suggestions
 - `Model.View() string` — Renders prompt + value + cursor + suggestions
@@ -45,6 +49,7 @@
 - `Paste() / Blink()` — Commands
 
 ### TextArea
+
 - `New() Model` — Creates with defaults
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)` — Full multi-line editing
 - `Model.View() string` — Renders with line numbers, prompts
@@ -54,6 +59,7 @@
 - Line number display, soft-wrap, clipboard integration
 
 ### Table
+
 - `New(columns []Column, rows []Row)` — Constructor
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)`
 - `Model.View() string`
@@ -61,6 +67,7 @@
 - Navigation via KeyMap (LineUp/Down, PageUp/Down, HalfPageUp/Down, GotoTop/Bottom)
 
 ### Progress
+
 - `New(opts ...Option) Model`
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)` — 60fps animation
 - `Model.View() string` — Renders bar with percentage
@@ -68,6 +75,7 @@
 - `WithColors(color...)` / `WithDefaultBlend()` / `WithoutPercentage()` — Options
 
 ### List
+
 - `New(items []Item, delegate ItemDelegate, opts ...Option) Model`
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)`
 - `Model.View() string` — Renders list with optional title/filter/pagination/help
@@ -76,6 +84,7 @@
 - Fuzzy filtering via `sahilm/fuzzy` with `DefaultFilter` / `UnsortedFilter`
 
 ### Viewport
+
 - `New(opts ...Option) Model`
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)`
 - `Model.View() string`
@@ -86,6 +95,7 @@
 - `MouseWheelEnabled` / `FillHeight` / `SoftWrap` — Options
 
 ### Help
+
 - `New() Model`
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)`
 - `Model.View() string`
@@ -93,6 +103,7 @@
 - Generates help text from `KeyMap` interface
 
 ### Key
+
 - `NewBinding(opts ...BindingOpt) Binding` — Creates binding
 - `WithKeys("up", "k")` — Keys that trigger binding
 - `WithHelp("↑/k", "move up")` — Help text
@@ -100,6 +111,7 @@
 - `Matches(k Key, b ...Binding) bool` — Checks if key matches any binding
 
 ### Cursor
+
 - `New() Model`
 - `Model.Update(msg tea.Msg) (Model, tea.Cmd)`
 - `Model.View() string`
@@ -108,6 +120,7 @@
 - `Model.SetChar(string)` — Character under cursor
 
 ## Notable Algorithms / Named Patterns
+
 - **Elm Architecture (Model/Update/View)** — Every component implements the Tea.Model interface with `Update(tea.Msg) (Model, tea.Cmd)` and `View() string`
 - **ID-based Message Routing** — Spinner, Timer, Stopwatch, Cursor use atomic ID counters to ensure messages only reach intended components
 - **Tag-based Message Gating** — Tick messages carry incrementing `tag` values to prevent stale/duplicate frame messages
@@ -120,6 +133,7 @@
 - **KeyMap Interface** — Help component introspects `ShortHelp() / FullHelp() []key.Binding` on any implementation
 
 ## Strengths
+
 - **Mature, production-tested** — Used in Charm's own Crush shell and many other real applications
 - **Comprehensive documentation** — README shows all components with screenshots, each package has GoDoc
 - **Consistent API** — Every component follows the same Elm-architecture pattern
@@ -129,6 +143,7 @@
 - **Well-tested** — Components have comprehensive test coverage with golden file tests
 
 ## Weaknesses
+
 - **Go-specific** — The Elm-architecture pattern is native to Go; PHP ports require significant reinterpretation
 - **Goroutine-based concurrency** — Tick/animator patterns rely on Go's concurrency model
 - **Large components** — TextArea is 1900+ lines, List is 1300+ lines — porting scope is substantial
@@ -139,6 +154,7 @@
 ## SugarCraft Mapping
 
 ### sugar-bits / candy-forms
+
 `charmbracelet/bubbles` maps directly to `SugarCraft\Bits` → `SugarCraft\Forms` (per MATCHUPS.md row 33)
 
 | Bubbles Component | SugarCraft Component | Status |
@@ -159,9 +175,11 @@
 | cursor | `SugarCraft\Forms\Cursor\Cursor` | 🟢 |
 
 ### sugar-prompt (charmbracelet/huh)
+
 Note: `charmbracelet/huh` is a separate form library that builds on bubbles. SugarCraft maps `huh` → `sugar-prompt` (MATCHUPS.md row 34). Bubbles components (TextInput, TextArea, List, etc.) provide the primitive widgets that huh combines into a form framework.
 
 ### candy-forms extraction
+
 Per MATCHUPS.md row 45: "Foundation: form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) — extraction in progress"
 
 ## Analysis

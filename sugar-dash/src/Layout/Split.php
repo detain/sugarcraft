@@ -223,17 +223,20 @@ final class Split implements \SugarCraft\Dash\Foundation\Sizer
         // Pad each pane to same height
         foreach ($paneLines as $index => $lines) {
             [$width] = $paneSizes[$index] ?? [80];
-            while (count($lines) < $maxHeight) {
+            $lineCount = count($lines);
+            while ($lineCount < $maxHeight) {
                 $lines[] = str_repeat(' ', $width);
+                $lineCount++;
             }
             $paneLines[$index] = $lines;
         }
 
         // Build result row by row
         $result = [];
+        $paneLineCount = count($paneLines);
         for ($row = 0; $row < $maxHeight; $row++) {
             $rowParts = [];
-            for ($col = 0; $col < count($paneLines); $col++) {
+            for ($col = 0; $col < $paneLineCount; $col++) {
                 $line = $paneLines[$col][$row] ?? '';
                 [$width] = $paneSizes[$col] ?? [80];
                 // Truncate or pad line to pane width
@@ -245,7 +248,7 @@ final class Split implements \SugarCraft\Dash\Foundation\Sizer
                 $rowParts[] = $line;
 
                 // Add divider
-                if ($col < count($paneLines) - 1 && $this->showDividers) {
+                if ($col < $paneLineCount - 1 && $this->showDividers) {
                     $divider = $this->renderVerticalDivider($width, $row, $maxHeight);
                     $rowParts[] = $divider;
                 }
@@ -271,7 +274,8 @@ final class Split implements \SugarCraft\Dash\Foundation\Sizer
         $result = [];
         $totalWidth = $this->width ?? 80;
 
-        for ($i = 0; $i < count($panes); $i++) {
+        $paneCount = count($panes);
+        for ($i = 0; $i < $paneCount; $i++) {
             $paneLines = explode("\n", $panes[$i]);
 
             // Pad/truncate each line to total width

@@ -12,10 +12,12 @@
 ## Files
 
 **Modify:**
+
 - `sugar-bits/src/Table/Table.php` — page-size handling, current-page
   state.
 
 **Create:**
+
 - `sugar-bits/src/Paginator/Paginator.php`.
 
 ## Tests

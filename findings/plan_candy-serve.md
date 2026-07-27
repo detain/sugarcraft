@@ -7,6 +7,7 @@ updated: 2026-06-30
 # Implementation Plan: candy-serve
 
 ## Goal
+
 Fix all 28 findings in candy-serve library: 7 HIGH severity issues (shell injection, path traversal, hardcoded LFS token, empty password bypass, repo init wrong dir, array modification during iteration, temp file leak), 12 MEDIUM severity issues, and 9 LOW severity issues.
 
 ## Context & Decisions

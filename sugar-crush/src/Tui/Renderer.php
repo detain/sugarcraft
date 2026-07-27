@@ -48,7 +48,9 @@ final class Renderer
                 self::$terminalSize = ['rows' => $size['rows'], 'cols' => $size['cols']];
                 return self::$terminalSize;
             }
-        } catch (\Throwable) {}
+        } catch (\Throwable) {
+            // Terminal size detection failed; fall back to defaults.
+        }
 
         self::$terminalSize = ['rows' => 60, 'cols' => 200];
         return self::$terminalSize;

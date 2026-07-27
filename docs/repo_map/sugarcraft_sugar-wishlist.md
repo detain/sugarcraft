@@ -1,13 +1,21 @@
 # SugarCraft/sugar-wishlist
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-wishlist
+
 - **Language:** PHP 8.3+
+
 - **Status:** 🟢 v1 ready
+
 - **License:** MIT
+
 - **Composer:** `sugarcraft/sugar-wishlist`
+
 - **Namespace:** `SugarCraft\Wishlist`
+
 - **Upstream:** `charmbracelet/wishlist` (Go, ~700 stars)
+
 - **Depends on:** `sugarcraft/candy-core`, `sugarcraft/sugar-bits`, `sugarcraft/candy-pty`, `sugarcraft/candy-sprinkles`, `sugarcraft/candy-forms`, `sugarcraft/candy-zone`, `sugarcraft/honey-bounce`, `sugarcraft/candy-palette`
 
 ---
@@ -15,18 +23,30 @@
 ## Feature List
 
 ### Core Features
+
 - **TUI-based SSH endpoint picker** — Interactive terminal UI listing configured SSH endpoints with selection, filtering, and connection
+
 - **Dual-mode operation**:
   - **Local mode**: Browse and connect to endpoints from YAML/JSON config or imported OpenSSH config
+
   - **SSH-server TUI mode**: (architecture in place; full server mode deferred to future phase)
+
 - **Multi-format configuration**: Supports YAML (`wishlist.yml`), JSON (`wishlist.json`), and raw OpenSSH `~/.ssh/config`
+
 - **ProxyJump support**: Connects through bastion hosts via `-J` flag
+
 - **Agent forwarding**: Compatible with SSH agent forwarding via standard OpenSSH mechanisms
+
 - **Identity file selection**: Supports multiple identity files via `-i` flag
+
 - **OpenSSH config import**: Parses `~/.ssh/config` and maps `Host`, `HostName`, `User`, `Port`, `IdentityFile`, `ProxyJump` directives
+
 - **SSH options passthrough**: Arbitrary `-o KEY=VALUE` options from YAML/JSON config
+
 - **Type-to-filter**: Real-time fuzzy filtering as user types
+
 - **Keyboard navigation**: j/k, arrow keys, Enter, Esc, Ctrl-C
+
 - **i18n**: Full translation support with 16 locales (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar)
 
 ---
@@ -66,9 +86,13 @@ Two distinct parsing paths, auto-detected by file extension or content heuristic
 
 2. **YAML-ish flat-list path** — A hand-rolled parser (`parseYaml()`) that handles the documented subset:
    - `- key: value` entry headers
+
    - 2-space-indented continuation keys (`host:`, `port:`, `user:`, etc.)
+
    - 4-space-indented `- value` list items under a value-less key (used for `options:` lists)
+
    - `#` line comments
+
    - Scalar type coercion: integers, booleans (`true`/`false`/`yes`/`no`), null (`~`/`null`), quoted strings
 
    The YAML parser is intentionally minimal — `ext-yaml` is NOT a dependency. The library only needs a flat list of entry blocks; no anchors, multi-doc, or nested mappings.
@@ -81,7 +105,9 @@ Two distinct parsing paths, auto-detected by file extension or content heuristic
 
 A stateful line-by-line parser that tracks:
 - `$globalOptions` — options from `Host *` blocks (inherited by all subsequent hosts)
+
 - `$hostBlocks` — ordered list of per-host option maps
+
 - `$inGlobalBlock` — flag indicating whether current block is `Host *`
 
 Per SSH config semantics (first-match-wins), blocks are stored in declaration order. When building endpoints, `$globalOptions` is merged with per-host options (host-specific wins). `~` in `IdentityFile` paths is expanded via `getenv('HOME')` with `posix_getpwuid` fallback.
@@ -97,10 +123,15 @@ Ignored keywords (intentionally): `Match`, `Include`, `Set`, `SendEnv`, `Forward
 A lightweight, single-purpose TUI widget (not a full SugarBits `List`). Key design decisions:
 
 - **No full event loop** — Uses a simple `while(true)` loop with blocking `fread()` on STDIN. Directly draws to STDOUT via ANSI escape sequences.
+
 - **Raw mode via `candy-core` `RawMode`** — Delegates terminal raw-mode setup to `SugarCraft\Core\Util\RawMode::enable/disable()`, which is a portable no-op on non-tty streams (enabling testability).
+
 - **ANSI rendering** — Uses `SugarCraft\Core\Util\Ansi` for `cursorTo()`, `eraseToEnd()`, `sgr()`, `reset()`.
+
 - **CSI sequence parsing** — `readKey()` handles ESC-prefixed CSI sequences for arrow keys (`ESC [ A/B/C/D`) with non-blocking retry to avoid hanging on a lone ESC byte.
+
 - **Filter matching** — Case-insensitive `str_contains` across `name + host + user` fields.
+
 - **Testable via stream override** — Constructor accepts nullable `$in`/`$out` resources; tests use `php://memory` streams with a `setRawMode()` override for in-process testing.
 
 ### Endpoint Value Object
@@ -146,7 +177,9 @@ sugar-wishlist does **not** implement dynamic service discovery (Zeroconf/DNS SR
 
 **Upstream discovery features** (not yet ported):
 - `_ssh._tcp` Zeroconf/mDNS/Bonjour browsing via `grandcat/zeroconf`
+
 - DNS SRV record discovery via `srv.Endpoints()`
+
 - Tailscale tailnet device discovery via API (OAuth client credentials preferred over static API keys)
 
 If these are added, they would live in a future `sugar-discovery` leaf library.
@@ -165,8 +198,11 @@ The `candy-wish` dependency exists for potential future SSH-server TUI mode (`ss
 
 The key architectural decision: **do not proxy SSH bytes**. Instead, `pcntl_exec` replaces PHP entirely with the real `ssh` binary. This means:
 - Full host-key prompting works natively
+
 - Agent forwarding works natively
+
 - TTY / PTY allocation works natively
+
 - Exit status propagates correctly
 
 This is architecturally cleaner than a PHP-based SSH proxy, but means sugar-wishlist cannot introspect or log the SSH session itself.
@@ -281,15 +317,19 @@ This is architecturally cleaner than a PHP-based SSH proxy, but means sugar-wish
 ## Related Third-Party Repos
 
 ### `charmbracelet/wishlist` (primary upstream — 700 stars)
+
 Full-featured Go SSH directory with local CLI mode + SSH server mode. sugar-wishlist v1 ports the local CLI mode only. The upstream also provides Zeroconf/DNS SRV/Tailscale discovery, which are deferred. See full analysis at `repo_map/charmbracelet_wishlist.md`.
 
 ### `charmbracelet/wish` (SSH middleware framework — 5,233 stars)
+
 The SSH server framework that upstream wishlist builds on. sugar-wishlist does not use `candy-wish` in v1 (local CLI mode doesn't need an SSH server). The `candy-wish` port exists independently. See full analysis at `repo_map/charmbracelet_wish.md`.
 
 ### `charmbracelet/charm` (cloud infrastructure — 2.4k stars)
+
 Provides SSH-based authentication, encrypted KV store, and cloud filesystem. Not directly related to wishlist's endpoint management use case. See full analysis at `repo_map/charmbracelet_charm.md`.
 
 ### `candy-wish` (SugarCraft port of charmbracelet/wish)
+
 SSH server middleware framework. sugar-wishlist declares it as a dependency (via `candy-core`, `candy-pty`) but does not invoke its SSH server capabilities in v1. The dependency exists for future SSH-server TUI mode.
 
 ---

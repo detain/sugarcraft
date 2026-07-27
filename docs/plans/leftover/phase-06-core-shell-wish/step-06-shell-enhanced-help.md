@@ -14,6 +14,7 @@ Three help-system improvements:
 ## Files
 
 **Create:**
+
 - `candy-shell/src/Attribute/Example.php`
 - `candy-shell/src/Attribute/Alias.php`
 - `candy-shell/src/Help/HelpFormatter.php` — renders the enhanced help.
@@ -21,10 +22,12 @@ Three help-system improvements:
   command registry; suggests if distance ≤ 2.
 
 **Modify:**
+
 - `candy-shell/src/Application.php` — wire all three into the run
   loop. Unknown command → suggester runs.
 
 **Tests:**
+
 - `candy-shell/tests/Help/TypoSuggesterTest.php`.
 - `candy-shell/tests/Help/HelpFormatterTest.php` — snapshot.
 

@@ -377,7 +377,7 @@ final class PERT implements \SugarCraft\Dash\Foundation\Sizer
             return '';
         }
 
-        [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
+        [$tl, $tr, $bl, $br, $_h, $v] = $this->getStyleChars();
 
         $nodeColor = $this->nodeColor ?? Color::hex('#89B4FA');
         $arrowColor = $this->arrowColor ?? Color::hex('#45475A');
@@ -425,9 +425,9 @@ final class PERT implements \SugarCraft\Dash\Foundation\Sizer
                     $depY = $y + intval($nodeHeight / 2);
 
                     $arrowStartX = $depX + $nodeWidth;
-                    $arrowStartY = $depY;
+                    $_arrowStartY = $depY;
                     $arrowEndX = $x;
-                    $arrowEndY = $depY;
+                    $_arrowEndY = $depY;
 
                     if ($arrowColor !== null) {
                         $result .= $arrowColor->toFg(ColorProfile::TrueColor);
@@ -491,8 +491,8 @@ final class PERT implements \SugarCraft\Dash\Foundation\Sizer
         PertTask $task,
         int $x,
         int $width,
-        int $y,
-        int $height,
+        int $_y,
+        int $_height,
         Color $color,
         Color $textColor,
     ): void {

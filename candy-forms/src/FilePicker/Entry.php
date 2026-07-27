@@ -61,7 +61,8 @@ final class Entry
         $units = ['B', 'K', 'M', 'G', 'T'];
         $size  = (float) $this->size;
         $i = 0;
-        while ($size >= 1024.0 && $i < count($units) - 1) {
+        $unitCount = count($units);
+        while ($size >= 1024.0 && $i < $unitCount - 1) {
             $size /= 1024.0;
             $i++;
         }

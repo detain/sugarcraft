@@ -17,6 +17,7 @@
 **Source:** `/home/sites/sugarcraft/sugar-prompt/src/`
 
 ### Current Strengths
+
 - Immutable field design with `with*()` fluent API
 - `HasHideFunc` and `HasDynamicLabels` traits for conditional visibility
 - Theme system with 7 presets (ANSI, Charm, Dracula, Catppuccin, Base16, Base, Plain)
@@ -26,6 +27,7 @@
 - Accessibility mode (`withAccessible()`)
 
 ### Current Gaps
+
 - No fuzzy/autocomplete matching (only exact prefix filter)
 - No async/debounced suggestion providers
 - No built-in validators (only custom closures)

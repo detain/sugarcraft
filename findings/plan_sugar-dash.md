@@ -35,10 +35,12 @@ Fix all identified critical, high, medium, and low severity issues in the sugar-
 **Why the change should be done:** The current code `Sizer&& $useWidth` is a parse error. PHP interprets `Sizer&&` as an attempt to use `&&` as a constant name, causing a fatal parse error that prevents the class from being autoloaded entirely.
 
 **Conditions for success:**
+
 - `php -l src/Layout/Stack.php` returns no errors
 - `Stack::render()` can be called without parse failure
 
 **Related code locations:**
+
 - `sugar-dash/src/Layout/Stack.php:78`
 
 **Investigation notes:**
@@ -61,11 +63,13 @@ The fix is simply inserting a space: `Sizer &&`
 **Why the change should be done:** Any code that instantiates or renders a `Chart` object will fatal with `Class "SugarCraft\Buffer\Buffer" not found`. This is a blocking issue — Chart is completely unusable.
 
 **Conditions for success:**
+
 - Chart class can be instantiated without fatal error
 - `php -l src/Plot/Chart/Chart.php` passes
 - Unit tests for Chart pass
 
 **Related code locations:**
+
 - `sugar-dash/src/Plot/Chart/Chart.php:7-9` (the wrong imports)
 - `sugar-dash/composer.json:38,102-106` (candy-buffer dependency and path repo)
 - `sugar-dash/src/Foundation/Buffer.php` (if it exists — needs investigation)
@@ -89,17 +93,20 @@ The fix requires determining the actual namespace of Buffer/Cell in candy-buffer
 **What is expected:** Redesign `dispatch()` to return `[Event, self]` (tuple of event and new dispatcher) instead of mutating `$this->listeners` and `$this->onceKeysToRemove` in-place. The Elm-architecture pattern used throughout the Module system returns `[newModule, ?Cmd]` from `update()` — the EventDispatcher should follow the same immutable pattern.
 
 **Why the change should be done:**
+
 1. The class uses clone-based immutability throughout (`on()`, `once()`, `off()`, `clear()` all return new instances). `dispatch()` violates this contract.
 2. The `array_push()` at line 60 returns the new count, not a boolean. `$key - 1` gives the correct index only when there are no gaps. After `off()` removes handlers (using `array_filter` at lines 83-86, which preserves numeric keys), the numeric indices stored in `onceKeysToRemove` point to wrong slots.
 3. Mutating `$this` after `dispatch()` means the "old" dispatcher instance shared with any subscriber has already lost its once-handlers.
 
 **Conditions for success:**
+
 - `dispatch()` returns `[Event, self]` tuple
 - `once()` handlers are removed only in the new returned dispatcher instance
 - Calling `dispatch()` twice on the same dispatcher instance produces correct behavior both times
 - Unit tests verify immutability: original dispatcher unchanged after dispatch of a `once` event
 
 **Related code locations:**
+
 - `sugar-dash/src/Events/EventDispatcher.php:52-70` (`once()` method)
 - `sugar-dash/src/Events/EventDispatcher.php:77-89` (`off()` method using `array_filter`)
 - `sugar-dash/src/Events/EventDispatcher.php:98-120` (`dispatch()` method - lines 112-117 are the mutation)
@@ -125,11 +132,13 @@ The fix should make `dispatch()` return `[$event, $newDispatcher]` and mark the 
 **Why the change should be done:** The `render()` method mutates `$this->previousFrame`, `$this->prevWidth`, and `$this->prevHeight` in place. This is inconsistent with the wither-based immutability pattern used throughout the rest of the codebase. Calling `render()` twice with different size constraints on the same `Chart` instance will silently produce incorrect output (diff computed against a buffer from a different-size first frame).
 
 **Conditions for success:**
+
 - `Chart` instances can be safely reused across render calls with different size constraints
 - No mutation of `$this` during `render()` — either document the intentional mutability or refactor to render-context pattern
 - Unit tests verify correct behavior when same Chart is rendered at different sizes
 
 **Related code locations:**
+
 - `sugar-dash/src/Plot/Chart/Chart.php:46-50` (property declarations: `$previousFrame`, `$prevWidth`, `$prevHeight`)
 - `sugar-dash/src/Plot/Chart/Chart.php:129-134` (the mutation in render())
 - `sugar-dash/src/Plot/Chart/Chart.php:160-167` (where previousFrame is used for diff computation)
@@ -150,11 +159,13 @@ The diff-based rendering pattern (storing `previousFrame` and computing a delta)
 **Why the change should be done:** The current `oldest()` returns wrong values in the wrapped-partial buffer case. For example, after pushing [A, B, C, D] then [E, F] (size=4), the buffer contains [E, F, C, D] with index=2 and count=4. `oldest()` returns `data[2] = C` but the correct oldest is `data[0] = E`. This silently corrupts time-series data for chart rendering.
 
 **Conditions for success:**
+
 - Unit tests cover the wrapped-partial buffer scenario: push elements until wrap, then push a few more without filling, verify `oldest()` returns the correct element
 - `oldest()` result always matches `toArray()[0]` when buffer is non-empty
 - All existing RingBuffer tests continue to pass
 
 **Related code locations:**
+
 - `sugar-dash/src/Plot/RingBuffer.php:122-133` (the `oldest()` method)
 - `sugar-dash/src/Plot/RingBuffer.php:81-100` (the `toArray()` method — correct reference implementation)
 
@@ -187,11 +198,13 @@ Actually, the cleanest fix: `oldest()` when `count > 0` should return `data[($in
 **Why the change should be done:** The `update()` method calls `$this->fetchSystemData()` before `withSystemState()`. Since `fetchSystemData()` mutates direct properties (`$cpuLoad`, `$memLoad`, `$gpuLoad`, `$uptime`, `$cpuHistory`, `$memHistory`) on `$this` in-place, the "old" module instance shared with any subscriber is already mutated when `update()` returns. This violates the Elm architecture's immutability guarantee.
 
 **Conditions for success:**
+
 - SystemModule's `update()` returns an instance where the original instance is unchanged
 - Unit tests verify that calling `update()` twice on the same instance produces two different module instances with different state
 - All properties that affect `view()` output are stored in the state array returned by `withSystemState()`
 
 **Related code locations:**
+
 - `sugar-dash/src/Modules/System/SystemModule.php:22-31` (direct property declarations)
 - `sugar-dash/src/Modules/System/SystemModule.php:43-50` (`update()` method)
 - `sugar-dash/src/Modules/System/SystemModule.php:85-95` (`withSystemState()` method)
@@ -215,11 +228,13 @@ The dual-storage pattern (direct properties + state array) is the root cause. `f
 **Why the change should be done:** On some CGI/FastCGI configurations, `$_SERVER['HOME']` may not be set. While the `??` operator handles the undefined index warning, `getenv()` is the more portable way to read environment variables and should be preferred as a primary source.
 
 **Conditions for success:**
+
 - `cachePath()` works correctly on systems without `$_SERVER['HOME']` (e.g., some PHP-FPM configurations)
 - Code uses `getenv('HOME') ?: $_SERVER['HOME'] ?: $_SERVER['USERPROFILE'] ?: sys_get_temp_dir()`
 - `@file_get_contents` failure is logged or the method returns a more descriptive result
 
 **Related code locations:**
+
 - `sugar-dash/src/Modules/Weather/WeatherModule.php:196-200` (cachePath())
 - `sugar-dash/src/Modules/Weather/WeatherModule.php:154` (silent file_get_contents failure)
 
@@ -236,10 +251,12 @@ The dual-storage pattern (direct properties + state array) is the root cause. `f
 **Why the change should be done:** The legacy directory iteration pattern is considered obsolete. `FilesystemIterator` is more memory-efficient for large directories, provides better object orientation, and groups the file metadata retrieval into a single system call per entry rather than separate `is_file()` and `is_executable()` stat calls.
 
 **Conditions for success:**
+
 - `Discovery::scan()` returns the same results using `FilesystemIterator` as it did with `opendir()`/`readdir()`
 - All existing plugin discovery tests pass
 
 **Related code locations:**
+
 - `sugar-dash/src/Plugin/Discovery.php:24-57` (the `scan()` method)
 
 ---
@@ -255,10 +272,12 @@ The dual-storage pattern (direct properties + state array) is the root cause. `f
 **Why the change should be done:** The `Msg` parameter is completely discarded. The adapter's state advances on every message, not just messages relevant to the legacy module. Without documentation, this design limitation is invisible to consumers of the API.
 
 **Conditions for success:**
+
 - The limitation is clearly documented in the class docblock and the `update()` method docblock
 - Unit tests demonstrate the adapter's behavior with mixed message types
 
 **Related code locations:**
+
 - `sugar-dash/src/Module/LegacyModuleAdapter.php:54-60` (`update()` method)
 
 ---
@@ -274,12 +293,14 @@ The dual-storage pattern (direct properties + state array) is the root cause. `f
 **Why the change should be done:** Every wither (12 methods: `withDataPoints`, `withType`, `withWidth`, `withHeight`, `withGrid`, `withShowValues`, `withShowLabels`, `withXAxisLabel`, `withYAxisLabel`, `withColor`, `withGridColor`, `withLabelColor`) duplicates all 11 constructor parameters. Adding a new parameter requires updating all 12+ withers. This is a maintenance hazard.
 
 **Conditions for success:**
+
 - All 12 existing `with*()` methods continue to work (backward compatible)
 - A new `with(array $overrides)` method is introduced as the canonical refactored form
 - Unit tests for all withers continue to pass
 - Code size reduced by ~200 lines
 
 **Related code locations:**
+
 - `sugar-dash/src/Plot/Chart/Chart.php:44-435` (constructor with 11 params)
 - `sugar-dash/src/Plot/Chart/Chart.php:436-690` (12 wither methods)
 
@@ -299,10 +320,12 @@ The recommended pattern mirrors `BaseModule::withState(array $state)` from the M
 **Why the change should be done:** `array_search()` returns `false` when the value is not found. If `$this->focusedId` is set but not in `$this->focusMap` (which can happen after `blur()` and subsequent `unregister()` calls), `false + 1 = 1` which then `% count($ids)` silently selects a valid but incorrect focus target.
 
 **Conditions for success:**
+
 - `focusNext()` and `focusPrevious()` correctly handle the case where `$this->focusedId` is not in the focus map
 - Unit tests cover the edge case: register IDs, blur one, unregister it, then call focusNext()
 
 **Related code locations:**
+
 - `sugar-dash/src/Layout/FocusManager.php:63-76` (`focusNext()`)
 - `sugar-dash/src/Layout/FocusManager.php:78-91` (`focusPrevious()`)
 
@@ -324,11 +347,13 @@ At line 70-72, `array_search()` is used without checking for `false`. If `focuse
 **Why the change should be done:** The interface is completely empty — no methods, no constants. It serves only as documentation. In PHP 8.3, `callable` is the natural type for event handlers. The interface adds indirection without adding value.
 
 **Conditions for success:**
+
 - All references to `EventHandler` in type positions are replaced with `callable`
 - The `EventHandler` interface file is removed (or retained as documentation-only with a `@deprecated` tag)
 - All event registration (`on()`, `once()`) continues to accept the same callable signatures
 
 **Related code locations:**
+
 - `sugar-dash/src/Events/EventHandler.php` (entire file)
 - `sugar-dash/src/Events/EventDispatcher.php:13` (import and usage in type hints at lines 33, 50)
 
@@ -345,10 +370,12 @@ At line 70-72, `array_search()` is used without checking for `false`. If `focuse
 **Why the change should be done:** If `new()` clamps to `[0, 1]` and `render()` clamps again, the second clamp in `render()` is redundant. If a caller creates a `Gauge` with out-of-range ratio and then uses withers without rendering, the withers would carry the unclamped value.
 
 **Conditions for success:**
+
 - Ratio is clamped exactly once in the codebase
 - Unit tests verify behavior at ratio values of -0.5, 0.0, 0.5, 1.0, 1.5
 
 **Related code locations:**
+
 - `sugar-dash/src/Plot/Chart/Gauge.php:43-56` (`new()` clamps at line 46)
 - `sugar-dash/src/Plot/Chart/Gauge.php:80` (`render()` clamps at line 80)
 
@@ -400,11 +427,13 @@ No action needed. This finding should be marked as resolved.
 **Why the change should be done:** Currently if the process receives a SIGTERM or SIGINT, the loop exits silently with `exit(0)`. There is no way for the host to signal "please stop" that the plugin can respond to. Additionally, if `fgets()` returns an empty string `""` (not `false`), the `trim()` at line 57 produces `""` and the loop `continue`s — but a single empty line from STDIN will spin the loop forever without consuming CPU (empty string immediately returns).
 
 **Conditions for success:**
+
 - Plugin responds to SIGTERM/SIGINT with a graceful exit (call `exit(0)` only after cleanup)
 - Empty string from `fgets()` is handled — either breaks the loop or is processed as a valid empty request
 - Unit tests or integration tests verify signal handling behavior
 
 **Related code locations:**
+
 - `sugar-dash/src/Plugin/PluginSdk.php:47-75` (the run() method loop)
 
 ---
@@ -420,10 +449,12 @@ No action needed. This finding should be marked as resolved.
 **Why the change should be done:** This is the exact scenario that triggers the index-mismatch bug in C-3. Having a test ensures the fix for C-3 is correct and prevents regression.
 
 **Conditions for success:**
+
 - New test `testOnceHandlerRemovedAfterDispatchWithPriorOffCall()` exists in the EventDispatcher test file
 - Test demonstrates that after `once()` → `off()` → `dispatch()`, the dispatcher is in a consistent state
 
 **Related code locations:**
+
 - `sugar-dash/tests/Events/EventDispatcherTest.php` (or similar path)
 
 ---
@@ -445,6 +476,7 @@ No action needed. This finding should be marked as resolved.
 **Why the change should be done:** 25+ chart files each implement similar rendering patterns. Duplication makes it impossible to change grid line generation or value range computation in one place and have it apply everywhere.
 
 **Conditions for success:**
+
 - Common chart rendering logic is extracted to `AbstractChart`
 - Area, Bar, Line, Bubble, Candlestick, Donut, Funnel, Gauge, Heatmap, OHLC, Partition, Radar, Sparkline, Waterfall all extend `AbstractChart`
 - Existing tests continue to pass
@@ -464,10 +496,12 @@ No action needed. This finding should be marked as resolved.
 **Why the change should be done:** DRY violation. `FocusManager` replicates the save/load pattern without using `State\Persistence` directly.
 
 **Conditions for success:**
+
 - `FocusManager` uses `State\Persistence` for all persistence operations
 - `WeatherModule::saveCache()` is reviewed and either uses `Persistence` or is documented as a separate pattern
 
 **Related code locations:**
+
 - `sugar-dash/src/Layout/FocusManager.php:122-147` (FocusManager persistence)
 - `sugar-dash/src/Modules/Weather/WeatherModule.php:172-194` (WeatherModule cache)
 - `sugar-dash/src/State/Persistence.php:22-51` (Persistence::save — the canonical pattern)

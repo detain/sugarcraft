@@ -27,9 +27,9 @@ final class SpawnPtySystemIntegrationTest extends TestCase
     {
         $system = new SpyPtySystem();
 
-        $observedSession = null;
-        $spawn = new Spawn(function (Session $s) use (&$observedSession): array {
-            $observedSession = $s;
+        $_observedSession = null;
+        $spawn = new Spawn(function (Session $s) use (&$_observedSession): array {
+            $_observedSession = $s;
             return [
                 'cmd' => ['/usr/bin/env'],
                 'env' => ['TERM' => $s->term, 'USER' => $s->user],
@@ -147,9 +147,9 @@ final class SpyMasterPty implements MasterPty
     }
 
     public function fd(): int { return -1; }
-    public function read(int $len = 8192, ?float $timeout = null): ?string { return ''; }
+    public function read(int $_len = 8192, ?float $_timeout = null): ?string { return ''; }
     public function write(string $bytes): int { return \strlen($bytes); }
-    public function resize(int $cols, int $rows): void {}
+    public function resize(int $_cols, int $_rows): void {}
     public function size(): array { return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0]; }
     public function stream(): mixed { return $this->stream; }
     public function close(): void { $this->closed = true; if (\is_resource($this->stream)) { @\fclose($this->stream); } }
@@ -165,8 +165,8 @@ final class SpySlavePty implements SlavePty
     public function spawn(
         array $cmd,
         ?array $env = null,
-        int $cols = 80,
-        int $rows = 24,
+        int $_cols = 80,
+        int $_rows = 24,
         bool $controllingTerminal = false,
     ): Child {
         $this->sys->spawnCalls++;
@@ -183,5 +183,5 @@ final class SpyChild implements Child
     public function exited(): bool { return true; }
     public function wait(): int { return 0; }
     public function exitCode(): ?int { return 0; }
-    public function kill(int $signal): void {}
+    public function kill(int $_signal): void {}
 }

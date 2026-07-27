@@ -13,6 +13,7 @@ into the Buffer via `setCell()`.
 ## Files
 
 **Modify:**
+
 - `sugar-dash/src/Plot/Plot.php`:
   - `draw(Buffer $buffer): void` — compute each braille glyph from
     the data series + `MarkerBraille`/`MarkerDot` mode, write each

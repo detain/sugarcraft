@@ -36,6 +36,7 @@ Three separate implementations of terminal color profile detection with identica
 All follow the same 13-step priority order documented in Palette.php:174-192. This violates DRY and creates maintenance burden.
 
 **Specific duplications:**
+
 - TERM pattern matching (`xterm*`, `screen*`, `tmux*`, `-256color`, `xterm-kitty`, `xterm-ghostty`) appears in three places
 - TMUX/STY detection logic appears in three places  
 - WT_SESSION, GOOGLE_CLOUD_SHELL checks appear in three places
@@ -432,6 +433,7 @@ In a ReactPHP ecosystem, a library doing terminal detection should ideally:
 ## Files Reviewed
 
 **Source (11 files):**
+
 - `src/Color.php` (356 lines) — RGBA value object with conversion methods
 - `src/Palette.php` (338 lines) — Main detection and degradation API
 - `src/Profile.php` (102 lines) — Terminal profile enum  
@@ -445,6 +447,7 @@ In a ReactPHP ecosystem, a library doing terminal detection should ideally:
 - `src/Probe/ProbeReport.php` (115 lines) — Capability detection results
 
 **Tests (10 files):**
+
 - `tests/ColorTest.php` — Color value object tests
 - `tests/PaletteTest.php` — Palette detection and degradation tests
 - `tests/ProfileTest.php` — Profile enum tests

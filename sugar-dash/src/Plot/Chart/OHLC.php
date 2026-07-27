@@ -33,7 +33,6 @@ final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
 
     private bool $showGrid = true;
     private bool $showLabels = true;
-    private bool $showValues = true;
     private ?float $minPrice = null;
     private ?float $maxPrice = null;
     private string $style = 'rounded';
@@ -124,16 +123,6 @@ final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Show or hide values.
-     */
-    public function withShowValues(bool $show): self
-    {
-        $clone = clone $this;
-        $clone->showValues = $show;
-        return $clone;
-    }
-
-    /**
      * Set fixed price range.
      */
     public function withPriceRange(float $min, float $max): self
@@ -193,8 +182,8 @@ final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
 
         [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
 
-        $gridColor = $this->gridColor ?? Color::hex('#45475A');
-        $textColor = $this->textColor ?? Color::hex('#CDD6F4');
+        $_gridColor = $this->gridColor ?? Color::hex('#45475A');
+        $_textColor = $this->textColor ?? Color::hex('#CDD6F4');
         $bullishColor = $this->bullishColor ?? Color::hex('#A6E3A1');
         $bearishColor = $this->bearishColor ?? Color::hex('#F38BA8');
 
@@ -215,7 +204,7 @@ final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
         if ($this->showGrid) {
             $gridLines = min($chartHeight - 1, 5);
             for ($i = 0; $i < $gridLines; $i++) {
-                $y = intval($i * ($chartHeight - 1) / max(1, $gridLines - 1));
+                $_y = intval($i * ($chartHeight - 1) / max(1, $gridLines - 1));
                 $price = $this->maxPrice - (($this->maxPrice - $this->minPrice) * $i / max(1, $gridLines - 1));
                 $priceLabel = sprintf('%6.2f', $price);
                 $gridLine = str_repeat('·', $chartWidth - $priceScaleWidth - 1);

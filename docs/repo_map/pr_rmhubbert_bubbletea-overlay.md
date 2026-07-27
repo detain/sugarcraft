@@ -59,6 +59,7 @@ From first-stage analysis:
 **Finding: Zero closed issues** — the issue tracker has never been used. All activity is PR-based.
 
 **Notable observation**: The community uses PRs to contribute rather than opening issues. This suggests:
+
 - The library is simple enough not to need issue discussions
 - OR users are resigned to Lipgloss v2 migration and not reporting problems
 
@@ -79,6 +80,7 @@ From first-stage analysis:
 | v0.3.0 | Center bias calculation was wrong | Bug |
 
 ### Analysis:
+
 1. **Offset/position interaction bugs** — The combination of X/Y positioning with X/Y offsets produced unexpected results. This is a classic API design flaw where two positioning systems interact in non-obvious ways.
 
 2. **Security bug** — Debug log file permissions were too permissive (likely 0777), revealing the maintainer's security awareness.
@@ -109,6 +111,7 @@ Contributor @Encephala explained:
 **Result**: Library relaxed from `tea.Model` constraint to `interface { View() string }`. This was the **only community feature request** and it was accepted.
 
 ### Feature Request Pattern Analysis:
+
 - **Zero feature requests** in issue tracker
 - **One PR-based feature request** — API relaxation for broader usability
 - **No requests for**: stacked overlays, animations, transparency, themes
@@ -200,6 +203,7 @@ However, the library's design shows extensibility constraints:
 - Fixed two-layer model
 
 **What users could not extend**:
+
 - Overlay stacking (multiple layers)
 - Animation transitions
 - Transparency effects
@@ -228,6 +232,7 @@ Only evidence of UX issues:
 - v0.5.1 bug fixes (offset/position confusion) — suggests confusing API
 
 **Observed API weaknesses**:
+
 1. **Offset behavior unclear**: Offsets added AFTER position calculation produces surprising results for Center position
 2. **tea.Model requirement too strict**: Prevented use by non-Bubble Tea applications
 3. **Update delegation surprising**: Users expect overlay to forward updates
@@ -245,11 +250,13 @@ However, the maintainer's Feb 2026 announcement signals a **looming migration pr
 > "v2 of Charm's Bubbletea & Lipgloss packages have now launched. Lipgloss v2 has compositing built in, so you should probably use that instead if you are using v2."
 
 **Migration path for bubbletea-overlay users**:
+
 1. Lipgloss v2 has `compositor.Compose(layers...).Render()`
 2. Layer-based API is more powerful (stacking, Z-order, mouse interaction)
 3. bubbletea-overlay users must rewrite overlay code
 
 **SugarCraft implication**: If SugarCraft builds overlay on top of Lipgloss v1 patterns, it will become obsolete when PHP TUI frameworks adopt similar built-in compositing. SugarCraft should either:
+
 - Target Lipgloss v2-equivalent functionality
 - Create framework-agnostic compositing that outlasts any specific framework version
 
@@ -268,6 +275,7 @@ if fg == bg return fg  // Optimization: no compositing needed
 ```
 
 **v0.3.0: Center bias fix**
+
 - Changed centering algorithm to bias toward top-left when dimensions are even
 - Integer division truncation was producing inconsistent centering
 - Documented in tests: "even×even → 2,3 (top-left bias in height)"
@@ -291,6 +299,7 @@ func clamp(v, lower, upper int) int {
 ```
 
 ### Community Workaround (inferred from PR #19):
+
 Users with non-standard TUI models that don't implement tea.Model literally created wrapper adapters:
 ```go
 type MyModel struct { ... }
@@ -328,6 +337,7 @@ func (m *Manager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 ```
 
 **Workaround characteristics**:
+
 - No automatic child update forwarding
 - Parent model manually coordinates child updates
 - Adds boilerplate but keeps overlay simple
@@ -339,6 +349,7 @@ func (m *Manager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 ## 16. Maintainer Guidance Patterns
 
 **Maintenance style observed**:
+
 1. **Conservative**: No new features post-v0.6.0
 2. **Security-conscious**: Fixed file permission bug promptly
 3. **Dependency-maintained**: Kept up with charmbracelet ecosystem via Dependabot
@@ -346,11 +357,13 @@ func (m *Manager) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 5. **Transparent**: Publicly announced when Lipgloss v2 superseded the library
 
 **Guidance philosophy**:
+
 - Responded to community contributions constructively
 - Suggested simplifications rather than just accepting PRs
 - Maintained comprehensive tests (644 lines in composite_test.go)
 
 **What maintainer refused**:
+
 - No features beyond v1 compatibility scope
 - No breaking changes during maintenance phase
 - No response to feature requests for animations/stacking

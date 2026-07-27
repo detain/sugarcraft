@@ -15,11 +15,13 @@ Four chart features:
 ## Files
 
 **Modify:**
+
 - `sugar-charts/src/Canvas/Graph.php` — `niceNumbers()` helper for
   tick labels.
 - `sugar-charts/src/LineChart.php` — `push()` + `withFill()`.
 
 **Create:**
+
 - `sugar-charts/src/MarkLine.php` (annotation type).
 
 ## Tests

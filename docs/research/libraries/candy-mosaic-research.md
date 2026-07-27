@@ -33,6 +33,7 @@
 | `ChafaRenderer` | External chafa CLI | ✅ | Varies | External |
 
 **Key Strengths:**
+
 - Clean `Renderer` interface with protocol-agnostic `render(ImageSource, width, height)` signature
 - Proper tmux passthrough via `TmuxPassthroughDecorator`
 - Comprehensive dithering (Floyd-Steinberg, Stucki, Atkinson)
@@ -40,6 +41,7 @@
 - Median-cut quantization for Sixel
 
 **Key Weaknesses:**
+
 - No animation/GIF support (all renderers produce static output)
 - No clear mechanism for image removal (especially Kitty's delete/transmit functionality)
 - Sixel RLE encoding may not be optimal (byte-aligned vs bit-aligned)
@@ -104,6 +106,7 @@ public static function probe(): Capability
 ```
 
 **Detection Method:**
+
 - **Kitty:** `KITTY_WINDOW_ID`, `TERM_PROGRAM=WezTerm`, `TERM=xterm-kitty`
 - **iTerm2:** `TERM_PROGRAM=iTerm.app|iTerm2`, `LC_TERMINAL=iTerm2`
 - **Sixel:** DA1 query (`\x1b[c`) looking for `;4;` or `;4c` in reply
@@ -152,6 +155,7 @@ public function render(ImageSource $image, int $width, ?int $height = null): str
 ```
 
 **Kitty Features NOT Implemented:**
+
 - Virtual images (upload once, place multiple times)
 - Z-index for layering
 - Compression (`f=1` zlib)
@@ -189,6 +193,7 @@ type Mosaic struct {
 ```
 
 **Key Features in Go upstream:**
+
 - 2x2 pixel block analysis for symbol selection
 - Multiple symbol sets: HalfBlocks, QuarterBlocks, ComplexBlocks
 - Floyd-Steinberg dithering
@@ -235,12 +240,14 @@ func (r *KittyRenderer) Render(img image.Image, opts RenderOptions) (string, err
 ```
 
 **Performance Benchmarks (go-termimg):**
+
 - Halfblocks: ~800µs (fastest, works everywhere)
 - Kitty: ~2.5ms (efficient, modern terminals)
 - iTerm2: ~2.5ms (fast, macOS)
 - Sixel: ~90ms (high quality, slower)
 
 **Key Advantage Over candy-mosaic:**
+
 - Native Go for Kitty/Sixel (no GD dependency)
 - Proper image deletion/clear mechanisms
 - Atomic image ID management for virtual images
@@ -253,6 +260,7 @@ func (r *KittyRenderer) Render(img image.Image, opts RenderOptions) (string, err
 **Purpose:** `ls` for images - displays thumbnails in terminal
 
 **Approach:**
+
 - Uses ImageMagick `convert` for all format conversions
 - Outputs Sixel directly via `convert -gravity south -background black -extent 0x0 ... sixel:-`
 - Fallback to Chafa if Sixel unavailable
@@ -272,6 +280,7 @@ func (r *KittyRenderer) Render(img image.Image, opts RenderOptions) (string, err
 **The reference terminal graphics library.** All other implementations are compared to chafa.
 
 **Features:**
+
 - SIMD-optimized (x86, ARM)
 - Multithreaded
 - Symbol ranges: Half blocks, quarter blocks, braille, box-drawing
@@ -333,6 +342,7 @@ impl Picker {
 **Purpose:** Terminal image viewer (used by viu command)
 
 **Features:**
+
 - Default: Lower half-blocks (▄)
 - Kitty, iTerm2, Sixel (via feature flags)
 - Animated GIF support
@@ -406,7 +416,9 @@ pub fn encode(img: &DynamicImage, opts: &EncodeOptions) -> Result<Vec<u8>, Error
 **Approach:** Pure Python, PIL/Pillow-based ASCII art generation
 
 ```python
+
 # Core algorithm
+
 def get_ansi_color(r, g, b):
     # Map RGB to nearest ANSI 256 color
     ansi = 16 + (r//43)*36 + (g//43)*6 + (b//43)
@@ -427,6 +439,7 @@ def generate_ANSI_from_pixels(pixels, width, height, bgcolor):
 ```
 
 **Features:**
+
 - `--ansi` for ANSI colored output
 - `--color` for HTML with colored spans
 - `--dither` for Floyd-Steinberg-like dithering to 256-color palette
@@ -434,6 +447,7 @@ def generate_ANSI_from_pixels(pixels, width, height, bgcolor):
 - `--antialias` for smooth resize
 
 **Limitations:**
+
 - ASCII only (no block characters)
 - No truecolor SGR (only 256-color ANSI)
 - No Sixel/Kitty/iTerm2 protocols
@@ -453,6 +467,7 @@ print(ascii_img)
 ```
 
 **Features:**
+
 - Configurable character set: `chars = r" ░▒▓█"`
 - Bright mode (bold characters)
 - Reverse intensity
@@ -471,10 +486,12 @@ print(ascii_img)
 from PIL import Image
 
 # Resize with antialiasing
+
 img = Image.open('photo.jpg')
 img = img.resize((width, height), Image.LANCZOS)
 
 # Extract pixels
+
 pixels = img.load()
 width, height = img.size
 

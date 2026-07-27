@@ -1,6 +1,7 @@
 # charmbracelet/fantasy
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/fantasy
 - **Language:** Go
 - **Stars:** 774
@@ -25,11 +26,13 @@
 ## Key Classes and Methods
 
 ### Core Interfaces
+
 - **`Agent`:** `Generate(ctx, AgentCall)`, `Stream(ctx, AgentStreamCall)` — Main agent interface
 - **`LanguageModel`:** `Generate(ctx, Call)`, `Stream(ctx, Call)`, `GenerateObject(ctx, ObjectCall)`, `StreamObject(ctx, ObjectCall)`, `Provider()`, `Model()`
 - **`Provider`:** `Name()`, `LanguageModel(ctx, modelID)` — Abstract factory for language models
 
 ### Agent Configuration
+
 - **`NewAgent(model, ...AgentOption)`** — Creates agent with model and options
 - **`WithSystemPrompt(string)`** — Set system prompt
 - **`WithTools(...AgentTool)`** — Register tools
@@ -37,32 +40,38 @@
 - **`WithMaxRetries(int)`**, **`WithTemperature(float64)`**, etc. — Standard LLM options
 
 ### Tool System
+
 - **`NewAgentTool[T any](name, description, fn)`** — Creates typed tool from function
 - **`NewParallelAgentTool[T any](name, description, fn)`** — Creates tool with parallel execution
 - **`AgentTool`** interface: `Info() ToolInfo`, `Run(ctx, ToolCall) ToolResponse`
 
 ### Content Types
+
 - **`TextContent`**, **`ReasoningContent`**, **`FileContent`**, **`ToolCallContent`**, **`ToolResultContent`**, **`SourceContent`**
 - **`ResponseContent`** methods: `Text()`, `Reasoning()`, `ReasoningText()`, `Files()`, `Sources()`, `ToolCalls()`, `ToolResults()`
 
 ### Structured Outputs (`object` package)
+
 - **`object.Generate[T any](ctx, model, ObjectCall)`** — Generate typed object
 - **`object.Stream[T any](ctx, model, ObjectCall)`** — Stream typed object with progressive updates
 - **`StreamObjectResult[T].PartialObjectStream()`** — Progressive object updates iterator
 - **`StreamObjectResult[T].Object()`** — Wait for final typed result
 
 ### Schema (`schema` package)
+
 - **`schema.Generate(reflect.Type)`** — Generate JSON schema from Go type
 - **`schema.ParsePartialJSON(text)`** — Parse potentially incomplete JSON with repair
 - **`schema.ValidateAgainstSchema(obj, schema)`** — Validate parsed object
 - **`schema.Normalize(map[string]any)`** — Normalize schema for providers that reject type-arrays
 
 ### Retry (`retry.go`)
+
 - **`RetryWithExponentialBackoffRespectingRetryHeaders[T](options)`** — Returns `RetryFunction[T]`
 - **`RetryOptions`:** `MaxRetries`, `InitialDelayIn`, `BackoffFactor`, `OnRetry`
 - **`DefaultRetryOptions()`** — Returns defaults: 2 retries, 2s initial, 2x factor
 
 ### Error Types
+
 - **`Error`** — Core error with Title/Message/Cause
 - **`ProviderError`** — Provider errors with `IsRetryable()`, `IsContextTooLarge()`
 - **`RetryError`** — Wraps multiple retry errors
@@ -71,6 +80,7 @@
 ## Notable Algorithms / Named Patterns
 
 ### Exponential Backoff with Header Respect
+
 ```go
 // From retry.go:L18-53
 func getRetryDelayInMs(err error, exponentialBackoffDelay time.Duration) time.Duration {
@@ -80,6 +90,7 @@ func getRetryDelayInMs(err error, exponentialBackoffDelay time.Duration) time.Du
 ```
 
 ### Tool Call Validation & Repair Pattern
+
 ```go
 // From agent.go:L1026-1052
 func (a *agent) validateAndRepairToolCall(ctx, toolCall, availableTools, ...) {
@@ -100,6 +111,7 @@ func (a *agent) validateAndRepairToolCall(ctx, toolCall, availableTools, ...) {
 ```
 
 ### JSON Schema Generation from Go Types
+
 ```go
 // From schema/schema.go:L77-180
 // Reflects on struct fields, uses json/description/enum tags
@@ -108,6 +120,7 @@ func (a *agent) validateAndRepairToolCall(ctx, toolCall, availableTools, ...) {
 ```
 
 ### Agent Loop with Multi-Step Tool Execution
+
 ```go
 // From agent.go:L384-541 (Generate method)
 // 1. Create step input messages (system + history)
@@ -120,6 +133,7 @@ func (a *agent) validateAndRepairToolCall(ctx, toolCall, availableTools, ...) {
 ```
 
 ### Parallel Tool Execution with Semaphore
+
 ```go
 // From agent.go:L1540-1575
 parallelSem := make(chan struct{}, 5)  // Max 5 concurrent

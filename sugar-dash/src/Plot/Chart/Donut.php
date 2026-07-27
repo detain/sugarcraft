@@ -250,7 +250,8 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
     {
         $segmentAngle = 360.0 / $total;
 
-        for ($i = 0; $i < count($this->segments); $i++) {
+        $segmentCount = count($this->segments);
+        for ($i = 0; $i < $segmentCount; $i++) {
             $segmentValue = $this->segments[$i]['value'];
             $segmentSpan = $segmentValue * $segmentAngle;
 

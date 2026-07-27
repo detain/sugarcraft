@@ -9,6 +9,7 @@
 **Ecosystem Position**: sugar-dash is the flagship dashboard/TUI composition library of SugarCraft, sitting at the application layer above candy-core (runtime), candy-sprinkles (styling), and candy-vt (terminal emulation).
 
 ### Biggest Opportunity Areas
+
 1. **Constraint-based layout** — Ratatui-style `Constraint::Min()/Max()/Length()/Percentage()/Ratio()/Fill()` enum system for declarative, composable sizing
 2. **StatefulWidget separation** — External state objects (`TableState`, `ListState`, etc.) for testability and decoupling
 3. **Reactive properties** — Declarative reactive state with automatic watcher injection (Textual pattern)
@@ -16,6 +17,7 @@
 5. **Plugin/events UX** — Better event system for component interaction
 
 ### Biggest Missing Capabilities
+
 1. No constraint enum system — current `Constraint` class handles Fixed/Flex/Fit only
 2. No reactive/stateful widget pattern — components are pure render-only
 3. No buffer diffing — full re-render on every frame
@@ -29,6 +31,7 @@
 ### Current Architecture
 
 **Grid System** (StackedGrid):
+
 - Multi-column stacked grid with items in columns, vertical stacking within columns
 - `expandVertical` flag for filling remaining space
 - Responsive breakpoint collapse at 90 cells (narrow terminal)
@@ -36,6 +39,7 @@
 - Height allocation: floor division with remainder distributed to last expanding item
 
 **Layout Containers**: 8 distinct layout strategies
+
 - `StackedGrid` — column-based dashboard layout
 - `HStack`/`VStack`/`ZStack` — stack layouts with alignment/spacing
 - `FlexLayout` — CSS Flexbox-inspired with direction/wrap/justify/align
@@ -45,6 +49,7 @@
 - `Split` — two-pane split view
 
 **Component Library**: 200+ components across 13 namespaces
+
 - Foundation (Item, Sizer, Drawable, Rect, Buffer, Cell, Style, Theme)
 - Layout (Frame, Panel, BoxDrawing, Spacer, Shadow, etc.)
 - Components (Modal, Select, Toast, Tabs, StatusBar, Form, Feedback, Nav, Card, Calendar, Tree, Table)
@@ -55,12 +60,14 @@
 - Plugin (JSON-based plugin protocol with Request/Response/PluginSdk/ExternalModule)
 
 ### Current Rendering Systems
+
 - **Item/Sizer pattern**: Components implement `Item::render(): string` or `Sizer extends Item` with `setSize()`
 - **Screen management**: Enter/leave alternate screen, cursor control, mouse tracking, screen clear
 - **Immutable patterns**: All components use `with*()` withers returning new instances
 - **Theme fan-down**: `Drawable::withTheme()` recursively applies theme to children
 
 ### Strengths
+
 1. Comprehensive layout system with 8 distinct layout strategies
 2. Immutable patterns with readonly properties and wither methods
 3. Constraint-based layout via Tile/Constraint system from tealeaves
@@ -73,6 +80,7 @@
 10. Dual-SSOT awareness documented (distinct primitives from candy-sprinkles/candy-core/candy-vt)
 
 ### Weaknesses
+
 1. Components are pure render-only — no built-in state management beyond withers
 2. No constraint enum system (Ratatui-style Min/Max/Length/Percentage/Ratio/Fill)
 3. No buffer diffing — full re-render every frame
@@ -107,6 +115,7 @@
 ### Critical Priority
 
 #### 1. Constraint Enum System (Ratatui-style)
+
 **Title**: Constraint-based layout with declarative sizing enums
 
 **Description**: sugar-dash's current `Tile/Constraint` system handles `Fixed`, `Flex`, and `Fit` only. Ratatui provides a richer `Constraint` enum with `Length()`, `Percentage()`, `Ratio()`, `Fill()`, `Min()`, `Max()` for more expressive, composable layout constraints.
@@ -130,6 +139,7 @@ Constraint::min(int) / Constraint::max(int)  // Bounded
 ```
 
 **Implementation ideas**:
+
 - Create new `Constraint` enum with cases: `Length(int)`, `Percentage(int)`, `Ratio(int, int)`, `Fill(?int)`, `Min(int)`, `Max(int)`
 - Update `Layout` to use new Constraint enum
 - Potentially integrate Cassowary solver from `php-tui/cassowary` for complex multi-constraint layouts
@@ -141,6 +151,7 @@ Constraint::min(int) / Constraint::max(int)  // Bounded
 ---
 
 #### 2. StatefulWidget Separation
+
 **Title**: External state objects for widget state management
 
 **Description**: Components like Tabs, List, Table mix state and rendering. External state objects (`TabsState`, `TableState`, `ListState`) would improve testability and allow multiple views of the same data.
@@ -157,13 +168,16 @@ ScrollbarState: position(), scroll_amount()
 
 **Source**: `docs/repo_map/textualize_textual.md`:
 ```python
+
 # Reactive state descriptor
+
 numbers = var("0")  # Reactive state
 def watch_numbers(self, value: str) -> None:  # Watcher
     self.query_one("#numbers", Digits).update(value)
 ```
 
 **Implementation ideas**:
+
 - Create `TabsState` class with `selectedIndex`, `withSelectedIndex()` 
 - Create `TableState` class with `scrollOffset`, `selectedRow`, `sortColumns`
 - Update Tabs/Table constructors to accept state objects
@@ -176,6 +190,7 @@ def watch_numbers(self, value: str) -> None:  # Watcher
 ---
 
 #### 3. Buffer Diffing / Incremental Rendering
+
 **Title**: Only redraw changed cells instead of full re-render
 
 **Description**: sugar-dash re-renders everything on every frame. Ratatui uses buffer diffing to compute minimal cell changes and only write those to the terminal.
@@ -196,6 +211,7 @@ BufferUpdates: Collection of BufferUpdate (position + cell)
 ```
 
 **Implementation ideas**:
+
 - Add `Buffer::diff(Buffer): array<array{pos: [int,int], cell: Cell}>` method
 - Track previous buffer in `Screen` or `Program`
 - Only write changed cells on render
@@ -209,6 +225,7 @@ BufferUpdates: Collection of BufferUpdate (position + cell)
 ### High Value
 
 #### 4. Reactive Properties with Watchers
+
 **Title**: Declarative reactive state with automatic UI updates
 
 **Description**: Textual-style reactive properties that automatically trigger re-renders when values change, with watcher hooks for side effects.
@@ -225,6 +242,7 @@ class CalculatorApp(App):
 ```
 
 **Implementation ideas**:
+
 - Create `Reactive<T>` descriptor class
 - Add `watch_` method convention for reactive property watchers
 - Integrate with `BaseModule::withState()` pattern
@@ -236,6 +254,7 @@ class CalculatorApp(App):
 ---
 
 #### 5. Block Wrapper Component
+
 **Title**: DRY up border/padding/title rendering across Frame, Panel, Card
 
 **Description**: Ratatui-style `Block` component that Frame, Panel, Card all reinvent separately. A unified Block wrapper with title, border, padding, and inner getter would eliminate duplication.
@@ -249,6 +268,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 ```
 
 **Implementation ideas**:
+
 - Create `Block` class with title, border style, padding, and inner area calculation
 - Update Frame, Panel, Card to use Block internally
 - Expose `inner()` method for content area dimensions
@@ -260,6 +280,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 ---
 
 #### 6. Component Lifecycle Hooks
+
 **Title**: Mount/unmount hooks for initialization/cleanup
 
 **Description**: No current lifecycle for components. Add `mount()` and `unmount()` hooks called when components are added/removed from the tree.
@@ -267,6 +288,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 **Why it matters**: Enables proper resource acquisition/release (e.g., closing file handles, stopping timers).
 
 **Implementation ideas**:
+
 - Add `Component` interface with `mount(): void`, `unmount(): void`
 - Call hooks in parent component's render/layout cycle
 
@@ -279,6 +301,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 ### Medium Priority
 
 #### 7. Bubble Sort Replacement in Table
+
 **Title**: Replace bubble sort with efficient PHP sorting
 
 **Description**: Table sorting uses bubble sort (O(n²)) — should use PHP's built-in `usort` or `array_multisort`.
@@ -287,6 +310,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 > bubble sort implementation... replace with quicksort/mergesort in PHP port for large datasets
 
 **Implementation ideas**:
+
 - Replace bubble sort with `usort($rows, fn($a, $b) => $a['col'] <=> $b['col'])`
 - Add stable sort support for multi-column sorting
 
@@ -297,6 +321,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 ---
 
 #### 8. Gap Distribution (space-around/space-evenly)
+
 **Title**: Complete FlexLayout gap distribution algorithms
 
 **Description**: FlexLayout's `SpaceAround` and `SpaceEvenly` implementations are noted as "simplified/stubbed" in the mapping.
@@ -304,6 +329,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 **Source**: `docs/repo_map/sugarcraft_sugar-dash.md` — architectural gaps
 
 **Implementation ideas**:
+
 - `SpaceEvenly`: `(totalGapWidth - totalContentWidth) / (itemCount + 1)` per gap
 - `SpaceAround`: `(totalGapWidth - totalContentWidth) / itemCount / 2` per side
 
@@ -314,6 +340,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 ---
 
 #### 9. ContentGenerator Pattern (stickers)
+
 **Title**: Per-cell adaptive content via closures
 
 **Description**: stickers' `Cell.SetContentGenerator(func(maxX, maxY int) string)` allows cell content to adapt to available dimensions. sugar-dash doesn't have this.
@@ -322,6 +349,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 > Cell content can adapt to available dimensions (`maxX`, `maxY`), enabling text truncation/wrapping without pre-measuring
 
 **Implementation ideas**:
+
 - Add `Cell::withContentGenerator(callable(int $maxX, int $maxY): string)` method
 - Call generator during render with allocated dimensions
 
@@ -334,6 +362,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 ### Low Priority
 
 #### 10. Streaming Data Support
+
 **Title**: Append-mode updates for streaming data
 
 **Description**: bubble-grid supports append mode for streaming data; sugar-dash does not.
@@ -347,6 +376,7 @@ padding(), border_type(), border_style(), inner(), style(), shadow()
 ---
 
 #### 11. Composition Generator Interface
+
 **Title**: `compose()` generator for declarative child declaration
 
 **Description**: Textual uses `compose()` method yielding widgets. sugar-dash lacks this pattern.
@@ -380,6 +410,7 @@ class CalculatorApp(App):
 | **Layout algorithm** | Custom flex-weight | Cassowary constraint solver | Handles complex constraints | External dependency |
 
 ### Applicability to sugar-dash
+
 - **Buffer diffing**: Highly applicable — would improve performance for live dashboards
 - **Constraint enum**: Highly applicable — improves layout API expressiveness
 - **ContentGenerator**: Applicabale — enables adaptive cell content
@@ -390,18 +421,22 @@ class CalculatorApp(App):
 ## Architecture Improvements
 
 ### 1. Widget/StatefulWidget Trait Pattern
+
 Ratatui's `Widget` and `StatefulWidget` traits provide clean contracts for custom widget development. sugar-dash should adopt a similar marker interface pattern.
 
 **Current**: Components just implement `Item` or `Sizer`
 **Proposed**: Add `Widget` marker interface, `StatefulWidget` for components with state
 
 ### 2. Extension/Plugin Architecture
+
 php-tui's `DisplayExtension` interface allows adding widget renderers without modifying core. sugar-dash's plugin system is JSON-based binary communication; a PHP-level extension system would be more ergonomic.
 
 ### 3. Visitor Pattern for Widget Rendering
+
 php-tui uses visitor pattern: `WidgetRenderer::render(WidgetRenderer, Widget, Buffer, Area)`. Allows nested widget rendering (List containing Paragraphs).
 
 ### 4. Compositor Double-Buffering
+
 Textual's compositor renders widgets to strips, composites with control sequences, and only updates dirty regions. sugar-dash could adopt incremental rendering.
 
 ---
@@ -409,6 +444,7 @@ Textual's compositor renders widgets to strips, composites with control sequence
 ## API / Developer Experience Improvements
 
 ### 1. Constraint Enum Declarative API
+
 ```php
 // Current verbose approach
 $layout = new Layout([
@@ -427,14 +463,17 @@ $layout = Layout::vertical([
 ```
 
 ### 2. Builder Pattern for Components
+
 Many components already use fluent withers; standardize across all 200+ components with consistent naming.
 
 ### 3. Consistent Factory Methods
+
 - `::new()` default everywhere
 - `::ansistr` for ANSI string parsing
 - `Theme::tokyoNight()`, `Theme::dracula()` presets
 
 ### 4. Type-Safe Events
+
 Current events are loosely typed. Ratatui-style strongly typed event payloads improve IDE support.
 
 ---
@@ -442,17 +481,21 @@ Current events are loosely typed. Ratatui-style strongly typed event payloads im
 ## Documentation / Cookbook Opportunities
 
 ### 1. Layout Algorithm Deep Dive
+
 Document the 5-phase constraint resolution algorithm in TileLayout with visual examples.
 
 ### 2. Component Composition Patterns
+
 Show how to compose StackedGrid + Frame + VStack + components into dashboards.
 
 ### 3. Performance Cookbook
+
 - When to use each layout type
 - Buffer diffing for live data
 - Lazy rendering strategies
 
 ### 4. Migration Guide from bubble-grid
+
 Document differences from Go bubble-grid for developers coming from that ecosystem.
 
 ---
@@ -460,15 +503,19 @@ Document differences from Go bubble-grid for developers coming from that ecosyst
 ## UX / TUI Improvements
 
 ### 1. Synchronized Output (ANSI 2026)
+
 bubble-tea supports synchronized output mode for flicker-free updates on supported terminals (Windows Terminal, ghostty, wezterm, alacritty, kitty, rio).
 
 ### 2. Kitty Keyboard Protocol
+
 Full key repeat detection, modifier support, alternate key values.
 
 ### 3. Better Focus Management
+
 Ratatui has no built-in focus system — sugar-dash could excel here with a built-in FocusManager.
 
 ### 4. Terminal Background Detection
+
 lipgloss's `HasDarkBackground()` queries terminal via OSC 11 for adaptive theming.
 
 ---
@@ -476,19 +523,25 @@ lipgloss's `HasDarkBackground()` queries terminal via OSC 11 for adaptive themin
 ## Testing / Reliability Improvements
 
 ### 1. Snapshot Testing Expansion
+
 Current snapshot testing covers rendering output. Expand to:
+
 - Layout algorithm outputs at various terminal sizes
 - Constraint resolution at edge cases
 - Responsive breakpoint transitions
 
 ### 2. Property-Based Testing
+
 Use `phpunit/phpunit` `@dataProvider` with edge case inputs (0, -1, max int, empty collections).
 
 ### 3. Golden File Tests
+
 Establish golden file test suite for all 40+ VHS demos to catch regression.
 
 ### 4. Fuzz Testing
+
 Like bubble-table's fuzz tests for scrolling, add fuzz tests for:
+
 - Layout with extreme constraint values
 - Chart rendering with NaN/Inf values
 - Unicode edge cases
@@ -498,15 +551,19 @@ Like bubble-table's fuzz tests for scrolling, add fuzz tests for:
 ## Ecosystem / Integration Opportunities
 
 ### 1. MCP Server Integration
+
 Build MCP server exposing sugar-dash components as tools for AI agents to generate TUIs.
 
 ### 2. Integration with sugar-charts
+
 Charts and dashboards naturally compose — ensure seamless integration.
 
 ### 3. Integration with sugar-prompt
+
 Form inputs (Textarea, Select, etc.) should integrate with dashboard layouts.
 
 ### 4. VS Code Extension
+
 TUI preview extension that renders sugar-dash output in a terminal panel.
 
 ---
@@ -514,6 +571,7 @@ TUI preview extension that renders sugar-dash output in a terminal panel.
 ## Notable PRs / Issues / Discussions
 
 ### 1. bubble-tea ANSI 2026 Synchronized Output
+
 **Source**: `docs/repo_map/charmbracelet_bubbletea.md`
 
 > The default renderer (cursedRenderer) uses uv.TerminalRenderer for actual rendering with synchronized output mode (ANSI 2026) for flicker-free updates
@@ -521,6 +579,7 @@ TUI preview extension that renders sugar-dash output in a terminal panel.
 **Lesson**: Synchronized output is a simple addition that dramatically improves visual quality on supported terminals.
 
 ### 2. ratatui Layout Constraint Solver
+
 **Source**: `docs/repo_map/ratatui_ratatui.md`
 
 > The layout system uses the Cassowary constraint solver algorithm (via the kasuari crate) to resolve conflicting layout constraints
@@ -528,6 +587,7 @@ TUI preview extension that renders sugar-dash output in a terminal panel.
 **Lesson**: For complex responsive layouts, a proper constraint solver handles edge cases better than hand-rolled algorithms.
 
 ### 3. stickers Ratio-based Layout
+
 **Source**: `docs/repo_map/76creates_stickers.md`
 
 > The core layout algorithm distributes available space (width or height) across cells/rows/columns using integer ratios
@@ -535,6 +595,7 @@ TUI preview extension that renders sugar-dash output in a terminal panel.
 **Lesson**: Ratio-based sizing with minimum constraints is simpler than Cassowary for common cases and sufficient for most dashboards.
 
 ### 4. bubble-table Style Precedence
+
 **Source**: `docs/repo_map/Evertras_bubble-table.md`
 
 > rowStyle.Inherit(column.style).Inherit(baseStyle) — cell most specific, base least
@@ -542,6 +603,7 @@ TUI preview extension that renders sugar-dash output in a terminal panel.
 **Lesson**: Layered style precedence is intuitive and powerful for data-driven styling.
 
 ### 5. php-tui Widget Extension Architecture
+
 **Source**: `docs/repo_map/php-tui_php-tui.md`
 
 > The DisplayExtension interface allows adding widget renderers and shape painters without modifying core code
@@ -553,24 +615,28 @@ TUI preview extension that renders sugar-dash output in a terminal panel.
 ## Recommended Roadmap
 
 ### Immediate Wins (0-3 months)
+
 1. **Replace bubble sort with `usort`** in Table — trivial, immediate performance gain
 2. **Complete gap distribution** (space-around/space-evenly) — medium effort, improves flexbox parity
 3. **Add ContentGenerator pattern** to cells — enables adaptive content
 4. **Expand snapshot tests** for layout algorithms
 
 ### Medium-Term (3-6 months)
+
 1. **Constraint enum system** (Ratatui-style) — significant API improvement
 2. **StatefulWidget separation** — improves testability
 3. **Buffer diffing** — performance improvement for live dashboards
 4. **Block wrapper component** — DRY up border rendering
 
 ### Major Architectural (6-12 months)
+
 1. **Reactive properties with watchers** — reduces boilerplate
 2. **Component lifecycle hooks** — proper mount/unmount
 3. **Synchronized output support** (ANSI 2026) — visual quality
 4. **Cassowary constraint solver integration** — complex responsive layouts
 
 ### Experimental
+
 1. **MCP server** exposing TUI components as AI tools
 2. **TCSS (Textual CSS)** styling — familiar to web developers
 3. **Web-based TUI rendering** — serve dashboards in browser
@@ -602,12 +668,14 @@ TUI preview extension that renders sugar-dash output in a terminal panel.
 sugar-dash is a **mature, comprehensive TUI dashboard library** that successfully ports multiple Go TUI patterns to PHP. Its primary strength is **breadth** — over 200 components across 13 namespaces — while maintaining consistent patterns for sizing, theming, and event handling. The StackedGrid system derived from bubble-grid provides intuitive column-based dashboard layout, while various stack implementations (H/V/Z) offer flexible composition. The Tile/Constraint system from tealeaves enables sophisticated constraint-based sizing.
 
 **Key differentiators from external repos**:
+
 - More component types than any single external library
 - Immutable patterns throughout (readonly + wither)
 - Dual-SSOT awareness prevents confusion with same-named types in other SugarCraft libs
 - Comprehensive VHS demo library (40+ demos)
 
 **Critical gaps vs Ratatui/Textual**:
+
 1. No constraint enum system for declarative layout
 2. No buffer diffing for incremental rendering
 3. No reactive state with automatic watcher injection

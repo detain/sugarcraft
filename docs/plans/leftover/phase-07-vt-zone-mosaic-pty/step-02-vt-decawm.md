@@ -12,6 +12,7 @@ disabled, characters overwrite the rightmost column.
 ## Files
 
 **Modify:**
+
 - `candy-vt/src/Mode/Mode.php` — add `bool $autoWrap` field with
   `withAutoWrap(bool): self` immutable wither.
 - `candy-vt/src/Handler/ScreenHandler.php` — character-write path

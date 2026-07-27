@@ -1,6 +1,7 @@
 # Second-Stage Ecosystem Intelligence: charmbracelet/ultraviolet
 
 ## Metadata
+
 - **URL**: https://github.com/charmbracelet/ultraviolet
 - **Language**: Go
 - **Stars**: ~330
@@ -17,6 +18,7 @@
 Ultraviolet is the foundational TUI primitive layer for the Charmbracelet ecosystem, powering Bubble Tea v2 and Lip Gloss v2. It provides cell-based rendering, cross-platform input handling, and a diffing terminal renderer — all without terminfo/termcap dependencies. The library is in active development with a rapidly evolving API; the README removed its "API stability" disclaimer in April 2026, signaling confidence but also volatility.
 
 The codebase is organized around:
+
 - `Terminal` / `TerminalScreen` — lifecycle, I/O, screen management
 - `Buffer` / `RenderBuffer` / `Line` / `Cell` — cell grid and diffing
 - `Window` — parent/child view hierarchy
@@ -68,18 +70,21 @@ The first-pass analysis identified these gaps in SugarCraft's coverage:
 ## 4. High-Signal Open Issues
 
 ### Issue #95: "drawing styled strings onto a buffer loses escape sequences"
+
 - **Author**: gwenya (Mar 2, 2026)
 - **Signal**: Bug report, moderate community interest
 - **Content**: When drawing styled strings onto a Buffer, escape sequences are lost. This is a fundamental API design issue about how styled text interacts with the cell buffer model.
 - **Relevance to SugarCraft**: Directly applicable to `sugar-bits` if it implements `StyledString.Draw(buf, area)`. Must ensure escape sequences survive cell buffer round-trips.
 
 ### Issue #61: "Renderer does not correctly transform newlines into CRLF in some cases"
+
 - **Author**: kralicky (Nov 18, 2025)
 - **Signal**: Bug with active discussion
 - **Content**: The renderer fails to properly handle `\n` → CRLF transformation in certain edge cases. The `SetMapNewline` flag exists but may not be fully implemented.
 - **Relevance to SugarCraft**: Cross-platform line-ending handling is a common pitfall. SugarCraft's renderer must correctly handle both Unix (`\n`) and Windows (`\r\n`) line endings.
 
 ### Issue #54: "Testing that's sort of like playwright"
+
 - **Author**: joeblew999 (Oct 17, 2025)
 - **Signal**: Feature request, moderate interest
 - **Content**: Request for a higher-level testing abstraction over the renderer output tests. Not about renderer bugs, but about developer ergonomics for testing TUI output.
@@ -90,20 +95,24 @@ The first-pass analysis identified these gaps in SugarCraft's coverage:
 ## 5. Important Closed Issues
 
 ### Issue #97: printString infinite recursion / stack overflow (1 fps rendering)
+
 - **Root Cause**: Infinite loop in renderer when parsing certain styled strings — same class of bug as the `transformLine` IsZero loop (#109). This and the wide-char infinite loop (#109) represent a **recurring pattern** where buffer-traversal loops fail to re-read buffer state inside the loop.
 - **Fix**: Various commits addressed this; maintainer noted it as related to #109
 - **Signal**: This is a **high-value detection** — infinite loops in renderer hot paths are catastrophic (CPU spin, 1 fps, process hang). SugarCraft must add timeout-based tests for any renderer loop.
 
 ### Issue #1167 (in bubbletea, closed): Windows: first character input lost on successive programs
+
 - **Root Cause**: `CancelIo` doesn't cancel I/O across threads on Windows. Need `CancelIoEx`. Also: Windows Console input cancellation is fundamentally broken per microsoft/terminal#12143.
 - **Signal**: Windows input handling is the most fragile part of the Charm stack. Ultraviolet's `terminal_reader_windows.go` is where this lives. SugarCraft's Windows input handling will face identical issues.
 - **Fix**: PRs in x/input and bubbletea addressed this, but the fundamental Windows limitation remains.
 
 ### Issue #845/#847/#851 (in crush, closed): Windows non-win32 terminal bugs
+
 - **Root Cause**: Ultraviolet's Windows input code assumed win32 console API was available. Terminals like Alacritty and Rio on Windows don't use the Windows Console — they emulate xterm. The code path that forces win32 input-mode broke these.
 - **Signal**: **Critical cross-platform assumption violation**. SugarCraft must detect whether it's running in a native Windows console vs. a terminal emulator on Windows and behave differently.
 
 ### Issue #1613 (in bubbletea, closed): cursor misplaced in inline mode with Println
+
 - **Root Cause**: `scrollHeight` tracking hack in the renderer was incorrect when ESC L (insert line) sequence was used. The hack maintained scroll position state across renders but it was never properly updated.
 - **Fix**: Removed the scroll height tracking hack entirely; simplified cursor movement logic.
 - **Signal**: **Inline mode is underspecified** — the renderer was built primarily for fullscreen (alternate screen) mode. Inline mode (preserving terminal scrollback) has different invariants and was being retrofitted.
@@ -113,6 +122,7 @@ The first-pass analysis identified these gaps in SugarCraft's coverage:
 ## 6. Recurring Pain Points
 
 ### 6.1 Wide Character Rendering (CJ K/Emoji)
+
 This is the **highest-frequency recurring bug** in the UV issue tracker:
 
 1. **#109** (merged Apr 2026): Infinite loop in `transformLine` — forward-scanning loop reads `next` once before loop, never re-reads inside loop body. Classic off-by-one pointer bug.
@@ -121,6 +131,7 @@ This is the **highest-frequency recurring bug** in the UV issue tracker:
 4. **#93**: The `chars.go` PR explicitly handles wide chars in `Characters()` and `Lines()` functions using grapheme cluster awareness.
 
 **Pattern**: Wide characters expose the assumption that every cell is exactly 1 column wide. Any optimization that iterates cells column-by-column can break wide characters. The fix pattern is either:
+
 - Detect wide chars and bypass ALL optimizations (safe but slow)
 - Make each optimization wide-char-aware (complex, error-prone)
 
@@ -129,6 +140,7 @@ Maintainer position: "These optimizations don't fire on wide cells" — but the 
 **Direct Risk to SugarCraft**: CRITICAL. The `candy-core` renderer will implement cell-grid diffing. Any loop over cells that doesn't re-read buffer state on each iteration risks an infinite loop. Wide characters (CJK, emoji) must be treated as first-class concerns from day one.
 
 ### 6.2 Inline Mode Complexity
+
 The inline mode (non-fullscreen) renderer has required multiple corrective commits:
 - `fix(renderer): remove scroll height tracking hack` (Apr 2026)
 - `fix(renderer): move to the last line in inline mode when the width or height changes` (Apr 2026)
@@ -137,6 +149,7 @@ The inline mode (non-fullscreen) renderer has required multiple corrective commi
 **Signal**: Inline mode requires different cursor movement and scroll handling than fullscreen mode. The renderer had accumulated heuristics (scrollHeight) that didn't compose correctly. SugarCraft should decide early whether to support inline mode and design for it explicitly.
 
 ### 6.3 Windows Input Complexity
+
 Windows input handling is the most platform-specific and bug-prone subsystem:
 - Win32 Console API vs. xterm emulation on Windows terminals
 - VT input mode (ENABLE_VIRTUAL_TERMINAL_INPUT) not supported on Windows 7
@@ -149,6 +162,7 @@ Windows input handling is the most platform-specific and bug-prone subsystem:
 **Direct Risk to SugarCraft**: HIGH. SugarCraft's `candy-core` will need Windows support. The Windows input path should be minimal and well-tested, or potentially deferred.
 
 ### 6.4 StreamEvents Goroutine Race
+
 **#94** (merged Mar 2026): `StreamEvents()` returns without waiting for its internal goroutine when context is cancelled. Race condition between `cancelreader.Close()` and `cancelreader.wait()`.
 
 **Root Cause**: Classic goroutine lifecycle management bug — spawn goroutine, return immediately on cancellation, don't join.
@@ -162,6 +176,7 @@ Windows input handling is the most platform-specific and bug-prone subsystem:
 ## 7. Frequently Requested Features
 
 ### 7.1 Expanding the Screen Interface
+
 **Discussion** (jaypipes, Feb 2026, Ideas category): Request to extend the `Screen` interface beyond the minimal 4 methods (`Bounds`, `CellAt`, `SetCell`, `WidthMethod`).
 
 **Maintainer response**: Open to discussion but API must remain minimal. The Screen interface is intentionally small — any addition must be truly fundamental.
@@ -169,6 +184,7 @@ Windows input handling is the most platform-specific and bug-prone subsystem:
 **Implication for SugarCraft**: The Screen interface is the right abstraction level. SugarCraft should mirror this minimalism. Adding methods to Screen should require strong justification.
 
 ### 7.2 Character Cells and Line Wrapping (PR #93, open)
+
 The `chars.go` PR (1020 lines added) introduces:
 - `Characters()` — construct []Cell from string with grapheme cluster awareness
 - `Lines()` — construct []Line from string
@@ -179,9 +195,11 @@ This is the most substantial API addition in recent history. It directly address
 **Relevance to SugarCraft**: If SugarCraft adds similar functionality to `sugar-bits`, the API should be compared. The UV approach uses factory methods and a `Wrapper` struct. SugarCraft might prefer a different API style (fluent setters, etc.).
 
 ### 7.3 Kitty Text-Sizing Protocol (PR #108, closed)
+
 Added OSC 66 support to `StyledString` for multi-cell scaled glyphs in Kitty terminals.
 
 **Engineering complexity**: This involved:
+
 - Recognizing OSC 66 in the ANSI parser
 - Building Cells whose Content is the full escape verbatim
 - Handling multi-row glyphs (2x2 blocks) with CUF placeholder cells
@@ -191,6 +209,7 @@ Added OSC 66 support to `StyledString` for multi-cell scaled glyphs in Kitty ter
 **Relevance to SugarCraft**: Kitty graphics protocols (text-sizing, images) are emerging as important terminal capabilities. SugarCraft's `sugar-bits` should consider whether to support these, but the implementation complexity is significant.
 
 ### 7.4 Cassowary Constraint Solver
+
 **Third-party** (metafates, Feb 2026, Show and tell): External Cassowary implementation for UV.
 
 The UV `layout` package uses a Cassowary solver derived from Ratatui. A third party has built an alternative. This validates that the constraint-based layout approach is sound but shows there may be alternative implementations to consider.
@@ -216,6 +235,7 @@ The UV `layout` package uses a Cassowary solver derived from Ratatui. A third pa
 ## 9. Architectural Changes
 
 ### 9.1 Renderer Architecture Simplification (Apr 2026)
+
 Multiple commits in April 2026 simplified the renderer:
 - **Removed scroll height tracking hack** — The `scrollHeight` field and associated logic in `moveCursor` and `relativeCursorMove` was removed. Instead, always use newlines for vertical movement in inline mode. This fixes cursor position errors in Bubble Tea Println with insert-above logic.
 - **Removed `scrollHeight` return from `moveCursor`** — Changed signature from `(string, int)` to just `(string)`; eliminated scrollHeight tracking throughout.
@@ -224,6 +244,7 @@ Multiple commits in April 2026 simplified the renderer:
 **Architectural lesson**: Accumulated state (scrollHeight) that requires manual maintenance across code paths is a liability. The simpler fix (no accumulated state) is usually correct.
 
 ### 9.2 Terminal Tabs Reset (Apr 2026)
+
 `NewTerminalScreen` now:
 - Detects if tabs are supported via `optimizeMovements(state)`
 - If not using tabs, explicitly calls `SetTabStops(-1)` to clear them
@@ -233,6 +254,7 @@ Multiple commits in April 2026 simplified the renderer:
 This was a subtle bug where leftover tab stops from a previous program could affect the current program's rendering.
 
 ### 9.3 Mouse Encoding Reduction (Apr 2026)
+
 The `MouseEncoding` enum was reduced from 4 variants to 2:
 - Kept: `MouseEncodingLegacy` (X10), `MouseEncodingSGR` (DEC 1006)
 - Disabled: `MouseEncodingUrxvt`, `MouseEncodingSGRPixel` (with TODO comments)
@@ -241,6 +263,7 @@ The `MouseEncoding` enum was reduced from 4 variants to 2:
 **Signal**: Not all terminal capabilities are ready for prime time. UV is cutting back to only the most widely-supported encodings. SugarCraft should similarly disable by default any terminal feature that isn't universally supported.
 
 ### 9.4 Refactored Examples to "Advanced" Directory (Apr 2026)
+
 Examples were reorganized from `examples/` to `examples/advanced/`. This signals a distinction between beginner-friendly demos and complex usage patterns.
 
 ---
@@ -248,6 +271,7 @@ Examples were reorganized from `examples/` to `examples/advanced/`. This signals
 ## 10. Performance Discussions
 
 ### 10.1 Bandwidth Optimization via Cell-Based Diffing
+
 UV's core performance insight: only send changed cells using optimized escape sequences (ECH, REP, ICH/DCH, scroll sequences). This is critical for SSH where bandwidth is the bottleneck.
 
 **SSH latency issue**: A third-party project (lablup/all-smi) found that `stdout.flush()` is a blocking syscall that stalls the async event loop on slow SSH connections. Their fix: separate diff computation from I/O, offload write+flush to `spawn_blocking`.
@@ -255,11 +279,13 @@ UV's core performance insight: only send changed cells using optimized escape se
 **Relevance to SugarCraft**: The ReactPHP event loop will face identical issues. The flush/write operation is inherently blocking and must be offloaded on slow connections. This is an architectural decision SugarCraft must make early.
 
 ### 10.2 String Allocation Reduction (Apr 2026)
+
 Changed `fmt.Sprintf` + `strings.Builder.WriteString` pattern to direct `fmt.Fprintf(&buf, ...)` to avoid intermediate string allocations in Windows key event logging.
 
 **Signal**: At the renderer level, avoiding allocations matters. SugarCraft should use similar patterns (fmt.Fprintf directly to Writer) for hot paths.
 
 ### 10.3 Inline Mode Redraw Optimization
+
 The `Render()` method re-renders the entire buffer on each call. For inline mode (where only part of the screen is used), this means re-emitting content that hasn't changed. The April 2026 commit moved the cursor to the last line only on dimension changes, reducing unnecessary cursor movement.
 
 ---
@@ -267,11 +293,13 @@ The `Render()` method re-renders the entire buffer on each call. For inline mode
 ## 11. Extensibility Discussions
 
 ### 11.1 Screen Interface Extensibility
+
 The discussion about "Expanding the Screen interface" (jaypipes, Feb 2026) reveals tension between minimalism and utility. The Screen interface has exactly 4 methods, which is deliberately minimal. Any addition must be truly fundamental.
 
 **SugarCraft lesson**: The Screen interface should remain minimal. If additional capabilities are needed, they should come from composition (e.g., a `StyledScreen` decorator) rather than extending the interface.
 
 ### 11.2 Window vs. Buffer Distinction
+
 `Window` supports both shared-buffer views (`NewView`) and independent buffers (`NewWindow`). The window hierarchy enables nested TUIs. The examples refactor (commit f72cc87) switched from `NewScreen` to `NewWindow` for creating the root, indicating that `Window` is the preferred abstraction even for root-level rendering.
 
 **SugarCraft lesson**: `candy-sprinkles` (windowing) should follow the same pattern: `NewWindow` for everything, not `NewScreen`.
@@ -281,16 +309,19 @@ The discussion about "Expanding the Screen interface" (jaypipes, Feb 2026) revea
 ## 12. API/UX Complaints
 
 ### 12.1 API Instability
+
 UV is pre-1.0 and makes no stability guarantees. The removal of the "API stability" disclaimer from the README (Apr 2026) is notable — it signals confidence but also means consumers must pin versions. The Bubble Tea v2 renderer had a breaking change (`Buffer` vs `RenderBuffer` type mismatch after a UV update) that required manual UV version pinning.
 
 **SugarCraft lesson**: Pre-1.0 instability is acceptable, but SugarCraft should provide migration guides for each breaking change. The `go get github.com/charmbracelet/ultraviolet@b927aa605560` workaround for Bubble Tea users should serve as a cautionary tale.
 
 ### 12.2 Renderer Complexity
+
 `terminal_renderer.go` is 1589 lines of complex escape sequence optimization logic. The comment at line 1 says "This is the cursed render" — the codebase acknowledges the renderer is difficult. The scroll height tracking hack, inline mode special cases, and capability-based optimization branches make this one of the most complex pieces of code in the Charm ecosystem.
 
 **SugarCraft lesson**: Document the renderer clearly. The complexity is unavoidable (terminal rendering inherently involves many special cases), but it must be explained. Consider extracting the optimization decision logic into a separate strategy pattern for testability.
 
 ### 12.3 Missing Documentation
+
 The first-pass analysis noted "Limited documentation — aside from README, doc.go, and TUTORIAL.md, inline godoc is the primary reference." This remains true. The `chars.go` PR added significant new API without extensive documentation beyond doc comments.
 
 ---
@@ -298,16 +329,19 @@ The first-pass analysis noted "Limited documentation — aside from README, doc.
 ## 13. Migration Problems
 
 ### 13.1 V1 to V2 Bubble Tea Breaking Change
+
 When a Bubble Tea v2 user ran `go get -u ./...`, it upgraded UV automatically. This caused a type mismatch: `s.cellbuf.Buffer` (type `*Buffer`) could not be used as `*RenderBuffer`. The fix required downgrading UV to a specific commit.
 
 **Signal**: Go's automatic semver resolution and the lack of a stable API make it dangerous for consumers to blindly upgrade dependencies. SugarCraft should pin UV to a specific commit hash in its `composer.json` (or equivalent) until UV reaches 1.0.
 
 ### 13.2 Docker Scratch + SSH Rendering Issue (bubble tea #912)
+
 After upgrading from Bubble Tea V1 to V2, UI renders garbled characters when the application is deployed inside a Docker scratch image and accessed via SSH. This worked in V1.
 
 **Signal**: Docker scratch images lack libc and terminal database. SSH + scratch + UV2 had a regression. SugarCraft must test in minimal container environments, not just local development environments.
 
 ### 13.3 Windows Console Input Cancellation
+
 The fundamental issue (CancelIo doesn't work across threads, CancelIoEx returns "Element not found") means Windows console input cancellation is unreliable. Programs that try to cleanly shut down on Windows may hang waiting for the input goroutine to exit.
 
 ---
@@ -315,6 +349,7 @@ The fundamental issue (CancelIo doesn't work across threads, CancelIoEx returns 
 ## 14. Clever Fixes & Workarounds
 
 ### 14.1 Zero-Width Cell Sentinel Pattern
+
 The pattern of using `Width=0, IsZero=true` cells as wide-character trailing sentinels is both clever and dangerous:
 - It allows wide characters to occupy exactly 2 columns in the cell grid
 - It enables normal cell iteration to "skip" the trailing cell
@@ -323,16 +358,19 @@ The pattern of using `Width=0, IsZero=true` cells as wide-character trailing sen
 **SugarCraft approach**: Consider using a dedicated wide-character representation instead of sentinel cells. For example, store wide characters as a single cell with extra metadata rather than splitting them. This avoids the sentinel cell problem entirely.
 
 ### 14.2 Kitty Text-Sizing Cell Encoding
+
 For OSC 66, the fix was to build a `Cell` whose `Content` is the full escape sequence verbatim and whose `Width` comes from the protocol metadata (`s=` / `w=`). This mirrors how OSC 8 (hyperlinks) are handled — consistent pattern for embedding protocol-specific data in cells.
 
 **SugarCraft lesson**: When supporting new escape sequence protocols, the Cell model is flexible enough to encode them. Use the same pattern: verbatim Content + appropriate Width.
 
 ### 14.3 UTF-8 0x9C Rescue
+
 The ANSI decoder terminates string-state sequences on bare `0x9C`. But `0x9C` is also a valid UTF-8 continuation byte. When a string sequence (OSC 66) ends on `0x9C` and more input is available, the decoder rescans for an unambiguous 7-bit terminator (BEL or ESC+\\) and extends the returned slice.
 
 **Clever**: The fix applies to ALL string-state prefixes (OSC, DCS, APC, SOS, PM) via `hasStringPrefix`, making it future-proof.
 
 ### 14.4 Inline Mode Cursor Dangling Prevention
+
 In `Flush()`, if the cursor is hidden and at the end of a line in inline mode, it's moved to the beginning of the next line to prevent "unwanted line wraps in some terminals." This is a terminal quirk workaround that must be applied on every flush.
 
 ---
@@ -340,15 +378,18 @@ In `Flush()`, if the cursor is hidden and at the end of a line in inline mode, i
 ## 15. Community Workarounds
 
 ### 15.1 Windows Non-Win32 Terminal Workaround (charmbracelet/crush)
+
 When Crush encountered double-typing and input corruption on Alacritty/Rio on Windows, the workaround was to downgrade UV temporarily. No permanent fix has landed in UV; the issue was closed as a known limitation.
 
 ### 15.2 Windows First-Character-Lost Workaround (multiple repos)
+
 For successive tea program runs on Windows losing the first keypress, workarounds included:
 - Using `CancelIoEx` instead of `CancelIo` (platform-specific)
 - Restructuring application to avoid successive `p.Run()` calls
 - Using custom input readers that bypass the problematic Windows console path
 
 ### 15.3 Wide Character Handling Workaround (PR #103)
+
 Before the proper fixes landed, wide character corruption was worked around by:
 - Routing wide-char lines to `transformLineWide` (bypasses optimizations)
 - Checking for wide characters before cursor overwrite operations
@@ -359,6 +400,7 @@ Before the proper fixes landed, wide character corruption was worked around by:
 ## 16. Maintainer Guidance Patterns
 
 ### 16.1 Conservative Optimization Policy
+
 Maintainer (aymanbagabas) consistently prefers conservative fixes over aggressive ones:
 - When wide-char lines were reported as corrupted, the response was "These optimizations don't fire on wide cells" — but the bug report showed they did via the infinite loop
 - When multiple PRs addressed the same issue (#103 vs #109), maintainer merged the simpler one (#109) and closed the comprehensive one
@@ -367,9 +409,11 @@ Maintainer (aymanbagabas) consistently prefers conservative fixes over aggressiv
 **Pattern**: Maintainer favors minimal, verifiable fixes over comprehensive changes. SugarCraft should follow the same pattern: small, testable fixes first.
 
 ### 16.2 API Minimalism
+
 The Screen interface stays at 4 methods. The layout package stays focused on Cassowary constraints. New features (Kitty text-sizing, characters/lines) are additive, not interface-changing.
 
 ### 16.3 Platform Capability Detection
+
 Platform-specific handling is gated on capability detection, not assumptions:
 - `xtermCaps()` returns terminal capabilities as a bitmask
 - `optimizeMovements()` detects tab/backspace support from terminal state
@@ -382,11 +426,13 @@ Platform-specific handling is gated on capability detection, not assumptions:
 ## 17. Rejected Ideas Worth Revisiting
 
 ### 17.1 Reflow Tracking (PR #96, closed)
+
 A contributor attempted to add reflow tracking but the PR was closed without merge. The concept (tracking how content reflows on resize) is valid but the implementation didn't meet maintainer standards.
 
 **Relevance**: Word-wrap-aware resize (reflow on width change) is listed as planned work in the UV README. SugarCraft should watch for this feature to be properly implemented upstream.
 
 ### 17.2 Additional Mouse Encodings
+
 `MouseEncodingUrxvt` and `MouseEncodingSGRPixel` were disabled (not deleted) with TODO comments. These remain on the roadmap but are not currently supported.
 
 ---
@@ -472,21 +518,27 @@ A contributor attempted to add reflow tracking but the PR was closed without mer
 ## 20. Architectural Lessons
 
 ### Lesson 1: Screen Interface as Keystone
+
 The `Screen` interface with 4 minimal methods (`Bounds`, `CellAt`, `SetCell`, `WidthMethod`) is the right abstraction. All rendering and drawing code depends on it. SugarCraft should mirror this exactly.
 
 ### Lesson 2: Wide Characters Break Single-Column Assumptions
+
 Every column-based optimization (ECH, REP, ICH, DCH, cursor movement overwrite) assumes each cell = 1 column. Wide characters are 2 columns + 0 sentinel. This assumption is violated constantly and causes subtle corruption. The fix is to detect multi-column content and bypass all optimizations — simpler and safer than making each optimization wide-char-aware.
 
 ### Lesson 3: Inline Mode is Not Fullscreen Mode
+
 The original UV renderer was designed for fullscreen (alternate screen). Inline mode was added later and required significant retrofitting. The scrollHeight hack was an accumulating state that never composed correctly. The simpler fix (no accumulated state, always use newlines in inline mode) is correct. SugarCraft should design for both modes from the start.
 
 ### Lesson 4: Windows is a First-Class Platform
+
 Windows support requires significantly more code and testing. The Windows input path has had more bugs than any other component. The non-win32 terminal problem (Alacritty on Windows using xterm emulation, not Win32 Console API) means Windows can be treated as Unix in some cases and requires special handling in others. Windows cannot be an afterthought.
 
 ### Lesson 5: Accumulated State is Technical Debt
+
 The `scrollHeight` field is a perfect example: it accumulated state across renders and required manual maintenance in multiple code paths. Removing it simplified the code and fixed bugs. Any time SugarCraft considers adding accumulated state to a renderer, it should be a red flag — prefer stateless computation.
 
 ### Lesson 6: Protocol Extension via Cell Encoding
+
 The pattern for adding new escape sequence protocols (OSC 8 hyperlinks, OSC 66 text-sizing) is:
 1. Recognize the protocol in the parser
 2. Build a Cell whose Content is the full escape verbatim
@@ -496,6 +548,7 @@ The pattern for adding new escape sequence protocols (OSC 8 hyperlinks, OSC 66 t
 This is an extensible pattern that SugarCraft should adopt.
 
 ### Lesson 7: The Renderer is Inherently Complex
+
 `terminal_renderer.go` at 1589 lines is not a sign of bad design — it's a sign of the problem domain. Terminal escape sequences, capability detection, optimization selection, cursor movement, wide character handling, style diffing, and scroll optimization all interact. SugarCraft's renderer will be similarly complex. Extract the capability detection and optimization decision logic for testability, but don't expect to simplify the renderer itself.
 
 ---
@@ -569,15 +622,19 @@ This is an extensible pattern that SugarCraft should adopt.
 ## 24. Cross-Ecosystem Pattern Matches
 
 ### Ratatui (Rust)
+
 Ultraviolet's Cassowary layout solver was derived from Ratatui. The Cell/Buffer/Line/Screen model is similar. Ratatui's documentation and testing patterns should be studied for SugarCraft implementation guidance.
 
 ### bubble tea (Go)
+
 UV is the foundational layer for Bubble Tea v2. Any breaking change in UV causes immediate breakage in Bubble Tea v2. SugarCraft's relationship to its consumer frameworks (whatever builds on candy-core/sugar-bits) will be similar. Pin UV versions until 1.0.
 
 ### ncurses
+
 UV is consciously "ncurses without terminfo/termcap." The cell-based diffing approach and the "cursed render" moniker acknowledge the ncurses heritage. Understanding ncurses quirks (tab handling, cursor movement, scroll regions) helps explain UV design decisions.
 
 ### iTerm2 / Kitty
+
 Both terminals implement extended protocols (SGR mouse, OSC 66 text-sizing, OSC 1337 graphics). UV supports the subset that is widely implemented. SugarCraft should match this conservative approach — support what's universal, not what's newest.
 
 ---

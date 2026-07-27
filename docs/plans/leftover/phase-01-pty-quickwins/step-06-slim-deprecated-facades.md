@@ -14,6 +14,7 @@ shim that delegates to the canonical `Posix\Posix*` class.
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/Pty.php` — every public method delegates to the
   equivalent on `\SugarCraft\Pty\Posix\PosixPtySystem` or
   `\SugarCraft\Pty\Posix\PosixMasterPty`. The `read()` loop lives

@@ -15,6 +15,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-vt/src/Handler/EraseHandler.php` — uses current SGR bg.
 - `candy-vt/src/Cell/Cell.php` — `combining: string` field; setter
   honors graphemes.

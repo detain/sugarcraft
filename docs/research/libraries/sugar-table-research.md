@@ -17,6 +17,7 @@ Research across Go (bubble-table, lipgloss, tview), Rust (ratatui, comfy-table),
 **Source:** `/home/sites/sugarcraft/sugar-table/src/`
 
 ### Strengths
+
 - Immutable + fluent API with `with*()` pattern
 - Multi-column sorting with `ThenSortBy*()` pattern
 - Filter by column with case-insensitive substring matching
@@ -25,6 +26,7 @@ Research across Go (bubble-table, lipgloss, tview), Rust (ratatui, comfy-table),
 - Horizontal scroll offset tracking
 
 ### Gaps vs. Other Libraries
+
 1. **No viewport virtualization** — renders all rows on every `View()` call
 2. **No dynamic column sizing** — requires explicit widths, no auto-expand/shrink
 3. **No percentage-based widths** — only fixed pixel widths
@@ -70,6 +72,7 @@ Research across Go (bubble-table, lipgloss, tview), Rust (ratatui, comfy-table),
 ### 1. Column Sizing
 
 #### lipgloss/table Dynamic Resizing
+
 **Source:** [charmbracelet/lipgloss/table/resizing.go](https://github.com/charmbracelet/lipgloss/blob/main/table/resizing.go)
 
 lipgloss implements sophisticated column width optimization:
@@ -91,6 +94,7 @@ func (r *resizer) optimizedWidths() (colWidths, rowHeights []int) {
 **Key Insight:** Expansion prioritizes shortest columns first; shrinking uses median deviation to preserve important data.
 
 #### comfy-table Constraints
+
 **Source:** [docs.rs/comfy-table](https://docs.rs/comfy-table/latest/src/comfy_table/style/column.rs_search=)
 
 ```rust
@@ -112,6 +116,7 @@ pub enum Width {
 **Key Insight:** Explicit lower/upper boundaries with both fixed and percentage options.
 
 #### bubble-table Flex Columns
+
 **Source:** [Context7: evertras/bubble-table](https://context7.com/evertras/bubble-table/llms.txt)
 
 ```go
@@ -134,6 +139,7 @@ func NewFlexTableModel() table.Model {
 ### 2. Row Rendering & Text Wrapping
 
 #### lipgloss Row Height Calculation
+
 **Source:** [charmbracelet/lipgloss#620](https://github.com/charmbracelet/lipgloss/commit/c289bad531f2588fc7506d7fbd5cdfd3daf4cb27)
 
 lipgloss calculates row heights based on wrapped content:
@@ -153,6 +159,7 @@ func (r *resizer) expandRowHeights(colWidths []int) {
 ```
 
 #### ratatui Table with Multi-line Cells
+
 **Source:** [Context7: ratatui/ratatui](https://context7.com/ratatui/ratatui/llms.txt)
 
 ```rust
@@ -174,6 +181,7 @@ let rows = vec![
 ### 3. Sorting
 
 #### bubble-table Multi-Column Sort
+
 **Source:** [Context7: evertras/bubble-table](https://context7.com/evertras/bubble-table/llms.txt)
 
 ```go
@@ -195,6 +203,7 @@ func getSortInfo(m table.Model) []table.SortColumn {
 ### 4. Filtering
 
 #### bubble-table Column-Filtered Search
+
 **Source:** [Context7: evertras/bubble-table](https://context7.com/evertras/bubble-table/llms.txt)
 
 ```go
@@ -217,6 +226,7 @@ return table.New(columns).
 ### 5. Borders & Styling
 
 #### lipgloss StyleFunc Pattern
+
 **Source:** [Context7: charmbracelet/lipgloss](https://context7.com/charmbracelet/lipgloss/llms.txt)
 
 ```go
@@ -239,6 +249,7 @@ t := table.New().
 **Key Insight:** `StyleFunc(row, col int)` provides row+column context for dynamic styling.
 
 #### ratatui Cell-Level Styling
+
 **Source:** [Context7: ratatui/ratatui](https://context7.com/ratatui/ratatui/llms.txt)
 
 ```rust
@@ -258,6 +269,7 @@ Row::new([
 ### 6. Large Dataset Handling (Virtualization)
 
 #### bubble-table Viewport Optimization PR #284
+
 **Source:** [charmbracelet/bubbles#284](https://github.com/charmbracelet/bubbles/pull/284)
 
 The key optimization is rendering only visible rows:
@@ -284,6 +296,7 @@ After:  0.005 sec per MoveDown() (100x faster)
 ```
 
 #### vtable - Virtualized Table for Bubble Tea
+
 **Source:** [davidroman0O/vtable](https://github.com/davidroman0O/vtable)
 
 ```go
@@ -303,6 +316,7 @@ type DataSource interface {
 ```
 
 #### ratatui TableState for Virtual Scroll
+
 **Source:** [ratatui/ratatui#1004](https://github.com/ratatui-org/ratatui/issues/1004)
 
 ```rust
@@ -327,6 +341,7 @@ let visible_rows = rows
 ### 🔴 High Priority (High Impact, Medium Effort)
 
 #### 1. Add Flex/Grow Column Support
+
 **Pattern from:** bubble-table `NewFlexColumn()`, lipgloss dynamic resizing
 
 **Current:** Columns have fixed `width` + `flexibleWidth` but `computeTotalWidth()` doesn't use flexible widths for dynamic allocation.
@@ -373,6 +388,7 @@ private function computeTotalWidth(int $viewportWidth = 0): int
 **Effort:** ~2-3 hours
 
 #### 2. Add Viewport Virtualization
+
 **Pattern from:** bubble-table PR #284, vtable
 
 **Current:** `View()` renders all `pagedRows()` every call.
@@ -407,6 +423,7 @@ public function scrollViewport(int $delta): self
 **Effort:** ~3-4 hours
 
 #### 3. Add StyleFunc for Dynamic Cell Styling
+
 **Pattern from:** lipgloss `StyleFunc(func(row, col int) Style)`
 
 **Current:** Style precedence is fixed: base < column < row < cell
@@ -440,6 +457,7 @@ if ($this->styleFunc !== null) {
 ### 🟡 Medium Priority (Medium Impact, Higher Effort)
 
 #### 4. Add Text Wrapping with Row Height Tracking
+
 **Pattern from:** lipgloss resizing.go, ratatui multi-line cells
 
 **Current:** Cells truncated at column width, no wrapping.
@@ -497,6 +515,7 @@ private function wrapText(string $text, int $width, int $maxHeight = 0): array
 **Effort:** ~6-8 hours
 
 #### 5. Add Per-Column Filterable Flag
+
 **Pattern from:** bubble-table `.WithFiltered(true)`
 
 **Current:** Global filtering applies to all columns via `filterText` array.
@@ -528,6 +547,7 @@ private function findColumn(string $key): ?Column
 **Effort:** ~1 hour
 
 #### 6. Add Border Style Templates
+
 **Pattern from:** lipgloss (rounded, ascii, markdown, hidden)
 
 **Implementation:**
@@ -570,16 +590,19 @@ final class Table
 ### 🟢 Lower Priority (Lower Impact, Varying Effort)
 
 #### 7. Percentage-Based Column Widths
+
 **Pattern from:** comfy-table `Width::Percentage()`, terminal-columns `'50%'`
 
 **Effort:** ~3-4 hours
 
 #### 8. Row Span / Column Span Support
+
 **Pattern from:** cli-table3 cell span
 
 **Effort:** ~8+ hours (significant refactor)
 
 #### 9. Async Data Source Interface
+
 **Pattern from:** vtable `DataSource` interface
 
 **Effort:** ~10+ hours (architectural change)
@@ -600,6 +623,7 @@ final class Table
 ## References
 
 ### Go
+
 - **bubble-table:** https://github.com/Evertras/bubble-table
 - **lipgloss table:** https://github.com/charmbracelet/lipgloss/tree/main/table
 - **bubbles table PR #284 (viewport optimization):** https://github.com/charmbracelet/bubbles/pull/284
@@ -607,14 +631,17 @@ final class Table
 - **tview:** https://github.com/rivo/tview
 
 ### Rust
+
 - **ratatui:** https://github.com/ratatui-org/ratatui
 - **comfy-table:** https://github.com/Nicd16/comfy-table
 
 ### Python
+
 - **textual DataTable:** https://github.com/textualize/textual
 - **rich Table:** https://github.com/textualize/rich
 
 ### JavaScript
+
 - **cli-table3:** https://github.com/cli-table/cli-table3
 - **terminal-columns:** https://github.com/privatenumber/terminal-columns
 - **tty-table:** https://github.com/tecfu/tty-table

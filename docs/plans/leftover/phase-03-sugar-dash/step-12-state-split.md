@@ -24,6 +24,7 @@ Split:
 ## Files
 
 **Create:**
+
 - `sugar-dash/src/Components/Tree/StateMachine.php` (the diagram
   widget — renamed from State).
 - `sugar-dash/src/Components/Tree/StateNode.php`.
@@ -33,6 +34,7 @@ Split:
   and `load(string $path): ?array`. Atomic via tmp+rename.
 
 **Delete:**
+
 - `sugar-dash/src/State/State.php` (the original).
 
 **Modify** consumers:

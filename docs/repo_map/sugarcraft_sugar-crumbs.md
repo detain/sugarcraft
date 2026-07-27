@@ -1,11 +1,17 @@
 # SugarCraft/sugar-crumbs
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-crumbs
+
 - **Language:** PHP 8.3+
+
 - **License:** MIT
+
 - **Status:** 🟢 v1 ready
+
 - **Upstream:** KevM/bubbleo (69 stars, MIT)
+
 - **Description:** PHP port of KevM/bubbleo — NavStack (navigation stack) and Breadcrumb components for terminal UIs. Immutable push/pop navigation with hierarchical breadcrumb rendering.
 
 ---
@@ -224,14 +230,20 @@ public function pushDirectory(string $path): self
 
 Example: `pushDirectory('/home/user/projects/sugarcraft/src')` pushes:
 - `('home', '/home')`
+
 - `('user', '/home/user')`
+
 - `('projects', '/home/user/projects')`
+
 - `('sugarcraft', '/home/user/projects/sugarcraft')`
+
 - `('src', '/home/user/projects/sugarcraft/src')`
 
 **Shell change detection:** The Shell itself does **not** have an explicit "shell changed" listener. The change detection pattern is:
 1. Application tracks current working directory (or URL path) externally
+
 2. On change, calls `Shell::pushDirectory()` with the new path
+
 3. Renders `Shell::renderBreadcrumb()` to show the new trail
 
 This is a **pull** model — the application polls or observes and pushes changes, rather than the Shell subscribing to filesystem events.
@@ -254,10 +266,15 @@ $filtered = $stack->filter('/set');
 ```
 
 **Filtering semantics:**
+
 - Case-insensitive substring matching (`stripos`)
+
 - Matches against `NavigationItem::$title`
+
 - Also matches against `NavigationItem::$data` (cast to string via `(string)$item->data`)
+
 - Returns **new NavStack** — original unchanged
+
 - Empty result if no matches
 
 **Comparison to other implementations:**
@@ -287,7 +304,9 @@ final class Url
 ```
 
 - `derive()` uses `rawurlencode()` on each segment
+
 - `parse()` uses `rawurldecode()` and ignores empty segments
+
 - Round-trip safe: `Url::parse(Url::derive($s))->depth() === $s->depth()`
 
 ---
@@ -353,29 +372,47 @@ Prevents separator collision when titles contain ` > `. The escape character is 
 ## File References
 
 ### Source Files
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/NavStack.php` — 197 lines
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/Breadcrumb.php` — 211 lines
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/Shell.php` — 66 lines
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/NavigationItem.php` — 48 lines
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/Closable.php` — 23 lines
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/Escape.php` — 30 lines
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/Url.php` — 43 lines
+
 - `/home/sites/sugarcraft/sugar-crumbs/src/Lang.php` — 22 lines
 
 ### Tests
+
 - `/home/sites/sugarcraft/sugar-crumbs/tests/NavStackTest.php` — 275 lines (push/pop, filter, view, Shell, pushDirectory)
+
 - `/home/sites/sugarcraft/sugar-crumbs/tests/NavStackHtmlTest.php` — 142 lines (viewHtml, ARIA, HTML escaping)
+
 - `/home/sites/sugarcraft/sugar-crumbs/tests/EscapeTest.php` — 87 lines (round-trip escaping)
+
 - `/home/sites/sugarcraft/sugar-crumbs/tests/ClosableTest.php` — 60 lines (onEnter/onLeave no-ops)
+
 - `/home/sites/sugarcraft/sugar-crumbs/tests/UrlDerivationTest.php` — 128 lines (round-trip, encode/decode)
+
 - `/home/sites/sugarcraft/sugar-crumbs/tests/LangCoverageTest.php` — 66 lines (i18n wiring verification)
 
 ### Examples
+
 - `/home/sites/sugarcraft/sugar-crumbs/examples/basic.php` — NavStack + Breadcrumb demo
+
 - `/home/sites/sugarcraft/sugar-crumbs/examples/navigation.php` — push/pop/filter/pushDirectory demo
 
 ### Config
+
 - `/home/sites/sugarcraft/sugar-crumbs/phpunit.xml` — PHPUnit 10 config, `failOnWarning=true`
+
 - `/home/sites/sugarcraft/sugar-crumbs/lang/en.php` — i18n strings (separator, truncator)
 
 ---
@@ -425,8 +462,13 @@ sugar-crumbs is the navigation primitive for SugarCraft TUI applications. Its fr
 ## Related Reports
 
 - `/home/sites/sugarcraft/repo_map/KevM_bubbleo.md` — Primary upstream (Go)
+
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbletea.md` — Framework sugar-crumbs can integrate with
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-zone.md` — Mouse zone tracking for clickable breadcrumbs
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_candy-core.md` — TUI framework foundation
+
 - `/home/sites/sugarcraft/repo_map/treilik_bubblelister.md` — List widget alternative for selection UI
+
 - `/home/sites/sugarcraft/repo_map/erikgeiser_promptkit.md` — Prompt library with fuzzy filtering

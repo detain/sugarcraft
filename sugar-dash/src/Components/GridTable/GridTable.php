@@ -566,7 +566,8 @@ final class GridTable implements Item, Sizer
 
         // Render scrollable portion
         $scrollStart = $frozenCount;
-        for ($i = $scrollStart; $i < count($this->columns); $i++) {
+        $columnCount = count($this->columns);
+        for ($i = $scrollStart; $i < $columnCount; $i++) {
             $column = $this->columns[$i];
             $width = $colWidths[$i];
             $value = $row->get($column->key);

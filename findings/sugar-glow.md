@@ -15,6 +15,7 @@ Sugar-glow is a PHP port of charmbracelet/glow — a Markdown CLI viewer/pager t
 ## Files Reviewed
 
 ### Source Files (`src/`)
+
 - `Application.php` — CLI entry point (22 lines)
 - `GlowModel.php` — Pager model implementing `Model` contract (68 lines)
 - `GlamourTheme.php` — Glamour-style JSON theme loader (93 lines)
@@ -27,6 +28,7 @@ Sugar-glow is a PHP port of charmbracelet/glow — a Markdown CLI viewer/pager t
 - `Highlighter/ChromaJsonHighlighter.php` — Regex-based syntax highlighter (131 lines)
 
 ### Test Files (`tests/`)
+
 - 10 test files covering all major components
 
 ---
@@ -80,6 +82,7 @@ public function supports(string $language): bool
 **Problem**: Despite accepting a `$language` parameter, the implementation returns `true` for ANY non-empty, non-"text" language. This makes the `HighlighterInterface` contract misleading. A consumer cannot ask "does this highlighter support PHP?" — it always says yes.
 
 **Recommendation**: Either:
+
 - Implement actual language support detection based on the ChromaJsonHighlighter's capabilities
 - Remove the parameter and update the interface contract to remove the parameter
 
@@ -148,6 +151,7 @@ return is_string($raw) && $raw !== '' ? $raw : null;
 ```
 
 **Problem**: The logic returns `null` when:
+
 1. STDIN is a TTY (interactive terminal)
 2. The stream is empty
 3. The stream read returns empty string
@@ -175,6 +179,7 @@ $result = preg_replace_callback(
 ### 9. LOW: Missing Tests for GlowModel Viewport Integration
 
 **Problem**: `GlowModelTest.php` tests individual key handling (q, Esc, Ctrl+C, Down) but doesn't test:
+
 - Scrolling to bottom (End/G key)
 - Page up behavior
 - Half-page scroll (Ctrl+U/D)
@@ -359,6 +364,7 @@ Since the library is CLI-based (not a long-running server), the blocking behavio
 - Integration points properly mocked
 
 **Gaps:**
+
 - Full pager key binding coverage (End, Home, PgUp, PgDn, Ctrl+U/D)
 - Integration test for pager mode with actual `Program::run()`
 - Performance tests for large file handling

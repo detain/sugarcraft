@@ -133,6 +133,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 ## Critical Priority
 
 ### 1. Word-wrap integration in Style::render()
+
 **Description:** `Width::wrap()` exists in sugar-core but `Style::render()` only truncates, never wraps multi-line content.
 **Why it matters:** Every lipgloss user expects `Width(n).Render("long text")` to wrap at n columns automatically.
 **Source:** `charmbracelet_lipgloss.md` — `Wrap(s, width, breakpoints)` in wrap.go
@@ -141,6 +142,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** High — closes major lipgloss feature gap, enables auto-wrapping text areas
 
 ### 2. CIELAB Color Blending
+
 **Description:** `Color::blend()` uses linear RGB LERP; lipgloss uses `lucasb-eyer/go-colorful` for perceptually-uniform CIELAB D65 blending.
 **Why it matters:** Linear RGB interpolation produces visually jarring gradient transitions, especially for perceptually-similar colors.
 **Source:** `charmbracelet_lipgloss.md` — `Blend1D`, `Blend2D` using CIELAB; `sugarcraft_candy-sprinkles.md` — pattern note at line 516
@@ -149,6 +151,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** High — visually smoother gradients, perceptual uniformity matching upstream
 
 ### 3. Table column width constraints
+
 **Description:** lipgloss table has `Width(Constraint)` per column; candy-sprinkles Table auto-fits to widest cell.
 **Why it matters:** Dashboard tables need fixed-width columns (for IDs) alongside proportional columns.
 **Source:** `charmbracelet_lipgloss.md` — `table` sub-package, `Width(constraint)`; `charmbracelet_bubbles.md` — table column navigation
@@ -159,6 +162,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 ## High Value
 
 ### 4. 2D Rectangular Gradient Fills
+
 **Description:** `Blend2D(tl, tr, bl, br, width, height, angle)` for heatmap-style cell coloring.
 **Why it matters:** Heatmaps, data visualizations, and color-coded status displays need 2D gradients.
 **Source:** `charmbracelet_lipgloss.md` — `Blend2D(width, height, angle, stops...)` using rotated 1D gradient sampling
@@ -167,6 +171,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** Medium — enables heatmap visualizations, color-coded grids
 
 ### 5. Cassowary Constraint Solver
+
 **Description:** Replace one-pass greedy solver with proper Cassowary algorithm for inter-constraint ratio support.
 **Why it matters:** Cannot express "column A is always at least twice as wide as column B" with current greedy solver.
 **Source:** `ratatui_ratatui.md` — Cassowary via `kasuari` crate; `php-tui_php-tui.md` — Cassowary via `php-tui/cassowary`; `76creates_stickers.md` — `calculateRatioWithMinimum` recursive algorithm
@@ -175,6 +180,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** High — enables truly responsive layouts with constraint relationships
 
 ### 6. Text/Line/Span Text Model
+
 **Description:** Structured multi-styled inline text hierarchy (`Text → Line → Span`) like ratatui and php-tui.
 **Why it matters:** `Markup::parse()` returns `list<Cell>` but no first-class type for styled substrings within a line.
 **Source:** `ratatui_ratatui.md` — `Text`, `Line`, `Span` hierarchy; `php-tui_php-tui.md` — same pattern
@@ -183,6 +189,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** High — enables proper multi-styled inline text, richer text rendering
 
 ### 7. Flex Alignment Variants in Layout Solver
+
 **Description:** ratatui's `Flex` enum: `Legacy | Centered | SpaceBetween | SpaceAround` for slack distribution.
 **Why it matters:** Dashboard layouts need even spacing between elements, not all-slack-to-first-child.
 **Source:** `ratatui_ratatui.md` — `Flex` enum; `sugarcraft_candy-sprinkles.md` — gap at line 396
@@ -191,6 +198,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** High — significantly better dashboard layout ergonomics
 
 ### 8. Grapheme-Aware Border Measurement
+
 **Description:** `Border::GetTopSize()` assumes 1-cell runes; doesn't handle emoji/wide chars.
 **Why it matters:** Borders containing emoji or wide characters render incorrectly.
 **Source:** `charmbracelet_lipgloss.md` — `GetTopSize()` uses `displaywidth.String()`; `sugarcraft_candy-sprinkles.md` — gap at line 384
@@ -201,6 +209,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 ## Medium Priority
 
 ### 9. StyleRunes for Sub-String Styling
+
 **Description:** `StyleRunes(str, indices, matched, unmatched)` applies styles to specific rune index ranges.
 **Why it matters:** Fuzzy search highlighting requires styling matched character positions regardless of multi-byte characters.
 **Source:** `charmbracelet_lipgloss.md` — `StyleRunes` in runes.go using `uniseg.NewGraphemes()`
@@ -209,6 +218,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** Medium — enables fuzzy search result highlighting
 
 ### 10. Terminal Background Detection via OSC 11
+
 **Description:** `HasDarkBackground()` uses `COLORFGBG` only; doesn't query terminal directly like lipgloss.
 **Why it matters:** `COLORFGBG` is not set by all terminals; direct OSC 11 query is more reliable.
 **Source:** `charmbracelet_lipgloss.md` — `queryBackgroundColor` via OSC 11; `sugarcraft_candy-sprinkles.md` — gap at line 383
@@ -217,6 +227,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** Medium — more reliable dark/light detection
 
 ### 11. Canvas Cell-Level Diffing
+
 **Description:** Canvas uses string composition; php-tui's `Buffer::diff()` enables efficient partial redraws.
 **Why it matters:** Animation and live updates redraw entire canvas unnecessarily.
 **Source:** `php-tui_php-tui.md` — `Buffer::diff(Buffer)` for minimal cell updates; `ratatui_ratatui.md` — immediate mode with diffing
@@ -225,6 +236,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 **Expected impact:** High — efficient partial redraws for animations
 
 ### 12. Spatial Map for Canvas Hit-Testing
+
 **Description:** Canvas only has z-ordering; textual uses R-tree-like spatial index for O(log n) mouse hit detection.
 **Why it matters:** Interactive overlays need mouse event routing to correct layer.
 **Source:** `textualize_textual.md` — `_spatial_map.SpatialMap` for widget lookup by screen position
@@ -303,6 +315,7 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 ## Medium-term (new subsystems)
 
 5. **Text/Line/Span text model** — Create structured text types:
+
    ```
    Span: content (string) + style (Style)
    Line: list<Span>
@@ -419,21 +432,25 @@ content → width constraint + horizontal align → padding (styled) → fixed h
 # Notable PRs / Issues / Discussions
 
 ### lipgloss: `StyleRunes` via grapheme mapping
+
 `StyleRunes(str, indices, matched, unmatched)` maps byte indices to grapheme cluster positions using `uniseg.NewGraphemes()`. Enables highlighting matched characters in fuzzy search results regardless of multi-byte characters.
 **Reference:** `charmbracelet_lipgloss.md` — runes.go, lines 198-199
 **Lesson:** PHP equivalent needs `preg_match_all('/./us', $str, $matches)` for grapheme-aware indexing.
 
 ### lipgloss: `WrapWriter` ANSI state machine
+
 Tracks current `uv.Style` and `uv.Link` state across newlines via `ansi.Parser`. Emits `ansi.ResetStyle` before each `\n`, replays tracked style after. Ensures hyperlinks and styles survive line breaks.
 **Reference:** `charmbracelet_lipgloss.md` — wrapping.go, lines 219-220
 **Lesson:** State machine approach is correct; PHP equivalent needs to track SGR attribute state.
 
 ### stickers: `calculateRatioWithMinimum` recursive algorithm
+
 Recursive algorithm: if a cell's minimum exceeds its ratio-allocated share, lock the minimum and redistribute remaining space among non-locked cells recursively. Enables CSS flexbox-style responsive layouts with hard floors.
 **Reference:** `76creates_stickers.md` — flexbox/utils.go
 **Lesson:** More powerful than current greedy solver for constrained layouts.
 
 ### pterm: `MapRangeToRange` linear interpolation
+
 ```go
 func MapRangeToRange(fromMin, fromMax, toMin, toMax, current float32) int {
     if fromMax-fromMin == 0 { return 0 }
@@ -445,11 +462,13 @@ Foundational utility for bar chart scaling, progress color fades, keyboard navig
 **Lesson:** Should be in sugar-core or honey-bounce as `MapRange::map(float $value, float $fromMin, float $fromMax, float $toMin, float $toMax): float`.
 
 ### textual: Spatial map for O(log n) hit testing
+
 Compositor uses `_spatial_map.SpatialMap` (R-tree-like) for widget lookup by screen position. Enables efficient mouse event routing without O(n) iteration.
 **Reference:** `textualize_textual.md` — src/layout/compositor.rs, lines 119-123
 **Lesson:** For Canvas mouse events, spatial index is essential for performance.
 
 ### ratatui: `Stylize` trait for ergonomic styling
+
 ```rust
 "hello".red().on_blue().bold() // → Span
 Text::from("hello").red().blue() // → Text
@@ -460,6 +479,7 @@ PHP could achieve similar via `__call` magic on strings returning `Span` instanc
 **Lesson:** Aspirational ergonomics; lower priority than feature parity.
 
 ### php-tui: `Buffer::diff()` cell-level diffing
+
 `Buffer::diff(Buffer)` computes minimal updates between two buffers. Only changed cells sent to terminal backend.
 **Reference:** `php-tui_php-tui.md` — src/Display/Buffer.php, lines 96-116
 **Lesson:** Key for efficient animation; would benefit Canvas.

@@ -12,11 +12,13 @@ has limited visibility into protocol-level details.
 ## Files
 
 **Modify:**
+
 - `candy-wish/src/Session.php` — add the new readonly properties.
 - `candy-wish/src/Transport/InProcessTransport.php` — populates them
   from the protocol handshake.
 
 **Tests:**
+
 - `candy-wish/tests/SessionMetadataTest.php` — fixture session;
   assert metadata is populated post-handshake.
 

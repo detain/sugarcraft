@@ -16,6 +16,7 @@ candy-vt implements a VT500-series ANSI parser with cell grid management, cursor
 ## 1. Current Implementation Overview
 
 ### Source Structure
+
 ```
 candy-vt/src/
 ├── Terminal/Terminal.php      — Facade, owns Parser + ScreenHandler
@@ -46,6 +47,7 @@ candy-vt/src/
 ```
 
 ### Current Coverage (from CALIBER_LEARNINGS.md)
+
 - ✅ VT500 state machine with UTF-8 accumulation
 - ✅ SGR (38;2;R;G;B, 38;5;N, 48;2;R;G;B, 48;5;N)
 - ✅ Cursor movement (CUU/CUD/CUF/CUB, CUP/HVP, CHA, VPA)
@@ -58,6 +60,7 @@ candy-vt/src/
 - ✅ Wide char handling (CJK, emoji — 2 cells with continuation)
 
 ### Known Gaps (from CALIBER_LEARNINGS.md)
+
 - ❌ **No scrollback** — scrolled-off rows are dropped
 - ❌ **No auto-wrap** — cursor clamps at right edge; auto-wrap deferred until DECSTBM margins
 - ❌ **No DECSTBM scroll margins** — vertical scroll only at buffer bottom
@@ -101,6 +104,7 @@ func (p *Parser) advance(b byte) parser.Action {
 ```
 
 **Key features:**
+
 - Compile-time generated transition table (Go generate)
 - Params stored as `[]int` with `paramsLen` cursor
 - `data` buffer for OSC/DCS strings with `dataLen` tracking
@@ -166,11 +170,13 @@ CSI 4:0:1m             → 4;0;1 (underline with style subparam)
 ```
 
 **xterm.js implementation insight:**
+
 - Stores up to 32 params, 32 subparams total
 - Uses a flat structure: `params[]` where first value of subparam group goes in params array, excess subparams in `subparams[]`
 - Performance optimization: for common case (no subparams), zero overhead
 
 **Recommendation for candy-vt:** Implement subparameter parsing in `Transitions.php` and `Parser.php`. The current `Action::Param` handling treats `:` as an invalid digit (skipped). Need to either:
+
 1. Add new action `Subparam` to the transition table
 2. Handle `:` within existing `Action::Param` logic (more complex state machine)
 
@@ -306,6 +312,7 @@ func (s *Scrollback) Push(line uv.Line) {
 ```
 
 **Design notes:**
+
 - Simple slice-based with eviction via `slices.Delete`
 - Lines are cloned (not referenced) to prevent mutation
 - Trim trailing empty cells on push
@@ -339,6 +346,7 @@ impl<T> Storage<T> {
 ```
 
 **Design notes:**
+
 - Ring buffer where `zero` is the bottommost line offset
 - Scroll = increment/decrement `zero` (O(1), no data movement)
 - Rotation only needed when buffer grows
@@ -364,6 +372,7 @@ static inline int sb_phys_index(int logical_idx) {
 ```
 
 **Design notes:**
+
 - Ring buffer of Line pointers
 - `head` points to oldest line
 - Physical index = `(head + logical_index) % capacity`
@@ -405,6 +414,7 @@ final class Scrollback {
 ```
 
 **Integration with ScreenHandler:**
+
 - `ScrollHandler` calls `$scrollback->push($buffer->copyRow($row))` when scrolling
 - Add `Terminal::scrollback(): ?Scrollback` accessor
 - Add `Terminal::scrollbackLen(): int`
@@ -554,6 +564,7 @@ final readonly class Sgr {
 When bracketed paste mode (DECSET 2004) tells the terminal to wrap pasted text in markers, synchronized output (DECSET 2026) tells the terminal that the application will send output in discrete chunks, and the terminal should wait for a flush sequence before rendering.
 
 **Flow:**
+
 1. App sends `ESC[?2026h` to enable
 2. App sends rendering commands
 3. App sends `ESC[202S` (sync updates) or waits for `flush` callback
@@ -583,12 +594,14 @@ public function __construct(
 ### 8.1 Overview
 
 Kitty graphics protocol (0x47 escape sequence) provides:
+
 - 24-bit color
 - Vector graphics
 - Image transmission (base64, direct)
 - Query support
 
 **Upstream status in charmbracelet/x/vt:**
+
 - `vt/graphics.go` — partial implementation
 - Supports transmission, query, removal
 
@@ -613,6 +626,7 @@ Allows applications to query the current terminal state (cursor position, tab st
 ### 10.1 Current Implementation
 
 candy-vt tracks mouse modes:
+
 - `mouseAny` (1000) — button events
 - `mouseCellMotion` (1002) — button + drag
 - `mouseExtended` (1003) — any motion
@@ -689,6 +703,7 @@ candy-vt tracks mouse modes:
 ### P0.1 DECSTBM Scroll Margins
 
 **Files:**
+
 - `src/Handler/ScrollHandler.php` — Add margin awareness to `index()`, `reverseIndex()`, `nextLine()`
 - `src/Mode/Mode.php` — Add `scrollTop`/`scrollBottom` margin fields
 - `src/Handler/ModeHandler.php` — Handle DECSTBM (CSI r)
@@ -696,12 +711,14 @@ candy-vt tracks mouse modes:
 ### P0.2 Auto-wrap
 
 **Files:**
+
 - `src/Handler/ScreenHandler.php` — In `printChar()`, wrap instead of clamp when at right edge and DECAWM is set
 - `src/Mode/Mode.php` — Add `autoWrap` boolean field
 
 ### P0.3 Subparameter Parsing
 
 **Files:**
+
 - `src/Parser/Transitions.php` — Modify OSC/DCS string state ranges to handle `:`
 - `src/Parser/Parser.php` — Update `param()` to recognize `:` subparam separator
 - `src/Handler/SgrHandler.php` — Parse subparams for SGR 38:2 etc.
@@ -711,22 +728,26 @@ candy-vt tracks mouse modes:
 ## 14. References
 
 ### Upstream
+
 - [charmbracelet/x/ansi/parser](https://github.com/charmbracelet/x/tree/main/ansi/parser) — Go VT500 parser
 - [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt) — Virtual terminal emulator
 - [charmbracelet/x/vt/commit/2969fce](https://github.com/charmbracelet/x/commit/2969fcee80035444c85f98baa13389201d6edd0c) — Scrollback addition (March 2026)
 - [charmbracelet/ultraviolet](https://github.com/charmbracelet/ultraviolet) — Terminal UI primitives
 
 ### Rust
+
 - [alacritty/vte](https://github.com/alacritty/vte) — Rust VTE parser (310 stars)
 - [alacritty/vte/issues/22](https://github.com/jwilm/vte/issues/22) — Subparameter discussion
 
 ### Other Terminal Emulators
+
 - [nsf/termbox-go](https://github.com/nsf/termbox-go) — Minimalist cell-based terminal API
 - [gdamore/tcell](https://github.com/gdamore/tcell) — Enhanced terminal library (successor to termbox)
 - [alacritty/alacritty](https://github.com/alacritty/alacritty) — GPU-accelerated terminal (scrollback ring buffer)
 - [st suckless scrollback](http://st.suckless.org/patches/scrollback) — Ring buffer implementation
 
 ### Specifications
+
 - [VT100.net — DEC ANSI Parser](https://vt100.net/emu/dec_ansi_parser) — Paul-Williams state machine
 - [ECMA-48](https://www.ecma-international.org/publications-and-standards/standards/ecma-48/) — Control functions for Coded Character Sets
 - [xterm sequence definitions](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) — CSI, OSC, DCS sequences

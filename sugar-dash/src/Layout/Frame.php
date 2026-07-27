@@ -171,8 +171,10 @@ final class Frame implements \SugarCraft\Dash\Foundation\Sizer
             $adjusted[] = $line;
         }
 
-        while (count($adjusted) < $innerH) {
+        $adjustedCount = count($adjusted);
+        while ($adjustedCount < $innerH) {
             $adjusted[] = str_repeat(' ', $innerW);
+            $adjustedCount++;
         }
 
         return implode("\n", array_slice($adjusted, 0, $innerH));

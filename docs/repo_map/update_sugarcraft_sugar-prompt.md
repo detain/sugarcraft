@@ -7,11 +7,13 @@
 **Critical architectural note:** `sugar-prompt` is a deprecated backward-compatibility re-export layer. The actual implementation lives in **`candy-forms`** (`SugarCraft\Forms\*` namespace). The `sugar-prompt/src/` files are thin `class_alias()` wrappers pointing to `candy-forms` — making candy-forms the canonical source of truth.
 
 **Biggest opportunity areas:**
+
 - ReactPHP async integration for genuinely asynchronous suggestions (unique to SugarCraft)
 - Smith-Waterman fuzzy matching with custom adjacent bonus scoring
 - Vim keybindings in text input (full vim mode)
 
 **Biggest missing capabilities:**
+
 - Snapshot/visual regression tests for all field types
 - Matched indices from FuzzyMatcher (UI highlighting in filter results)
 - TextArea soft-wrap support for wide Unicode characters
@@ -26,6 +28,7 @@
 The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/src/`:
 
 **Core Components:**
+
 - `Form.php` (862 lines) — Top-level form compositor, implements `Model` interface
 - `Group.php` (137 lines) — One page of fields with hide predicate and theme override
 - `Field.php` (87 lines) — Field interface with 13 methods: `key()`, `value()`, `focus()`, `blur()`, `update()`, `view()`, `isFocused()`, `getTitle()`, `getDescription()`, `getError()`, `skippable()`, `consumes()`, `isHidden()`
@@ -33,6 +36,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - `KeyMap.php` (139 lines) — Rebindable key bindings for next/prev/submit/quit
 
 **Field Types:**
+
 - `Field\Input` (489 lines) — Single-line text, wraps `TextInput` widget
 - `Field\Text` (160 lines) — Multi-line textarea, wraps `TextArea` widget
 - `Field\Select` (334 lines) — Single-choice list, wraps `ItemList` widget
@@ -42,6 +46,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - `Field\FilePicker` (125 lines) — Filesystem browser, wraps `FilePicker` widget
 
 **Supporting Systems:**
+
 - `HasDynamicLabels.php` (71 lines) — `*Func()` dynamic label trait
 - `HasHideFunc.php` (38 lines) — Runtime visibility predicate trait
 - `Fuzzy/FuzzyMatcher.php` (115 lines) — Smith-Waterman local alignment scorer
@@ -99,6 +104,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ### Critical Priority
 
 #### 1. Snapshot/Visual Regression Tests
+
 - **Title:** Add snapshot tests for all field type renders
 - **Description:** No golden file assertions exist for ANSI SGR byte output. Every `view()` method needs a corresponding test asserting exact `\x1b[...m` bytes.
 - **Why it matters:** Without snapshot tests, any rendering regression is silent. Forms render complex multi-line ANSI output — regressions in color codes, cursor positioning, or layout break user-facing demos.
@@ -109,6 +115,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Expected impact:** High — enables confident refactoring of any `view()` method
 
 #### 2. FuzzyMatcher Matched Indices
+
 - **Title:** Return matched character indices from FuzzyMatcher
 - **Description:** `FuzzyMatcher::match()` returns scored candidates but not positions for UI highlighting. Upstream `sahilm/fuzzy` returns byte indices for highlighted filter matches.
 - **Why it matters:** Cannot implement highlighted filter results in Select or Input with suggestions. Users see matched items but cannot see *why* they matched.
@@ -121,6 +128,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ### High Value Priority
 
 #### 3. Template-Based Rendering
+
 - **Title:** Add optional template rendering system
 - **Description:** Upstream huh uses Lipgloss directly for styling. PromptKit uses Go's `text/template` with rich helper functions. SugarCraft uses direct ANSI concat.
 - **Why it matters:** Template rendering enables user-defined field layouts without modifying core code. Complex real-world forms often need custom arrangements.
@@ -131,6 +139,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Expected impact:** Medium — niche use case but high for advanced users
 
 #### 4. Auto-Pagination
+
 - **Title:** Add auto-pagination based on terminal height
 - **Description:** PromptKit uses binary search to find page size that fits terminal height. SugarCraft's ItemList requires manual `withPageSize()` configuration.
 - **Why it matters:** Users shouldn't guess terminal height. Forms should auto-adjust item count to fit available space.
@@ -141,6 +150,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Expected impact:** High — significantly improves OOTB user experience
 
 #### 5. Common Prefix Auto-Complete
+
 - **Title:** Add common prefix detection for suggestions
 - **Description:** PromptKit implements `commonPrefix()` using sorted array endpoints (O(n log n) sort, then single comparison). SugarCraft only has fuzzy and async suggestions.
 - **Why it matters:** CLI users expect single-tab completion when only one suggestion matches. Without it, users must manually type complete match.
@@ -153,6 +163,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ### Medium Priority
 
 #### 6. TextArea Soft-Wrap with Wide Unicode
+
 - **Title:** Implement soft-wrap accounting for East Asian wide characters
 - **Description:** PHP port stores flat lines only. Upstream Bubbles `TextArea` maintains complex `LineInfo` accounting for wide Unicode characters across wrapped lines.
 - **Why it matters:** CJK users cannot use TextArea properly without wide char support.
@@ -163,6 +174,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Expected impact:** Medium — affects specific locale users significantly
 
 #### 7. Closable Interface for Resource Cleanup
+
 - **Title:** Add Closable interface for Group/Form cleanup
 - **Description:** bubbleo's `Closable` interface calls `Close()` when items are popped from NavStack. SugarCraft Forms have no cleanup hook.
 - **Why it matters:** Applications embedding Forms may need to release resources (cancel async ops, close file handles) when form completes or is dismissed.
@@ -173,6 +185,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Expected impact:** Medium — enables resource cleanup in embedded contexts
 
 #### 8. Input History Persistence
+
 - **Title:** Add optional history persistence across sessions
 - **Description:** TextInput has history navigation (up/down) but no persistence. PromptKit's TextInput also lacks this.
 - **Why it matters:** CLI tools like `gum input --value` benefit from remembering previous inputs across invocations.
@@ -185,6 +198,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ### Low Priority
 
 #### 9. Shell Completion Generation
+
 - **Title:** Add shell completion for form field names/values
 - **Description:** CLIFramework generates bash/zsh completion. SugarCraft Forms with typed accessors could generate completions automatically.
 - **Why it matters:** Users building CLI tools with forms want tab completion for field keys and enum values.
@@ -195,6 +209,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Expected impact:** Low — specialized tooling feature
 
 #### 10. External Editor Integration
+
 - **Title:** Add `withEditor()` to Text field for external $EDITOR
 - **Description:** gum's `write` command uses `charmbracelet/x/editor` to open `$EDITOR` for multi-line input. SugarCraft Text has no editor integration.
 - **Why it matters:** Long-form text input is cumbersome in-terminal. Users prefer their configured editor.
@@ -209,6 +224,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ## Algorithm / Performance Opportunities
 
 ### 1. Smith-Waterman vs Substring Matching
+
 - **Current approach:** Custom Smith-Waterman implementation with adjacent bonus scoring
 - **External approach:** Upstream `sahilm/fuzzy` uses simpler substring scoring with character index tracking
 - **Why external is better:** `sahilm/fuzzy` is battle-tested across thousands of Go projects; returns matched indices for free
@@ -216,6 +232,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Applicability:** SugarCraft's fuzzy is superior for ranking but lacks index reporting
 
 ### 2. Auto-Pagination Binary Search
+
 - **Current approach:** Manual `withPageSize()` configuration
 - **External approach:** PromptKit brute-forces page size by trying 1..n until fit
 - **Why external is better:** Automatic adaptation to terminal height improves OOTB UX
@@ -223,6 +240,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Applicability:** Would significantly improve Select/MultiSelect UX
 
 ### 3. Common Prefix from Sorted Array
+
 - **Current approach:** No common prefix detection
 - **External approach:** Sort suggestions, compare first and last strings
 - **Why external is better:** O(n log n) sort enables O(1) prefix detection
@@ -230,6 +248,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Applicability:** Only useful for non-fuzzy exact prefix scenarios
 
 ### 4. Buffer Diffing (Rendering)
+
 - **Current approach:** Full re-render on every frame
 - **External approach:** Ratatui/php-tui compute cell-level diff and only write changed cells
 - **Why external is better:** Massive reduction in terminal I/O for complex forms
@@ -237,6 +256,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 - **Applicability:** Would benefit any form with static sections (notes, descriptions)
 
 ### 5. Cassowary Constraint Solver (Layout)
+
 - **Current approach:** Fixed width/height dimensions
 - **External approach:** Ratatui/php-tui use Cassowary for responsive layouts
 - **Why external is better:** Enables layouts that adapt to terminal resize without explicit handling
@@ -304,6 +324,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ## Documentation / Cookbook Opportunities
 
 ### 1. Multi-Step Wizard Pattern
+
 - Conditional group visibility with `withHideFunc()`
 - Progress indication in breadcrumb style
 - Data validation across group boundaries
@@ -311,6 +332,7 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 **Reference:** `sugarcraft_sugar-prompt.md` — "Multi-group (wizard) flow"
 
 ### 2. Async Autocomplete with ReactPHP
+
 - Debounced API fetching
 - Loading states
 - Error handling for network failures
@@ -318,11 +340,13 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 **Reference:** `sugarcraft_sugar-prompt.md` — "Async Suggestions" section
 
 ### 3. Custom Theme Creation
+
 - Composing `Theme` from `Style` building blocks
 - Per-group theme overrides
 - Accessible mode theming
 
 ### 4. Embedded Forms in larger TUIs
+
 - Form as `Model` in a `Program`
 - Mixing form fields with custom widgets
 - Navigation between form and other views
@@ -332,20 +356,24 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ## UX / TUI Improvements
 
 ### 1. Focus Transition Animations
+
 - **Current:** Instant focus changes between fields
 - **Improvement:** Subtle animation (cursor blink, highlight pulse) on focus change
 - **Reference:** `textualize_textual.md` — "Animation System"
 
 ### 2. Help Footer Improvements
+
 - **Current:** Simple `?` shows all keybindings
 - **Improvement:** Context-aware help showing only relevant keys for focused field
 - **Reference:** `charmbracelet/gum` — consistent help display
 
 ### 3. Error Highlighting
+
 - **Current:** Error text below field after failed submit
 - **Improvement:** Animate error highlight (red background pulse) on validation failure
 
 ### 4. Loading States for Async Suggestions
+
 - **Current:** No visual indication during async fetch
 - **Improvement:** Spinner or shimmer in suggestions dropdown during fetch
 
@@ -354,19 +382,23 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ## Testing / Reliability Improvements
 
 ### 1. Snapshot Tests (Critical)
+
 **Current:** No ANSI byte assertions
 **Improvement:** Golden files per field type per theme
 **Command:** `vendor/bin/phpunit --snapshot-update` after writing initial snapshots
 
 ### 2. Behavior Tests for Key Routing
+
 **Current:** `consumes()` logic tested indirectly
 **Improvement:** Explicit tests for key claiming in filter mode, multi-line mode
 
 ### 3. Cross-Field Validation Tests
+
 **Current:** `validateAll()` tested at integration level only
 **Improvement:** Unit tests for cross-field predicates
 
 ### 4. FFI/PTY Test Gating
+
 **Current:** Some tests require syscalls
 **Improvement:** `requirePtySyscalls()` gating for FFI-dependent tests
 
@@ -377,19 +409,23 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ## Ecosystem / Integration Opportunities
 
 ### 1. Gum CLI Wrapper (`sugar-prompt` → `gum`-equivalent)
+
 - **Current:** `sugar-prompt` is a library, not a CLI
 - **Opportunity:** `candy-shell` could provide `sugar` CLI wrapping sugar-prompt fields
 - **Reference:** `charmbracelet_gum.md` — 13 commands mapping to form fields
 
 ### 2. PHPStorm/IDE Plugin for Form Building
+
 - **Opportunity:** Visual form builder with drag-drop fields
 - **Reference:** `textualize_textual.md` — "DevTools" with hot-reloading
 
 ### 3. Live Preview CLI Tool
+
 - **Opportunity:** `sugar preview` command showing form in all themes
 - **Reference:** `charmbracelet/gum` — animated GIFs in README
 
 ### 4. Form Schema / Serialization
+
 - **Current:** Forms built in PHP code
 - **Opportunity:** JSON/YAML form schema with field definitions, parsed to Form
 - **Reference:** `erikgeiser_promptkit.md` — template-based rendering enables schema
@@ -399,27 +435,32 @@ The implementation lives in `candy-forms/src/` with re-exports in `sugar-prompt/
 ## Notable PRs / Issues / Discussions
 
 ### charmbracelet/huh #272 — Per-Form KeyMap Override
+
 - **Summary:** Feature request for per-form KeyMap rebinding
 - **Status:** Implemented in huh
 - **Relevance:** sugar-prompt already has this via `Form::withKeyMap()`
 - **Lessons:** This was highly requested; sugar-prompt should emphasize it in docs
 
 ### charmbracelet/huh — Dynamic Labels (*Func pattern)
+
 - **Summary:** `withTitleFunc()` / `withDescriptionFunc()` for render-time evaluation
 - **Status:** Both upstream and SugarCraft have identical pattern
 - **Lessons:** Capturing `$values` in closures is cleaner than Go's binding/invalidation
 
 ### erikgeiser/promptkit — Template-Based Rendering
+
 - **Summary:** Uses Go `text/template` with rich FuncMap
 - **Status:** Active development, pre-1.0
 - **Lessons:** Template rendering enables complex custom UIs without core changes
 
 ### textualize/textual — CSS-Based Styling
+
 - **Summary:** TCSS with selectors, properties, hot-reload
 - **Status:** Production-ready, 30k+ stars
 - **Lessons:** Web developers find CSS styling paradigm intuitive for TUI
 
 ### ratatui/ratatui — Buffer Diffing
+
 - **Summary:** Immediate mode rendering with cell-level diff computation
 - **Status:** 19.6k stars, production-ready
 - **Lessons:** Buffer diffing is essential for performance in complex TUIs
@@ -490,6 +531,7 @@ The most ambitious architectural opportunities—**buffer diffing** and **Cassow
 The strategic positioning of sugar-prompt is strong: it's the canonical form library for the SugarCraft ecosystem, living atop the foundational `candy-forms` layer. As the ecosystem matures, sugar-prompt will benefit from improvements in all dependent libraries. The deprecation path (direct `SugarCraft\Forms\*` usage) is already clear, making sugar-prompt a stable API surface for users.
 
 **Key recommendations:**
+
 1. **Immediately** add snapshot tests and FuzzyMatcher indices
 2. **Focus on** auto-pagination and common prefix for CLI UX parity
 3. **Invest in** documentation and cookbook examples for common patterns

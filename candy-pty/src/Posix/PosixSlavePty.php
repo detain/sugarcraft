@@ -57,6 +57,7 @@ final class PosixSlavePty implements SlavePty
             try {
                 $this->master->resize($cols, $rows);
             } catch (\SugarCraft\Pty\PtyException) {
+                // Resize failed (e.g., non-blocking pipe); best-effort, continue.
             }
         }
 

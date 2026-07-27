@@ -30,7 +30,6 @@ final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
     private array $items = [];
 
     private bool $showConnectors = true;
-    private bool $showValues = true;
     private bool $showGrid = true;
     private ?float $minValue = null;
     private ?float $maxValue = null;
@@ -120,16 +119,6 @@ final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Show or hide values.
-     */
-    public function withShowValues(bool $show): self
-    {
-        $clone = clone $this;
-        $clone->showValues = $show;
-        return $clone;
-    }
-
-    /**
      * Show or hide grid.
      */
     public function withShowGrid(bool $show): self
@@ -199,9 +188,6 @@ final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
 
         [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
 
-        $gridColor = $this->gridColor ?? Color::hex('#45475A');
-        $textColor = $this->textColor ?? Color::hex('#CDD6F4');
-
         $result = '';
 
         // Title
@@ -224,7 +210,6 @@ final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
         if ($this->showGrid) {
             $gridLines = min($chartHeight - 1, 5);
             for ($i = 0; $i < $gridLines; $i++) {
-                $y = intval($i * ($chartHeight - 1) / max(1, $gridLines - 1));
                 $labelY = $this->maxValue - (($this->maxValue - $this->minValue) * $i / max(1, $gridLines - 1));
                 $labelStr = sprintf('%5.1f', $labelY);
                 $line = str_repeat('·', $barAreaWidth);
@@ -280,7 +265,6 @@ final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
 
             // Connector line
             if ($this->showConnectors && !$isLast && $item->type !== WaterfallBarType::Total && $item->type !== WaterfallBarType::Subtotal) {
-                $connectorY = intval(($this->maxValue - $runningTotal) / max(0.01, $this->maxValue - $this->minValue) * ($chartHeight - 1));
                 $connectorLine = str_repeat('─', $barAreaWidth);
                 $result .= $v . str_repeat(' ', $labelWidth) . $v . $connectorLine . $v . "\n";
             }

@@ -104,6 +104,7 @@ Today:
 sugar-boxer research lists `BoxStyle` enum (Single/Double/Round/Bold/Classic/Hidden/Block), text alignment, box titles, colors, margin as missing features. **All five live in candy-sprinkles.** sugar-boxer should compose `\SugarCraft\Sprinkles\Style` + `\SugarCraft\Sprinkles\Border\Border` instead of rolling its own.
 
 **Action:**
+
 - SSOT-02 — Refactor sugar-boxer to accept `Style` and `Border` from candy-sprinkles. Delete any internal `Border*`. Adds candy-sprinkles to require (transitive via candy-core OK; verify path-repo per `tools/check-path-repos.php`).
 
 ### SSOT-03 — sugar-stickers composes sugar-bits
@@ -111,6 +112,7 @@ sugar-boxer research lists `BoxStyle` enum (Single/Double/Round/Bold/Classic/Hid
 sugar-stickers research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. **Both already exist** in `sugar-bits/src/Viewport/Viewport.php` and `sugar-bits/src/Scrollbar/`. The sticker-specific behaviour (sticky positioning, scroll sync) should layer **on top** of sugar-bits, not replace.
 
 **Action:**
+
 - SSOT-03 — sugar-stickers' `Viewport` becomes a `final class` extending or composing `\SugarCraft\Bits\Viewport\Viewport` with the sticky-positioning extras. Add sugar-bits to require.
 
 ### SSOT-04 — sugar-crumbs click regions use candy-zone
@@ -118,6 +120,7 @@ sugar-stickers research's Priority 1 is `Viewport`, Priority 3 is `Scrollbar`. *
 sugar-crumbs research P4 calls for "Click-region rendering". `candy-zone` is the canonical zone-tracking lib (APC marker + scan algorithm). sugar-crumbs should emit zone markers via candy-zone, not embed click coordinates.
 
 **Action:**
+
 - SSOT-04 — When implementing click regions in sugar-crumbs, use `\SugarCraft\Zone\Manager::mark()` for each crumb. Acceptance: `grep -n "zoneMark\|APC" sugar-crumbs/src` returns hits to candy-zone, not inline copies.
 
 ### SSOT-05 — Chart duplication: sugar-dash depends on sugar-charts
@@ -127,6 +130,7 @@ sugar-crumbs research P4 calls for "Click-region rendering". `candy-zone` is the
 **Decision:** sugar-charts is the focused chart library — keep it canonical. sugar-dash's Plot/Chart should delegate.
 
 **Action:**
+
 - SSOT-05a — Audit each `sugar-dash/src/Plot/Chart/*.php` against `sugar-charts/src/*.php`. For each direct duplicate, delete the dash version + replace with re-export.
 - SSOT-05b — sugar-dash variants that add value beyond sugar-charts (e.g. `GaugeWithDetail`, `WordCloud`, `Treemap`) stay in dash; document the rule "leaf chart families = sugar-charts; visualizations + dashboard widgets = sugar-dash."
 - SSOT-05c — Add `sugarcraft/sugar-charts` to `sugar-dash/composer.json` `require`.
@@ -148,6 +152,7 @@ Found in `candy-mosaic/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Cont
 `candy-log` research items M5/M6 (`NO_COLOR`/`FORCE_COLOR` detection + downsampling) and `candy-palette` itself need `CLICOLOR_FORCE`/`CLICOLOR`/`COLORTERM` precedence, tmux/screen detection, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, terminfo `Tc`/`RGB` parsing. All these env probes belong in **one** place: `candy-palette`.
 
 **Actions:**
+
 - SSOT-08a — Pull all env-var probes into `candy-palette/src/Probe.php` (new class). Single API: `Probe::colorProfile(): ColorProfile`.
 - SSOT-08b — `candy-log`, `candy-mosaic`, `candy-freeze` (themes), `candy-vt` (truecolor accept) all consume it.
 - SSOT-08c — Implement the missing candy-palette items (H1–H5, M1–M3, terminfo Phase 2) inside `Probe`. Tests cover each env-var precedence rule.
@@ -157,6 +162,7 @@ Found in `candy-mosaic/src/Detect.php:236-237`. Canonical: `\SugarCraft\Pty\Cont
 sugar-dash's `Module/Module.php` uses `array<string,mixed>` state. candy-core's `\SugarCraft\Core\Model` is the established Elm-style contract (`update(Msg): [Model, ?Cmd]`). Two incompatible contracts in one monorepo.
 
 **Action:**
+
 - SSOT-09 — Redefine `Module\Module::update()` to return `array{0:Module,1:?Cmd}` aligned with `Core\Model`. Built-in modules (Clock, System, Greeting, Uptime, Generic) rewritten. Old array-state contract kept as `LegacyModule` interface for one release.
 
 ---

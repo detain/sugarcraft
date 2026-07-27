@@ -13,6 +13,7 @@ both reference. It is a stub plan for the eventual Windows ConPTY backend.
 ## Files
 
 **Create:**
+
 - `plans/x-windows.md`
 
 Contents should cover (one short paragraph or bullet each):

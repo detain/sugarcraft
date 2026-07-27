@@ -119,6 +119,7 @@ $ tput rs2 | sequin
 **Problem**: Escape sequences are undocumented beyond ECMA-48, and each emulator has conflicting approaches. The project needs a well-defined scope early-on.
 
 **Key Questions Raised**:
+
 1. Should project handle only VT100-VT500 + xterm-compatible terminals?
 2. Are features from rare emulators/physical terminals acceptable?
 3. How to handle conflicting sequences (e.g., SGR 21 behaves differently across Linux console versions)?
@@ -161,11 +162,13 @@ $ tput rs2 | sequin
 4. GNU Screen < 4.99.0 lacks OSC10/11 support
 
 **Solution**:
+
 - PR #22: Added 4-bit ANSI color scheme fallback
 - PR #444 (lipgloss): Fixed Windows CONIN/CONOUT explicit opening for non-tty streams
 - Documentation: FAQ added with multiplexer version requirements
 
 **Lessons for SugarCraft**:
+
 1. Background color detection requires explicit handling for piped/non-tty scenarios
 2. Multiplexer compatibility requires version-specific workarounds
 3. OSC queries are unreliable across terminal layers—document minimum versions
@@ -179,6 +182,7 @@ $ tput rs2 | sequin
 **Signal**: Multiple issues and codebase contain "TODO: unhandled sequence" output
 
 **Patterns**:
+
 - `CSI !p`: DECSTR not implemented
 - `ESC >`: DECPNM not implemented
 - `CSI ?3;4l`: Private mode numbers not all mapped
@@ -203,6 +207,7 @@ $ tput rs2 | sequin
 | $TERM detection | N/A | Must not trust $TERM for OSC queries |
 
 **SugarCraft Implication**: Any SugarCraft component that queries terminal properties (background color, terminal type) must account for:
+
 1. Layered multiplexing (tmux inside SSH inside terminal)
 2. Version differences
 3. Config differences
@@ -214,6 +219,7 @@ $ tput rs2 | sequin
 **Signal**: Issue #98 and HN/Lobsters comments reveal that private mode descriptions are not specific enough.
 
 **Current Problem**:
+
 - `CSI ?1h` → "Enable private mode 'cursor keys'" (but WHICH cursor keys mode? DECCKM or something else?)
 - Single sequence can enable/disable multiple modes but only first is described
 - Mode number → name mapping is incomplete (many "unknown" modes)
@@ -227,6 +233,7 @@ $ tput rs2 | sequin
 **Signal**: Lobsters thread reports `sequin -- foo` failing with argument parsing issues
 
 **Community Workarounds**:
+
 1. `socat` piping to sequin
 2. `script session.log` recording + replay
 
@@ -247,6 +254,7 @@ $ tput rs2 | sequin
 | SGR 21 accurate behavior | PR #43 | Fixed in 2024 |
 
 **High-Value for SugarCraft**:
+
 1. DECSTR handler (Issue #77) - fundamental terminal reset
 2. Multiple private mode decoding (Issue #98) - usability improvement
 3. SGR 21 fix (PR #43) - demonstrates cross-terminal compatibility challenge
@@ -419,6 +427,7 @@ $ tput rs2 | sequin
 ```bash
 # Instead of: sequin -- some-cmd
 # Use: socat exec:"some-cmd" stdout | sequin
+
 ```
 
 **Signal**: Community discovered that PTY through socat provides more reliable capture than sequin's built-in PTY execution.
@@ -429,6 +438,7 @@ $ tput rs2 | sequin
 script session.log
 # interact with application
 # exit
+
 cat session.log | sequin
 ```
 
@@ -462,6 +472,7 @@ setenv -g COLORTERM "truecolor"
 ### Pattern: Encourage Community Contributions
 
 **Examples**:
+
 - Issue #20 (Tektronix): "if you're interested in contributing the feature you are more than welcome to go for it!"
 - Issue #77: "Good first issue" label applied within hours
 
@@ -472,6 +483,7 @@ setenv -g COLORTERM "truecolor"
 ### Pattern: Document Known Limitations
 
 **Examples**:
+
 - README explicitly states "APC sequences are not supported yet"
 - FAQ added for multiplexer compatibility issues
 
@@ -648,6 +660,7 @@ defer ansi.PutParser(p)
 ### Lesson: Theme Detection Layers
 
 **Pattern**: Multiple detection mechanisms
+
 1. OSC query to terminal
 2. Environment variable fallback
 3. Compile-time default
@@ -659,6 +672,7 @@ defer ansi.PutParser(p)
 ### Lesson: Golden File Testing
 
 **Pattern**: Snapshot testing via `x/exp/golden`
+
 - Test data maps covering all sequence types
 - Compare rendered output against expected
 
@@ -697,6 +711,7 @@ defer ansi.PutParser(p)
 **Problem**: When terminal detection fails, what happens?
 
 **Defensive Design**: Always provide fallback:
+
 1. Try OSC query
 2. Try environment variable
 3. Try compile-time default

@@ -457,28 +457,33 @@ The stdin pipe is closed, but the test doesn't explicitly close stdout/stderr pi
 ## Recommendations Summary
 
 ### Must Fix (Critical)
+
 1. **[Memory leak]** `PngRenderer::allocateColor()` static `$cache` grows indefinitely — make it instance-scoped or use `WeakMap`
 2. **[Bug]** `VsCodeThemeLoader.php:52` has `throw throw` — duplicate keyword
 3. **[Dead code]** `$buttonHoverColors` unused in both `SvgRenderer` and `PngRenderer`
 
 ### Should Fix (Correctness)
+
 4. **[Typo]** `VsCodeThemeLoader.php:77` fallback `#c9d9` should be `#c9d1d9`
 5. **[Docs]** Add note that `PngRenderer` GD fonts don't support Unicode
 6. **[Symlink]** CLI should reject symlinks pointing outside CWD for input files
 
 ### Should Refactor (Code Quality)
+
 7. **[DRY]** Extract `LayoutCalculator` from duplicate sizing logic in both renderers
 8. **[DRY]** Consolidate four window-chrome geometry methods via `WindowChromeGeometry`
 9. **[Modernize]** Replace 20+ `if/continue` in `applySgr()` with `match` expression
 10. **[Dead code]** `Theme::$windowStyle` property is set but never read — remove or wire it up
 
 ### Could Add (Features)
+
 11. **[Missing feature]** Add `--format svg|png` to CLI
 12. **[Missing feature]** `OutputWriter` interface for streaming / async rendering
 13. **[Missing feature]** Wire `LanguageDetector` into the rendering pipeline for language-aware output
 14. **[Missing feature]** Document and use `PngRenderer::dark()` etc. factories in examples
 
 ### Testing
+
 15. **[Coverage]** Add `testAnsiBackgroundBecomesRectFill` for SVG renderer
 16. **[Coverage]** Add tests for mixed 256-color + truecolor on one line
 17. **[Coverage]** Add test for empty-input rendering

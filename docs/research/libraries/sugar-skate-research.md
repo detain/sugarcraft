@@ -183,6 +183,7 @@ let value: String = db.get("key")?;
 ```
 
 **Key patterns:**
+
 - Unified API across multiple backends
 - Automatic serialization/deserialization via Serde
 - Type-safe values (integer types, String, bool, bytes)
@@ -191,6 +192,7 @@ let value: String = db.get("key")?;
 
 **Repository:** https://docs.rs/tinykv/latest/tinykv/
 **Features:**
+
 - JSON-based storage (serde)
 - TTL/expiration support
 - Auto-saving
@@ -206,6 +208,7 @@ db.expire("key", std::time::Duration::from_secs(60))?;  // TTL!
 ```
 
 **Key patterns:**
+
 - **TTL/expiration** - Sugar-skate lacks this
 - **Auto-save** on modification
 - **Backup files** (.bak)
@@ -214,6 +217,7 @@ db.expire("key", std::time::Duration::from_secs(60))?;  // TTL!
 
 **Repository:** https://docs.rs/rkv/latest/rkv/
 **Features:**
+
 - Single backend (SafeMode, based on LMDB-inspired design)
 - Type-safe values via Value enum
 - Manager singleton for environment control
@@ -231,6 +235,7 @@ store.put(&mut writer, "blob", &Value::Blob(b"bytes"))?;
 ```
 
 **Key patterns:**
+
 - **Typed values** - sugar-skate could benefit from typed entries
 - **Value::Json variant** - Store JSON documents
 
@@ -256,6 +261,7 @@ db.get("key")  # returns "value"
 
 ```python
 # Atomic save to temp file + rename
+
 async def save(self) -> bool:
     temp = f"{self.location}.tmp"
     async with aiofiles.open(temp, "wb") as f:
@@ -265,6 +271,7 @@ async def save(self) -> bool:
 ```
 
 **Features:**
+
 - Async-first with `aiofiles`
 - Optional SQLite backend
 - Atomic writes (write to `.tmp`, rename)
@@ -308,6 +315,7 @@ table.insert({'value': True})
 ```
 
 **Sugar-skate could learn from:**
+
 - Middleware for caching reads
 - Rich query API for future expansion
 
@@ -325,14 +333,17 @@ db['key'] = 'value'
 db['key']  # 'value'
 
 # Hash operations (nested key-value)
+
 h = db.Hash('some key')
 h['k1'] = 'v1'
 
 # Counters
+
 db.incr('counter')  # Atomic counter operations
 ```
 
 **Key patterns:**
+
 - **Hashes** (nested key-value within a key) - similar to skate's `@db` notation but for nested values
 - **Atomic counter operations** (`incr`, `decr`)
 - **Sets**, **Lists** (beyond basic key-value)

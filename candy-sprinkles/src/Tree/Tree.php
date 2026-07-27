@@ -237,7 +237,8 @@ final class Tree
                     continue;
                 }
                 $lines[] = $branch . $childLines[0];
-                for ($j = 1; $j < count($childLines); $j++) {
+                $childLineCount = count($childLines);
+                for ($j = 1; $j < $childLineCount; $j++) {
                     $lines[] = $contRaw . $childLines[$j];
                 }
                 continue;
@@ -247,7 +248,8 @@ final class Tree
                 : $child;
             $leafLines = explode("\n", $leafText);
             $lines[] = $branch . $leafLines[0];
-            for ($j = 1; $j < count($leafLines); $j++) {
+            $leafLineCount = count($leafLines);
+            for ($j = 1; $j < $leafLineCount; $j++) {
                 $lines[] = $contRaw . $leafLines[$j];
             }
         }

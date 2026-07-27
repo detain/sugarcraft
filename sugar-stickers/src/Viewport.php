@@ -210,8 +210,10 @@ final readonly class Viewport
     private function padLines(array $lines, int $count): array
     {
         $pad = str_repeat(' ', $this->inner->width);
-        while (count($lines) < $count) {
+        $lineCount = count($lines);
+        while ($lineCount < $count) {
             $lines[] = $pad;
+            $lineCount++;
         }
         return array_slice($lines, 0, $count);
     }

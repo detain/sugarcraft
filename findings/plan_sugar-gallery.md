@@ -67,24 +67,29 @@ The findings file references `src/Gallery.php:78-85` and `src/FFIDecoder.php:45`
 **Source:** `findings/sugar-gallery.md:L125-L128`
 
 #### What is Expected
+
 PosterCard shows filename/title but not dimensions/file size/date.
 
 #### Why the Change Should be Done
+
 Users cannot see image metadata (dimensions, file size) without decoding the image, which is intentionally not done in sugar-gallery. However, optional metadata fields could be added for display purposes without coupling to an image decoder.
 
 #### Severity: LOW
 
 #### Conditions for Success
+
 - PosterCard can optionally display dimensions (e.g., "1920×1080") and file size (e.g., "2.4MB")
 - Metadata is purely decorative — does not affect rendering geometry
 - Consumer is responsible for providing metadata
 
 #### Related Code Locations
+
 - `sugar-gallery/src/PosterCard.php:L38-47` — constructor
 - `sugar-gallery/src/PosterCard.php:L106-143` — render() method
 - `sugar-mosaic/src/ImageSource.php:L25-30` — has width/height fields that could supply metadata
 
 #### Implementation Approach
+
 Add optional metadata fields to PosterCard:
 
 ```php
@@ -107,6 +112,7 @@ public function __construct(
 Add to `::new()` factory and update render() to optionally display metadata.
 
 #### Investigation Notes
+
 - candy-mosaic's `ImageSource` already has `$width`, `$height`, and access to file size via `filesize()` in `fromFile()`
 - The CALIBER_LEARNINGS explicitly says NOT to add an image decoder dependency
 - Metadata should be provided by the consumer that calls candy-mosaic to render

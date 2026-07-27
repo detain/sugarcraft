@@ -11,6 +11,7 @@ Built-in `Validator` subclasses: `Required`, `Email`, `MinLength`,
 ## Files
 
 **Create:**
+
 - `sugar-prompt/src/Validator/Required.php`
 - `sugar-prompt/src/Validator/Email.php`
 - `sugar-prompt/src/Validator/MinLength.php`
@@ -18,6 +19,7 @@ Built-in `Validator` subclasses: `Required`, `Email`, `MinLength`,
 - `sugar-prompt/src/Validator/Pattern.php`
 
 **Modify:**
+
 - `sugar-prompt/src/TextInput.php` — `withValidator(Validator)` accepts
   any of the above; multiple validators chain.
 

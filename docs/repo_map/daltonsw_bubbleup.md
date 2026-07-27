@@ -1,6 +1,7 @@
 # daltonsw/bubbleup
 
 ## Metadata
+
 - URL: https://github.com/daltonsw/bubbleup
 - Language: Go
 - Stars: Unknown (GitHub credentials unavailable)
@@ -78,6 +79,7 @@
 | daltonsw/bubbleup | SugarToast | sugar-toast/ | sugarcraft/sugar-toast | SugarCraft\Toast | 🟢 |
 
 **Many-to-many mapping notes**:
+
 - `AlertModel` → `Toast` (main model class)
 - `alert` struct → `Alert` (individual alert data)
 - `Position` type → `Position` enum (9 positions in SugarToast vs 6 in upstream)

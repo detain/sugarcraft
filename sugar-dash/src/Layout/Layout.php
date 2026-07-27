@@ -156,7 +156,8 @@ final class Layout implements \SugarCraft\Dash\Foundation\Sizer
                 $lines[$y] .= $lineContent;
 
                 // Add gap after this child (except last)
-                if ($index < count($this->children) - 1 && $this->gap > 0) {
+            $childCount = count($this->children);
+            if ($index < $childCount - 1 && $this->gap > 0) {
                     $lines[$y] .= str_repeat(' ', $this->gap);
                 }
             }
@@ -213,15 +214,18 @@ final class Layout implements \SugarCraft\Dash\Foundation\Sizer
             }
 
             // Pad with empty lines if needed
-            while (count($alignedLines) < $childHeight) {
+            $alignedCount = count($alignedLines);
+            while ($alignedCount < $childHeight) {
                 $alignedLines[] = str_repeat(' ', $childWidth);
+                $alignedCount++;
             }
 
             // Add to output
             $lines = array_merge($lines, $alignedLines);
 
             // Add gap after this child (except last)
-            if ($index < count($this->children) - 1 && $this->gap > 0) {
+            $childCount = count($this->children);
+            if ($index < $childCount - 1 && $this->gap > 0) {
                 for ($i = 0; $i < $this->gap; $i++) {
                     $lines[] = str_repeat(' ', $width);
                 }
@@ -409,8 +413,10 @@ final class Layout implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Add bottom padding
-        while (count($result) < $layoutHeight) {
+        $resultCount = count($result);
+        while ($resultCount < $layoutHeight) {
             $result[] = '';
+            $resultCount++;
         }
 
         return $result;

@@ -1,6 +1,7 @@
 # charmbracelet/pop
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/pop
 - **Language:** Go
 - **Stars:** ~2.8k
@@ -8,6 +9,7 @@
 - **Description:** Send emails from your terminal. A TUI email client built on Bubble Tea with support for both the Resend API and SMTP delivery.
 
 ## Feature List
+
 - **Text-based User Interface (TUI):** Full terminal UI for composing emails with real-time preview, built on Bubble Tea (charmbracelet/bubbletea)
 - **Command-line Interface (CLI):** Pipe email content directly with flags for `--from`, `--to`, `--subject`, `--attach`, etc.
 - **Markdown-to-HTML Rendering:** Body text written in Markdown is converted to HTML via goldmark before sending; supports tables, strikethrough, linkify (with `--unsafe` flag)
@@ -26,12 +28,14 @@
 ## Key Classes and Methods
 
 ### `main.go`
+
 - **`rootCmd`** (`*cobra.Command`) — Root CLI command; dispatches either TUI or direct-send based on whether all required fields are present
 - **`NewModel(resend.SendEmailRequest, DeliveryMethod)`** — Bootstraps the TUI `Model` (delegated to `model.go`)
 - **`hasStdin()`** — Checks if stdin has data (for CLI pipe mode)
 - **`DeliveryMethod` selection logic** — Resolved at startup from env vars; error级ly handled when both SMTP and Resend credentials are present
 
 ### `model.go`
+
 - **`State`** enum — Finite state machine states: `editingFrom`, `editingTo`, `editingCc`, `editingBcc`, `editingSubject`, `editingBody`, `editingAttachments`, `hoveringSendButton`, `pickingFile`, `sendingEmail`
 - **`DeliveryMethod`** enum — `None`, `Resend`, `SMTP`, `Unknown`
 - **`Model` struct** — Holds all Bubble Tea component models (`From`, `To`, `Cc`, `Bcc`, `Subject`, `Body` textinput/textarea, `Attachments` list, `filepicker`, `loadingSpinner`, `help`, `keymap`) plus `state`, `DeliveryMethod`, `err`, `quitting`, `abort`
@@ -44,6 +48,7 @@
 - **`canSend()`** — Returns true when From, To, Subject, and Body are all non-empty
 
 ### `email.go`
+
 - **`sendEmailCmd()`** — Returns a `tea.Cmd` closure that calls `sendSMTPEmail` or `sendResendEmail`, dispatches `sendEmailSuccessMsg` or `sendEmailFailureMsg`
 - **`sendSMTPEmail(to, cc, bcc, from, subject, body, attachments)`** — Creates SMTP client via `xhit/go-simple-mail/v2`, sets TLS config, uses `goldmark` to convert body Markdown → HTML (falls back to plain text on error), attaches files, sends
 - **`sendResendEmail(to, cc, bcc, from, subject, body, attachments)`** — Creates Resend client, uses `goldmark` with optional unsafe extensions for HTML conversion, builds `resend.SendEmailRequest`, calls `client.Emails.Send`
@@ -52,17 +57,20 @@
 - **`gmailSuffix` / `gmailSMTPHost` / `gmailSMTPPort`** — Constants for Gmail smart defaults
 
 ### `keymap.go`
+
 - **`KeyMap` struct** — Fields: `NextInput`, `PrevInput`, `Send`, `Attach`, `Unattach`, `Back`, `Quit` (each a `key.Binding`)
 - **`DefaultKeybinds()`** — Returns keybindings: `tab`=next, `shift+tab`=prev, `ctrl+d`/`enter`=send (disabled until hover), `enter`=attach (disabled until attachments state), `x`=unattach, `esc`=back, `ctrl+c`=quit
 - **`updateKeymap()`** — Enables/disables bindings based on current `state`; also updates `filepicker.KeyMap` sub-bindings
 - **`canSend()`** — (duplicated in keymap.go) predicate checking all required fields
 
 ### `style.go`
+
 - **Lipgloss styles** — `activeTextStyle`, `textStyle`, `activeLabelStyle`, `labelStyle`, `placeholderStyle`, `cursorStyle`, `paddedStyle`, `errorHeaderStyle`, `errorStyle`, `commentStyle`, `sendButtonActiveStyle`, `sendButtonInactiveStyle`, `sendButtonStyle`, `inlineCodeStyle`, `linkStyle`
 - **Color constants** — `accentColor` (99), `yellowColor` (#ECFD66), `whiteColor` (255), `grayColor` (241), `darkGrayColor` (236), `lightGrayColor` (247)
 - **`emailSummary(to, subject)`** — Formats the success message shown after send
 
 ### `attachments.go`
+
 - **`attachment`** type — `string` alias representing a file path; `FilterValue()` returns the path string
 - **`attachmentDelegate` struct** — Implements Bubble Tea `list.ItemDelegate`; `Render()` draws each attachment with `•` prefix when focused, spaces when unfocused; `Height()` returns 1
 - **`Update()`** — No-op; required by interface
@@ -77,6 +85,7 @@
 - **Keyboard-navigable form:** Combination of Bubble Tea's `textinput` and `textarea` bubbles with manual `focusActiveInput()`/`blurInputs()` style management for visual feedback (active label turns accent-colored).
 
 ## Strengths
+
 - Clean separation between TUI and CLI modes — works interactively and in pipelines
 - Two production-quality delivery backends (Resend API + SMTP) with a clean dispatch pattern
 - Gmail auto-detection reduces friction for the most common SMTP case
@@ -87,6 +96,7 @@
 - MIT licensed, part of the well-regarded charmbracelet ecosystem (~2.8k stars)
 
 ## Weaknesses
+
 - No HTML template support — body is either plain text or single-pass Markdown→HTML
 - No email preview (rendered HTML) before sending in the default (non-preview) flow
 - Bcc/Cc fields are hidden by default (only shown when non-empty) — not discoverable

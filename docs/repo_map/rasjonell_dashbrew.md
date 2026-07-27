@@ -1,6 +1,7 @@
 # rasjonell/dashbrew
 
 ## Metadata
+
 - **URL:** https://github.com/rasjonell/dashbrew
 - **Language:** Go (1.23.6)
 - **Stars:** ~1.4k (star-history.com chart reference only; exact count not accessible via GitHub unauthenticated API)
@@ -8,6 +9,7 @@
 - **Description:** A terminal dashboard builder that visualizes data from scripts and APIs via a JSON configuration file, built on the Charmbracelet TUI ecosystem.
 
 ## Feature List
+
 - **JSON-driven dashboard configuration** — Declarative `dashboard.json` defines layout tree (container rows/columns + leaf components) and per-component styling
 - **Layout system** — Recursive row/column flexbox-style containers with configurable `flex` weights and `gap` spacing; aspect-ratio reservation for even/odd terminal dimensions
 - **6 component types:**
@@ -33,9 +35,11 @@
 ## Key Classes and Methods
 
 ### `cmd/dashbrew/main.go`
+
 - `main()` — CLI entry: parses `-c` (config path), `-t/--theme` (theme override), `--list-themes`; constructs `tea.NewProgram(tui.New(cfg), tea.WithAltScreen(), tea.WithMouseCellMotion())`
 
 ### `internal/config/config.go`
+
 - `LoadConfig(path string)` — Reads JSON, unmarshals, fills defaults (global/border), calls `resolvePalette()`, returns `*DashboardConfig`
 - `DashboardConfig` struct — Top-level: `Layout *LayoutNode`, `Style *StyleConfig`
 - `LayoutNode` struct — `Type` (`container`|`component`), `Flex`, `Direction` (`row`|`column`), `Children []*LayoutNode`, `Component *Component`
@@ -43,14 +47,17 @@
 - `EffectiveStyles(global, comp)` — Clones global `StyleConfig`, merges per-component palette/border overrides; used by every component constructor
 
 ### `internal/config/themes.go`
+
 - `resolvePalette()` — 4-level merge: (1) `default` theme, (2) named `style.theme`, (3) explicit `style.palette`, (4) legacy `style.border.color/focusedColor`; writes back into `cfg.Style.Palette`
 - `LookupTheme(name)`, `AvailableThemes()`, `OverrideTheme(cfg, name)`, `loadCustomThemesOnce()` — Theme registry with disk-scan for custom themes
 
 ### `internal/config/validate.go`
+
 - `Validate()` — Walks layout tree, validates each component; checks reserved key conflicts, internal key conflicts per component type, action type validity, `output_as` constraints, timeout non-negativity
 - `NormalizeKey(s string)` — Canonicalizes key chords (ctrl/alt/shift ordering, `space` alias expansion)
 
 ### `internal/components/components.go`
+
 - `Component` interface — `ID()`, `Type()`, `IsFocusable()`, `SupportsAdd()`, `GetAddInput()`, `SupportsRefresh()`, `Config()`, `Bindings()`, `ActionActive()`, `ActionLoading()`, `BeginAction()`, `ApplyActionResult()`, `ResetAction()`, `Init()`, `View(w, h, focused)`, `Update(msg)`, `SetContent(result)`, `HandleAddMode(msg)`
 - `NewComponent(cfg, styles)` — Factory: switches on `cfg.Type` to construct `*textComponent`, `*listComponent`, `*todoComponent`, `*chartComponent`, `*tableComponent`, `*histogramComponent`
 - `baseComponent` struct — Embeds `id`, `config`, `styles`, `action actionState`; default implementations for all interface methods
@@ -59,17 +66,20 @@
 - `tickActionSpinner(b, msg)`, `updateActionViewport(b, msg)` — Fan-out helpers that components call from their `Update` to handle spinner ticks and action viewport scrolling without deduplication
 
 ### `internal/components/text.go`
+
 - `TextComponent` struct — Embeds `baseComponent` + `viewport bubbles/viewport.Model` + `content string`
 - `View()` — Renders header + scrollable viewport with content wrapped to pane width + optional footer showing scroll `%` + caption
 - `SetContent(result)` — Stores content string; resets viewport to top
 
 ### `internal/components/chart.go`
+
 - `ChartComponent` struct — Embeds `baseComponent` + `plotData []float64`
 - `View()` — Delegates to `asciigraph.Plot()` with ANSI-256 colors converted from theme palette via `HexToAnsi256()`; reserves 2 rows below header for chart height
 - `SetContent(result)` — Parses raw output as JSON number array OR newline-separated floats; supports `refresh_mode: append` for streaming data
 - `parseDataToChartPoints(rawData)` — Tries `json.Unmarshal` first, then falls back to per-line `strconv.ParseFloat`
 
 ### `internal/components/histogram.go`
+
 - `HistogramComponent` struct — Embeds `baseComponent` + `maxValue int`, `content string`, `labels []string`, `bins map[string]int`, `viewport`
 - `View()` — Conditionally renders caption inline vs in footer based on whether content overflows available height (avoids first-frame miscalculation from stale viewport dimensions)
 - `SetContent(result)` — Parses via `parseDataToHistogram`; sorts labels alphabetically
@@ -78,6 +88,7 @@
 - `barColor()` — `single` (accent), `alternate` (accent/dim alternation), `gradient` (LAB interpolation dim→accent based on value/maxValue), `map` (per-bin hex override)
 
 ### `internal/components/todo.go`
+
 - `TodoComponent` struct — Embeds `baseComponent` + `addInput string`, `list bubbles/list.Model`, `items []*data.TodoOutput`
 - `TodoListItem` struct — Implements `list.Item` with `Title()` returning `✓ + strikethrough` if done, raw text for filtering
 - `View()` — Delegates to `c.list.View()` with width/height set from pane dimensions
@@ -85,21 +96,25 @@
 - `writeTodos()` — Serializes items back to plain-text file (`+`/`-` prefix) via `data.WriteTodoFile`
 
 ### `internal/components/list.go`
+
 - `ListComponent` struct — Embeds `baseComponent` + `list bubbles/list.Model`
 - `View()`, `Update()`, `SetContent()` — Standard component lifecycle; `parseDataToListItems` routes `script` (newline split) vs `api` (JSON array) sources differently
 
 ### `internal/components/table.go`
+
 - `TableComponent` struct — Embeds `baseComponent` + `table bubbles/table.Model`, `cols []table.Column`
 - `parseDataToTableRows()` — Handles `[][]string` arrays and `[]map[string]any` (object arrays with field names mapped to column configs)
 - `getTableColumns()` — Distributes available width across columns proportional to `flex` weights
 - `getTableStyles()` — Builds `table.Styles` from theme accent + border settings
 
 ### `internal/components/utils.go`
+
 - `ComponentId(comp)` — Returns `comp.ID` if non-empty, else `fmt.Sprintf("%p", comp)` (pointer address as implicit ID)
 - `CalcWidthHeight(w, h)` — Subtracts `2*borderSize` from each dimension, clamping to minimum 1
 - `GetFlex(flex)` — Returns 1 if `flex <= 0`, else `flex`
 
 ### `internal/components/styles.go`
+
 - `GetBorderStyle(borderStyles)` — Maps `borderStyles.Type` string to `lipgloss.Border` constants (`rounded`, `thicc`, `double`, `hidden`, `normal`, `md`, `ascii`, `block`); returns `(normal, focused, border)`
 - `HexToAnsi256(hex, fallback)` — Maps hex → ANSI-256 6×6×6 cube + 16 base (16+36*r+6*g+b), for `asciigraph` which不接受 truecolor
 - `blendHexColors(a, b, t, fallback)` — LAB-space linear interpolation between two hex colors; used by histogram `gradient` mode
@@ -107,6 +122,7 @@
 - `BrightenColor(color, percent)` — Brightens ANSI or hex colors by a percentage factor; handles 3-digit hex (`#RGB`), 6-digit, and named basic colors
 
 ### `internal/data/data.go`
+
 - `FetchOutput` interface — `Error()`, `Output()`; implemented by `*fetchOutput`
 - `RunScript(command)` — `exec.Command("sh", "-c", command)` → combined output
 - `RunAPI(url, jsonPath)` — HTTP GET with 5s timeout; optionally extracts via `jsonpath.JsonPathLookup`; marshals result back to indented JSON
@@ -114,30 +130,36 @@
 - `WriteTodoFile(path, items)` — Inverse of ReadTodoFile; serializes `[]*TodoOutput` back to `+`/`-` prefixed lines
 
 ### `internal/tui/tui.go`
+
 - `model` struct — `cfg`, `width/height`, `ready`, `isAdding`, `initialized`, `focusedComponentId`, `components map[string]Component`, `componentBoxes`, `navMap`, `errorModal`, `palette`
 - `Init()` — Calls `buildComponentMap`, finds first component, runs initial `fetchAllData()`, schedules refreshes, sends `tea.ClearScreen`
 - `Update(msg)` — Large switch on `tea.Msg` type: handles `fetchResultMsg` (avoids clobbering if action active), `refreshMsg` (reschedules + refetches unless action active), `actionResultMsg` (routes to `SetContent` for `output_as=inherit`, else `ApplyActionResult`), `actionFailedMsg` (resets action + shows error modal), `spinner.TickMsg` (fan-out to all loading components), `MouseMsg` (click-to-focus), `KeyMsg` (navigation, palette, add mode, binding dispatch, component-internal)
 - `View()` — Returns `renderErrorModal()` or `renderPalette()` or `renderNode(layout, width, height, focusedComponentId)` + help line
 
 ### `internal/tui/renderer.go`
+
 - `renderNode(node, width, height, focusedComponentId)` — Recursive layout renderer; for `container` computes flex proportions and gap interleaving; for `component` calls `comp.View()` with `isFocused` flag; applies `Faint(true)` when not focused and `focusMode == "highlight"`
 - `calculateBoundingBoxes()` — Recursive flex layout algorithm matching `renderNode`; stores `(x, y, w, h, id)` for each component; used for click-to-focus and arrow-key navigation
 - `calculateNavigationMap(boxes)` — For each component, finds closest neighbor in 4 cardinal directions using axis-aligned bounding box overlap + minimum Euclidean distance
 
 ### `internal/tui/navigation.go`
+
 - `boundingBox` struct — `X, Y, W, H int`, `ID string`
 - `navigationMap` struct — `Up, Down, Left, Right` component IDs
 - `handleResize(msgWidth, msgHeight)` — Reserves 2 rows for help line; calls `calculateBoundingBoxes` + `calculateNavigationMap`; resets `ready` flag until complete
 
 ### `internal/tui/fetch.go`
+
 - `fetchComponentAsyncCmd(id, comp)` — Returns a `tea.Cmd` closure that dispatches to `RunScript`, `RunAPI`, or `ReadTodoFile` (special-cased for todo); emits `fetchResultMsg`
 
 ### `internal/tui/scheduler.go`
+
 - `refreshMsg` struct — `ID string`; timer chain message
 - `scheduleRefreshes()` — Returns `tea.Cmd` per component with `refresh_interval > 0`
 - `scheduleSingleRefresh(id, comp)` — `time.Sleep(interval) * time.Second` then returns `refreshMsg{ID: id}`
 
 ### `internal/tui/actions.go`
+
 - `actionResultMsg` / `actionFailedMsg` — Result messages from shell action execution
 - `nextPendingID()` — Atomic counter for per-action ID used to discard stale results
 - `matchBinding(bindings, chord)` — Normalizes pressed key and searches component bindings
@@ -147,6 +169,7 @@
 - `runReplacePane()` — Synchronous `exec.CommandContext`; captures stdout/stderr; emits `actionResultMsg` or `actionFailedMsg`
 
 ## Notable Algorithms / Named Patterns
+
 - **Flexbox-style layout** — Recursive flex proportion algorithm with `gap` interleaving and "last child gets remainder" treatment (avoids rounding drift)
 - **Bounding-box navigation map** — AABB overlap detection + closest-neighbor search by direction; computed from live layout on every resize
 - **Pending-ID action deduplication** — Atomic counter mints a unique `act-N` token per action dispatch; late-arriving results after `Esc`/`R` reset are silently dropped by `applyActionResult` checks
@@ -156,6 +179,7 @@
 - **Effective styles merge** — 4-level palette resolution (default → named theme → explicit override → legacy border fields) with pointer cloning to avoid mutation
 
 ## Strengths
+
 - **Declarative, data-driven architecture** — Entire dashboard is defined in JSON; no code required to create a dashboard
 - **Rich component set** — 6 visually distinct component types (text, list, todo, chart, histogram, table) with data-source abstraction
 - **Sophisticated layout** — Flexbox-style recursive containers with dynamic neighbor navigation (no hardcoded positions)
@@ -166,6 +190,7 @@
 - **Boundary-box resize robustness** — Even/odd dimension correction prevents off-by-one layout drift on terminal resize
 
 ## Weaknesses
+
 - **Go-only** — Not a library; deploys as a standalone CLI; no embeddable components for other Go programs
 - **No streaming/chunked data** — Chart `append` mode only appends new data points; no streaming updates for live data; `tail -f`-style commands not supported in actions
 - **Todo persistence is file-based** — Plain-text format limits expressiveness; no metadata, tags, due dates, or prioritization

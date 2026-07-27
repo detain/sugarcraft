@@ -16,10 +16,12 @@ Candy-hermit is a well-implemented PHP port of the theHermit Go library, correct
 ## 1. Current Implementation Analysis
 
 ### 1.1 Source Files
+
 - `/home/sites/sugarcraft/candy-hermit/src/Hermit.php` — Main overlay renderer (430 lines)
 - `/home/sites/sugarcraft/candy-hermit/src/Model.php` — Bubble-Tea-style model interface (31 lines)
 
 ### 1.2 What Works Well
+
 - ✅ Immutable/fluent pattern with `with*()` methods
 - ✅ Proper `declare(strict_types=1)` compliance
 - ✅ Background view compositing (chars replaced, not obliterated)
@@ -77,6 +79,7 @@ type Model struct {
 ### 2.1 Go Libraries
 
 #### 2.1.1 charmbracelet/bubbles List Component
+
 **Source:** https://github.com/charmbracelet/bubbles/blob/master/list/list.go
 
 The `bubbles/list` component provides the canonical reference for TUI list components:
@@ -110,6 +113,7 @@ type Model struct {
 ```
 
 **Key Patterns:**
+
 - **Filter function injection** — `Filter func(term string, targets []string) []Rank` allows custom filtering algorithms
 - **DefaultFilter uses `sahilm/fuzzy`** — Real fuzzy matching with rank scoring
 - **Paginator integration** — Handles large lists with pagination
@@ -118,6 +122,7 @@ type Model struct {
 - **Help model** — Built-in help display
 
 #### 2.1.2 reeflective/readline History Management
+
 **Source:** https://github.com/reeflective/readline/blob/master/history.go
 
 The readline library provides comprehensive history management patterns:
@@ -139,12 +144,14 @@ func (rl *Shell) historySourceNext() // Cycle between history sources
 ```
 
 **Key Patterns:**
+
 - **Multiple history sources** — Can bind multiple history providers
 - **Incremental search** — Real-time filtering as you type
 - **History inference** — Suggest next command based on context
 - **Undo/redo for history** — `History.Undo()` / `History.Redo()`
 
 #### 2.1.3 chzyer/readline File-based History
+
 **Source:** https://github.com/chzyer/readline/blob/master/history.go
 
 ```go
@@ -171,6 +178,7 @@ func (o *opHistory) Compact() {
 ```
 
 **Key Patterns:**
+
 - **Append-only writes** — New entries appended, not rewritten
 - **Compact on limit** — Rewrites file when exceeding limit
 - **Tmp file + rename** — Atomic file updates (`Write -> Rename`)
@@ -179,10 +187,13 @@ func (o *opHistory) Compact() {
 ### 2.2 Rust/Helix Patterns
 
 #### 2.2.1 Helix Editor Completion System
+
 **Source:** https://docs.helix-editor.com/master/editor.html
 
 ```toml
+
 # Configuration options from Helix
+
 [editor]
 auto-completion = true        # Auto popup
 completion-trigger-len = 2    # Min chars to trigger
@@ -200,6 +211,7 @@ trigger-length = 7
 ```
 
 **Key Patterns:**
+
 - **Async completion** — Non-blocking UI during completion lookup
 - **Trigger length config** — Don't start until N chars typed
 - **Preview on select** — Show what selection would look like
@@ -207,6 +219,7 @@ trigger-length = 7
 - **Multiple completer sources** — Can chain completers (path, LSP, words)
 
 #### 2.2.2 Helix Shell Command Completion
+
 **Source:** https://github.com/helix-editor/helix/pull/12883
 
 ```rust
@@ -216,6 +229,7 @@ trigger-length = 7
 ```
 
 **Key Patterns:**
+
 - **Position-aware completion** — First arg ≠ second arg
 - **Program discovery** — Scan $PATH for executables
 - **Async PATH scanning** — Don't block UI on slow filesystems
@@ -224,15 +238,19 @@ trigger-length = 7
 ### 2.3 Fish Shell Patterns
 
 #### 2.3.1 Fish History Management
+
 **Source:** https://fishshell.com/docs/current/cmds/history.html
 
 ```fish
+
 # Session-based history (not global by default)
+
 set -x fish_history "session_name"  # Per-session history
 set -x fish_history ""              # Disable history
 set -x fish_history "default"       # Shared history
 
 # History search operations
+
 history search --contains "git"
 history delete --exact --case-sensitive "password"
 history merge  # Import from other sessions
@@ -240,28 +258,35 @@ history clear  # Interactive clear
 ```
 
 **Key Patterns:**
+
 - **Session isolation** — Can have private sessions (good for sudo)
 - **XDG paths** — `$XDG_DATA_HOME/fish/fish_history`
 - **History merging** — Real-time sync across sessions
 - **Search with --contains** — Substring matching
 
 #### 2.3.2 Fish Completion Architecture
+
 **Source:** https://fishshell.com/docs/current/completions.html
 
 ```fish
+
 # Completion specification
+
 complete -c myprog -s o --long output -f -a "one two three"
 
 # Autoload from $fish_complete_path
+
 # Files named after command: myprog.fish
 
 # Useful functions
+
 __fish_print_filesystems     # List of known filesystems
 __fish_complete_directories  # Directory completion
 __fish_complete_path         # Path with description
 ```
 
 **Key Patterns:**
+
 - **Lazy loading** — Completions loaded on-demand
 - **Per-command files** — `~/.config/fish/completions/cmake.fish`
 - **Function-based generators** — Dynamic completion computation
@@ -615,6 +640,7 @@ public function setStatusMessage(string $msg, int $ttlSeconds = 3): self { /* ..
 ## 5. Files to Create/Modify
 
 ### 5.1 New Files
+
 ```
 candy-hermit/src/Item.php          # Item interface
 candy-hermit/src/StringItem.php    # String adapter
@@ -625,6 +651,7 @@ candy-hermit/src/KeyMap.php        # Key binding config
 ```
 
 ### 5.2 Files to Modify
+
 ```
 candy-hermit/src/Hermit.php        # Add features 1,2,4,5
 candy-hermit/src/Model.php         # May need updates
@@ -638,11 +665,13 @@ candy-hermit/tests/HermitTest.php  # Add tests for new features
 ## 6. Dependencies
 
 ### Recommended for Future
+
 - `sahilm/fuzzy` PHP port or native implementation for better fuzzy matching
 - `brick/font` or similar for box-drawing characters
 - Consider `symfony/styler` for style composition
 
 ### Current
+
 - Only `php: ^8.3` required (good!)
 
 ---
@@ -650,6 +679,7 @@ candy-hermit/tests/HermitTest.php  # Add tests for new features
 ## 7. References
 
 ### Upstream
+
 - **Genekkion/theHermit:** https://github.com/Genekkion/theHermit
   - `list/model.go` — Main model structure
   - `list/item.go` — Item interface
@@ -657,6 +687,7 @@ candy-hermit/tests/HermitTest.php  # Add tests for new features
   - `list/misc.go` — Getters/setters
 
 ### Go Libraries
+
 - **charmbracelet/bubbles:** https://github.com/charmbracelet/bubbles
   - `list/list.go` — Reference implementation with filter injection
   - Uses `sahilm/fuzzy` for fuzzy ranking
@@ -670,12 +701,14 @@ candy-hermit/tests/HermitTest.php  # Add tests for new features
   - Well-documented history file format
 
 ### Rust Libraries
+
 - **Helix Editor:** https://github.com/helix-editor/helix
   - `book/src/editor.md` — Editor configuration reference
   - `book/src/languages.md` — LSP completion patterns
   - PR #12883 — Shell command completion
 
 ### Fish Shell
+
 - **fish-shell:** https://github.com/fish-shell/fish-shell
   - `completions/` — Completion file format
   - `history.rs` — History management

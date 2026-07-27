@@ -14,9 +14,11 @@
 ## Files
 
 **Create:**
+
 - `honey-bounce/src/SpringChain.php`.
 
 **Modify:**
+
 - `honey-bounce/src/Spring.php` — respect Probe::reducedMotion().
 - `honey-bounce/composer.json` — add `sugarcraft/candy-palette`.
 

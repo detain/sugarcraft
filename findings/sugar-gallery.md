@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — Image loading doesn't validate file type
+
 **Severity:** HIGH  
 **Location:** `src/Gallery.php:78-85`
 
@@ -24,6 +25,7 @@ The loader opens any file and attempts to decode it as an image. No magic-bytes 
 ---
 
 ### Finding 2 — Directory traversal in path navigation
+
 **Severity:** HIGH  
 **Location:** `src/Gallery.php:95`
 
@@ -34,6 +36,7 @@ The loader opens any file and attempts to decode it as an image. No magic-bytes 
 ---
 
 ### Finding 3 — FFI image decoder doesn't validate dimensions
+
 **Severity:** MEDIUM  
 **Location:** `src/FFIDecoder.php:45`
 
@@ -44,6 +47,7 @@ If image dimensions are 0×0 or extremely large, no validation is performed. Lar
 ---
 
 ### Finding 4 — Missing format support fallback
+
 **Severity:** MEDIUM  
 **Location:** `src/Gallery.php`
 
@@ -56,6 +60,7 @@ If a format is unsupported, the error is thrown but not caught. The gallery cras
 ## 2. Performance Problems
 
 ### Finding 5 — Full directory scan on every navigation
+
 **Severity:** MEDIUM  
 **Location:** `src/Gallery.php`
 
@@ -66,6 +71,7 @@ Every `chdir()` triggers a full filesystem scan of the new directory. For direct
 ---
 
 ### Finding 6 — No image thumbnail caching
+
 **Severity:** MEDIUM  
 **Location:** `src/FFIDecoder.php`
 
@@ -76,6 +82,7 @@ Same image revisited requires full decode. No thumbnails cached in memory.
 ## 3. Memory Leaks
 
 ### Finding 7 — FFI buffer not explicitly freed
+
 **Severity:** HIGH  
 **Location:** `src/FFIDecoder.php`
 
@@ -86,6 +93,7 @@ FFI C allocations must be explicitly `free()`'d. PHP GC can't manage C memory.
 ---
 
 ### Finding 8 — Image buffer held during viewing
+
 **Severity:** MEDIUM  
 **Location:** `src/Gallery.php`
 
@@ -96,6 +104,7 @@ Full decoded image held in memory while viewing. Large images could exhaust RAM.
 ## 4. Security
 
 ### Finding 9 — No security concerns beyond Finding 1 & 2
+
 **Severity:** MEDIUM  
 
 Path traversal risk (Finding 2) is the main concern.
@@ -105,6 +114,7 @@ Path traversal risk (Finding 2) is the main concern.
 ## 5. Complexity
 
 ### Finding 10 — FFIDecoder abstraction is thin
+
 **Severity:** LOW  
 **Location:** `src/FFIDecoder.php`
 
@@ -115,6 +125,7 @@ The FFI wrapper is a thin passthrough. Consider whether abstraction adds value.
 ## 6. Missing Features / Incomplete Ports
 
 ### Finding 11 — No animated image support (GIF)
+
 **Severity:** MEDIUM  
 **Location:** `src/FFIDecoder.php`
 
@@ -123,6 +134,7 @@ Only first frame decoded. Animated GIFs don't animate.
 ---
 
 ### Finding 12 — No metadata display (EXIF, dimensions, size)
+
 **Severity:** LOW  
 **Location:** `src/Gallery.php`
 
@@ -133,6 +145,7 @@ Gallery shows filename but not dimensions/file size/date.
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 13 — FFI requires PHP 8.4+ on Windows
+
 **Severity:** MEDIUM  
 **Location:** `composer.json`
 
@@ -143,6 +156,7 @@ FFI only available reliably on PHP 8.4+ for Windows. Library should note this co
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 14 — Image decoding is blocking
+
 **Severity:** MEDIUM  
 **Location:** `src/FFIDecoder.php`
 

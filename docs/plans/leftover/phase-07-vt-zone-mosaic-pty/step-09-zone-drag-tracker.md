@@ -11,6 +11,7 @@ Tracks press → move → release sequences within and across zones.
 ## Files
 
 **Create:**
+
 - `candy-zone/src/DragTracker.php`.
 - `candy-zone/src/Msg/ZoneDragStartMsg.php`, `ZoneDragMoveMsg.php`,
   `ZoneDragEndMsg.php`.

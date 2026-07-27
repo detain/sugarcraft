@@ -44,21 +44,25 @@ The findings file describes a `sugar-crush` library that:
 - Has resize event handling in InputHandler
 
 **Why this matters:**
+
 - The actual `sugar-crush` in this repository is a chat-shell AI coding agent
 - It ports `charmbracelet/crush`, NOT `charmbracelet/bubbletea`
 - The files described in the findings do NOT exist at the specified paths
 - Input handling for the actual sugar-crush is done through `Tui/KeyboardHandler.php`
 
 **Conditions for resolution:**
+
 - Determine if the findings are for a different/planned library
 - Clarify whether bubbletea input handling is a planned port
 
 **Related code locations:**
+
 - `sugar-crush/src/Tui/KeyboardHandler.php` — actual keyboard handler for sugar-crush app
 - `candy-input/src/EscapeDecoder.php` — escape sequence decoder (bubbletea-style input)
 - `candy-core/src/InputReader.php` — byte stream parser into typed Msg
 
 **Investigation notes:**
+
 - The findings say "sugar-crush ports charmbracelet/bubbletea input handling"
 - But `sugar-crush/README.md:L16` says it's a "port of `charmbracelet/crush`"
 - `KeyboardHandler.php` handles Ctrl combinations (Ctrl+C, Ctrl+N, Ctrl+G, etc.) but not Ctrl+D EOF
@@ -80,14 +84,17 @@ When HandleCyan (Ctrl+D) is received, any buffered input ahead of Ctrl+D should 
 If a user types "hello" then presses Ctrl+D, the "hello" might be lost if the handler immediately stops without draining the buffer.
 
 **Conditions for success:**
+
 - Ctrl+D with preceding buffered input: buffer is drained and processed first
 - Only a bare Ctrl+D (no preceding input) triggers EOF/quit
 
 **Actual code location:**
+
 - `sugar-crush/src/Tui/KeyboardHandler.php:81-94` — handles Ctrl+key combinations
 - `candy-core/src/InputReader.php` — parses byte stream (could drain buffer here)
 
 **Investigation notes:**
+
 - `KeyboardHandler.php` handles Ctrl+C (CancelCmd), Ctrl+G (GroupInputCmd), etc.
 - Ctrl+D is NOT currently handled (line 81-94 shows match cases for ctrl+n, ctrl+c, ctrl+g, ctrl+k, ctrl+s, ctrl+a, ctrl+p, ctrl+,)
 - EOF behavior would need to be added to handle Ctrl+D specifically
@@ -107,15 +114,18 @@ Upstream bubbletea handles window resize events. These should be routed to appro
 Terminal resizes need to trigger layout recalculation and full frame repaint.
 
 **Conditions for success:**
+
 - Window resize event is detected and dispatched
 - UI re-renders correctly at new dimensions
 
 **Actual code location:**
+
 - `candy-core/src/Msg/WindowSizeMsg.php` — exists and represents resize event
 - `sugar-crush/src/Chat.php:53,212` — has resize detection and resets diff state
 - `sugar-crush/src/Tui/Renderer.php:30-35` — `setSize()` is called on resize
 
 **Investigation notes:**
+
 - `WindowSizeMsg` exists in candy-core and is used by multiple libraries
 - `Chat.php:212` shows resize detection logic
 - `Renderer::setSize()` caches terminal size
@@ -137,16 +147,19 @@ Mouse coordinates are 0-indexed internally but terminal cells start at 1. The bo
 Users cannot click on the first column or last column of the terminal.
 
 **Conditions for success:**
+
 - Clicking at column 1 is accepted (not rejected)
 - Clicking at column = width is accepted (not rejected)
 - Coordinates are correctly converted to 0-indexed internally
 
 **Actual code location:**
+
 - `candy-input/src/EscapeDecoder.php:268-331` — handles SGR 1006 mouse decoding
 - `candy-input/src/Event/MouseEvent.php:35-47` — MouseEvent is 1-based per docstring
 - `candy-core/src/InputReader.php:569-617` — `decodeSgrMouse()` also handles mouse
 
 **Investigation notes:**
+
 - `candy-input/src/Event/MouseEvent.php:35-36` says:
   ```
   @param int          $x         Column (1-based, matches terminal coordinates)
@@ -172,16 +185,19 @@ When `throttle` or `debounce` settings change via `withThrottle()`/`withDebounce
 Changing debounce settings mid-operation could cause stale timers to fire with old configuration.
 
 **Conditions for success:**
+
 - Calling `withDebounce(100)` then `withDebounce(200)` cancels any pending 100ms timer
 - New 200ms timer is started
 - No stale timer fires with old configuration
 
 **Actual code location:**
+
 - `candy-async/src/AsyncOps.php:159-175` — `debounce()` creates timer closures
 - `candy-forms/src/Field/Input.php:248-449` — async suggestions with debounce
 - `candy-core/src/Program.php` — uses `Loop::addTimer()`
 
 **Investigation notes:**
+
 - `AsyncOps::debounce()` at line 159-175 creates a closure that captures `$timer` by reference
 - When called again, it cancels the existing timer before scheduling a new one (line 168-170)
 - This appears to already handle timer cancellation correctly
@@ -201,14 +217,17 @@ Changing debounce settings mid-operation could cause stale timers to fire with o
 Abandoned timer references could prevent garbage collection or fire after cleanup.
 
 **Conditions for success:**
+
 - Timer references are stored
 - `__destruct()` calls `cancel()` on pending timers
 
 **Actual code location:**
+
 - `candy-async/src/AsyncOps.php` — debounce/throttle use timers
 - `candy-core/src/Program.php:310` — mentions block until loop stops
 
 **Investigation notes:**
+
 - `AsyncOps::debounce()` stores timer in closure variable, not object property
 - Closure-scoped timers are garbage collected when closure is garbage collected
 - No explicit `__destruct()` with timer cancellation found in sugar-crush
@@ -229,16 +248,19 @@ Abandoned timer references could prevent garbage collection or fire after cleanu
 Paste could fail silently instead of crashing.
 
 **Conditions for success:**
+
 - Empty clipboard returns empty string, not exception
 - Unavailable clipboard is handled gracefully
 - Pasted content is still processed correctly
 
 **Actual code location:**
+
 - `candy-input/src/EscapeDecoder.php:542-591` — handles paste events
 - `candy-input/src/Event/PasteEvent.php` — PasteEvent with MAX_SIZE truncation
 - `candy-core/src/InputReader.php:60-76` — handles paste via PasteStartMsg/PasteEndMsg
 
 **Investigation notes:**
+
 - `EscapeDecoder.php` uses `PasteEvent::truncate()` to cap at 1 MiB
 - `PasteEvent.php:26-33` does length check but no clipboard access
 - The clipboard access mentioned in findings ($clipboard->get()) is not visible in these files
@@ -258,11 +280,13 @@ Only `PasteMsg` handled. No `PasteStartMsg`/`PasteEndMsg`.
 Bracketed paste mode sends start/end markers that should be handled separately.
 
 **Conditions for success:**
+
 - `PasteStartMsg` is dispatched when paste begins
 - `PasteEndMsg` is dispatched when paste ends
 - `PasteMsg` contains the pasted content
 
 **Actual code location:**
+
 - `candy-core/src/Msg/PasteStartMsg.php` — EXISTS
 - `candy-core/src/Msg/PasteEndMsg.php` — EXISTS
 - `candy-core/src/Msg/PasteMsg.php` — EXISTS
@@ -270,6 +294,7 @@ Bracketed paste mode sends start/end markers that should be handled separately.
 - `candy-input/src/EscapeDecoder.php:31-45, 542-591` — handles paste buffering
 
 **Investigation notes:**
+
 - All three message types exist in candy-core
 - `InputReader.php:104-109` shows PasteStartMsg being emitted when CSI 200~ is seen
 - `EscapeDecoder.php` has `PASTE_START = "\x1b[200~"` and `PASTE_END = "\x1b[201~"` constants
@@ -291,13 +316,16 @@ Handlers stored in array, linear scan to find matching handler. For small N (<10
 For large numbers of handlers, this could become a bottleneck.
 
 **Conditions for success:**
+
 - If handler count stays small (<10), no change needed
 - If scale is a concern, consider hash-based lookup
 
 **Actual code location:**
+
 - `sugar-crush/src/Tui/KeyboardHandler.php` — handler dispatch via match statement
 
 **Investigation notes:**
+
 - `KeyboardHandler.php:83` uses `match ($key)` for Ctrl key dispatch — O(1)
 - No linear array scan found in current implementation
 - The findings may describe a different structure than what's in the actual codebase
@@ -331,6 +359,7 @@ For large numbers of handlers, this could become a bottleneck.
 The actual `sugar-crush` in this repository is a chat-shell AI coding agent that ports `charmbracelet/crush` (a different project). It does have input handling via `Tui/KeyboardHandler.php`, but the files and functionality described in the findings (InputHandler.php, MouseHandler.php, Config.php, PasteHandler.php with HandleCyan/debounce timers/clipboard access) do not exist.
 
 **Recommended actions:**
+
 1. Verify if the findings are for a different/planned library (e.g., a future bubbletea input port)
 2. If implementing bubbletea input handling, it should likely live in `candy-input` (which already has EscapeDecoder, MouseEvent, PasteEvent, ResizeEvent)
 3. If modifying the existing sugar-crush app, the issues should be mapped to actual files like `Tui/KeyboardHandler.php`

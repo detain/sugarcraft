@@ -19,6 +19,7 @@ explanation.
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/PumpOptions.php` — add `?\Closure $onIdle = null`
   field with paired `withOnIdle()` wither using the `mutate()` helper.
   Keep `onSigwinch` signature `\Closure(int $cols, int $rows): void`.

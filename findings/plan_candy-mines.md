@@ -65,10 +65,12 @@ public function withGame(Difficulty $d, bool $won, ?int $time): self
 ```
 
 **Conditions for success:**
+
 - All existing `StatsTest.php` tests pass (especially `testStatsAreIndependentPerDifficulty`)
 - New test: `testWithGameAllDifficultiesIndependent` — verify all three difficulties can be updated in a single chain without interference
 
 **Related code locations:**
+
 - `src/Stats.php:26-62` — `withGame()` method (duplicated match arms)
 - `tests/StatsTest.php:27-65` — existing tests that must continue passing
 
@@ -126,10 +128,12 @@ private function nullableIntField(Difficulty $d, string $suffix): ?int
 ```
 
 **Conditions for success:**
+
 - All `StatsTest.php` accessor tests pass (`testGamesPlayedMethod`, `testWinsMethod`, etc.)
 - `testWinRateCalculation` — indirectly exercises all three accessors
 
 **Related code locations:**
+
 - `src/Stats.php:76-83` — `gamesPlayed()` (lines 78-82 match pattern)
 - `src/Stats.php:85-92` — `wins()` (lines 87-91 match pattern)
 - `src/Stats.php:103-110` — `bestTime()` (lines 105-109 match pattern)
@@ -155,6 +159,7 @@ Add `flagCount` as a constructor-promoted `readonly int` field (default 0), incr
 Current `flagCount()` iterates all cells O(n*m) on every call. `Renderer::status()` calls it at line 202 every frame. The `revealedCount` pattern already proves this counter approach works and is O(1).
 
 **Implementation steps:**
+
 1. Add `public readonly int $flagCount = 0` to `Board::__construct()` parameters (promoted)
 2. In `toggleFlag()`: compute `$flagDelta = $cell->flagged ? -1 : +1` and pass `$this->flagCount + $flagDelta` to new Board
 3. In `floodReveal()`: `flagCount` is unchanged (revealed cells are unflagged by `Cell::reveal()`)
@@ -162,12 +167,14 @@ Current `flagCount()` iterates all cells O(n*m) on every call. `Renderer::status
 5. Replace `flagCount()` method body with `return $this->flagCount;`
 
 **Conditions for success:**
+
 - `BoardTest.php::testFlagToggle` — already checks flag toggling, will implicitly test flagCount
 - New test `testFlagCountAfterToggle` (see Issue #4.3)
 - New test `testFlagCountAfterReveal` — verify flagCount goes to 0 when revealing a flagged cell
 - `testSerializeAfterFlagUnaffected` — verify serialization round-trips
 
 **Related code locations:**
+
 - `src/Board.php:26-42` — constructor (needs `$flagCount` promoted field added)
 - `src/Board.php:95-107` — `toggleFlag()` — add `+$flagDelta` to new Board call
 - `src/Board.php:159-198` — `floodReveal()` — preserves flagCount (revealed cells unflagged)
@@ -216,10 +223,12 @@ public static function resolveClickWithScanner(Game $g, int $col, int $row, Scan
 ```
 
 **Conditions for success:**
+
 - `GameTest.php` mouse click tests — `testLeftClickRevealsResolvedCell`, `testRightClickTogglesFlag`, `testMiddleClickChords` — must continue passing
 - Add test: pass a mock Scanner to `resolveClickWithScanner`, verify it uses the passed scanner
 
 **Related code locations:**
+
 - `src/Renderer.php:159-165` — `renderWithScanner()` — already creates scanner
 - `src/Renderer.php:175-190` — `resolveClick()` (existing) — creates duplicate scanner
 - `src/Game.php:212` — `Renderer::resolveClick($this, $col, $row)` call in `onMouse()` — no change needed (backward compat)
@@ -261,9 +270,11 @@ public function __construct(
 Also remove `private array $rows;` declaration at line 21.
 
 **Conditions for success:**
+
 - All existing `BoardTest` tests pass — this is a pure refactor with no behavior change
 
 **Related code locations:**
+
 - `src/Board.php:20-21` — `private array $rows;` declaration (to remove)
 - `src/Board.php:26-42` — constructor (promote `$rows`, remove `$this->rows = $rows`)
 - `src/Board.php:63-72` — `cell()` and `rows()` — no changes needed
@@ -303,10 +314,12 @@ readonly final class Cell
 Note: This requires PHP 8.2+. The `composer.json` requires `php: ">=8.3"` — safe to use.
 
 **Conditions for success:**
+
 - All `CellTest.php` and `BoardTest.php` tests pass
 - `composer.json` requires `php: ">=8.3"` — confirmed safe
 
 **Related code locations:**
+
 - `src/Cell.php:13` — `final class Cell` → `readonly final class Cell`
 - `src/Cell.php:15-21` — remove `readonly` from each property
 
@@ -341,10 +354,12 @@ In `tests/DifficultyStatsTest.php`:
 - Line 125: `expectException(\RuntimeException::class)` → `InvalidArgumentException::class`
 
 **Conditions for success:**
+
 - `DifficultyStatsTest::testLoadThrowsOnNonIntegerField` — update expected exception class
 - All other `DifficultyStatsTest` tests pass
 
 **Related code locations:**
+
 - `src/Stats/DifficultyStats.php:47,54,58,89,105` — all `\RuntimeException` occurrences
 - `tests/DifficultyStatsTest.php:125` — expected exception class
 - `src/Board.php:258,261,270,273,279,285` — `\InvalidArgumentException` (already correct)
@@ -372,9 +387,11 @@ while (!empty($stack)) {
 ```
 
 **Conditions for success:**
+
 - All `BoardTest` flood-fill tests pass (`testFirstRevealOnEmptyAreaFloodsRecursively`, `testChordCascadesIntoEmptyRegion`, etc.)
 
 **Related code location:**
+
 - `src/Board.php:166` — `while ($stack !== [])` → `while (!empty($stack))`
 
 **Investigation notes:**
@@ -414,9 +431,11 @@ public static function load(string $path): ?self
 ```
 
 **Conditions for success:**
+
 - `DifficultyStatsTest::testLoadThrowsOnNonIntegerField` — verify it still throws for wrong types (not absent fields)
 
 **Related code locations:**
+
 - `src/Stats/DifficultyStats.php:64-72` — `load()` calls with `?? null, 0, $path` (the `0` is the default)
 - `src/Stats/DifficultyStats.php:83-92` — `expectInt()` with default parameter
 
@@ -480,10 +499,12 @@ public function testElapsedIsFrozenAfterExplosion(): void
 ```
 
 **Conditions for success:**
+
 - New test passes alongside `testTimerUsesMicrotimePrecision`
 - Deterministic RNG (`$rand = static fn(int $max): int => 0`) ensures mine positions are predictable
 
 **Related code locations:**
+
 - `src/Game.php:269-278` — `elapsed()` method (frozen time at lines 274-275)
 - `tests/GameTest.php:296-317` — `testTimerUsesMicrotimePrecision` (existing)
 - `tests/GameTest.php` — add new test after `testTimerUsesMicrotimePrecision`
@@ -545,10 +566,12 @@ public function testFlagCountAfterMultipleToggles(): void
 ```
 
 **Conditions for success:**
+
 - All three new tests pass
 - All existing `BoardTest` tests continue to pass
 
 **Related code locations:**
+
 - `src/Board.php:207-216` — `flagCount()` (to be replaced with `return $this->flagCount;`)
 - `tests/BoardTest.php` — add after `testFlagToggle` (line ~81)
 
@@ -585,6 +608,7 @@ These tests depend on Issue #2.1 being implemented first (the O(1) flagCount cou
 | **Total** | **11** | |
 
 **Recommended priority:**
+
 1. **Issue #2.1 (flagCount O(n*m))** — High impact on render performance. Straightforward fix (add counter like `revealedCount`).
 2. **Issues #1.1 & #1.2 (Stats duplication)** — Medium effort, high long-term maintainability improvement.
 3. **Issue #2.3 (Board $rows promotion)** — Trivial fix, improves consistency. Combine with 2.1.

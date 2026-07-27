@@ -97,6 +97,7 @@ func (m *tea.Model) View() {
 ```
 
 **Strategic Interpretation**:
+
 - **Direct Risk to SugarCraft**: HIGH. If `sugar-crumbs` or related libs implement `Closable`-like cleanup, the same concern applies: cleanup commands cannot be properly sequenced in the current design.
 - **Feature Opportunity**: SugarCraft should implement disposal-as-command pattern (`Dispose() tea.Cmd`) rather than `Close() error`. This allows proper cleanup sequencing in the TEA model lifecycle.
 - **The async init pattern** (`onDataInit`/`onDataInited`) mirrors React's `componentDidMount` and is a common request for data-loading in TUI apps. SugarPrompt handles this differently (via its form fields), but a general-purpose async init lifecycle hook could be valuable across all SugarCraft models.
@@ -132,6 +133,7 @@ func (m *tea.Model) View() {
 **Why it matters**: Many apps want to show a "home" screen or dashboard when the stack empties, not immediately exit. Currently the only option is to never let the stack fully empty.
 
 **SugarCraft Opportunity**: SugarCraft's navigation primitives should offer a configurable empty-stack behavior:
+
 - `QuitOnEmpty` option (default: true for backwards compatibility)
 - `ShowHomeOnEmpty` option — automatically navigate to a designated home screen
 - `DoNothingOnEmpty` option — keep running in a suspended state
@@ -139,6 +141,7 @@ func (m *tea.Model) View() {
 ### PR #3: "feat(option): add support for functional option arguments" (Open, by ardnew)
 
 **What it does**: Adds functional options pattern to `menu.Model` for configuration:
+
 - `WithShowPagination(bool)`
 - `WithShowTitle(bool)`
 - `WithFilteringEnabled(bool)`
@@ -212,6 +215,7 @@ func (m Model) View() string {
 **Additional Change**: `Init()` is now always called before `Update(WindowSizeMsg)` when pushing/popping, with resulting commands executed sequentially via `tea.Sequence`.
 
 **Why this matters for SugarCraft**: This is an important lifecycle ordering decision. The pattern ensures:
+
 1. Resources from old item are cleaned up
 2. New item is initialized
 3. New item receives window size
@@ -548,6 +552,7 @@ The v0.1.5 push-symmetry change (closing on push AND pop) reflects a maturing un
 **Opportunity**: SugarCraft lacks a dedicated stack navigation primitive. `sugar-prompt` handles forms, `candy-shell` is a CLI shell, but neither provides the bubbleo-style `NavStack` with push/pop/close semantics.
 
 **Recommendation**: Consider creating `sugar-nav` (or expanding `sugar-crumbs`) to provide:
+
 - `NavigationStack` model with configurable empty behavior
 - `NavigationItem` with `Disposable` disposal
 - `Push`/`Pop`/`Clear` operations returning commands

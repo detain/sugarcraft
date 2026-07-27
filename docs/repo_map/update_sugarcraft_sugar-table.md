@@ -81,6 +81,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 ### Critical Priority
 
 **1. Frozen Column Rendering**
+
 - **Description:** `withFrozenCols()` stores column indices but `View()` never applies differential rendering — frozen columns scroll away when `scrollX > 0`. Upstream renders frozen columns on the left regardless of horizontal scroll position.
 - **Why it matters:** Wide tables with frozen key columns (ID, name) are a primary use case for tables
 - **Source:** `docs/repo_map/Evertras_bubble-table.md` — `WithHorizontalFreezeColumnCount` + `ScrollLeft/ScrollRight`
@@ -89,6 +90,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Expected impact:** High — enables proper wide-table UX
 
 **2. Fuzzy Filtering**
+
 - **Description:** sugar-table only has `stripos` case-insensitive contains. Upstream has `filterFuncFuzzy` using ordered subsequence matching (`fuzzySubsequenceMatch`).
 - **Why it matters:** Fuzzy matching is essential for user-facing tables with messy data (typos, partial matches)
 - **Source:** `docs/repo_map/Evertras_bubble-table.md` — `filterFuncFuzzy` implementation
@@ -97,6 +99,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Expected impact:** High — closes major upstream feature gap
 
 **3. Horizontal Scroll Actual Rendering**
+
 - **Description:** `scrollX` is stored via `withScrollX()` but `View()` never shifts column rendering based on it. Columns render at their absolute positions.
 - **Why it matters:** Wide tables without horizontal scroll rendering are unusable
 - **Source:** `docs/repo_map/Evertras_bubble-table.md` — `WithMaxTotalWidth` + `ScrollLeft/ScrollRight`
@@ -107,6 +110,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 ### High Value
 
 **4. Expanded Keyboard Navigation**
+
 - **Description:** Only `SelectNext()` / `SelectPrevious()` / `SelectPage()` implemented. No vim keys (j/k/g/G), no HalfPageUp/Down, no Home/End.
 - **Why it matters:** TUI users expect vim-style navigation; HalfPageUp/Down is essential for large tables
 - **Source:** `docs/repo_map/76creates_stickers.md` — `CursorUp/Down/Left/Right()`; `docs/repo_map/charmbracelet_bubbles.md` — `HalfPageUp/Down, GotoTop/Bottom`
@@ -115,6 +119,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Expected impact:** High — significantly improves UX
 
 **5. UserEvent System**
+
 - **Description:** sugar-table is render-only. No event callbacks for highlight changes, row selection, or filter focus/unfocus.
 - **Why it matters:** Interactive TUIs need to respond to user actions without polling table state
 - **Source:** `docs/repo_map/Evertras_bubble-table.md` — `UserEventHighlightedIndexChanged`, `UserEventRowSelectToggled`, `UserEventFilterInputFocused`
@@ -123,6 +128,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Expected impact:** High — enables reactive TUI patterns
 
 **6. StyleFunc Dynamic Per-Cell Callback**
+
 - **Description:** sugar-bits Table has `styleFunc(Closure): Style` for data-dependent styling. sugar-table uses only StyledCell for per-cell overrides.
 - **Why it matters:** Conditional cell coloring (negative numbers red, alerts yellow) requires either pre-wrapping every cell in StyledCell or a callback
 - **Source:** `docs/repo_map/sugarcraft_sugar-bits.md` — `styleFunc(\Closure $fn)` at line 74
@@ -133,6 +139,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 ### Medium Priority
 
 **7. Stable Multi-Column Sort**
+
 - **Description:** Uses `usort` which is not stable — equal primary keys can reorder. Go's `sort.Stable` maintains relative order.
 - **Why it matters:** Multi-column sort on equal keys gives inconsistent results across re-renders
 - **Source:** `docs/repo_map/Evertras_bubble-table.md` — `sort.Stable` description
@@ -141,6 +148,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Expected impact:** Medium — subtle but correctness-affecting
 
 **8. Visible Row Caching**
+
 - **Description:** Every `View()` call recomputes entire filter/sort/pagination pipeline. Upstream has `visibleRowCache` invalidated on data changes.
 - **Why it matters:** For large datasets, repeated View() calls waste CPU
 - **Source:** `docs/repo_map/Evertras_bubble-table.md` — `visibleRowCache` + `visibleRowCacheUpdated`
@@ -149,6 +157,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Expected impact:** Medium — performance optimization for large tables
 
 **9. KeyMap + Help Integration**
+
 - **Description:** No `KeyMap` struct or `Help` integration for rendering keyboard shortcuts
 - **Why it matters:** Users need to know available keyboard shortcuts
 - **Source:** `docs/repo_map/charmbracelet_bubbles.md` — `KeyMap` interface with `ShortHelp()`/`FullHelp()`
@@ -157,6 +166,7 @@ rows → filteredSortedRows() [filter + sort] → pagedRows() [pagination]
 - **Expected impact:** Medium — improves discoverability
 
 **10. ContentGenerator for Dynamic Cells**
+
 - **Description:** Cell content is static; stickers has `ContentGenerator(func(maxX, maxY) string)` for adaptive text
 - **Why it matters:** Tables displaying dynamic content (timestamps, truncated text) benefit from adaptive rendering
 - **Source:** `docs/repo_map/76creates_stickers.md` — `SetContentGenerator`
@@ -190,6 +200,7 @@ $rows = \array_filter($rows, fn(Row $row) => stripos((string)$val, $text) !== fa
 ```
 
 **Issues:**
+
 - `usort` is not stable — equal keys may reorder between calls
 - No caching — every `View()` recomputes entire pipeline
 - Filter iterates all rows even when no filters active
@@ -198,11 +209,13 @@ $rows = \array_filter($rows, fn(Row $row) => stripos((string)$val, $text) !== fa
 ### External Approach: sort.Stable + VisibleRowCache
 
 **bubble-table** (`docs/repo_map/Evertras_bubble-table.md`):
+
 - Uses Go's `sort.Stable` for multi-column sort — guaranteed stable
 - Has `visibleRowCache` with `visibleRowCacheUpdated` flag — only recomputes when dirty
 - Has `extractNumber()` for robust numeric extraction from formatted strings
 
 **stickers** (`docs/repo_map/76creates_stickers.md`):
+
 - Ratio-based column layout via `calculateRatio()` — proportional space distribution
 - Bubble sort `sortIndex()` — O(n²) worst case, but noted as acceptable for typical table sizes
 
@@ -239,6 +252,7 @@ This would mirror the `tea.Model` interface from upstream (`docs/repo_map/Evertr
 ### Row/Cell Decomposition
 
 Currently `Table::View()` builds the entire table string in one pass. A decomposed approach (mirroring ratatui's `Widget` trait) would allow:
+
 - Incremental rendering (only changed regions)
 - composable table sub-components (header, body, footer as separate renderable units)
 
@@ -299,18 +313,23 @@ $t = $t->SortBy('name', true)->thenSortBy('city', false);
 ## Documentation / Cookbook Opportunities
 
 ### 1. Large Dataset Example
+
 Demonstrate `withViewportHeight()` + `withScrollY()` for tables with 10,000+ rows
 
 ### 2. Interactive TUI Example
+
 Full TEA loop example with ReactPHP integration showing table + keyboard events
 
 ### 3. StyledCell Cookbook
+
 Examples of conditional cell styling: negative numbers red, status column color-coded, etc.
 
 ### 4. Multi-column Sort Guide
+
 Explain primary vs secondary sort columns, interaction with pagination
 
 ### 5. Custom Filter Function Guide
+
 Show how to implement custom `FilterFunc` for specialized filtering (date ranges, numeric comparisons)
 
 ---
@@ -318,17 +337,21 @@ Show how to implement custom `FilterFunc` for specialized filtering (date ranges
 ## UX / TUI Improvements
 
 ### 1. Cursor Visual Distinction
+
 Currently cursor is `reverse video` style (`7`). ratatui (`docs/repo_map/ratatui_ratatui.md`) and bubble-table support configurable cursor styles including block/bar/underline and custom colors.
 
 ### 2. Sort Indicator Glyphs
+
 Upstream bubble-table appends `▲`/`▼` to sorted column headers. sugar-table does not render sort direction indicators.
 
 **Fix:** In `renderHeader()`, detect if this column is in `$sortColumns` and append direction glyph
 
 ### 3. Filter Active Indicator
+
 stickers (`docs/repo_map/76creates_stickers.md`) appends `⑂` to filtered column header. sugar-table doesn't indicate which columns have active filters.
 
 ### 4. Missing Cell vs Empty String Distinction
+
 Currently both render as `missingIndicator`. Upstream distinguishes absent cells from explicitly empty cells.
 
 ---
@@ -404,16 +427,19 @@ final class TableModel implements Model
 ### From Evertras/bubble-table (Primary Upstream)
 
 **Issue: #246 Per-cell styleFunc** (`docs/repo_map/Evertras_bubble-table.md`)
+
 - Long-requested feature for data-dependent cell styling
 - SugarCraft already implemented this in sugar-bits but NOT in sugar-table
 - **Lesson:** SugarCraft enhancements in sugar-bits should be ported to sugar-table
 
 **PR: Fuzzy filter implementation** (`docs/repo_map/Evertras_bubble-table.md`)
+
 - `filterFuncFuzzy` added as alternative to simple contains
 - Algorithm: iterate needle runes, find ordered subsequence in haystack
 - **Lesson:** Port this — it's only ~15 lines and closes a major feature gap
 
 **Issue: FilterFuncFuzzy concatenates all columns** (`docs/repo_map/Evertras_bubble-table.md`)
+
 - `filterFuncFuzzy` joins all filterable column values into one string before matching
 - Cannot target specific columns with fuzzy logic
 - **Lesson:** sugar-table's per-column filter approach may actually be superior for targeted filtering
@@ -421,16 +447,19 @@ final class TableModel implements Model
 ### From 76creates/stickers
 
 **Issue: Bubble sort performance** (`docs/repo_map/76creates_stickers.md`)
+
 - Author acknowledges O(n²) worst case and invites faster-algorithm PRs
 - **Lesson:** Don't copy bubble sort — use `usort` (already done) or implement stable sort
 
 **Design: ContentGenerator pattern** (`docs/repo_map/76creates_stickers.md`)
+
 - `SetContentGenerator(func(maxX, maxY int) string)` enables adaptive cell content
 - **Lesson:** Consider adding to sugar-table for width-aware cell content adaptation
 
 ### From textualize/textual
 
 **DataTable reactivity** (`docs/repo_map/textualize_textual.md`)
+
 - Uses reactive state (`var()`) with automatic watcher injection
 - Sorting/filtering updates propagate automatically to UI
 - **Lesson:** Could inspire sugar-table's event system design

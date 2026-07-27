@@ -1,6 +1,7 @@
 # charmbracelet/wishlist
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/wishlist
 - **Language:** Go
 - **Stars:** ~700 (estimated from GitHub activity; not confirmed via API)
@@ -12,6 +13,7 @@
 ## Feature List
 
 ### Core Features
+
 - **TUI-based SSH Directory**: Interactive terminal UI listing all configured SSH endpoints with selection, filtering, and connection.
 - **Dual-Mode Operation**:
   - **Local mode**: Browse and connect to endpoints from `~/.ssh/config` or a YAML config without serving anything.
@@ -33,6 +35,7 @@
 - **Blocking Reader**: Wraps an `io.Reader` to suppress `io.EOF` until real data arrives (used for STDIN handoff from a buffer).
 
 ### Authentication Methods
+
 - SSH Agent (local and remote forwarding)
 - Ed25519/RSA/EC keys from `~/.ssh/` or custom `IdentityFiles`
 - Auto-generated ephemeral client keys (`.wishlist/client_ed25519`)
@@ -134,24 +137,31 @@
 ## Notable Algorithms / Named Patterns
 
 ### ProxyJump (Bastion Tunneling)
+
 `proxyJump()` in `jump.go` performs a multi-leg SSH connection: dial the bastion → open a TCP connection from the bastion to the target → wrap that connection in `gossh.NewClientConn`. This is the direct Go equivalent of OpenSSH's `ProxyJump` option.
 
 ### STDIN Multiplexing
+
 `multiplex.Reader()` forks the SSH session's STDIN into two independent readers: one feeds the bubbletea TUI, the other is "handed off" to the remote session after a user selects an endpoint. The `ResetableReader` interface allows the TUI to drain/reset its copy after handoff without affecting the other.
 
 ### EOF-Suppressing Blocking Reader
+
 `blocking.Reader` re-reads on `io.EOF` every 10ms. This prevents the `bytes.Buffer` STDIN stand-in from reporting EOF when the buffer might still receive data (since the SSH session continues writing while the TUI is running).
 
 ### Host Key Callback with Auto-Accept
+
 `hostKeyCallback()` in `client_auth.go` uses `knownhosts.New()` to validate. Unknown hosts are not rejected — the key is appended to the known_hosts file. This mimics SSH's `StrictHostKeyChecking=no` behavior for a better UX in a directory tool.
 
 ### Tea Model Pattern (bubbletea)
+
 The project heavily uses the `charmbracelet/bubbletea` architecture: `ListModel` implements `tea.Model` with `Init()`/`Update()`/`View()`. The `Update()` method handles `tea.KeyMsg`, `tea.WindowSizeMsg`, `SetEndpointsMsg`, and error messages. The middleware wires the bubbletea `Program` into the SSH session I/O streams.
 
 ### Broadcast Relay for Dynamic Endpoint Updates
+
 `broadcast.Relay[[]*Endpoint]` from `teivah/broadcast` propagates endpoint list updates from the config reloader goroutine to all connected SSH session handlers without mutex complexity.
 
 ### Thread-Safe Hostinfo Map
+
 `sshconfig.hostinfoMap` uses a `sync.Mutex` protecting `inner map[string]hostinfo` and ordered `keys []string`. All operations (`set`, `get`, `forEach`) lock the mutex.
 
 ---
@@ -211,6 +221,7 @@ Wishlist is an SSH directory/TUI app that combines several Charmbracelet ecosyst
 | `keygen` for ephemeral key generation | `candy-core` (crypto utils) | `charmbracelet/keygen` for ed25519 key generation; SugarCraft has no keygen equivalent yet. |
 
 **Primary SugarCraft ports for wishlist dependencies**:
+
 - `sugar-bits` — ports `charmbracelet/bubbletea`, `charmbracelet/bubbles` (including `list`, `key`, `spinner`)
 - `candy-shell` — ports `charmbracelet/ssh`, `charmbracelet/wish`
 - `candy-shine` — ports `charmbracelet/lipgloss`, `muesli/termenv`

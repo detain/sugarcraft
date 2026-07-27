@@ -11,6 +11,7 @@
 Sugar-dash has made substantial progress implementing a TUI dashboard library, but its current organization under `src/Grid/` is architecturally misaligned with the original 18-package vision. This plan proposes a comprehensive reorganization into distinct subsystems with implementation priorities based on dependency order and value delivered.
 
 **Key Problems Identified:**
+
 1. **Flat directory structure** — 222 files in `src/Grid/` makes navigation impossible
 2. **Multiple competing layout systems** — `Layout`, `GridLayout`, `FlexLayout`, `StackedGrid`, `HStack`, `VStack`, `ZStack`, `Stack` without clear hierarchy
 3. **Documented technical debt** — 35 entries in CALIBER_LEARNINGS.md indicate accumulated issues
@@ -18,6 +19,7 @@ Sugar-dash has made substantial progress implementing a TUI dashboard library, b
 5. **No plugin/extensibility system** — despite original plan calling for Module/Registry/Plugin
 
 **Value from Upstream Analysis:**
+
 - **termui** provides the Drawable interface pattern and braille canvas math
 - **bubbletea-tilelayout** provides the iterative constraint solver algorithm
 - **bubbleboxer** provides the layout-tree/Model separation pattern
@@ -140,6 +142,7 @@ class Boxer {
 **What:** ≤100 iteration residual distribution for weight-based sizing with min/max/fixed constraints
 
 **Algorithm:**
+
 1. Calculate available space minus fixed sizes
 2. Distribute remaining based on weights (float64 0-1)
 3. Apply min/max clamping
@@ -698,6 +701,7 @@ public function testFrameRenders(): void {
 ## Appendix B: Key Interfaces Reference
 
 ### B.1 Drawable Interface
+
 ```php
 interface Drawable {
     public function getRect(): Rect;
@@ -708,6 +712,7 @@ interface Drawable {
 ```
 
 ### B.2 Module Interface
+
 ```php
 interface ModuleInterface {
     public function name(): string;
@@ -719,6 +724,7 @@ interface ModuleInterface {
 ```
 
 ### B.3 Layout Interfaces
+
 ```php
 interface Item {
     public function render(): string;

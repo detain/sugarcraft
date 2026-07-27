@@ -15,14 +15,17 @@ This audit identified **10 major categories** of repeated logic patterns across 
 ## 1. Immutable Builder Pattern (`with*()` + `mutate()`)
 
 ### Description
+
 The Elm-architecture-inspired immutable builder pattern where setter methods return new instances via a private `mutate()` method. This is the **most prevalent pattern** in the codebase.
 
 ### Statistics
+
 - **Direct use of `Mutable` trait from candy-core:** 13 classes
 - **Classes with local `private function mutate()` implementations:** 35 classes
 - **`with*()` method calls:** 10,246 occurrences
 
 ### Canonical Implementation
+
 **Source:** `candy-core/src/Concerns/Mutable.php:L27-L39`
 
 ```php
@@ -36,6 +39,7 @@ trait Mutable
 ```
 
 ### Classes Using the Trait
+
 - `candy-flip/src/Player.php`
 - `sugar-wishlist/src/Endpoint.php`
 - `candy-query/src/App.php`
@@ -76,6 +80,7 @@ private function mutate(?TextInput $input = null, ?string $title = null, ?string
 ```
 
 ### Key Insight
+
 The `Mutable` trait exists in `candy-core` but **35 projects re-implement their own `mutate()` locally** rather than using the trait. This suggests either:
 1. The trait doesn't handle edge cases (sentinel bools for nullable fields)
 2. The trait isn't widely known/discoverable
@@ -86,13 +91,16 @@ The `Mutable` trait exists in `candy-core` but **35 projects re-implement their 
 ## 2. Elm Architecture Model Interface
 
 ### Description
+
 The `Model` interface enforces the TEA (The Elm Architecture) pattern: `init()`, `update(Msg): [Model, ?Cmd]`, `view(): string|View`, and `subscriptions(): ?Subscriptions`.
 
 ### Statistics
+
 - **Classes implementing Model:** 92 (79 `final class`, 13 in tests/examples)
 - **Interface definition:** `candy-core/src/Model.php`
 
 ### Interface Definition
+
 **Source:** `candy-core/src/Model.php:L26-L62`
 
 ```php
@@ -108,6 +116,7 @@ interface Model
 ### Implementation Distribution
 
 **candy-core (9):**
+
 - `Composite`, `RootModelWithScreenStack`, `Panes`
 
 **candy-* libs (20+):**
@@ -132,6 +141,7 @@ interface Model
 - `honey-flap/src/Game.php`
 
 ### Key Insight
+
 The Model interface is **highly standardized and well-adopted**. All 92 implementations follow the same pattern of returning `[nextModel, optionalCmd]` from `update()`.
 
 ---
@@ -139,9 +149,11 @@ The Model interface is **highly standardized and well-adopted**. All 92 implemen
 ## 3. Internationalization (i18n) Pattern
 
 ### Description
+
 Each library has a `Lang` facade class that extends `SugarCraft\Core\I18n\Lang` and delegates to the central `T` registry.
 
 ### Statistics
+
 - **Lang facade classes:** 41 libraries
 - **`Lang::t()` calls:** 503 occurrences
 - **Lang files (en.php):** 41 libraries
@@ -201,6 +213,7 @@ final class Lang extends BaseLang
 ```
 
 ### Key Translation Pattern
+
 **`sugar-bits/lang/en.php`** structure:
 ```php
 <?php
@@ -212,6 +225,7 @@ return [
 ```
 
 ### Key Insight
+
 The i18n pattern is **highly standardized** with 41 identical Lang facade patterns and 503 call sites. The fallback chain (locale → base-language → en → raw key) is consistent.
 
 ---
@@ -219,9 +233,11 @@ The i18n pattern is **highly standardized** with 41 identical Lang facade patter
 ## 4. Error Handling Pattern
 
 ### Description
+
 Standardized validation errors using `throw new \InvalidArgumentException(Lang::t('...'))`.
 
 ### Statistics
+
 - **InvalidArgumentException with Lang::t():** 131 occurrences
 - **Pattern:** `throw new \InvalidArgumentException(Lang::t('error.key', ['param' => $value]));`
 
@@ -264,6 +280,7 @@ throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => 
 ```
 
 ### Key Insight
+
 The error handling pattern is **highly consistent** - 131 identical patterns using `Lang::t()` for user-facing error messages. The main improvement opportunity is potentially extracting common validation methods (e.g., `validateNonNeg()`, `validatePositive()`) into a shared validator utility.
 
 ---
@@ -271,9 +288,11 @@ The error handling pattern is **highly consistent** - 131 identical patterns usi
 ## 5. Async/Promise Pattern (ReactPHP)
 
 ### Description
+
 ReactPHP-based async operations using `Deferred`, `PromiseInterface`, and helper classes.
 
 ### Statistics
+
 - **`React\Promise` usage:** 120 occurrences
 - **`Deferred` usage:** 28 occurrences
 - **`Cmd::promise()` / `Cmd::tick()`:** 78 occurrences
@@ -356,6 +375,7 @@ final class Cmd
 ```
 
 ### Key Insight
+
 There are **two separate `AsyncOps` classes** (`candy-async/src/AsyncOps.php` and `candy-files/src/AsyncOps.php`) implementing similar patterns. The file operations in `candy-files` could potentially reuse `candy-async`'s utilities. Both use the same `Deferred` + `futureTick` pattern.
 
 ---
@@ -363,12 +383,15 @@ There are **two separate `AsyncOps` classes** (`candy-async/src/AsyncOps.php` an
 ## 6. Factory Method Pattern (`::new()`)
 
 ### Description
+
 Standardized factory method `::new()` for creating new instances.
 
 ### Statistics
+
 - **`::new()` calls:** 3,042 occurrences across the codebase
 
 ### Pattern
+
 ```php
 public static function new(): self
 {
@@ -377,6 +400,7 @@ public static function new(): self
 ```
 
 ### Examples
+
 ```php
 // sugar-bits/src/Stopwatch/Stopwatch.php:L33
 public static function new(float $interval = 1.0): self
@@ -395,6 +419,7 @@ public static function new(): self
 ```
 
 ### Key Insight
+
 The `::new()` factory is **ubiquitous** (3,042 uses). Some factories include validation (like `Stopwatch::new()`), others are simple wrappers. This is a strong convention that should be documented as required for all new classes.
 
 ---
@@ -402,12 +427,15 @@ The `::new()` factory is **ubiquitous** (3,042 uses). Some factories include val
 ## 7. Terminal Width Measurement Utility
 
 ### Description
+
 `SugarCraft\Core\Util\Width` class for measuring terminal display width accounting for ANSI codes, emoji, and CJK characters.
 
 ### Location
+
 **`candy-core/src/Util/Width.php`** (736 lines)
 
 ### Capabilities
+
 ```php
 final class Width
 {
@@ -426,6 +454,7 @@ final class Width
 ```
 
 ### Key Insight
+
 This utility is **well-centralized in candy-core** and handles complex Unicode/grapheme width calculation. It is used extensively by styled text rendering libraries.
 
 ---
@@ -433,12 +462,15 @@ This utility is **well-centralized in candy-core** and handles complex Unicode/g
 ## 8. Validator Interface Pattern
 
 ### Description
+
 `candy-forms` provides a `Validator` interface and concrete implementations for input validation.
 
 ### Location
+
 **`candy-forms/src/Validator/`**
 
 ### Interface
+
 **`candy-forms/src/Validator/Validator.php:L12-L17`**
 
 ```php
@@ -452,6 +484,7 @@ interface Validator
 ```
 
 ### Implementations
+
 - `Required.php` - validates non-empty input
 - `Email.php` - validates email format
 - `Pattern.php` - validates against regex
@@ -459,6 +492,7 @@ interface Validator
 - `MaxLength.php` - validates maximum length
 
 ### Example
+
 **`candy-forms/src/Validator/Required.php:L12-L21`**
 
 ```php
@@ -475,6 +509,7 @@ final class Required implements Validator
 ```
 
 ### Key Insight
+
 The validator interface is **defined in candy-forms and re-exported from sugar-prompt** for backward compatibility. This is a clean pattern but only used within forms/prompt contexts, not across the broader monorepo.
 
 ---
@@ -482,9 +517,11 @@ The validator interface is **defined in candy-forms and re-exported from sugar-p
 ## 9. Clamping/Range Limiting Pattern
 
 ### Description
+
 Various forms of value clamping to ensure values stay within valid ranges.
 
 ### Statistics
+
 - **`clamp()` method definitions:** 4 occurrences
 - **`clamp()` method calls:** 28 occurrences
 
@@ -529,6 +566,7 @@ private function clamp(): self
 ```
 
 ### Key Insight
+
 Clamping logic is **duplicated across 4+ libraries** with different implementations. A shared `clamp(int $value, int $min, int $max): int` utility in `candy-core` could eliminate this duplication.
 
 ---
@@ -536,24 +574,29 @@ Clamping logic is **duplicated across 4+ libraries** with different implementati
 ## 10. ANSIAware String Utilities
 
 ### Description
+
 Shared ANSI escape sequence handling in `SugarCraft\Core\Util\Ansi`.
 
 ### Location
+
 **`candy-core/src/Util/Ansi.php`**
 
 ### Capabilities
+
 - Strip ANSI sequences: `Ansi::strip($s)`
 - Parse ANSI sequences (CSI, OSC handlers)
 - Build SGR sequences for colors/styles
 - Terminal queries (cursor position, color profiles, etc.)
 
 ### Usage Pattern
+
 ```php
 // candy-core/src/Util/Width.php:L21
 $clean = Ansi::strip($s);
 ```
 
 ### Key Insight
+
 This is **well-centralized in candy-core** and used by the Width utility and various renderers. No duplication detected.
 
 ---
@@ -600,6 +643,7 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 ## Files Referenced
 
 ### candy-core (Foundation)
+
 - `candy-core/src/Concerns/Mutable.php` - Mutable trait
 - `candy-core/src/Model.php` - Model interface
 - `candy-core/src/Cmd.php` - Cmd factory
@@ -610,15 +654,19 @@ This is **well-centralized in candy-core** and used by the Width utility and var
 - `candy-core/src/AsyncCmd.php` - Async command wrapper
 
 ### candy-async
+
 - `candy-async/src/AsyncOps.php` - Async utilities (timeout, retry, debounce, throttle)
 
 ### candy-files
+
 - `candy-files/src/AsyncOps.php` - File-specific async operations (DUPLICATED)
 
 ### candy-forms
+
 - `candy-forms/src/Validator/Validator.php` - Validator interface
 - `candy-forms/src/Validator/Required.php`, `Email.php`, `Pattern.php`, `MinLength.php`, `MaxLength.php`
 
 ### sugar-bits
+
 - `sugar-bits/src/Lang.php` - Per-library Lang facade
 - `sugar-bits/src/Stopwatch/Stopwatch.php` - Model implementation example

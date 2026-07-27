@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — History search (`Ctrl+R`) doesn't handle empty history
+
 **Severity:** MEDIUM  
 **Location:** `src/History.php`
 
@@ -24,6 +25,7 @@ When history is empty, pressing `Ctrl+R` enters search mode and immediately exit
 ---
 
 ### Finding 2 — Vi mode cursor positioning off by one at line end
+
 **Severity:** MEDIUM  
 **Location:** `src/ViEngine.php`
 
@@ -34,6 +36,7 @@ After typing to end of line and entering normal mode, cursor is positioned one c
 ---
 
 ### Finding 3 — Tab completion doesn't handle empty prefix
+
 **Severity:** LOW  
 **Location:** `src/Completion.php`
 
@@ -44,6 +47,7 @@ When tab is pressed with no input, the completer may return all completions (flo
 ---
 
 ### Finding 4 — History save race condition
+
 **Severity:** MEDIUM  
 **Location:** `src/History.php:89`
 
@@ -56,6 +60,7 @@ When tab is pressed with no input, the completer may return all completions (flo
 ## 2. Performance Problems
 
 ### Finding 5 — History search is O(n)
+
 **Severity:** LOW  
 **Location:** `src/History.php`
 
@@ -66,6 +71,7 @@ Linear scan through history on each search keystroke. For history with 10,000+ e
 ---
 
 ### Finding 6 — No N+1 issues detected
+
 **Severity:** N/A  
 
 ---
@@ -73,6 +79,7 @@ Linear scan through history on each search keystroke. For history with 10,000+ e
 ## 3. Memory Leaks
 
 ### Finding 7 — History array grows unboundedly
+
 **Severity:** MEDIUM  
 **Location:** `src/History.php`
 
@@ -83,6 +90,7 @@ Linear scan through history on each search keystroke. For history with 10,000+ e
 ---
 
 ### Finding 8 — No memory leaks in edit buffer
+
 **Severity:** N/A  
 
 ---
@@ -90,6 +98,7 @@ Linear scan through history on each search keystroke. For history with 10,000+ e
 ## 4. Security
 
 ### Finding 9 — History file permissions use 0644
+
 **Severity:** LOW  
 **Location:** `src/History.php`
 
@@ -100,6 +109,7 @@ Default `0664` allows group read. If the history contains sensitive commands, th
 ---
 
 ### Finding 10 — No security concerns beyond history file perms
+
 **Severity:** N/A  
 
 ---
@@ -107,6 +117,7 @@ Default `0664` allows group read. If the history contains sensitive commands, th
 ## 5. Complexity
 
 ### Finding 11 — Dual keybinding engine (Emacs/Vi) adds complexity
+
 **Severity:** LOW  
 **Location:** `src/`
 
@@ -117,6 +128,7 @@ Two separate input state machines. Finding bugs requires understanding both.
 ## 6. Missing Features / Incomplete Ports
 
 ### Finding 12 — No incremental search (Emacs mode)
+
 **Severity:** LOW  
 **Location:** `src/EmacsEngine.php`
 
@@ -125,6 +137,7 @@ Standard readline incremental search (`Ctrl+S`) not implemented.
 ---
 
 ### Finding 13 — No Vi text objects
+
 **Severity:** MEDIUM  
 **Location:** `src/ViEngine.php`
 
@@ -133,6 +146,7 @@ Vi text objects (`ci"`, `da{`, etc.) not implemented.
 ---
 
 ### Finding 14 — No bracketed paste mode
+
 **Severity:** LOW  
 **Location:** `src/InputHandler.php`
 
@@ -143,6 +157,7 @@ Modern terminals use bracketed paste. Not supported.
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 15 — Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 
 Uses readonly, promoted constructors, strict types.
@@ -152,6 +167,7 @@ Uses readonly, promoted constructors, strict types.
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 16 — Synchronous history save on every enter
+
 **Severity:** MEDIUM  
 **Location:** `src/History.php`
 

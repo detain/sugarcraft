@@ -126,12 +126,14 @@ final class Viewport implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad with empty lines if needed
-        while (count($visibleLines) < $height) {
+        $visibleCount = count($visibleLines);
+        while ($visibleCount < $height) {
             $emptyLine = $this->background !== null
                 ? $this->background->toBg(ColorProfile::TrueColor) . str_repeat(' ', $width) . Ansi::reset()
                 : str_repeat(' ', $width);
             $result .= $emptyLine . "\n";
             $visibleLines[] = '';
+            $visibleCount++;
         }
 
         return rtrim($result, "\n");

@@ -14,6 +14,7 @@
 ## 1. BUGS & EDGE CASES
 
 ### HIGH: BlockStack/StyleSheet state not reset in copy()
+
 **Location:** `src/Renderer.php:276-298` (the `copy()` method)
 
 The `copy()` method does not reset `$this->blockStack` or `$this->styleSheet`. These are instance properties initialized fresh only inside `render()`. If a `Renderer` instance is reused and `with*()` is called to get a "new" instance, the new renderer shares the **same** `blockStack` and `styleSheet` object references.
@@ -23,6 +24,7 @@ The `copy()` method does not reset `$this->blockStack` or `$this->styleSheet`. T
 ---
 
 ### MEDIUM: SyntaxHighlighter line-numbers rebuilds string inefficiently
+
 **Location:** `src/SyntaxHighlighter.php:108-119`
 
 ```php
@@ -34,6 +36,7 @@ return implode("\n", $lines);
 ```
 
 **Issues:**
+
 1. `explode()` + `implode()` creates a full copy of the string
 2. The `&$line` reference iteration is error-prone — `$line` reference doesn't unset after loop
 3. String concatenation inside loop is O(n²)
@@ -50,6 +53,7 @@ return implode("\n", array_map(
 ---
 
 ### MEDIUM: Theme::fromJson error suppression hides real failures
+
 **Location:** `src/Theme.php:560`
 
 ```php
@@ -63,6 +67,7 @@ The `@` suppresses warnings. If `file_get_contents()` fails for permission denie
 ---
 
 ### MEDIUM: Renderer::renderChildren string concatenation in loop
+
 **Location:** `src/Renderer.php:601-608`
 
 ```php
@@ -90,6 +95,7 @@ return implode('', $parts);
 ---
 
 ### LOW: JSON decode error not distinguishable from valid `null`
+
 **Location:** `src/Theme.php:570-572`
 
 `json_decode()` returns `null` both for JSON `null` and for decoding errors. `!is_array($data)` conflates the two.
@@ -104,6 +110,7 @@ if (json_last_error() !== JSON_ERROR_NONE) {
 ---
 
 ### LOW: Emoji shortcode regex compiled every call
+
 **Location:** `src/Renderer.php:369-373`
 
 ```php
@@ -121,6 +128,7 @@ Regex pattern recompiled on every call. Could use pre-compiled pattern.
 ## 2. PERFORMANCE PROBLEMS
 
 ### MEDIUM: Repeated string concatenation throughout Renderer
+
 **Location:** `src/Renderer.php` — multiple methods
 
 The renderer uses `$out .=` pattern extensively in:
@@ -133,6 +141,7 @@ The renderer uses `$out .=` pattern extensively in:
 ---
 
 ### MEDIUM: SyntaxHighlighter regex compilation on every tokenise() call
+
 **Location:** `src/SyntaxHighlighter.php:130-136`
 
 ```php
@@ -158,6 +167,7 @@ private static function getPattern(array $keywords): string
 ---
 
 ### LOW: StyleSheet::for() does linear scan up the depth ladder
+
 **Location:** `src/Style/StyleSheet.php:76-80`
 
 ```php
@@ -175,6 +185,7 @@ For deeply nested documents, O(depth) per lookup.
 ## 3. MEMORY LEAKS
 
 ### LOW: No explicit cleanup of BlockStack after render
+
 **Location:** `src/Renderer.php:300-348`
 
 `render()` sets new `$this->blockStack` and `$this->styleSheet`. PHP will GC old ones, but if Renderer is kept alive for many renders, old references persist until overwritten.
@@ -184,6 +195,7 @@ For deeply nested documents, O(depth) per lookup.
 ---
 
 ### LOW: SyntaxHighlighter line-number reference loop
+
 **Location:** `src/SyntaxHighlighter.php:112`
 
 ```php
@@ -202,6 +214,7 @@ After `foreach` with `&$line`, the reference is not `unset()`. `$line` still hol
 ## 4. SECURITY
 
 ### LOW: Input sanitization covers C0/ESC but not all injection vectors
+
 **Location:** `src/Renderer.php:458-462` (`stripControls()`) and `src/Renderer.php:545-548` (`safeUrl()`)
 
 `stripControls()` strips C0 controls except tab/newline, and ESC. `safeUrl()` strips C0/ESC/BEL from URLs. `withSanitize(false)` bypasses all sanitization — no runtime warning.
@@ -211,6 +224,7 @@ After `foreach` with `&$line`, the reference is not `unset()`. `$line` still hol
 ---
 
 ### LOW: Theme::fromJson path traversal possibility
+
 **Location:** `src/Theme.php:555-565`
 
 API design issue: method takes a file path. If path is user-controlled, could read arbitrary files.
@@ -222,6 +236,7 @@ API design issue: method takes a file path. If path is user-controlled, could re
 ## 5. COMPLEXITY
 
 ### MEDIUM: StyleSheet uses custom mutate() workaround
+
 **Location:** `src/Style/StyleSheet.php:123-128`
 
 ```php
@@ -240,6 +255,7 @@ protected function mutate(array $changes): static
 ---
 
 ### LOW: Redundant is_file() check before file_get_contents()
+
 **Location:** `src/Theme.php:557, 560`
 
 `file_get_contents()` already returns `false` if file doesn't exist. `is_file()` check is redundant.
@@ -249,6 +265,7 @@ protected function mutate(array $changes): static
 ## 6. MISSING FEATURES / INCOMPLETE PORTS
 
 ### MEDIUM: Missing glamour "Write" function parity
+
 **Location:** `src/Renderer.php`
 
 Upstream `glamour` has `Write(markdown, options)` function that writes directly to a terminal-optimized writer. This library only provides `Renderer::renderMarkdown()` returning a string.
@@ -258,6 +275,7 @@ Upstream `glamour` has `Write(markdown, options)` function that writes directly 
 ---
 
 ### MEDIUM: Limited emoji shortcode map
+
 **Location:** `src/Renderer.php:358-368`
 
 Emoji map has 15 entries. glamour's emoji support is more extensive.
@@ -267,6 +285,7 @@ Emoji map has 15 entries. glamour's emoji support is more extensive.
 ---
 
 ### LOW: No streaming/rendering for very large documents
+
 **Location:** `src/Renderer.php:300` (`render()` method)
 
 Entire output string built in memory before returning. glamour supports streaming output.
@@ -278,6 +297,7 @@ Entire output string built in memory before returning. glamour supports streamin
 ## 7. PHP 8.3/8.4 COMPATIBILITY
 
 ### LOW: Already using PHP 8.3 features correctly
+
 **Location:** All source files
 
 Uses `declare(strict_types=1)`, `readonly`, constructor property promotion, `fn()` arrow functions, `match` expressions. **No PHP 8.3/8.4 compatibility issues found.**
@@ -287,6 +307,7 @@ Uses `declare(strict_types=1)`, `readonly`, constructor property promotion, `fn(
 ## 8. ASYNC/REACTPHP IMPROVEMENTS
 
 ### LOW: No async rendering support
+
 **Location:** `src/Renderer.php`
 
 Renderer is fully synchronous. For high-throughput use cases:

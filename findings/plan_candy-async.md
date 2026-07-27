@@ -43,12 +43,14 @@ Address all findings from the candy-async code review, fixing safety issues (mar
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - `CancellationToken::markCancelled()` is `private`
 - `CancellationSource::cancel()` still works (it is in the same package)
 - All existing tests pass
 - Consumer code that directly calls `markCancelled()` should fail to compile/run
 
 **Related code locations:**
+
 - `candy-async/src/CancellationToken.php:45` — method to change
 - `candy-async/src/CancellationSource.php:57` — existing caller
 - `candy-async/tests/CancellationTokenTest.php:176-191` — existing idempotency test
@@ -67,12 +69,14 @@ The method is only called by `CancellationSource::cancel()` within the same pack
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - `private static ?CancellationToken $neverToken = null;` is removed
 - Line 99 changes from `$token ??= self::$neverToken ??= CancellationSource::new()->token();` to `$token ??= CancellationSource::new()->token();`
 - All existing retry tests pass
 - Concurrent retry() calls with no explicit token don't interfere with each other
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:25` — static property definition
 - `candy-async/src/AsyncOps.php:99` — static property usage
 - `candy-async/tests/AsyncOpsTest.php:163-312` — retry tests
@@ -91,12 +95,14 @@ The comment at line 24 says "Never-cancelled sentinel token shared across retry(
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - `AsyncOps::retry()` catches synchronous exceptions from `$operation()`
 - Caught exceptions are converted to rejected promises via `reject()`
 - Retry logic handles these rejected promises normally
 - Test added: operation that throws synchronously on first attempt, succeeds on second
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:118` — direct `$operation()` call
 - `candy-async/src/AsyncOps.php:107-148` — retryAttempt method
 
@@ -123,12 +129,14 @@ return $operationPromise->then(/* ... */);
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - Each callback is wrapped in try-catch
 - If a callback throws, remaining callbacks still fire
 - Exceptions are not silently swallowed (should be logged or collected)
 - Test added: verify all callbacks fire even if one throws
 
 **Related code locations:**
+
 - `candy-async/src/CancellationToken.php:76-78` — callback invocation loop
 - `candy-async/src/CancellationToken.php:70-80` — fireCallbacks method
 - `candy-async/tests/CancellationTokenTest.php` — existing callback tests
@@ -173,12 +181,14 @@ Libraries that use both namespaces (like `candy-serve` using `SugarCraft\Async\S
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - Class renamed from `Subscription` to `SubscriptionHandle`
 - All usages updated across the monorepo
 - No import conflicts when using both `SugarCraft\Async\SubscriptionHandle` and `SugarCraft\Core\Subscription`
 - All tests pass
 
 **Related code locations:**
+
 - `candy-async/src/Subscription.php` — interface file to rename
 - `candy-async/src/Subscriptions.php:16` — implements `Subscription`
 - `candy-async/src/Subscriptions.php:42` — `add(Subscription $subscription)`
@@ -201,12 +211,14 @@ Also need to rename `Subscriptions` to `SubscriptionGroup` (see 2.2).
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - Class renamed from `Subscriptions` to `SubscriptionGroup`
 - Static factory `Subscriptions::compose()` becomes `SubscriptionGroup::compose()`
 - All usages updated
 - All tests pass
 
 **Related code locations:**
+
 - `candy-async/src/Subscriptions.php` — file to rename (and class inside)
 - `candy-async/tests/SubscriptionsTest.php:9,21` — test usages
 - `candy-serve/src/Git/GitDaemon.php:8` — consumer usage
@@ -222,12 +234,14 @@ Also need to rename `Subscriptions` to `SubscriptionGroup` (see 2.2).
 **Severity:** LOW
 
 **Conditions for success:**
+
 - `SubscriptionHandle` interface includes `count()` and `isEmpty()` (and `add()` only on group)
 - OR new `SubscriptionGroup` interface extends `SubscriptionHandle` and adds these methods
 - All implementations updated
 - Type hints work correctly
 
 **Related code locations:**
+
 - `candy-async/src/Subscription.php` — interface to extend
 - `candy-async/src/Subscriptions.php:70-78` — methods on implementation
 
@@ -245,10 +259,12 @@ The cleaner approach is likely a separate `SubscriptionGroup` interface that ext
 **Severity:** LOW
 
 **Conditions for success:**
+
 - `@internal` annotation removed if `disposeAll()` is public API
 - OR visibility changed to `private`/`protected` if truly internal
 
 **Related code locations:**
+
 - `candy-async/src/Subscriptions.php:80-91` — `disposeAll()` method
 
 ---
@@ -270,6 +286,7 @@ The cleaner approach is likely a separate `SubscriptionGroup` interface that ext
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - `AsyncOps::awaitAll()` method added
 - Wraps `React\Promise\all()`
 - Returns a promise that resolves when all input promises resolve
@@ -277,6 +294,7 @@ The cleaner approach is likely a separate `SubscriptionGroup` interface that ext
 - Tests added
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php` — add method here
 - `candy-async/tests/AsyncOpsTest.php` — add tests
 
@@ -291,12 +309,14 @@ The cleaner approach is likely a separate `SubscriptionGroup` interface that ext
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - `AsyncOps::awaitAny()` method added
 - Wraps `React\Promise\race()`
 - Returns a promise that resolves/rejects when the first input promise resolves/rejects
 - Tests added
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php` — add method here
 - `candy-async/tests/AsyncOpsTest.php` — add tests
 
@@ -319,12 +339,14 @@ public static function periodicSubscription(
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - `AsyncOps::periodicSubscription()` method added
 - Returns a `Subscription` that can be unsubscribed
 - On unsubscribe, the periodic timer is cancelled
 - Tests added
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php` — add method here
 - `candy-async/tests/AsyncOpsTest.php` — add tests
 - `candy-async/src/Subscription.php` — return type
@@ -358,12 +380,14 @@ This library only supports trailing edge for debounce and leading edge for throt
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - Debounce supports `leading=true` option to fire immediately on first call
 - Throttle supports `trailing=true` option to fire after cooldown period
 - Tests added for both new modes
 - Backward compatible (default behavior unchanged)
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:159-175` — debounce method
 - `candy-async/src/AsyncOps.php:186-204` — throttle method
 - `candy-async/tests/AsyncOpsTest.php` — add tests
@@ -387,6 +411,7 @@ public static function debounceWithFlush(
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - `AsyncOps::debounceWithFlush()` method added
 - Returns array with `['fn' => debouncedFunction, 'flush' => flushFunction]`
 - Calling `flush()` triggers the function immediately if there are pending arguments
@@ -394,6 +419,7 @@ public static function debounceWithFlush(
 - Tests added
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php` — add method here
 - `candy-async/tests/AsyncOpsTest.php` — add tests
 
@@ -417,11 +443,13 @@ public static function debounceWithFlush(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - `lang/en.php` has at least some useful translation keys
 - OR `Lang` class is removed if not needed
 - Tests pass
 
 **Related code locations:**
+
 - `candy-async/lang/en.php` — empty array
 - `candy-async/src/Lang.php` — translation facade
 - `candy-async/tests/LangTest.php` — existing tests
@@ -447,11 +475,13 @@ public static function retry(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - New `$jitter` parameter added with default 0.0 (no change to existing behavior)
 - When jitter > 0, backoff is randomized within range `[backoff * (1 - jitter), backoff * (1 + jitter)]`
 - Tests added
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:86-102` — retry method signature
 - `candy-async/src/AsyncOps.php:129-133` — where backoff is used
 
@@ -466,11 +496,13 @@ public static function retry(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - `AsyncOpsInterface` created with all public static method signatures
 - `AsyncOps` implements `AsyncOpsInterface`
 - Tests can mock the interface
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:22` — final class
 - `candy-async/src/AsyncOpsInterface.php` — new file
 
@@ -485,11 +517,13 @@ public static function retry(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Investigation: Is implementing `PromiseInterface` on `CancellationToken` feasible?
 - If yes, implementation added
 - If no, documentation added explaining why
 
 **Related code locations:**
+
 - `candy-async/src/CancellationToken.php` — class to potentially modify
 - `candy-async/tests/CancellationTokenTest.php` — add tests
 
@@ -504,10 +538,12 @@ public static function retry(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Docblock comments updated with memory behavior warning
 - Callers know to ensure they call the debounced function one final time or explicitly drop references
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:150-175` — debounce method
 - `candy-async/src/AsyncOps.php:177-204` — throttle method
 
@@ -522,10 +558,12 @@ public static function retry(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Clear documentation added to both methods
 - One is designated as the recommended public API
 
 **Related code locations:**
+
 - `candy-async/src/CancellationSource.php:63-66` — onCancel delegation
 - `candy-async/src/CancellationToken.php:57-65` — onCancel method
 
@@ -544,12 +582,14 @@ public static function retry(
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - `retry()` accepts optional `LoopInterface $loop` parameter
 - `retryAttempt()` receives and uses the loop instead of `Loop::get()`
 - Default behavior unchanged (uses `Loop::get()` when null)
 - Tests pass with explicit loop
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:86-102` — retry method signature
 - `candy-async/src/AsyncOps.php:131` — `Loop::get()->addTimer(...)`
 
@@ -565,6 +605,7 @@ public static function retry(
 **What is expected:** Add documentation to relevant methods explaining performance characteristics.
 
 **Why:**
+
 - debounce() cancels and reschedules timer on every call — standard implementation, likely fine
 - retry() recursive chain creates nested Deferreds — natural limit from exponential backoff, minor concern
 - Subscriptions stores array and iterates on unsubscribe — fine for small counts
@@ -572,9 +613,11 @@ public static function retry(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Docblocks updated with performance notes where relevant
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:150-175` — debounce
 - `candy-async/src/AsyncOps.php:104-148` — retryAttempt
 - `candy-async/src/Subscriptions.php:85-91` — disposeAll
@@ -590,9 +633,11 @@ public static function retry(
 **Severity:** LOW
 
 **Conditions for success:**
+
 - Documentation added to retry method
 
 **Related code locations:**
+
 - `candy-async/src/AsyncOps.php:104-148` — retryAttempt
 
 ---

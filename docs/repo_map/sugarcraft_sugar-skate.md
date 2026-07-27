@@ -5,11 +5,17 @@
 **sugar-skate** is a pure-PHP personal key/value store and the definitive PHP port of `charmbracelet/skate`. It provides multi-database isolation, binary data storage, glob pattern matching, ordered listing, TTL/expiry, Levenshtein-based typo suggestions, and JSON/YAML import/export — all backed by SQLite instead of the Go project's BadgerDB. The library is `final` classes, `declare(strict_types=1)`, PSR-4, and works on PHP 8.3+ with only `ext-sqlite3` required.
 
 **Key statistics:**
+
 - **5 source files** in `src/` (Store, Database, Entry, Cli/ExportCommand, Cli/ImportCommand)
+
 - **2 importer classes** in `src/Import/` (JsonImporter, YamlImporter)
+
 - **3 test files** with 30+ test methods covering all major operations
+
 - **5 example scripts** (basic, multidb, glob, binary, reverse-order)
+
 - **17 locales** (en + 16 translated)
+
 - **1 VHS demo** (.vhs/glob.gif)
 
 **Status:** 🟢 v1 ready — local-only KV store with full test coverage and documentation
@@ -67,7 +73,9 @@ private function parseKey(string $key): array
 
 **Data directory resolution** (lines 321–331):
 - Respects `$XDG_CONFIG_HOME` environment variable
+
 - Falls back to `~/.config/skate`
+
 - Created with `0o700` permissions (owner-only read/write/execute)
 
 **Levenshtein typo suggestions** on key miss (lines 146–165):
@@ -120,7 +128,9 @@ WAL (Write-Ahead Logging) provides better concurrency and crash recovery than de
 
 **Glob pattern to SQL LIKE translation** (`buildGlobQuery()`, lines 315–344):
 - `*` → `%` (matches any characters)
+
 - `?` → `_` (matches single character)
+
 - `%` and `_` are escaped as `\%` and `\_` to prevent accidental LIKE wildcards
 
 **Atomic transactions** (lines 290–301):
@@ -145,25 +155,34 @@ Uses `BEGIN IMMEDIATE` to acquire a write lock immediately rather than deferring
 A **value object** with 6 readonly properties: `key`, `value`, `binary`, `createdAt`, `modifiedAt`, `expiresAt`. Notable methods:
 
 - `isExpired()`: Checks if `expiresAt <= now`
+
 - `rawValue()`: Returns base64-decoded bytes if `binary === true`, original value otherwise
+
 - `Entry::binary(string $key, string $bytes)`: Factory that base64-encodes and marks as binary
 
 #### 4. Import/Export System
 
 **JsonImporter** (`src/Import/JsonImporter.php`):
 - Reads `{ "key": "value", "_ttl": { "key": 3600 } }` format
+
 - `_ttl` top-level map specifies per-key expiry in seconds
+
 - Atomic import uses reflection to access `Store::$databases` and call `Database::transaction()` directly
+
 - Multi-database atomic import throws `RuntimeException` (documented limitation — SQLite transactions are per-connection)
 
 **YamlImporter** (`src/Import/YamlImporter.php`):
 - Reads `skate_ttl_key: 3600` entries as TTL metadata
+
 - Falls back to built-in minimal YAML parser (200 lines) if `symfony/yaml` is not available
+
 - Handles simple scalar values and quoted strings
 
 **ExportCommand** (`src/Cli/ExportCommand.php`):
 - Outputs `_ttl` map in JSON, `skate_ttl_<key>` entries in YAML
+
 - Uses `JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE` flags
+
 - Falls back to minimal YAML formatting if `symfony/yaml` unavailable
 
 ---
@@ -184,15 +203,22 @@ Sugar-skate implements a **file-per-database** abstraction. Unlike Go skate whic
 
 BadgerDB is a Go-native LSM-tree store with:
 - Concurrent read/write transactions
+
 - Garbage collection (compaction)
+
 - Variable-size keys and values
+
 - Directory-based multi-database (each DB = a subdirectory)
 
 PHP has no native Badger equivalent. SQLite was chosen because:
 1. ** ubiquitously available** (`ext-sqlite3` is part of PHP core)
+
 2. **Zero configuration**: Single file, auto-created on first access
+
 3. **ACID transactions**: Full rollback support
+
 4. **Familiar ecosystem**: PHP developers already know SQLite
+
 5. **Sufficient performance** for personal CLI use cases
 
 ### Trade-offs vs Go Implementation
@@ -219,11 +245,16 @@ The fuzzy search in sugar-skate operates on **keys within a database**, triggere
 **Algorithm** (`src/Store.php`, lines 146–165):
 
 1. Fetch all non-expired keys from the target database via `Database::allKeys()`
+
 2. Initialize `bestDist = PHP_INT_MAX`, `best = null`
+
 3. For each candidate key:
    - Compute `levenshtein($key, $candidate)` (PHP's built-in, O(n*m) time)
+
    - Accept candidate only if `dist < bestDist && dist <= strlen(key) / 2`
+
    - The `/ 2` threshold means longer keys allow proportionally more edit distance
+
 4. Return the closest match, or `null` if none qualify
 
 **Example behavior:**
@@ -241,6 +272,7 @@ Go skate's `findDb()` function (`charmbracelet/skate`, line 286) uses `levenshte
 
 The practical difference:
 - Go: "database 'passwrd' not found; did you mean 'passwords'?"
+
 - PHP: "key 'colro' not found; did you mean 'color'?"
 
 ---
@@ -260,11 +292,15 @@ The CLI (`bin/skate`, 280 lines) implements 7 commands:
 | `export <json\|yaml> [db] [pattern]` | Bulk export | Outputs to stdout, filtered by pattern |
 
 **STDIN handling**:
+
 - `set`: If no positional value given, reads one `trim()`ed line from `STDIN`
+
 - `import`: `path='-'` or `path='/dev/stdin'` reads all of `php://stdin`
 
 **Exit codes**:
+
 - `get`: Returns `1` if key is truly missing (not just empty value)
+
 - `import`/`export`: `1` on error, `0` on success
 
 ---
@@ -326,9 +362,13 @@ The CLI (`bin/skate`, 280 lines) implements 7 commands:
 ### What PHP Adds Over Go
 
 1. **Import/Export**: Bulk load/save in JSON or YAML format with atomic transaction support
+
 2. **i18n**: Full localization for 16 languages beyond English
+
 3. **Schema migration**: Automatic `ALTER TABLE` for `expires_at` column on legacy databases
+
 4. **Binary factory**: `Entry::binary()` convenience constructor for creating binary entries
+
 5. **Detailed expiry metadata**: `Entry::isExpired()`, `Entry::expiresAt` (Go skate has expiry but less granular access)
 
 ---
@@ -340,14 +380,18 @@ The CLI (`bin/skate`, 280 lines) implements 7 commands:
 Beyond the upstream `charmbracelet/skate`, several other projects in the ecosystem relate to key-value storage:
 
 1. **dgraph/badger** (upstream dependency of Go skate): Production-grade LSM-tree KV store in Go. Not directly relevant to PHP porting.
+
 2. **sqlite** (PHP's backend): Sugar-skate uses SQLite3 directly — no abstraction layer between PHP and the database.
+
 3. **symfony/cache** (optional dependency): Could theoretically back sugar-skate, but would add significant weight for a CLI tool.
+
 4. **sugarcraft/candy-core** (dependency): Provides `SugarCraft\Core\I18n\T` for i18n — not a storage dependency.
 
 ### Notable Patterns
 
 The **file-per-database** pattern in sugar-skate (`<name>.db` files in a shared directory) is a common approach in CLI tools:
 - `go-skate` uses subdirectories per database
+
 - Many CLI tools (e.g., `less` history, `fzf` cache) use this pattern
 
 The **TTL as expiry timestamp** (storing ISO 8601 datetime in a TEXT column) is straightforward and SQLite-friendly. An alternative would be storing Unix epoch seconds as an INTEGER, which would enable efficient range queries but lose human readability.
@@ -359,19 +403,29 @@ The **TTL as expiry timestamp** (storing ISO 8601 datetime in a TEXT column) is 
 ### Strengths
 
 1. **Zero-configuration persistence**: Data directory created automatically with `0o700` permissions on first Store instantiation
+
 2. **Multi-database isolation without server**: Each `.db` file is independent — backup, share, or delete without affecting others
+
 3. **Glob pattern filtering**: SQL LIKE translation enables filtering without loading all keys into PHP memory
+
 4. **Iterable results**: `Database::list()` and `Store::list()` are generators — memory-efficient for large databases
+
 5. **Graceful typo recovery**: Levenshtein suggestions on key miss reduce user frustration
+
 6. **Import/export with TTL**: Critical for backup/restore workflows with expiring entries
+
 7. **Atomic single-database transactions**: Uses `BEGIN IMMEDIATE` to avoid SQLite deadlock scenarios
+
 8. **Legacy schema migration**: `ALTER TABLE` automatically adds new columns without data loss
 
 ### Innovations Over Upstream
 
 1. **Import/Export system** (JSON/YAML): Go skate has no equivalent; this is a genuine extension
+
 2. **i18n**: 17 locales via the SugarCraft i18n framework
+
 3. **Binary file convenience**: `setFile()`/`getFile()` for seamless file storage
+
 4. **Entry metadata access**: PHP's `Entry::isExpired()`, `createdAt`, `modifiedAt` give more introspection than Go's raw bytes
 
 ---
@@ -379,12 +433,19 @@ The **TTL as expiry timestamp** (storing ISO 8601 datetime in a TEXT column) is 
 ## Weaknesses and Limitations
 
 1. **No encryption at rest**: Data stored in plain files in `~/.config/skate/` — anyone with file access can read everything
+
 2. **No authentication**: No access control; file permissions are the only protection
+
 3. **No atomic cross-database operations**: `BEGIN IMMEDIATE` only locks one `.db` file; multi-db atomic import explicitly throws
+
 4. **Levenshtein on large key sets**: `allKeys()` loads every key into memory; no index-based acceleration for fuzzy search
+
 5. **Single PHP process**: No concurrent access support; multiple processes accessing the same `.db` file will have locking contention
+
 6. **No query beyond glob**: No pattern matching on values, no range queries, no full-text search
+
 7. **Binary data overhead**: base64 encoding increases size by ~33%; no native binary storage (unlike Go Badger)
+
 8. **No compaction/cleanup**: WAL journal grows indefinitely; no automated `VACUUM` scheduling
 
 ---

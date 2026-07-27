@@ -33,6 +33,7 @@
 The `append()` method uses `FILE_APPEND | LOCK_EX` which only provides atomic writes for the single `file_put_contents` call. If multiple processes read (`all()`) while another appends, data corruption can occur.
 
 **Problem Details:**
+
 - `append()` uses `FILE_APPEND | LOCK_EX` — atomic for the write, but does not prevent concurrent reads
 - `all()` has no file locking whatsoever — concurrent reads during a write can read partial data
 

@@ -55,7 +55,8 @@ final class Entry
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $i = 0;
         $n = (float) $this->size;
-        while ($n >= 1024 && $i < count($units) - 1) {
+        $unitCount = count($units);
+        while ($n >= 1024 && $i < $unitCount - 1) {
             $n /= 1024;
             $i++;
         }

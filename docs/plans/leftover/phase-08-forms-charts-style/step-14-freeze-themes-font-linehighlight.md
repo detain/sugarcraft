@@ -14,10 +14,12 @@
 ## Files
 
 **Create:**
+
 - `candy-freeze/src/Theme/VsCodeThemeLoader.php`.
 - `candy-freeze/src/Theme/ChromaThemeLoader.php`.
 
 **Modify:**
+
 - `candy-freeze/src/Renderer/SvgRenderer.php` — `--font path/to/font.ttf`
   embeds. `--highlight start-end` adds.
 

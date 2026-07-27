@@ -1,6 +1,7 @@
 # charmbracelet/lipgloss
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/lipgloss
 - **Language:** Go
 - **Stars:** ~3,500+ (mature, widely-adopted TUI styling library from the Charmbracelet ecosystem)
@@ -15,6 +16,7 @@
 ## Feature List
 
 ### Core Styling
+
 - **ANSI text formatting:** Bold, Italic, Faint, Blink, Strikethrough, Reverse, Underline
 - **Underline styles:** None, Single, Double, Curly, Dotted, Dashed — with optional custom underline color
 - **Foreground/Background colors:** ANSI 16-color, ANSI 256-color, TrueColor (24-bit hex), `NoColor` sentinel
@@ -23,6 +25,7 @@
 - **Custom fill characters:** `PaddingChar('·')`, `MarginChar('░')` for block-fill effects; NBSP (`\u00A0`) for non-breaking padding
 
 ### Borders
+
 - **Preset border styles:** `NormalBorder`, `RoundedBorder`, `BlockBorder`, `ThickBorder`, `DoubleBorder`, `OuterHalfBlockBorder`, `InnerHalfBlockBorder`, `HiddenBorder`, `MarkdownBorder`, `ASCIIBorder`
 - **Per-side border control:** `BorderTop`, `BorderRight`, `BorderBottom`, `BorderLeft`
 - **Per-side colors:** `BorderForeground` / `BorderBackground` with individual side accessors
@@ -30,12 +33,14 @@
 - **Custom border definitions:** `Border{Top, Bottom, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight, ...}` struct
 
 ### Layout & Geometry
+
 - **Width/Height constraints:** `Width(n)`, `Height(n)` — text wraps at computed boundary after subtracting padding and borders
 - **Inline mode:** `Inline(true)` forces single-line rendering; `MaxWidth(n)` / `MaxHeight(n)` truncates at render time without affecting layout
 - **Horizontal/Vertical alignment:** `Align(lipgloss.Left|Center|Right)`, `AlignHorizontal`, `AlignVertical`
 - **Tab handling:** `TabWidth(n)` — converts `\t` to n spaces (default 4); `NoTabConversion` constant disables conversion
 
 ### Color System
+
 - **Automatic downsampling:** Detects terminal color profile (ANSI/ANSI256/TrueColor) and strips styles entirely when output is not a TTY
 - **Adaptive colors:** `LightDark(hasDarkBackground)` helper returns light/dark variant at runtime
 - **Complete colors:** `Complete(profile)` helper picks ANSI/ANSI256/TrueColor triple at runtime
@@ -44,23 +49,27 @@
 - **Terminal background detection:** `HasDarkBackground(os.Stdin, os.Stdout)` queries terminal via OSC 11; Windows-compatible with `CONIN$/CONOUT$` fallback
 
 ### Text Utilities
+
 - **Width/Height measurement:** `Width(str)` and `Height(str)` correctly handle ANSI escape sequences and wide Unicode characters (CJK, emoji)
 - **Text wrapping:** `Wrap(s, width, breakpoints)` preserves ANSI styles and hyperlinks across line breaks
 - **Text joining:** `JoinHorizontal(pos, blocks...)` and `JoinVertical(pos, blocks...)` with Position type (0–1 range, Top=0, Bottom=1, Center=0.5)
 - **Text placement:** `Place(width, height, hPos, vPos, str, opts...)`, `PlaceHorizontal`, `PlaceVertical` — fills whitespace around content; customizable via `WithWhitespaceChars`, `WithWhitespaceStyle`
 
 ### Sub-packages
+
 - **`table`:** Full table renderer with `Headers()`, `Rows()`, `Row()`, `StyleFunc(row, col)` for per-cell styling, `Border()`, `MarkdownBorder()`, `ASCIIBorder()`, column `Width()` constraints, resizing, and row/column filtering
 - **`list`:** Nested list renderer with enumerators (`Bullet`, `Arabic`, `Alphabet`, `Roman`, `Tree`), custom enumerator function support, `ItemStyle()` and `EnumeratorStyle()`, incremental `Item()` building
 - **`tree`:** Tree renderer with `Root()`, `Child()`, custom `Enumerator()` functions (`DefaultEnumerator`, `RoundedEnumerator`), `RootStyle()`, `ItemStyle()`, `EnumeratorStyle()`, incremental building
 - **`compat`:** v1 migration helpers: `AdaptiveColor`, `CompleteColor`, `CompleteAdaptiveColor` — globally reads stdin/stdout at init time (not recommended for new code)
 
 ### Layer Compositing
+
 - **`Layer`:** Visual layer with `content`, `X/Y/Z` positioning, `ID()` for hit-testing, child layer support via `AddLayers()`
 - **`Compositor`:** Flattens layer hierarchy, sorts by z-index, provides `Draw(scr, area)`, `Hit(x, y)` for mouse click resolution, `Bounds()` for overall extent
 - **`Canvas`:** Cell-buffer implementing `uv.Screen` and `uv.Drawable`; `Compose(drawable)` layers content; `Render()` outputs styled string
 
 ### Output Utilities
+
 - **Writer functions:** `Print`, `Println`, `Printf`, `Fprint`, `Fprintln`, `Fprintf`, `Sprint`, `Sprintln`, `Sprintf` — drop-in fmt replacements that auto-downsample color and strip styles for non-TTY
 
 ---
@@ -68,9 +77,11 @@
 ## Key Classes and Methods
 
 ### `Style` — central style definition
+
 Fluent, pure-value type. All setters return a new `Style`; assignment creates a true copy.
 
 **Setters (all return `Style`):**
+
 - `Bold(bool)`, `Italic(bool)`, `Faint(bool)`, `Blink(bool)`, `Reverse(bool)`, `Strikethrough(bool)`
 - `Underline(bool)` / `UnderlineStyle(Underline)` / `UnderlineColor(color.Color)` / `UnderlineSpaces(bool)` / `StrikethroughSpaces(bool)`
 - `Foreground(color.Color)`, `Background(color.Color)`
@@ -85,6 +96,7 @@ Fluent, pure-value type. All setters return a new `Style`; assignment creates a 
 - `Inherit(Style)` — overlays unset properties from another style (margins/padding excluded)
 
 **Getters (defined in `get.go`):**
+
 - `GetBold()`, `GetItalic()`, `GetUnderline()`, `GetUnderlineStyle()`, `GetUnderlineColor()`
 - `GetForeground()`, `GetBackground()`, `GetWidth()`, `GetHeight()`
 - `GetAlign()`, `GetAlignHorizontal()`, `GetAlignVertical()`
@@ -95,6 +107,7 @@ Fluent, pure-value type. All setters return a new `Style`; assignment creates a 
 - `GetInline()`, `GetMaxWidth()`, `GetMaxHeight()`, `GetTabWidth()`, `GetTransform()`, `GetHyperlink()` → `(link, params)`
 
 **Rendering:**
+
 - `Render(strs ...string) string` — applies all style rules to produce ANSI-encoded string
 - `String() string` — implements `fmt.Stringer`; calls `Render()` if `SetString()` was used
 - `SetString(strs ...string) Style` — sets the underlying string value for Stringer use
@@ -104,10 +117,12 @@ Fluent, pure-value type. All setters return a new `Style`; assignment creates a 
 **Unsetters (defined in `unset.go`):** `UnsetBold()`, `UnsetItalic()`, `UnsetUnderline()`, `UnsetStrikethrough()`, `UnsetReverse()`, `UnsetBlink()`, `UnsetFaint()`, `UnsetForeground()`, `UnsetBackground()`, `UnsetWidth()`, `UnsetHeight()`, `UnsetAlign()`, `UnsetPaddingMarginsBorder()`, etc. When unset, properties are excluded from inheritance/copy.
 
 ### `Border` struct
+
 Contains 13 string fields: `Top`, `Bottom`, `Left`, `Right`, `TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`, `MiddleLeft`, `MiddleRight`, `Middle`, `MiddleTop`, `MiddleBottom`.
 Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` — return max rune width across edge components.
 
 ### `Layer` struct (layer.go)
+
 - `NewLayer(content string, layers ...*Layer) *Layer`
 - `GetContent()`, `Width()`, `Height()`, `GetID()`
 - `ID(id string) *Layer`, `X(int) *Layer`, `Y(int) *Layer`, `Z(int) *Layer`
@@ -117,6 +132,7 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - `Draw(scr uv.Screen, area uv.Rectangle)` — implements `uv.Drawable`
 
 ### `Compositor` struct (layer.go)
+
 - `NewCompositor(layers ...*Layer) *Compositor`
 - `AddLayers(...*Layer) *Compositor`
 - `Bounds() image.Rectangle`
@@ -127,6 +143,7 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - `Render() string` — renders to styled string
 
 ### `Canvas` struct (canvas.go)
+
 - `NewCanvas(width, height int) *Canvas`
 - `Resize(width, height)`, `Clear()`
 - `Compose(drawable uv.Drawable) *Canvas` — layers onto canvas
@@ -134,14 +151,17 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - `Render() string` — outputs styled string
 
 ### `Position` type (position.go)
+
 `float64` alias with `math.Min(1, math.Max(0, float64(p)))` clamping. Constants: `Top=0.0`, `Bottom=1.0`, `Center=0.5`, `Left=0.0`, `Right=1.0`.
 
 ### `Color(...)` function (color.go)
+
 - Parses `#RGB`, `#RRGGBB` hex strings, or ANSI integer values
 - Returns `ansi.BasicColor` (< 16), `ANSIColor` (< 256), or `color.RGBA` (TrueColor)
 - Named ANSI constants: `Black`, `Red`, `Green`, `Yellow`, `Blue`, `Magenta`, `Cyan`, `White`, `Bright*` variants
 
 ### Color utility functions (color.go)
+
 - `Darken(c color.Color, percent float64)` — reduces luminance
 - `Lighten(c color.Color, percent float64)` — increases luminance
 - `Complementary(c color.Color)` — rotates hue 180°
@@ -150,10 +170,12 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - `Complete(colorprofile.Profile) func(ansi, ansi256, truecolor color.Color) color.Color`
 
 ### Blending functions (blending.go)
+
 - `Blend1D(steps int, stops ...color.Color) []color.Color` — 1D CIELAB gradient
 - `Blend2D(width, height int, angle float64, stops ...color.Color) []color.Color` — 2D rotated CIELAB gradient
 
 ### Layout utilities (position.go, join.go)
+
 - `Place(width, height int, hPos, vPos Position, str string, opts ...WhitespaceOption)` — places text in whitespace
 - `PlaceHorizontal(width int, pos Position, str string, opts ...WhitespaceOption)` — horizontal placement
 - `PlaceVertical(height int, pos Position, str string, opts ...WhitespaceOption)` — vertical placement
@@ -161,11 +183,13 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - `JoinVertical(pos Position, strs ...string)` — vertical join along horizontal axis
 
 ### Measurement utilities (size.go)
+
 - `Width(str string) int` — cell width (ANSI-aware, wide-char-aware)
 - `Height(str string) int` — line count + 1
 - `Size(str string) (width, height int)`
 
 ### Table sub-package (`charm.land/lipgloss/v2/table`)
+
 - `New() *Table`
 - `Headers(...string)`, `Rows(...[]string)`, `Row(...any)`
 - `StyleFunc(StyleFunc)` — per-cell styling
@@ -174,6 +198,7 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - `StyleFunc` type: `func(row, col int) lipgloss.Style`; `HeaderRow` constant = -1
 
 ### List sub-package (`charm.land/lipgloss/v2/list`)
+
 - `New(items ...any) *List`
 - `Items(...any) *List`, `Item(any) *List`
 - `Enumerator(func(Items, int) string)`, `EnumeratorStyle(lipgloss.Style)`, `ItemStyle(lipgloss.Style)`, `ItemStyleFunc(func(Items, int) lipgloss.Style)`
@@ -181,6 +206,7 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - Predefined enumerators: `Bullet`, `Arabic`, `Alphabet`, `Roman`, `Tree`
 
 ### Tree sub-package (`charm.land/lipgloss/v2/tree`)
+
 - `New() *Tree`, `Root(any) *Tree`, `Child(...any) *Tree`
 - `Enumerator(func(Node) string)`, `EnumeratorStyle(lipgloss.Style)`, `RootStyle(lipgloss.Style)`, `ItemStyle(lipgloss.Style)`
 - Predefined enumerators: `DefaultEnumerator`, `RoundedEnumerator`
@@ -188,13 +214,16 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 - `Leaf` struct implements Node
 
 ### Writer / output (writer.go — implicit fmt replacements)
+
 - `Print`, `Println`, `Printf`, `Fprint`, `Fprintln`, `Fprintf`, `Sprint`, `Sprintln`, `Sprintf` — all auto-downsample colors
 
 ### `Wrap` and `WrapWriter` (wrap.go)
+
 - `Wrap(s string, width int, breakpoints string) string` — wraps text preserving ANSI
 - `NewWrapWriter(io.Writer) *WrapWriter` — stateful writer tracking pen style + link state across newlines
 
 ### `StyleRunes` (runes.go)
+
 - `StyleRunes(str string, indices []int, matched, unmatched Style) string` — applies different styles to specific rune indices
 
 ---
@@ -202,30 +231,39 @@ Methods: `GetTopSize()`, `GetRightSize()`, `GetBottomSize()`, `GetLeftSize()` �
 ## Notable Algorithms / Named Patterns
 
 ### Bitmask Property Storage (`props int64`)
+
 The `Style` struct stores which properties are set using a `props int64` bitmask (defined via `propKey` constants shifting `1 << iota`). This enables compact `props.has(k)`, `props.set(k)`, `props.unset(k)` operations. Bool properties are additionally stored in `attrs int` with `attrs |= int(key)` — `set()` dispatches both. This dual representation (bitmask for presence + attrs for bool values) is a named pattern throughout the codebase.
 
 ### CIELAB Color Blending
+
 `Blend1D` and `Blend2D` (in `blending.go`) use the CIE L\*a\*b\* color space (`lucasb-eyer/go-colorful`) rather than RGB for perceptual uniformity. The `ensureNotTransparent()` helper repairs alpha lost in RGB→RGBA conversion. `Blend2D` computes a diagonal 1D gradient, then samples it at rotated (x, y) positions using `math.Cos`/`math.Sin` rotation.
 
 ### CSS-like Shorthand Resolution
+
 `whichSidesInt`, `whichSidesBool`, `whichSidesColor` in `set.go` implement CSS shorthand: 1 arg = all sides; 2 args = vertical/horizontal; 3 args = top/horizontal/bottom; 4 args = clockwise from top. The same pattern appears in `Padding()`, `Margin()`, `Border()`, `BorderForeground()`, `BorderBackground()`.
 
 ### Immutable/Fluent Style Pattern
+
 All setter methods on `Style` return `Style` (not `*Style`). Calling `s.Bold(true)` does not mutate `s` — it returns a new `Style` with `bold` set. Assignment (`s2 := s1`) creates a true copy because `Style` is a value type. The one exception is `Inline()`, `MaxWidth()`, `MaxHeight()` which explicitly note "this method will not mutate the style and instead return a copy."
 
 ### Layer Compositing with Z-Index Sort
+
 `Compositor.flatten()` recursively collects all layers with absolute positions, indexes by `ID`, sorts by `layer.z` ascending, then draws from lowest to highest so later layers appear on top. `Hit()` checks from highest z to lowest (reverse iteration) to return the topmost layer.
 
 ### ANSI-Safe Text Wrapping
+
 `WrapWriter` (wrapping.go) parses ANSI sequences via `ansi.Parser`, tracks current `uv.Style` and `uv.Link` state, emits `ansi.ResetStyle` before each newline, then re-applies the tracked style after — ensuring styles and hyperlinks survive line breaks.
 
 ### Terminal Background Color Query
+
 `queryBackgroundColor` (terminal.go) writes OSC 11 (`\033]11;?\007`) to the terminal and reads the response using a state machine (`ansi.DecodeSequence`) with a 2-second timeout. Windows uses `CONIN$/CONOUT$` console handles explicitly when stdin/stdout are redirected.
 
 ### Adaptive Color via `Color` Interface
+
 `AdaptiveColor`, `CompleteColor`, and `CompleteAdaptiveColor` (in `compat/`) implement Go's `color.Color` interface (`RGBA() (r,g,b,a uint32)`), allowing them to be passed directly to `lipgloss.Color()`. The `RGBA()` method performs runtime detection and returns the appropriate variant, making adaptive colors transparent to `Style.Render()`.
 
 ### Unicode Grapheme-Aware Width
+
 `Border.GetTopSize()` etc. use `displaywidth.String()` and `displaywidth.StringGraphemes()` from `clipperhouse/displaywidth` to correctly measure the visual width of Unicode characters (emoji, CJK, combiners) in border rendering.
 
 ---

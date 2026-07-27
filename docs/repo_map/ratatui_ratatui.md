@@ -1,6 +1,7 @@
 # ratatui/ratatui
 
 ## Metadata
+
 - URL: https://github.com/ratatui/ratatui
 - Language: Rust
 - Stars: ~19,600 (20.2k as of recent counts)
@@ -200,6 +201,7 @@ pub struct Buffer {
 | `ratatui::run()` initialization | `candy-shell` (Tty initialization) | Terminal setup/teardown helpers |
 
 **Many-to-Many Mapping:**
+
 - `ratatui` as a whole → Maps to multiple SugarCraft libs in combination
 - `ratatui-core` → `candy-core` (foundation) + `sugar-bits` (text/layout)
 - `ratatui-widgets` → `sugar-bits` (visual components)

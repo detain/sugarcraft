@@ -12,6 +12,7 @@ result when the worker finishes. ReactPHP-friendly.
 ## Files
 
 **Create:**
+
 - `candy-core/src/WorkerPool.php` — bounded concurrency (default 4
   workers).
 - `candy-core/src/Cmd/WorkerCmd.php`.
@@ -23,6 +24,7 @@ subprocesses, or async ReactPHP promises. Use whichever ReactPHP
 already provides (`React\Promise\async`) — simplest path.
 
 **Tests:**
+
 - `candy-core/tests/WorkerPoolTest.php`.
 
 ## Acceptance

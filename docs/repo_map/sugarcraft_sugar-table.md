@@ -1,10 +1,15 @@
 # SugarCraft/sugar-table
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-table
+
 - **Language:** PHP 8.3+
+
 - **License:** MIT
+
 - **Status:** 🟢 v1 Ready
+
 - **Description:** PHP port of Evertras/bubble-table — full-featured interactive terminal table with column definitions, StyledCell ANSI formatting, pagination, multi-column sorting, filtering, frozen rows/columns, viewport virtualization, and ANSI border styling.
 
 ---
@@ -34,6 +39,7 @@ sugar-table/
 ```
 
 ### Dependencies
+
 ```json
 {
   "sugarcraft/candy-core": "dev-master",     // ANSI rendering primitives (Ansi class)
@@ -317,8 +323,11 @@ private function renderRowLines(Row $row, int $rowIndex, int $totalWidth, bool $
 
 When `multilineMode=true`:
 1. Each cell is rendered via `Column::renderCell()` returning `list<string>`
+
 2. Maximum line count across all columns is computed
+
 3. Each row line is built by taking one line from each column (or space-padding if that column has fewer lines)
+
 4. Row height = max cell height
 
 When `multilineMode=false` (default): `maxLines = 1`, first line only from each cell.
@@ -328,10 +337,14 @@ When `multilineMode=false` (default): `maxLines = 1`, first line only from each 
 **Location:** `Table.php` lines 506–565 (`computeColumnWidths()`)
 
 **Algorithm: Two-pass**
+
 1. **Pass 1:** Collect Fixed/Percent widths, count Dynamic/Content placeholders
+
 2. **Pass 2:** Calculate remaining space, distribute to Dynamic/Content:
    - `Dynamic`: `max(contentWidth, flexWidth)`
+
    - `Content`: exact content width (min 1)
+
 3. Remaining placeholders fall back to original `$column->width`
 
 ### Style Precedence
@@ -343,10 +356,15 @@ baseStyle → column.style → row.style → StyledCell.style → zebra override
 
 Order (least specific to most specific):
 1. Table `$baseStyle`
+
 2. Column `$style`
+
 3. Row `$style`
+
 4. `StyledCell::$style` (cell-most specific)
+
 5. Zebra (if enabled, overwrites for odd/even rows)
+
 6. Cursor (`'7'` = reverse video for selected row)
 
 ---
@@ -400,21 +418,28 @@ Order (least specific to most specific):
 ## Notable Algorithms / Named Patterns
 
 ### 1. Two-pass Column Width Computation
+
 `Table::computeColumnWidths()` — First collects explicit widths, then distributes remaining space to flexible columns. See CALIBER_LEARNINGS pattern `column-width-enum`.
 
 ### 2. Viewport Virtualization
+
 `Table::View()` at lines 604–611 — when `$viewportHeight > 0`, rows are sliced via `array_slice($rows, $this->scrollY, $this->viewportHeight)`. See CALIBER_LEARNINGS pattern `viewport-virtualization`.
 
 ### 3. Multi-line Row Rendering
+
 `Table::renderRowLines()` builds output by iterating cell line arrays in parallel, padding with spaces when a column has fewer lines than the max. See CALIBER_LEARNINGS pattern `cell-wrap-return-list-string`.
 
 ### 4. Immutable RowData with with()
+
 `RowData::with()` creates a clone and sets a key — pure immutable update pattern.
 
 ### 5. Column wrapping modes
+
 `Column::wrapText()` dispatch:
 - `WrapMode::None` — truncate with `substr()`
+
 - `WrapMode::WordWrap` — break at last space before width
+
 - `WrapMode::Character` — `str_split()` at width boundaries
 
 ---
@@ -422,11 +447,17 @@ Order (least specific to most specific):
 ## Innovation Points (SugarCraft Enhancements Over Upstream)
 
 1. **ColumnWidth enum with 4 modes** — Fixed/Percent/Dynamic/Content provides more column sizing strategies than upstream's simpler flex/fixed model
+
 2. **WrapMode enum** — Three distinct wrapping strategies (None/WordWrap/Character) as a proper PHP enum
+
 3. **Viewport virtualization** — `withViewportHeight()` + `withScrollY()` for efficient rendering of large datasets
+
 4. **Multi-column AND filtering** — Upstream bubble-table filters on all filterable columns simultaneously; sugar-table allows per-column filters via `Filter($colKey, $text)` with AND semantics
+
 5. **Border family integration** — Full `Border` family from candy-sprinkles (8 border styles) rather than hand-rolled border chars
+
 6. **i18n via Lang facade** — Page footer and future labels translatable via `SugarCraft\Table\Lang::t()`
+
 7. **Strict types + immutability** — All classes `final`, `declare(strict_types=1)`, `readonly` properties throughout
 
 ---
@@ -457,11 +488,17 @@ Order (least specific to most specific):
 ## Known Gaps
 
 1. **Fuzzy filtering** — Case-insensitive contains only. No fuzzy subsequence matching like upstream's `filterFuncFuzzy`.
+
 2. **Frozen column rendering** — `withFrozenCols()` stores indices but the rendering logic doesn't properly handle frozen columns staying visible during horizontal scroll. `scrollX` is stored but not applied during rendering.
+
 3. **Keyboard navigation** — Only `SelectNext()` / `SelectPrevious()` / `SelectPage()`. No vim keys (j/k/g/G), no HalfPageUp/Down, no Home/End.
+
 4. **UserEvent system** — No event callbacks for highlight changes, row selection, or filter focus/unfocus. Table is render-only.
+
 5. **Bubble Tea integration** — Not applicable (PHP), but means sugar-table can't participate in the TEA update loop.
+
 6. **StyleFunc dynamic styling** — Unlike sugar-bits' Table which has per-cell `styleFunc(Closure)`, sugar-table relies on StyledCell for cell-level style overrides rather than a callback-based approach.
+
 7. **Horizontal scrolling actual rendering** — `scrollX` is stored but `View()` doesn't shift column rendering based on it.
 
 ---
@@ -469,36 +506,59 @@ Order (least specific to most specific):
 ## File References
 
 ### Core Source Files
+
 - `/home/sites/sugarcraft/sugar-table/src/Table.php` — 857 lines, main table class
+
 - `/home/sites/sugarcraft/sugar-table/src/Column.php` — 266 lines, column definition
+
 - `/home/sites/sugarcraft/sugar-table/src/Row.php` — 47 lines, row wrapper
+
 - `/home/sites/sugarcraft/sugar-table/src/RowData.php` — 61 lines, row data container
+
 - `/home/sites/sugarcraft/sugar-table/src/StyledCell.php` — 44 lines, styled cell wrapper
+
 - `/home/sites/sugarcraft/sugar-table/src/ColumnWidth.php` — 26 lines, ColumnWidth enum
+
 - `/home/sites/sugarcraft/sugar-table/src/WrapMode.php` — 20 lines, WrapMode enum
+
 - `/home/sites/sugarcraft/sugar-table/src/Lang.php` — 22 lines, i18n facade
 
 ### Test Files
+
 - `/home/sites/sugarcraft/sugar-table/tests/TableTest.php` — 257 lines
+
 - `/home/sites/sugarcraft/sugar-table/tests/ColumnTest.php` — 201 lines
+
 - `/home/sites/sugarcraft/sugar-table/tests/StyledCellTest.php` — 145 lines
+
 - `/home/sites/sugarcraft/sugar-table/tests/TableViewportTest.php` — 106 lines
+
 - `/home/sites/sugarcraft/sugar-table/tests/TableColumnWidthTest.php` — 127 lines
+
 - `/home/sites/sugarcraft/sugar-table/tests/TableBorderStyleTest.php` — 213 lines
+
 - `/home/sites/sugarcraft/sugar-table/tests/TableWrappingTest.php` — 141 lines
+
 - `/home/sites/sugarcraft/sugar-table/tests/RowDataTest.php`
+
 - `/home/sites/sugarcraft/sugar-table/tests/LangCoverageTest.php`
 
 ### Examples
+
 - `/home/sites/sugarcraft/sugar-table/examples/basic.php` — Basic table demo
+
 - `/home/sites/sugarcraft/sugar-table/examples/features.php` — Wide table with frozen columns, pagination, StyledCell
 
 ### VHS Demos
+
 - `/home/sites/sugarcraft/sugar-table/.vhs/basic.tape` + `basic.gif`
+
 - `/home/sites/sugarcraft/sugar-table/.vhs/features.tape` + `features.gif`
 
 ### Documentation
+
 - `/home/sites/sugarcraft/sugar-table/README.md` — 248 lines
+
 - `/home/sites/sugarcraft/sugar-table/CALIBER_LEARNINGS.md` — 54 lines
 
 ---
@@ -508,21 +568,35 @@ Order (least specific to most specific):
 **sugar-table** is a mature, well-structured PHP port of Evertras/bubble-table that achieves feature parity on core table functionality while adding several SugarCraft-unique enhancements. The architecture is clean with proper separation of concerns: `Table` owns state and rendering, `Column` encapsulates column-specific behavior, `Row`/`RowData` represent row data, and `StyledCell` provides per-cell styling.
 
 **Strengths:**
+
 - Comprehensive feature coverage (sorting, filtering, pagination, selection, viewport)
+
 - Multi-column AND filtering (superior to bubble-table's single-column or stickers' limited filtering)
+
 - Immutable + fluent builder pattern throughout
+
 - Viewport virtualization for large datasets
+
 - ColumnWidth and WrapMode enums provide more flexibility than upstream
+
 - Integration with candy-sprinkles Border family (8 styles)
+
 - i18n support via Lang facade
+
 - Good test coverage (10 test files)
 
 **Gaps:**
+
 - Fuzzy filtering not implemented (upstream has `filterFuncFuzzy`)
+
 - Frozen column rendering incomplete (stored but not applied during render)
+
 - Keyboard navigation limited (no vim keys, no half-page navigation)
+
 - Horizontal scroll offset stored but not applied during rendering
+
 - No UserEvent system for reactive TUI patterns
+
 - StyledCell only, no callback-based StyleFunc like sugar-bits Table has
 
 **Strategic Position:** sugar-table is the dedicated table component in SugarCraft, distinct from the Table component embedded in sugar-bits. It targets scenarios requiring a full-featured standalone table widget. The v1 status indicates readiness for production use, though the frozen column and horizontal scroll rendering gaps should be addressed for full upstream parity.
@@ -532,6 +606,9 @@ Order (least specific to most specific):
 ## Related Reports
 
 - `/home/sites/sugarcraft/repo_map/Evertras_bubble-table.md` — Primary upstream (Go)
+
 - `/home/sites/sugarcraft/repo_map/76creates_stickers.md` — FlexBox/Table for bubbletea (Go)
+
 - `/home/sites/sugarcraft/repo_map/charmbracelet_bubbles.md` — Charm ecosystem components (Go)
+
 - `/home/sites/sugarcraft/repo_map/sugarcraft_sugar-bits.md` — SugarCraft components including Table variant

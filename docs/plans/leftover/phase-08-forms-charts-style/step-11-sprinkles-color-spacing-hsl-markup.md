@@ -17,12 +17,14 @@ Four enhancements:
 ## Files
 
 **Modify:**
+
 - `\SugarCraft\Core\Util\Color` — `parse(string)` accepts named colors
   (CSS names + ANSI 8-color names).
 - `\SugarCraft\Sprinkles\Layout` — `join*` methods accept
   `?int $spacing = null` parameter.
 
 **Create:**
+
 - `candy-sprinkles/src/Hsl.php` — `Color::hsl()` factory.
 - `candy-sprinkles/src/Markup.php` — Rich-style markup parser.
 

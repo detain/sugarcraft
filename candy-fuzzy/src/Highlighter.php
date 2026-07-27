@@ -67,8 +67,9 @@ final class Highlighter
         $runs = [];
         $runStart = $indices[0];
         $runEnd = $indices[0];
+        $indexCount = count($indices);
 
-        for ($i = 1; $i < count($indices); $i++) {
+        for ($i = 1; $i < $indexCount; $i++) {
             if ($indices[$i] === $runEnd + 1) {
                 // Consecutive - extend the run
                 $runEnd = $indices[$i];

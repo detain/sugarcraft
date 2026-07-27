@@ -1,6 +1,7 @@
 # SugarCraft/candy-log
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/candy-log
 - **Language:** PHP 8.3+
 - **License:** MIT
@@ -11,6 +12,7 @@
 ## Architecture
 
 ### Package Structure
+
 ```
 candy-log/
 ├── src/
@@ -83,6 +85,7 @@ if ($level->value < $this->minLevel->value) {
 ### Formatter Implementations
 
 #### TextFormatter
+
 **File:** `src/Formatter/TextFormatter.php:16-123`
 
 Colorized human-readable output with configurable timestamp, caller, prefix, and structured context. Uses `candy-sprinkles/Style` for ANSI SGR rendering:
@@ -119,6 +122,7 @@ private function formatContext(array $context): string
 ```
 
 #### JsonFormatter
+
 **File:** `src/Formatter/JsonFormatter.php:14-68`
 
 Simple JSON Lines output with ATOM timestamps:
@@ -135,6 +139,7 @@ return (string) \json_encode($record, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_
 ```
 
 #### LogfmtFormatter
+
 **File:** `src/Formatter/LogfmtFormatter.php:14-76`
 
 Logfmt format with proper escaping:
@@ -309,24 +314,29 @@ PHP has no equivalent to Go's `sync.Pool`. This is a Go-specific optimization fo
 ## Performance Characteristics
 
 ### Level Filtering
+
 Integer comparison is O(1): `$level->value < $this->minLevel->value`
 
 ### String Formatting
+
 - **TextFormatter:** Direct string building with `implode()` — minimal allocations
 - **JsonFormatter:** Single `json_encode()` call — native C extension
 - **LogfmtFormatter:** Loop with `preg_match()` for escaping — O(n) with string scanning
 
 ### Memory
+
 - No string builder pooling (see above)
 - Immutable loggers use `clone` — shallow copy, only fields array is copied
 - Formatters are stateless — no per-instance allocation overhead
 
 ### Atomic Level Checking
+
 PHP's integer comparison is atomic at the PHP engine level for simple reads. No `sync/atomic` equivalent needed.
 
 ## Comparison with Mapped Upstream
 
 ### charmbracelet/log (Go)
+
 | Feature | Go Original | PHP Port | Notes |
 |--------|------------|----------|-------|
 | Leveled logging | ✅ | ✅ | 5 levels, syslog-aligned values |
@@ -351,6 +361,7 @@ PHP's integer comparison is atomic at the PHP engine level for simple reads. No 
 | Hook system | ❌ | ✅ | Added middleware-style interceptors |
 
 ### pterm/pterm (Go)
+
 | Feature | pterm Logger | candy-log |
 |---------|-------------|------------|
 | Log levels | 7 (TRACE/DEBUG/INFO/WARN/ERROR/FATAL/PRINT) | 5 (Debug/Info/Warn/Error/Fatal) |
@@ -367,12 +378,14 @@ PHP's integer comparison is atomic at the PHP engine level for simple reads. No 
 ## Key Innovation Points
 
 ### 1. Syslog-Aligned Level Values
+
 Using -4/0/4/8/12 instead of sequential integers (0-4) enables:
 - Threshold comparisons with external log systems
 - Easy integration with syslog, journald, and log aggregators
 - No value collisions with standard log levels
 
 ### 2. Probe-Driven Color Intelligence
+
 Delegating color decision to `candy-palette`'s `Probe::colorProfile()` means:
 - Respects `NO_COLOR` environment variable
 - Respects `FORCE_COLOR` for CI environments
@@ -380,6 +393,7 @@ Delegating color decision to `candy-palette`'s `Probe::colorProfile()` means:
 - Single source of truth for color detection across SugarCraft
 
 ### 3. Hook System for Observability
+
 The `HookRegistry` enables middleware-style log interception:
 - Dispatch to external services (Datadog, Sentry, etc.)
 - Enrich context with runtime metadata
@@ -387,6 +401,7 @@ The `HookRegistry` enables middleware-style log interception:
 - Rotate log files based on entry counts
 
 ### 4. Panic Handler for TTY Recovery
+
 The `installPanicHandler()` system provides:
 - Terminal state restoration (exit altscreen, show cursor)
 - Beautiful exception rendering with backtrace
@@ -395,6 +410,7 @@ The `installPanicHandler()` system provides:
 - Caliber hint for configuration issues
 
 ### 5. PartsOrder Config DTO
+
 Configurable log-part ordering enables:
 - Default: timestamp level prefix? caller? message fields?
 - Syslog-friendly: timestamp level message fields

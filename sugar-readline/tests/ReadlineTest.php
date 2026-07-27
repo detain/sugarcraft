@@ -318,7 +318,7 @@ final class ReadlineTest extends TestCase
     {
         $history = new InMemoryHistory();
 
-        $p = TextPrompt::new('> ')->withHistory($history)
+        $_p = TextPrompt::new('> ')->withHistory($history)
             ->handleChar('a')->handleChar('b')->submit();
 
         // History should now contain 'ab'.
@@ -887,7 +887,7 @@ final class ReadlineTest extends TestCase
         $driver = new StreamInputDriver($readEnd);
         $ctrlCHandlerFired = false;
         $readline = (new Readline($driver))
-            ->onKey('ctrl_c', function (KeyEvent $e) use (&$ctrlCHandlerFired): void {
+            ->onKey('ctrl_c', function (KeyEvent $_e) use (&$ctrlCHandlerFired): void {
                 $ctrlCHandlerFired = true;
             });
 
@@ -937,7 +937,7 @@ final class ReadlineTest extends TestCase
         $driver = new StreamInputDriver($readEnd);
         $enterHandlerFired = false;
         $readline = (new Readline($driver))
-            ->onKey('enter', function (KeyEvent $e) use (&$enterHandlerFired): void {
+            ->onKey('enter', function (KeyEvent $_e) use (&$enterHandlerFired): void {
                 $enterHandlerFired = true;
             });
 
@@ -970,10 +970,10 @@ final class ReadlineTest extends TestCase
         fclose($writeEnd);
 
         $driver = new StreamInputDriver($readEnd);
-        $pasteFired = false;
+        $_pasteFired = false;
         $readline = (new Readline($driver))
-            ->onPaste(function (PasteEvent $e) use (&$pasteFired): void {
-                $pasteFired = true;
+            ->onPaste(function (PasteEvent $_e) use (&$_pasteFired): void {
+                $_pasteFired = true;
             });
 
         // The readline is properly constructed with paste handler

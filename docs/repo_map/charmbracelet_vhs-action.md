@@ -1,6 +1,7 @@
 # charmbracelet/vhs-action
 
 ## Metadata
+
 - **URL**: https://github.com/charmbracelet/vhs-action
 - **Language**: TypeScript / GitHub Action (Node.js 20)
 - **Stars**: Unknown (API unavailable; upstream `charmbracelet/vhs` ~4.3k+ stars)
@@ -8,6 +9,7 @@
 - **Description**: A GitHub Action that runs [VHS](https://github.com/charmbracelet/vhs) to render terminal recordings (`.tape` files) into GIF/MP4/WebM output directly in CI workflows, keeping demo GIFs automatically up to date.
 
 ## Feature List
+
 - **Tape File Execution**: Parses `.tape` files containing terminal commands and renders them to video output
 - **Multi-Format Output**: Generates GIF, MP4, and WebM from the same tape input
 - **Cross-Platform Support**: Runs on Linux, macOS, and Windows (ubuntu-latest, macOS-latest, windows-latest)
@@ -21,9 +23,11 @@
 ## Key Classes and Methods
 
 ### `src/main.ts` — Entry Point
+
 - `run()` — Orchestrates the full flow: validates input file, installs fonts, installs dependencies, installs VHS binary, sets up PATH and environment variables, executes VHS with the tape file
 
 ### `src/installer.ts` — VHS Binary Installation
+
 - `install(version: string): Promise<string>` — Downloads and caches the VHS binary from GitHub releases
   - Resolves `latest` tag via `octo.rest.repos.getLatestRelease()`
   - Maps OS/arch to download URL pattern (`vhs_${version}_${Platform}_${Arch}.tar.gz|.zip`)
@@ -31,6 +35,7 @@
   - Returns path to `vhs.exe` on Windows, `vhs` on Unix
 
 ### `src/dependencies.ts` — Runtime Dependencies (ttyd + ffmpeg)
+
 - `install(): Promise<void>` — Top-level installer for both ttyd and ffmpeg
 - `installTtyd(version?: string): Promise<string>` — Installs `tsl0922/ttyd` terminal server
   - Linux/macOS: Downloads from GitHub releases; MacOS has special brew-based installation
@@ -45,6 +50,7 @@
 - `installTtydBrewHead(): Promise<void>` — Builds ttyd from source on macOS (rarely used)
 
 ### `src/fonts.ts` — Font Installation
+
 - `install(): Promise<void>` — Main font installation orchestrator
   - Creates font directories per OS (`~/.local/share/fonts`, `~/Library/Fonts`, `%LocalAppData%\Microsoft\Windows\Fonts`)
   - Installs Google Fonts (Source Code Pro, Inconsolata, Noto Sans Mono, Roboto Mono, Ubuntu Mono)
@@ -60,6 +66,7 @@
 ## Notable Algorithms / Named Patterns
 
 ### Platform/Architecture Mapping
+
 ```typescript
 // Architecture mapping (src/installer.ts:L48-L63)
 x64  → x86_64
@@ -73,9 +80,11 @@ linux  → Linux  (ext: tar.gz)
 ```
 
 ### GitHub Release Asset Matching
+
 Asset names follow the pattern `vhs_{version}_{Platform}_{Arch}.{ext}` and are matched by exact string comparison against release assets.
 
 ### Tape File Format
+
 The `.tape` format uses line-based DSL:
 ```
 Output <path>              — Set output format (gif/mp4/webm)
@@ -92,11 +101,13 @@ Hide/Show                  — Toggle command visibility in output
 ```
 
 ### Font Cache Strategy
+
 - Uses `@actions/tool-cache` for all binary and font caching
 - Cache keys: `vhs` (VHS binary), `ttyd`, `ffmpeg`, and per-font-repo names
 - Fonts cached by repo name + `latest` tag
 
 ### Environment Variable Hacks
+
 ```typescript
 // src/main.ts:L33-L37
 core.exportVariable('CI', '')       // Unset CI to enable ANSI sequences
@@ -104,6 +115,7 @@ core.exportVariable('COLORTERM', 'truecolor')  // Enable true color
 ```
 
 ## Strengths
+
 - **Zero-Config**: Users only need a `.tape` file and a workflow; all dependencies are handled automatically
 - **Cross-Platform**: Works on Linux, macOS, and Windows with appropriate binary downloads
 - **Intelligent Caching**: Uses `@actions/tool-cache` for VHS, ttyd, ffmpeg, and fonts — subsequent runs skip downloads
@@ -115,6 +127,7 @@ core.exportVariable('COLORTERM', 'truecolor')  // Enable true color
 - **Version Pinning**: Supports specific VHS versions or `latest` via GitHub releases API
 
 ## Weaknesses
+
 - **Minimal Tests**: Only a single placeholder test (`__tests__/main.test.ts`);
 - **Barely-There Test Suite**: `test('test runs', {})` does nothing; no assertion coverage
 - **FIXME Comments**: Several noted issues in code (e.g., `dependencies.ts:L104` "fetch version", `fonts.ts:L329` "liberation-fonts don't upload their fonts to GitHub releases")

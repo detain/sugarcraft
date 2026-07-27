@@ -976,15 +976,19 @@ public function subscriptions(): ?\SugarCraft\Core\Subscriptions
 
 ```sh
 # Syntax check (will fail for C-1)
+
 php -l sugar-dash/src/Layout/Stack.php
 
 # Run tests (will reveal C-2, C-3, H-1, H-2, H-3)
+
 cd sugar-dash && composer install && vendor/bin/phpunit
 
 # Autoload check (will fail for C-2)
+
 cd sugar-dash && composer dump-autoload
 
 # Static analysis
+
 vendor/bin/phpstan analyse sugar-dash/src --level=8
 ```
 

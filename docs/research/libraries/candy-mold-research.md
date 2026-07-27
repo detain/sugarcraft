@@ -15,6 +15,7 @@ This document analyzes PHP skeleton/scaffold tools and provides recommendations 
 ## 1. Current State of Candy-Mold
 
 ### 1.1 Structure
+
 ```
 candy-mold/
 ├── composer.json          # 130 lines, 24 VCS repos, dev dep on phpunit ^10.0
@@ -30,6 +31,7 @@ candy-mold/
 ```
 
 ### 1.2 Strengths
+
 - ✅ Minimal, focused structure
 - ✅ Excellent README with visual demo and "next steps" table
 - ✅ Proper PSR-4 autoload
@@ -37,6 +39,7 @@ candy-mold/
 - ✅ Tests demonstrate pure `update()` testing without event loop
 
 ### 1.3 Gaps
+
 - ❌ No CI/CD workflow files
 - ❌ No static analysis (PHPStan/Psalm)
 - ❌ No code style enforcement (Pint/CS-Fixer)
@@ -88,6 +91,7 @@ laravel/
 ```
 
 **Key Patterns:**
+
 - Bootstrap discovers autoloader from multiple candidate paths
 - `artisan` CLI entry point with help system
 - `.env.example` for environment configuration
@@ -141,6 +145,7 @@ package-skeleton-php/
 ```
 
 **Key Features:**
+
 1. **Placeholder System:** Files contain tokens like `:vendor_slug/`, `:package_slug`, `VendorName`, `Skeleton` that get replaced by `configure.php`
 
 2. **Interactive `configure.php` Script:**
@@ -185,6 +190,7 @@ package-skeleton-php/
 ### 4.1 High Priority (Low Effort, High Impact)
 
 #### 4.1.1 Add `.editorconfig`
+
 **Source:** `spatie/package-skeleton-php/.editorconfig:L1-L25`
 
 ```ini
@@ -205,13 +211,17 @@ trim_trailing_whitespace = false
 **Benefit:** Consistent editor formatting across contributors
 
 #### 4.1.2 Add `.gitattributes`
+
 **Source:** `spatie/package-skeleton-php/.gitattributes`
 
 ```gitattributes
+
 # Auto detect text files and perform LF normalization
+
 * text=auto
 
 # Force Unix line endings
+
 *.php text eol=lf
 *.md text eol=lf
 *.yml text eol=lf
@@ -220,6 +230,7 @@ trim_trailing_whitespace = false
 *.xml text eol=lf
 
 # Denote all files that are truly binary and should not be modified.
+
 *.png binary
 *.gif binary
 *.jpg binary
@@ -229,6 +240,7 @@ trim_trailing_whitespace = false
 **Benefit:** Consistent line endings, proper binary handling
 
 #### 4.1.3 Add Composer Scripts
+
 **Current:**
 ```json
 "scripts": {}
@@ -246,6 +258,7 @@ trim_trailing_whitespace = false
 **Benefit:** Standardized test execution
 
 #### 4.1.4 Add `failOnWarning` to PHPUnit
+
 **Source:** `candy-core/phpunit.xml` pattern
 
 ```xml
@@ -261,22 +274,29 @@ trim_trailing_whitespace = false
 **Benefit:** Catches problematic tests early
 
 #### 4.1.5 Add `.env.example` (for TUI config)
+
 **Source:** `laravel/laravel/.env.example`
 
 ```env
 # SugarCraft TUI Application Configuration
+
+
 # Copy to .env and customize for your environment
 
 # Terminal Settings
+
 TERM=xterm-256color
 
 # Optional: Enable debug mode
+
 DEBUG=false
 
 # Optional: Log file path
+
 LOG_PATH=
 
 # Optional: Panic handler enabled (requires candy-log)
+
 PANIC_HANDLER=false
 ```
 
@@ -288,6 +308,7 @@ PANIC_HANDLER=false
 ### 4.2 Medium Priority (Moderate Effort)
 
 #### 4.2.1 Add Interactive `configure.php`
+
 **Reference:** `spatie/package-skeleton-php/configure.php` (250+ lines)
 
 **Proposed simplified version for candy-mold:**
@@ -296,9 +317,11 @@ PANIC_HANDLER=false
 #!/usr/bin/env php
 <?php
 /**
+
  * Configure SugarCraft TUI app after scaffold.
  *
  * Usage: php configure.php
+
  */
 
 declare(strict_types=1);
@@ -371,6 +394,7 @@ use Symfony\Component\Process\Process;
 **Benefit:** Personalized scaffold, proper namespace/variable replacement
 
 #### 4.2.2 Add GitHub Actions CI Workflow
+
 **Source:** `spatie/package-skeleton-php/.github/workflows/run-tests.yml`
 
 ```yaml
@@ -391,6 +415,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup PHP
+
         uses: shivammathur/setup-php@v2
         with:
           php-version: 8.3
@@ -399,12 +424,15 @@ jobs:
           ini-values: memory=256M
 
       - name: Install dependencies
+
         run: composer install --no-interaction --prefer-dist
 
       - name: Run tests
+
         run: vendor/bin/phpunit --coverage-text
 
       - name: Upload coverage
+
         uses: codecov/codecov-action@v4
         with:
           flags: candy-mold
@@ -414,6 +442,7 @@ jobs:
 **Benefit:** Automated testing, coverage reporting
 
 #### 4.2.3 Add Code Style Workflow
+
 ```yaml
 name: Code Style
 
@@ -432,14 +461,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup PHP
+
         uses: shivammathur/setup-php@v2
         with:
           php-version: 8.3
 
       - name: Install dependencies
+
         run: composer install --no-interaction --prefer-dist
 
       - name: Run Pint
+
         run: vendor/bin/pint --test
 ```
 
@@ -460,8 +492,10 @@ parameters:
     paths:
         - src
         - tests
+
     excludePaths:
         - src/LibraryStarterKit
+
     checkGenericClassInNonGenericObjectType: false
     checkMissingIterableValueType: false
 ```
@@ -484,6 +518,7 @@ tests/
 **Benefit:** More expressive tests, simpler syntax
 
 #### 4.3.3 Add Makefile for Common Tasks
+
 **Source:** `JBZoo/Skeleton-PHP` Makefile pattern
 
 ```makefile
@@ -508,6 +543,7 @@ analyse:
 **Benefit:** Simple shortcuts for common operations
 
 #### 4.3.4 Add Pre-commit Hooks
+
 **Source:** `ramsey/php-library-starter-kit/captainhook.json`
 
 ```json
@@ -564,6 +600,7 @@ Unlike web applications (Laravel) or packages (spatie), TUI apps have unique nee
 5. **VHS demos** for visual documentation (already present)
 
 Consider adding:
+
 - **System requirements check** in `configure.php` (TTY support, color support)
 - **Example of optional panic handler** integration
 - **Example of multiple Models** for complex apps

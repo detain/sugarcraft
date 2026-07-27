@@ -91,6 +91,7 @@ The `keyMsgToVhs()` method only handles 7 KeyType cases:
 - Enter, Escape, Backspace, Tab, Up, Down, Left, Right (7 out of ~120+ key types)
 
 **Missing key types include:**
+
 - F1-F63 function keys (F1-F12 commonly used in TUI apps)
 - Home, End, PageUp, PageDown (common navigation keys)
 - Delete, Insert (common editing keys)

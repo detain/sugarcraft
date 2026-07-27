@@ -11,6 +11,7 @@ binary protocols, etc. against an SSH server.
 ## Files
 
 **Create:**
+
 - `candy-wish/src/Middleware/Subsystem.php` — middleware that, on
   `subsystem <name>` request from the client, dispatches to a
   registered `SubsystemHandler`.
@@ -21,6 +22,7 @@ binary protocols, etc. against an SSH server.
   the wiring.
 
 **Tests:**
+
 - `candy-wish/tests/Middleware/SubsystemTest.php` — request the stub,
   assert dispatch.
 

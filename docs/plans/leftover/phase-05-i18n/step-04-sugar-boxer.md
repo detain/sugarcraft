@@ -10,13 +10,16 @@ Add i18n for alignment-mode labels and error strings in sugar-boxer.
 ## Files
 
 **Create:**
+
 - `sugar-boxer/lang/en.php`.
 - `sugar-boxer/src/Lang.php`.
 
 **Modify:**
+
 - `sugar-boxer/src/` files using English literals.
 
 **Tests:**
+
 - `sugar-boxer/tests/LangCoverageTest.php`.
 
 ## Acceptance

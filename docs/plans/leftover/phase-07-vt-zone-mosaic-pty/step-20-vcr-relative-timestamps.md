@@ -13,11 +13,13 @@ made).
 ## Files
 
 **Create:**
+
 - `candy-vcr/src/Format/RelativeFormat.php` — serializes/deserializes
   events with `dt` (delta-since-previous-event) instead of `t`
   (absolute).
 
 **Modify:**
+
 - `candy-vcr/src/Recorder.php` — `withFormat(Format $f)` selector.
 - `candy-vcr/src/Player.php` — handles both formats transparently.
 

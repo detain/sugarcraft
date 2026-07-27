@@ -11,6 +11,7 @@ optional `withFilterPredicate(callable)` for custom filtering.
 ## Files
 
 **Modify:**
+
 - `sugar-bits/src/Table/Table.php` — filter state, indexed apply.
 
 ## Tests

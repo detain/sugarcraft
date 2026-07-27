@@ -3,6 +3,7 @@
 CandyWish is a PHP port of `charmbracelet/wish` — an SSH server middleware framework that lets developers build TUIs anyone can `ssh user@host` to run. The library provides composable middleware (auth, logging, rate-limiting), pluggable transport strategies (InProcessPTY or HostSshd inline), and deep integration with `candy-pty` for full pseudo-terminal semantics.
 
 **Biggest opportunity areas:**
+
 - Full SFTP subsystem implementation (currently stub only)
 - Git server middleware (upstream has complete implementation)
 - SCP protocol support
@@ -10,6 +11,7 @@ CandyWish is a PHP port of `charmbracelet/wish` — an SSH server middleware fra
 - Mosh support for connection resilience
 
 **Biggest missing capabilities:**
+
 - No standalone SSH server (depends on OpenSSH)
 - No in-process SFTP/SCP protocols
 - No git-receive-pack/git-upload-pack middleware
@@ -34,6 +36,7 @@ CandyWish uses a deliberate architectural tradeoff: it delegates SSH to the host
 ```
 
 **Two transport strategies:**
+
 - `InProcessTransport` (default): Allocates a `candy-pty` master/slave pair, spawns user's cmd as subprocess with controlling terminal semantics, pumps bytes via `PosixPump`
 - `HostSshdTransport` (legacy): Runs middleware chain inline where STDIN/STDOUT are sshd's PTY slave
 
@@ -127,6 +130,7 @@ Server::new()
 ## Critical
 
 ### 1. SFTP Subsystem Implementation
+
 **Description:** The `Subsystem` middleware has only a `SftpStub` demonstrating wiring — no actual SFTP protocol implementation. Go wish ships `WithSubsystem` via `github.com/pkg/sftp`.
 
 **Why it matters:** SFTP is the standard file transfer mechanism over SSH. OpenSSH 9.0 changed default from SCP to SFTP. Without SFTP, candy-wish cannot serve files securely over SSH.
@@ -134,6 +138,7 @@ Server::new()
 **Source:** `docs/repo_map/charmbracelet_wish.md` (PR #224), `docs/repo_map/pr_charmbracelet_wish.md` (Issue #40)
 
 **Implementation ideas:**
+
 - Port or wrap `github.com/pkg/sftp` PHP equivalent
 - Use `phpseclib/phpseclib` for SFTP protocol handling
 - Implement `SubsystemHandler` interface for sftp subsystem
@@ -143,6 +148,7 @@ Server::new()
 **Expected impact:** High — enables production file transfer use cases
 
 ### 2. Git Server Middleware
+
 **Description:** Go wish ships `git-receive-pack` and `git-upload-pack` middleware for serving git repos over SSH with on-demand bare repo creation and public-key authorization.
 
 **Why it matters:** Git hosting over SSH is a major use case for wish. Without it, candy-wish is missing a key differentiator.
@@ -150,6 +156,7 @@ Server::new()
 **Source:** `docs/repo_map/sugarcraft_candy-wish.md`, `docs/repo_map/charmbracelet_wish.md`
 
 **Implementation ideas:**
+
 - Create `candy-git` leaf library
 - Implement `git-receive-pack` and `git-upload-pack` handlers
 - Add authorized_keys-based repo authorization
@@ -159,6 +166,7 @@ Server::new()
 **Expected impact:** Medium — niche but valuable for specific use cases
 
 ### 3. Authorized Keys Hot-Reloading
+
 **Description:** Go wish (PR #88) refreshes `authorized_keys` files without server restart, like OpenSSH.
 
 **Why it matters:** Production deployments need to add/remove users without restarting the SSH server process.
@@ -166,6 +174,7 @@ Server::new()
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (Issue #82)
 
 **Implementation ideas:**
+
 - Watch authorized_keys via inotify/fsevents
 - Cache with TTL, re-read on new auth attempts
 - Make `Auth` middleware support callable that returns current allowlist
@@ -177,6 +186,7 @@ Server::new()
 ## High Value
 
 ### 4. Banner/MOTD Middleware
+
 **Description:** Go wish has `WithBanner`/`WithBannerHandler` for MOTD-style text at session start.
 
 **Why it matters:** Session start banners are standard SSH practice for ToS acceptance, welcome messages, system status.
@@ -184,6 +194,7 @@ Server::new()
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (PR #210, Issue #205)
 
 **Implementation ideas:**
+
 - Create `Banner` middleware that writes to STDOUT before chain continues
 - Support both static string and callback for dynamic content
 - Support acceptance flow (press Y to accept ToS)
@@ -193,6 +204,7 @@ Server::new()
 **Expected impact:** Medium — common SSH server feature
 
 ### 5. Rate Limit Before Auth Pattern
+
 **Description:** Issue #325 in Go wish reveals auth handlers execute BEFORE middleware regardless of ordering — rate limiting happens after auth, defeating brute-force protection.
 
 **Why it matters:** Security-critical: rate limiting should execute before authentication to prevent brute-force attacks.
@@ -200,6 +212,7 @@ Server::new()
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (Issue #325)
 
 **Implementation ideas:**
+
 - Document that RateLimit should be first middleware
 - Consider connection callback mechanism for truly pre-auth rate limiting
 - Add connection-level callbacks separate from request-level middleware
@@ -209,6 +222,7 @@ Server::new()
 **Expected impact:** High — security improvement
 
 ### 6. Recovery/Panic Middleware
+
 **Description:** Go wish has `recover.Middleware` for panic recovery with stack trace logging.
 
 **Why it matters:** Production servers need to handle unexpected errors gracefully without crashing the PHP process.
@@ -216,6 +230,7 @@ Server::new()
 **Source:** `docs/repo_map/charmbracelet_wish.md`
 
 **Implementation ideas:**
+
 - Create `Recovery` middleware wrapping chain in try/catch
 - Log stack trace to configured logger
 - Return graceful error message to client
@@ -225,6 +240,7 @@ Server::new()
 **Expected impact:** Medium — production robustness
 
 ### 7. Access Control Middleware
+
 **Description:** Go wish's `accesscontrol.Middleware` restricts which shell commands can execute per session.
 
 **Why it matters:** Multi-tenant environments need command allowlisting for security.
@@ -232,6 +248,7 @@ Server::new()
 **Source:** `docs/repo_map/charmbracelet_wish.md`
 
 **Implementation ideas:**
+
 - Create `AccessControl` middleware with command allowlist/denylist
 - Support glob patterns and regex for command matching
 - Log rejected command attempts
@@ -243,6 +260,7 @@ Server::new()
 ## Medium Priority
 
 ### 8. Metrics Integration with candy-metrics
+
 **Description:** `promwish` exposes SSH session metrics to Prometheus. `candy-metrics` has `SessionMetrics` middleware but not yet integrated with candy-wish.
 
 **Why it matters:** Production deployments need observability — session counts, durations, error rates.
@@ -250,6 +268,7 @@ Server::new()
 **Source:** `docs/repo_map/charmbracelet_promwish.md`, `docs/repo_map/pr_charmbracelet_promwish.md`
 
 **Implementation ideas:**
+
 - Create `SugarCraft\Wish\Middleware\Metrics` that uses `candy-metrics` SessionMetrics
 - Expose `wish.session.connect`, `wish.session.duration`, `wish.session.error` counters
 - Add `extraTags` callback for custom labels (user, term, command)
@@ -259,6 +278,7 @@ Server::new()
 **Expected impact:** Medium — production observability
 
 ### 9. Command String Parsing Improvement
+
 **Description:** `DefaultChannelHandler::parseCommandString()` handles basic quoting but doesn't perform full shell parsing.
 
 **Why it matters:** Complex shell commands with pipes, redirections, or quotes may misparse.
@@ -266,6 +286,7 @@ Server::new()
 **Source:** `docs/repo_map/sugarcraft_candy-wish.md` (weakness #9)
 
 **Implementation ideas:**
+
 - Use ` Symfony\Component\Console\Input\ArgvInput` for parsing
 - Or wrap `pexec` style parser from shell-helper library
 - Document limitations and provide workarounds
@@ -275,6 +296,7 @@ Server::new()
 **Expected impact:** Low — edge case for most use cases
 
 ### 10. Color Profile / Terminal Capability Detection
+
 **Description:** Go wish has issues with color rendering in Docker/systemd due to terminal capability detection failures.
 
 **Why it matters:** Containerized deployments may lack full terminal capabilities, causing broken color rendering.
@@ -282,6 +304,7 @@ Server::new()
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (Issues #45, #350, #456)
 
 **Implementation ideas:**
+
 - Provide fallback conservative color profile
 - Allow forced color profile override via environment
 - Document systemd/Docker requirements
@@ -293,6 +316,7 @@ Server::new()
 ## Low Priority
 
 ### 11. Mosh Support
+
 **Description:** Issue #455 requests Mosh support for connection resilience on unstable networks.
 
 **Why it matters:** Mosh provides better handling of connection interruptions — important for mobile clients.
@@ -300,6 +324,7 @@ Server::new()
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (Issue #455)
 
 **Implementation ideas:**
+
 - Research `tsshd` Go implementation as integration point
 - Consider long-term if demand grows
 
@@ -308,6 +333,7 @@ Server::new()
 **Expected impact:** Low — niche use case
 
 ### 12. SSH Proxy/Router ("Nginx for SSH")
+
 **Description:** Issue #488 requests forwarding SSH sessions to other SSH servers based on logic beyond just port.
 
 **Why it matters:** Users want path-based or user-based SSH routing.
@@ -315,6 +341,7 @@ Server::new()
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (Issue #488)
 
 **Implementation ideas:**
+
 - Create `ProxyMiddleware` for forwarding to backend SSH servers
 - Support routing based on user, command, or environment
 
@@ -323,6 +350,7 @@ Server::new()
 **Expected impact:** Low — niche enterprise feature
 
 ### 13. Windows PTY Support
+
 **Description:** Go wish integrates `x/xpty` for ConPTY support on Windows.
 
 **Why it matters:** Windows development workflows may need SSH access to Windows servers.
@@ -330,6 +358,7 @@ Server::new()
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (PR #522), `docs/repo_map/charmbracelet_x.md`
 
 **Implementation ideas:**
+
 - Leverage `candy-pty` cross-platform support when available
 - Document Windows limitations
 - Consider ConPTY FFI integration in candy-pty
@@ -417,6 +446,7 @@ interface Backend {
 **Problem:** `BubbleTea` middleware only works with `HostSshdTransport`. `InProcessTransport` requires `Spawn` with wrapper script.
 
 **Proposed:** Create unified `TeaTransport` that bridges BubbleTea programs to PTY subprocess model:
+
 - Mount SugarCraft Program inline under HostSshd
 - Wrap Program in PTY subprocess under InProcess
 
@@ -480,6 +510,7 @@ Auth::allowUsers(['alice', 'bob'])
 ## 1. Deployment Guide
 
 **Missing:** Production deployment documentation for:
+
 - systemd service configuration
 - Docker container deployment
 - nginx reverse proxy for SSH
@@ -490,6 +521,7 @@ Auth::allowUsers(['alice', 'bob'])
 ## 2. Auth Backend Examples
 
 **Missing:** Examples for integrating:
+
 - LDAP authentication
 - OAuth/JWT authentication  
 - Database-backed user/permission store
@@ -500,6 +532,7 @@ Auth::allowUsers(['alice', 'bob'])
 ## 3. Multi-Tenant Hosting
 
 **Missing:** Cookbook for shared SSH hosting:
+
 - Per-user virtual directories
 - Command restrictions per user
 - Quota enforcement
@@ -531,6 +564,7 @@ new BubbleTea(fn ($session) => new MyApp($session))
 **Source:** `docs/repo_map/pr_charmbracelet_wish.md` (Issues #45, #350, #456)
 
 **Solution:** 
+
 - Document `CLICOLOR_FORCE=1` workaround
 - Provide conservative fallback color profile
 - Add environment-based auto-detection
@@ -542,6 +576,7 @@ new BubbleTea(fn ($session) => new MyApp($session))
 **Current:** PTY tests use `proc_open()` fixture scripts; SIGWINCH tests are racy.
 
 **Improvement:** Create `tests/_fixtures/` with:
+
 - SSH server mock for ForceCommand testing
 - PTY fixture scripts for subprocess testing
 - Network fixture for connection testing
@@ -549,6 +584,7 @@ new BubbleTea(fn ($session) => new MyApp($session))
 ## 2. Property-Based Testing
 
 **Missing:** Property-based tests for:
+
 - Command string parsing edge cases
 - Token-bucket algorithm under concurrent access
 - Context propagation invariants
@@ -556,6 +592,7 @@ new BubbleTea(fn ($session) => new MyApp($session))
 ## 3. Chaos Testing
 
 **Missing:** Tests for:
+
 - Network disconnection mid-session
 - PTY allocation failure
 - Auth timeout scenarios
@@ -601,6 +638,7 @@ Server::new()
 **Relevance:** When integrating BubbleTea with subprocess execution, I/O handle routing is critical.
 
 **Lessons:**
+
 - PTY slave overrides custom stdout when set
 - Need proper stdio field storage and usage
 - Both Bubble Tea and subprocess want terminal ownership
@@ -614,6 +652,7 @@ Server::new()
 **Relevance:** Critical for security. Rate limiting must execute before auth to prevent brute-force.
 
 **Lessons:**
+
 - Auth handlers separate from middleware is architectural flaw
 - SugarCraft should ensure auth is middleware OR use connection callbacks
 - Document that RateLimit should be first in chain
@@ -629,6 +668,7 @@ Server::new()
 **Relevance:** Terminal state restoration after subprocess execution is complex.
 
 **Lessons:**
+
 - PtyWriter hacks don't work for interactive subprocesses
 - Real PTY allocation enables vim, bash, etc.
 - Terminal state must be restored (exit raw mode, restore window size)
@@ -706,6 +746,7 @@ Server::new()
 CandyWish represents a well-architected port of `charmbracelet/wish` that makes deliberate tradeoffs to deliver a secure, maintainable SSH middleware framework in PHP. The decision to delegate SSH to OpenSSH via `ForceCommand` is sound — it reduces complexity dramatically while leveraging battle-tested cryptographic primitives. The middleware composability pattern is elegant and mirrors PSR-15/Express conventions familiar to PHP developers.
 
 **Key differentiators from upstream:**
+
 - Transport abstraction (`InProcessTransport` vs `HostSshdTransport`) provides deployment flexibility
 - ReactPHP-based async middleware enables enterprise auth back-ends
 - Deep `candy-pty` integration provides cross-platform PTY support

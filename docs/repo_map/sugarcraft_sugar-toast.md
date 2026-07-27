@@ -263,12 +263,14 @@ The `charmbracelet/bubbles` library provides a `Progress` component used as a re
 It addresses the most glaring gap in bubbleup (single-alert limitation) with a well-designed queue system and adds three genuinely useful features absent from the upstream: progress bars, action buttons, and a history log.
 
 **Strengths**:
+
 - Clean immutable + fluent API matching SugarCraft conventions
 - Proper UTF-8 multibyte handling throughout (display-cell slicing vs byte slicing)
 - Queue overflow strategies are thoughtful and well-tested
 - i18n wiring with `LangCoverageTest` prevents translation drift
 
 **Weaknesses / Technical Debt**:
+
 - Animation stub (`withAnimationDuration()`) is a no-op — honey-bounce integration is documented as "deferred step 09.17" in CALIBER_LEARNINGS.md
 - Action button callbacks stored but never auto-triggered — consumer must call them manually in key handler, which is not obvious from the README
 - No custom alert type registration (upstream has `RegisterNewAlertType()`)

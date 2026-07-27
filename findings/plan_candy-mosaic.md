@@ -37,13 +37,16 @@ Address all 28 findings from the candy-mosaic code review — resource leaks, se
 **Severity:** high
 
 **Conditions for success:**
+
 - `ChafaRendererTest::testAvailableFalseCleansUpPipes()` passes — verifies no fd leaks when `chafa` binary does not exist
 - Manual test: loop 1000 `proc_open` failures, verify no warnings
 
 **Related code locations:**
+
 - `src/Renderer/ChafaRenderer.php:44-58`
 
 **Investigation notes:**
+
 - `proc_open()` creates pipes before returning; if it returns `false`, pipes are already created
 - Current code at L49-50 returns `false` immediately without iterating `$pipes`
 - Fix: close any already-opened pipes before the early return
@@ -77,16 +80,19 @@ if (!is_resource($proc)) {
 **Severity:** critical (security)
 
 **Conditions for success:**
+
 - Existing `ImageSourceUrlTest` tests still pass
 - New test: `testFromUrlRejectsFileScheme()` — passes `file:///etc/passwd`, expects `\InvalidArgumentException`
 - New test: `testFromUrlWithExplicitAllowedScheme()` — passes `file:///path`, `allowedSchemes: ['file']`, succeeds
 
 **Related code locations:**
+
 - `src/ImageSource.php:180-183` — `fromUrl()` signature
 - `src/ImageSource.php:207-235` — `fromUrlAsync()` signature
 - `src/ImageSource.php:243-272` — `fetchUrlSync()` which applies the scheme check
 
 **Investigation notes:**
+
 - `fromUrl()` delegates to `fromString(self::fetchUrlSync(...))` at L182
 - `fetchUrlSync()` uses `file_get_contents($url, ...)` at L259, which honors all PHP wrappers
 - Need a new lang key: `image_source.url_invalid_scheme`
@@ -103,13 +109,16 @@ if (!is_resource($proc)) {
 **Severity:** medium
 
 **Conditions for success:**
+
 - `vendor/bin/phpunit` passes with no phpstan warnings about dead code
 - `MosaicAutoTest` still passes (tests the fallback behavior)
 
 **Related code locations:**
+
 - `src/Mosaic.php:100-115`
 
 **Investigation notes:**
+
 - `Detect::probe()` (Detect.php L49-60) never throws — returns `Capability` with all protocols `false` on failure
 - The outer catch at L121 catches any throw and calls `self::halfBlock()` — identical behavior
 - The inner catch only falls through to `TerminalProbe::run()` path, but `Detect::probe()` does not throw
@@ -125,13 +134,16 @@ if (!is_resource($proc)) {
 **Severity:** medium
 
 **Conditions for success:**
+
 - `MosaicBuilderTest` passes — existing tests verify `build()` output
 - New test: immutability check — `withRenderer()` returns new instance, original unchanged
 
 **Related code locations:**
+
 - `src/Mosaic.php:492-576` — `MosaicBuilder` class
 
 **Investigation notes:**
+
 - Pattern to follow: `with(string $property, mixed $value)` via `__call()` that does `new self(...get_object_vars($this), $property: $value)`
 - Or: named constructor that accepts all fields as promoted params and each `with*()` creates new instance via `new self(renderer: $renderer, ...)`
 
@@ -146,10 +158,12 @@ if (!is_resource($proc)) {
 **Severity:** medium
 
 **Conditions for success:**
+
 - `Mosaic::supportedProtocols()` returns the full list
 - `ChafaRendererTest::testAvailableResets()` verifies reset functionality
 
 **Related code locations:**
+
 - `src/Mosaic.php` — new static method
 - `src/Renderer/ChafaRenderer.php:19` — `private static ?bool $available = null`
 
@@ -164,14 +178,17 @@ if (!is_resource($proc)) {
 **Severity:** high
 
 **Conditions for success:**
+
 - `SyncAsyncRendererTest::testRenderAsyncRejectsOnException()` — mocks `Mosaic::render()` to throw, verifies promise rejects
 - Existing `AsyncRendererTest` tests still pass
 
 **Related code locations:**
+
 - `src/SyncAsyncRenderer.php:31` — `Loop::futureTick()` call
 - `src/SyncAsyncRenderer.php:36-48` — `doRender()` method
 
 **Investigation notes:**
+
 - The `doRender()` at L42-47 already has try/catch — the issue is that `Loop::futureTick(fn() => $this->doRender(...))` wraps it, so the exception propagates OUT of the callback into the event loop
 
 ```php
@@ -203,14 +220,17 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** high
 
 **Conditions for success:**
+
 - `SixelRendererTest::testMemoryStripeProcessing()` — render large image, verify peak memory stays bounded
 - Visual output matches non-striped version for same dither settings
 - All existing `SixelRendererTest` tests pass (all dither modes, color counts)
 
 **Related code locations:**
+
 - `src/Renderer/SixelRenderer.php:388-437` — `ditheredIndexGrid()` method
 
 **Investigation notes:**
+
 - Floyd-Steinberg/Atkinson/Stucki diffusion only propagates ±1-2 rows from current pixel
 - Atkinson (6 neighbors, max row offset 2) and Stucki (max row offset 2) both fit in a 3-row buffer
 - Process in stripes of 64 rows + 2-row overlap, emit each stripe's sixel data before proceeding
@@ -226,12 +246,15 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - `SixelRendererTest::testSamplePixelsMatchesFullScan()` — verify sampled output matches full scan for same image
 
 **Related code locations:**
+
 - `src/Renderer/SixelRenderer.php:178-201` — `samplePixels()` method
 
 **Investigation notes:**
+
 - Current: `for ($y=0;$y<$h;$y++) for ($x=0;$x<$w;$x++) if (($i++ % $step) !== 0) continue;`
 - Replace with: `for ($y=0;$y<$h;$y+=$rowStep) for ($x=0;$x<$w;$x+=$colStep)`
 
@@ -246,13 +269,16 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - `ImageSourceTest::testFromStringRoundTrip()` — create from GD resource, convert to bytes, re-create via `fromString()`, verify dimensions and bytes match
 - `ImageSourceTest::testFromStringWithTransparentPng()` — transparency is preserved
 
 **Related code locations:**
+
 - `src/ImageSource.php:96-112` — `fromString()` method
 
 **Investigation notes:**
+
 - `imagecreatefromstring()` at L328 already handles this path for `fromString()` bytes
 - Use `imagecreatefromstring()` + `imagepng($img, 'php://temp')` + `stream_get_contents()` to get PNG bytes directly
 
@@ -267,10 +293,12 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** critical (security) — same issue as 1.2 but different code path
 
 **Conditions for success:**
+
 - `ImageSourceUrlTest::testFromUrlAsyncRejectsFileScheme()` — verifies async path also blocks `file://`
 - Existing async URL tests pass
 
 **Related code locations:**
+
 - `src/ImageSource.php:207-235` — `fromUrlAsync()` method
 
 ---
@@ -286,10 +314,12 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - All renderer tests pass — behavior unchanged
 - New test: `RendererContractTest::testPrepareRenderValidatesWidth()` — verify all renderers share identical validation message
 
 **Related code locations:**
+
 - `src/Renderer/Renderer.php` — interface (consider abstract base class or trait)
 - `src/Renderer/KittyRenderer.php:34-45` — duplicated boilerplate
 - `src/Renderer/SixelRenderer.php:50-67` — duplicated boilerplate
@@ -300,6 +330,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 - `src/Renderer/ChafaRenderer.php:61-78` — duplicated boilerplate
 
 **Investigation notes:**
+
 - Interface can't have `protected` methods — use an abstract `AbstractRenderer` base class or a `RenderValidation` trait
 - Trait approach avoids breaking `final` renderer classes; inject via `use RenderValidationTrait`
 - Method signature: `protected function prepareRender(ImageSource $image, int $width, ?int &$height): int`
@@ -315,15 +346,18 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - `ColorUtilTest` — new unit tests for `squaredDistance()` and `luma()`
 - `QuarterBlockRendererTest::testRenderCellUsesCorrectLuma()`
 - `AsciiRendererTest::testLumaMatchesSharedUtil()`
 
 **Related code locations:**
+
 - `src/Renderer/QuarterBlockRenderer.php:161-173` — private `dist()` and `luma()` methods
 - `src/Renderer/AsciiRenderer.php:86` — inline luma calculation
 
 **Investigation notes:**
+
 - Create `SugarCraft\Core\Util\ColorUtil` as a standalone utility class
 - BT.601 luma: `(77R + 150G + 29B) >> 8`
 - Squared distance: `(dr*dr + dg*dg + db*db)`
@@ -343,11 +377,13 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - All `QuarterBlockRendererTest` tests pass
 - New tests for each extracted method: `testFindSeedPair()`, `testGroupQuadrantsBySeed()`, `testComputeCellColors()`
 - `renderCell()` becomes ≤20 lines
 
 **Related code locations:**
+
 - `src/Renderer/QuarterBlockRenderer.php:100-155`
 
 ---
@@ -361,10 +397,12 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - All `SixelRendererTest` tests pass
 - `emitBand()` reduced to ≤40 lines after extraction
 
 **Related code locations:**
+
 - `src/Renderer/SixelRenderer.php:549-615` — `emitBand()` method
 
 ---
@@ -380,10 +418,12 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - `MosaicBuilderTest::testBuildWithNoConfigDefaultsToSixel()` — documents behavior
 - Explicit: `MosaicBuilder::sixel()->withDither(Dither::Stucki)->build()` works
 
 **Related code locations:**
+
 - `src/Mosaic.php:557-575` — `MosaicBuilder::build()` method
 - `src/Mosaic.php:563-564` — Sixel default instantiation
 
@@ -398,12 +438,15 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low
 
 **Conditions for success:**
+
 - `MosaicAutoTest::testAutoFromPaletteUsesTrueColor()` — verifies Kitty is returned when `TrueColor` is reported alongside `KittyKeyboard`
 
 **Related code locations:**
+
 - `src/Mosaic.php:144-166`
 
 **Investigation notes:**
+
 - `PaletteCapability` enum includes: `TrueColor`, `Color256`, `BasicAscii`, `KittyKeyboard`, `NoColor`
 - Current code only checks `KittyKeyboard` and `NoColor`, falling back to `halfBlock()`
 
@@ -418,9 +461,11 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low
 
 **Conditions for success:**
+
 - `AnimationDriverTest::testSubscriptionsReturnsNull()` documents the contract
 
 **Related code locations:**
+
 - `src/AnimationDriver.php:95-98`
 
 ---
@@ -434,9 +479,11 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low
 
 **Conditions for success:**
+
 - Reader of `PixelGrid::fromGd()` understands the alpha handling limitation
 
 **Related code locations:**
+
 - `src/PixelGrid.php:16-25` — class doc-comment
 - `src/PixelGrid.php:39` — `fromGd()` doc-comment
 
@@ -451,9 +498,11 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low (but required for 1.2 and 2.4)
 
 **Conditions for success:**
+
 - Centralized in one place, called from both `fromUrl()` and `fromUrlAsync()`
 
 **Related code locations:**
+
 - `src/ImageSource.php` — new private static method
 - `lang/en.php` — add `'image_source.url_invalid_scheme' => 'URL scheme {scheme} is not in the allowed list: {allowed}'`
 
@@ -470,15 +519,18 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - `GifDecoder::decode(ImageSource)` returns `Animation`
 - Full pipeline: `ImageSource::fromFile('animated.gif')` → `GifDecoder::decode()` → `AnimationDriver::render()` shows animation
 
 **Related code locations:**
+
 - `candy-mosaic/src/Animation.php` — immutable value object (exists)
 - `candy-mosaic/src/AnimationDriver.php` — drives animation (exists)
 - `candy-mosaic/CALIBER_LEARNINGS.md:33-37` — notes GIF belongs in candy-flip
 
 **Investigation notes:**
+
 - Use `imagecreatefromgif()` to extract individual frames, build `Animation::fromFrames()`
 - If candy-flip doesn't exist yet, document the gap in CALIBER_LEARNINGS
 
@@ -491,6 +543,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low (future consideration)
 
 **Conditions for success:**
+
 - Documented in CALIBER_LEARNINGS.md
 
 ---
@@ -504,10 +557,12 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** medium
 
 **Conditions for success:**
+
 - `Mosaic::auto()` doc-comment explains the detection chain
 - `Mosaic::diagnose()` is mentioned as the debug tool
 
 **Related code locations:**
+
 - `src/Mosaic.php:94-125`
 - `src/Detect.php` — `Detect::probe()` implementation
 
@@ -522,9 +577,11 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low
 
 **Conditions for success:**
+
 - Doc-comment on `private static ?bool $available = null;` explains behavior
 
 **Related code locations:**
+
 - `src/Renderer/ChafaRenderer.php:19`
 
 ---
@@ -536,6 +593,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low (future consideration)
 
 **Conditions for success:**
+
 - Documented in CALIBER_LEARNINGS.md
 
 ---
@@ -551,12 +609,15 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low
 
 **Conditions for success:**
+
 - `AdaptiveImageTest::testRenderAsyncCacheHitIsImmediate()` — verifies cached path resolves synchronously
 
 **Related code locations:**
+
 - `src/AdaptiveImage.php:93-100`
 
 **Investigation notes:**
+
 - Current: `Loop::futureTick(fn() => $deferred->resolve($this->cache[$key]))`
 - Fix: `return \React\Promise\Promise::resolve($this->cache[$key]);`
 
@@ -571,9 +632,11 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 **Severity:** low
 
 **Conditions for success:**
+
 - Comment clearly explains: (1) `TerminalProbe::run()` throws on platform detection errors, (2) `halfBlock()` means "no image protocol detected, using universal fallback"
 
 **Related code locations:**
+
 - `src/Mosaic.php:121-124`
 
 ---

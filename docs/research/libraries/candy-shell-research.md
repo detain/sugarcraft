@@ -13,6 +13,7 @@
 ## Current Architecture
 
 ### Source Structure
+
 ```
 candy-shell/src/
 ├── Application.php          # Extends SymfonyApplication, registers all commands
@@ -86,6 +87,7 @@ $program = new Program($model, new ProgramOptions(
 **Library ID:** `/spf13/cobra` | `/charmbracelet/fang`
 
 #### Command Routing
+
 Cobra uses a tree structure where each `Command` can have children (subcommands):
 ```go
 rootCmd.AddCommand(&cobra.Command{...})  // flat registration
@@ -95,9 +97,11 @@ cmdEcho.AddCommand(cmdTimes)             // nested subcommands
 **Pattern:** Hierarchical command tree; `Execute()` handles parsing + routing + error propagation
 
 #### Flag Parsing
+
 - Uses `pflag` (POSIX-compliant fork of stdlib `flag`)
 - Persistent flags inherit to all subcommands
 - Local flags belong only to the declaring command
+
 ```go
 rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 cmd.Flags().StringVarP(&output, "output", "o", "json", "output format")
@@ -105,17 +109,21 @@ cmd.MarkFlagRequired("region")
 ```
 
 #### Help Generation
+
 Auto-generated from command structure, flags, and doc comments:
+
 - `cmd.HelpFunc()` customizable
 - `cmd.SetUsageFunc()` for custom format
 - Suggestions for typo'd commands ("did you mean --help?")
 
 #### Subcommand Organization
+
 - `AddCommand()` for explicit registration
 - Generator (`cobra-cli`) scaffolds entire CLI structure
 - `IsAvailableCommand()` / `Find()` for traversal
 
 #### Error Handling
+
 ```go
 RunE: func(cmd *cobra.Command, args []string) error {
     // return error; propagated to Execute()
@@ -132,6 +140,7 @@ cobra.CheckErr(rootCmd.Execute())  // prints error + exits
 **Library ID:** `/clap-rs/clap` | `/websites/rs_clap`
 
 #### Command Routing
+
 Uses enums for subcommands — type-safe mutual exclusion:
 ```rust
 #[derive(Parser)]
@@ -150,6 +159,7 @@ enum Commands {
 ```
 
 #### Flag Parsing
+
 Declarative struct fields with attributes:
 ```rust
 #[derive(Parser)]
@@ -162,11 +172,13 @@ struct Args {
     verbose: bool,
 }
 ```
+
 - Type-driven: `String` = required, `Option<T>` = optional, `Vec<T>` = multiple
 - `value_parser` for custom validation
 - `ValueEnum` for enumerated values with auto-validation
 
 #### Help Generation
+
 Auto-derived from struct + doc comments + attributes:
 ```rust
 // Help output:
@@ -184,11 +196,13 @@ Options:
 ```
 
 #### Subcommand Organization
+
 - Enum variants = subcommands (compiler catches missing match arms)
 - `#[command(propagate_version = true)]` for version inheritance
 - Module-per-command structure recommended
 
 #### Error Handling
+
 - `Result` type enforced by compiler
 - Validation at parse time (not runtime)
 - Rich error messages with possible values listed
@@ -200,6 +214,7 @@ Options:
 **Library ID:** `/pallets/click`
 
 #### Command Routing
+
 Decorator-based groups:
 ```python
 @click.group()
@@ -215,6 +230,7 @@ def dropdb(force):
 ```
 
 #### Flag Parsing
+
 Decorators with type conversion:
 ```python
 @click.option('--count', default=1, type=int)
@@ -226,6 +242,7 @@ def cmd(count, name, verbose, items):
 ```
 
 #### Help Generation
+
 Auto-generated; respects docstrings:
 ```bash
 $ python db.py --help
@@ -243,11 +260,13 @@ Commands:
 ```
 
 #### Subcommand Organization
+
 - Groups host commands via decorator or `add_command()`
 - Context object (`ctx.obj`) shared state across commands
 - Command ordering preserved
 
 #### Error Handling
+
 ```python
 @click.command()
 def cmd():
@@ -265,6 +284,7 @@ def cmd():
 **Library ID:** `/tj/commander.js`
 
 #### Command Routing
+
 Chainable API:
 ```javascript
 program
@@ -275,6 +295,7 @@ program
 ```
 
 #### Flag Parsing
+
 - `.option()` with shorthand syntax
 - Custom processing functions
 - `.combineFlagAndOptionalValue()` for `-v45` style
@@ -286,17 +307,20 @@ program
 ```
 
 #### Help Generation
+
 ```javascript
 program.showHelpAfterError();           // show full help after error
 program.showSuggestionAfterError(false); // disable "did you mean"
 ```
 
 #### Subcommand Organization
+
 - `.command()` returns new command for chaining
 - `.addCommand()` for adding pre-built commands
 - Positional options with `enablePositionalOptions()`
 
 #### Error Handling
+
 ```javascript
 program.error('Password must be longer than four characters');
 program.error('Custom processing failed', { exitCode: 2, code: 'custom' });
@@ -326,6 +350,7 @@ program.error('Custom processing failed', { exitCode: 2, code: 'custom' });
 **Current (Symfony):** Manual `addCommands([new X(), new Y()...])` — verbose, error-prone for ordering.
 
 **Better Patterns:**
+
 - **Go/Cobra:** Tree with `AddCommand()` / `AddCommand(child)` for nesting
 - **Rust/Clap:** Enum-based routing — compiler guarantees exhaustive handling
 - **Click:** Decorator-based registration + context sharing
@@ -345,6 +370,7 @@ foreach (glob(__DIR__ . '/Command/*Command.php') as $file) {
 **Current:** 15+ `addOption()` calls per command — verbose, repetitive.
 
 **Better Patterns:**
+
 - **Rust/Clap derive:** Declarative struct fields = automatic parsing, validation, help
 - **Go/Cobra:** Builder pattern with validation helpers
 - **Click:** Type-safe decorators with automatic conversion
@@ -373,6 +399,7 @@ final class StyleCommand extends Command
 **Current:** Basic Symfony help — works but not rich.
 
 **Better Patterns:**
+
 - **Rust/Clap:** Rich colored help with value enumerations, default values, env var hints
 - **Cobra:** Suggestions for typos, command aliases
 - **Click:** Excellent terminal edge-case handling
@@ -396,6 +423,7 @@ Extend `AsCommand` attribute to include more metadata (examples, env vars, depre
 **Current:** Flat list in `Application.php`. Commands have no hierarchical relationships.
 
 **Better Patterns:**
+
 - **Cobra:** Groups can nest subcommands (`git commit`, `git push`)
 - **Clap:** Enum-based — mutual exclusion enforced at compile time
 - **Click:** Groups with `ctx.obj` for shared state
@@ -416,6 +444,7 @@ $this->addCommands([
 **Current:** Return `Command::FAILURE` / `Command::SUCCESS`; basic exception propagation.
 
 **Better Patterns:**
+
 - **Go/Cobra:** `RunE` returns error, centralized handling via `Execute()`
 - **Rust/Clap:** `Result` type, parse-time validation, rich error messages
 - **Click:** `ClickException` with automatic formatting
@@ -438,6 +467,7 @@ throw new CandyException('User aborted', ErrorCode::Aborted);
 **Current:** Manual string matching in `StyleBuilder::fromFlags()` (e.g., border presets, align values).
 
 **Better Patterns:**
+
 - **Rust/Clap `ValueEnum`:** Compile-time enum for valid values, auto-help with possible values
 - **Click `click.Choice(['foo', 'bar'])`:** Runtime validation with helpful messages
 
@@ -466,6 +496,7 @@ final class StyleCommand extends Command
 ### High Priority
 
 #### 1. **Auto-Discovery of Commands** (Effort: Low, Impact: Medium)
+
 **Problem:** 13 `new XCommand()` calls in `Application.php` — boilerplate, easy to forget a command.
 
 **Solution:** Use `ReflectionClass` to auto-discover and register commands:
@@ -481,6 +512,7 @@ foreach (glob("{$commandDir}/*Command.php") as $file) {
 ```
 
 #### 2. **FlagSpec Trait for Declarative Options** (Effort: Medium, Impact: High)
+
 **Problem:** 15+ `addOption()` calls per interactive command — verbose, hard to maintain.
 
 **Solution:** Create a `FlagSpec` attribute/trait:
@@ -506,6 +538,7 @@ final class StyleCommand extends Command { }
 ```
 
 #### 3. **ValueEnum Pattern for Constrained Options** (Effort: Low, Impact: Medium)
+
 **Problem:** Manual string validation in `StyleBuilder` for border/alignment values.
 
 **Solution:** PHP native enums (PHP 8.1+):
@@ -532,6 +565,7 @@ enum BorderPreset: string {
 ### Medium Priority
 
 #### 4. **Enhanced Help with Examples** (Effort: Low, Impact: Medium)
+
 **Problem:** No usage examples in `--help` output.
 
 **Solution:** Extend `AsCommand` attribute or use `setExamples()`:
@@ -544,6 +578,7 @@ $this->setExamples([
 ```
 
 #### 5. **Command Aliases** (Effort: Low, Impact: Low)
+
 **Problem:** `gum` has aliases (e.g., `filter` → `find`); candy-shell only has primary names.
 
 **Solution:** `AsCommand` attribute accepts aliases:
@@ -552,6 +587,7 @@ $this->setExamples([
 ```
 
 #### 6. **Error Suggestions** (Effort: Medium, Impact: Low)
+
 **Problem:** No "did you mean" suggestions for typos.
 
 **Solution:** Implement similar to Commander.js:

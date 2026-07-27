@@ -16,6 +16,7 @@ slot in without changing call sites.
 ## Files
 
 **Modify:**
+
 - `candy-pty/src/PtySystemFactory.php`:
   - `default(): PtySystem` checks `getenv('SUGARCRAFT_PTY_BACKEND')`
     first.

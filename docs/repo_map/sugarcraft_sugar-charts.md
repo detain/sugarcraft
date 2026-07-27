@@ -1,11 +1,17 @@
 # SugarCraft/sugar-charts
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-charts
+
 - **Language:** PHP 8.3+
+
 - **Status:** 🟡 In Progress
+
 - **Upstream:** NimbleMarkets/ntcharts (primary), with Charmbracelet/bubbletea (canvas rendering patterns), ratatui/ratatui (widget trait patterns), rasjonell/dashbrew (dashboard integration)
+
 - **Dependencies:** `sugarcraft/candy-core`, `sugarcraft/candy-sprinkles`, `sugarcraft/sugar-dash`
+
 - **Description:** PHP terminal charting library providing ASCII/Unicode chart rendering with ANSI SGR color support for SugarCraft TUI ecosystem
 
 ## Architecture Overview
@@ -74,7 +80,9 @@ The `paint()` method transfers the accumulated dot pattern onto a `Canvas`.
 Three immutable utility classes for time-series data preprocessing:
 
 - **`BucketByTime`** — Groups timestamped values into time buckets
+
 - **`MovingAverage`** — Simple/centered SMA and EMA computation
+
 - **`Resample`** — Upsampling (linear interpolation, nearest) and downsampling (last, mean)
 
 All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMany()` and terminal `compute()` methods.
@@ -86,8 +94,11 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** 8 discrete vertical levels using Unicode block characters `▁▂▃▄▅▆▇█` mapped to normalized values [0,1]. Each data point occupies exactly one cell column.
 
 **Key design decisions:**
+
 - Auto-max mode (`autoMaxValue` flag) — when enabled, rescales to window maximum rather than configured max, so sparklines of live data grow naturally
+
 - Sliding window via `array_slice($data, -$width)` in `view()` — only last `width` points shown
+
 - `push()` returns new instance — immutable append with unbounded input
 
 **Rendering formula:** `idx = round(norm * 8)` where `norm = clamp((v - min) / range, 0, 1)`. When all points equal, renders mid-bar (▄) for visibility.
@@ -99,9 +110,13 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** String building with `█` for filled bars. Supports both vertical (bars grow up from baseline) and horizontal (bars grow right from label).
 
 **Key design decisions:**
+
 - Auto bar-width/gap calculation — distributes available width across bars, minimum 1 cell per bar
+
 - Horizontal mode renders one bar per row with label in left gutter
+
 - Value coercion from multiple input shapes: `['label', value]` tuples, `label => value` assoc arrays, or pre-constructed `Bar` objects
+
 - Optional axis line (`┤` vertical, `├` horizontal) at chart edge
 
 **Legend integration:** Uses shared `Legend::new()` with `Position` enum (Top/Bottom/Left/Right). Merge logic pads shorter side.
@@ -113,11 +128,17 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** Plots [column, row] coordinate pairs onto Canvas using configurable point rune (`*` default) with slope-aware connector glyphs (`─ │ ╱ ╲`).
 
 **Key design decisions:**
+
 - Multi-series via `withDataset(name, values)` — auto-assigns cycling colors from `DATASET_COLORS` palette
+
 - Axes and labels are rendered as part of the plot using `Graph::drawXYAxis()` and `drawXYAxisLabel()` with gutter reservation
+
 - Animation support via `animationProgress` (0.0–1.0) — only first `N` points rendered in `renderChart()`
+
 - Area fill mode (`withFill(true)`) fills vertical space from baseline to point row
+
 - BrailleCanvas integration via `withCanvas(BrailleCanvas)` for sub-cell dot-matrix rendering (bridge to sugar-dash)
+
 - Theme integration via `withTheme(Theme)` — passes through to base `Chart` class
 
 **Connector algorithm (`drawConnector`):** For adjacent columns, samples one row per intermediate column using linear interpolation. Vertical connectors use `|` with step direction.
@@ -131,8 +152,11 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** Thin wrapper over `LineChart` that accepts `[DateTimeImmutable, value]` tuples and converts timestamps to formatted X-axis labels using PHP `date()` format strings.
 
 **Key design decisions:**
+
 - Explicit range filtering via `withTimeRange(start, end)` — filters points before rendering, rescales X labels to explicit range endpoints rather than data extent
+
 - `withXLabelCount(n)` controls tick count
+
 - Timezone preservation — labels use the timezone of the range start, not UTC
 
 **Limitation:** Does not modify the LineChart's X-axis range — X values are still column-indexed, only labels are timestamp-formatted.
@@ -148,8 +172,11 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** Explicit [x, y] point pairs rather than column-indexed values. Projects arbitrary X range onto canvas width.
 
 **Key design decisions:**
+
 - Independent X and Y ranges — `withXYRange(xMin, xMax, yMin, yMax)`
+
 - Projection lambda normalizes both axes independently: `tx = (x - xMin) / (xMax - xMin)`, `ty = (y - yMin) / (yMax - yMin)`
+
 - Bresenham connector algorithm for sub-pixel lines
 
 ### Heatmap (`src/Heatmap/Heatmap.php`)
@@ -157,9 +184,13 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** 2D grid where each cell's foreground color is linearly interpolated between `coldColor` and `hotColor` (or across multi-stop `palette`). Uses `SugarCraft\Core\Util\Color` RGB type.
 
 **Key design decisions:**
+
 - Auto-grows grid via `pushPoint(HeatPoint)` — rows and columns padded with zeros until first write
+
 - Color sampling: when `palette` is set, linearly interpolates between palette stops; otherwise blends cold↔hot
+
 - `ColorProfile` — controls whether colors render as ANSI 256 or TrueColor based on terminal capability
+
 - Legend strip rendered as a single row below the grid, width-aligned
 
 **Color interpolation:** Uses `Color::blend(Color $other, float $t)` where `t` is normalized position. Multi-stop palette: `t * (count-1)` selects segment and `localT` interpolates within segment.
@@ -171,9 +202,13 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** One column per bar. Vertical wick drawn first (high→low), then body cells overlaid on top (open↔close range).
 
 **Key design decisions:**
+
 - Bullish detection: `isBullish()` = `close >= open`
+
 - Wick and body use separate glyphs — body overlays wick so open/close range is visually distinct
+
 - Color assignment: `bullishColor` (default green) for up bars, `bearishColor` (default red) for down
+
 - When count exceeds width, renders last `width` bars (rightmost visible)
 
 **OHLC Bar normalization:** `bodyTop = max(open, close)`, `bodyBottom = min(open, close)` — these are row values, not Y coordinates. Row formula: `row = round((1 - normalized) * (height - 1))`.
@@ -183,14 +218,21 @@ All three follow the **clone-mutate builder pattern** with fluent `add()`/`addMa
 **Implementation:** Terminal image protocol encoder. Supports three protocols with auto-detection via `$TERM`/`$TERM_PROGRAM` environment variables.
 
 **Protocols:**
+
 - **Sixel** — Pure PHP encoder (no GD/Imagick required). `Sixel::encode()` does palette quantization + 6-row stripe encoding
+
 - **Kitty** — APC `G` sequence with base64-encoded PNG chunks
+
 - **iTerm2** — `ESC ]1337;File=inline=1` sequence with base64 PNG
 
 **Sixel encoder details (`Picture/Sixel.php`):**
+
 1. Builds palette from uniform RGB cube (first 16 = ANSI colors, remainder = axis-sampled cube)
+
 2. Quantizes every pixel via squared-RGB nearest-neighbor
+
 3. Emits palette as `#idx;2;r;g;b` entries (HLS=2 for RGB, 0-100 scale)
+
 4. Walks grid in 6-row stripes — per stripe, emits one color pass per active color with 6-bit mask bytes
 
 **Auto-detection order:** iTerm2 → WezTerm → Kitty → foot/mlterm → Sixel fallback.
@@ -231,7 +273,9 @@ Canvas::view() → $cell->style->render($rune)  (produces ANSI SGR sequence)
 
 All charts using color (`Heatmap`, `OHLC`) accept `ColorProfile` to control output format:
 - `ColorProfile::TrueColor` — `\e[38;2;r;g;bm` format
+
 - `ColorProfile::ANSI256` — `\e[38;5;nm` format
+
 - Not all terminals support TrueColor — fallback is automatic
 
 ## Color Scale Design
@@ -253,23 +297,32 @@ All charts using color (`Heatmap`, `OHLC`) accept `ColorProfile` to control outp
 ### Axis labels
 
 - **X labels:** `withXLabels([...])` for explicit list; `withXLabelFormatter(fn($v): string, $ticks)` for generated labels based on X range
+
 - **Y labels:** `withYLabels([...])` for explicit list; `withYLabelFormatter(fn($v): string, $ticks)` for generated
+
 - Auto-generated Y labels format floats — `Graph::niceNumbers()` generates "nice" round numbers for tick spacing
 
 ### Data coercion
 
 All chart constructors accept loose input shapes:
 - Raw arrays: `[val1, val2, val3]` or `[[x1, y1], [x2, y2], ...]`
+
 - Associative: `['label1' => 0.5, 'label2' => 0.8]`
+
 - Pre-constructed value objects: `Bar`, `HeatPoint`, `OHLC\Bar`
 
 ### Streaming data
 
 - `Sparkline::push()` — appends without trimming if window not full
+
 - `Streamline::push()` — always trims to width (fixed-window)
+
 - `TimeSeries::push(DateTimeImmutable, value)` — appends time-series tuple
+
 - `Waveline::push(x, y)` — appends XY point
+
 - `Heatmap::pushPoint(HeatPoint)` — auto-grows grid
+
 - `LineChart::push(float)` — slides window and appends
 
 ## Performance Considerations
@@ -291,29 +344,41 @@ All chart constructors accept loose input shapes:
 Based on source analysis and CALIBER_LEARNINGS.md, the following gaps exist:
 
 ### API Completeness
+
 1. **MarkLine not integrated** — `MarkLine` class exists but is not used by any chart. Could be added to LineChart/BarChart for threshold annotations.
+
 2. **No explicit API for horizontal stacked bar charts** — `BarChart::withHorizontal()` renders horizontal bars but stacked behavior requires custom Bar extensions
+
 3. **No grid overlay option** — Charts don't support optional grid lines for reference
+
 4. **No logarithmic scale** — All axes are linear only
+
 5. **No color per data point** — LineChart applies single color per series, not per-point gradients
 
 ### Rendering Gaps
+
 6. **No gauge/arc chart** — Present in ratatui/dashbrew but not in sugar-charts
+
 7. **No bubble/scatter with sized points** — `Scatter` uses fixed-size rune; bubble would need size encoding
+
 8. **No radar/spider chart** — Not present in sugar-charts
+
 9. **No 3D projection** — Obviously out of scope for ASCII, but worth noting
 10. **No animation duration** — `animationProgress` exists but the duration-based animation (driven by ReactPHP timers) is not wired
 
 ### Platform Integration
+
 11. **BrailleCanvas path is experimental** — `LineChart::withCanvas(BrailleCanvas)` integrates with sugar-dash but is marked as bridging pattern in CALIBER_LEARNINGS
 12. **No batch/animated rendering** — Individual frame rendering only; no `Animation` helper class
 13. **Kitty/iTerm2 need PNG bytes** — `Picture::fromGrid()` works for Sixel but Kitty/iTerm2 require GD/Imagick for PNG encoding (external dependency)
 
 ### Testing
+
 14. **Snapshot tests needed** — Many chart classes lack snapshot tests asserting exact SGR byte output
 15. **OHLC testing incomplete** — `OHLCChart` has minimal test coverage
 
 ### Documentation
+
 16. **Examples missing** — Only 8 of 11 chart types have examples (missing: sparkline streaming, scatter, ohlc)
 17. **VHS demos** — Only `.tape` files for bar, heatmap, line, ohlc, picture, scatter, sparkline, timeseries
 

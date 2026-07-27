@@ -13,6 +13,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-mosaic/src/Renderer/HalfBlockRenderer.php` — alpha=0 pixels
   emit no fg/bg, falling back to terminal default.
 - `candy-mosaic/src/Renderer/SixelRenderer.php` — palette negotiator

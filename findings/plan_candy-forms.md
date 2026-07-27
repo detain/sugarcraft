@@ -36,6 +36,7 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 - [ ] **1.10** `TextInput.php:926-933` — mutate() complex deferred validation timing with convoluted condition → Fix: extract to named boolean variables (`$shouldDefer`, `$shouldValidate`) for readability; add tests for Blur/Submit timing → `ref:investigation`
 
 ### Phase 1 Notes
+
 - **PR grouping recommendation**: Split into 3 PRs:
   - PR-A (Items 1.6 + 1.3): Duplicate interface deletion + Select revalidate doc
   - PR-B (Items 1.1 + 1.5 + 1.9): Async sequence counter + workerPool + closure capture
@@ -56,6 +57,7 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 - [ ] **2.9** `Form.php:471-488` and `Form.php:824-838` — `values()` and `collectValues()` share logic (both iterate isHidden/skippable) → Fix: extract `private function iterateFields(callable $callback, ?int $maxGroupIndex = null): mixed` helper → `ref:investigation`
 
 ### Phase 2 Notes
+
 - **PR grouping recommendation**: Split into 2-3 PRs:
   - PR-D (Items 2.1 + 2.9): Form validateAll + values/collectValues consolidation
   - PR-E (Items 2.2 + 2.3): Select SmithWatermanMatcher reuse + Input O(N²) validator fix
@@ -97,12 +99,14 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 > These are feature requests, not bugs. Address in separate enhancement PRs as needed, in dependency order (foundation libs first).
 
 ### High Priority Missing Features
+
 - [ ] **5.1** No per-field blur validation forwarding — `Field::update()` doesn't receive blur message → Design and implement blur message forwarding from Form to field for `ValidateOn::Blur` support
 - [ ] **5.2** No async `Form::validateAll()` — always synchronous blocking → Add `validateAllAsync(): AsyncCmd` variant that returns async command for slow validators (network lookup, etc.)
 - [ ] **5.3** No `Form::focusField(string $key)` for programmatic focus management → Add method to programmatically move focus to specific field by key
 - [ ] **5.4** No per-field keybinding overrides — KeyMap applies to Form navigation only → Add per-field `withKeyMap()` override so individual fields can customize their key handling
 
 ### Medium Priority Missing Features
+
 - [ ] **5.5** No input masking for credit cards/phone numbers/SSN (password field withEchoMode exists, but pattern-based masking like showing only last 4 digits doesn't)
 - [ ] **5.6** No date/time/datetime-local picker fields — common form inputs not available
 - [ ] **5.7** No range/slider numeric field — 1-10 slider input common in forms
@@ -116,6 +120,7 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 - [ ] **5.15** No infinite scrolling / load-more callback for ItemList — `infiniteScrolling` flag exists but no callback fires at end
 
 ### Low Priority Missing Features
+
 - [ ] **5.16** No autocomplete="off" equivalent — browser-like autocomplete attribute for username/password fields not supported
 - [ ] **5.17** No drag-and-drop support for FilePicker — only keyboard navigation
 
@@ -159,6 +164,7 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 ## Implementation Notes
 
 ### General
+
 - All changes must maintain `declare(strict_types=1)` and PSR-12 compliance
 - All changes must pass `vendor/bin/phpunit` for the candy-forms package
 - All changes must follow immutable+fluent `with*()` pattern per AGENTS.md
@@ -166,6 +172,7 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 - Author: Joe Huss `<detain@interserver.net>` per AGENTS.md
 
 ### Critical Path Execution Order
+
 1. **Phase 1 (Critical)** — Must be addressed first; correctness bugs
 2. **Phase 2 (High Performance)** — Performance issues that may become correctness problems at scale
 3. **Phase 3 (Medium)** — Code quality and maintainability
@@ -173,6 +180,7 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 5. **Phases 5-8 (Features/Refactoring)** — Future enhancement PRs, not blocking
 
 ### Recommended PR Sequence
+
 | PR | Items | Description |
 |----|-------|-------------|
 | PR-1 | 1.6, 1.3 | Delete duplicate Field/Field.php + Select revalidate doc |
@@ -186,6 +194,7 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 | PR-9 | 6.x | Async pattern improvements (6.5, 6.6, 6.7 are quick wins) |
 
 ### Verification Strategy
+
 - Each PR: run `vendor/bin/phpunit` in candy-forms directory
 - Each PR: run `composer validate` (without `--strict` per AGENTS.md note)
 - Each PR: verify no new PHPStan errors if level is configured

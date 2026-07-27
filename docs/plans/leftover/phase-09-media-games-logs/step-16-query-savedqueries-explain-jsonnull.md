@@ -13,6 +13,7 @@
 ## Files
 
 **Create/Modify:**
+
 - `candy-query/src/SnippetStore.php`.
 - `candy-query/src/ExplainView.php`.
 - `candy-query/src/ResultTable.php` — h-scroll + JSON pretty print.

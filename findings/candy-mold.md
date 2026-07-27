@@ -15,6 +15,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — Quit does not fire for uppercase `Q` (Shift+q)
+
 **Severity:** LOW  
 **Location:** `src/Counter.php:51`  
 **Code:**
@@ -30,6 +31,7 @@ if ($msg->type === KeyType::Char && strtolower($msg->rune) === 'q' && !$msg->ctr
 ---
 
 ### Finding 2 — Ctrl+C quit is rune-sensitive (only matches lowercase `'c'`)
+
 **Severity:** LOW  
 **Location:** `src/Counter.php:53`  
 **Code:**
@@ -42,6 +44,7 @@ if ($msg->type === KeyType::Char && strtolower($msg->rune) === 'q' && !$msg->ctr
 ---
 
 ### Finding 3 — Quit silently ignores key combos (alt, shift, alt+ctrl)
+
 **Severity:** LOW  
 **Location:** `src/Counter.php:51-55`  
 **Code:**
@@ -56,6 +59,7 @@ if (($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl)
 ---
 
 ### Finding 4 — `view()` rebuilds the `Style` object on every render
+
 **Severity:** MEDIUM  
 **Location:** `src/Counter.php:68-71`  
 **Code:**
@@ -80,6 +84,7 @@ public function view(): string
 ---
 
 ### Finding 5 — `bin/start` error message says `candy-template` instead of `candy-mold`
+
 **Severity:** LOW  
 **Location:** `bin/start:25`  
 **Code:**
@@ -92,6 +97,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ---
 
 ### Finding 6 — `bin/start` uses IIFE for autoload discovery
+
 **Severity:** INFORMATIONAL  
 **Location:** `bin/start:17-27`  
 **Issue:** The double-loop over autoload candidates is defensive but could be simplified.
@@ -102,6 +108,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ## 2. Performance Problems
 
 ### Finding 7 — No N+1, no DB, no loops — Performance is clean
+
 **Severity:** N/A  
 **Note:** As a template, `candy-mold` has no performance concerns. The only potential issue is Finding 4 (Style recreation on every frame).
 
@@ -110,6 +117,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ## 3. Memory Leaks
 
 ### Finding 8 — No memory leaks detected
+
 **Severity:** N/A  
 **Note:** `Style` chain objects are short-lived and properly GC'd. No streams, no resources, no callbacks with reference cycles.
 
@@ -118,12 +126,14 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ## 4. Security
 
 ### Finding 9 — No user input reaches unsanitized paths
+
 **Severity:** N/A  
 **Note:** `Counter` only receives structured `KeyMsg` objects from the SugarCraft event loop. No attack surface.
 
 ---
 
 ### Finding 10 — No `CALIBER_LEARNINGS.md` exists
+
 **Severity:** LOW  
 **Location:** `candy-mold/`  
 **Issue:** The skeleton lacks a `CALIBER_LEARNINGS.md` file.
@@ -134,12 +144,14 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ## 5. Complexity
 
 ### Finding 11 — Complexity is appropriate for a skeleton template
+
 **Severity:** N/A  
 **Note:** The `Counter` class is exactly as complex as it needs to be.
 
 ---
 
 ### Finding 12 — Tests are comprehensive and follow the canonical SugarCraft pattern
+
 **Severity:** N/A  
 **Note:** `CounterTest.php` covers all four quit paths, up/down mutations, immutability, subscriptions, view rendering.
 
@@ -148,6 +160,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ## 6. Missing Features / Incomplete Ports
 
 ### Finding 13 — `subscriptions()` returns `null` — no subscription demo
+
 **Severity:** INFORMATIONAL  
 **Location:** `src/Counter.php:74-77`  
 **Recommendation:** Add a commented subscription demo showing an auto-increment tick.
@@ -155,6 +168,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ---
 
 ### Finding 14 — `init()` returns `null` — no startup command demo
+
 **Severity:** INFORMATIONAL  
 **Location:** `src/Counter.php:39-42`  
 **Recommendation:** Add a commented example in the docblock showing how to return a startup `Cmd`.
@@ -162,6 +176,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ---
 
 ### Finding 15 — No `examples/` directory
+
 **Severity:** INFORMATIONAL  
 **Location:** `candy-mold/`  
 **Recommendation:** Add `examples/counter-with-step.php` and `examples/async-counter.php`.
@@ -169,6 +184,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ---
 
 ### Finding 16 — No `View` object demo — `view()` returns only `string`
+
 **Severity:** INFORMATIONAL  
 **Location:** `src/Counter.php:65`  
 **Recommendation:** Add a second `CounterWithView` example.
@@ -178,6 +194,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 17 — Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 **Note:** No PHP 8.4-specific features are used but none are needed at this stage.
 
@@ -186,6 +203,7 @@ fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `c
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 18 — Async not demonstrated
+
 **Severity:** INFORMATIONAL  
 **Location:** `bin/start:41`, `src/Counter.php`  
 **Recommendation:** Add `examples/async-counter.php` demonstrating `Cmd::promise()`.

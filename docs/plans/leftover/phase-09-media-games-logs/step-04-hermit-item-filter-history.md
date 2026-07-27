@@ -12,11 +12,13 @@
 ## Files
 
 **Create:**
+
 - `candy-hermit/src/Item.php` (interface).
 - `candy-hermit/src/FilteredItem.php` (numbered impl).
 - `candy-hermit/src/History/FileHistory.php`.
 
 **Modify:**
+
 - `candy-hermit/src/Hermit.php` — accept `Item[]`; `setFilterFn`.
 
 ## Tests

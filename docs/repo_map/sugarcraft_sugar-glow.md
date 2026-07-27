@@ -1,33 +1,57 @@
 # SugarCraft SugarGlow
 
 ## Metadata
+
 - **URL:** https://github.com/sugarcraft/sugar-glow
+
 - **Subdir:** `sugar-glow/`
+
 - **Composer pkg:** `sugarcraft/sugar-glow`
+
 - **Namespace:** `SugarCraft\Glow`
+
 - **Status:** 🟢 v1 ready
+
 - **Upstream:** [charmbracelet/glow](https://github.com/charmbracelet/glow)
+
 - **PHP:** ^8.3
+
 - **Entry point:** `bin/sugarglow`
+
 - **i18n:** 15 locales (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar)
 
 ## Feature List
 
 - **Markdown Rendering:** Composes `candy-shine` (Renderer/Theme) for ANSI-escaped styled output
+
 - **Dual-Mode CLI:** Direct stdout rendering (default) or fullscreen pager via `GlowModel` + `Viewport`
+
 - **8 Built-in Themes:** ansi, plain, dark, light, notty, dracula, tokyo-night, pink
+
 - **3 JSON Themes:** solarized, monokai, github (loaded from `themes/` directory)
+
 - **Custom Theme Loading:** `--theme-config` flag loads arbitrary JSON theme files via `Theme::fromJson`
+
 - **Word Wrap:** Configurable width with `--width` / `-w`; 0 disables wrapping
+
 - **OSC 8 Hyperlinks:** Enabled by default; `--no-hyperlinks` renders links as `text (url)`
+
 - **Pager Mode:** `-p` / `--pager` opens a `GlowModel` backed Viewport with standard reader keys
+
 - **Pager Keys:** ↑/↓/j/k (scroll), PgUp/PgDn/b/f (page), Ctrl+U/D (half-page), Home/g/End/G (bounds), q/Esc/Ctrl+C (exit)
+
 - **Syntax Highlighting:** Regex-based `ChromaJsonHighlighter` for code blocks using named-group tokenization
+
 - **File Watching:** `FileWatcher` uses mtime polling (cross-platform, no extension required)
+
 - **GlamourTheme Utility:** Parses Glamour-style JSON (block_prefix/suffix, indent_token, margin, chroma map)
+
 - **TTY Auto-Detection:** Stdin read skipped when TTY is detected (prevents empty reads)
+
 - **Width Helpers:** CJK/emoji visual width via `SugarCraft\Core\Util\Width`
+
 - **Streaming Pager:** `Pager` class yields chunks from streams for large file handling
+
 - **i18n:** Full translation infrastructure with 15 locales via `Lang` facade
 
 ## Source Tree
@@ -100,7 +124,9 @@ The rendering pipeline uses `SugarCraft\Shine\Renderer` which wraps the League C
 
 `GlowModel` implements the `Model` contract (init/update/view/subscriptions) and wraps a `Viewport` for scroll management. It handles:
 - **Exit signals:** q (char), Esc, Ctrl+C → returns `Cmd::quit()`
+
 - **Viewport delegation:** All scroll/mouse messages forwarded to `Viewport`
+
 - **Immutable:** `update()` returns `[new GlowModel(...), ?Cmd]`
 
 ```php
@@ -307,26 +333,42 @@ This is critical for correct visual rendering since `strlen()` counts code units
 ## Strengths
 
 1. **Clean separation of concerns** — Rendering (candy-shine), TUI (GlowModel+Viewport), CLI (Symfony) are cleanly layered
+
 2. **Immutable model pattern** — GlowModel follows the functional update pattern correctly
+
 3. **Cross-platform file watching** — mtime polling works everywhere without extensions
+
 4. **Theme flexibility** — 11 built-in themes + custom JSON loading + GlamourTheme compatibility
+
 5. **i18n infrastructure** — Full 15-locale support with Lang facade
+
 6. **Width-aware rendering** — CJK/emoji handled correctly via Width utility
+
 7. **OSC 8 hyperlink support** — Modern terminal feature supported via Renderer option
+
 8. **VHS demo infrastructure** — render.gif and pager.gif demonstrate both modes
+
 9. **PHPUnit 10 testing** — Modern test structure with failOnWarning enabled
 10. **Streaming pager** — Pager class handles large files without full memory load
 
 ## Weaknesses
 
 1. **No GitHub/GitLab integration** — Cannot fetch remote READMEs (glow's killer feature)
+
 2. **No file browser/stash** — Can only view one file at a time
+
 3. **No fuzzy filtering** — Cannot search/filter within a directory of markdown files
+
 4. **Regex highlighter is proof-of-concept** — Not a proper lexer; malformed code breaks tokenization
+
 5. **mtime polling has 1-second resolution** — Cannot detect changes faster than filesystem resolution
+
 6. **No clipboard support** — OSC 52 not integrated
+
 7. **No $PAGER fallback** — Only built-in pager mode
+
 8. **No line numbers** — Not available in pager or stdout mode
+
 9. **No config file** — Cannot persist user preferences
 10. **No external editor integration** — Cannot open files in $EDITOR
 11. **No git-aware file discovery** — Recursive search ignores .gitignore
@@ -347,8 +389,11 @@ sugar-glow (RenderCommand, GlowModel, FileWatcher, GlamourTheme)
 
 Dependencies:
 - `sugarcraft/candy-core` — Viewport, Model, Program, TtyDetect, Width, Ansi
+
 - `sugarcraft/candy-shine` — Renderer, Theme
+
 - `sugarcraft/sugar-bits` — MarkdownRenderer
+
 - `symfony/console` — Application, Command
 
 Path repos in `composer.json`:
@@ -357,13 +402,21 @@ Path repos in `composer.json`:
 ## Potential Enhancements
 
 1. **GitHub API integration** — Add `fetchGitHubREADME(string $repo): ?string` using HTTP client
+
 2. **GitLab API v4 integration** — Add `fetchGitLabREADME(string $project): ?string`
+
 3. **URL protocol support** — Parse `github://` and `gitlab://` prefixes in file arguments
+
 4. **File stash browser** — Implement stash model with file discovery and fuzzy filtering
+
 5. **gitcha port** — Port git-aware file discovery respecting .gitignore
+
 6. **Full Chroma lexer** — Replace regex tokenizer with proper lexer for robust syntax highlighting
+
 7. **fsnotify extension** — Use `inotify` (Linux) / `FSEvents` (macOS) / ReadDirectoryChangesW (Windows) for native file watching
+
 8. **OSC 52 clipboard** — Integrate clipboard copy on 'c' key in pager mode
+
 9. **$PAGER fallback** — Respect $PAGER environment variable and shell out when not in TTY
 10. **Line numbers** — Add optional line number display in Viewport
 11. **Config file** — YAML or JSON config in XDG_CONFIG_HOME with env var overrides

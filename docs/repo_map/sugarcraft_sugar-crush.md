@@ -1,11 +1,17 @@
 # SugarCraft sugar-crush
 
 ## Metadata
+
 - **Package:** `sugarcraft/sugar-crush`
+
 - **Upstream:** `charmbracelet/crush` (Go, 24,731 stars, archived March 2026)
+
 - **Language:** PHP 8.3+
+
 - **License:** MIT
+
 - **Status:** 🟢 v1 ready
+
 - **Description:** Chat-shell TUI for AI coding assistants with pluggable backends (EchoBackend offline; CommandBackend for Anthropic/OpenAI/Ollama via wrapper script). Markdown rendering via CandyShine, scrollback viewport, session persistence.
 
 ---
@@ -46,10 +52,15 @@ sugar-crush/src/
 The `Session` class implements stateless persistence with graceful degradation:
 
 - **State stored:** `cwd`, `selected` (file paths), `filter`, `sortColumn`, `sortDir`, `activePane`
+
 - **Persistence:** `~/.config/sugarcraft-crush/session.json` via `Session::load()` / `Session::save()`
+
 - **Home resolution order:** `$HOME` env → `posix_getpwuid()` → `getcwd() ?: '/tmp'`
+
 - **Graceful degradation:** Missing file, unreadable content, malformed JSON all return fresh `new self()`
+
 - **Immutable + fluent:** Every `withCwd()`, `withSelected()`, `withFilter()`, `withSort()`, `withActivePane()` returns a new instance
+
 - **Readonly properties:** Written once at construction time by `load()` or `with*()` builders
 
 ```php
@@ -104,10 +115,15 @@ final class Chat implements Model {
 ```
 
 **Message flow:**
+
 1. User types → keystrokes accumulate in `inputBuf` (UTF-8-aware backspace via `dropLast()`)
+
 2. Enter submits → `Message::user()` added to history, `inFlight=true`, `Backend::completeAsync()` scheduled via `Cmd::promise()`
+
 3. Backend resolves → `AssistantMsg` dispatched with `Message::assistant()` reply
+
 4. If `toolCalls` present → `handleToolCalls()` executes each tool synchronously, appends results to history, schedules follow-up backend call
+
 5. `inFlight` gate prevents racing ahead while waiting
 
 ### 1.4 Tool Calling System
@@ -134,17 +150,27 @@ public function toWire(): array {
 ```
 
 **ToolRegistry built-ins (ToolRegistry.php:124-188):**
+
 - `filter <expression>` — Filter viewport lines
+
 - `sort [-r] [-n]` — Sort viewport lines (reverse, numeric flags)
+
 - `goto <line>` — Jump to line number
+
 - `select <start> <end>` — Select line range
+
 - `quit` — Exit application
 
 **Multi-step tool calling flow (Chat.php:121-159):**
+
 1. AI returns message with `toolCalls` array
+
 2. `handleToolCalls()` iterates each `ToolCall`, invokes registered callback
+
 3. Tool results appended to history as `Message::assistant()` with `withToolResults()`
+
 4. Follow-up `Backend::completeAsync()` scheduled with updated history
+
 5. Loop continues until AI returns no tool calls
 
 ### 1.5 Provider Abstraction (Backend Interface)
@@ -158,6 +184,7 @@ Clean pluggable backend interface:
 interface Backend {
     /**
      * @param list<Message> $history full conversation so far
+
      * @param callable|null $onToken optional callback for each token during streaming
      */
     public function complete(array $history, callable $onToken = null): Message;
@@ -174,10 +201,15 @@ interface Backend {
 | `StreamingCommandBackend` | Streaming LLM (line-by-line) | `src/Backend/StreamingCommandBackend.php` |
 
 **CommandBackend (CommandBackend.php:39-96):**
+
 - Shells out via `proc_open()` with piped stdio
+
 - JSON-encodes full history → stdin of wrapper script
+
 - Reads stdout → assistant reply
+
 - Captures stderr → error message if exit != 0
+
 - Network-dep-free core; users wire their own wrapper
 
 ```php
@@ -196,9 +228,13 @@ public function complete(array $history, callable $onToken = null): Message {
 ```
 
 **StreamingCommandBackend (StreamingCommandBackend.php:39-160):**
+
 - Same stdin/stdout piping as CommandBackend
+
 - Non-blocking stdout via `stream_set_blocking(false)`
+
 - Reads line-by-line, calls `$onToken` callback for each token
+
 - Accumulates tokens → final message
 
 ### 1.6 MCP Client
@@ -224,10 +260,15 @@ final class McpClient {
 ```
 
 **Key methods:**
+
 - `connect(?array $options)` — Spawn Claude Code process, send initialize handshake, return initial messages
+
 - `callTool(string $name, ?array $params)` — Send tools/call request, poll for response (100 attempts × 10ms)
+
 - `listTools()` — Send tools/list request, poll for response
+
 - `readMessages()` — Non-blocking newline-delimited JSON parsing
+
 - `disconnect()` — Clean shutdown via `proc_close()`
 
 **Protocol:** JSON-RPC 2.0 over stdio (newline-delimited messages)
@@ -292,9 +333,13 @@ public static function render(Chat $chat): string {
 ```
 
 **Rendering rules:**
+
 - User messages: raw text with cyan `user>` prefix
+
 - Assistant messages: rendered via CandyShine (markdown) with magenta `assistant` prefix
+
 - System messages: faint styling
+
 - Input: `> ` prompt with cursor block `█` when not in-flight
 
 ---
@@ -318,9 +363,13 @@ public static function render(Chat $chat): string {
 | **Permission System** | None | Tool allow-lists |
 
 **Key upstream insights absorbed:**
+
 - Backend interface pattern (shell-out to wrapper script)
+
 - Session persistence with graceful degradation
+
 - Tool call abstraction (ToolCall/ToolResult VOs)
+
 - Markdown rendering via external library
 
 ### 2.2 vs charmbracelet/fantasy (Provider Abstraction)
@@ -335,8 +384,11 @@ public static function render(Chat $chat): string {
 | **Tool Repair** | None | Validation + optional repair function |
 
 **What sugar-crush borrowed:**
+
 - `LanguageModel` → `Backend` interface (pluggable adapters)
+
 - `Provider` → Wrapper script approach (external process)
+
 - Agent loop concept → `handleToolCalls()` multi-step flow
 
 ### 2.3 vs charmbracelet/mods (Sunset Competitor)
@@ -351,8 +403,11 @@ public static function render(Chat $chat): string {
 | **Slash Commands** | CommandParser | None |
 
 **What sugar-crush does differently:**
+
 - Ephemeral chat (no SQLite overhead) — history passed to backends each turn
+
 - Simpler MCP client (only stdio, only Claude Code)
+
 - Immutable + fluent patterns throughout
 
 ---
@@ -365,12 +420,16 @@ public static function render(Chat $chat): string {
 
 The `CommandBackend` / `StreamingCommandBackend` shell out to a user-provided wrapper script. This means:
 - No HTTP client dependency in the core package
+
 - Users can use any language for backend integration
+
 - Prompt engineering is a shell script edit away
+
 - Provider changes don't require PHP code changes
 
 ```bash
 # Example wrapper (Anthropic)
+
 export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic-stream.sh
 ./bin/sugarcrush
 ```
@@ -380,12 +439,16 @@ export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic-stream.sh
 Every state-mutating operation returns a new instance:
 
 - `Chat::withStreaming()`, `Chat::onToken()`, `Chat::registerTool()`, `Chat::onToolCall()`
+
 - `Session::withCwd()`, `Session::withSelected()`, `Session::withFilter()`, `Session::withSort()`
+
 - `ParsedCommand::withArgs()`
 
 This enables:
 - Time-travel debugging potential
+
 - Safe concurrent updates
+
 - Simple testability (assert old !== new, verify fields carried forward)
 
 ### 3.3 UTF-8-Aware Input Handling
@@ -407,8 +470,11 @@ Properly handles emoji and multi-byte characters — backspacing an emoji remove
 ### 3.4 Graceful Degradation Throughout
 
 - `Session::load()` never throws — missing file, bad JSON, wrong types all return fresh session
+
 - `CommandBackend::complete()` never throws — missing command, non-zero exit all return error message
+
 - `McpMessage::parse()` returns `null` for malformed JSON — callers handle gracefully
+
 - `StreamingDirectoryLister` uses `opendir`/`readdir` with `finally` cleanup
 
 ### 3.5 Generator-Based Directory Listing
@@ -561,9 +627,13 @@ Dependent packages: None yet
 The sugar-crush implementation introduces several patterns NOT present in upstream crush:
 
 1. **Immutable + fluent throughout** — crush uses struct mutation; sugar-crush uses readonly properties + with*() builders
+
 2. **PHP-native async** — ReactPHP Promises for non-blocking backend calls
+
 3. **Generator-based listing** — Memory-safe directory enumeration
+
 4. **Graceful degradation** — Every failure mode handled silently with sensible defaults
+
 5. **UTF-8 grapheme awareness** — Proper multi-byte character handling in backspace
 
 ---
@@ -573,17 +643,25 @@ The sugar-crush implementation introduces several patterns NOT present in upstre
 ### 8.1 Architecture Strengths
 
 1. **Clean separation** — Backend is injectable, tools are registerable, renderers are pure functions
+
 2. **Testability** — Every class is independently testable; Chat uses EchoBackend in tests
+
 3. **Immutable state** — No hidden mutations; race conditions visible in tests
+
 4. **Network-dep-free core** — Wrapper script approach keeps PHP code isolated from provider changes
+
 5. **Comprehensive test suite** — 158 tests with behavior/coercion/snapshot patterns
 
 ### 8.2 Architecture Weaknesses
 
 1. **No chat history persistence** — History is ephemeral; no conversation resumption
+
 2. **Synchronous tool execution** — Long-running tools block the TUI update loop
+
 3. **No streaming UI** — Tokens accumulated before rendering, not incrementally displayed
+
 4. **Single-backend limitation** — Can only use one Backend at a time (no provider switching)
+
 5. **MCP client is Claude Code-specific** — Not a general-purpose MCP implementation
 
 ### 8.3 Design Pattern Influences
@@ -604,22 +682,31 @@ The sugar-crush implementation introduces several patterns NOT present in upstre
 ### 9.1 Near-term (v1.x)
 
 1. **Session chat persistence** — Add `ChatHistory` class persisting to JSONL
+
 2. **Token counting** — Estimate context usage, trigger compaction
+
 3. **Built-in file tools** — Register read/write/edit/glob via ToolRegistry
+
 4. **Streaming UI** — Render tokens incrementally via partial message state
 
 ### 9.2 Medium-term (v2.0)
 
 1. **Provider abstraction layer** — `Provider` interface (like fantasy) for direct HTTP backends
+
 2. **LSP integration** — `LspClient` class connecting to gopls/tsserver
+
 3. **MCP transports** — Add HTTP and SSE support to McpClient
+
 4. **Permission system** — Tool allow-lists with confirmation prompts
 
 ### 9.3 Long-term (v3.0)
 
 1. **Multi-agent support** — Background agents with separate contexts
+
 2. **Workspace sharing** — SSE-based collaboration (like crush)
+
 3. **Thinking blocks** — Display Claude reasoning process
+
 4. **RAG integration** — Context file loading + semantic search
 
 ---

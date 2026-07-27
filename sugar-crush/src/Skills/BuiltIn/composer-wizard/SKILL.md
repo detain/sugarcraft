@@ -13,6 +13,7 @@ paths:
 When managing Composer dependencies:
 
 ## Version Constraints
+
 - Use caret (^) for patch/minor updates: ^1.2.3
 - Use tilde (~) for minor updates: ~1.2.3
 - Use exact for critical: 1.2.3
@@ -25,6 +26,7 @@ When managing Composer dependencies:
 - Lock versions in production
 
 ## Autoloading
+
 - PSR-4 for modern code
 - Classmap for legacy
 - Optimize after adding many classes

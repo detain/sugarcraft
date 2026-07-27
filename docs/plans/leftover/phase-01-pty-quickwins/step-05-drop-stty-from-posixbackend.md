@@ -14,6 +14,7 @@ both `size()` and `restoreLast()` to use candy-pty primitives.
 ## Files
 
 **Modify:**
+
 - `candy-core/src/Util/Tty/PosixBackend.php`:
   - `size()` — when `posix_isatty($this->stream)` is false, try
     `openTty()` → `SizeIoctl::query($fd)` against `/dev/tty`. Drop

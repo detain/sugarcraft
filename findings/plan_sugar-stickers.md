@@ -36,14 +36,17 @@ Fix all HIGH and MEDIUM severity findings in sugar-stickers library (multibyte c
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - Unit test passes verifying `東京` survives `sanitize()`
 - `vendor/bin/phpunit` passes for entire sugar-stickers test suite
 
 **Related code locations:**
+
 - `src/Flex/FlexBox.php:301-302` (bug location)
 - `src/Table/Column.php:122-126` (reference fix already in Column)
 
 **Investigation notes:**
+
 - Confirmed bug exists at line 302: `\x7F\x80-\x9F` pattern
 - The Column.php sanitize method at lines 122-126 already has the correct fix with detailed comment explaining why
 - sugar-bits Table.php sanitizeCell at line 580-584 uses simpler approach (only removes C0 controls)
@@ -75,14 +78,17 @@ $s = \preg_replace('/\x7F/', '', $s);
 **Severity:** HIGH
 
 **Conditions for success:**
+
 - Code inspection confirms only `\x7F` is stripped, not `\x80-\x9F`
 - Unit test with CJK input passes
 
 **Related code locations:**
+
 - `src/Table/Column.php:112-128` (sanitize method)
 - `src/Table/Column.php:122-126` (fix already in place)
 
 **Investigation notes:**
+
 - Lines 122-126 in current code show the correct fix
 - Comment explicitly documents the UTF-8 continuation byte rationale
 - The comment explains: "Do NOT remove 0x80-0x9F — those are valid UTF-8 continuation bytes (e.g. CJK `東京` = e6[9d]b1 e4[ba]ac where bytes in brackets fall in that range)"
@@ -103,14 +109,17 @@ $s = \preg_replace('/\x7F/', '', $s);
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - `php -l examples/flexbox.php` passes with no errors
 - Example file can be executed without fatal error
 
 **Related code locations:**
+
 - `examples/flexbox.php:13` (erroneous import)
 - `src/Flex/FlexBox.php:10-21` (actual enums: Direction, Align)
 
 **Investigation notes:**
+
 - `FlexBox.php` defines only `Direction` and `Align` enums (lines 10-21)
 - The example doesn't actually use `Justify` anywhere in the code - it's imported but never referenced
 - Finding #8 is duplicate of this issue
@@ -137,16 +146,19 @@ use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem};
 **Severity:** MEDIUM
 
 **Conditions for success:**
+
 - PHPDoc comment added to `rebuildView()` explaining cursor reset behavior
 - PHPDoc comment added to `sortBy()`, `filter()`, `sortByNext()` methods noting the cursor reset side effect
 
 **Related code locations:**
+
 - `src/Table/Table.php:248-275` (rebuildView method)
 - `src/Table/Table.php:274` (cursor reset line)
 - `src/Table/Table.php:77-84` (sortBy)
 - `src/Table/Table.php:96-102` (filter)
 
 **Investigation notes:**
+
 - `rebuildView()` called from `sortBy()` (line 82), `sortByNext()` (line 89), `filter()` (line 100), and `addRow()` (line 73)
 - Cursor reset is on line 274: `$this->cursorRow = 0;`
 - This behavior is intentional (filter on empty set should show from beginning) but should be documented
@@ -182,15 +194,18 @@ private function rebuildView(): void
 **Severity:** LOW
 
 **Conditions for success:**
+
 - `vendor/bin/phpunit` tests pass
 - Behavior change documented in method docblocks
 
 **Related code locations:**
+
 - `src/Viewport.php:352-355` (scrollLeft)
 - `src/Viewport.php:357-360` (scrollRight)
 - `src/Viewport.php:336-344` (lineUp/lineDown defaults for reference)
 
 **Investigation notes:**
+
 - `lineUp(int $n = 1)` and `lineDown(int $n = 1)` at lines 336 and 341 use default 1
 - `halfPageUp()`, `halfPageDown()`, `pageUp()`, `pageDown()` don't take parameters (delegates to inner)
 
@@ -224,13 +239,16 @@ And same change for `scrollRight()` at line 357.
 **Severity:** LOW (performance optimization, not a bug)
 
 **Conditions for success:**
+
 - Documentation added to `CALIBER_LEARNINGS.md` noting this as a known pattern
 
 **Related code locations:**
+
 - `src/Flex/FlexBox.php:114-120` (renderRow measured array)
 - `src/Flex/FlexBox.php:195-201` (renderColumn measured array)
 
 **Investigation notes:**
+
 - Lines 114-120 in `renderRow()` and lines 195-201 in `renderColumn()` create `$measured` arrays with closures
 - Could potentially be cached if items haven't changed, but this would add complexity for marginal gain
 - Recommendation: Document as a known performance consideration rather than fixing immediately
@@ -248,12 +266,15 @@ And same change for `scrollRight()` at line 357.
 **Severity:** LOW (performance optimization, not a bug)
 
 **Conditions for success:**
+
 - Documentation added to `CALIBER_LEARNINGS.md` noting this as a known pattern
 
 **Related code locations:**
+
 - `src/Table/TableRenderer.php:119-150` ($strippedPosToStyle array)
 
 **Investigation notes:**
+
 - The `$strippedPosToStyle` array at lines 119-150 maps stripped character positions to active SGR styles
 - This is necessary for correct ANSI style tracking through the diff algorithm
 - Recommendation: Document as a known memory usage pattern rather than fixing
@@ -269,16 +290,19 @@ And same change for `scrollRight()` at line 357.
 **Why the change should be done:** Prevent regression of the multibyte corruption bug.
 
 **Conditions for success:**
+
 - All new tests pass
 - All existing tests continue to pass
 
 **Test Cases to add:**
+
 1. `testFlexBoxSanitizePreservesCJK()` - verifies `東京` survives sanitize
 2. `testColumnSanitizePreservesCJK()` - verifies `東京` survives sanitize
 3. `testFlexBoxSanitizePreservesEmoji()` - verifies emoji survive sanitize
 4. `testColumnSanitizePreservesAccentedChars()` - verifies `café` survives sanitize
 
 **Related code locations:**
+
 - `tests/StickersTest.php` (existing tests)
 
 ---
@@ -290,10 +314,12 @@ And same change for `scrollRight()` at line 357.
 **Why the change should be done:** Prevent regression of the default parameter change.
 
 **Conditions for success:**
+
 - All new tests pass
 - All existing tests continue to pass
 
 **Test Cases to add:**
+
 1. `testViewportScrollLeftDefaultsTo1()` - verifies no-arg call scrolls by 1
 2. `testViewportScrollRightDefaultsTo1()` - verifies no-arg call scrolls by 1
 
@@ -304,6 +330,7 @@ And same change for `scrollRight()` at line 357.
 **Command:** `cd sugar-stickers && vendor/bin/phpunit`
 
 **Conditions for success:**
+
 - All tests pass with exit code 0
 
 ---

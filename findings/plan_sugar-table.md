@@ -7,9 +7,11 @@ updated: 2026-07-04
 # Implementation Plan: sugar-table Audit Fixes
 
 ## Goal
+
 Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to improve validation, performance, and API ergonomics.
 
 ## Context & Decisions
+
 | Decision | Rationale | Source |
 |----------|-----------|--------|
 | Add validation in `withHiddenCols`/`withFrozenCols` rather than `isColumnVisible` | Fail-fast principle: detect conflicts at configuration time, not render time | Finding #1 |
@@ -25,6 +27,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 ## Phase 1: Validation & Error Handling [PENDING]
 
 ### 1.1 [MEDIUM] Hidden + Frozen Column Conflict Detection
+
 - **Task**: Add validation in `withFrozenCols()` and `withHiddenCols()` to detect overlapping indices
 - **What**: When a column index appears in both `$hiddenCols` and `$frozenCols`, throw `\InvalidArgumentException` with a clear message
 - **Why**: Silent precedence (hidden overrides frozen) is surprising behavior that leads to user confusion
@@ -40,6 +43,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `isColumnVisible()` (line 1283-1294) checks hidden first, then frozen — hidden silently wins
 
 ### 1.2 [MEDIUM] Invalid Column Keys in Filter() and SortBy()
+
 - **Task**: Add column key validation to `Filter()` and `SortBy()`
 - **What**: Throw `\InvalidArgumentException` when `$colKey` does not match any column's key (unless opt-in filter gating allows it for Filter)
 - **Why**: Silent no-op on invalid keys leads to confusing bugs where operations appear to work but have no effect
@@ -55,6 +59,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - Existing `filterableKeys()` helper at line 847-859 could be extended or a new `columnExists()` helper added
 
 ### 1.3 [LOW] Improved Error Message for Empty Page in withExpandedRows()
+
 - **Task**: Fix misleading error message in `withExpandedRows()` when page is empty
 - **What**: Change error message from "Invalid row index {$idx}" to something like "Invalid row index {$idx}: page has no rows"
 - **Why**: Current message implies the index is wrong type/range when the actual issue is the page is empty
@@ -71,6 +76,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 ## Phase 2: Performance Optimizations [PENDING]
 
 ### 2.1 [LOW] Pre-compute Visible Column Indices Before Row Loop
+
 - **Task**: Compute visible column indices once before iterating rows in `fillDataRow()` and `fillDataRowLines()`
 - **What**: Create a `$visibleColumnIndices` array at the start of the row rendering section, then use it instead of calling `isColumnVisible()` per-row per-column
 - **Why**: `isColumnVisible()` is called N×M times (rows × columns) but produces the same result for all rows. Pre-computation reduces complexity from O(rows×cols) to O(cols)
@@ -85,6 +91,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `isColumnVisible()` checks hidden array, frozen array, and computes scrollable start index — all constant for a given render pass
 
 ### ✅ 2.2 [LOW] SelectNext/SelectPrevious Short-circuit at Boundaries
+
 - **Task**: Check if navigation would be a no-op before calling `filteredSortedRows()`
 - **What**: In `SelectNext()`, if `selectedIndex` is already at the last row, return `$this` without computing. In `SelectPrevious()`, if already at 0, return `$this`
 - **Why**: Avoid expensive `filteredSortedRows()` call when the operation would have no effect
@@ -99,6 +106,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `SelectPrevious()` (line 571-576) doesn't call filteredSortedRows but could still short-circuit if selectedIndex is already 0
 
 ### 2.3 [LOW] TotalRows() + pagedRows() Double-compute Fix
+
 - **Task**: When both methods are called, avoid computing `filteredSortedRows()` twice
 - **What**: The cached `filteredSortedCache` already prevents double computation when both methods are called on the same Table instance. However, when a new instance is created (e.g., via `withPage()`), the cache is cleared. Consider computing once in methods that both need the result, or document that callers should cache the result themselves.
 - **Why**: Redundant computation on first call of each method
@@ -113,6 +121,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - The caching works correctly within a single fluent chain. Issue is when callers use both methods separately
 
 ### ✅ 2.4 [LOW] widthSolveCache Bounded Growth
+
 - **Task**: Add eviction policy to `$widthSolveCache`
 - **What**: Use a LRU (Least Recently Used) cache with a maximum size (e.g., 10 entries) for `$widthSolveCache`. When adding a new entry beyond the limit, evict the oldest.
 - **Why**: Unbounded cache growth could cause memory issues with long-running applications or many table width computations
@@ -131,6 +140,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 ## Phase 3: Code Quality & Documentation [PENDING]
 
 ### ✅ 3.1 [LOW] Clarify styleFunc Signature in Docblock
+
 - **Task**: Update docblock for `$styleFunc` and `withStyleFunc()` to clarify "int col" means column index (not key)
 - **What**: Change `@param callable|null $fn (int $row, int $col, string $value): Style|string` to clarify col is the 0-based index, not the column key string
 - **Why**: Ambiguity could lead to misuse
@@ -145,6 +155,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `styleFunc` callback at line 1497 is called with `($rowIndex, $ci, $cellStr)` where `$ci` is the column index
 
 ### 3.2 [LOW] Extract computeVisibleContentWidth Repeated Logic
+
 - **Task**: DRY up the column visibility + width iteration logic
 - **What**: The visible column iteration in `computeVisibleContentWidth()` is repeated 4+ times (header, separators, data rows). Extract a helper method `getVisibleColumnIndices()` that returns the list of visible column indices
 - **Why**: Code duplication makes maintenance harder and increases chance of inconsistencies
@@ -161,6 +172,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - `calculateRowHeight()` at line 1550-1553 has similar iteration
 
 ### ✅ 3.3 [LOW] parseAnsiToStyle / styleToAnsi Color Round-trip Consistency
+
 - **Task**: Audit color value consistency between parseAnsiToStyle and styleToAnsi
 - **What**: Standard colors (30-37, 40-47, 90-97, 100-107) in `parseAnsiToStyle()` use specific RGB values (e.g., case 31: `0xcc0000` for red). Verify that `styleToAnsi()` produces the inverse values correctly for these standard colors
 - **Why**: Round-trip (parse → style → parse) should preserve colors. Different values could cause subtle visual differences
@@ -179,6 +191,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 ## Phase 4: API Ergonomics [PENDING]
 
 ### 4.1 [LOW] Add column(string $key) Accessor
+
 - **Task**: Add `column(string $key): ?Column` method to Table
 - **What**: Return the Column with the given key, or null if not found
 - **Why**: Users currently must iterate `Columns()` manually to find a column by key — a common operation that deserves a convenience method
@@ -193,6 +206,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - Pattern common in collection APIs (e.g., ArrayObject::getIterator())
 
 ### ✅ 4.2 [LOW] Add Column::withFlexWidth() Alias
+
 - **Task**: Add `withFlexWidth(int $share): self` as an alias for `withFlexibleWidth()`
 - **What**: Alias method that calls through to `withFlexibleWidth()`
 - **Why**: Upstream bubble-table uses `WithFlexWidth()` — naming difference makes porting harder
@@ -205,6 +219,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
   - No `withFlexWidth()` alias exists
 
 ### ✅ 4.3 [LOW] Add SelectedRow() Convenience Method
+
 - **Task**: Add `SelectedRow(): ?Row` method to Table
 - **What**: Return `$this->pagedRows()[$this->selectedIndex] ?? null`
 - **Why**: Reduces boilerplate from `$table->pagedRows()[$table->SelectedIndex()]` to `$table->SelectedRow()`
@@ -222,6 +237,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 ## Phase 5: Testing [PENDING]
 
 ### 5.1 Add Tests for All Fixes
+
 - **Task**: Add PHPUnit tests for each fix
 - **What**: Test cases covering:
   - Hidden+frozen conflict detection (throws on overlap)
@@ -240,6 +256,7 @@ Address all 13 findings from the sugar-table audit (2 MEDIUM, 11 LOW/INFO) to im
 ---
 
 ## Notes
+
 - 2026-07-04: Items 2.2, 2.4, 3.1, 3.3, 4.2, 4.3 closed (selection short-circuit, width-cache LRU, docblocks, color round-trip tests, withFlexWidth alias, SelectedRow). Remaining items were already implemented in source.
 - 2026-06-30: Plan created from audit findings in `findings/sugar-table.md`
 - Priority order per audit recommendations: validation fixes first (items 1.1, 1.2), then optimizations, then API ergonomics

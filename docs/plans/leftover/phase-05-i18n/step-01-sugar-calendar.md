@@ -12,6 +12,7 @@ strings with `Lang::t($key, $params)`.
 ## Files
 
 **Create:**
+
 - `sugar-calendar/lang/en.php` — assoc array `key => string`. Keys
   for: month names, day-of-week names, "Today", "Yesterday", "Tomorrow",
   weekday abbreviations, error strings ("Invalid date", etc.), keyboard
@@ -26,10 +27,12 @@ strings with `Lang::t($key, $params)`.
   ```
 
 **Modify:**
+
 - Every PHP file in `sugar-calendar/src/` — replace inline English
   strings with `Lang::t('key')`.
 
 **Tests:**
+
 - `sugar-calendar/tests/LangCoverageTest.php` — assert every key
   referenced in `src/` exists in `lang/en.php`.
 

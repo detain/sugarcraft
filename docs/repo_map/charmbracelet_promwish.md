@@ -1,6 +1,7 @@
 # charmbracelet/promwish
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/promwish
 - **Language:** Go
 - **Stars:** Unknown (GitHub API unavailable in environment)
@@ -8,6 +9,7 @@
 - **Description:** Package promwish provides a simple wish middleware exposing some Prometheus metrics.
 
 ## Feature List
+
 - **SSH Session Metrics Middleware** — Wraps SSH session lifecycle (connect/disconnect) with Prometheus counters
 - **Duration Tracking** — Measures session duration in seconds with a histogram-style counter
 - **Command Label Extraction** — Flexible `CommandFn` to extract command names for per-command metric labeling
@@ -49,6 +51,7 @@
 ## Notable Algorithms / Named Patterns
 
 ### Middleware Wrapper Pattern
+
 The core implementation wraps an SSH handler in a closure that:
 1. Records start time with `time.Now()`
 2. Increments `sessionsCreated` counter
@@ -70,6 +73,7 @@ return func(sh ssh.Handler) ssh.Handler {
 ```
 
 ### Graceful Shutdown Pattern
+
 Uses Go channels and signal notification for clean shutdown:
 ```go
 done := make(chan os.Signal, 1)
@@ -77,9 +81,11 @@ signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 ```
 
 ### Prometheus CounterVec with ConstLabels
+
 Metrics are created with `promauto.With(registry).NewCounterVec(...)` — promauto auto-registers with the given registry and ensures metrics are registered only once.
 
 ## Strengths
+
 - **Minimal and Focused** — Single responsibility: expose SSH session metrics to Prometheus
 - **Clean Middleware Abstraction** — Uses standard `wish.Middleware` interface, easy to compose
 - **Flexible Label Extraction** — `CommandFn` allows custom labeling strategies
@@ -89,6 +95,7 @@ Metrics are created with `promauto.With(registry).NewCounterVec(...)` — promau
 - **Well-Tested** — Includes integration tests with `testsession` that verify metric output
 
 ## Weaknesses
+
 - **Limited Metrics** — Only tracks sessions created/finished/duration — no CPU, memory, or custom application metrics
 - **No Histogram Buckets** — Duration is a counter (cumulative seconds), not a proper histogram with percentile buckets
 - **Single Prometheus Format** — No StatsD, Datadog, or other backend support built-in

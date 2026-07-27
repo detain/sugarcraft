@@ -69,7 +69,19 @@
       return escapeHtml(text);
     }
     var escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return escapeHtml(text).replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
+    var safe = escapeHtml(text);
+    var parts = safe.split(new RegExp('(' + escaped + ')', 'gi'));
+    var result = document.createDocumentFragment();
+    parts.forEach(function (part, i) {
+      if (i % 2 === 1) {
+        var mark = document.createElement('mark');
+        mark.textContent = part;
+        result.appendChild(mark);
+      } else {
+        result.appendChild(document.createTextNode(part));
+      }
+    });
+    return result;
   }
 
   /* ── Render results ─────────────────────────────────────────────── */
@@ -79,10 +91,11 @@
     if (results.length === 0) {
       var emptyEl = document.createElement('li');
       emptyEl.className = 'search-empty';
-      emptyEl.innerHTML =
-        'No results for <mark>' +
-        highlight(query, query) +
-        '</mark> — try a different term.';
+      emptyEl.appendChild(document.createTextNode('No results for '));
+      var mark = document.createElement('mark');
+      mark.appendChild(highlight(query, query));
+      emptyEl.appendChild(mark);
+      emptyEl.appendChild(document.createTextNode(' — try a different term.'));
       resultsList.appendChild(emptyEl);
       selectedIndex = -1;
       return;
@@ -97,18 +110,25 @@
       link.setAttribute('aria-selected', 'false');
       link.href = item.url;
 
-      link.innerHTML =
-        '<div class="search-result-content">' +
-        '<span class="search-result-name">' +
-        highlight(item.name, query) +
-        '</span>' +
-        '<span class="search-result-category">' +
-        escapeHtml(item.category) +
-        '</span>' +
-        '</div>' +
-        '<p class="search-result-description">' +
-        highlight(item.description, query) +
-        '</p>';
+      var contentDiv = document.createElement('div');
+      contentDiv.className = 'search-result-content';
+
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'search-result-name';
+      nameSpan.appendChild(highlight(item.name, query));
+      contentDiv.appendChild(nameSpan);
+
+      var categorySpan = document.createElement('span');
+      categorySpan.className = 'search-result-category';
+      categorySpan.textContent = item.category;
+      contentDiv.appendChild(categorySpan);
+
+      link.appendChild(contentDiv);
+
+      var descP = document.createElement('p');
+      descP.className = 'search-result-description';
+      descP.appendChild(highlight(item.description, query));
+      link.appendChild(descP);
 
       link.addEventListener('mouseenter', function () {
         setSelected(i);
@@ -204,7 +224,7 @@
 
       case 'Enter':
         e.preventDefault();
-        if (selectedIndex >= 0 && items[selectedIndex]) {
+        if (typeof selectedIndex === 'number' && selectedIndex >= 0 && selectedIndex < count && items[selectedIndex]) {
           items[selectedIndex].click();
         }
         break;

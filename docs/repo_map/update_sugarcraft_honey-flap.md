@@ -5,11 +5,13 @@
 honey-flap is a Flappy Bird-style arcade game that demonstrates HoneyBounce projectile physics in a TUI context. It ports the Go [kbrgl/flapioca](https://github.com/kbrgl/flapioca) ecosystem to PHP, running on the SugarCraft stack. The package is production-ready (🟢 v1) with 28 passing tests, a VHS demo, and full documentation.
 
 **Biggest opportunities:**
+
 1. Wing animation — the bird has no visual state change during flap/fall (always `>` glyph)
 2. Audio feedback — flap, score, and crash lack sound effects (classic Flappy Bird had all three)
 3. Mutable physics variant — per-tick allocation via `Projectile::update()` could be avoided with a mutable builder for game-critical paths
 
 **Biggest missing capabilities:**
+
 1. No pause/resume functionality
 2. No sub-cell collision (pipe gaps are integer cells, bird position is rounded)
 3. No death animation (bird just stops and shows "💥 splat")
@@ -88,6 +90,7 @@ honey-flap/bin/       # honey-flap CLI entry point (composer bin)
 | `charmbracelet/glow` | Low | Markdown rendering, adaptive colors, file watching | P3 |
 
 **Rationale for priority assignments:**
+
 - **P0**: Bubble Tea is the upstream framework; understanding its Cmd/Tick/Subscription patterns is essential for comparing honey-flap's game loop architecture
 - **P1**: VHS provides the demo recording infrastructure used by the SugarCraft ecosystem
 - **P2**: Dashbrew, Ratatui, and pterm all demonstrate sophisticated rendering patterns potentially applicable to game development
@@ -330,6 +333,7 @@ This would require a `ProjectileMutable` or `Projectile::updateInPlace()` method
 honey-flap is a **well-architected, production-ready** package that demonstrates the SugarCraft stack's capability for physics-based TUI games. Its use of HoneyBounce for projectile physics is a genuine differentiator — no other Flappy Bird clone in the TUI ecosystem uses real physics simulation.
 
 **Key differentiators from upstream (flapioca):**
+
 - Real physics (gravity + velocity kick) vs integer stepping
 - 6× faster tick rate (30 Hz vs 5 Hz)
 - Difficulty scaling (gap shrinkage)
@@ -337,11 +341,13 @@ honey-flap is a **well-architected, production-ready** package that demonstrates
 - Comprehensive test suite with deterministic PRNG
 
 **Areas where honey-flap could lead the ecosystem:**
+
 1. Physics-based game development — honey-flap + honey-bounce establishes a pattern for physics TUI games in PHP
 2. Sound integration — adding audio feedback to TUI games is underexplored in the SugarCraft ecosystem
 3. Performance optimization — mutable physics variant would be a first for the ecosystem
 
 **Risk factors:**
+
 - No core maintainer identified for v2.0 features
 - Limited community awareness (single upstream source)
 - No benchmark suite for performance regression detection

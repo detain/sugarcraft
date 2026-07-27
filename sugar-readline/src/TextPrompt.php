@@ -42,7 +42,7 @@ final class TextPrompt
     private array $completions = [];
 
     /** @var (callable(string): bool)|null */
-    private $validator = null;
+    private $_validator = null;
 
     private string $labelStyle      = '1;36';   // bold cyan
     private string $cursorStyle     = '7';      // reverse
@@ -64,13 +64,13 @@ final class TextPrompt
      * Navigation cursor into history: -1 = live buffer (no history entry selected).
      * 0 = most recent entry, higher = older entries.
      */
-    private int $historyPosition = -1;
+    private int $_historyPosition = -1;
 
     /**
      * Saved buffer captured when history navigation begins, so it can be
      * restored when the user navigates past the oldest entry.
      */
-    private ?string $bufferBeforeHistory = null;
+    private ?string $_bufferBeforeHistory = null;
 
     /** Active key-binding mode (vi or emacs), or null for default bindings. */
     private ?ModeInterface $mode = null;
@@ -658,20 +658,6 @@ final class TextPrompt
         $before = self::sliceChars($display, 0, $this->cursor);
         $under  = self::sliceChars($display, $this->cursor, 1);
         $after  = self::sliceChars($display, $this->cursor + 1);
-
-        // Apply syntax highlighting if set.
-        $highlightedBuffer = $display;
-        if ($this->highlight !== null) {
-            $spans = $this->highlight->highlight($display);
-            $highlightedBuffer = '';
-            foreach ($spans as $span) {
-                if ($span['style'] === '') {
-                    $highlightedBuffer .= $span['text'];
-                } else {
-                    $highlightedBuffer .= Ansi::wrap($span['text'], $span['style']);
-                }
-            }
-        }
 
         // Compute fish-style autosuggestion from history.
         $autoSuggestText = '';

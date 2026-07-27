@@ -100,6 +100,7 @@ Renderer::render($markdown)
 ### Critical Priority
 
 **1. GitHub/GitLab README Fetching**
+
 - **Description:** Fetch remote README files via `github://owner/repo` or `gitlab://owner/repo` URL protocols, or direct API calls
 - **Why it matters:** This is glow's defining feature — the primary reason users choose glow over simple markdown renderers
 - **Source:** `charmbracelet/glow.md` — `sourceFromArg()` parses URLs, `findGitHubREADME()` / `findGitLabREADME()` fetch via API
@@ -112,6 +113,7 @@ Renderer::render($markdown)
 - **Expected impact:** High — fills the single biggest gap vs. upstream
 
 **2. File Stash Browser with Fuzzy Filtering**
+
 - **Description:** TUI file browser that lists discovered markdown files with fuzzy search filtering
 - **Why it matters:** Upstream glow's TUI mode provides stash browsing — users expect this for multi-file workflows
 - **Source:** `charmbracelet/glow.md` — `stash.go` with `fuzzy.Find()` filtering, `stashModel` with spinner + filter input
@@ -124,6 +126,7 @@ Renderer::render($markdown)
 - **Expected impact:** High — enables multi-file workflows
 
 **3. Proper Syntax Highlighting Lexer**
+
 - **Description:** Replace regex tokenizer (`ChromaJsonHighlighter`) with proper lexer-based highlighting
 - **Why it matters:** The current regex approach breaks on malformed code and doesn't handle all token types correctly
 - **Source:** `charmbracelet_glamour.md` — glamour uses full Chroma lexer for code block highlighting
@@ -135,6 +138,7 @@ Renderer::render($markdown)
 - **Expected impact:** Medium — improves code block rendering quality significantly
 
 **4. Native File Watching (inotify/FSEvents)**
+
 - **Description:** OS-native file system notifications instead of mtime polling
 - **Why it matters:** mtime polling has 1-second resolution and can't detect rapid changes; wastes CPU
 - **Source:** `charmbracelet_glow.md` — uses `fsnotify` for `watchFile()` / `unwatchFile()`
@@ -149,6 +153,7 @@ Renderer::render($markdown)
 ### High Value
 
 **5. Clipboard Integration (OSC 52)**
+
 - **Description:** Copy selected content to terminal clipboard
 - **Why it matters:** Standard feature in modern CLI tools
 - **Source:** `charmbracelet_glow.md` — `clipboard copy` in pager keys, OSC 52 integration
@@ -160,6 +165,7 @@ Renderer::render($markdown)
 - **Expected impact:** Medium — improves UX for content consumption
 
 **6. Line Numbers Display**
+
 - **Description:** Optional line number gutter in pager mode
 - **Why it matters:** Common expectation for reading code-heavy markdown
 - **Source:** `charmbracelet_glow.md` — `ShowLineNumbers` config option in `ui/config.go`
@@ -171,6 +177,7 @@ Renderer::render($markdown)
 - **Expected impact:** Medium — common user expectation
 
 **7. $PAGER / less -r Fallback**
+
 - **Description:** Respect $PAGER environment variable, shell out when not in TTY
 - **Why it matters:** Idiomatic Unix behavior; users expect pager integration
 - **Source:** `charmbracelet_glow.md` — `Pager support` using `less -r` fallback
@@ -181,6 +188,7 @@ Renderer::render($markdown)
 - **Expected impact:** Medium — better Unix integration
 
 **8. Config File Support**
+
 - **Description:** YAML or JSON config in XDG_CONFIG_HOME with env var overrides
 - **Why it matters:** Users want persistent preferences (default theme, width, etc.)
 - **Source:** `charmbracelet_glow.md` — `tryLoadConfigFromDefaultPlaces()` with Viper/YAML
@@ -192,6 +200,7 @@ Renderer::render($markdown)
 - **Expected impact:** Medium — improves usability
 
 **9. External Editor Integration**
+
 - **Description:** Open file at current position in $EDITOR
 - **Why it matters:** Allows quick edits while reading documentation
 - **Source:** `charmbracelet_glow.md` — `ui/editor.go` with `openEditor(path, lineno)`
@@ -202,6 +211,7 @@ Renderer::render($markdown)
 - **Expected impact:** Low — niche but valued feature
 
 **10. Git-Aware File Discovery (gitcha)**
+
 - **Description:** Recursive markdown file search respecting .gitignore rules
 - **Why it matters:** Enables discovering all docs in a repository without spurious matches
 - **Source:** `charmbracelet_glow.md` — `findLocalFiles()` using `gitcha.FindFilesExcept()`
@@ -215,6 +225,7 @@ Renderer::render($markdown)
 ### Medium Priority
 
 **11. Per-Element Word Wrap Widths**
+
 - **Description:** Allow different word wrap widths for different markdown elements (headings, code blocks, tables)
 - **Why it matters:** Requested feature in glamour (issue #445); useful for complex documents
 - **Source:** `pr_charmbracelet_glamour.md` — issue #445, multiple renderers workaround
@@ -225,6 +236,7 @@ Renderer::render($markdown)
 - **Expected impact:** Low — nice-to-have
 
 **12. GitHub-Style Blockquote Alerts**
+
 - **Description:** Support `> [!note]`, `> [!warning]` styled blockquotes
 - **Why it matters:** Popular GitHub feature for documentation
 - **Source:** `pr_charmbracelet_glamour.md` — issue #300
@@ -235,6 +247,7 @@ Renderer::render($markdown)
 - **Expected impact:** Low — documentation-focused feature
 
 **13. LinkStyler Interface**
+
 - **Description:** Customizable link rendering (text-only, full URL, footer references)
 - **Why it matters:** Frequently requested in glamour (issues #361, #85, #114)
 - **Source:** `pr_charmbracelet_glamour.md` — LinkStyler design discussion
@@ -246,6 +259,7 @@ Renderer::render($markdown)
 - **Expected impact:** Medium — improves link rendering flexibility
 
 **14. Dynamic Height TextArea**
+
 - **Description:** Auto-growing textarea for multi-line input
 - **Why it matters:** Highly requested in bubbles (PR #910, v2.1.0)
 - **Source:** `pr_charmbracelet_bubbles.md` — dynamic height feature
@@ -257,6 +271,7 @@ Renderer::render($markdown)
 - **Expected impact:** Low — primarily for input forms
 
 **15. Accessible Color Modes**
+
 - **Description:** Support terminal16 (16-color) formatter for accessibility
 - **Why it matters:** GitHub CLI needed this (issue #395)
 - **Source:** `pr_charmbracelet_glamour.md` — `WithChromaFormatter("terminal16")`
@@ -269,16 +284,19 @@ Renderer::render($markdown)
 ### Low Priority
 
 **16. Template Format for All Elements**
+
 - **Description:** Allow `{left}` / `{mid}` / `{right}` template functions in all element styles
 - **Why it matters:** Requested in glamour issue #480
 - **Implementation:** Not straightforward — requires style preprocessing
 
 **17. Image Rendering (iTerm2 Inline)**
+
 - **Description:** Render actual images using iTerm2 inline image protocol
 - **Why it matters:** Requested in glamour issue #501
 - **Implementation:** Would require iTerm2 protocol support
 
 **18. Horizontal Scrolling in Viewport**
+
 - **Description:** Left/right arrow scrolling for long lines
 - **Why it matters:** Long-standing gum issue #12; upstream PR #791 blocked on bubbletea v2
 - **Source:** `pr_charmbracelet_bubbles.md` — horizontal scrolling implemented in v2
@@ -311,6 +329,7 @@ public static function watch(string $path, int $intervalMs = 500): \Generator
 ### Upstream Approach: fsnotify / inotify
 
 `charmbracelet/glow` uses OS-native `fsnotify` which provides:
+
 - Immediate notification on file change
 - No CPU overhead for polling
 - Correct handling of rapid successive changes
@@ -318,6 +337,7 @@ public static function watch(string $path, int $intervalMs = 500): \Generator
 ### Why External is Better
 
 OS-native watchers register with the kernel and receive push notifications. mtime polling:
+
 - Consumes CPU every `intervalMs` regardless of file activity
 - Has filesystem resolution (typically 1 second minimum)
 - May miss changes that occur and are reverted between polls
@@ -418,6 +438,7 @@ GlamourTheme::debugResolve($theme, 'heading1');
 ### 1. Word Wrap Edge Cases Guide
 
 Per `pr_charmbracelet_glamour.md`, word wrapping is the #1 pain point. Document:
+
 - CJK character handling
 - Trailing punctuation preservation
 - Hyphenated word breaks
@@ -426,6 +447,7 @@ Per `pr_charmbracelet_glamour.md`, word wrapping is the #1 pain point. Document:
 ### 2. Custom Theme Tutorial
 
 Step-by-step guide for creating Glamour-style JSON themes:
+
 - Style config structure
 - Chroma token mapping
 - Block prefix/suffix usage
@@ -525,6 +547,7 @@ public function testRenderMatchesSnapshot(): void
 ### 2. Word Wrap Edge Case Tests
 
 Per `pr_charmbracelet_glamour.md` issue #505, add comprehensive tests for:
+
 - Trailing punctuation at wrap boundaries
 - CJK characters in wrapped text
 - Emoji in wrapped text
@@ -533,6 +556,7 @@ Per `pr_charmbracelet_glamour.md` issue #505, add comprehensive tests for:
 ### 3. Grapheme-Aware String Tests
 
 Per `pr_charmbracelet_gum.md`, implement `bytePosToVisibleCharPos()` and test:
+
 - Emoji in filter items
 - ANSI codes in text
 - Combining characters
@@ -566,9 +590,11 @@ Render code style documentation with syntax highlighting for PHP-CS-Fixer rules.
 ## Notable PRs / Issues / Discussions
 
 ### charmbracelet/glamour PR #406: Footer Links for Tables
+
 **Relevance:** High — directly applicable to `sugar-charts` table rendering
 
 When a table contains links, glamour now:
+
 1. Walks table AST and collects all links/images during rendering
 2. Renders cells with short reference numbers like `[1]`, `[2]`
 3. At table end, renders footer with `[1]: https://full/url`
@@ -578,6 +604,7 @@ This solves the "link too long for table cell" problem without breaking the link
 **Lesson:** The pattern "collect during walk, render after" is directly portable to SugarCraft's table implementation.
 
 ### charmbracelet/glamour Issue #505: Word Wrap Edge Case
+
 **Relevance:** Critical — word wrap is the #1 pain point
 
 Trailing punctuation (`.` or `,`) at wrap boundaries gets incorrectly dropped. Root cause: `lipgloss.Wrap` uses hardcoded breakpoints `" ,.;-+|"` that don't preserve trailing punctuation.
@@ -585,6 +612,7 @@ Trailing punctuation (`.` or `,`) at wrap boundaries gets incorrectly dropped. R
 **Lesson:** Do NOT hardcode break characters — make them configurable. Test extensively with edge cases.
 
 ### charmbracelet/glamour Issue #331/#486: Width Calculation Bugs
+
 **Relevance:** High — width arithmetic bugs
 
 Multiple glamour bugs stem from using multiplication instead of addition for width calculation:
@@ -598,6 +626,7 @@ return uint(ctx.options.WordWrap) - s.Indent() - s.Margin()
 **Lesson:** Always verify width calculations with edge cases: very small widths (1-5), zero indent/margin, negative effective widths (clamp to 0).
 
 ### charmbracelet/gum PR #799: Grapheme Cluster Fix
+
 **Relevance:** High — ANSI + fuzzy matching
 
 Fixed ANSI handling for grapheme clusters by adding `rivo/uniseg` dependency and implementing `bytePosToVisibleCharPos()`.
@@ -605,6 +634,7 @@ Fixed ANSI handling for grapheme clusters by adding `rivo/uniseg` dependency and
 **Lesson:** Any time we strip ANSI, match, then re-apply, we need grapheme-aware position mapping.
 
 ### charmbracelet/bubbles PR #427: Textarea Memoization
+
 **Relevance:** High — performance critical
 
 Memoization reduced textarea wrap computation from 42s to 3s (93% improvement). Text wrapping is extremely expensive and must be cached aggressively.
@@ -612,6 +642,7 @@ Memoization reduced textarea wrap computation from 42s to 3s (93% improvement). 
 **Lesson:** Text wrapping and similar expensive computations should be memoized keyed by (content, width) pairs.
 
 ### charmbracelet/bubbles Issue #1652: Infinite Loop
+
 **Relevance:** High — defensive coding
 
 Unconditional loop in `wordLeft()` caused infinite loop when textarea empty. Fix: add boundary check at top of loop.
@@ -619,6 +650,7 @@ Unconditional loop in `wordLeft()` caused infinite loop when textarea empty. Fix
 **Lesson:** Always check boundaries before entering navigation loops. Never assume input is non-empty.
 
 ### textualize/textual Issue #6381: GC-Induced Stuttering
+
 **Relevance:** Medium — performance at scale
 
 MarkdownViewer with 200+ blocks created 600+ reference cycles, causing Python gen2 GC pauses (50-200ms) every ~2 seconds.
@@ -626,6 +658,7 @@ MarkdownViewer with 200+ blocks created 600+ reference cycles, causing Python ge
 **Lesson:** For content-heavy widgets, consider virtualization or weak references to prevent GC pressure.
 
 ### charmbracelet/glamour Issue #405: Terminal Probe Race
+
 **Relevance:** Medium — concurrency
 
 Auto-style detection caused Lip Gloss and Glamour to fight over stdout, causing lock-ups and leakage when both probed at render time.
@@ -703,6 +736,7 @@ Architecture-wise, the rendering pipeline correctly separates markdown parsing (
 The **Block Stack pattern** and **Two-Phase rendering** from glamour (`docs/repo_map/charmbracelet_glamour.md`) are not yet implemented. These are essential for proper nested element rendering and will become critical when implementing table rendering with footer links.
 
 For the PHP ecosystem, sugar-glow fills an important niche as the only production-quality markdown TUI renderer. The immediate focus should be on:
+
 1. Completing the GitHub/GitLab integration (enabling "sugar-glow github://owner/repo" workflows)
 2. Adding the missing TUI pager features (line numbers, clipboard, help overlay)
 3. Implementing configuration persistence

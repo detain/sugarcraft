@@ -1,6 +1,7 @@
 # charmbracelet/mods
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/mods
 - **Language:** Go
 - **Stars:** ~5.3k (as of 2026-01, based on repository metadata)
@@ -34,6 +35,7 @@
 ## Key Classes and Methods
 
 ### `main.go` (CLI Entry Point)
+
 - `main()` — Entry point, initializes config, opens DB, executes cobra command
 - `handleError(err)` — Formats and prints errors to stderr
 - `askInfo()` — Interactive model/API selection using huh forms
@@ -42,6 +44,7 @@
 - `saveConversation()` — Persists conversation to cache and SQLite
 
 ### `mods.go` (Bubble Tea Model)
+
 - `type Mods struct` — Main TUI model holding state, config, messages, viewport
 - `newMods()` — Constructor creating glamour renderer and viewport
 - `Init()` — tea.Model initialization, starts cache details lookup
@@ -53,6 +56,7 @@
 - `resolveModel()` — Matches CLI model flag to configured API/model pairs
 
 ### `config.go` (Configuration)
+
 - `type Config struct` — Main config mapped to YAML settings file
 - `type API struct` — API endpoint with name, API key, base URL, models map
 - `type Model struct` — Model with name, aliases, max-chars, fallback, thinking-budget
@@ -60,47 +64,57 @@
 - `defaultConfig()` — Returns sensible defaults (markdown format, 15s MCP timeout)
 
 ### `db.go` (SQLite Conversation Storage)
+
 - `type convoDB struct` — Wraps sqlx.DB
 - `type Conversation struct` — {id, title, updated_at, api, model}
 - `Save()`, `Delete()`, `Find()`, `FindHEAD()`, `List()`, `ListOlderThan()` — CRUD operations
 - `openDB()` — Creates SQLite DB with migrations for conversations table + indexes
 
 ### `internal/cache/cache.go`
+
 - `type Cache[T] struct` — Generic file-based cache using gob serialization
 - `Read()`, `Write()`, `Delete()` — Cache file operations
 
 ### `internal/stream/stream.go`
+
 - `type Stream interface` — `Next()`, `Current()`, `Close()`, `Err()`, `Messages()`, `CallTools()`
 - `type Client interface` — `Request(context, proto.Request) Stream`
 
 ### `internal/openai/openai.go`
+
 - `type Client struct` — Wraps openai.Client
 - `Request()` — Builds ChatCompletionNewParams, returns OpenAI stream
 - `type Stream struct` — Implements stream.Stream with SSE streaming
 
 ### `internal/anthropic/anthropic.go`
+
 - `type Client struct` — Wraps anthropic.Client
 - `Request()` — Builds MessageNewParams, returns Anthropic stream
 
 ### `internal/google/google.go`, `internal/cohere/cohere.go`, `internal/ollama/ollama.go`
+
 - Similar pattern: Client + Request + Stream for respective APIs
 
 ### `internal/proto/proto.go`
+
 - `type Message struct` — {role, content, tool_calls}
 - `type Request struct` — {messages, api, model, tools, temperature, topP, topK, stop, maxTokens, toolCaller}
 - `type Chunk struct` — Streaming text content
 - `type Conversation []Message` — Conversation as message slice with String()
 
 ### `mcp.go` (MCP Integration)
+
 - `enabledMCPs()` — Yields enabled MCP server configs
 - `mcpTools()` — Fetches tools from all enabled MCP servers concurrently
 - `initMcpClient()` — Creates stdio/SSE/HTTP MCP client
 - `toolCall()` — Routes tool calls to appropriate MCP server
 
 ### `anim.go`
+
 - `newAnim()` — Creates loading animation model with configurable fanciness level
 
 ### `styles.go`
+
 - `type styles struct` — Lipgloss styling for rendering
 - `stdoutStyles()`, `stderrStyles()` — Style factories
 

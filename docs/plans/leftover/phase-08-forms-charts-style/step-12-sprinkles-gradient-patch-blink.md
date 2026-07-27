@@ -12,6 +12,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-sprinkles/src/Border/BorderGradientBlend.php` — accept up to
   5 colors; interpolate.
 - `candy-sprinkles/src/Style.php` — `patch()` + `withRapidBlink(bool)`.

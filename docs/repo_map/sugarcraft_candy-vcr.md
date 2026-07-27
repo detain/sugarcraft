@@ -21,7 +21,9 @@ The `Recorder` class implements `SugarCraft\Core\Recorder` interface, making it 
 
 **Streaming JSONL with crash-safety** (`Recorder.php:13-14`):
 - Each event is encoded and flushed immediately via `fwrite()` + `@fflush()`
+
 - A crash mid-recording loses only the event currently being written, not the entire cassette
+
 - This is critical for long-running recordings in CI or demo capture
 
 **Event model** (`Recorder.php:246-291`):
@@ -56,7 +58,9 @@ if ($this->idleTrimSec !== null && $this->hasPriorEvent) {
 }
 ```
 - Inter-event gaps exceeding `$idleTrimSec` are compressed to `min(idleTrimSec, 0.5s)`
+
 - Original wall-clock time preserved in `tRaw` field for `--no-trim` replay
+
 - Cumulative trim tracked so subsequent events continue from compressed timeline
 
 ### 1.2 Replay Architecture
@@ -90,11 +94,15 @@ $step = function () use (&$step, &$i, $events, ...) : void {
 
 **Critical 5ms yield in INSTANT mode** (CALIBER_LEARNINGS.md:7):
 - Without the yield, React's `StreamSelectLoop` fires all timers in the same tick before the program's framerate-based render tick
+
 - `view()` is never rendered and no output is produced
+
 - 5ms is enough for a 1kHz tickInterval to produce a frame
 
 **Two speed modes:**
+
 - `SPEED_INSTANT`: 5ms between events, fast for CI
+
 - `SPEED_REALTIME`: Uses recorded `t` deltas, optionally clamped via `idleThresholdSeconds`
 
 ### 1.3 Input Event Handling
@@ -115,6 +123,7 @@ $step = function () use (&$step, &$i, $events, ...) : void {
    }
    ```
    - Bypasses the program's stream watcher to avoid async race between `fwrite` + `fread` + parse
+
    - This is the key insight for deterministic byte replay (CALIBER_LEARNINGS.md:9)
 
 ### 1.4 Cassette Format
@@ -131,10 +140,15 @@ $step = function () use (&$step, &$i, $events, ...) : void {
 
 **Event kinds** (`EventKind.php`):
 - `resize` — terminal dimensions
+
 - `input` — raw bytes (`b`) or msg envelope (`msg`)
+
 - `output` — program output bytes (`b`)
+
 - `quit` — session end
+
 - `snapshot` — screenshot directive (render-side only)
+
 - `hide`/`show` — cursor visibility control
 
 **Dual timestamps** (`Recorder.php:281-286`):
@@ -153,12 +167,16 @@ if ($this->cumulativeTrim > 0.0 && !isset($line['tRaw'])) {
 
 **Absolute mode (default)** — `JsonlFormat`:
 - `t` = seconds since cassette start (ms precision)
+
 - Intuitive for playback timing, but editing requires re-shifting all subsequent `t` values
 
 **Relative mode** — `RelativeFormat`:
 - `dt` = interval since previous event
+
 - Easier manual editing (change one event's timing without cascading changes)
+
 - Self-describing via header's `timestampMode: "relative"`
+
 - Auto-detected on replay by presence of `dt` vs `t` on first event
 
 **Conversion** (`RelativeFormat.php:102-115` and `JsonlFormat.php:102-135`):
@@ -176,11 +194,14 @@ $result[] = new Event(t: round($cumulative, self::T_PRECISION), ...);
 
 **Recording side** (`Recorder.php:250-256`):
 - Threshold configurable via `Recorder::withIdleTrim(?float $thresholdSec, float $compressedMaxSec = 0.5)`
+
 - Gaps exceeding threshold compressed to `min(threshold, 0.5s)`
+
 - Original time preserved in `tRaw`
 
 **Replay side** (`Player.php:254-263`):
 - `--idle-trim=N` clamps long pauses to N seconds for faster CI
+
 - `--no-trim` honors `tRaw` (original cadence) over compressed `t`
 
 ### 2.3 Playback Speed
@@ -206,19 +227,25 @@ if ($playbackSpeed !== null && $playbackSpeed > 0.0) {
 
 **`ByteAssertion`** (`Assert/ByteAssertion.php`):
 - Exact byte equality check
+
 - Hex window diff starting at first divergence
+
 - The strictest assertion — fails on any byte difference even if visually equivalent
 
 **Gotcha** (CALIBER_LEARNINGS.md:10):
 - `ByteAssertion::compare()` returns a hex window that **starts at the first-divergence offset**, not before it
+
 - Tests expecting to see bytes preceding the divergence will fail
 
 ### 3.2 Cell-Grid Replay
 
 **`ScreenAssertion`** (`Assert/ScreenAssertion.php:41-59`):
 - Feeds expected/actual byte streams into separate `Terminal` instances
+
 - Compares resulting cell grids via `Screen::diff()`
+
 - Tolerates ANSI reorderings (redundant SGR re-emission, equivalent cursor moves, partial vs full repaints)
+
 - Failure shows first 5 differing cells with (row, col) coordinates
 
 ### 3.3 Event Matchers
@@ -231,8 +258,11 @@ if ($playbackSpeed !== null && $playbackSpeed > 0.0) {
 
 **Critical requirement** (CALIBER_LEARNINGS.md:8):
 - Replay `Program` must use the **same `ProgramOptions`** as the recording program
+
 - Cassette captures setup AND teardown bytes (alt-screen enter/leave, mode resets)
+
 - Any divergence in lifecycle options breaks `ByteAssertion`
+
 - Build both Programs from a shared factory closure taking `(input, output, loop)`
 
 ### 3.5 Quit Event Placement
@@ -253,7 +283,9 @@ public function update(Msg $msg): array {
 
 **First resize skipped** (`Player.php:343-351`):
 - Cassette's first resize is the recording program's startup size
+
 - Replay program emits its own `WindowSizeMsg` from `tty.size()` lookup
+
 - Dispatching cassette's first resize would duplicate it and throw msg counts off
 
 ---
@@ -264,11 +296,14 @@ public function update(Msg $msg): array {
 
 **`bin/candy-vcr`** (`bin/candy-vcr`):
 - Portable autoload resolution loop (tries 5 candidate paths)
+
 - Routes to `SugarCraft\Vcr\Cli\Application`
 
 **`Application`** (`Cli/Application.php`):
 - Custom `Command` interface for legacy commands
+
 - Symfony `Command` for `render-tape`/`render-batch`
+
 - `runSymfonyCommand()` bridges custom argv/stream to Symfony `InputInterface`/`OutputInterface`
 
 ### 4.2 Commands
@@ -288,9 +323,13 @@ public function update(Msg $msg): array {
 
 **RecordCommand** (`RecordCommand.php:358-376`):
 - Puts host stdin into raw mode during recording
+
 - `register_shutdown_function([RecordCommand::class, 'rescueRestore'])` — fires on every PHP shutdown including fatal errors
+
 - `pcntl_signal(SIGTERM/SIGHUP/SIGINT, handler)` with `pcntl_async_signals(true)`
+
 - Rescue marker file at `sys_get_temp_dir() . '/candy-vcr-rescue.<pid>'` with TTY device path
+
 - `SIGKILL` cannot be intercepted (documented)
 
 ### 4.4 Env Capture
@@ -301,7 +340,9 @@ public function update(Msg $msg): array {
 public const SECRET_KEY_REGEX = '/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i';
 ```
 - Defaults to empty env
+
 - Strips `KEYBOARD_LAYOUT` because it contains `KEY`
+
 - `--env-allow-secrets` disables filtering (documented footgun)
 
 ---
@@ -329,11 +370,14 @@ interface Recorder {
 
 **`Msg\BuiltinSerializer`** — covers 19 Msg types:
 - KeyMsg, MouseClickMsg, MotionMsg, WheelMsg, ReleaseMsg
+
 - WindowSizeMsg, FocusGainedMsg, FocusLostMsg, BlurMsg, FocusInMsg, FocusOutMsg
+
 - PasteStartMsg/EndMsg/Msg, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg
 
 **`Msg\JsonableSerializer`** — catch-all for any `Msg` implementing `\JsonSerializable`
 - Tag is FQCN, `data` is `jsonSerialize()` result
+
 - Round-trip works when constructor param names match `jsonSerialize()` keys
 
 **`Msg\Registry`** — manages serializers:
@@ -377,18 +421,25 @@ Measured overhead:    ≤2% per plan target
 ```
 
 **Key optimizations:**
+
 - Single conditional `recorder->recordOutput($bytes)` per master-read chunk
+
 - No extra syscalls on hot path
+
 - No per-chunk serialization beyond appending a JSON line to open stream
 
 ### 6.2 Replay Overhead
 
 **`SPEED_INSTANT` mode:**
+
 - 5ms yield between events is minimal
+
 - Total replay time dominated by program's own processing
 
 **`SPEED_REALTIME` mode:**
+
 - Real-time delays inserted
+
 - `idleThresholdSeconds` clamps long pauses for CI
 
 ### 6.3 Render Pipeline
@@ -400,7 +451,9 @@ End-to-end:      enabled 1.2832s  disabled 1.2889s  speedup 1.00x
 Cache stats:     hits=9599  misses=6  hit-rate=99.9%
 ```
 - End-to-end dominated by PHP GIF encoder
+
 - Glyph cache provides ~7% rasterization speedup
+
 - 99.9% hit rate — typical 80×24 grid has 1920 cells but only ~6 unique combinations
 
 ---
@@ -411,30 +464,40 @@ Cache stats:     hits=9599  misses=6  hit-rate=99.9%
 
 Already implemented:
 - `Hook\Hook` interface: `beforeSave(Event): ?Event` (transform/suppress) + `afterCapture(Event): void` (fire-and-forget)
+
 - `HookRegistry`: chains hooks in order, returning null from `beforeSave` suppresses event
+
 - `SanitizingHook`: removes keys or replaces patterns via regex
+
 - `MetadataHook`: injects CI metadata into first output event
 
 ### 7.2 Matchers
 
 Already implemented:
 - `PassthroughMatcher` — default, kind-only matching
+
 - `ContentMatcher` — `(kind, payload)` equality, ignores timing
+
 - `TimingTolerantMatcher` — ±50ms (configurable) timing tolerance
 
 ### 7.3 Assertions
 
 Already implemented:
 - `ByteAssertion` — strict byte equality
+
 - `ScreenAssertion` — cell-grid equality (via candy-vt)
+
 - `ContainsAssertion` — substring match
+
 - `RegexAssertion` — PCRE pattern match
 
 ### 7.4 Format Extensions
 
 **CompressedJsonlFormat** (`Format/CompressedJsonlFormat.php`):
 - Gzipped JSONL, 5-10× smaller
+
 - Streaming gzip with per-line flush
+
 - Auto-detected via `.gz` extension
 
 **YamlFormat** — human-editable fixtures  

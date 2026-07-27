@@ -5,12 +5,19 @@
 **candy-palette** is a PHP port of Go's [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) — providing terminal color profile detection and automatic ANSI color degradation. It enables PHP CLI applications to produce richly colored terminal output that gracefully downgrades to match the connected terminal's capabilities.
 
 **Key statistics:**
+
 - **8 source files** across `src/`
+
 - **6 test files** with comprehensive coverage
+
 - **16 language translations** (en + 15 locales)
+
 - **4 VHS demo tapes** (detect.gif, convert.gif, degrade.gif, standard-colors.gif)
+
 - **4 example scripts** (detect, convert, degrade, standard-colors)
+
 - **Status**: 🟢 v1-ready in MATCHUPS.md
+
 - **Upstream**: [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) (Go, ~111 stars)
 
 **Primary consumers within SugarCraft**: `candy-log`, `candy-mosaic`, `candy-freeze`, `candy-vt` consume `Probe::colorProfile()` + `ColorProfile` enum directly.
@@ -93,13 +100,21 @@ The `Probe` class provides the **canonical detection hierarchy** used throughout
 
 ```
 1.  CLICOLOR_FORCE=1  → TrueColor  (overrides everything)
+
 2.  NO_COLOR (any)    → NoTTY     (per no-color.org standard)
+
 3.  CLICOLOR=0        → NoTTY
+
 4.  TERM=dumb         → NoTTY
+
 5.  COLORTERM=24bit|truecolor|yes → TrueColor
+
 6.  WT_SESSION (set)  → TrueColor  (Windows Terminal)
+
 7.  GOOGLE_CLOUD_SHELL=true → TrueColor
+
 8.  TMUX || STY + screen*/tmux* → Ansi256
+
 9.  TERM=xterm-kitty|xterm-ghostty|*-256color → Ansi256
 10. TERM=xterm*|screen*|tmux* → Ansi
 11. Default → Ansi, then Phase 2 infocmp upgrade
@@ -168,7 +183,9 @@ final class StandardColors {
 
 Static initialization uses the classic XTerm/ANSI palette values (not the Windows console defaults):
 - Black: `#000000`, Red: `#cd0000`, Green: `#00cd00`, Yellow: `#cdcd00`
+
 - Blue: `#0000cd`, Magenta: `#cd00cd`, Cyan: `#00cdcd`, White: `#e5e5e5`
+
 - Bright Black: `#7f7f7f`, Bright Red: `#ff0000`, etc.
 
 ---
@@ -180,7 +197,9 @@ Static initialization uses the classic XTerm/ANSI palette values (not the Window
 The `Color` class operates in **RGB color space** (R, G, B, A components, 0-255 each). It does **not** use perceptual color spaces (CIELAB, LCH, OKLAB) for conversion — the conversion uses:
 
 1. **For ANSI256**: Naive 6x6x6 color cube quantization + 24-step greyscale ramp
+
 2. **For ANSI16**: Euclidean distance in RGB space to the 8 basic ANSI colors
+
 3. **For Ascii**: Perceived brightness threshold (128)
 
 ### Greyscale Detection
@@ -211,6 +230,7 @@ public function toAnsi256Index(): int {
 ```
 
 - Greys: 232 + floor(luminance / 255 * 23)
+
 - Color cube: 16 + (r*36) + (g*6) + b, where r,g,b ∈ {0..5}
 
 ### ANSI16 Index Calculation
@@ -299,8 +319,11 @@ private function rewriteAnsi(string $s, Profile $targetProfile): string {
 ```
 
 **Limitation**: Only handles SGR `38;2;R;G;B` and `48;2;R;G;B` (24-bit foreground/background). Does not handle:
+
 - 256-color indexed (`38;5;N`)
+
 - 16-color indexed (`38;N`)
+
 - Compound SGR sequences with additional parameters
 
 ---
@@ -430,15 +453,20 @@ if (\array_key_exists('NO_COLOR', $env)) { return Profile::NoTTY; }
 
 ✅ Fully compliant:
 - `CLICOLOR_FORCE=1` → TrueColor (overrides everything)
+
 - `CLICOLOR=0` → NoTTY
+
 - `CLICOLOR=1` → no special behavior (let TERM decide)
 
 ### FORCE_COLOR
 
 ✅ Implemented as level-based override:
 - `FORCE_COLOR=0` → Ascii
+
 - `FORCE_COLOR=1` → ANSI
+
 - `FORCE_COLOR=2` → ANSI256
+
 - `FORCE_COLOR=3+` → TrueColor
 
 ### Terminfo / Terminal Database
@@ -460,21 +488,29 @@ if (\array_key_exists('NO_COLOR', $env)) { return Profile::NoTTY; }
 ### Detection Performance
 
 - **Environment variable reads**: O(1) — direct `$_ENV` / `getenv()` lookups
+
 - **infocmp subprocess**: O(subprocess) — spawns `/usr/bin/infocmp` once per detection
+
 - **Memoization**: None in `Palette` (stateless factory pattern). `infocmpAvailable()` uses static memoization but only for the binary's existence, not the result
+
 - **Thread safety**: `Probe` class has no mutable state — all methods are static, trivially thread-safe
 
 ### Color Conversion Performance
 
 - **Ansi256 indexing**: Pure arithmetic, O(1)
+
 - **Ansi16 nearest-color search**: Iterates over 8 palette entries, O(8) — constant time
+
 - **Perceived brightness**: O(1) arithmetic
+
 - **String degradation** (`rewriteAnsi`): Single `preg_replace_callback` over the full string — O(n) where n = string length. The callback creates `Color` objects and calls `convert()` — no caching of results
 
 ### Memory
 
 - **Color objects**: Small (4 x int + overhead, ~56 bytes)
+
 - **ANSI palette arrays**: Static 16-entry arrays in `StandardColors` and inside `Color` methods
+
 - **No unbounded growth**: No caches, no memoization of color conversions
 
 ### ProfileWriter Write Performance
@@ -521,25 +557,36 @@ public function convert(Profile $profile): self {
 The current RGB→ANSI256 conversion uses naive 6x6x6 cube quantization. The Go upstream (`go-colorful`) uses perceptually uniform color spaces for better downsampling. A PHP port could add:
 
 - RGB → CIELAB conversion
+
 - Nearest-color search in CIELAB space
+
 - Delta-E (CIE76 or CIE2000) for color difference
 
 ### 3. HSL / HSV Color Space Support
 
 The `Color` class could gain:
 - `Color::fromHsl(float $h, float $s, float $l, int $a = 255): self`
+
 - `Color::toHsl(): array{h: float, s: float, l: float, a: int}`
+
 - `Color::lighten(float $amount): self`
+
 - `Color::darken(float $amount): self`
+
 - `Color::saturate(float $amount): self`
+
 - `Color::desaturate(float $amount): self`
 
 ### 4. Color Harmony Utilities
 
 - `Color::complementary(): self`
+
 - `Color::triadic(): array{self, self}`
+
 - `Color::analogous(): array{self, self}`
+
 - `Color::splitComplementary(): array{self, self}`
+
 - `Color::tetradic(): array{self, self, self, self}`
 
 ### 5. Gradient Generation
@@ -555,15 +602,20 @@ public static function gradientMulti(array $stops, int $steps): array;
 
 Currently supports `#rgb` and `#rrggbb`. Could extend to support:
 - `rgb(r, g, b)` / `rgba(r, g, b, a)`
+
 - `hsl(h, s%, l%)` / `hsla(h, s%, l%, a)`
+
 - Named colors (`red`, `cornflowerblue`, etc.)
+
 - `currentColor` keyword (for inherited foreground/background)
 
 ### 7. SGR Sequence Parsing Extension
 
 The `rewriteAnsi()` method only handles `\x1b[38;2;R;G;Bm` / `\x1b[48;2;R;G;Bm`. Could extend to handle:
 - `\x1b[38;5;Nm` (256-color indexed)
+
 - `\x1b[58;2;R;G;Bm` (underline color, CSI 58)
+
 - Compound SGR sequences (bold+italic+color in one sequence)
 
 ### 8. Palette::write() Instance Reuse
@@ -603,10 +655,15 @@ public function write(string $data): int|false {
 | Re-detection | No automatic re-detection | No automatic re-detection |
 
 **Key gaps vs Go upstream:**
+
 1. No tmux `tmux info` detection (environment variables only)
+
 2. No ConEmuANSI / ANSICON detection (Windows detection is `WT_SESSION`-only)
+
 3. No perceptual color conversion (go-colorful's `Clamp` / `ToXyz` / `ToLab`)
+
 4. No conversion caching
+
 5. No automatic re-detection when terminal capabilities change
 
 **Verdict**: candy-palette is a 70% port — covers the core detection hierarchy and color degradation but lacks the perceptual color science and tmux/Windows depth of the Go original.
@@ -689,13 +746,21 @@ class Color:
 ## Missing Features
 
 1. **No color conversion caching** — every `convert()` call recomputes from scratch
+
 2. **No CIELAB / perceptual color space conversion** — RGB cube quantization is naive
+
 3. **No tmux `tmux info` detection** — only environment variables
+
 4. **No Windows ConEmuANSI / ANSICON detection** — only `WT_SESSION`
+
 5. **No automatic re-detection** — profile is set once at construction
+
 6. **No SGR sequence parsing for indexed colors** — `rewriteAnsi()` only handles 24-bit SGR
+
 7. **No gradient / fade utilities** — no multi-stop color interpolation
+
 8. **No HSL/HSV color space** — only RGB
+
 9. **No color harmony operations** — complementary, triadic, analogous
 10. **No CSS color parsing extension** — only `#rgb` and `#rrggbb`
 11. **No ProfileWriter instance reuse** — new `Palette` created per `write()` call
@@ -782,6 +847,7 @@ Comprehensive coverage of all 12 detection steps.
 
 The existence of both `Profile` and `ColorProfile` enums is a source of confusion. They serve different purposes:
 - `ColorProfile` (in `Probe`) is the **SSOT** for environment-driven detection — consumed by `candy-log`, `candy-mosaic`, `candy-freeze`, `candy-vt`
+
 - `Profile` (in `Palette` instances) is what the **degradation engine** operates on
 
 The `Profile` enum has the **same cases** as `ColorProfile` but different string values (`'ansi'` vs `'ansi'` — actually same, but the enum names differ: `ANSI256` vs `Ansi256`).

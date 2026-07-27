@@ -15,6 +15,7 @@ will retire its bespoke version in step 03.05.
 ## Files
 
 **Create:**
+
 - `candy-sprinkles/src/Theme.php` — final class, immutable, public
   readonly properties for palette slots:
   - `Color $foreground, $background, $accent, $muted, $error,
@@ -36,6 +37,7 @@ will retire its bespoke version in step 03.05.
 - Doc-comment cites: `Mirrors charmbracelet/lipgloss.Theme`.
 
 **Tests:**
+
 - `candy-sprinkles/tests/ThemeTest.php` — assertions:
   - Each factory returns expected slot colors.
   - Withers return new instance (instance !== original).

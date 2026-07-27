@@ -19,6 +19,7 @@ Sugar-toast currently implements a solid baseline of toast notification function
 **Source:** `/home/sites/sugarcraft/sugar-toast/src/`
 
 ### Strengths
+
 - Immutable/fluent with*() pattern — excellent
 - Alert expiry via `microtime(true)` based timestamps
 - Multiple symbol sets (NerdFont, Unicode, ASCII)
@@ -26,6 +27,7 @@ Sugar-toast currently implements a solid baseline of toast notification function
 - Composite-based rendering over background
 
 ### Gaps vs. Ecosystem
+
 | Feature | sugar-toast | bubbleup (Go) | ratatui-notifications | textual |
 |---------|-------------|---------------|----------------------|---------|
 | Positions | 6 | 6 | 9 | CSS-controlled |
@@ -46,6 +48,7 @@ Sugar-toast currently implements a solid baseline of toast notification function
 ### 2.1 Notification Positioning
 
 #### Current (sugar-toast)
+
 ```php
 enum Position {
     case TopLeft;
@@ -60,6 +63,7 @@ enum Position {
 **Source:** `sugar-toast/src/Position.php:L12-L19`
 
 #### Enhanced: ratatui-notifications (Rust)
+
 Rust's library provides **9 anchor positions** including edge midpoints:
 
 ```rust
@@ -77,6 +81,7 @@ enum Anchor {
 **Source:** https://docs.rs/ratatui-notifications/latest/ratatui_notifications/all.html
 
 #### Recommendation
+
 **Add 3 edge-center positions** (TopCenter already exists as TopCenter, need MiddleLeft, MiddleRight, MiddleCenter):
 
 ```php
@@ -102,6 +107,7 @@ enum Position {
 ### 2.2 Auto-Dismiss Timing
 
 #### Current Implementation
+
 ```php
 // Alert stores expiresAt as float (seconds since epoch)
 // Toast applies duration at alert creation time
@@ -118,6 +124,7 @@ public function alert(ToastType $type, string $message, ?float $expiresAt = null
 **Source:** `sugar-toast/src/Toast.php:L98-L107`
 
 #### Enhanced: ratatui-notifications (Rust)
+
 ```rust
 // Source: https://docs.rs/ratatui-notifications/latest/ratatui_notifications/
 pub enum AutoDismiss {
@@ -139,6 +146,7 @@ let persistent = Notification::new("Click to dismiss")
 ```
 
 #### Enhanced: goaster (Go web)
+
 ```go
 // Source: https://github.com/indaco/goaster
 // Progress bar for auto-dismiss countdown
@@ -149,6 +157,7 @@ toaster := goaster.NewToaster(
 ```
 
 #### ntm (Go TUI) — Progress Toasts
+
 ```go
 // Source: https://github.com/Dicklesworthstone/ntm/commit/74a0ecf
 type Toast struct {
@@ -167,6 +176,7 @@ func (tm *ToastManager) PushProgress(id, message string, progress float64) {
 ```
 
 #### Recommendation
+
 **Add 3 enhancements:**
 
 1. **Persistent toasts** — `Alert::withPersistent()` returns Alert that never auto-dismisses
@@ -200,6 +210,7 @@ final class Alert {
 ### 2.3 Stack Management
 
 #### Current Implementation
+
 All alerts render at same position, offset by Y. No limit on concurrent alerts.
 
 ```php
@@ -222,6 +233,7 @@ public function View(string $background, int $viewportWidth = 80, int $viewportH
 **Problem:** When multiple alerts exist, they render on top of each other at the same position. The last one wins.
 
 #### Enhanced: ratatui-notifications (Rust)
+
 ```rust
 // Source: https://github.com/5ocworkshop/ratatui-notifications
 let notifications = Notifications::new()
@@ -236,6 +248,7 @@ pub enum Overflow {
 ```
 
 #### ntm (Go) — Stack Height & Position Lookup
+
 ```go
 // Source: https://github.com/Dicklesworthstone/ntm/commit/74a0ecf
 // ToastAtPosition returns toast ID at Y offset for click-to-dismiss
@@ -262,6 +275,7 @@ func (tm *ToastManager) ToastStackHeight() int { ... }
 ```
 
 #### Recommendation
+
 **Add stack management:**
 
 1. **Max concurrent limit** — `Toast::withMaxConcurrent(int $n)`
@@ -299,20 +313,26 @@ public function yOffset(int $alertHeight, int $viewportHeight, int $totalAlertLi
 ### 2.4 Action Buttons
 
 #### Current State
+
 No action button support. Toasts are display-only.
 
 #### Enhanced: win11toast (Python Windows)
+
 ```python
 # Source: https://github.com/GitHub30/win11toast
+
 from win11toast import toast
 
 # Single button
+
 toast('Hello', 'Hello from Python', button='Dismiss')
 
 # Multiple buttons
+
 toast('Hello', 'Click a button', buttons=['Approve', 'Dismiss', 'Other'])
 
 # Button with action
+
 toast('Hello', 'Hello from Python',
       button={'activationType': 'protocol',
               'arguments': 'https://google.com',
@@ -320,6 +340,7 @@ toast('Hello', 'Hello from Python',
 ```
 
 #### goaster (Go web)
+
 ```go
 // Source: https://github.com/indaco/goaster
 toaster := goaster.NewToaster(
@@ -328,6 +349,7 @@ toaster := goaster.NewToaster(
 ```
 
 #### Recommendation
+
 **Add action button support:**
 
 ```php
@@ -360,9 +382,11 @@ final class Alert {
 ### 2.5 Keyboard Interaction
 
 #### Current State
+
 No keyboard interaction.
 
 #### bubbleup (Go)
+
 ```go
 // Source: https://github.com/daltonsw/bubbleup
 m.alert = bubbleup.NewAlertModel(50, false, 10*time.Second).
@@ -387,6 +411,7 @@ func (m myModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 ```
 
 #### Recommendation
+
 **Add ESC dismiss:**
 
 ```php
@@ -413,9 +438,11 @@ public function hasActiveAlert(): bool
 ### 2.6 Animation Support
 
 #### Current State
+
 No animations — toasts appear/disappear instantly.
 
 #### ratatui-notifications (Rust)
+
 ```rust
 // Source: https://docs.rs/ratatui-notifications/latest/
 pub enum Animation {
@@ -435,9 +462,11 @@ let overlay = Overlay::new()
 ```
 
 #### textual (Python)
+
 Textual's toast system inherently supports CSS animations via the widget system.
 
 #### Recommendation
+
 **Add animation enum and slide-in rendering:**
 
 ```php
@@ -462,6 +491,7 @@ For PHP TTY context, animation would be rendered via multi-frame output with cur
 ### 2.7 Custom Alert Types
 
 #### Current (sugar-toast)
+
 ```php
 enum ToastType: string {
     case Error   = 'error';
@@ -474,6 +504,7 @@ enum ToastType: string {
 **Source:** `sugar-toast/src/ToastType.php:L12-L17`
 
 #### bubbleup (Go)
+
 ```go
 // Source: https://github.com/daltonsw/bubbleup
 // Register custom alert type
@@ -485,6 +516,7 @@ alert.RegisterNewAlertType(bubbleup.AlertDefinition{
 ```
 
 #### Recommendation
+
 **Extend ToastType to support custom types:**
 
 ```php
@@ -514,6 +546,7 @@ final class ToastType {
 ### 2.8 History / Dismissed Log
 
 #### ntm (Go)
+
 ```go
 // Source: https://github.com/Dicklesworthstone/ntm/commit/74a0ecf
 type ToastManager struct {
@@ -527,6 +560,7 @@ func (tm *ToastManager) GetHistory() []Toast {
 ```
 
 #### Recommendation
+
 **Add dismissed toast history:**
 
 ```php
@@ -576,18 +610,21 @@ public function getHistory(): array { ... }
 ## 4. Implementation Plan
 
 ### Phase 1: Quick Wins (1-2 sessions)
+
 1. Add `MiddleLeft`, `MiddleRight`, `MiddleCenter` to Position enum
 2. Add `withAllowEscToClose()` and `hasActiveAlert()` methods
 3. Fix stack Y-offset calculation (pass totalAlertLines)
 4. Add dismissed history with `maxHistory` limit
 
 ### Phase 2: Core Enhancements (2-3 sessions)
+
 1. Add `withMaxConcurrent()` and `Overflow` enum
 2. Add persistent toast support (`withPersistent()`)
 3. Extend `ToastType` to support custom types via factory methods
 4. Add progress support to `Alert` and rendering
 
 ### Phase 3: Advanced Features (3-4 sessions)
+
 1. Action button system with callback registration
 2. Animation framework (slide, fade)
 3. Hover pause for auto-dismiss timers
@@ -718,10 +755,12 @@ private function renderAlert(Alert $alert): string
 ## 6. References
 
 ### Upstream
+
 - DaltonSW/bubbleup: https://github.com/daltonsw/bubbleup
 - BubbleUp Go package: https://pkg.go.dev/go.dalton.dog/bubbleup
 
 ### Rust
+
 - ratatui-notifications: https://docs.rs/ratatui-notifications/latest/ratatui_notifications/
 - ratatui-notifications source: https://github.com/5ocworkshop/ratatui-notifications
 - ratatui-toaster: https://docs.rs/ratatui-toaster/latest/ratatui_toaster/
@@ -729,17 +768,20 @@ private function renderAlert(Alert $alert): string
 - ratkit toast: https://crates.io/crates/ratkit
 
 ### Python
+
 - textual Toast widget: https://textual.textualize.io/widgets/toast/
 - pyqt-toast-notification: https://pypi.org/project/pyqt-toast-notification/
 - win11toast: https://github.com/GitHub30/win11toast
 
 ### Go (TUI)
+
 - goaster: https://github.com/indaco/goaster
 - SCKelemen/tui: https://pkg.go.dev/github.com/SCKelemen/tui
 - bubbletea-modal: https://github.com/sraaaaaaay/bubbletea-modal
 - ntm (enhanced toasts): https://github.com/Dicklesworthstone/ntm/commit/74a0ecf
 
 ### Go (Desktop notifications)
+
 - nikoksr/notify: https://github.com/nikoksr/notify
 - soloterm/tnotify: https://github.com/soloterm/tnotify
 - hattya/go.notify: https://github.com/hattya/go.notify

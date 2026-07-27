@@ -263,6 +263,7 @@ final class PostgresAdminProvider implements AdminProviderInterface
                 return $this->maxConnectionsCache;
             }
         } catch (\PDOException) {
+            // Query failed (e.g., insufficient privileges); use default.
         }
 
         $this->maxConnectionsCache = 100;

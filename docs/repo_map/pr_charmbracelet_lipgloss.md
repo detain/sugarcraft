@@ -53,6 +53,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 ## 4. High-Signal Open Issues
 
 ### Issue #644: Proposal: Flexbox/Grid Layout Engine (charm-layout)
+
 - **Author:** junhinhow (2026-04-01)
 - **Reactions:** Active community interest
 - **Summary:** Building complex TUI layouts with lipgloss requires manual calculations. `JoinHorizontal` and `JoinVertical` don't support proportional sizing. No way to say "sidebar 30%, main 70%". Terminal resize requires manual recalculation. No grid system for dashboard-style layouts.
@@ -61,6 +62,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Strategic Opportunity:** SugarCraft could implement a superior layout system from the start, avoiding the "every Bubble Tea app invents layout logic" problem.
 
 ### Issue #85: Formatting Lost on Linewrap
+
 - **Author:** FredrikL (2022-06-03)
 - **Labels:** bug
 - **Milestone:** v1.2.0 (has been moved between milestones multiple times)
@@ -73,6 +75,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Strategic Opportunity:** Implementing proper style-preserving text wrap in PHP from the start is a chance to avoid this 3-year-old bug.
 
 ### Issue #194: BorderTop(false) Disappears Entire Border
+
 - **Author:** haarts (2023-04-12)
 - **Labels:** bug
 - **Summary:** Setting `BorderTop(false)` (or any individual side) makes the entire border disappear instead of just that side. Once one side is set to `false`, other borders are treated as `false`.
@@ -81,6 +84,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Direct Risk to SugarCraft:** MEDIUM — This was a long-standing bug now fixed upstream; SugarCraft should implement the corrected behavior.
 
 ### Issue #562: Emoji/Unicode Width Calculation Causes Layout Misalignment
+
 - **Author:** kolkov (2025-09-04)
 - **Summary:** The library incorrectly calculates display width of emoji, Unicode grapheme clusters, CJK characters, and ZWJ sequences, causing misaligned TUI layouts.
 - **Maintainer response:** Claims this is a terminal emulator issue (referencing jeffquast.com, mitchellh.com writing on grapheme clusters). However, users have reproduced across multiple terminals (bash, fish, konsole) and claim ghostty (which handles graphemes correctly natively) still shows the issue in TUIOS.
@@ -88,17 +92,20 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Strategic Opportunity:** PHP's `mb_strwidth()` and `grapheme_strlen()` functions may handle this better than Go's `uniseg` — worth investigating.
 
 ### Issue #666: V2 Lipgloss.Width Does Not Match Output Width In Some Cases
+
 - **Author:** pjkaufman (2026-04-15)
 - **Summary:** `lipgloss.Width()` returns one value for a string, but rendering that many dashes produces different output length. Affects strings with certain Unicode characters (ﾟ Д etc.). This bubbles up from `ansi.StringWidth`, `runewidth-go`, and `uniseg` — all agree on the wrong value.
 - **Direct Risk to SugarCraft:** HIGH — `CandySprinkles` uses width measurement for `MaxWidth`, text truncation, and table column sizing.
 
 ### Issue #605: Allow Multi-Character Corners on Borders
+
 - **Author:** Grantmartin2002 (2026-02-02)
 - **Labels:** enhancement
 - **Summary:** `Border` struct truncates corners to 1 rune, but users want multi-character corners for custom border styles.
 - **Direct Risk to SugarCraft:** LOW — Border customization is an edge case, but worth supporting in `CandySprinkles` if it doesn't complicate the API significantly.
 
 ### Issue #564: Dynamic Layout Not Behaving Like React-Style Flex
+
 - **Author:** vinaycharlie01 (2025-09-05)
 - **Summary:** Lip Gloss doesn't behave like React's flexbox for dynamic resizing and positioning. Expected proportional sizing, gap support, etc.
 - **Direct Risk to SugarCraft:** HIGH — Same as #644; layout system inadequacy.
@@ -108,6 +115,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 ## 5. Important Closed Issues
 
 ### Issue #593: Regression — Markdown Redirection to Files Not Working in v2
+
 - **Author:** adriens (2025-11-24)
 - **State:** closed (completed)
 - **Summary:** After upgrading to lipgloss v2, redirecting console output to a text file produces ANSI escape sequences instead of clean markdown.
@@ -116,6 +124,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Key Insight:** The v2 architecture shift is deliberate: separate rendering from output. This is a *feature*, not a regression.
 
 ### Issue #635: HasDarkBackground Hangs When No TTY Available
+
 - **Author:** jedevc (2026-03-22)
 - **State:** open (fix in PR #636)
 - **Summary:** Importing `charm.land/lipgloss/v2/compat` causes program to hang when stdin is a pipe (e.g., `source <(./program)`). Related to OSC 11 background color query.
@@ -123,6 +132,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Direct Risk to SugarCraft:** MEDIUM — The same pattern applies to any library that queries terminal capabilities. SugarCraft should guard TTY queries.
 
 ### Issue #383: Table Resizing Issue with \r\n in Cells
+
 - **Author:** pachecot (2024-09-28)
 - **State:** closed (completed)
 - **Summary:** Table resize logic fails on carriage return + line feed (`\r\n`) sequences, adding spaces before newlines.
@@ -130,6 +140,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Direct Risk to SugarCraft:** MEDIUM — SugarCraft's `SugarBits` table implementation should handle `\r\n` correctly.
 
 ### Issue #574: Table Width Doesn't Count Column Borders
+
 - **Author:** AdrienHorgnies (2025-10-07)
 - **State:** open (fix in PR #575)
 - **Summary:** Table doesn't account for border width when computing whether content fits. A 10-character cell in a table with width=10 might overflow due to border characters.
@@ -137,6 +148,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Direct Risk to SugarCraft:** MEDIUM — Table column sizing must include border widths.
 
 ### Issue #287: Weird Behaviour When Using Lipgloss in a Test
+
 - **Author:** LaBatata101 (2024-04-30)
 - **State:** closed (completed)
 - **Summary:** Test output varies based on whether `go test` is run from the test directory or parent directory. Lipgloss defaults to no color when TTY detection fails.
@@ -144,6 +156,7 @@ From the first-pass `repo_map/charmbracelet_lipgloss.md`, the following gaps wer
 - **Direct Risk to SugarCraft:** HIGH — SugarCraft tests need explicit color profile settings, otherwise snapshot tests produce different output depending on context.
 
 ### Issue #599: Latest x/ansi Package Breaks Compat with v2.0.0-beta.3
+
 - **Author:** mrusme (2025-12-15)
 - **State:** open
 - **Summary:** `x/ansi v0.11.3` changed API (e.g., `te.Italic()` now requires `bool` arg), breaking lipgloss v2 beta.
@@ -215,11 +228,13 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 ```
 
 **Key Implications for SugarCraft:**
+
 - SugarCraft's `Style::render()` should **always emit full ANSI** (no downsampling in render)
 - SugarCraft needs **output writer functions** (`Print`, `Sprint`, `Fprint`) that handle TTY detection and color stripping
 - The `compat` package pattern (global state at import time) is explicitly discouraged — SugarCraft should make this optional
 
 **Background Detection Change:**
+
 - v1: `HasDarkBackground()` (no args) used global stdin/stdout
 - v2: `HasDarkBackground(in, out)` requires explicit file descriptors
 - The `compat` package provides the old behavior but maintainers note: "this removes the purity from Lip Gloss... could cause Lip Gloss to compete for resources (like stdin) with other tools"
@@ -229,6 +244,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 ## 10. Performance Discussions
 
 ### Issue #81: New API — Fast Colors
+
 - **Author:** antonmedv (2022-04-14)
 - **Summary:** CPU profile shows `Render()` is slow when using only colors (no padding/borders). User prerenders every line for a viewbox.
 - **Proposed Solution:** Optimize `Render()` to short-circuit when style only contains ANSI sequences.
@@ -236,11 +252,13 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 - **Actual Fix:** v2's architecture (separate render from output) partially addresses this. Also: "If you really just need colors, you could of course try and see how you fare with directly using `termenv`."
 
 ### Issue #86: Lazy Loading Dark Background Causes Sporadic Performance Issues
+
 - **Author:** orlangure (2022-06-08)
 - **Summary:** `HasDarkBackground` sometimes takes up to a minute to complete (~50% of the time). Root cause: both `tea` and `lipgloss` try to query background color from terminal simultaneously.
 - **Fix:** Coordinated fix in both Bubble Tea and Lip Gloss v2.
 
 ### Issue #592: Improve Performance of maxRuneWidth
+
 - **Author:** clipperhouse
 - **Summary:** `maxRuneWidth()` used `uniseg.FirstGraphemeClusterInString()` which was slow. Replaced with `displaywidth.StringGraphemes()` for significant speedup.
 - **Diff:** Uses `displaywidth.String()` for single-char case, `displaywidth.StringGraphemes()` for longer strings. Benchmarks show improvement.
@@ -255,6 +273,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 ## 11. Extensibility Discussions
 
 ### Issue #293: Proposal — Pure NewStyle, Lip Gloss v2
+
 - **Author:** aymanbagabas (2024-05-09) — *one of the maintainers*
 - **Summary:** Proposes making `Style` a pure value type by embedding `colorProfile` and `hasLightBackground` in `Style` itself, rather than using a global renderer.
 - **Justification:**
@@ -281,12 +300,14 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 **Direct Risk to SugarCraft:** This v2 design aligns with how SugarCraft's `CandySprinkles` should be designed — pure value types, no hidden global state, explicit color profile passing at output time.
 
 ### Issue #502: Border Manual Coloring with ANSI Colors
+
 - **Author:** jcbasso
 - **Summary:** When adding a string as a border that contains ANSI colors, width calculation is wrong. Rune-by-rune `ansi.StringWidth` fails; needs to parse string as a whole.
 - **Maintainer Note:** "We don't support varying colours for border sides."
 - **Direct Risk to SugarCraft:** MEDIUM — SugarCraft should ensure border width calculation is ANSI-aware.
 
 ### Issue #531: Rendering Parts of String in Bold Resets Background of Rest
+
 - **Author:** (community member)
 - **Summary:** Bold text inside a gray-background box causes the text after the bold portion to lose its background.
 - **Workaround:** Make a base style with the background, then derive bold and non-bold styles from it:
@@ -327,6 +348,7 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 | `WithWhitespaceForeground/Background` | `WithWhitespaceStyle` |
 
 **Key Migration Pain Points:**
+
 1. **`fmt.Print` → `lipgloss.Print`** — v2 render always emits ANSI; must use lipgloss writer functions to get downsampled output.
 2. **Adaptive colors** — Must choose between `compat.AdaptiveColor` (global state) or explicit `LightDark(bool)` helper.
 3. **`Renderer` removal** — Any code with `*Renderer` fields must be refactored.
@@ -379,11 +401,13 @@ lipgloss.Println(style.Render("Hello")) // print layer downsamples
 6. **"Set `lipgloss.SetColorProfile(termenv.TrueColor)` in tests"** — For test color issues.
 
 **What Maintainers Repeatedly REFUSE:**
+
 - Per-side multi-color borders (#502)
 - Flexbox/grid layout (direct to #644 charm-layout proposal)
 - Fast-path color-only API (they suggest using termenv directly)
 
 **What Maintainers RECOMMEND:**
+
 - Use the `compat` package for v1-style adaptive colors (but note it's not recommended for new code)
 - Use the writer functions for output
 - Use `LightDark` and `Complete` helpers for explicit control

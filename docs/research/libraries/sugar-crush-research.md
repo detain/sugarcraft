@@ -12,6 +12,7 @@
 Sugar-crush is a well-architected PHP port of charmbracelet/crush with a clean Model-View-Update (MVU) pattern using ReactPHP for async operations. The current implementation covers core chat functionality but lacks features present in upstream and competing implementations.
 
 **Key Findings:**
+
 - **Message Handling:** sugar-crush uses immutable `Message` objects with role-based structure (System/User/Assistant) - similar to Go crush
 - **Stream Rendering:** Basic token accumulation via `onToken` callback; no live incremental rendering
 - **Context Management:** History passed to backends but no automatic compaction or session persistence
@@ -44,6 +45,7 @@ sugar-crush/src/
 ### 2.2 Key Implementation Details
 
 **Chat Model (Chat.php:39-343):**
+
 - Three pieces of state: `history` (list<Message>), `inputBuf` (string), `inFlight` (bool)
 - Tool execution via `registerTool()` - callbacks stored in `$this->tools`
 - Async backend calls return `PromiseInterface` wrapped in `Cmd::promise()`
@@ -71,6 +73,7 @@ interface Backend {
 ```
 
 **Renderer (Renderer.php:34-77):**
+
 - Uses `SugarCraft\Shine\Renderer` (CandyShine) for markdown
 - User turns rendered raw, assistant turns rendered as markdown
 - Simple box layout with border using CandySprinkles
@@ -95,6 +98,7 @@ interface Backend {
 | Session | SQLite-backed with JSONL files |
 
 **Key Features sugar-crush Lacks:**
+
 - Real-time streaming display with incremental rendering
 - LSP-based code intelligence
 - MCP server integration
@@ -119,6 +123,7 @@ interface Backend {
 | Providers | 20+ (OpenAI, Claude, Gemini, Ollama, Groq, etc.) |
 
 **Key Features:**
+
 - Shell assistant mode (natural language → shell commands)
 - REPL mode with tab completion
 - RAG (Retrieval Augmented Generation)
@@ -139,6 +144,7 @@ interface Backend {
 | Background Tasks | tmux integration |
 
 **Key Features:**
+
 - Typed agent loop powered by BAML
 - Fuzzy file search (Ctrl+P)
 - Session history (Ctrl+H)
@@ -152,6 +158,7 @@ interface Backend {
 ### 3.4 Go: kardolus/chatgpt-cli (1.4K stars)
 
 **Features:**
+
 - Multi-provider (OpenAI, Azure, Perplexity, LLaMA)
 - Streaming mode
 - Agent mode (ReAct + Plan/Execute)
@@ -162,6 +169,7 @@ interface Backend {
 ### 3.5 Python: cursor-agent-tools
 
 **Architecture:**
+
 - Async Python with function calling
 - Model flexibility (Claude, OpenAI, Ollama)
 - Permission system for file operations
@@ -170,6 +178,7 @@ interface Backend {
 ### 3.6 Rust: clifcode
 
 **Features:**
+
 - Context compaction (3-tier automatic)
 - Session persistence
 - 3 autonomy modes (suggest, auto-edit, full-auto)
@@ -198,6 +207,7 @@ interface Backend {
 ### 4.1 Message Handling
 
 **sugar-crush Current:**
+
 - Immutable `Message` with role, content, timestamp, attachments, toolCalls
 - `toWire()` method for backend adapters
 - Support for file/image attachments
@@ -213,21 +223,25 @@ interface Backend {
 ### 4.2 Stream Rendering
 
 **sugar-crush Current:**
+
 - `StreamingCommandBackend` reads line-by-line from process stdout
 - `onToken` callback accumulates tokens
 - Tokens accumulated, then rendered as complete message
 
 **Upstream (crush) Pattern:**
+
 - Bubble Tea subscriptions for real-time updates
 - Token received → immediate view update
 - No waiting for complete response
 
 **aichat Pattern:**
+
 - Real-time token streaming
 - Incremental markdown rendering
 - Typing indicator animation
 
 **rust-code Pattern:**
+
 - Streaming with syntect highlighting per-line
 - Side panels for tools/git/diff
 
@@ -239,6 +253,7 @@ interface Backend {
 ### 4.3 Context Management
 
 **sugar-crush Current:**
+
 - Full history passed to backend on each call
 - No automatic compaction
 - No session persistence
@@ -258,6 +273,7 @@ interface Backend {
 ### 4.4 Code Highlighting
 
 **sugar-crush Current:**
+
 - Uses CandyShine (league/commonmark) for markdown
 - No syntax highlighting in code blocks
 - Raw markdown code fences rendered as plain text
@@ -315,24 +331,28 @@ interface Backend {
 ## 6. Implementation Roadmap
 
 ### Phase 1: Session & Streaming (Week 1)
+
 1. Add `SessionManager` class for JSONL persistence
 2. Modify `Chat` model to support partial/streaming state
 3. Update `Renderer` to show incremental content
 4. Add session list/resume commands
 
 ### Phase 2: Context Management (Week 2)
+
 1. Implement token counting utility
 2. Add context compaction logic to Chat
 3. Implement CLAUDE.md loading
 4. Add `/compact` slash command
 
 ### Phase 3: Tool System (Week 2-3)
+
 1. Add built-in file tools (read, write, edit)
 2. Add bash execution tool
 3. Implement permission system
 4. Add tool result rendering
 
 ### Phase 4: Enhancements (Week 3-4)
+
 1. Integrate syntax highlighting
 2. Add slash commands
 3. MCP client infrastructure
@@ -343,17 +363,20 @@ interface Backend {
 ## 7. Technical Debt & Architecture Notes
 
 ### 7.1 Current Strengths
+
 - Clean MVU architecture with immutable state
 - Async backend via ReactPHP promises
 - Plugin backend interface design
 - Comprehensive test coverage (ChatTest, RendererTest, Backend tests)
 
 ### 7.2 Architectural Considerations
+
 - **Streaming Backend:** `StreamingCommandBackend` uses blocking I/O with `stream_set_blocking(false)`. Consider using ReactPHP Stream for proper async.
 - **Renderer:** Static method, creates new `Markdown` instance each call. Consider caching theme.
 - **Tool Execution:** Synchronous in MVU update loop. Long-running tools block UI.
 
 ### 7.3 PHP-Specific Considerations
+
 - No native async/await (uses ReactPHP)
 - No built-in syntax highlighting (need external library or wrapper)
 - Unicode handling in `dropLast()` is correct (multi-byte safe)
@@ -363,19 +386,23 @@ interface Backend {
 ## 8. References
 
 ### 8.1 Upstream Sources
+
 - **charmbracelet/crush:** https://github.com/charmbracelet/crush
 - **AGENTS.md (UI docs):** https://github.com/charmbracelet/crush/blob/main/internal/ui/AGENTS.md
 
 ### 8.2 Rust Implementations
+
 - **aichat:** https://github.com/sigoden/aichat/ (9.7K stars)
 - **rust-code:** https://crates.io/crates/rust-code (0.6.1)
 - **syntect:** https://github.com/trishume/syntect (syntax highlighting)
 
 ### 8.3 Go Tools
+
 - **chatgpt-cli:** https://github.com/kardolus/chatgpt-cli
 - **claude-code-go:** https://github.com/tunsuy/claude-code-go
 
 ### 8.4 PHP Libraries Used
+
 - **CandyShine:** Markdown rendering (league/commonmark wrapper)
 - **CandySprinkles:** Terminal styling (borders, padding)
 - **SugarBits:** TUI components

@@ -20,6 +20,7 @@ Three loose ends from phase P6:
 ## Files
 
 **Create:**
+
 - `candy-pty/examples/multi-pump.php` — spawn two shells; tee each
   master to stdout with a prefix; quit on Ctrl-C.
 - `candy-pty/tests/PtyPoolReactLoopTest.php` — boots a ReactPHP loop,
@@ -29,6 +30,7 @@ Three loose ends from phase P6:
   reproduces it.
 
 **Modify:**
+
 - `candy-pty/src/Expect.php` — add `withRecorder(?Recorder $r): self`
   via the `mutate()` helper. Calls to `send()` and matched `expect()`
   also call the recorder's `recordInputBytes()` and `recordOutput()`.

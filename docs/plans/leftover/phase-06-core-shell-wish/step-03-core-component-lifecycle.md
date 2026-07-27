@@ -11,6 +11,7 @@ that can be composed inside a Model. Today everything is one flat Model.
 ## Files
 
 **Create:**
+
 - `candy-core/src/Component.php` — interface extending Model with:
   - `onMount(): ?Cmd` — fired when first added to the tree.
   - `onUnmount(): ?Cmd` — fired when removed.
@@ -19,10 +20,12 @@ that can be composed inside a Model. Today everything is one flat Model.
   `onMount` / `onUnmount` as the child set evolves.
 
 **Modify:**
+
 - `Program` reconciles lifecycle hooks across ticks (same shape as
   Subscriptions in 06.01).
 
 **Tests:**
+
 - `candy-core/tests/ComponentLifecycleTest.php` — add three components
   to a Composite; one is removed mid-session; assert `onUnmount` fired
   exactly once.

@@ -1,6 +1,7 @@
 # sugar-boxer — Update Report
 
 ## Metadata
+
 - **Package**: `sugarcraft/sugar-boxer`
 - **Upstream**: [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) (Go, 84 stars, MIT)
 - **Status**: v1 ready
@@ -18,12 +19,14 @@ sugar-boxer is a **pure layout renderer** — a recursive tree-based box-drawing
 **Ecosystem Positioning**: sugar-boxer is a foundational layout primitive at the same level as `candy-shine`'s table rendering — both are output producers that render to strings. It sits between the low-level cell-grid foundation (candy-core) and the full widget layer (sugar-bits). Unlike the upstream bubbleboxer (which wraps tea.Model instances), sugar-boxer is a pure string renderer focused purely on H/V panel composition with box-drawing borders.
 
 **Biggest Opportunity Areas**:
+
 1. **Buffer diffing** — currently full re-render every call; external repos (ultraviolet, ratatui, php-tui) use touched-line diffing for bandwidth optimization
 2. **Wide-character overflow handling** — CJK/emoji characters write to one cell without filling adjacent cells
 3. **Constraint-based layout** — external repos (ultraviolet, ratatui, php-tui) use Cassowary constraint solver for more flexible layouts
 4. **ContentGenerator pattern** — upstream stickers has `func(maxX, maxY) string` per cell for adaptive content
 
 **Biggest Missing Capabilities**:
+
 1. No dirty-region tracking or diffing
 2. No constraint-based layout (tree-only)
 3. No wide-character overflow handling
@@ -47,12 +50,14 @@ SugarBoxer (render engine, 408 lines)
 ```
 
 **Rendering Pipeline**:
+
 1. `render(Node, width, height)` creates a 2D `$cells[y][x]` char-cell grid
 2. `renderNode()` dispatches on node kind to type-specific renderers
 3. Each renderer: computes available space → distributes to children → recurses → draws separators
 4. Output: `implode("\n", array of joined rows)`
 
 **Node Properties** (16 readonly properties):
+
 - Core: `kind`, `children[]`, `content`
 - Dimensions: `minWidth`, `maxWidth`, `minHeight`, `maxHeight`
 - Visual: `padding`, `border`, `spacing`, `borderStyle`, `style`, `title`, `margin`
@@ -153,6 +158,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 ## Critical
 
 ### 1. Buffer Diffing / Dirty-Region Tracking
+
 **Title**: Full re-render on every call; no optimization for unchanged regions
 
 **Description**: sugar-boxer recomputes and outputs the entire layout on every `render()` call. External repos (ultraviolet, ratatui, php-tui) track touched lines and only emit delta ANSI sequences.
@@ -164,6 +170,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Source**: `ratatui_ratatui.md` — "Double-Buffered Rendering: Internal frame diffing - only changed cells are written to terminal"
 
 **Implementation ideas**:
+
 1. Wrap `SugarBoxer::render()` output in a diffing layer that compares previous frame's cell grid to current
 2. Track which cells changed and emit only the minimal ANSI sequence delta
 3. Consider a `Renderer` interface with `render()` and `diff(previousGrid)` methods
@@ -173,6 +180,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Expected impact**: High for network use cases; moderate for local terminal use
 
 ### 2. Wide-Character Overflow Handling
+
 **Title**: CJK/emoji characters overflow into adjacent cells without fill
 
 **Description**: When rendering a wide character (CJK, emoji) into the cell grid, only the primary cell is written. The adjacent cell is not automatically filled with a blank, causing potential visual artifacts when the next character is written.
@@ -180,6 +188,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Source**: `charmbracelet_ultraviolet.md` — "Wide Character Handling — When overwriting part of a wide character (emoji, CJK), fills remaining width with blank cells to avoid rendering artifacts. Placeholder zero-width cells for wide char trailers are handled symmetrically."
 
 **Implementation ideas**:
+
 1. After `setChar()`, check if the character is wide (via `Width::string() > 1`) and fill subsequent cell(s) with empty string or ANSI "clear" sequence
 2. When overwriting a wide character from a previous frame, must clear both cells
 3. Add `clearCell()` method that handles both single and wide char clearing
@@ -191,6 +200,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 ## High Value
 
 ### 3. Constraint-Based Layout (Cassowary Solver)
+
 **Title**: Tree-based layout cannot express competing constraints
 
 **Description**: sugar-boxer uses weighted round-robin distribution which is simple but cannot express constraints like "column A should be 30% of total width but never less than 10 cells". External repos (ultraviolet, ratatui, php-tui) use Cassowary constraint solver.
@@ -202,6 +212,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Source**: `ratatui_ratatui.md` — "Layout System: Cassowary constraint solver-based layout (Layout, Constraint, Direction, Flex)"
 
 **Implementation ideas**:
+
 1. Port the Cassowary algorithm (via `honey-bounce` or new `candy-constraint` lib)
 2. Add `withConstraint()` methods to Node for Min/Max/Percent/Ratio constraints
 3. Before rendering, run solver to compute actual dimensions from constraints
@@ -212,6 +223,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Expected impact**: High for complex layouts; enables truly responsive H/V compositions
 
 ### 4. ContentGenerator Pattern
+
 **Title**: Leaf nodes hold static strings only; no per-cell adaptive content
 
 **Description**: sugar-boxer leaf nodes hold raw strings. Upstream stickers has `ContentGenerator(func(maxX, maxY) string)` that recomputes content based on actual allocated space at render time, enabling adaptive text truncation/wrapping without pre-measuring.
@@ -221,6 +233,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Source**: `76creates_stickers.md` — "Content generators: Cells can hold either static content (SetContent) or dynamic content via SetContentGenerator(func(maxX, maxY) int) string) for per-cell adaptive text wrapping/display"
 
 **Implementation ideas**:
+
 1. Add `Node::withContentGenerator(callable): self` that accepts `Closure(int $maxX, int $maxY): string`
 2. Store as `?Closure` in Node alongside `content`
 3. At render time, if `contentGenerator !== null`, call it with `(pcw, pch)` to get actual content string
@@ -231,6 +244,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Expected impact**: Medium — ergonomic improvement for adaptive content scenarios
 
 ### 5. Dimension Locking / Fixed Size
+
 **Title**: No equivalent to stickers' LockRowHeight/LockColumnWidth
 
 **Description**: In stickers, `LockRowHeight()` disables vertical scaling for a specific row, forcing it to maintain a fixed height regardless of available space. sugar-boxer has no equivalent — all dimension hints are soft.
@@ -238,6 +252,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Why it matters**: For dashboard-style layouts where a header or footer panel should remain a fixed size while the main content area expands/shrinks, dimension locking is essential.
 
 **Implementation ideas**:
+
 1. Add `withFixedWidth(int)` / `withFixedHeight(int)` methods to Node
 2. These set a hard constraint that overrides weighted distribution for that axis
 3. In `distribute()`, treat nodes with fixed size as having weight 0 and size equal to fixed value
@@ -249,6 +264,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 ## Medium
 
 ### 6. Auto-Sizing / Content-Fit
+
 **Title**: render() requires explicit width/height; no auto-fit to content
 
 **Description**: sugar-boxer's `render()` takes explicit viewport dimensions. It does not compute required dimensions from content (like CSS `fit-content`). External layout systems can query "how big does this need to be" before rendering.
@@ -256,6 +272,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Why it matters**: For cases where the layout should adapt to content size rather than viewport size (e.g., a dialog that sizes to fit its content).
 
 **Implementation ideas**:
+
 1. Add `Boxer::measure(Node): [width, height]` that computes total dimensions without rendering
 2. Node already has `totalWidth()` and `totalHeight()` but these use minWidth/minHeight, not actual measured content
 3. Add `Node::measureContent(): [int, int]` that calls strWidth() on content strings
@@ -265,6 +282,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Expected impact**: Medium — enables layout-first-then-size approaches
 
 ### 7. Mixed Border Styles Within Panels
+
 **Title**: Single border style per node; no mixed inner/outer borders
 
 **Description**: Each node has one `borderStyle` that applies to its entire perimeter. External libraries like ratatui's Block support `inner` and `outer` border types separately for complex panel compositions.
@@ -272,6 +290,7 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Why it matters**: For compound borders like double-line outer with single-line inner separators, the current single-style approach requires multiple nodes with different border styles manually composed.
 
 **Implementation ideas**:
+
 1. Add `withInnerBorderStyle(?Border)` alongside existing `borderStyle`
 2. For compound borders, use `withBorderStyle()` for outer and `withInnerBorderStyle()` for inner separators
 
@@ -282,11 +301,13 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 ## Low Priority
 
 ### 8. Title Positioning
+
 **Title**: Title is drawn but positioning within top border is fixed
 
 **Description**: While Node supports `title`, the actual title rendering position within the top border is implicit and not configurable (typically centered or left-aligned). External libs support title position options.
 
 **Implementation ideas**:
+
 1. Add `withTitlePosition(TitlePosition)` enum (Left, Center, Right)
 2. In `drawBorder()`, when title is set, draw title text at the specified position within top edge
 
@@ -295,11 +316,13 @@ None — sugar-boxer is a pure renderer, not a component framework. Extension wo
 **Expected impact**: Low — cosmetic improvement
 
 ### 9. Gap/Grid Layout Mode
+
 **Title**: Only H/V tree distribution; no CSS grid-style two-dimensional layout
 
 **Description**: sugar-boxer only supports linear H/V composition. CSS grid provides two-dimensional placement where items can span multiple rows/columns. Not critical but a gap versus stickers FlexBox.
 
 **Implementation ideas**:
+
 1. Consider adding `Grid` node type with explicit row/column span
 2. Or add to `sugar-stickers` as a separate component
 
@@ -340,6 +363,7 @@ $layout->constraints([
 ```
 
 **Tradeoffs**:
+
 - Round-robin vs floor-robin: sugar-boxer and stickers both distribute integer space; sugar-boxer uses single-pass rounding, stickers uses two-pass (floor + remainder round-robin)
 - Weighted vs constraint-based: Weighted is simpler and faster O(n) but cannot express competing constraints; Cassowary is O(n²) but handles constraints with priority
 
@@ -377,6 +401,7 @@ func (tr *TerminalRenderer) Render() {
 **Current**: `SugarBoxer` mixes layout computation and cell-grid rendering in the same class.
 
 **Opportunity**: Consider separating `LayoutEngine` (tree → rectangle assignment) from `Renderer` (rectangles → string). This would enable:
+
 - Reusing layout engine with different rendering backends
 - Easier testing of layout algorithm independent of cell-grid
 - Future support for different output formats (ANSI, HTML, etc.)
@@ -397,6 +422,7 @@ interface Renderer {
 **Current**: Node dispatch is via `kind` string constants and a switch in `renderNode()`.
 
 **Opportunity**: Use a proper Visitor pattern for extensibility:
+
 - Add new node types without modifying the main switch
 - Enable custom rendering per node type via visitor implementation
 - Easier to add debug/trace rendering
@@ -467,6 +493,7 @@ $layout = SugarBoxer::build(function($b) {
 ## 1. Layout Recipes
 
 **Opportunity**: Document common layout patterns:
+
 - Sidebar + main content layout
 - Header + body + footer layout
 - Multi-panel dashboard layout
@@ -476,6 +503,7 @@ $layout = SugarBoxer::build(function($b) {
 ## 2. Integration Guides
 
 **Opportunity**: Document how sugar-boxer integrates with other SugarCraft libs:
+
 - Using sugar-boxer with `candy-core` TTY loop
 - Composing sugar-boxer layouts inside sugar-bits Viewport
 - Combining sugar-boxer with sugar-stickers FlexBox
@@ -483,6 +511,7 @@ $layout = SugarBoxer::build(function($b) {
 ## 3. Performance Tips
 
 **Opportunity**: Document rendering performance characteristics:
+
 - When to use `minWidth` vs explicit sizing
 - Tradeoffs of deep nesting
 - When to cache render results vs re-render
@@ -520,6 +549,7 @@ $node->withTitle('My Panel')
 **Current**: Unit tests cover known dimension scenarios.
 
 **Opportunity**: Add fuzz testing that generates random node trees and viewport dimensions, verifying:
+
 - No cell writes outside grid bounds
 - All children receive at least 1 cell of space
 - Total allocated space equals available space minus gaps
@@ -529,6 +559,7 @@ $node->withTitle('My Panel')
 **Current**: Limited explicit testing of CJK/emoji content.
 
 **Opportunity**: Add explicit test cases for wide character rendering, verifying:
+
 - Wide chars don't overflow into next content area
 - Wide chars in bordered vs borderless nodes
 - Mixed narrow + wide content in same leaf
@@ -560,6 +591,7 @@ $node->withTitle('My Panel')
 ## From Upstream (treilik/bubbleboxer)
 
 ### ModelMap Indirection
+
 **Issue**: bubbleboxer wraps each leaf in a `ModelMap` that holds `tea.Model` instances. This enables integration with the broader Bubbletea ecosystem but adds complexity.
 
 **Lesson for sugar-boxer**: sugar-boxer correctly chose a simpler approach — raw string content — given PHP's lack of a Bubbletea runtime. Don't over-engineer for a use case that doesn't exist.
@@ -567,6 +599,7 @@ $node->withTitle('My Panel')
 **Source**: `sugarcraft_sugar-boxer.md` §1.1
 
 ### SizeFunc for Custom Sizing
+
 **Discussion**: bubbleboxer supports `SizeFunc func(node, dim) []int` for custom layout algorithms beyond weighted distribution.
 
 **Lesson**: This could be ported as `withSizeFunc()` on Node, but it's a lower priority than the constraint-based layout approach since Cassowary already solves the general case.
@@ -576,6 +609,7 @@ $node->withTitle('My Panel')
 ## From External Repos
 
 ### ultraviolet's Style Diff Algorithm
+
 **PR**: `charmbracelet/ultraviolet` implements `StyleDiff()` that computes minimal SGR sequence to transition between styles.
 
 **Lesson**: sugar-boxer currently renders each cell with the node's `Style` but doesn't track previous frame's style for delta optimization. If diffing is added, style transitions would benefit from similar optimization.
@@ -583,6 +617,7 @@ $node->withTitle('My Panel')
 **Source**: `charmbracelet_ultraviolet.md` — "Style Diff Algorithm — Computes minimal SGR sequence to transition from one style to another"
 
 ### ratatui's Widget Trait Pattern
+
 **Discussion**: ratatui's `Widget` trait with `impl Widget for &str` allows ergonomic string rendering without explicit wrapping.
 
 **Lesson**: sugar-boxer could benefit from a similar trait — `Drawable` — that accepts strings directly:
@@ -593,6 +628,7 @@ $boxer->render('Hello World', 40, 10); // auto-wrap as leaf
 **Source**: `ratatui_ratatui.md` — "impl<W: Widget> Widget for &W { ... } impl Widget for &str { ... }"
 
 ### textual's CSS Layout
+
 **Discussion**: textual implements full CSS flexbox via TCSS stylesheet.
 
 **Lesson**: While a full CSS layout engine is out of scope for sugar-boxer, the Justify/Align concepts map to sugar-boxer's `spacing` and `alignH/alignV`. The CSS flexbox model could inspire future layout directions.
@@ -663,6 +699,7 @@ sugar-boxer is a well-implemented, focused layout engine that correctly adapts i
 The immediate wins (wide-char handling, ContentGenerator, dimension locking) address real ergonomic and correctness issues without major architectural change. The medium-term investments (diffing, constraints) are more significant but would substantially close the gap with leading TUI layout systems.
 
 The key strategic decision is whether to evolve sugar-boxer toward:
+
 - **Full constraint-based layout** (Cassowary solver) — more powerful but higher complexity
 - **Incremental improvements** (diffing, content generator) — lower complexity with targeted impact
 

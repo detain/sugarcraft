@@ -1,11 +1,17 @@
 # SugarCraft/honey-bounce
 
 ## Metadata
+
 - **Package**: `sugarcraft/honey-bounce`
+
 - **Upstream**: [charmbracelet/harmonica](https://github.com/charmbracelet/harmonica) (1.53k stars, Go)
+
 - **Language**: PHP 8.3+
+
 - **Namespace**: `SugarCraft\Bounce`
+
 - **Status**: 🟢 v1 ready (public API + tests + docs + demo)
+
 - **Role**: Spring physics + Newtonian projectile simulation for terminal animation
 
 ## Overview
@@ -13,6 +19,7 @@
 HoneyBounce is a pure-math PHP library providing two complementary animation primitives:
 
 1. **Damped Spring Physics** — Ryan Juckett's analytically-exact damped harmonic oscillator algorithm for realistic spring-based animations (under-damped, critically-damped, over-damped regimes)
+
 2. **Newtonian Projectile Simulation** — Euler-integrated 3D point/vector-based projectile motion with configurable gravity
 
 Unlike UI-focused animation libraries, honey-bounce is **framework-agnostic** — it solves the physics equations and returns numbers; consumers decide how to render them. This makes it suitable for TUIs (candy-core), game physics (honey-flap/Flappy Bird clone), particle effects, or any context requiring smooth, physically-grounded motion.
@@ -41,8 +48,11 @@ honey-bounce/src/
 ### Design Principles
 
 - **Immutable where possible**: `Spring::update()` returns `[pos, vel]` pair; `Projectile::update()` returns new `Projectile` instance; `Vector`/`Point` are value objects
+
 - **O(1) per-frame updates**: All complex math precomputed in constructor; `update()` is 4 multiplies + 2 adds
+
 - **FPS-first timing**: `Spring::fps(int $n)` returns `1.0/n` for consistent simulation cadence
+
 - **No terminal dependency**: Pure math library — consumers handle rendering
 
 ## Feature Inventory
@@ -101,7 +111,9 @@ $z2 = $za + $zb;
 // Coefficients use hyperbolic functions (exp, sqrt) — no oscillation
 ```
 - Converges monotonically without oscillation
+
 - Slower than critical damping
+
 - Suitable for "heavy, lazy" motion
 
 **2. Under-damped (`ζ < 1`)** — `Spring.php:73-90`
@@ -111,6 +123,7 @@ $alpha = $angularFrequency * sqrt(1.0 - $dampingRatio * $dampingRatio);
 // Uses trig functions (cos, sin, exp) — oscillatory decay
 ```
 - Oscillates around target with decaying amplitude
+
 - Suitable for "bouncy" feel (preset: `Wobbly`)
 
 **3. Critically-damped (`ζ = 1`)** — `Spring.php:93-101`
@@ -120,6 +133,7 @@ $timeExp = $deltaTime * $expTerm;
 // Special case: fastest convergence without overshoot
 ```
 - The default for "snap to value" animations
+
 - Presets `Gentle`, `Stiff`, `Slow`, `Molasses` all use critical damping
 
 #### Equilibrium-Relative Update
@@ -160,6 +174,7 @@ public function update(): self
 
 Uses first-order Euler integration:
 - `pos += vel * dt`
+
 - `vel += acc * dt`
 
 **Limitation**: Euler integration is numerically unstable for large timesteps or high-velocity scenarios. For games or simulations requiring accuracy, consider upgrading to RK4 or Verlet integration.
@@ -189,14 +204,20 @@ This translates the user-facing "spring feel" parameters (tension, friction, mas
 
 Both are immutable 3D value objects with `$z` defaulting to `0.0` for 2D backward compatibility. `Vector` provides:
 - `add(self $other)` — vector addition
+
 - `sub(self $other)` — vector subtraction
+
 - `scale(float $s)` — scalar multiplication
+
 - `length()` — Euclidean magnitude
+
 - `dot(self $other)` — dot product
+
 - `cross(self $other)` — cross product (right-hand rule)
 
 `Point` provides:
 - `add(Vector)` — translate point
+
 - `distance(self $other)` — Euclidean distance
 
 This is richer than upstream harmonica's `Vector` (which is just 3 public float fields with no methods).
@@ -258,7 +279,9 @@ if (Probe::reducedMotion()) {
 
 `Probe::reducedMotion()` checks:
 1. `getenv('REDUCE_MOTION') === '1'`
+
 2. `getenv('PREFERS_REDUCED_MOTION') === '1'`
+
 3. Terminal signals `prefers-reduced-motion` (via `Terminfo`/`ncurses`)
 
 This provides WCAG 2.1 compliance at the physics layer — any consumer using `Spring::update()` gets reduced-motion support automatically.
@@ -422,25 +445,41 @@ $value = $ease->evaluate($t);
 ## Strengths
 
 1. **Analytically exact spring physics**: Ryan Juckett's algorithm is numerically stable at any frame rate, unlike naive Verlet/RK4
+
 2. **Constant-time updates**: 4 multiplies + 2 adds per spring tick after one-time coefficient setup
+
 3. **Rich presets**: UIKit-inspired spring presets eliminate magic number tuning for common use cases
+
 4. **Framework-agnostic**: Pure math — no terminal or UI dependencies; works in TUIs, games, or any animation context
+
 5. **Accessibility built-in**: `REDUCE_MOTION` support at the physics layer, not bolted on
+
 6. **Complete easing coverage**: 15 named easings + 24 CSS cubic-bezier curves — no need to reach for a separate library
+
 7. **Immutable design**: Value semantics prevent spooky-action-at-a-distance bugs
+
 8. **Y-up/Y-down flexibility**: `Gravity::standard()` vs `Gravity::standardYDown()` matches any coordinate convention
+
 9. **Production validated**: Powers `honey-flap` Flappy Bird clone; harmonica powers TUI animations in bubbletea
 
 ## Weaknesses
 
 1. **No collision detection**: `Projectile` is pure kinematics; consumers must implement boundary/collision logic
+
 2. **Euler integration drift**: First-order Euler accumulates error over many frames
+
 3. **Mutable Projectile allocation**: Immutable `update()` creates garbage in tight loops
+
 4. **No frame-skip handling**: Baked-in `deltaTime` assumes consistent frame cadence
+
 5. **No multi-body physics**: No joint/constraint system for connected bodies (ragdolls, soft bodies)
+
 6. **No spatial partitioning**: `SpringCollection` uses linear search — O(n) per tick for n springs
+
 7. **PHP-only**: No WASM/browser target, limiting use to server-side TUI or CLI tools
+
 8. **No animation timeline**: Consumers must manually orchestrate multi-stage animations via `SpringChain` polling
+
 9. **Limited curve types**: No B-spline, Catmull-Rom, or custom piecewise bezier support
 
 ## Comparison with Upstream (harmonica)
@@ -464,18 +503,27 @@ $value = $ease->evaluate($t);
 ## Third-Party Animation Libraries (for reference)
 
 ### Ratatui (Rust)
+
 - No built-in animation framework — animations must be manually implemented via state and timers
+
 - Uses immediate-mode rendering with buffer diffing — animation state managed by consumer
+
 - **Lesson**: honey-bounce's physics-first approach is the right split; rendering should remain consumer's responsibility
 
 ### Textual (Python)
+
 - Built-in `Animator` class with easing functions and transitions
+
 - Reactive state + watchers provide automatic animation triggering
+
 - **Lesson**: A `SugarCraft\Bounce\Animator` wrapper that auto-hooks springs to reactive properties in candy-core could provide similar ergonomics
 
 ### Charmbracelet/confettysh (Go)
+
 - Particle system using velocity, gravity, acceleration for confetti/fireworks
+
 - SugarCraft has no particle system — `honey-bounce` + a future `ParticleSystem` class could replicate this
+
 - **Lesson**: Projectile physics can serve as the foundation for particle effects; need only add emission/collision/lifetime management
 
 ## Files Reference

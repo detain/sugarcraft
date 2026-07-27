@@ -31,6 +31,7 @@ The complete subagent cycle for each step is:
 git checkout master && git pull --ff-only        # start from clean master
 git checkout -b ai/<slug>                        # branch named in step file
 # ... edit files ...
+
 cd <touched-lib> && composer install --quiet && vendor/bin/phpunit
 cd /home/sites/sugarcraft
 git add <specific files>                         # NEVER -A or .

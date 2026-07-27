@@ -18,6 +18,7 @@
 | Open PRs | 0 |
 
 **Core Components:**
+
 - **Charm KV** — Encrypted, cloud-synced key-value store (BadgerDB)
 - **Charm FS** — Cloud filesystem with E2E encryption
 - **Charm Crypt** — SIV-mode encryption utilities
@@ -42,6 +43,7 @@ From `repo_map/charmbracelet_charm.md`:
 | Overall architecture | `candy-core` | Elm-style MVC TUI pattern |
 
 **Identified Opportunities:**
+
 - **Sugar-KV** — PHP port of encrypted KV store
 - **Sugar-FS** — PHP `fs.FS`-compatible filesystem with encryption
 - **Sugar-Crypt** — E2E encryption using PHP's OpenSSL
@@ -215,6 +217,7 @@ No explicit performance issues in the tracker. Implicit signals:
 4. **Path encryption** — Deterministic encryption of path components may leak patterns
 
 **Performance Lessons:**
+
 - KV store needed range queries but only had prefix scan
 - FS operations needed Stat() without full read (requested in #291)
 - Binary data handling broke terminal (issue #70)
@@ -237,6 +240,7 @@ No explicit performance issues in the tracker. Implicit signals:
 4. **Hardcoded Charm Cloud** — Default endpoint embedded in client
 
 ### SugarCraft Opportunity:
+
 A cleaner PHP-based encrypted storage library could provide better separation of concerns with a clean extension API.
 
 ---

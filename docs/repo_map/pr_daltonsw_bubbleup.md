@@ -11,6 +11,7 @@
 **Homepage**: https://pkg.go.dev/go.dalton.dog/bubbleup
 
 **Activity Summary**:
+
 - 2 Open Issues | 3 Closed PRs | 0 Open PRs | No Discussions (404)
 - All meaningful development came from 1-2 external contributors
 - Small, niche ecosystem (~50 stars) with minimal community engagement
@@ -24,6 +25,7 @@
 | daltonsw/bubbleup | sugar-toast | 🟢 Implemented |
 
 **SugarCraft enhancements over upstream**:
+
 - Multiple concurrent alerts (queue system)
 - Progress toast support
 - Action buttons with callbacks
@@ -49,6 +51,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ## 4. High-Signal Open Issues
 
 ### Issue #7: "Support for bubbletea v2" (Open)
+
 **Author**: ossenthusiast | **Opened**: Jan 28, 2026 | **Comments**: 2
 
 **Body**: Links to https://github.com/charmbracelet/bubbletea/discussions/1374
@@ -67,6 +70,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 > [links to https://charm.land/blog/v2/]
 
 **Analysis**:
+
 - **Critical Signal**: Maintainer fears upstream v2 could obsolete this library entirely via lipgloss "Layer" paradigm
 - **Version anxiety**: BubbleTea + lipgloss tight coupling creates upgrade risk
 - **Action taken**: Maintainer decided to start migration after upstream v2 blog post
@@ -75,6 +79,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ---
 
 ### Issue #3: "Configurable animations" (Open)
+
 **Author**: DaltonSW (owner) | **Opened**: Oct 3, 2024 | **Comments**: 0
 
 **Body**:
@@ -83,6 +88,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 > "If I enable some sort of slide-in, it would only work (in a way that looks good) if snapped to an edge"
 
 **Analysis**:
+
 - **Owner-initiated**: The maintainer themselves identified animation as a desired feature
 - **Design constraint noted**: Slide-in animations only work aesthetically when anchored to screen edges
 - **No progress**: Issue open for ~20 months with no implementation
@@ -93,6 +99,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ## 5. Important Closed Issues
 
 ### Issue #6 (PR #6): "fix: correct duration handling to match API signature"
+
 **Author**: mikeschinkel | **Closed**: Jan 31, 2026 | **Merged**: Yes
 
 **PR Description**:
@@ -101,12 +108,14 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 > **BREAKING CHANGE** _(since PR #4):_ Code passing raw integers (e.g., `10`) will now correctly receive `10 nanoseconds` instead of incorrectly receiving `10 seconds`. Update code to use proper `time.Duration` values e.g., `10*time.Second`."
 
 **Changes**:
+
 - `alert.go`: Removed `time.Second` multiplication from `NewAlertCmd()`
 - `model.go`: Added default case to continue ticking on non-alert messages
 - `README.md`: Updated all examples to use `N*time.Second` syntax
 - `examples/example_main.go`: Updated to use `10*time.Second`
 
 **Analysis**:
+
 - **Duration type confusion**: Classic API design bug—function declared `time.Duration` but implementation treated it as raw int
 - **Silent breakage**: Previous PR (#4) introduced this bug
 - **Defensive lesson**: When wrapping Duration types, validate that API contract matches implementation
@@ -115,18 +124,21 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ---
 
 ### Issue #5 (PR #5): "Add positioning, dynamic width, Unicode support, Esc-to-dismiss, and improved docs/examples"
+
 **Author**: mikeschinkel | **Closed**: Jan 18, 2026 | **Merged**: Yes | **Comments**: 6
 
 **PR Description**:
 > "This PR adds a small set of features I needed for a production TUI (alert positioning, dynamic width, Unicode prefixes, and Esc-to-dismiss), while making a strong effort to preserve backward compatibility for existing users."
 
 **Features Added**:
+
 1. **Alert positioning** (top/bottom × left/center/right)
 2. **Dynamic width alerts** with min/max bounds
 3. **Unicode prefix support** (alternative to NerdFonts or ASCII)
 4. **`Esc` key support** to dismiss active alerts before timeout
 
 **Contributions beyond features**:
+
 - Expanded and clarified README.md
 - Updated example app to be more comprehensive
 - Added screen recording `.gif` to demonstrate behavior
@@ -143,6 +155,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 > "Is this an AI-generated PR? While I did use AI extensively to produce this PR, I directed it entirely and reviewed every line of code and every word of the README and this PR message manually over three full (3) days."
 
 **Analysis**:
+
 - **External contributor drove major enhancements**: mikeschinkel found the library, needed features, chose to enhance rather than fork
 - **Backward compatibility was explicit priority**: This is a model worth emulating
 - **AI-assisted but human-directed**: Significant use of AI but with rigorous review
@@ -152,12 +165,14 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ---
 
 ### Issue #4 (PR #4): "Programmable duration"
+
 **Author**: joel-sgc | **Closed**: Nov 19, 2025 | **Merged**: Yes | **Comments**: 1
 
 **Body**:
 > "I like the project, but this is pretty important for a project I'm working on, so I figured I'd add it. Hope this helps"
 
 **Analysis**:
+
 - **Simple but critical feature**: Duration was not configurable originally; user needed it for their production app
 - **Motivated by real use-case**: Contributor was building something that needed this
 - **Note**: This PR introduced the duration bug fixed in PR #6
@@ -165,12 +180,14 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ---
 
 ### Issue #2: "Configurable alert location" (Closed — completed)
+
 **Author**: DaltonSW (owner) | **Closed**: Jan 18, 2026
 
 **Body**:
 > "Corners and center for sure. Currently iffy on mid-edge, but I'm sure it would be pretty trivial after the others"
 
 **Analysis**:
+
 - **Owner-initiated feature request**: The maintainer themselves wanted configurable positioning
 - **Mid-edge considered but deferred**: The 6 corner/edge positions were prioritized over 9 (adding middle-left/center/right)
 
@@ -203,12 +220,14 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ## 8. Important PRs
 
 ### PR #5: Feature Expansion (mikeschinkel)
+
 - **Scope**: Positioning, dynamic width, Unicode, Esc dismiss, VHS demo tape, README overhaul
 - **Approach**: Backward-compatible, human-reviewed AI-assisted development
 - **Merge time**: ~11 days from submission to merge
 - **Lesson**: External contributor can substantially enhance a small library if maintainer is receptive
 
 ### PR #6: Duration Bug Fix (mikeschinkel)
+
 - **Scope**: Fixed type mismatch between API signature and implementation
 - **Breaking change**: Required users to update from raw ints to `time.Duration`
 - **Lesson**: API design must ensure implementation matches declared types
@@ -218,6 +237,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 ## 9. Architectural Changes
 
 ### Major Architectural Evolution
+
 1. **Original (Oct 2024)**: Simple single-position, fixed-width alerts
 2. **PR #4 (Nov 2025)**: Added programmable duration
 3. **PR #5 (Jan 2026)**: Major expansion—6 positions, dynamic width, Unicode, Esc dismiss
@@ -225,6 +245,7 @@ From initial analysis (`repo_map/daltonsw_bubbleup.md`):
 5. **Current**: Awaiting BubbleTea v2 migration
 
 ### Key Architectural Pattern
+
 - **TEA (The Elm Architecture)** via BubbleTea Model interface
 - **Fluent/builder pattern** via `With*()` methods returning modified copies
 - **Composite rendering** via `Render(content)` method overlaying alerts on existing view
@@ -242,11 +263,13 @@ No explicit performance discussions found. Observed tick overhead:
 ## 11. Extensibility Discussions
 
 ### AlertDefinition Registration Pattern
+
 - Custom alert types can be registered via `RegisterNewAlertType(AlertDefinition)`
 - Allows: custom key, foreground color, lipgloss.Style override, prefix string
 - **Limitation**: No way to unregister or modify existing alert types after creation
 
 ### VHS Demo Tape
+
 - Contributor added `examples/record-example.sh` and `.tape` file
 - Allows regenerating demo GIF via `vhs` tool
 - **Strategic lesson for SugarCraft**: Should adopt VHS tape pattern for sugar-toast demos
@@ -265,6 +288,7 @@ None explicitly documented. However:
 ## 13. Migration Problems
 
 ### Breaking Change in PR #6
+
 > "Code passing raw integers (e.g., `10`) will now correctly receive `10 nanoseconds` instead of incorrectly receiving `10 seconds`."
 
 **Migration path required**: Users had to change from `NewAlertModel(50, true, 10)` to `NewAlertModel(50, true, 10*time.Second)`
@@ -276,6 +300,7 @@ None explicitly documented. However:
 ## 14. Clever Fixes & Workarounds
 
 ### Duration Handling Fix (PR #6)
+
 The fix removed the errant `time.Second` multiplication:
 ```go
 // Before (buggy):
@@ -296,6 +321,7 @@ NewAlertCmd := func(msg string, dur time.Duration) tea.Cmd {
 ```
 
 ### Render() as Composite
+
 - `View()` returns empty string; consumers must call `Render(content)` to composite alerts
 - **Clever design**: Signals that this isn't a standalone renderer but an overlay system
 
@@ -304,11 +330,13 @@ NewAlertCmd := func(msg string, dur time.Duration) tea.Cmd {
 ## 15. Community Workarounds
 
 ### Observed Patterns
+
 1. **Forking**: At least 2 forks exist (mikeschinkel, joel-sgc) for contributing features
 2. **Fork-then-PR**: Contributors fork, implement features, then submit PR
 3. **Fork-and-maintain**: One contributor (mikeschinkel) maintained a fork during PR review wait time
 
 ### No Plugin Ecosystem
+
 - No third-party plugins, extensions, or ecosystem tools found
 - Single-purpose library with no extensibility hooks beyond alert type registration
 
@@ -317,6 +345,7 @@ NewAlertCmd := func(msg string, dur time.Duration) tea.Cmd {
 ## 16. Maintainer Guidance Patterns
 
 **Maintainer (DaltonSW) Behavior**:
+
 1. **Conservative updates**: Waits for upstream (BubbleTea/lipgloss) to stabilize before migrating
 2. **Responsive to PRs**: Merged external contributions within days of submission
 3. **Minimal proactive development**: Features often require external contributors to drive
@@ -352,6 +381,7 @@ None formally rejected. All suggested features were either:
 ## 19. Features SugarCraft Should Consider
 
 ### Already Implemented (Validated by Upstream)
+
 - ✅ Multiple alert positions (SugarToast: 9, upstream: 6)
 - ✅ Dynamic width alerts
 - ✅ Unicode/ASCII/NerdFont symbol options
@@ -360,11 +390,13 @@ None formally rejected. All suggested features were either:
 - ✅ Multiple concurrent alerts (SugarToast enhancement)
 
 ### Should Consider Adding
+
 1. **VHS demo tape**: Adopt the `vhs` tape pattern from PR #5 for regenerating demo GIFs
 2. **Fade-in animation**: As owner noted, fade-in is "fairly trivial" to implement
 3. **Progress toasts**: Already in SugarToast—validate this works well
 
 ### Consider Carefully (Existential Risk)
+
 - **lipgloss v2 Layer paradigm**: If BubbleTea v2 makes overlay alerts native, need to evaluate whether SugarToast has unique value proposition
 
 ---
@@ -372,12 +404,14 @@ None formally rejected. All suggested features were either:
 ## 20. Architectural Lessons
 
 ### TEA Pattern Integration
+
 - **Good**: Library fully implements BubbleTea Model interface (`Init()`, `Update()`, `View()`)
 - **Design compromise**: `View()` returns empty string; consumer must call `Render()` instead
 - **Rationale**: Enables composite rendering over existing views
 - **SugarCraft lesson**: PHP port should consider similar pattern where View() returns empty and render is composite
 
 ### Fluent/Builder Pattern
+
 ```go
 // All With*() methods return modified copies for immutability
 m.alert = m.alert.WithPosition(TopRightPosition).WithMinWidth(15)
@@ -385,6 +419,7 @@ m.alert = m.alert.WithPosition(TopRightPosition).WithMinWidth(15)
 - **SugarCraft convention matches**: Already using `with*()` fluent pattern
 
 ### Animation Architecture
+
 - **Current**: LAB color blending drives fade effect
 - **Gap**: Position animation (slide-in) only works aesthetically when "snapped to an edge"
 - **Lesson**: Slide-in animations need careful design about anchor points
@@ -446,15 +481,18 @@ m.alert = m.alert.WithPosition(TopRightPosition).WithMinWidth(15)
 ## 25. High ROI Recommendations
 
 ### Immediate (High Impact, Low Effort)
+
 1. **Adopt VHS tape pattern** for sugar-toast demos—adds reproducibility and CI-friendly generation
 2. **Verify duration handling** in SugarToast—ensure PHP int vs Duration type consistency
 3. **Stop tick timer on alert dismiss**—eliminates 100ms tick overhead after fade
 
 ### Short-term (Medium Impact, Medium Effort)
+
 4. **Implement fade-in animation**—"opacity seems fairly trivial" per upstream owner
 5. **Add comprehensive godoc examples**—upstream has documentation gaps; capitalize on this
 
 ### Long-term (High Impact, High Effort)
+
 6. **Evaluate BubbleTea v2 migration** path and lipgloss Layer paradigm impact on sugar-toast's value proposition
 7. **Add slide-in animation** for edge-anchored positions—validate design constraint about edge-snapping
 8. **Progress toast polish**—SugarToast already has this; validate UX and edge cases

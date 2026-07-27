@@ -7,6 +7,7 @@ updated: 2026-07-04
 # Implementation Plan: candy-pty Code Review Findings
 
 ## Goal
+
 Address all critical, high, medium, and low severity issues identified in the candy-pty code review, plus implement missing features and resolve duplication. Each item includes investigation notes confirming the finding's context in the codebase.
 
 ## Context & Decisions
@@ -46,10 +47,12 @@ Address all critical, high, medium, and low severity issues identified in the ca
 **Severity:** Critical
 
 **Conditions for success:**
+
 - Unit test that spawns a child, calls `stream()`, then `close()`, and verifies the child is properly reaped (SIGHUP delivered)
 - Verify no FD leak under repeated open/close cycles
 
 **Related code locations:**
+
 - `src/Posix/PosixMasterPty.php:211-257` (close method)
 - `src/Posix/PosixMasterPty.php:179-194` (stream method)
 - `src/Posix/PosixMasterPty.php:186` (fopen creates duplicate fd)
@@ -86,11 +89,13 @@ $rc = Libc::lib()->close($this->fd);
 **Severity:** Critical
 
 **Conditions for success:**
+
 - EINTR does not cause premature exit from pump loops
 - Signal handlers (like SIGWINCH) don't corrupt pump state
 - All three locations use the helper consistently
 
 **Related code locations:**
+
 - `src/Posix/PosixMasterPty.php:80-81` (read timeout loop)
 - `src/Posix/PosixPump.php:126` (pump loop stream_select)
 - `src/Posix/MultiPump.php:172` (multiplexer tick stream_select)
@@ -128,6 +133,7 @@ if ($ready === false) {
 **Severity:** Critical (but already resolved - no action needed)
 
 **Investigation notes:**
+
 - `Spawn.php:33`: `SHIM_RELATIVE = '/../bin/pty-shim.php'`
 - `Spawn.php:110`: `$shim = __DIR__ . self::SHIM_RELATIVE;`
 - `__DIR__` is `/home/sites/sugarcraft/candy-pty/src/Spawn`
@@ -146,10 +152,12 @@ if ($ready === false) {
 **Severity:** Critical
 
 **Conditions for success:**
+
 - Code like `$pty instanceof PosixMasterPty ? $pty->fd() : throw ...` can be replaced with `$pty->fd()`
 - Interface is implemented correctly by all PTY backends
 
 **Related code locations:**
+
 - `src/Contract/MasterPty.php` (interface definition, add fd() here)
 - `src/Posix/PosixMasterPty.php:264-267` (existing implementation)
 - Note: Windows implementation does not exist yet (tracked in `plans/x-windows.md`)
@@ -167,10 +175,12 @@ if ($ready === false) {
 **Severity:** High
 
 **Conditions for success:**
+
 - Doc comment renders cleanly in all IDEs
 - No non-ASCII characters remain in doc comments
 
 **Related code locations:**
+
 - `src/Expect.php:389` - line contains: `Mirrors charmbracelet/m泡泡/expect.Exp.`
 
 **Investigation notes:** The string `charmbracelet/m泡泡/expect.Exp` appears to be a corrupted reference to `charmbracelet/mbubbletea` (the upstream project). The Chinese characters `泡泡` mean "bubbles" and were likely accidentally included during copy-paste from the upstream `mububbletea` repository name.
@@ -186,11 +196,13 @@ if ($ready === false) {
 **Severity:** High
 
 **Conditions for success:**
+
 - Each SignalForwarder instance maintains independent async state
 - Signal handlers work correctly across multiple instances
 - PHP-FPM workers don't share async state incorrectly
 
 **Related code locations:**
+
 - `src/SignalForwarder.php:30` (static property declaration)
 - `src/SignalForwarder.php:180-188` (ensureAsync method uses static)
 - `src/SignalForwarder.php:55-68` (callback closures capture $fd, $sizeProvider, not instance)
@@ -224,10 +236,12 @@ private static function ensureAsync(bool $async): void
 **Severity:** High
 
 **Conditions for success:**
+
 - All fallback events are logged (with rate limiting if needed)
 - Each fallback instance is distinguishable in logs
 
 **Related code locations:**
+
 - `src/TermiosFactory.php:26` (static boolean)
 - `src/TermiosFactory.php:47-49` (only logs first time)
 
@@ -254,11 +268,13 @@ if (!self::$loggedFallback) {
 **Severity:** High
 
 **Conditions for success:**
+
 - README quickstart uses `PtySystemFactory::default()->open()` or `PosixPtySystem::open()`
 - `Pty` class is clearly marked as deprecated with migration path
 - Users can easily find the non-deprecated API
 
 **Related code locations:**
+
 - `README.md:28-48` (quickstart using deprecated Pty)
 - `README.md:51-66` (DI-friendly example using PosixPtySystem - this is the good one)
 - `src/Pty.php:10-11` (deprecation annotation)
@@ -278,11 +294,13 @@ if (!self::$loggedFallback) {
 **Severity:** Medium
 
 **Conditions for success:**
+
 - `PtyFlags` class or trait contains `O_RDWR = 0x0002` and `oNoCtty()` method
 - Both `Pty` and `PosixPtySystem` use the shared definition
 - No duplication remains
 
 **Related code locations:**
+
 - `src/Pty.php:30` (O_RDWR constant)
 - `src/Pty.php:68-71` (oNoCtty method)
 - `src/PosixPtySystem.php:17` (O_RDWR constant)
@@ -320,11 +338,13 @@ private static function oNoCtty(): int
 **Severity:** Medium
 
 **Conditions for success:**
+
 - Single `trimBuffer()` method exists
 - All three locations (expectAny, expectPattern, expectEof) use it
 - Behavior is identical before and after refactoring
 
 **Related code locations:**
+
 - `src/Expect.php:295-299` (in expectAny)
 - `src/Expect.php:377-381` (in expectPattern)
 - `src/Expect.php:428-430` (in expectEof)
@@ -342,11 +362,13 @@ private static function oNoCtty(): int
 **Severity:** Medium
 
 **Conditions for success:**
+
 - CPU usage during wait is minimal
 - Wait can be interrupted by signals
 - Existing tests still pass
 
 **Related code locations:**
+
 - `src/Posix/ChildPollTrait.php:168` (usleep in wait loop)
 - Also found in `src/Posix/PosixProcess.php:168` (same pattern in overridden wait)
 
@@ -384,11 +406,13 @@ Replace the current manual calculation at PosixMasterPty.php:77-78.
 **Severity:** Medium
 
 **Conditions for success:**
+
 - `$usec` is always `< 1_000_000` after calculation
 - All existing timeout tests pass
 - Edge cases with fractional timeouts work correctly
 
 **Related code locations:**
+
 - `src/Posix/PosixMasterPty.php:77-78`
 
 **Investigation notes:**
@@ -412,11 +436,13 @@ $usec = (int) \round(($remaining - $sec) * 1_000_000);
 **Severity:** Medium
 
 **Conditions for success:**
+
 - `MultiPumpSession::$done` is private with getter
 - `MultiPumpSession::$childExitedAt` is private with getter
 - `MultiPump` uses controlled mutator methods
 
 **Related code locations:**
+
 - `src/Posix/MultiPump.php:251-258` (MultiPumpSession class)
 - `src/Posix/MultiPump.php:131-154` (MultiPump modifies session properties directly)
 
@@ -453,10 +479,12 @@ $session->done = true;
 **Severity:** Low
 
 **Conditions for success:**
+
 - Invalid regex patterns produce clear error messages
 - `preg_last_error()` returns `PREG_NO_ERROR` on success
 
 **Related code locations:**
+
 - `src/Expect.php:330`
 
 **Investigation notes:**
@@ -481,11 +509,13 @@ if ($rc === false) {
 **Severity:** Low
 
 **Conditions for success:**
+
 - Multiple rapid resizes don't spawn multiple stty processes
 - Resize operations are still correct
 - Performance is improved under rapid resize scenarios
 
 **Related code locations:**
+
 - `src/SizeIoctl.php:171-189` (sttySetSize method)
 - `src/SizeIoctl.php:149-161` (setSizeViaLibc calls sttySetSize on Darwin)
 
@@ -500,11 +530,13 @@ if ($rc === false) {
 **Severity:** Low
 
 **Conditions for success:**
+
 - Value objects have `__toString()` returning human-readable representation
 - `Size` and `WinSize` (if they exist) are covered
 - JSON serialization works via `JsonSerializable`
 
 **Related code locations:**
+
 - Value objects mentioned in findings: `Size`, `WinSize` (search codebase)
 - See `src/Expect.php` for example of buffer object style
 
@@ -519,11 +551,13 @@ if ($rc === false) {
 **Severity:** Low
 
 **Conditions for success:**
+
 - Code compiles and works on both Linux and Darwin
 - Intent is clearer to future maintainers
 - Behavior is equivalent or better than current
 
 **Related code locations:**
+
 - `src/ControllingTerminal.php:56-58` (lines with comment explaining the null)
 - `src/ControllingTerminal.php:59` (actual ioctl call)
 
@@ -551,6 +585,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - PTY classes in `src/Posix/`
 - Contract interfaces in `src/Contract/`
 
@@ -565,6 +600,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - `src/Expect.php`
 
 ---
@@ -578,6 +614,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - `composer.json` shows dependency on `sugarcraft/candy-ansi`
 - See README lines 403-406 for current documentation
 
@@ -592,6 +629,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - `src/PtyPool.php:73-82` (acquire method)
 - `src/PtyPool.php:89-101` (release method)
 
@@ -610,11 +648,13 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Refactoring (P3)
 
 **Conditions for success:**
+
 - Trait `LibcAccess` exists with `libc()` method
 - All FFI-using classes use the trait
 - Behavior is identical before and after
 
 **Related code locations:**
+
 - Found in many files: `PosixMasterPty.php`, `PosixPump.php`, `PosixPtySystem.php`, `SizeIoctl.php`, `ControllingTerminal.php`, etc.
 
 ---
@@ -628,6 +668,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Refactoring (P3)
 
 **Related code locations:**
+
 - `src/PtyPool.php:48` (inFlight array)
 - `src/PtyPool.php:104-107` (inFlight method)
 
@@ -644,6 +685,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Compatibility (P3)
 
 **Related code locations:**
+
 - `README.md` (install section at lines 16-24)
 - `composer.json:33` (`ext-ffi` requirement)
 
@@ -660,6 +702,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Compatibility (P3)
 
 **Related code locations:**
+
 - `PosixPtySystem::open()` - entry point where /dev/ptmx is accessed
 - Tests show `markTestSkipped` checks at `PosixMasterPtyTest.php:22-24`
 
@@ -676,6 +719,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Compatibility (P3)
 
 **Related code locations:**
+
 - `src/SizeIoctl.php:149-161` (setSizeViaLibc with stty fallback)
 - `src/SizeIoctl.php:171-189` (sttySetSize subprocess)
 - CALIBER_LEARNINGS.md:33 (`gotcha:ioctl-read-vs-write-variadic`)
@@ -691,6 +735,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Compatibility (P3)
 
 **Related code locations:**
+
 - `src/SizeIoctl.php:76` (`unsigned short[4]`)
 - `src/Libc.php:125-127` (comment about termios being opaque ≥80 bytes)
 
@@ -705,6 +750,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Compatibility (P3)
 
 **Related code locations:**
+
 - `src/Libc.php:78-88` (libraryPath method with env override)
 - `README.md:261-263` (current documentation of env var)
 
@@ -723,6 +769,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - `src/Posix/PosixPump.php:87-175` (pump method with blocking loop)
 
 ---
@@ -738,6 +785,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - `src/SignalForwarder.php:55-68` (static handler closures)
 - `src/SignalForwarder.php:98-108` (static handler in attachSigwinch)
 
@@ -754,6 +802,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - `src/Posix/PosixChild.php` (wait method inherited from ChildPollTrait)
 - `src/Child.php` (interface, should define waitAsync)
 
@@ -770,6 +819,7 @@ if ($libc->ioctl($fd, $tioCSctty, null) !== 0) {
 **Severity:** Enhancement (P4)
 
 **Related code locations:**
+
 - `src/Posix/MultiPump.php:107-118` (run method)
 - `src/Posix/MultiPump.php:126-206` (tick method)
 

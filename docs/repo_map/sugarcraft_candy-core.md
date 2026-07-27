@@ -5,6 +5,7 @@
 **candy-core** is the foundational TUI runtime library of the SugarCraft monorepo — a PHP port of the Go [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) ecosystem. It implements The Elm Architecture (TEA): **Model** (immutable state), **Update** (pure state transitions via Messages), and **View** (declarative string rendering). The runtime orchestrates input parsing, the ReactPHP event loop, subscription reconciliation, command dispatching, and frame rendering.
 
 **Key statistics:**
+
 - **~110 source files** across `src/` and `tests/`
 - **42+ Msg subclasses** covering keyboard, mouse, focus, paste, resize, clipboard, exec, suspend/resume, color-profile detection
 - **ReactPHP-based** event loop with `addReadStream`, `addPeriodicTimer`, `futureTick`
@@ -65,6 +66,7 @@ The dispatch path handles special Msgs inline (BatchMsg, SequenceMsg, TickReques
 ```
 
 **Cell-diff ("cursed", opt-in):**
+
 - Tokenize previous and current lines via `Parser`
 - Compute longest common token prefix
 - Emit partial repaint: `cursorTo(col_after_prefix) + eraseToLineEnd + active_SGR + suffix`
@@ -230,6 +232,7 @@ Model::update() returns [Model, ?Cmd]
 ## Feature Inventory
 
 ### Input Handling
+
 - [x] Full key press/release/repeat with modifier support (Ctrl, Alt, Shift)
 - [x] Kitty keyboard protocol (disambiguate, repeat, alternate keys, associated text)
 - [x] Arrow keys, function keys F1-F24, home/end/page up/page down/delete
@@ -244,6 +247,7 @@ Model::update() returns [Model, ?Cmd]
 - [x] XTVERSION terminal identification
 
 ### Rendering
+
 - [x] Line-diff renderer (baseline, always correct)
 - [x] Cell-diff renderer (Bubble Tea v2 algorithm, opt-in)
 - [x] Synchronized output mode (DEC 2026)
@@ -262,6 +266,7 @@ Model::update() returns [Model, ?Cmd]
 - [x] Sixel graphics (DCS-based)
 
 ### Terminal Control
+
 - [x] Raw mode (termios on POSIX, SetConsoleMode on Windows via FFI)
 - [x] Signal handling (SIGINT/SIGWINCH/SIGTSTP/SIGCONT)
 - [x] Suspend/resume cycle
@@ -270,6 +275,7 @@ Model::update() returns [Model, ?Cmd]
 - [x] /dev/tty reopening for piped stdin
 
 ### Program Control
+
 - [x] Batch commands (concurrent)
 - [x] Sequence commands (ordered)
 - [x] Tick (independent timer)
@@ -281,6 +287,7 @@ Model::update() returns [Model, ?Cmd]
 - [x] Program::println() / printf()
 
 ### Composition
+
 - [x] Component interface (onMount/onUnmount lifecycle)
 - [x] Composite (child management by id)
 - [x] ScreenStack (immutable modal stack)
@@ -289,6 +296,7 @@ Model::update() returns [Model, ?Cmd]
 - [x] ScreenStackCapable interface
 
 ### I18n
+
 - [x] T::t() translation registry with namespace
 - [x] Locale detection from $LANG
 - [x] Exact locale → base language → en fallback chain
@@ -354,6 +362,7 @@ Model::update() returns [Model, ?Cmd]
 ### Developer Experience
 
 **Positives:**
+
 - Clean `Model` contract — `init()`/`update()`/`view()` is simple to understand
 - Fluent `Subscriptions` builder is elegant
 - `Cmd::batch()` / `Cmd::sequence()` / `Cmd::every()` cover the main async patterns
@@ -361,6 +370,7 @@ Model::update() returns [Model, ?Cmd]
 - Good README with shopping list tutorial
 
 **Pain points:**
+
 - `update()` return type `array{0: Model, 1: ?Closure}` requires destructuring
 - No IDE autocomplete for Msg subclasses — `instanceof KeyMsg` is the pattern
 - `WorkerPool` requires named functions or string-eval for serialization — closures silently fail
@@ -376,6 +386,7 @@ The README notes that `gum input`/`gum confirm`/`gum spin` use inline mode (no a
 ## Developer Experience Evaluation
 
 **Strong areas:**
+
 - Clean separation of concerns (InputReader parses, Program dispatches, Renderer paints)
 - Immutable value objects throughout (Subscription, Subscriptions, Screen, ScreenStack, View, Cursor, Progress, Rect)
 - `SubscriptionCapable` trait reduces boilerplate for simple models
@@ -383,6 +394,7 @@ The README notes that `gum input`/`gum confirm`/`gum spin` use inline mode (no a
 - `Component` + `Composite` provides lifecycle-aware composition
 
 **Needs improvement:**
+
 - No `Program::withLogger()` — structured logging missing
 - No `Program::withExceptionHandler()` — exception handling customization
 - `ProgramOptions` is a large constructor with 16 parameters — consider a builder

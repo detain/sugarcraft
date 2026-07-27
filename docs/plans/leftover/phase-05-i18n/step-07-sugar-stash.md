@@ -11,13 +11,16 @@ bar, branch-list labels.
 ## Files
 
 **Create:**
+
 - `sugar-stash/lang/en.php`.
 - `sugar-stash/src/Lang.php`.
 
 **Modify:**
+
 - Files under `sugar-stash/src/`.
 
 **Tests:**
+
 - `sugar-stash/tests/LangCoverageTest.php`.
 
 ## Acceptance

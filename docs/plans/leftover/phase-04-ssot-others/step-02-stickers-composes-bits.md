@@ -13,6 +13,7 @@ Compose them; don't reinvent.
 ## Files
 
 **Modify:**
+
 - `sugar-stickers/src/Viewport.php` — `final class Viewport extends \SugarCraft\Bits\Viewport\Viewport`
   (or composition wrapper). Add sticker-specific extras (sticky
   positioning headers/footers as you scroll).

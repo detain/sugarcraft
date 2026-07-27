@@ -12,6 +12,7 @@
 The current sugar-calendar implementation is a direct port of the Go upstream with basic date selection. Research across Go, Rust, and Python ecosystems reveals significant opportunities for enhancement: **date range selection**, **focus-based navigation**, **event/store architecture**, **localization framework**, and **compound widget composition**.
 
 **Priority Recommendations:**
+
 1. 🔴 **Date Range Selection** — Most impactful missing feature (medium effort)
 2. 🟡 **Focus-based Navigation** — Matches upstream Go pattern, low effort, high UX value
 3. 🟡 **Event Store Architecture** — Enables calendar events and custom day styling (medium effort)
@@ -25,12 +26,14 @@ The current sugar-calendar implementation is a direct port of the Go upstream wi
 **Source:** `/home/sites/sugarcraft/sugar-calendar/src/DatePicker.php`
 
 ### Strengths
+
 - Immutable + fluent pattern (`with*()` methods return clones)
 - Pure ANSI renderer (no TUI framework dependency)
 - 6×7 grid cursor navigation with clamp logic
 - Clean separation of state (`viewMonth`, `viewYear`, `cursorIndex`, `selectedDate`)
 
 ### Gaps vs. Upstream & Peers
+
 | Feature | sugar-calendar | bubble-datepicker (Go) | ratatui (Rust) | textual-timepiece (Python) |
 |---------|---------------|------------------------|----------------|---------------------------|
 | Date range selection | ❌ | ❌ | ❌ | ✅ `DateRangePicker` |
@@ -50,6 +53,7 @@ The current sugar-calendar implementation is a direct port of the Go upstream wi
 **Source:** https://github.com/EthanEFung/bubble-datepicker (42 ⭐)
 
 #### Architecture
+
 ```go
 // Focus enum for header/year/calendar navigation
 type Focus int
@@ -110,6 +114,7 @@ for lastSundayOfLastMonth.Weekday() != time.Sunday {
 ```
 
 #### Missing in Upstream
+
 - No date range selection
 - No localization (hardcoded English day/month names)
 - No event marking / day styling
@@ -122,6 +127,7 @@ for lastSundayOfLastMonth.Weekday() != time.Sunday {
 **Source:** https://ratatui.rs/examples/widgets/calendar/ (19K ⭐)
 
 #### Architecture
+
 ```rust
 // DateStyler trait for custom day styling
 pub trait DateStyler {
@@ -170,6 +176,7 @@ event_store.add(date, Style::default().blue().italic());
 ```
 
 #### Missing
+
 - No date range selection
 - No interactive selection (display-only widget)
 - No keyboard navigation (just rendering)
@@ -193,8 +200,10 @@ event_store.add(date, Style::default().blue().italic());
 | `DateInput` / `TimeInput` | Direct text input |
 
 #### DateRangePicker Pattern
+
 ```python
 # From changelog: "Allow picking the end date first"
+
 class DateRangePicker:
     """Date range picker for picking an interval between two dates."""
 ```
@@ -205,6 +214,7 @@ Key behaviors:
 - `Changed` message emitted on selection change
 
 #### Architecture (compound widgets)
+
 ```
 DatePicker
 ├── Input (text field showing formatted date)
@@ -224,6 +234,7 @@ DateRangePicker
 **Source:** https://github.com/j4321/tkcalendar (106 ⭐)
 
 #### Features
+
 ```python
 Calendar(
     master=None,
@@ -264,10 +275,12 @@ date_pattern = 'y-mm-dd' # → '2026-05-13'
 4. **DateEntry (dropdown compound widget)**:
 ```python
 # Similar to HTML <input type="date">
+
 date_entry = DateEntry(top, width=12, background='darkblue',
                        foreground='white', borderwidth=2)
 date_entry.pack()
 # Shows entry with dropdown calendar on click
+
 ```
 
 ---
@@ -290,6 +303,7 @@ Not a date picker, but reference for compound widgets and focus management:
 **Current state:** Sugar-calendar only supports single date selection.
 
 **References:**
+
 - textual-timepiece `DateRangePicker` — complete implementation
 - tui.date-picker `createRangePicker` — TOAST UI range API
 
@@ -475,6 +489,7 @@ DateTimePicker — DateSelect + TimePicker (future)
 ## 4. Keyboard Navigation Patterns
 
 ### 4.1 Go bubble-datepicker Keys
+
 | Key | Calendar Focus | HeaderMonth Focus | HeaderYear Focus |
 |-----|---------------|-------------------|------------------|
 | ↑ / k | -7 days (LastWeek) | -1 month | -1 year |
@@ -485,6 +500,7 @@ DateTimePicker — DateSelect + TimePicker (future)
 | shift+tab | ← FocusCalendar | ← FocusHeaderMonth | ← FocusHeaderMonth |
 
 ### 4.2 Textual DatePicker Keys (from PR #3667)
+
 | Key | Behavior |
 |-----|----------|
 | ← / → | Wrap around to previous/next date (column edge) |
@@ -524,28 +540,33 @@ private const DEFAULT_KEY_MAP = [
 ## 5. Implementation Roadmap
 
 ### Phase 1: Quick Wins (1-2 sessions)
+
 1. **Extract Style constants to configurables** — `WithHeaderStyle()`, `WithDayNameStyle()` already exist
 2. **Add `WithDayNames()` / `WithMonthNames()`** — localization groundwork
 3. **Add PageUp/PageDown for month nav** — matches web datepicker behavior
 4. **Add `GoToPreviousYear()` / `GoToNextYear()`** — already exists but test coverage
 
 ### Phase 2: Focus & Keyboard (1-2 sessions)
+
 5. **Add `Focus` enum** — HeaderMonth, HeaderYear, Calendar, None
 6. **Add `KeyMap` abstraction** — rebindable keys
 7. **Implement `FocusNext()` / `FocusPrev()`** — tab cycling
 8. **Behavior-split arrow keys by focus** — ↑/↓ change month when on header
 
 ### Phase 3: Range Selection (2-3 sessions)
+
 9. **Create `DateRangePicker` class** — startDate, endDate, selectingStart
 10. **Add range rendering** — visual span indication between start/end
 11. **Add `SelectRange()` compound method**
 
 ### Phase 4: Event Store (1-2 sessions)
+
 12. **Define `DateStyler` interface**
 13. **Implement `CalendarEventStore`** — HashMap-based styling
 14. **Wire into `buildCells()`** — apply custom styles per day
 
 ### Phase 5: Compound Widgets (2-3 sessions)
+
 15. **Create `DateSelect` class** — Input + DatePicker overlay
 16. **Add `DateTimePicker`** if time support needed
 17. **Add tests for all new widgets**

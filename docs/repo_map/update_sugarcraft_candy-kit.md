@@ -3,18 +3,29 @@
 CandyKit (`candy-kit`) is a PHP port of `charmbracelet/fang` providing opinionated CLI presentation helpers (StatusLine, Banner, Section, Stage, HelpText, Logo, Theme) that turn ordinary command-line output into branded terminal output. It's library-only, framework-agnostic, and integrates with the SugarCraft ecosystem via `candy-sprinkles` (styling) and `candy-core` (utilities).
 
 **Biggest opportunity areas:**
+
 - Adaptive theme detection matching fang's `ColorSchemeFunc` pattern
+
 - Shell completion generation (fang's most-requested missing feature)
+
 - Wide-character alignment fixes in HelpText
+
 - Command palette / interactive selection system
 
 **Biggest missing capabilities:**
+
 - Light/dark terminal auto-detection
+
 - Shell completion generation for bash/zsh/fish
+
 - Manpage generation
+
 - Banner title anchor positioning (top-left/center/right)
+
 - Section dual-label support (left + right labels)
+
 - Theme derivation helpers (`withSuccess()`, `withError()`, etc.)
+
 - Logo re-theming without re-rendering from ASCII
 
 ---
@@ -43,31 +54,49 @@ candy-kit/
 | `Logo` | ASCII-art logo renderer with color theming | `fromAscii()`, `sugarcraft()`, `withColor()`, `render()` |
 
 **Design decisions:**
+
 - All classes are `final` with static factory methods
+
 - No instance state beyond configuration
+
 - Immutable value objects (Theme constructor sets all fields)
+
 - ANSI-safe width calculation via `Width::string()` in Section
+
 - Unicode-aware length via `mb_strlen()` in HelpText (but has wide-char bug)
+
 - Logo stores rendered string after `withColor()` — not re-themable
 
 ## Strengths
 
 1. **Minimal, focused API** — 7 classes, single responsibility, no learning curve
+
 2. **Drop-in library** — No framework requirement; `composer require sugarcraft/candy-kit`
+
 3. **Immutable + final classes** — Safe for concurrent use, easy to test
+
 4. **6 named theme factories** — Covers common branded palettes
+
 5. **ANSI-safe width calculation** — Accurate alignment with styled text
+
 6. **Good test coverage** — Dedicated tests per component
+
 7. **VHS demos** — Visual regression testing + documentation via `.tape` files
 
 ## Weaknesses
 
 1. **No auto theme detection** — fang uses `lipgloss.LightDarkFunc`; candy-kit requires explicit theme passing
+
 2. **No shell completion generation** — Fang includes `completion` command; requires CLI framework integration
+
 3. **No manpage generation** — Fang integrates `mango-cobra` for roff generation
+
 4. **HelpText alignment bug** — Uses `mb_strlen()` not `Width::string()`; double-width chars cause misalignment
+
 5. **No Banner title anchor** — Fixed `Border::rounded()` + `padding(0, 2)` only
+
 6. **Logo stores rendered string** — After `withColor()` applied, cannot re-theme without re-creating from ASCII
+
 7. **No Section right-side label** — Only supports left-padded labels
 
 ---
@@ -94,6 +123,7 @@ candy-kit/
 ## Critical Priority
 
 ### 1. Light/Dark Auto-Detection for Themes
+
 **Description:** Fang's `ColorSchemeFunc` accepts `lipgloss.LightDarkFunc` for automatic adaptation. candy-kit's Theme factories produce fixed-palette themes.
 
 **Why it matters:** Users on dark and light terminals get the same (dark-optimized) colors by default. Terminal auto-detection is a standard expectation for modern CLI styling.
@@ -115,6 +145,7 @@ public static function adaptive(?Closure $isDark = null): self {
 ---
 
 ### 2. Shell Completion Generator
+
 **Description:** Fang includes `completion` command for generating bash/zsh/fish completions. candy-kit has no completion generation.
 
 **Why it matters:** Shell completions are a major ergonomic win for CLI tools. Fang's completion implementation uses Cobra's flag/command structure to generate complete completion scripts.
@@ -122,9 +153,13 @@ public static function adaptive(?Closure $isDark = null): self {
 **Source:** `docs/repo_map/charmbracelet_fang.md` — `WithoutCompletions()` option
 
 **Implementation ideas:**
+
 - Create standalone `sugar-complete` or `candy-complete` library
+
 - Accept flag/command structure from any CLI framework
+
 - Generate completion scripts for bash, zsh, fish
+
 - Support lazy-computed valid values via closures
 
 **Estimated complexity:** High — requires understanding shell completion mechanisms deeply
@@ -134,6 +169,7 @@ public static function adaptive(?Closure $isDark = null): self {
 ---
 
 ### 3. HelpText Wide-Character Alignment Fix
+
 **Description:** `renderRows()` uses `mb_strlen()` for key width calculation, not visual cell width. Double-width characters (emoji, CJK) cause misaligned descriptions.
 
 **Why it matters:** Non-ASCII content breaks the two-column alignment, degrading output quality for international users.
@@ -159,6 +195,7 @@ foreach (array_keys($rows) as $k) {
 ## High Value Priority
 
 ### 4. Banner Title Anchor Positioning
+
 **Description:** Banner uses fixed `Border::rounded()` + `padding(0, 2)`. No support for title positioning (top-left, top-center, top-right, etc.) like lipgloss's `BorderTitle`.
 
 **Why it matters:** Users may want different title alignments for different contexts (left for technical tools, centered for branding).
@@ -166,8 +203,11 @@ foreach (array_keys($rows) as $k) {
 **Source:** `docs/repo_map/charmbracelet_lipgloss.md` — `Border{...}` struct with 13 fields for per-corner/edge control
 
 **Implementation ideas:**
+
 - Add `Banner::withTitlePosition(Position $pos)` where Position = Left|Center|Right
+
 - Use lipgloss-style border title pattern
+
 - Reuse `candy-sprinkles` BorderTitle system
 
 **Estimated complexity:** Medium
@@ -177,6 +217,7 @@ foreach (array_keys($rows) as $k) {
 ---
 
 ### 5. Section Dual-Label Support
+
 **Description:** `Section::header()` only supports left-padded labels. No right-side label support (e.g., `── SETUP ──────────────────── 3/5 ──`).
 
 **Why it matters:** Common CLI pattern for showing context on both ends (step number, percentage, status).
@@ -204,6 +245,7 @@ public static function headerWithRightLabel(
 ---
 
 ### 6. Theme Derivation Helpers
+
 **Description:** No `withSuccess()` / `withError()` etc. methods to derive a new theme from an existing one with a single color changed.
 
 **Why it matters:** Users may want to customize one level without redefining all 7. Current approach requires constructing a full new Theme.
@@ -224,6 +266,7 @@ public function withSuccess(Style $success): self {
 ---
 
 ### 7. Logo Re-theming Support
+
 **Description:** After `withColor()` is applied, Logo stores a rendered string. Cannot change color without re-creating from original ASCII art.
 
 **Why it matters:** Users may want to reuse a Logo instance with different themes.
@@ -231,8 +274,11 @@ public function withSuccess(Style $success): self {
 **Source:** `docs/repo_map/charmbracelet_fang.md` — Logo pattern analysis
 
 **Implementation:**
+
 - Store original ASCII art as private property
+
 - `withColor()` re-renders from original, not cached styled content
+
 - OR: Add `Logo::withColorOverride()` that stores raw + applies new color
 
 **Estimated complexity:** Low
@@ -244,6 +290,7 @@ public function withSuccess(Style $success): self {
 ## Medium Priority
 
 ### 8. Manpage Generation
+
 **Description:** Fang integrates `mango-cobra` for roff generation. candy-kit does not implement this.
 
 **Why it matters:** Manpages are expected for serious CLI tools. Not implementing this keeps parity with fang's "not applicable to library" stance, but users may want the feature.
@@ -257,6 +304,7 @@ public function withSuccess(Style $success): self {
 ---
 
 ### 9. Automatic --version Wiring
+
 **Description:** Fang automatically wires `--version` to build info. candy-kit has no mechanism.
 
 **Why it matters:** Version flag is standard CLI expectation. Requires CLI framework integration point.
@@ -270,6 +318,7 @@ public function withSuccess(Style $success): self {
 ---
 
 ### 10. Option Pattern for HelpText
+
 **Description:** Fang's help rendering accepts `Styles` customizable via `WithColorSchemeFunc()`. candy-kit's `HelpText::render()` only accepts a Theme.
 
 **Why it matters:** Fine-grained control over help page rendering (custom section ordering, key/value separators).
@@ -283,6 +332,7 @@ public function withSuccess(Style $success): self {
 ---
 
 ### 11. Command Palette System
+
 **Description:** Textual has an extensive command palette with fuzzy search. No equivalent in SugarCraft.
 
 **Why it matters:** Command palettes are increasingly expected in modern CLI tools for power users.
@@ -298,6 +348,7 @@ public function withSuccess(Style $success): self {
 ## Low Priority
 
 ### 12. Interactive Confirm/Select Prompts
+
 **Description:** pterm has `InteractiveConfirmPrinter`, `InteractiveSelectPrinter` with keyboard navigation and fuzzy search.
 
 **Why it matters:** Interactive CLI components improve user experience for common operations.
@@ -311,6 +362,7 @@ public function withSuccess(Style $success): self {
 ---
 
 ### 13. Context Propagation in Theme
+
 **Description:** `charmbracelet/log` supports sub-loggers with context. Theme could support per-module contextual theming.
 
 **Source:** `docs/repo_map/charmbracelet_log.md` — `logger.With("key", "value")` sub-logger pattern
@@ -324,6 +376,7 @@ public function withSuccess(Style $success): self {
 # Algorithm / Performance Opportunities
 
 ## Current: mb_strlen() in HelpText Alignment
+
 **Current approach:** Uses `mb_strlen($key, 'UTF-8')` to measure key width.
 
 **Problem:** `mb_strlen()` counts code points, not visual cell width. CJK/emoji characters take 2 cells but count as 1 code point.
@@ -341,6 +394,7 @@ public function withSuccess(Style $success): self {
 ---
 
 ## Current: Fixed Theme Factories
+
 **Current approach:** Static factory methods returning fixed-palette themes.
 
 **External approach:** fang's `ColorSchemeFunc` accepts closure for dynamic adaptation.
@@ -358,6 +412,7 @@ public function withSuccess(Style $success): self {
 # Architecture Improvements
 
 ## 1. Option Pattern Adoption
+
 Fang uses functional options (`type Option func(*settings)`) for deferred configuration. candy-kit uses nullable parameters with null coalescing defaults.
 
 **Current:**
@@ -380,6 +435,7 @@ public static function title(string $title, string $subtitle = '', ?Theme $theme
 This allows extending without breaking signatures.
 
 ## 2. Theme Derivation Pattern
+
 Add `with*()` methods to Theme for single-level customization:
 
 ```php
@@ -391,6 +447,7 @@ public function withError(Style $error): self;
 **Source:** `docs/repo_map/charmbracelet_lipgloss.md` — immutable Style setters
 
 ## 3. Logo Architecture Fix
+
 Store raw ASCII art, not rendered content:
 
 ```php
@@ -415,6 +472,7 @@ public function render(): string {
 # API / Developer Experience Improvements
 
 ## 1. Unified TextPrinter-like Interface
+
 pterm's `TextPrinter` interface with 8 methods (Sprint/Sprintf/Sprintln/Sprintfln × return string vs write output) provides consistent API across all printers.
 
 **candy-kit could add:**
@@ -426,6 +484,7 @@ interface TextOutput {
 ```
 
 ## 2. Builder Pattern for Complex Components
+
 HelpText::render() currently takes array for sections. Could use a builder:
 
 ```php
@@ -438,6 +497,7 @@ HelpText::build()
 ```
 
 ## 3. Theme Enumeration
+
 Allow programmatic theme selection:
 
 ```php
@@ -450,22 +510,32 @@ Theme::fromName('nord');
 # Documentation / Cookbook Opportunities
 
 ## 1. CLI Presentation Patterns Guide
+
 Document common patterns:
 - Version output with Banner + Logo
+
 - Multi-step progress with Stage
+
 - Help page structure with HelpText
+
 - Error/warning/info output with StatusLine
 
 ## 2. Theme Customization Tutorial
+
 Show how to:
 - Create custom themes
+
 - Use adaptive theme detection
+
 - Derive themes with with*() methods
 
 ## 3. Integration Examples
+
 Show candy-kit integration with:
 - `candy-shell` (CLI application framework)
+
 - `candy-log` (logging integration)
+
 - `candy-sprinkles` (advanced styling)
 
 ---
@@ -473,6 +543,7 @@ Show candy-kit integration with:
 # UX / TUI Improvements
 
 ## 1. HelpText Markdown Description
+
 Fang's help can render markdown-formatted descriptions. HelpText currently only supports plain text.
 
 **Source:** `docs/repo_map/charmbracelet_gum.md` — `gum format` uses glamour for markdown
@@ -480,11 +551,13 @@ Fang's help can render markdown-formatted descriptions. HelpText currently only 
 **Implementation:** Add `HelpText::renderMarkdown()` that integrates `candy-shine` for markdown descriptions.
 
 ## 2. Section Right-Side Labels
+
 Common CLI pattern: `── SETUP ──────────────────── 3/5 ──`
 
 **Source:** `docs/repo_map/pterm_pterm.md` — SectionPrinter
 
 ## 3. Banner Title Positioning
+
 Add `Banner::titleWithPosition()` accepting `Position::Left|Center|Right`:
 
 ```php
@@ -500,6 +573,7 @@ Banner::titleWithPosition(
 # Testing / Reliability Improvements
 
 ## 1. Wide-Character Snapshot Tests
+
 Add tests for HelpText with emoji/CJK content:
 
 ```php
@@ -511,6 +585,7 @@ public function testRenderRowsWithEmoji(): void {
 ```
 
 ## 2. Theme Adaptive Detection Tests
+
 Add tests for `Theme::adaptive()` with mocked ColorProfile:
 
 ```php
@@ -526,9 +601,11 @@ public function testAdaptiveLightTheme(): void {
 ```
 
 ## 3. Banner Long Title Tests
+
 Test border wrapping behavior with very long titles.
 
 ## 4. Stage Edge Case Tests
+
 Test with negative or very large step numbers.
 
 ---
@@ -536,6 +613,7 @@ Test with negative or very large step numbers.
 # Ecosystem / Integration Opportunities
 
 ## 1. candy-shell Integration
+
 candy-kit should document integration with `candy-shell` (SugarCraft's CLI application framework):
 
 ```php
@@ -552,12 +630,15 @@ class MyApp extends Application {
 ```
 
 ## 2. candy-log Integration
+
 candy-kit's StatusLine is visually similar to log levels but lacks log semantics. Document when to use which:
 
 - **StatusLine:** User-facing single messages, one-shot output
+
 - **candy-log:** Time-stamped, leveled, potentially high-volume logging
 
 ## 3. sugar-bits Progress Integration
+
 Stage is for visual sequencing; `sugar-bits` progress components are for bars/gauges. Document the distinction.
 
 ---
@@ -565,6 +646,7 @@ Stage is for visual sequencing; `sugar-bits` progress components are for bars/ga
 # Notable PRs / Issues / Discussions
 
 ## charmbracelet/fang: ColorSchemeFunc Pattern
+
 **Source:** `docs/repo_map/charmbracelet_fang.md`
 
 Fang's `ColorSchemeFunc` signature enables automatic adaptation:
@@ -585,6 +667,7 @@ public static function adaptive(?Closure $isDark = null): Theme {
 ---
 
 ## charmbracelet/lipgloss: CSS Shorthand Resolution
+
 **Source:** `docs/repo_map/charmbracelet_lipgloss.md`
 
 `whichSidesInt` / `whichSidesBool` implement CSS shorthand (1 arg = all sides, 2 = vertical/horizontal, etc.).
@@ -596,6 +679,7 @@ public static function adaptive(?Closure $isDark = null): Theme {
 ---
 
 ## pterm: TextPrinter Interface
+
 **Source:** `docs/repo_map/pterm_pterm.md`
 
 pterm's `TextPrinter` interface with 8 formatting methods provides API consistency across all printers.
@@ -607,6 +691,7 @@ pterm's `TextPrinter` interface with 8 formatting methods provides API consisten
 ---
 
 ## textualize/textual: Command Palette
+
 **Source:** `docs/repo_map/textualize_textual.md`
 
 Textual's command palette uses fuzzy search with custom `Provider` system for extensible commands.
@@ -618,6 +703,7 @@ Textual's command palette uses fuzzy search with custom `Provider` system for ex
 ---
 
 ## c9s/CLIFramework: Shell Completion
+
 **Source:** `docs/repo_map/c9s_CLIFramework.md`
 
 PHP-based completion generation with ZshGenerator/BashGenerator emitting `compdef` and `complete` scripts.
@@ -633,19 +719,25 @@ PHP-based completion generation with ZshGenerator/BashGenerator emitting `compde
 ## Immediate Wins (1-2 days)
 
 1. **Theme::adaptive()** — Add adaptive theme factory with closure for dark/light detection
+
 2. **HelpText wide-char fix** — Replace `mb_strlen()` with `Width::string()` in renderRows()
+
 3. **Theme derivation methods** — Add `withSuccess()`, `withError()`, etc.
 
 ## Medium-term Improvements (1-2 weeks)
 
 4. **Banner title anchor positioning** — Add Position parameter to Banner::title()
+
 5. **Section right-side label** — Add `Section::headerWithRightLabel()`
+
 6. **Logo re-theming fix** — Store raw ASCII, apply color on render
+
 7. **Theme enumeration** — Add `Theme::names()`, `Theme::fromName()`
 
 ## Major Architectural Upgrades (1-2 months)
 
 8. **Shell completion generator** — Create `candy-complete` or `sugar-complete` library
+
 9. **HelpText markdown rendering** — Integrate candy-shine for markdown descriptions
 10. **Option pattern for HelpText** — Add Options bag for fine-grained control
 11. **Command palette system** — Design and implement fuzzy command palette
@@ -690,7 +782,9 @@ CandyKit is a well-scoped, focused library providing the presentation layer of t
 **Key differentiators vs CLIFramework:** CLIFramework is a full CLI application framework with hierarchical commands, while candy-kit is purely presentation-focused. They can complement each other.
 
 **Main gaps relative to upstream:**
+
 - CLI integration features (shell completions, manpage generation, automatic version wiring) which require a CLI framework opinion that candy-kit correctly declines to have
+
 - Light/dark auto-detection — the most impactful missing feature
 
 **The biggest unlock:** Adding `Theme::adaptive()` for automatic light/dark detection would bring feature parity with fang's theme system and significantly improve out-of-the-box UX for users on different terminal backgrounds.

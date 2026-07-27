@@ -146,6 +146,7 @@ that are tiny but together justify a PR.
 ## Per-upstream coverage list (from MATCHUPS.md as of last refresh)
 
 ### Charmbracelet libraries
+
 - charmbracelet/bubbletea → candy-core
 - charmbracelet/lipgloss → candy-sprinkles
 - charmbracelet/harmonica → honey-bounce
@@ -171,6 +172,7 @@ that are tiny but together justify a PR.
 - 76creates/stickers → sugar-stickers
 
 ### Apps
+
 - charmbracelet/gum → candy-shell
 - charmbracelet/freeze → candy-freeze
 - charmbracelet/glow → sugar-glow

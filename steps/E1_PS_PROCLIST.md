@@ -7,10 +7,11 @@ Add Performance Schema path for processlist in MysqlAdminProvider, used when `@@
 `MysqlAdminProvider::fetchProcesslist()` always uses `SHOW FULL PROCESSLIST`, never uses the PS path even when available.
 
 ## MySQL Workbench PS Path (per mysql_workbench_dash.md §5.5)
+
 ```sql
-SELECT <cols> FROM performance_schema.threads t 
-  LEFT OUTER JOIN performance_schema.session_connect_attrs a 
-    ON t.processlist_id = a.processlist_id 
+SELECT <cols> FROM performance_schema.threads t
+  LEFT OUTER JOIN performance_schema.session_connect_attrs a
+    ON t.processlist_id = a.processlist_id
    AND (a.attr_name IS NULL OR a.attr_name = 'program_name')
   WHERE t.TYPE <> 'BACKGROUND'
 ```
@@ -22,12 +23,13 @@ Fallback when PS is off: `SHOW FULL PROCESSLIST`
 1. **`src/Admin/Providers/MysqlAdminProvider.php`** — Add PS path in `fetchProcesslist()`
 
 ## Spec
+
 ```php
 public function fetchProcesslist(): array
 {
     // Check if performance_schema is enabled
     $psEnabled = $this->context->serverVariables()['performance_schema'] ?? 'OFF';
-    
+
     if (strtoupper($psEnabled) === 'ON') {
         return $this->fetchProcesslistFromPs();
     }

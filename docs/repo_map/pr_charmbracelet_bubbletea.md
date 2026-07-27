@@ -1,6 +1,7 @@
 # Second-Stage Ecosystem Intelligence Report: charmbracelet/bubbletea
 
 ## Metadata
+
 - **Report Date:** 2026-05-27
 - **Repository:** charmbracelet/bubbletea (41K stars)
 - **Language:** Go
@@ -51,6 +52,7 @@ The first-stage analysis identified these known gaps:
 ## 4. High-Signal Open Issues
 
 ### Issue #1655: Proposal: DevTools Inspector (charm-devtools)
+
 **Author:** junhinhow (2026-04-01) | **Reactions:** Active discussion
 
 A community proposal for an official DevTools middleware that wraps any Bubble Tea model and provides an F12-toggleable inspector panel showing:
@@ -61,6 +63,7 @@ A community proposal for an official DevTools middleware that wraps any Bubble T
 **Strategic Note:** This is a direct response to the lack of visibility into running TUI applications. SugarCraft should consider building similar introspection capabilities into candy-core from the start.
 
 ### Issue #1654: Proposal: Testing Framework (charm-test)
+
 **Author:** junhinhow (2026-04-01) | **State:** Open
 
 A testing framework proposal providing:
@@ -74,6 +77,7 @@ A testing framework proposal providing:
 **Implication for SugarCraft:** This confirms a critical gap in TUI testing tooling. SugarCraft should design its testing infrastructure early, potentially as a first-class citizen rather than an afterthought.
 
 ### Issue #1627: Terminal Escape Sequence Leak in Short-Lived Programs
+
 **Author:** nonchan7720 (2026-03-15) | **State:** Closed (completed)
 
 Bubble Tea v2 queries for terminal capabilities (mode 2026, mode 2027) asynchronously during init. In programs that exit quickly, responses arrive after process exit and leak raw escape sequences (`^[[?2026;2$y`) to the shell prompt.
@@ -81,6 +85,7 @@ Bubble Tea v2 queries for terminal capabilities (mode 2026, mode 2027) asynchron
 **Root Cause:** No mechanism to cancel/drain pending capability queries on exit.
 
 **Proposed Solutions (not implemented):**
+
 1. `ProgramOption` like `tea.WithoutCapabilityQueries()`
 2. Documented way to inhibit probes
 3. Attempt to drain pending responses during terminal restoration
@@ -88,6 +93,7 @@ Bubble Tea v2 queries for terminal capabilities (mode 2026, mode 2027) asynchron
 **Direct Risk to SugarCraft:** YES - If candy-core queries terminal capabilities asynchronously, same leak could occur. Must handle capability responses synchronously or provide opt-out.
 
 ### Issue #1571: Scrollback Lost on tea.Quit (WezTerm-specific)
+
 **Author:** tj-smith47 (2026-01-20) | **State:** Open | **Reactions:** 👍 1
 
 When exiting a TUI on WezTerm, scrollback is corrupted with random characters. Does not occur on kitty. Likely related to alt screen mode handling differences between terminals.
@@ -95,6 +101,7 @@ When exiting a TUI on WezTerm, scrollback is corrupted with random characters. D
 **Direct Risk to SugarCraft:** YES - Terminal restoration after exit is a cross-platform concern. Must properly restore terminal state regardless of duration.
 
 ### Issue #1522: Nested Model Fails to Exit/Switch State via Custom Command
+
 **Author:** WhipMeHarder (2025-10-25) | **State:** Open
 
 Complex nested model architecture experiences reliability issues when sub-models try to signal parent to switch state. The user found a workaround: **stacking multiple case arguments in switch statements** rather than using fallthrough.
@@ -114,6 +121,7 @@ case "vote_results", "view_assets":
 3. Model composition patterns
 
 ### Issue #775: Viewport SoftWrap Scrolling Broken
+
 **Author:** kamiheku (2025-04-10) | **State:** Open
 
 When a single logical line wraps to 6 visual lines with `SoftWrap` enabled, the user must press `j` 5 times to achieve any scrolling. The viewport scrolls by visual lines, not logical lines.
@@ -125,6 +133,7 @@ When a single logical line wraps to 6 visual lines with `SoftWrap` enabled, the 
 ## 5. Important Closed Issues
 
 ### Issue #1395: v2 Render Position Shifted
+
 **Author:** rsteube | **State:** Closed (reverted)
 
 After running v2, rendering position shifted down one line. This was traced to intentional behavior in v2-exp that was later reverted after community feedback.
@@ -132,6 +141,7 @@ After running v2, rendering position shifted down one line. This was traced to i
 **Lesson:** The v2 experiment revealed that changing rendering position behavior breaks user expectations. SugarCraft should maintain consistent cursor positioning on exit.
 
 ### Issue #1167: Windows First Character Lost on Successive Programs
+
 **Author:** jtackaberry (2024-09-24) | **State:** Closed (completed)
 
 Windows-specific issue where running multiple Tea programs in succession within the same process causes first keypress to be silently eaten. Root cause was `CancelIo` not properly unblocking reads across threads.
@@ -141,6 +151,7 @@ Windows-specific issue where running multiple Tea programs in succession within 
 **Direct Risk to SugarCraft:** YES - Windows input handling is notoriously tricky. Any PTY/TTY implementation must handle cancellation properly across threads.
 
 ### Issue #831: Textarea Slow When Pasting Clipboard Content
+
 **Author:** cruizba (2023-10-04) | **State:** Closed (fixed)
 
 Textarea performance was dominated by `wrap()` calls during cursor position calculation. Profiling revealed:
@@ -157,6 +168,7 @@ Textarea performance was dominated by `wrap()` calls during cursor position calc
 **Direct Risk to SugarCraft:** YES - Any text input component (sugar-bits textinput) must memoize expensive operations like width calculation.
 
 ### Issue #1673: Signal Channel Leak in suspendProcess()
+
 **Author:** kuishou68 (2026-04-13) | **State:** Closed (fixed)
 
 `suspendProcess()` registers a channel with `signal.Notify` but never calls `signal.Stop` to deregister it. Each Ctrl+Z suspend/resume cycle leaks a channel.
@@ -175,6 +187,7 @@ func suspendProcess() {
 **Direct Risk to SugarCraft:** YES - Signal handling in candy-pty must properly deregister channels to prevent leaks.
 
 ### Issue #1520: Carriage Return Rendering Issues
+
 **Author:** (linked from PR #1523) | **State:** Closed (fixed)
 
 Carriage return (`\r`) characters in frames caused rendering issues. Fixed by stripping them before rendering.
@@ -182,11 +195,13 @@ Carriage return (`\r`) characters in frames caused rendering issues. Fixed by st
 **Direct Risk to SugarCraft:** YES - Rendering pipeline must sanitize control characters.
 
 ### Issue #1599: Data Race Between cancelreader.Close() and cancelreader.wait()
+
 **Author:** julez-dev (2026-02-26) | **State:** Open
 
 Running with `-race` reveals a data race during shutdown. The inner goroutine in `ultraviolet.StreamEvents()` doesn't have a happens-before relationship with the cleanup sequence.
 
 **Race Condition:**
+
 1. `shutdown()` calls `p.cancel()` - context cancelled
 2. `StreamEvents` returns on `ctx.Done()` - inner goroutine still blocked
 3. `cancelReader.Cancel()` wakes inner goroutine
@@ -195,6 +210,7 @@ Running with `-race` reveals a data race during shutdown. The inner goroutine in
 **Direct Risk to SugarCraft:** YES - Concurrency between reader cancellation and cleanup is a common source of races. Must ensure proper synchronization.
 
 ### Issue #1471: View Wraps on macOS Terminal.app Despite Calculating Widths
+
 **Author:** | **State:** Closed (fixed)
 
 Cursor position reset was using backward cursor movement by terminal width, which fails when renderer doesn't know terminal width yet.
@@ -204,6 +220,7 @@ Cursor position reset was using backward cursor movement by terminal width, whic
 **Direct Risk to SugarCraft:** YES - Cursor positioning during render must be robust to unknown dimensions.
 
 ### Issue #1690: Data Race Between Mouse Events and Cursed Renderer
+
 **Author:** lrstanley (2026-05-04) | **State:** Open
 
 `cursedRenderer.lastView` is written in `flush()` (with mutex) but read in `onMouse()` **without** acquiring the mutex, causing a data race when mouse events arrive during rendering.
@@ -310,6 +327,7 @@ Multiple Windows-specific issues:
 > "I find it strange that it is rare or non existent to find good tools for testing CLI apps or TUI apps... I would like to suggest the creators of Bubble Tea to create a Go package that is the equivalent of Microsoft tui-test but in Go."
 
 **Key Features Requested:**
+
 1. Terminal input simulation (`stdin`)
 2. Output capture (`stdout`/`stderr`)
 3. TUI interaction (buttons, checkboxes)
@@ -360,6 +378,7 @@ Multiple Windows-specific issues:
 ## 8. Important PRs
 
 ### PR #1500: Declarative View API (v2)
+
 **Author:** aymanbagabas | **Status:** Merged (v2.0.0)
 
 Transforms Bubble Tea from imperative to declarative:
@@ -381,6 +400,7 @@ func (m Model) View() tea.View {
 ```
 
 **Breaking Changes:**
+
 - `View() string` → `View() tea.View`
 - All `tea.WithX()` options → `View.X` fields
 - All `tea.EnterAltScreen` etc. commands → `View.AltScreen` field
@@ -388,6 +408,7 @@ func (m Model) View() tea.View {
 **SugarCraft Recommendation:** The declarative approach is superior. candy-core should follow v2's lead - make View properties the single source of truth for terminal state.
 
 ### PR #1568: Combine Event and Render Loops
+
 **Author:** aymanbagabas | **Status:** Merged
 
 Merges event handling and rendering into a single loop for improved performance and reduced complexity.
@@ -395,6 +416,7 @@ Merges event handling and rendering into a single loop for improved performance 
 **SugarCraft Consideration:** PHP's event-driven model may benefit from similar consolidation.
 
 ### PR #1499: Terminal Progress Bars
+
 **Author:** aymanbagabas | **Status:** Merged
 
 Adds support for terminal-native progress bars (Windows Terminal, Ghostty).
@@ -402,6 +424,7 @@ Adds support for terminal-native progress bars (Windows Terminal, Ghostty).
 **SugarCraft Status:** Already mapped in sugar-bits as `View::progressBar`.
 
 ### PR #958: Fix Sequence/Empty Commands
+
 **Author:** jdhenke | **Status:** Merged
 
 Makes `Sequence` handle empty/all-nil commands like `Batch` does, preventing 100% CPU infinite loops.
@@ -415,6 +438,7 @@ public static function sequence(Closure ...$cmds): Closure { ... }
 ```
 
 ### PR #1340: Windows Mouse Mode on Demand
+
 **Author:** aymanbagabas | **Status:** Merged
 
 Fixes regression where mouse mode was always enabled on Windows, breaking text selection. Now enabled only when program requests it.
@@ -426,6 +450,7 @@ Fixes regression where mouse mode was always enabled on Windows, breaking text s
 ## 9. Architectural Changes
 
 ### v2 Module Path Change
+
 ```
 github.com/charmbracelet/bubbletea/v2 → charm.land/bubbletea/v2
 ```
@@ -469,6 +494,7 @@ The v2 Cursed Renderer is a complete rewrite modeled on ncurses:
 **Root Cause:** `wrap()` called repeatedly in cursor position calculation. `StringWidth` from `go-runewidth` was 3x slower than `uniseg`.
 
 **Solution Patterns:**
+
 1. Memoization cache for expensive computations
 2. Profiling before optimization
 3. Package selection (`uniseg` vs `go-runewidth`)
@@ -552,6 +578,7 @@ tea.NewProgram(m,
 ```
 
 **Use Cases:**
+
 - Message validation
 - Logging
 - Rate limiting
@@ -621,6 +648,7 @@ The v2 upgrade guide is 200+ lines covering:
 | `EnableMouseCellMotion` | `View.MouseMode` |
 
 **Program Methods Removed:**
+
 - `tea.WindowSize()` → `tea.RequestWindowSize`
 
 **SugarCraft Warning:** Once we reach v1.0, avoid these kinds of sweeping changes. Use deprecation warnings first.
@@ -931,6 +959,7 @@ v2's shift from imperative commands to declarative View properties eliminates:
 Issues like #1599 and #1690 show that concurrency bugs (data races) can hide in production for years. Only exposed by race detectors.
 
 **SugarCraft Design:** 
+
 - Use PHP's single-threaded model to advantage (no goroutine races)
 - But be careful with ReactPHP async operations
 - Run tests with strict mode
@@ -940,6 +969,7 @@ Issues like #1599 and #1690 show that concurrency bugs (data races) can hide in 
 Windows handling consumed significant engineering time (#878, #1313, #1340, #1391).
 
 **SugarCraft Design:** 
+
 - Minimize platform-specific code paths
 - Use established libraries (ReactPHP) for cross-platform consistency
 - Document platform limitations clearly

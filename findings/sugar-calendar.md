@@ -14,6 +14,7 @@
 ## 1. Issues (Bugs, Edge Cases, Error Handling)
 
 ### Finding 1 — `View::render()` cells not capped to viewport width
+
 **Severity:** HIGH  
 **Location:** `src/View.php:97-135`
 
@@ -24,6 +25,7 @@ The `render()` method builds rows of day cells but doesn't clamp cell output to 
 ---
 
 ### Finding 2 — Keyboard navigation off by one in week boundary
+
 **Severity:** MEDIUM  
 **Location:** `src/Model.php` (update method)
 
@@ -34,6 +36,7 @@ Navigating left from the first day of a month (e.g., July 1, 2026) wraps to the 
 ---
 
 ### Finding 3 — `Day::render()` whitespace trimming inconsistent
+
 **Severity:** LOW  
 **Location:** `src/Day.php:55`
 
@@ -46,6 +49,7 @@ Navigating left from the first day of a month (e.g., July 1, 2026) wraps to the 
 ## 2. Performance Problems
 
 ### Finding 4 — Month re-rendered on every `view()` call
+
 **Severity:** MEDIUM  
 **Location:** `src/View.php`
 
@@ -56,6 +60,7 @@ Navigating left from the first day of a month (e.g., July 1, 2026) wraps to the 
 ---
 
 ### Finding 5 — No N+1 issues detected
+
 **Severity:** N/A  
 
 ---
@@ -63,6 +68,7 @@ Navigating left from the first day of a month (e.g., July 1, 2026) wraps to the 
 ## 3. Memory Leaks
 
 ### Finding 6 — No memory leaks detected
+
 **Severity:** N/A  
 
 Immutable value objects, no streams or resources.
@@ -72,6 +78,7 @@ Immutable value objects, no streams or resources.
 ## 4. Security
 
 ### Finding 7 — No security concerns
+
 **Severity:** N/A  
 
 No external input, no file operations, no shell execution.
@@ -81,6 +88,7 @@ No external input, no file operations, no shell execution.
 ## 5. Complexity
 
 ### Finding 8 — Complexity is appropriate for a calendar widget
+
 **Severity:** N/A  
 
 Clean separation: Model (state), View (rendering), Day (cell).
@@ -90,6 +98,7 @@ Clean separation: Model (state), View (rendering), Day (cell).
 ## 6. Missing Features / Incomplete Ports
 
 ### Finding 9 — No highlight for "today"
+
 **Severity:** LOW  
 **Location:** `src/Day.php`
 
@@ -98,6 +107,7 @@ Upstream `bubbles/calendar` highlights the current day. Not implemented.
 ---
 
 ### Finding 10 — No week number column (ISO week numbers)
+
 **Severity:** LOW  
 **Location:** `src/View.php`
 
@@ -106,6 +116,7 @@ Upstream shows ISO week numbers on the left. Not implemented.
 ---
 
 ### Finding 11 — No `examples/` directory
+
 **Severity:** LOW  
 
 ---
@@ -113,6 +124,7 @@ Upstream shows ISO week numbers on the left. Not implemented.
 ## 7. PHP 8.3/8.4 Compatibility
 
 ### Finding 12 — Fully compatible with PHP 8.3+
+
 **Severity:** N/A  
 
 Uses readonly, promoted constructors, strict types.
@@ -122,6 +134,7 @@ Uses readonly, promoted constructors, strict types.
 ## 8. Async/ReactPHP Improvements
 
 ### Finding 13 — No async improvements needed
+
 **Severity:** N/A  
 
 Synchronous TUI widget. Async not applicable.

@@ -3,6 +3,7 @@
 `honey-bounce` is a pure-math PHP physics/animation library providing damped spring physics (Ryan Juckett's algorithm) and Newtonian projectile simulation. It is the PHP port of `charmbracelet/harmonica` and extends upstream with significant ergonomic improvements: UIKit-inspired spring presets, `SpringChain`/`SpringCollection` for multi-spring orchestration, `REDUCE_MOTION` accessibility support, and a complete `Easing`/`CubicBezier` curve library.
 
 **Biggest opportunity areas:**
+
 1. Forces system (applyForce) for projectiles — explicitly called out in upstream PR #6 TODO but never built
 2. Animation completion callbacks — standard pattern in Flutter/iOS/Android/Framer Motion, missing from both upstream and SugarCraft
 3. Collision detection primitives for physics-based games
@@ -10,6 +11,7 @@
 5. Verlet integration upgrade from Euler for better numerical stability
 
 **Biggest missing capabilities:**
+
 1. No collision response system (only pure kinematics)
 2. No multi-body physics (joints/constraints)
 3. No spatial partitioning for SpringCollection (O(n) linear search)
@@ -40,20 +42,24 @@ honey-bounce/src/
 ## Current Features
 
 **Core Physics:**
+
 - `Spring`: Analytically exact damped harmonic oscillator with three damping regimes (under-damped ζ<1, critically damped ζ=1, over-damped ζ>1)
 - `Projectile`: Euler-integrated 3D projectile motion with configurable gravity
 - `Point`/`Vector`: Immutable 3D value objects with full vector math (add, sub, scale, length, dot, cross)
 - `Gravity`: Package-level static accessors for standard/terminal gravity in Y-up/Y-down conventions
 
 **Animation Orchestration:**
+
 - `SpringChain`: Sequential stage animator (each stage activates when previous settles within 0.001 pos/vel)
 - `SpringCollection`: Parallel multi-spring manager with tick()/setTarget() API
 
 **Easing:**
+
 - `Easing`: 15 named curves (Linear, Quad, Cubic, Elastic, Bounce, Back — each with In/Out/InOut)
 - `CubicBezier`: 24 CSS-named easings via Newton-Raphson with binary-search fallback
 
 **Accessibility:**
+
 - `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` env var support — springs snap to target instantly
 - `Probe::reducedMotion()` check in `Spring::update()` at line 114
 
@@ -89,6 +95,7 @@ honey-bounce/src/
 ## Critical Priority
 
 ### 1. Spring Completion Callback System
+
 - **Title**: Spring termination callbacks
 - **Description**: Add `Spring::setOnComplete(callable)` or `SpringChain::onComplete(callable)` that fires when a spring settles
 - **Why it matters**: This is a standard pattern in every major animation system — Flutter (`AnimationController.addStatusListener`), iOS (`CAAnimation.delegate`), Framer Motion (`onComplete`), React Spring (`onRest`). Neither upstream harmonica nor SugarCraft currently implements this
@@ -99,6 +106,7 @@ honey-bounce/src/
 - **Expected impact**: High — eliminates polling boilerplate for all animation consumers
 
 ### 2. Forces System for Projectile
+
 - **Title**: ApplyForce API for projectiles
 - **Description**: Add `Projectile::applyForce(Vector $force)` to modify acceleration mid-flight (wind, thrust, explosions)
 - **Why it matters**: Explicitly listed in upstream PR #6 TODO but never built. Natural extension for game physics
@@ -111,6 +119,7 @@ honey-bounce/src/
 ## High Value
 
 ### 3. Collision Detection Primitives
+
 - **Title**: Collidable interface with sphere/AABB colliders
 - **Description**: Add `Collidable` interface with `SphereCollider`, `AABBCollider` implementations for physics-based games
 - **Why it matters**: Explicitly in upstream PR #6 TODO list and needed for particle games
@@ -120,6 +129,7 @@ honey-bounce/src/
 - **Expected impact**: Medium — enables bouncing ball games, particle collisions
 
 ### 4. Mutable Projectile Variant
+
 - **Title**: In-place projectile update for game loops
 - **Description**: Add `ProjectileMutable` with in-place `update()` for particle systems where allocation overhead matters
 - **Why it matters**: Current immutable `Projectile::update()` creates new instance each tick — in a 30 FPS game loop with 100s of particles, this generates significant garbage
@@ -129,6 +139,7 @@ honey-bounce/src/
 - **Expected impact**: Medium — enables high-performance particle systems without GC pressure
 
 ### 5. Spring.isSettled() Helper
+
 - **Title**: Convergence detection utility
 - **Description**: Add `bool isSettled(float $pos, float $vel, float $target, float $epsilon = 0.001)` method
 - **Why it matters**: Eliminates common user pattern of manually checking `abs($pos - $target) < $epsilon && abs($vel) < $epsilon`
@@ -140,6 +151,7 @@ honey-bounce/src/
 ## Medium Priority
 
 ### 6. Frame-Skip Handling
+
 - **Title**: Adaptive timestep for springs
 - **Description**: Add `Spring::updateWithElapsed($pos, $vel, $target, $actualDt)` variant that recomputes coefficients if actual frame time deviates significantly from baked-in dt
 - **Why it matters**: Current implementation assumes consistent frame cadence; if actual frame time differs, simulation drifts
@@ -149,6 +161,7 @@ honey-bounce/src/
 - **Expected impact**: Medium — improves simulation accuracy in variable-frame-rate environments
 
 ### 7. SpringCollection Spatial Indexing
+
 - **Title**: O(log n) spring lookup in collections
 - **Description**: Add spatial index to `SpringCollection` for efficient spring lookup by name
 - **Why it matters**: Currently O(n) linear search per tick for n springs
@@ -158,6 +171,7 @@ honey-bounce/src/
 - **Expected impact**: Low — depends on current implementation
 
 ### 8. Animation Timeline (GSAP-like)
+
 - **Title**: Timeline orchestrator for multi-sequence animations
 - **Description**: Add `Timeline` class that orchestrates multiple `SpringChain`/`SpringCollection` instances with start/delay/loop/repeat config
 - **Why it matters**: Consumers must manually orchestrate multi-stage animations via SpringChain polling; GSAP-style timeline would simplify complex sequences
@@ -167,6 +181,7 @@ honey-bounce/src/
 - **Expected impact**: Medium — improves developer experience for complex animations
 
 ### 9. Verlet Integration Upgrade
+
 - **Title**: Replace Euler with Verlet for projectile physics
 - **Description**: Upgrade `Projectile::update()` from first-order Euler to Verlet integration for better numerical stability
 - **Why it matters**: Euler integration accumulates error over many frames; Verlet is more stable for games
@@ -176,6 +191,7 @@ honey-bounce/src/
 - **Expected impact**: Medium — better physics accuracy for games
 
 ### 10. Keyframe Animation
+
 - **Title**: Cubic interpolation between keyframes
 - **Description**: Add `KeyframeAnimation` with cubic interpolation between keyframes, supporting `Easing` curves between segments
 - **Why it matters**: Complements spring physics with explicit keyframe animation for cutscene/montage-style animations
@@ -187,6 +203,7 @@ honey-bounce/src/
 ## Low Priority
 
 ### 11. 2D Vector Shortcut
+
 - **Title**: Vector2D or Vector::from2D() factory
 - **Description**: Add `Vector::from2D()` factory or dedicated `Vector2D` class for 2D-only use cases
 - **Why it matters**: Avoids unused `$z` allocation for 2D use cases
@@ -196,6 +213,7 @@ honey-bounce/src/
 - **Expected impact**: Low — micro-optimization
 
 ### 12. Mass for Projectiles
+
 - **Title**: Projectile mass parameter
 - **Description**: Add mass parameter to `Projectile` for more realistic physics (F = ma calculations)
 - **Why it matters**: Listed in upstream PR #6 TODO; enables force-based physics
@@ -205,6 +223,7 @@ honey-bounce/src/
 - **Expected impact**: Low — niche use case
 
 ### 13. Spring 1D/2D/3D Generic Variants
+
 - **Title**: Dimension-specific spring classes
 - **Description**: Template spring to specific dimensions to avoid array packing/unpacking (`[$pos, $vel]`)
 - **Why it matters**: Would enable SIMD optimizations and cleaner API for multi-dimensional springs
@@ -214,6 +233,7 @@ honey-bounce/src/
 - **Expected impact**: Low — premature optimization
 
 ### 14. Particle System with Spatial Hashing
+
 - **Title**: Bundled Particle + ParticleSystem class
 - **Description**: Add `Particle` struct + `ParticleSystem` manager with spatial hashing for efficient broad-phase collision detection
 - **Why it matters**: Foundation for particle effects; confettysh uses this pattern
@@ -223,6 +243,7 @@ honey-bounce/src/
 - **Expected impact**: Low-Medium — enables particle effects
 
 ### 15. Spring Visualization/Debugging Tools
+
 - **Title**: SpringDebug helper for animation inspection
 - **Description**: Add `SpringDebug` helper that formats current spring state as string for debugging animations
 - **Why it matters**: Upstream has no way to inspect spring state mid-animation; helpful for developers
@@ -236,11 +257,13 @@ honey-bounce/src/
 ## Current Approach vs External Approach
 
 ### Spring Physics
+
 - **Current**: Ryan Juckett analytically exact solution per timestep; O(1) per update after coefficient precomputation
 - **External**: Various numerical integrators (Verlet, RK4) — less stable at low frame rates
 - **Verdict**: Current approach is superior for fixed-timestep spring physics. No change needed.
 
 ### Projectile Physics
+
 - **Current**: First-order Euler integration: `pos += vel * dt`, `vel += acc * dt`
 - **External**: Verlet integration (position-based, no velocity accumulation error), RK4 (higher accuracy)
 - **Why external is better**: Euler accumulates velocity error over many frames; Verlet is more stable for games with variable dt
@@ -248,6 +271,7 @@ honey-bounce/src/
 - **Applicability**: Medium — beneficial for games, not critical for UI animations
 
 ### SpringCollection Lookup
+
 - **Current**: Assumed linear search O(n) per tick
 - **External**: Hash map O(1) lookup by key
 - **Why external is better**: If using PHP associative array, already O(1) by key
@@ -255,6 +279,7 @@ honey-bounce/src/
 - **Applicability**: Low — verify current implementation before optimizing
 
 ### Easing Functions
+
 - **Current**: PHP enum with 15 easing curves + 24 CSS cubic-bezier via Newton-Raphson
 - **External**: JavaScript `easings.net` visual reference, CSS easing spec
 - **Why external is better**: Parity with web standards; Newton-Raphson implementation matches W3C spec
@@ -333,38 +358,46 @@ honey-bounce/src/
 ## From upstream charmbracelet/harmonica:
 
 ### Issue #13 — "issue running an example" (Open)
+
 - System dependencies for OpenGL example were never documented
 - **Lesson**: SugarCraft should document PHP extension requirements clearly
 
 ### Issue #11 — "go mod tidy unable to pull Projectile" (Closed)
+
 - Breaking API between v0.1.0 and v0.2.0 — types on master not available in latest tag
 - **Lesson**: SugarCraft should ensure examples match released versions
 
 ### PR #6 — Projectile motion addition
+
 - Added projectile physics; explicitly listed TODO items that were never built: mass, forces, collisions
 - **Lesson**: SugarCraft implementing these TODOs would be genuine feature leadership
 
 ### PR #24 — Spring tests added
+
 - Added first comprehensive spring tests for all three damping regimes
 - **Lesson**: SugarCraft should have equivalent comprehensive tests
 
 ### Commit d45b9627 — Data race prevention
+
 - Copy values in Update method to avoid data races in concurrent scenarios
 - **Lesson**: Immutable pattern in SugarCraft already addresses this; verify concurrent use is safe
 
 ## From textualize/textual:
 
 ### Animator class
+
 - Built-in animator with easing functions and transitions
 - **Lesson**: A `SugarCraft\Bounce\Animator` wrapper for candy-core could provide similar ergonomics
 
 ### Reactive state + watchers
+
 - Animations triggered automatically when reactive properties change
 - **Lesson**: Spring animations could be integrated into candy-core's reactive system
 
 ## From charmbracelet/confettysh:
 
 ### Particle system pattern
+
 - Uses velocity, gravity, acceleration for confetti/fireworks
 - **Lesson**: `honey-bounce` + a future `ParticleSystem` class could replicate this
 
@@ -420,6 +453,7 @@ honey-bounce/src/
 **honey-bounce** is a well-executed, faithful PHP port of `charmbracelet/harmonica` that meaningfully extends the upstream with ergonomic improvements: UIKit-inspired spring presets, immutable patterns, multi-spring orchestration (`SpringChain`/`SpringCollection`), `REDUCE_MOTION` accessibility support, and a complete easing curve library. The implementation quality is high — the Ryan Juckett spring algorithm is correctly ported with O(1) per-frame updates, and the physics-first, framework-agnostic design is the right architectural choice.
 
 **The library's strongest differentiation from upstream is:**
+
 1. Spring presets (UIKit tension/friction mappings) — upstream has no equivalent
 2. REDUCE_MOTION support — upstream has zero accessibility consideration
 3. Immutable `Projectile::update()` — upstream mutates in place
@@ -437,6 +471,7 @@ Third, the mutable `Projectile` allocation pattern creates garbage in tight game
 `honey-bounce` fills the physics/animation layer in SugarCraft's stack, sitting below `candy-core` (TUI runtime) and alongside `honey-flap` (game physics consumer). Its physics-first approach is correct — consumers handle rendering, enabling use in TUIs, games, or any animation context. The library's independence from terminal dependencies is a strength that should be preserved.
 
 **Recommended strategic direction:**
+
 1. **Consolidate v1.x** by adding the immediate wins (isSettled, onComplete, forces, collision detection)
 2. **Position v2.0** around game physics capabilities (Verlet, ParticleSystem, Timeline)
 3. **Document accessibility leadership** — REDUCE_MOTION support is a genuine differentiator that should be prominently marketed

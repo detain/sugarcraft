@@ -248,6 +248,7 @@ final class Glyphs
                     $this->fontPathCache[$style] = $path;
                     return $path;
                 } catch (\RuntimeException) {
+                    // Fallback font unavailable; try next candidate.
                 }
             }
         }

@@ -8,6 +8,7 @@
 ## Quick Start
 
 To implement an item:
+
 1. Find the feature you want in the index below
 2. Click the link to read the full research document
 3. Look for the **Priority** and **Effort** columns
@@ -128,35 +129,41 @@ To implement an item:
 ## Feature Categories
 
 ### Layout & Compositing
+
 - **sugar-dash**: Constraint layout, StatefulWidget separation
 - **sugar-veil**: Backdrop, animation, overlay stacking
 - **sugar-boxer**: Multiple box styles, text alignment, titles
 - **sugar-stickers**: Viewport component, sticky positioning
 
 ### Data Visualization
+
 - **sugar-charts**: Nice ticks, streaming, area fills
 - **sugar-table**: StyleFunc, flex columns, virtualization
 - **sugar-toast**: Progress toasts, max concurrent
 
 ### Input & Forms
+
 - **sugar-prompt**: Built-in validators, vim keys, fuzzy suggestions
 - **sugar-readline**: History persistence, auto-suggest, vi mode
 - **sugar-bits**: validate_on timing, restrict regex, table sorting
 - **sugar-calendar**: Date range picker, event store, localization
 
 ### Terminal Capabilities
+
 - **candy-vt**: Scrollback buffer, subparam parsing, cursor shapes
 - **candy-pty**: openpty FFI, waitpid FFI, raw mode
 - **candy-zone**: Hover tracking, drag detection, click count
 - **candy-palette**: CLICOLOR, terminfo Tc, color space handling
 
 ### App-Level
+
 - **candy-shell**: Auto-discovery, ValueEnum, FlagSpec trait
 - **sugar-stash**: Diff panel, branch ops, context help
 - **sugar-crush**: Session persistence, streaming UI, context compaction
 - **super-candy**: Copy/move, bookmarks, preview
 
 ### Games
+
 - **candy-tetris**: Full SRS, T-Spin detection, B2B bonus
 - **candy-mines**: Chord clicks, improved win detection
 - **honey-bounce**: SpringConfig presets, CubicBezier, SpringChain

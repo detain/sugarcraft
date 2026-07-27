@@ -54,6 +54,7 @@ exactly what the step file asks. Do not expand scope.
 git checkout master && git pull --ff-only
 git checkout -b ai/<slug-from-step-file>
 # ... do the work ...
+
 cd <touched-lib> && composer install --quiet && vendor/bin/phpunit
 cd /home/sites/sugarcraft
 git add <specific files>
@@ -67,10 +68,12 @@ EOF
 git push -u origin HEAD
 unset GITHUB_TOKEN && gh pr create --title "<lib>: <short summary> (leftover-rollout <step ID>)" --body "$(cat <<'EOF'
 ## Summary
+
 - <bullet 1>
 - <bullet 2>
 
 ## Test plan
+
 - [x] `cd <lib> && vendor/bin/phpunit` — N tests passing
 - [x] Consumer regression suites green
 - [x] Touched files listed below

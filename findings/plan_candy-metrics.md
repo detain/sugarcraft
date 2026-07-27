@@ -31,11 +31,13 @@ Address all findings from the candy-metrics code review, ranging from critical r
 **Severity:** Critical
 
 **Conditions for Success:**
+
 - SessionMetrics is moved to a bridge package OR `sugarcraft/candy-wish` is added as a hard `require` in composer.json
 - Running `composer install` without candy-wish does not produce a broken state
 - `composer validate` passes
 
 **Related Code:**
+
 - `src/Middleware/SessionMetrics.php:8-10` — problematic imports
 - `composer.json:39-41` — `suggest` section
 - `src/Middleware/SessionMetrics.php:27-59` — full middleware implementation
@@ -54,12 +56,14 @@ The imports at lines 8-10 pull in three classes from candy-wish (`Context`, `Mid
 **Severity:** Critical
 
 **Conditions for Success:**
+
 - `flush(): void` is added to the `Backend` interface (with default empty implementation for backends that don't need it)
 - OR documentation clearly states `flush()` must be called directly on backends that need it
 - `MultiBackend` forwards `flush()` to all children
 - All existing backends implement the interface correctly
 
 **Related Code:**
+
 - `src/Backend.php:20-70` — interface definition
 - `src/Backend/PrometheusFileBackend.php:132-273` — `flush()` implementation
 - `src/Backend/MultiBackend.php:82-85` — `describe()` forwarding (no `flush()` forwarding)
@@ -80,6 +84,7 @@ The Backend interface is clean with 7 methods. Adding `flush(): void` with a def
 **Severity:** Critical
 
 **Conditions for Success:**
+
 - Add a private `$dirty bool` property that tracks whether any data was recorded since last flush
 - Skip re-writing the file if `$dirty === false`
 - Set `$dirty = true` in `counter()`, `gauge()`, `histogram()`, `upDownCounter()`, `asyncCounter()`, `asyncGauge()`
@@ -87,6 +92,7 @@ The Backend interface is clean with 7 methods. Adding `flush(): void` with a def
 - Unit test verifies no file rewrite when no data recorded between flushes
 
 **Related Code:**
+
 - `src/Backend/PrometheusFileBackend.php:132-273` — full `flush()` method
 - `src/Backend/PrometheusFileBackend.php:71-123` — all emit methods that should set dirty flag
 - `src/Backend/PrometheusFileBackend.php:256-273` — file write + rename
@@ -107,12 +113,14 @@ The 6 emit methods (counter, gauge, histogram, upDownCounter, asyncCounter, asyn
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Extract helper method: `private function emitMetricLine(string $name, string $labels, float $value, ?Descriptor $descriptor, string $defaultType): string`
 - Replace each block with a call to the helper
 - Histogram block (lines 223-246) needs separate handling since it emits bucket lines
 - All 41 existing tests still pass
 
 **Related Code:**
+
 - `src/Backend/PrometheusFileBackend.php:143-246` — the 5 blocks
 - `src/Backend/PrometheusFileBackend.php:223-246` — histogram special handling
 
@@ -144,12 +152,14 @@ A helper method would reduce this significantly. The histogram block is structur
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Create `SugarCraft\Metrics\Util::tagKey(array $tags): string` — sorts tags and builds the `k=v|k2=v2` string
 - Update `InMemoryBackend::key()` to use `Util::tagKey()` and prepend the name
 - Update `Registry::tagKey()` to use `Util::tagKey()`
 - All existing tests pass (the key format is unchanged, only implementation deduplicated)
 
 **Related Code:**
+
 - `src/Backend/InMemoryBackend.php:120-131`
 - `src/Registry.php:269-280`
 
@@ -167,12 +177,14 @@ InMemoryBackend::key() returns `name|k=v|k2=v2` format, while Registry::tagKey()
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Extract `private function buildBucketLabels(string $labels, string $le): string`
 - Use for both regular bucket and +Inf bucket construction
 - Add unit test for edge case: empty labels, labels with multiple values
 - All existing tests pass
 
 **Related Code:**
+
 - `src/Backend/PrometheusFileBackend.php:239-243`
 
 **Investigation Notes:**
@@ -189,12 +201,14 @@ Current code: `$leAttr = $labels !== '' ? substr($labels, 0, -1) . ',le="' . $b 
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Add a constructor parameter `$failSilently = true` to control error handling behavior
 - When `$failSilently = false`, throw on fwrite failure or at least log via error_log()
 - Default to `true` for backward compatibility
 - Add a phpunit test that verifies behavior with failSilently configuration
 
 **Related Code:**
+
 - `src/Backend/StatsdBackend.php:106`
 - `src/Backend/StatsdBackend.php:38-57` — constructor
 
@@ -212,6 +226,7 @@ The comment at lines 23-27 in StatsdBackend.php says "Failed writes are silently
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Create a custom `MultiBackendException` class that extends RuntimeException and holds all errors
 - The exception should have `getErrors(): list<Throwable>` method
 - Update `fanout()` to use this exception when multiple children fail
@@ -219,6 +234,7 @@ The comment at lines 23-27 in StatsdBackend.php says "Failed writes are silently
 - Update tests to verify all errors are accessible
 
 **Related Code:**
+
 - `src/Backend/MultiBackend.php:100-114`
 
 **Investigation Notes:**
@@ -235,12 +251,14 @@ Current exception message format: "MultiBackend: N child backend(s) failed. Firs
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Add a doc comment on `Registry::tagKey()` explaining it returns tag-key only (no name) and is used for cardinality tracking
 - Add a doc comment on `InMemoryBackend::key()` explaining it returns name-prefixed key for storage
 - Add a shared constant `public const TAG_SEPARATOR = '|'` to formalize the separator
 - All existing tests pass without modification
 
 **Related Code:**
+
 - `src/Registry.php:269-280`
 - `src/Backend/InMemoryBackend.php:120-131`
 
@@ -258,12 +276,14 @@ This is partially addressed by issue 2.2 (extracting shared utility). After extr
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Add constructor parameter `?list<float> $buckets = null` to PrometheusFileBackend
 - Default to the 14 classic buckets if null
 - Add a public constant `DEFAULT_BUCKETS` for the classic set
 - All existing histogram tests pass
 
 **Related Code:**
+
 - `src/Backend/PrometheusFileBackend.php:41` — BUCKETS constant
 - `src/Backend/PrometheusFileBackend.php:82-96` — histogram() method
 
@@ -281,12 +301,14 @@ To make this configurable, the constructor would accept an optional `?list<float
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Add `InMemoryBackend::clear(): void` — resets all accumulators (counters, gauges, histograms, etc.)
 - Add `InMemoryBackend::remove(string $name, array $tags = []): void` — removes a specific metric series
 - Add `Registry::remove(string $name, array $tags = []): void` — removes from both backend and cardinality cache
 - Add unit tests for all new methods
 
 **Related Code:**
+
 - `src/Backend/InMemoryBackend.php` — all accumulator arrays
 - `src/Registry.php` — labelValueCache for cardinality tracking
 
@@ -304,11 +326,13 @@ The InMemoryBackend has 6 accumulator arrays. A `clear()` method would reset all
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Verify the factory method at `src/Registry.php:133-136` is correctly implemented
 - If it exists and works correctly, the finding is already addressed (confirm via test)
 - The test at `tests/RegistryTest.php:119-142` should include UpDownCounter factory test
 
 **Related Code:**
+
 - `src/Registry.php:133-136` — newUpDownCounter() factory
 - `tests/RegistryTest.php:119-142` — factory tests
 
@@ -326,12 +350,14 @@ Looking at the source code, `newUpDownCounter()` IS implemented at lines 133-136
 **Severity:** Major
 
 **Conditions for Success:**
+
 - Add `destroy(): void` method to AsyncCounter that removes their observations from the registry
 - Add `destroy(): void` method to AsyncGauge that removes their observations from the registry
 - OR: document that async instruments are meant to be long-lived and not created dynamically in large numbers
 - Add unit tests for destroy()
 
 **Related Code:**
+
 - `src/Instrument/AsyncCounter.php:26-32` — constructor
 - `src/Instrument/AsyncGauge.php:26-32` — constructor
 - `src/Registry.php` — would need to track async instruments
@@ -352,10 +378,12 @@ The async instruments are passive — they hold a closure callback and call `obs
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Change to `private readonly array $defaultTags;`
 - All tests pass
 
 **Related Code:**
+
 - `src/Registry.php:38`
 - `src/Registry.php:55-62` — constructor
 
@@ -370,12 +398,14 @@ The async instruments are passive — they hold a closure callback and call `obs
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Standardize all value methods to return `?float` (null if missing)
 - Update return type declarations and docblocks
 - Update any callers that rely on the old return type
 - All tests pass
 
 **Related Code:**
+
 - `src/Backend/InMemoryBackend.php:86-115` — all value methods
 
 ---
@@ -389,11 +419,13 @@ The async instruments are passive — they hold a closure callback and call `obs
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Verify newUpDownCounter() factory is tested (appears to be at lines 125-129)
 - If test exists and is adequate, no action needed
 - If test is missing, add it
 
 **Related Code:**
+
 - `tests/RegistryTest.php:119-142`
 
 **Investigation Notes:**
@@ -410,12 +442,14 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Add a descriptive constant: `private const KEY_SEPARATOR = "\0";`
 - Use the constant in `key()` and `splitKey()` methods
 - Add a docblock explaining why NUL was chosen (cannot appear in Prometheus metric names after sanitization)
 - All tests pass
 
 **Related Code:**
+
 - `src/Backend/PrometheusFileBackend.php:278-302`
 
 ---
@@ -429,11 +463,13 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Add a test that verifies `describe()` is forwarded to all children
 - Use a mock/spy backend that tracks describe() calls
 - All existing tests pass
 
 **Related Code:**
+
 - `tests/Backend/MultiBackendTest.php`
 - `src/Backend/MultiBackend.php:82-85`
 
@@ -448,12 +484,14 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Wrap registry operations in try-catch in the handle() method
 - The try block should contain `$next($ctx, $session)` and the catch should record the error counter
 - Registry operation failures should not prevent exception propagation
 - Add a test that verifies registry exceptions don't suppress the original exception
 
 **Related Code:**
+
 - `src/Middleware/SessionMetrics.php:42-59`
 
 ---
@@ -467,12 +505,14 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Add a constructor parameter `$throwOnError = true` to control behavior
 - When `$throwOnError = false`, silently drop metrics on partial write
 - Default to `true` for backward compatibility
 - Add tests for both behaviors
 
 **Related Code:**
+
 - `src/Backend/JsonStreamBackend.php:29-53` — constructor
 - `src/Backend/JsonStreamBackend.php:92-95` — emit/write logic
 
@@ -487,12 +527,14 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Add a `$timeout = 1.0` parameter to the constructor
 - Pass it to fsockopen
 - Default to 1.0 for backward compatibility
 - Add a test with a custom timeout value
 
 **Related Code:**
+
 - `src/Backend/StatsdBackend.php:38-57` — constructor
 - `src/Backend/StatsdBackend.php:51` — fsockopen call
 
@@ -507,12 +549,14 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Add validation in `describe()` that throws if the descriptor name doesn't match Prometheus syntax
 - OR modify the `Descriptor` class to store both original and sanitized names
 - Add a test that verifies invalid descriptor names throw an exception
 - All existing tests pass
 
 **Related Code:**
+
 - `src/Backend/PrometheusFileBackend.php:125-130`
 - `src/Backend/PrometheusFileBackend.php:309-320` — sanitizeName() method
 
@@ -527,11 +571,13 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Minor
 
 **Conditions for Success:**
+
 - Add `failOnWarning="true"` to phpunit.xml root element
 - Add `cacheDirectory=".phpunit.cache"` to phpunit.xml root element
 - Reference: `candy-core/phpunit.xml` has both attributes
 
 **Related Code:**
+
 - `candy-metrics/phpunit.xml:1-16`
 - `candy-core/phpunit.xml:1-18` — reference implementation
 
@@ -548,12 +594,14 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Enhancement
 
 **Conditions for Success:**
+
 - Create `final class Collector` with `register(AsyncCounter|AsyncGauge $instrument): void` and `collectAll(): void` methods
 - `collectAll()` calls `observe()` on each registered instrument
 - Add tests for the Collector
 - Document usage
 
 **Related Code:**
+
 - `src/Instrument/AsyncCounter.php` — observe() method
 - `src/Instrument/AsyncGauge.php` — observe() method
 
@@ -568,11 +616,13 @@ Looking at the test code, lines 125-129 already test `newUpDownCounter`: `$count
 **Severity:** Enhancement
 
 **Conditions for Success:**
+
 - This is a significant enhancement requiring a new backend class (e.g., `ReactStatsdBackend`)
 - Would depend on react/socket package
 - Not for the current PR scope — document as future enhancement
 
 **Related Code:**
+
 - `src/Backend/StatsdBackend.php`
 
 ---

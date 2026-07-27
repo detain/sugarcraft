@@ -43,6 +43,7 @@ Honey-bounce is a solid PHP port of harmonica with clean spring physics implemen
 ### 2.1 Go Ecosystem
 
 #### charmbracelet/harmonica (Upstream) ⭐
+
 **Source:** https://github.com/charmbracelet/harmonica, https://pkg.go.dev/github.com/charmbracelet/harmonica
 
 ```go
@@ -63,6 +64,7 @@ pos := projectile.Update()
 **Key insight:** harmonica's API is the reference - honey-bounce is a faithful port. No changes needed for Go parity.
 
 #### setanarut/tween (Go) ⭐⭐
+
 **Source:** https://github.com/setanarut/tween
 
 Tweening library with comprehensive easing functions and minimal GC pressure.
@@ -82,11 +84,13 @@ ease.Elastic // elastic gum effect
 **Value for honey-bounce:** Adding a separate `Tween` class with duration-based easing would complement the spring physics. Not a replacement - additive value.
 
 #### tanema/gween (Go)
+
 **Source:** https://github.com/tanema/gween
 
 Similar to tween, ~45 built-in easing functions. Uses `(t, b, c, d)` signature compatible with Penner easings.
 
 #### vron/gease (Go)
+
 **Source:** https://github.com/vron/gease
 
 Spring-based convenience methods for gioui. Designed to minimize GC pressure (zero allocation per frame).
@@ -98,6 +102,7 @@ Spring-based convenience methods for gioui. Designed to minimize GC pressure (ze
 ### 2.2 JavaScript/React Ecosystem
 
 #### pmndrs/react-spring ⭐⭐⭐
+
 **Source:** https://github.com/pmndrs/react-spring, https://context7.com/pmndrs/react-spring
 
 **The most influential spring animation library.** Provides the reference API design:
@@ -146,6 +151,7 @@ dampingRatio = friction / (2 × sqrt(tension × mass))
 **Value for honey-bounce:** HIGH - Add `SpringPreset` enum + `SpringConfig` value object with tension/friction/mass + conversion utilities.
 
 #### framer-motion ⭐⭐
+
 **Source:** https://context7.com/grx7/framer-motion
 
 Production-grade React animation with gesture support:
@@ -182,6 +188,7 @@ Production-grade React animation with gesture support:
 **Value for honey-bounce:** MEDIUM - Gesture support is TUI-irrelevant, but `whileHover`/`whileTap` pattern and `restDelta`/`restSpeed` are useful concepts.
 
 #### motion (formerly Framer Motion standalone) ⭐⭐
+
 **Source:** https://motion.dev/
 
 ```javascript
@@ -196,6 +203,7 @@ animate(element, { rotate: 180 }, {
 **Value for honey-bounce:** MEDIUM - Cross-platform variant reinforces spring API standardization.
 
 #### popmotion / animate ⭐
+
 **Source:** https://popmotion.io/
 
 ```javascript
@@ -211,6 +219,7 @@ animate({
 **Value for honey-bounce:** LOW - architectural reference, not API inspiration.
 
 #### d3-ease ⭐⭐⭐
+
 **Source:** https://github.com/d3/d3-ease
 
 ```javascript
@@ -232,6 +241,7 @@ d3.easeElastic.period(0.3)
 **Value for honey-bounce:** HIGH - Add `CubicBezier` easing class that accepts CSS-standard control points.
 
 #### dynamics.js ⭐
+
 **Source:** https://github.com/michaelvillar/dynamics.js
 
 ```javascript
@@ -249,6 +259,7 @@ dynamics.animate(el, {
 **Insight:** `frequency` parameter is different from angular frequency - more like "bounciness".
 
 #### oscillation ⭐⭐
+
 **Source:** https://github.com/UnknownPrinciple/oscillation
 
 ```javascript
@@ -265,6 +276,7 @@ motion(spring(0, 100), (value) => {
 ### 2.3 Rust/Dioxus Ecosystem
 
 #### dioxus-spring ⭐⭐
+
 **Source:** https://github.com/dioxus-community/dioxus-spring
 
 ```rust
@@ -283,6 +295,7 @@ use_animated(animated_ref, spring, |width| {
 **Value for honey-bounce:** LOW - Dioxus-specific reactive hooks don't translate to PHP.
 
 #### dioxus-motion ⭐⭐
+
 **Source:** https://docs.rs/dioxus-motion
 
 **Most comprehensive Rust animation library:**
@@ -317,11 +330,13 @@ Spring {
 ### 2.4 PHP Ecosystem
 
 #### haberco/easing ⭐
+
 **Source:** https://packagist.org/packages/haberco/easing
 
 Robert Penner easings ported to PHP. Current honey-bounce implementation is similar quality.
 
 #### smnandre/easing-functions ⭐⭐
+
 **Source:** https://github.com/smnandre/easing-functions
 
 Modern PHP 8 easing library with comprehensive test coverage and cubic-bezier support:

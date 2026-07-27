@@ -96,8 +96,10 @@ final class ProgressList implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Pad with empty lines if needed
-        while (count($result) < $useHeight) {
+        $resultCount = count($result);
+        while ($resultCount < $useHeight) {
             $result[] = str_repeat(' ', $useWidth);
+            $resultCount++;
         }
 
         return implode("\n", array_slice($result, 0, $useHeight));

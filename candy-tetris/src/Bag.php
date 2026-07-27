@@ -55,11 +55,13 @@ final class Bag
      */
     public function peek(int $n): array
     {
-        while (count($this->pending) < $n) {
+        $pendingCount = count($this->pending);
+        while ($pendingCount < $n) {
             $this->pending = array_merge(
                 $this->pending,
                 self::shuffle(Tetromino::cases(), $this->rand),
             );
+            $pendingCount = count($this->pending);
         }
         return array_slice($this->pending, 0, $n);
     }

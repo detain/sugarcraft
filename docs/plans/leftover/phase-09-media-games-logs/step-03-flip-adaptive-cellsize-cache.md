@@ -14,6 +14,7 @@
 ## Files
 
 **Modify:**
+
 - `candy-flip/src/Renderer.php` — `withAdaptiveSize()` reads tty.
 - `candy-flip/src/Cache/FrameCache.php` (new).
 - `candy-flip/composer.json` — add `sugarcraft/candy-pty` if not

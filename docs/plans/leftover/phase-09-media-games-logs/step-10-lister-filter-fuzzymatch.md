@@ -12,9 +12,11 @@
 ## Files
 
 **Modify:**
+
 - `candy-lister/src/Lister.php` — `withFilterFn(callable)`.
 
 **Create:**
+
 - `candy-lister/src/FuzzyMatch.php` — share impl with sugar-prompt
   fuzzy (step 08.02) where possible; consider lifting to candy-core
   if both consume it.

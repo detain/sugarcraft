@@ -15,6 +15,7 @@ Once landed, dashboards can switch dark/light at runtime via a Msg.
 ## Files
 
 **Modify:**
+
 - `sugar-dash/src/Foundation/Drawable.php` — add
   `withTheme(\SugarCraft\Sprinkles\Theme): self`. Default abstract impl
   returns `$this`. Subclasses opt-in by storing the theme in a
@@ -31,11 +32,14 @@ Once landed, dashboards can switch dark/light at runtime via a Msg.
     with the appropriate Theme slot.
 
 **Modify:**
+
 - `sugar-dash/examples/dashboard-live.php` — bind `Ctrl-T` to toggle
   between `Theme::dark()` and `Theme::light()`. Demonstrates runtime
   switching.
 
 ## Tests
+
+
 
 - `sugar-dash/tests/Foundation/DrawableThemeTest.php` — fixture
   drawable: `withTheme()` returns new instance, theme propagates to
@@ -60,6 +64,8 @@ Once landed, dashboards can switch dark/light at runtime via a Msg.
 ---
 
 ## Process reminders
+
+
 
 - `unset GITHUB_TOKEN` before every `gh` invocation. Always.
 - End on `master` with clean working tree (commit → push → `gh pr create` → `gh pr merge --merge --delete-branch` → `git checkout master && git pull --ff-only`). See `_templates/process_reminders.md`.

@@ -1,6 +1,7 @@
 # Second-Stage Ecosystem Intelligence Report: charmbracelet/fantasy
 
 ## Metadata
+
 - **URL:** https://github.com/charmbracelet/fantasy
 - **Analysis Date:** 2026-05-27
 - **Period Covered:** Nov 2025 - May 2026 (issues/PRs active in this window)
@@ -16,12 +17,14 @@
 **charmbracelet/fantasy** is an AI agent framework for Go that provides a unified API across multiple LLM providers (OpenAI, Anthropic, Google, Azure, Amazon Bedrock, OpenRouter, Vercel AI, Kronk). It powers "Crush," charmbracelet's AI coding agent, providing real-world production validation of the API design.
 
 **Activity Metrics:**
+
 - 14 open issues, 203+ closed PRs
 - 13 open PRs, many in active review
 - Very active development with recent maintainer responses
 - Strong community engagement with 100 forks
 
 **Key Active PRs:**
+
 - #192: Structured output for agents (feature complete, in review)
 - #127: Embeddings API support (in progress)
 - #149: WebSocket mode for OpenAI Responses API (in progress)
@@ -64,6 +67,7 @@ From first-pass analysis, these gaps were identified:
 ## 4. High-Signal Open Issues
 
 ### Issue #239: Include accumulated text in OnTextEnd callback
+
 **Author:** carsonfarmer (May 15, 2026)
 **Type:** Feature
 
@@ -78,6 +82,7 @@ From first-pass analysis, these gaps were identified:
 ---
 
 ### Issue #235: Allow callers to disable all tools for a single Agent call
+
 **Author:** fwang2002 (May 13, 2026)
 **Type:** Feature (area: tools)
 
@@ -92,6 +97,7 @@ From first-pass analysis, these gaps were identified:
 ---
 
 ### Issue #208: openaicompat silently drops ToolResultOutputContentMedia
+
 **Author:** ezynda3 (Apr 22, 2026)
 **Type:** Bug (area: tools, providers: openai, openrouter)
 
@@ -108,6 +114,7 @@ From first-pass analysis, these gaps were identified:
 ---
 
 ### Issue #130: Config mismatch—Fantasy ignores context_window from Catwalk
+
 **Author:** ivan-cstv (Feb 3, 2026)
 **Type:** Bug (provider: anthropic claude)
 
@@ -118,6 +125,7 @@ From first-pass analysis, these gaps were identified:
 ---
 
 ### Issue #122: Support for embeddings endpoint
+
 **Author:** acheong08 (Jan 22, 2026)
 **Type:** Feature
 
@@ -130,6 +138,7 @@ From first-pass analysis, these gaps were identified:
 ---
 
 ### Issue #118: Native json output support for agents
+
 **Author:** rashadism (Jan 17, 2026)
 **Type:** Feature
 
@@ -144,6 +153,7 @@ From first-pass analysis, these gaps were identified:
 ---
 
 ### Issue #95: Deduplicate code across providers and core logic
+
 **Author:** LarsArtmann (Dec 10, 2025)
 **Type:** Maintainability
 
@@ -159,6 +169,7 @@ From first-pass analysis, these gaps were identified:
 ---
 
 ### Issue #89: Structured response for streaming mode
+
 **Author:** casidiablo (Dec 2, 2025)
 **Type:** Feature
 
@@ -171,20 +182,25 @@ From first-pass analysis, these gaps were identified:
 ## 5. Important Closed Issues
 
 ### Issue #252/248: Bedrock region enforcement
+
 **Status:** Merged May 2026
 **Pattern:** Enforced `us-east-1` as region for Bedrock, then added `WithRegion` option.
 
 ### Issue #242: Retry on network connection errors
+
 **Status:** Merged May 2026
 **Pattern:** Extended retry logic beyond HTTP errors to include network-level errors.
 
 ### Issue #238/237: Anthropic reasoning/web search fidelity
+
 **Status:** Merged May 2026
 **Pattern:** Preserve reasoning replay and web search error replay fidelity.
 
 ### Issue #245/246: Require stream termination events before finishing
+
 **Status:** Merged May 2026
 **Pattern:** 
+
 - Anthropic: require `message_stop` before finishing
 - OpenAI: require terminal stream events before finishing
 
@@ -195,6 +211,7 @@ From first-pass analysis, these gaps were identified:
 ## 6. Recurring Pain Points
 
 ### A. Provider Parity Gaps
+
 Multiple issues highlight inconsistent behavior across providers:
 1. **Media handling** — Anthropic handles `ToolResultOutputContentMedia`, others don't (#208)
 2. **Context window config** — Ignored from Catwalk configs (#130)
@@ -203,6 +220,7 @@ Multiple issues highlight inconsistent behavior across providers:
 **Pattern:** Each provider implements features independently, leading to capability drift.
 
 ### B. Binary Size
+
 **Issue #222 (Draft):** Provider build tags to reduce binary size
 - All providers compiled: 32 MB
 - Core only: 12 MB
@@ -211,11 +229,13 @@ Multiple issues highlight inconsistent behavior across providers:
 Maintainer response suggests preferring package reorganization over build tags.
 
 ### C. API Ergonomics Asymmetry
+
 1. `OnTextEndFunc` vs `OnReasoningEndFunc` — inconsistent parameter passing (#239)
 2. `DisableAllTools` exists at `PrepareStepResult` level but not at `AgentCall` level (#235)
 3. No way to get structured output from agents without workarounds (#118)
 
 ### D. Code Duplication
+
 **431 clone groups** identified (#95). Key areas:
 - Provider hook files
 - Provider options handling
@@ -240,11 +260,13 @@ Maintainer response suggests preferring package reorganization over build tags.
 ## 8. Important PRs
 
 ### PR #192: Structured output for agents
+
 **Status:** Open, feature complete, in review
 **Author:** crazybolillo
 **Purpose:** Enable `object.Generate[T]` with agents
 
 **Key Details:**
+
 - Updates `LanguageModel` to support tool calls alongside structured output
 - Backwards compatible
 - Currently only OpenAI provider implements tool calls + structured output
@@ -256,18 +278,21 @@ Maintainer response suggests preferring package reorganization over build tags.
 ---
 
 ### PR #127: Add embeddings API + OpenAI/OpenAI-compat
+
 **Status:** Open, 8 comments, in progress
 **Purpose:** Add embeddings endpoint support
 
 ---
 
 ### PR #149: WebSocket mode for OpenAI Responses API
+
 **Status:** Open, 2 tasks done
 **Purpose:** Alternative transport for Responses API
 
 ---
 
 ### PR #222: Build tags for binary size reduction
+
 **Status:** Draft, seeking direction
 **Author:** ljuti (contributor)
 
@@ -279,12 +304,14 @@ Maintainer response suggests preferring package reorganization over build tags.
 ---
 
 ### PR #229: Agent prepare call
+
 **Status:** Open
 **Purpose:** Add `PrepareCall` hook to `AgentCall` / `AgentStreamCall` (addresses #224)
 
 ---
 
 ### PR #85: Hooks for pre/post tool call manipulation
+
 **Status:** Open
 **Purpose:** Add hooks for pre/post tool call manipulation
 
@@ -310,15 +337,18 @@ Maintainer response suggests preferring package reorganization over build tags.
 ## 10. Performance Discussions
 
 ### Binary Size Issue (#222)
+
 - 32 MB stripped binary for core+2 providers
 - 63% reduction possible via build tags
 - Maintainer prefers package reorganization
 
 ### Streaming Goroutine Leak (#191)
+
 - **Fixed:** Stream idle timeout and goroutine leak in `processStepStream`
 - Issue demonstrates complexity of streaming with proper cleanup
 
 ### Retry Performance (#242)
+
 - Extended retry to network connection errors
 - Pattern: respect `retry-after-ms` and `retry-after` headers
 
@@ -327,6 +357,7 @@ Maintainer response suggests preferring package reorganization over build tags.
 ## 11. Extensibility Discussions
 
 ### Issue #224: Application-level extension field + PrepareCall hook
+
 **Request:** Add extension field and `PrepareCall` hook to `AgentCall`/`AgentStreamCall`
 
 **Purpose:** Allow callers to pass through custom data without modifying core types.
@@ -334,11 +365,13 @@ Maintainer response suggests preferring package reorganization over build tags.
 **Status:** PR #229 addresses this.
 
 ### Issue #85: Pre/post tool call manipulation hooks
+
 **Request:** Hooks for pre/post tool call manipulation
 
 **Status:** Open
 
 ### Issue #89: Structured response for streaming mode
+
 **Request:** Streaming mode structured output
 
 **SugarCraft Relevance:** If SugarCraft ever adds streaming, similar patterns matter.
@@ -348,6 +381,7 @@ Maintainer response suggests preferring package reorganization over build tags.
 ## 12. API/UX Complaints
 
 ### A. Library Ergonomics (Discussion #247)
+
 **Author:** guesdo
 **Reference:** RubyLLM ergonomics
 
@@ -356,12 +390,15 @@ Maintainer response suggests preferring package reorganization over build tags.
 **Signal:** Community wants cleaner, simpler API surface.
 
 ### B. OnTextEnd Inconsistency (#239)
+
 `OnReasoningEndFunc` passes full content; `OnTextEndFunc` only passes ID.
 
 ### C. DisableTools Gap (#235)
+
 No way to disable tools per-call without `PrepareStep` callback.
 
 ### D. Structured Output Gap (#118)
+
 Cannot get structured output from agents without workarounds.
 
 ---
@@ -379,6 +416,7 @@ No explicit migration issues in recent issues. However:
 ## 14. Clever Fixes & Workarounds
 
 ### Workaround #1: DisableTools via PrepareStep
+
 Users who want to disable tools for a single call must use:
 ```go
 PrepareStepResult{D disableAllTools: true}
@@ -386,6 +424,7 @@ PrepareStepResult{D disableAllTools: true}
 This requires implementing `PrepareStep` function just to flip a boolean.
 
 ### Workaround #2: Structured output + HasToolCall
+
 Issue #118 user got structured output working via:
 ```go
 tool + HasToolCall stop condition
@@ -393,6 +432,7 @@ tool + HasToolCall stop condition
 But couldn't get native JSON mode working.
 
 ### Workaround #3: Media tool results with Anthropic
+
 Only Anthropic provider handles `ToolResultOutputContentMedia`. Users with OpenAI/OpenRouter must use Anthropic for media-capable tools.
 
 ---
@@ -409,18 +449,23 @@ Only Anthropic provider handles `ToolResultOutputContentMedia`. Users with OpenA
 ## 16. Maintainer Guidance Patterns
 
 ### A. Prefer Architectural Solutions Over Patching
+
 **Example:** For binary size (#222), maintainer prefers package reorganization over build tags.
 
 ### B. Require Discussion Before Large Features
+
 **Example:** PR #192 notes contributor "created a discussion that was approved by a maintainer" for new features.
 
 ### C. Provider-by-Provider Implementation
+
 **Example:** Structured output + tool calls only implemented for OpenAI; other providers get degraded mode.
 
 ### D. Backwards Compatibility Emphasis
+
 **Example:** PR #192 is "fully backwards compatible."
 
 ### E. Reuse Existing Types
+
 **Example:** Using `WithRegion` pattern for Bedrock instead of new abstractions.
 
 ---
@@ -436,20 +481,25 @@ Only Anthropic provider handles `ToolResultOutputContentMedia`. Users with OpenA
 ## 18. Problems Likely Relevant To SugarCraft
 
 ### A. Code Duplication (#95)
+
 SugarCraft's 40+ lib monorepo has similar issues—duplicated path-repo closures across `composer.json` files. The fantasy experience validates that early attention to DRY pays off.
 
 ### B. Silent Data Loss (#208)
+
 Provider drops `ToolResultContentTypeMedia` silently. SugarCraft should ensure any provider abstraction either:
 - Handles all content types consistently, OR
 - Fails loudly if content type unsupported
 
 ### C. API Ergonomics Asymmetry
+
 `OnReasoningEndFunc` vs `OnTextEndFunc` inconsistency. SugarCraft's streaming callbacks (e.g., `view()` rendering) should ensure symmetric patterns.
 
 ### D. Binary Size (63% savings possible)
+
 If SugarCraft ever adds heavy AI features, the fantasy 63% binary size reduction lesson applies: consider what users actually need vs what's compiled by default.
 
 ### E. Configuration Propagation (#130)
+
 Context window config ignored across layers. SugarCraft's API configs should propagate consistently through abstraction layers.
 
 ---
@@ -457,21 +507,26 @@ Context window config ignored across layers. SugarCraft's API configs should pro
 ## 19. Features SugarCraft Should Consider
 
 ### A. Provider Abstraction Lessons
+
 If SugarCraft ever adds multi-backend support (e.g., different storage providers), the fantasy Provider pattern is instructive:
 - Abstract factory (`Provider` interface)
 - Per-provider implementation
 - Consistent capability detection
 
 ### B. Tool Calling Pattern
+
 The `NewAgentTool[T]()` generics + reflection for automatic schema generation is elegant. If SugarCraft ever needs function invocation from CLI, this pattern is worth study.
 
 ### C. Streaming with Callbacks
+
 `OnTextDelta`, `OnToolCall`, `OnStepFinish` callback pattern for streaming. SugarCraft's `view()` could adopt similar granular callback hooks.
 
 ### D. Retry with Header Respect
+
 `retry-after-ms` / `retry-after` header respect pattern. SugarCraft's HTTP client could benefit from similar retry header awareness.
 
 ### E. Structured Output Pattern
+
 `object.Generate[T]()` type-safe generation pattern. If SugarCraft ever needs structured CLI output, this is a reference.
 
 ---
@@ -479,6 +534,7 @@ The `NewAgentTool[T]()` generics + reflection for automatic schema generation is
 ## 20. Architectural Lessons
 
 ### A. Provider Capability Matrix
+
 Fantasy has inconsistent provider capabilities:
 - Anthropic: handles media tool results ✓
 - OpenAI-compat: drops media tool results ✗
@@ -487,6 +543,7 @@ Fantasy has inconsistent provider capabilities:
 **Lesson:** Document and test provider capability matrices explicitly.
 
 ### B. Abstraction Leakage
+
 Some abstractions leak provider details:
 - `context_window` handling differs by provider
 - Media type handling differs by provider
@@ -494,16 +551,19 @@ Some abstractions leak provider details:
 **Lesson:** Choose abstraction boundaries that don't require provider-specific fallbacks.
 
 ### C. Extension Points
+
 Fantasy's `PrepareStep` callback is powerful but awkward for simple cases. Better to have explicit fields (`DisableAllTools bool`) than force extension through callbacks.
 
 **Lesson:** Provide both explicit fields AND extension hooks—don't force hooks for simple cases.
 
 ### D. Silent vs Loud Failures
+
 Issue #208: Silent data loss (media dropped). Better to fail explicitly.
 
 **Lesson:** Fail loudly on unsupported operations; silent failures cause debugging nightmares.
 
 ### E. Binary Size from Proliferation
+
 431 code clone groups + multiple heavy providers = 32 MB binary. 
 
 **Lesson:** Consider compile-time composition from the start.
@@ -513,6 +573,7 @@ Issue #208: Silent data loss (media dropped). Better to fail explicitly.
 ## 21. Defensive Design Lessons
 
 ### A. Defensive Content Type Handling
+
 Always handle all content types explicitly:
 ```go
 switch toolResultPart.Output.GetType() {
@@ -525,6 +586,7 @@ default:
 ```
 
 ### B. Defensive Streaming
+
 Require proper termination:
 ```go
 // Anthropic: require message_stop before finishing
@@ -532,6 +594,7 @@ Require proper termination:
 ```
 
 ### C. Defensive Config Propagation
+
 Validate config fields at boundary:
 ```go
 // Don't silently ignore context_window
@@ -541,6 +604,7 @@ if cfg.context_window > 0 {
 ```
 
 ### D. Defensive Build Composition
+
 Allow users to compile only what they need:
 - Go: build tags
 - PHP: composer `--no-dev` + selective autoloading
@@ -550,18 +614,23 @@ Allow users to compile only what they need:
 ## 22. Ecosystem Trends
 
 ### A. Multi-Provider as Default
+
 Users expect OpenAI + Anthropic + local providers all working. Single-provider libraries are declining.
 
 ### B. Structured Output as Table Stakes
+
 LangChain, LlamaIndex, and fantasy all moving toward native structured output. JSON mode / tool calling + structured output.
 
 ### C. Embeddings Everywhere
+
 Vector search / RAG patterns becoming standard even in small agent frameworks.
 
 ### D. Binary Size Consciousness
+
 Go ecosystem increasingly aware of binary size (fantasy's 32 MB sparked discussion).
 
 ### E. Streaming as Default
+
 Blocking + streaming both needed; streaming requires careful termination handling.
 
 ---

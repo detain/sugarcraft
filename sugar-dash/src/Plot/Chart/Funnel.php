@@ -87,7 +87,8 @@ final class Funnel implements \SugarCraft\Dash\Foundation\Sizer
         $values = [1000, 500, 250, 125, 60, 30];
         $funnelStages = [];
 
-        for ($i = 0; $i < min($stages, count($labels)); $i++) {
+        $labelCount = count($labels);
+        for ($i = 0; $i < min($stages, $labelCount); $i++) {
             $funnelStages[] = new FunnelStage(
                 label: $labels[$i],
                 value: $values[$i],

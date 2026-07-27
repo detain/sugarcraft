@@ -15,6 +15,7 @@ candy-sprinkles is a well-structured port of lipgloss v2 with strong parity in c
 ## 1. Style Composition
 
 ### Current State (Strong)
+
 - `Style::inherit(self $parent)` — child props override parent ✓
 - `Style::copy()` — explicit duplication ✓
 - Immutable fluent API with `with()` private helper ✓
@@ -37,7 +38,9 @@ let patched = base.patch(Style::new().add_modifier(Modifier::BOLD));
 
 **Rich (Python):**
 ```python
+
 # Style combination via addition
+
 combined = Style.parse("bold red") + Style.parse("italic")
 ```
 
@@ -51,6 +54,7 @@ combined = Style.parse("bold red") + Style.parse("italic")
 | **candy-sprinkles** | `inherit()` | Child wins | ✓ Implemented |
 
 ### Recommendation
+
 **Low priority** — current `inherit()` implementation is solid. Consider adding `patch()`-style method for incremental modifications if users request it.
 
 ---
@@ -58,6 +62,7 @@ combined = Style.parse("bold red") + Style.parse("italic")
 ## 2. Color Handling
 
 ### Current State (Strong)
+
 - `Color` class with `hex()`, `rgb()`, `ansi()`, `ansi256()` factories ✓
 - `CompleteColor` for profile-aware triple (TrueColor/ANSI256/ANSI) ✓
 - `AdaptiveColor` for light/dark background switching ✓
@@ -82,7 +87,9 @@ Color::parse("lightblue")      // String parsing
 **Rich — Theme Color System:**
 ```python
 console = Console(color_system="auto")  # auto-detect
+
 # Also: "standard", "256", "truecolor", "windows", None
+
 ```
 
 ### Gap Analysis
@@ -102,6 +109,7 @@ console = Console(color_system="auto")  # auto-detect
 2. **HSL color space** — `Color::hsl($h, $s, $l)` for designer-friendly color manipulation
 
 ### Recommendation
+
 **Medium priority**
 
 ```php
@@ -130,6 +138,7 @@ public static function hsl(float $h, float $s, float $l): self
 ## 3. Typography (Bold, Italic, Underline, etc.)
 
 ### Current State (Excellent)
+
 - All standard attributes: bold, italic, underline, strikethrough, faint, blink, reverse, overline, invisible ✓
 - `UnderlineStyle` enum (single, double, curly, dotted, dashed, none) ✓
 - `UnderlineColor` for colored underlines ✓
@@ -175,6 +184,7 @@ wave := lipgloss.NewStyle().
 2. **Blink rapid** — Rich has `blink2` for rapid flash
 
 ### Recommendation
+
 **Low priority for markup** — requires tokenizer and is complex. The `transform()` hook already exists.
 
 ---
@@ -182,6 +192,7 @@ wave := lipgloss.NewStyle().
 ## 4. Layout Properties (Margin, Padding, Border)
 
 ### Current State (Strong)
+
 - `padding(int ...$sides)` — CSS-like 1/2/4 arg shorthand ✓
 - `margin(int ...$sides)` — same ✓
 - `pad()` and `mg()` short aliases ✓
@@ -242,6 +253,7 @@ padded = Padding("Text", (1, 2), style="cyan")
 2. **Layout Constraint Solver** — already has `Solver` class but could be enhanced
 
 ### Recommendation
+
 **Medium priority**
 
 ```php
@@ -262,6 +274,7 @@ public function spacing(int $cells): self { /* ... */ }
 ## 5. Theme Systems
 
 ### Current State (Minimal)
+
 - `Palette` class with 16 ANSI color constants ✓
 - No formal theme/class registry
 
@@ -283,6 +296,7 @@ console.print("[warning]Low disk space[/]")
 console.print("[danger]Critical error![/]")
 
 # Load from file
+
 theme = Theme.read("/path/to/theme.ini")
 ```
 
@@ -302,13 +316,16 @@ widget.style(Style::new().fg(Color::Cyan));
 ```
 
 ### Recommendation
+
 **High priority** — Theme system would significantly improve DX
 
 ```php
 /**
+
  * Theme — Named style registry
  *
  * Mirrors Rich's Theme class.
+
  */
 final class Theme
 {
@@ -346,6 +363,7 @@ echo $theme->get('warning')->render('Low disk space');
 ## 6. Additional Features from Research
 
 ### A. Rich-Style String Markup
+
 **Value:** High for DX
 **Effort:** High (requires tokenizer)
 
@@ -358,12 +376,14 @@ $style->render("[bold]Important[/] message");
 ```
 
 ### B. Blinking Text Variants
+
 **Value:** Low (terminal support inconsistent)
 **Effort:** 1 hour
 
 Rich has `blink` (slow) and `blink2` (rapid). Currently only `blink` implemented.
 
 ### C. Border Gradient Blend Fix
+
 **Value:** Medium (already partially implemented)
 **Effort:** 2 hours
 
@@ -378,6 +398,7 @@ Current `borderForegroundBlend()` only takes 2 colors and interpolates to 4 side
 ```
 
 ### D. HSL Color Space
+
 **Value:** Medium for theming
 **Effort:** 3-4 hours
 
@@ -440,6 +461,7 @@ public static function hsl(float $hue, float $saturation, float $lightness): Col
 ### Key Code References
 
 **candy-sprinkles current implementation:**
+
 - `src/Style.php` — Main style class (1170+ lines)
 - `src/Border.php` — Border definitions
 - `src/Color.php` (in candy-core) — Color utilities
@@ -452,34 +474,41 @@ public static function hsl(float $hue, float $saturation, float $lightness): Col
 ### Upstream lipgloss v2 Patterns
 
 **Style inheritance:**
+
 - Source: `context7` lipgloss docs — "Inherit Styles from Base Styles"
 - Pattern: `child.Inherit(parent)` — only unset properties inherit
 
 **Color profiles:**
+
 - Source: `context7` lipgloss docs — "Profile-Aware Color with Lip Gloss"
 - Pattern: `lipgloss.Complete(profile)(ansi16, ansi256, truecolor)`
 
 **Transform:**
+
 - Source: `context7` lipgloss docs — "Text Transformations with Lip Gloss"
 - Pattern: `Transform(func(s string) string)`
 
 ### Ratatui Patterns
 
 **Style patching:**
+
 - Source: `context7` ratatui docs — "Styling Text with Style and Stylize"
 - Pattern: `base.patch(Style::new().add_modifier(Modifier::BOLD))`
 
 **Layout constraints:**
+
 - Source: `context7` ratatui docs — "Layout"
 - Pattern: `Layout::vertical([...constraints]).margin(1).spacing(1).areas(rect)`
 
 ### Rich Patterns
 
 **Theme system:**
+
 - Source: `rich.readthedocs.io` — "Style Themes"
 - Pattern: `Theme({ "info": "dim cyan", ... })` with `Theme.read()` from file
 
 **Markup:**
+
 - Source: `rich.readthedocs.io` — "Console Markup"
 - Pattern: `[bold red]text[/bold red]` inline styling
 

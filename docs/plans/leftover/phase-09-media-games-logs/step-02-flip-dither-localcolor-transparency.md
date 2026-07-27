@@ -14,6 +14,7 @@ Four quality improvements:
 ## Files
 
 **Modify:**
+
 - `candy-flip/src/Downsampler.php` — area-average mode.
 - `candy-flip/src/Dither/FloydSteinberg.php` (new).
 - `candy-flip/src/GifDecoder.php` — local color tables + disposal.

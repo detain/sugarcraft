@@ -1,6 +1,7 @@
 # WhispPHP/whisp
 
 ## Metadata
+
 - URL: https://github.com/WhispPHP/whisp
 - Language: PHP
 - Stars: Unknown (GitHub API unavailable from this environment)
@@ -8,6 +9,7 @@
 - Description: A pure PHP SSH server designed for terminal applications. Whisp enables developers to build SSH server applications in PHP, with support for PTY (pseudo-terminal), multiple authentication methods, and concurrent connections via process forking.
 
 ## Feature List
+
 - **Pure PHP SSH Server**: Complete SSH protocol implementation in PHP without requiring system-level SSH daemons
 - **Multi-App Support**: Auto-discovery of PHP scripts in an `apps/` directory, with parameterized route support (e.g., `chat-{roomName}`)
 - **PTY Management**: Full pseudo-terminal support with FFI (Foreign Function Interface) for cross-platform terminal control
@@ -26,6 +28,7 @@
 ## Key Classes and Methods
 
 ### Server (src/Server.php)
+
 - `__construct(int $port = 22, string $host = '0.0.0.0', bool $autoDiscoverApps = true)` — Creates TCP socket server
 - `run(string|array $apps = [])` — Starts the SSH server with optional apps
 - `autoDiscoverApps()` — Discovers apps in `apps/` directory
@@ -35,6 +38,7 @@
 - `stop()` — Gracefully stops server and terminates children
 
 ### Connection (src/Connection.php)
+
 - `handle()` — Main event loop for a single SSH connection
 - `handleKexInit()`, `handleKexDHInit()`, `handleNewKeys()` — SSH key exchange handling
 - `handleUserAuthRequest()` — Authentication (publickey, password, keyboard-interactive)
@@ -44,6 +48,7 @@
 - `disconnect(string $reason)` — Disconnect with reason
 
 ### Channel (src/Channel.php)
+
 - `createPty()` — Creates a pseudo-terminal for the channel
 - `startCommand(string $command)` — Starts a command with optional PTY
 - `writeToCommand(string $data)` — Forward data from SSH client to command
@@ -52,6 +57,7 @@
 - `commandIsRunning()` — Check if command is still running
 
 ### Pty (src/Pty.php)
+
 - `open()` — Open master/slave PTY pair
 - `write(string $data)` — Write data to PTY master
 - `read(int $length = 2048)` — Read data from PTY master
@@ -61,6 +67,7 @@
 - `getFileDescriptor()` — Get OS-specific file descriptor for FFI operations
 
 ### Ffi (src/Ffi.php)
+
 - `getSlaveNameFromMaster(int $masterFd)` — OS-specific PTY slave name lookup
 - `unlockPty()`, `grantPty()` — macOS-specific PTY permissions
 - `setWindowSize()` — ioctl call to set winsize
@@ -69,12 +76,14 @@
 - `getConstant(string $name)` — Get terminal constant by name
 
 ### Kex (src/Kex.php)
+
 - `response()` — Generate KEXDH_REPLY with Curve25519 key exchange
 - Uses `sodium_crypto_scalarmult()` for shared secret computation
 - Computes exchange hash with SHA-256
 - Signs with Ed25519 host key
 
 ### PacketHandler (src/PacketHandler.php)
+
 - `constructPacket()` — Build unencrypted SSH packet
 - `constructEncryptedPacket()` — Build AES-256-GCM encrypted packet
 - `fromData()` — Parse incoming data into packets
@@ -83,6 +92,7 @@
 - Uses `phpseclib3\Crypt\AES` for GCM mode encryption
 
 ### PublicKeyValidator (src/PublicKeyValidator.php)
+
 - `validateSignature()` — Validates SSH public key signatures
 - `verifyEd25519Signature()` — Ed25519 signature verification via `sodium_crypto_sign_verify_detached()`
 - `verifyRsaSignature()` — RSA signature verification via OpenSSL
@@ -90,25 +100,30 @@
 - `extractEd25519PublicKey()`, `extractRsaComponents()` — Blob parsing
 
 ### ServerHostKey (src/ServerHostKey.php)
+
 - Generates and persists Ed25519 host keypair in `~/.whisp-{name}/`
 - `getPrivateKey()`, `getPublicKey()` — Key accessors
 
 ### Command Classes
+
 - `CommandRunner` — Basic process execution with pipes
 - `PtyCommandRunner` — Process connected to PTY slave
 
 ### Enums
+
 - `MessageType` — All SSH protocol message types (DISCONNECT=1 through CHANNEL_FAILURE=100)
 - `TerminalMode` — Terminal control characters (VINTR, VQUIT, VERASE, etc.)
 - `DisconnectReason` — SSH disconnect reason codes
 
 ### Value Objects
+
 - `WinSize` — Terminal window dimensions (rows, cols, widthPixels, heightPixels)
 - `TerminalInfo` — Terminal configuration (term, dimensions, modes)
 
 ## Notable Algorithms / Named Patterns
 
 ### SSH Key Exchange (Diffie-Hellman Curve25519)
+
 ```
 shared_secret = sodium_crypto_scalarmult(curve25519_private, client_public_key)
 exchange_hash = SHA256(client_version || server_version || client_kexinit || server_kexinit || host_key_blob || client_ephemeral_pub || server_ephemeral_pub || shared_secret)
@@ -116,6 +131,7 @@ session_id = exchange_hash (first key exchange only)
 ```
 
 ### Key Derivation Function (KDF)
+
 ```
 output = ''
 prev_block = ''
@@ -127,17 +143,20 @@ while len(output) < needed_length:
 ```
 
 ### AES-256-GCM Encryption
+
 - 12-byte nonce derived from base IV + sequence number
 - Sequence number incremented per packet
 - Length bytes used as Additional Authenticated Data (AAD)
 - 16-byte authentication tag appended to ciphertext
 
 ### PTY Management
+
 - `/dev/ptmx` master PTY opening
 - OS-specific ioctl calls: `TIOCGPTN`, `TIOCSPTLCK`, `TIOCSWINSZ`, `TIOCSCTTY`
 - Session leadership via `posix_setsid()` before `ioctl(fd, TIOCSCTTY, 0)`
 
 ### Process Per Connection
+
 - Parent process: `socket_create()` → `socket_listen()` → `socket_select()` loop
 - On connection: `pcntl_fork()` → child handles Connection, parent tracks PID
 - Child: signal handlers reset, connection handling via event loop
@@ -185,6 +204,7 @@ while len(output) < needed_length:
 | FFI for terminal ioctl | Would be new - possibly `candy-sys` | System call FFI layer |
 
 **Relevant SugarCraft Libraries:**
+
 - `candy-core` — Foundation library with TUI event loop, process management
 - `candy-pty` — Would be a logical port target for PTY functionality
 - `sugar-bits` — Low-level data handling, could use packet construction patterns

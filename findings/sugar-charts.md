@@ -177,15 +177,19 @@ The library declares `sugarcraft/candy-async` as a dependency but provides **zer
 ## 8. Missing Features
 
 ### 8.1 No Stacked Bar Chart, Pie/Donut, or Histogram
+
 Common chart types absent from the library.
 
 ### 8.2 No Real-Time Animation Driver
+
 `LineChart` has `withAnimationProgress()` but no ReactPHP-based animation loop that drives it frame-by-frame.
 
 ### 8.3 No Grid Lines Option
+
 `Graph::drawXYAxis()` draws the axis frame, but no chart class exposes options for horizontal/vertical grid lines at tick marks.
 
 ### 8.4 No Export to Plain Text / CSV
+
 Charts only render to ANSI strings. No `toCsv()` or `toRawValues()` method exists.
 
 ---

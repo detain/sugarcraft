@@ -12,6 +12,7 @@ Comprehensive review of all changes across all previous steps to ensure quality 
 - Security: prepared statements for all SQL, no eval(), passwords not logged
 
 ### Completeness Check
+
 - [ ] PerfSchemaPage wired to AdminPane
 - [ ] Admin pane mapping corrected
 - [ ] Stale comments removed
@@ -26,11 +27,13 @@ Comprehensive review of all changes across all previous steps to ensure quality 
 - [ ] Missing path repos added
 
 ### Test Coverage
+
 - PHPUnit tests for all new/changed methods
 - Coverage report shows >90% on changed files
 - No regressions in existing tests
 
 ### Documentation
+
 - README.md reflects all changes
 - docs/lib/candy-query.html API table is accurate
 - CALIBER_LEARNINGS.md updated with any new patterns/gotchas
@@ -49,4 +52,5 @@ Comprehensive review of all changes across all previous steps to ensure quality 
 - Ready to merge to master
 
 ## If Problems Found
+
 Report in updates.md and spawn fix agent for each issue found. Repeat until clean.

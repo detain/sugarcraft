@@ -40,6 +40,7 @@ Address all 10 findings from the sugar-tick audit, correctly mapping each to act
 ### Finding 1 — Timer can go negative (Severity: MEDIUM, but partially addressed)
 
 **Investigation Notes:**
+
 - Finding references `src/Tick.php` which does not exist
 - However, `Heartbeat.php:L26-L31` already validates negative time and duration:
 
@@ -56,13 +57,16 @@ if ($duration < 0) {
 - `Heartbeat::fromArray()` also clamps negative values to 0 via `max(0, ...)`
 
 **What is expected:**
+
 - This finding is substantially addressed by existing validation in `Heartbeat`
 - However, the validation is only in the constructor - programmatic use via `Heartbeat::fromArray()` clamps but does not throw
 
 **Conditions for success:**
+
 - Verify all entry points to Heartbeat creation handle negative values appropriately
 
 **Related code locations:**
+
 - `src/Heartbeat.php:L26-L31` (constructor validation)
 - `src/Heartbeat.php:L44-L50` (fromArray clamping)
 - `bin/sugar-tick:L51-L53` (CLI clamping)
@@ -72,6 +76,7 @@ if ($duration < 0) {
 ### Finding 2 — No maximum duration cap (Severity: LOW)
 
 **Investigation Notes:**
+
 - Finding references `src/Tick.php` which does not exist
 - `bin/sugar-tick:L52` clamps duration to 1 year (31,536,000 seconds):
 ```php
@@ -79,14 +84,17 @@ $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
 ```
 
 **What is expected:**
+
 - However, `Heartbeat::__construct()` does NOT enforce a maximum duration
 - Duration is clamped at the CLI entry point but not in the value object itself
 - If Heartbeat is created programmatically without going through the CLI, no max is enforced
 
 **Conditions for success:**
+
 - Add max duration validation to `Heartbeat::__construct()` OR document that max is enforced at entry points only
 
 **Related code locations:**
+
 - `bin/sugar-tick:L52` (CLI clamping)
 - `src/Heartbeat.php:L23` (duration parameter)
 - `src/Heartbeat.php:L18-L32` (constructor)
@@ -96,6 +104,7 @@ $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
 ### Finding 7 — No lap/split time support (Severity: LOW)
 
 **Investigation Notes:**
+
 - Finding references `src/Tick.php` which does not exist
 - This finding is NOT APPLICABLE to sugar-tick - it's a time-tracking dashboard, not a stopwatch
 - The library already has gap detection via `GapsReport`:
@@ -109,13 +118,16 @@ public function gaps(): array
 ```
 
 **What is expected:**
+
 - This is a mismatch between the finding template and the actual library purpose
 - No "lap/split" feature is appropriate for a time-tracking app
 
 **Conditions for success:**
+
 - No action required - finding is based on wrong assumptions about library purpose
 
 **Related code locations:**
+
 - `src/Report/GapsReport.php` (gap detection)
 
 ---
@@ -123,6 +135,7 @@ public function gaps(): array
 ### Finding 8 — No `examples/` directory (Severity: LOW)
 
 **Investigation Notes:**
+
 - Finding claims no examples directory exists
 - BUT `examples/dashboard.php` EXISTS and is functional!
 
@@ -136,13 +149,16 @@ use SugarCraft\Tick\Store;
 ```
 
 **What is expected:**
+
 - This finding is INCORRECT - examples directory exists
 - Should be marked as resolved/incorrect
 
 **Conditions for success:**
+
 - No action required - finding is factually incorrect
 
 **Related code locations:**
+
 - `/home/sites/sugarcraft/sugar-tick/examples/dashboard.php` (example exists and works)
 
 ---
@@ -150,18 +166,22 @@ use SugarCraft\Tick\Store;
 ### Finding 10 — Tick loop uses blocking sleep (Severity: MEDIUM)
 
 **Investigation Notes:**
+
 - Finding references `src/Tick.php` which does not exist
 - The `Dashboard` model uses the SugarCraft TUI framework (candy-core)
 - No `usleep()` or blocking sleep observed in the source
 
 **What is expected:**
+
 - This finding is not applicable to the actual source code
 - The TUI framework handles its own event loop
 
 **Conditions for success:**
+
 - No action required - finding references non-existent file
 
 **Related code locations:**
+
 - `src/Dashboard.php` (actual Model implementation)
 - `bin/sugar-tick:L133` (Program::run() call)
 
@@ -170,34 +190,44 @@ use SugarCraft\Tick\Store;
 ## Phase 3: N/A Findings Confirmation [PENDING]
 
 ### Finding 3 — No performance concerns (Severity: N/A)
+
 **Investigation Notes:**
+
 - Confirmed - minimal computation, immutable value objects, no loops in hot paths
 - Source: `src/Stats.php` uses efficient array operations
 
 ---
 
 ### Finding 4 — No memory leaks detected (Severity: N/A)
+
 **Investigation Notes:**
+
 - Confirmed - `Heartbeat`, `Stats`, `Milestone` are all `final readonly` value objects
 - `Store` has intentional day cache but `invalidate()` method exists
 
 ---
 
 ### Finding 5 — No security concerns (Severity: N/A)
+
 **Investigation Notes:**
+
 - Confirmed - `CsvExporter::safeCell()` prevents CSV formula injection
 - `Heartbeat::fromArray()` sanitizes all inputs
 
 ---
 
 ### Finding 6 — Complexity is appropriate (Severity: N/A)
+
 **Investigation Notes:**
+
 - Confirmed - clean separation: Store (I/O), Stats (computation), Dashboard (Model), Renderer (view)
 
 ---
 
 ### Finding 9 — Fully compatible with PHP 8.3+ (Severity: N/A)
+
 **Investigation Notes:**
+
 - Confirmed - `composer.json:L32` requires `"php": ">=8.3"`
 - Uses typed properties, constructor promotion, readonly props
 
