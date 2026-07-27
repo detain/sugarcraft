@@ -505,13 +505,23 @@ final class GameTest extends TestCase
         [$g, ] = $g->update(self::key(KeyType::Char, 'k'));  // up (cursor 0,0)
         [$g, ] = $g->update(self::key(KeyType::Space));      // reveal at cursor
 
-        // Find an unrevealed safe cell to click.
-        $targetX = 2;
-        $targetY = 2;
-        $cell = $g->board->cell($targetX, $targetY);
-        if ($cell === null || $cell->revealed || $cell->mine) {
-            $this->markTestSkipped('Target cell not suitable for flag test; choose different coords');
+        // Find an unrevealed safe cell to click (hardcoding coordinates is
+        // fragile with a deterministic rand=0 — scan instead).
+        $targetX = null;
+        $targetY = null;
+        $b = $g->board;
+        for ($y = 0; $y < $b->height && $targetX === null; $y++) {
+            for ($x = 0; $x < $b->width; $x++) {
+                $cell = $b->cell($x, $y);
+                if ($cell !== null && !$cell->revealed && !$cell->mine) {
+                    $targetX = $x;
+                    $targetY = $y;
+                    break;
+                }
+            }
         }
+        $this->assertNotNull($targetX, 'Should have found an unrevealed safe cell');
+        $this->assertNotNull($targetY);
 
         // Compute terminal coords for interior cell (targetX, targetY).
         // Border: 1 col/row, padding(0,1): 1 col each side → interior starts at x=3, y=2.
