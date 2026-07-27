@@ -10,6 +10,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 - `CALIBER_LEARNINGS.md` (root + per-lib) — accumulated patterns/gotchas
 - `docs/index.html` — public site tiles · `docs/lib/<slug>.html` — per-lib pages **generated** by `tools/gen-docs.php` from `docs/_data/<slug>.{json,body.html}` (never hand-edit)
 - `scripts/affected-libs.php` — dynamic CI matrix · `tools/check-path-repos.php` — closure checker
+- `findings/<slug>.md` + `findings/plan_<slug>.md` (index `findings/README.md`, `findings/plan.md`) — per-lib audit findings + remediation plans · `docs/plans/leftover/` phased step files · `docs/repo_map/` (index `docs/repo_map.md`) · `docs/research/libraries/<slug>-research.md` (index `docs/research/INDEX.md`)
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `codecov.yml`, `.php-cs-fixer.dist.php`
 
 ## Naming
