@@ -102,7 +102,8 @@ final class SparkArea implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Plot the area fill
-        for ($x = 0; $x < count($this->values); $x++) {
+        $valueCount = count($this->values);
+        for ($x = 0; $x < $valueCount; $x++) {
             $value = $this->values[$x];
             $normalized = ($value - $min) / $range;
             $topY = (int) round($normalized * ($this->chartHeight - 1));

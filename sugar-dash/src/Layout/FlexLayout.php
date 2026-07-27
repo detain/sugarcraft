@@ -493,7 +493,8 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Add bottom padding
-        while (count($result) < $totalHeight) {
+        $resultCount = count($result);
+        while ($resultCount < $totalHeight) {
             $result[] = '';
         }
 

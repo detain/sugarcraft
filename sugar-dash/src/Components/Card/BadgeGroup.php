@@ -185,8 +185,8 @@ final class BadgeGroup implements \SugarCraft\Dash\Foundation\Sizer
         $currentLine = '';
         $currentLineWidth = 0;
         $isFirstBadgeOnLine = true;
-
-        for ($i = 0; $i < count($this->badges); $i++) {
+        $badgeCount = count($this->badges);
+        for ($i = 0; $i < $badgeCount; $i++) {
             $badge = $this->badges[$i];
             [$badgeWidth, ] = $badge->getInnerSize();
             $badgeRendered = $badge->render();

@@ -496,7 +496,7 @@ jobs:
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never --coverage-clover=${{ matrix.lib }}/coverage.xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@2f4a09a8d7e4f4a9b8c7d6e5f4a3b2c1d0e9f8a7b
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
         with:
           # Explicit slug + a single named file → don't accidentally
           # walk the whole tree looking for other coverage reports.
@@ -516,7 +516,7 @@ jobs:
           verbose: true
 
       - name: Upload coverage to Codacy
-        uses: codacy/codacy-coverage-reporter-action@9f9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1
+        uses: codacy/codacy-coverage-reporter-action@6904bd01e29ada115135b5eca20125758ccae53b
         with:
           api-token: ${{ secrets.CODACY_API_TOKEN }}
           coverage-reports: ${{ matrix.lib }}/coverage.xml

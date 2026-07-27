@@ -185,8 +185,8 @@ final class ChipGroup implements \SugarCraft\Dash\Foundation\Sizer
         $currentLine = '';
         $currentLineWidth = 0;
         $isFirstChipOnLine = true;
-
-        for ($i = 0; $i < count($this->chips); $i++) {
+        $chipCount = count($this->chips);
+        for ($i = 0; $i < $chipCount; $i++) {
             $chip = $this->chips[$i];
             [$chipWidth, ] = $chip->getInnerSize();
             $chipRendered = $chip->render();

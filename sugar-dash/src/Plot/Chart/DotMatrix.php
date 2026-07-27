@@ -440,7 +440,8 @@ final class DotMatrix implements \SugarCraft\Dash\Foundation\Sizer
             $frameTop = '┌' . str_repeat('─', $width) . '┐';
             $frameBottom = '└' . str_repeat('─', $width) . '┘';
 
-            for ($i = 0; $i < count($rows); $i++) {
+            $rowCount = count($rows);
+            for ($i = 0; $i < $rowCount; $i++) {
                 $rows[$i] = '│' . $rows[$i] . '│';
             }
 
