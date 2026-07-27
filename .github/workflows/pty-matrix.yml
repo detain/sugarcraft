@@ -50,10 +50,10 @@ jobs:
             termios: stty
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.PHP_EXTENSIONS }}
@@ -90,7 +90,7 @@ jobs:
           echo "key=composer-${{ runner.os }}-php${{ matrix.php }}-$(sha1sum candy-pty/composer.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Cache composer
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ steps.composer-cache.outputs.key }}
@@ -118,10 +118,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
           extensions: ${{ env.PHP_EXTENSIONS }}

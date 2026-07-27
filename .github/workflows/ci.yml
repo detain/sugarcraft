@@ -63,7 +63,7 @@ jobs:
       windows_count: ${{ steps.compute.outputs.windows_count }}
       macos_count: ${{ steps.compute.outputs.macos_count }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           # Need both endpoints of the diff. For push events GitHub sets
           # `event.before`; for PRs the base ref needs to be fetched too.
@@ -71,7 +71,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
           coverage: none
@@ -140,9 +140,9 @@ jobs:
     name: 'Path-repo closure'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
           coverage: none
@@ -163,7 +163,7 @@ jobs:
     name: 'Docs branch links'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Reject stale sugarcraft blob/main links under docs/
         run: |
           if grep -rEn 'github\.com/sugarcraft/[^/]+/blob/main/' docs/; then
@@ -181,7 +181,7 @@ jobs:
     name: 'Icon media↔docs parity'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: icon media↔docs basename parity
         run: diff <(ls media/icons | sort) <(ls docs/img/icons | sort)
 
@@ -214,7 +214,7 @@ jobs:
       matrix: ${{ fromJSON(needs.build-matrix.outputs.test_matrix) }}
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       # Cache the *built* PHP extension binaries (ssh2 / gd / curl / sqlite3
       # / pdo_sqlite — the ones that aren't bundled with the runner image).
@@ -231,14 +231,14 @@ jobs:
           key: php-ext-v4
 
       - name: Restore PHP extensions
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ steps.ext-cache.outputs.dir }}
           key: ${{ steps.ext-cache.outputs.key }}
           restore-keys: ${{ steps.ext-cache.outputs.key }}
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.PHP_EXTENSIONS }}
@@ -251,7 +251,7 @@ jobs:
           echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache composer downloads
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ steps.cache.outputs.dir }}
           key: composer-${{ matrix.php }}-${{ hashFiles('**/composer.json') }}
@@ -264,7 +264,7 @@ jobs:
       # restore-keys lets a sibling-lib's cache seed dependency resolution
       # before composer fills in the rest from the warm composer cache.
       - name: Cache vendor/
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ matrix.lib }}/vendor
           # restore-keys deliberately scoped to the same v3 version + lib +
@@ -298,13 +298,13 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.build-matrix.outputs.windows_matrix) }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       # PHP on Windows comes with FFI enabled by default in PHP 8.3+.
       # We still declare mbstring / intl / json / pcntl explicitly so that
       # the action installs them if they are missing from the runner image.
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: ${{ matrix.php }}
           extensions: mbstring, intl, json, pcntl, ffi
@@ -317,7 +317,7 @@ jobs:
       # (below) handles the significant per-lib dependency layer.
 
       - name: Cache vendor/
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ matrix.lib }}/vendor
           key: vendor-win-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
@@ -363,10 +363,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.build-matrix.outputs.macos_matrix) }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: ${{ matrix.php }}
           extensions: mbstring, intl, json, pcntl, ffi, :xdebug
@@ -375,7 +375,7 @@ jobs:
           ini-values: ffi.enable=true
 
       - name: Cache vendor/
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ matrix.lib }}/vendor
           key: vendor-mac-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
@@ -422,7 +422,7 @@ jobs:
       matrix:
         lib: ${{ fromJSON(needs.build-matrix.outputs.coverage_libs) }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       # Same extension-cache pattern as the test job (see comment there).
       - name: Compute PHP-extension cache key
@@ -434,14 +434,14 @@ jobs:
           key: php-ext-cov-v4
 
       - name: Restore PHP extensions
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ steps.ext-cache.outputs.dir }}
           key: ${{ steps.ext-cache.outputs.key }}
           restore-keys: ${{ steps.ext-cache.outputs.key }}
 
       - name: Setup PHP (with pcov)
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
           # Same extension union as the test job — keeps test- and
@@ -451,7 +451,7 @@ jobs:
           coverage: pcov
 
       - name: Cache composer downloads
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ~/.composer/cache/files
           key: composer-cov-${{ hashFiles('**/composer.json') }}
@@ -466,7 +466,7 @@ jobs:
       # and producing 32 "Class Symfony\\Component\\Process\\Process not
       # found" errors on Coverage · candy-vcr.
       - name: Cache vendor/
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ matrix.lib }}/vendor
           key: vendor-cov-v4-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
@@ -541,7 +541,7 @@ jobs:
       max-parallel: 10
       matrix: ${{ fromJSON(needs.build-matrix.outputs.phpstan_matrix) }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Compute PHP-extension cache key
         id: ext-cache
@@ -552,14 +552,14 @@ jobs:
           key: php-ext-stan-v4
 
       - name: Restore PHP extensions
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ steps.ext-cache.outputs.dir }}
           key: ${{ steps.ext-cache.outputs.key }}
           restore-keys: ${{ steps.ext-cache.outputs.key }}
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.PHP_EXTENSIONS }}
@@ -567,7 +567,7 @@ jobs:
           coverage: none
 
       - name: Cache composer downloads
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ~/.composer/cache/files
           key: composer-stan-${{ matrix.php }}-${{ hashFiles('**/composer.json') }}
@@ -576,7 +576,7 @@ jobs:
             composer-stan-
 
       - name: Cache vendor/
-        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ matrix.lib }}/vendor
           key: vendor-stan-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}

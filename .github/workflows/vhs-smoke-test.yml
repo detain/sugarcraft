@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
           # Must cover every ext-* in the root composer.lock platform reqs;
