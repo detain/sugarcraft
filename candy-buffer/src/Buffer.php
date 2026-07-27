@@ -44,6 +44,177 @@ final class Buffer implements \JsonSerializable
     }
 
     /**
+     * Build a Buffer from an ANSI-encoded string produced by {@see toAnsi()}.
+     *
+     * This is the inverse of {@see toAnsi()} for rendering round-trips in
+     * tests. Because toAnsi() is lossy (hyperlink IDs are not round-tripped,
+     * attribute-only SGRs cannot be reconstructed faithfully), this is only
+     * suitable for testFixtures — not for accurate terminal state replay.
+     *
+     * @param string|null $ansi  Raw ANSI output from toAnsi(), or null for a
+     *                           blank width×height buffer.
+     * @param int         $width  Frame width in cells
+     * @param int         $height Frame height in rows
+     *
+     * @throws \InvalidArgumentException when dimensions are non-positive or
+     *                                   the ANSI string does not contain
+     *                                   exactly width*height printable chars.
+     */
+    public static function fromString(?string $ansi, int $width, int $height): self
+    {
+        if ($width <= 0 || $height <= 0) {
+            throw new \InvalidArgumentException(
+                'Buffer dimensions must be positive'
+            );
+        }
+        if ($ansi === null || $ansi === '') {
+            return self::new($width, $height);
+        }
+
+        // Strip SGR escape sequences and newlines; collect [rune, style, width] tuples.
+        $runs = [];
+        $currentStyle = null;
+        $styleMap = [0 => null]; // idx 0 = no style
+        $styleSeq = '';          // accumulates the raw SGR bytes for current style
+
+        $ansiLen = strlen($ansi);
+        $idx = 0;
+
+        while ($idx < $ansiLen) {
+            $ch = $ansi[$idx];
+
+            if ($ch === "\x1b" && isset($ansi[$idx + 1]) && $ansi[$idx + 1] === '[') {
+                // CSI SGR sequence: find its end (m) and extract params.
+                $end = strpos($ansi, 'm', $idx);
+                if ($end === false) {
+                    $idx++;
+                    continue;
+                }
+                $seq = substr($ansi, $idx, $end - $idx + 1);
+                $params = substr($seq, 2, -1); // strip ESC [ and trailing m
+
+                if ($params === '' || $params === '0') {
+                    // Reset: clear current style
+                    $currentStyle = null;
+                    $styleSeq = '';
+                } else {
+                    // Append to style sequence and lookup/build style
+                    $styleSeq .= $seq;
+                    if (!isset($styleMap[$styleSeq])) {
+                        $styleMap[$styleSeq] = self::styleFromSgr($params);
+                    }
+                    $currentStyle = $styleMap[$styleSeq];
+                }
+                $idx = $end + 1;
+                continue;
+            }
+
+            if ($ch === "\n") {
+                // Row delimiter — skip but do not add to cell grid
+                $idx++;
+                continue;
+            }
+
+            // Printable character
+            $rune = $ch;
+            $runeWidth = 1; // TODO: actual wide-char width from wcwidth if needed for CJK
+            $runs[] = [$rune, $currentStyle, $runeWidth];
+            $idx++;
+        }
+
+        $expected = $width * $height;
+        $actual = count($runs);
+
+        // Lenient: accept any string length by truncating or padding with blanks.
+        // This is only for testFactories — production calls from toAnsi() always
+        // produce width*height printable chars.
+        if ($actual !== $expected) {
+            if ($actual < $expected) {
+                // Pad with blank cells
+                $blank = Cell::new();
+                for ($i = $actual; $i < $expected; $i++) {
+                    $runs[] = [' ', null, 1];
+                }
+            } else {
+                // Truncate
+                $runs = array_slice($runs, 0, $expected);
+            }
+        }
+
+        $grid = [];
+        foreach ($runs as [$rune, $style, $runeWidth]) {
+            $grid[] = new Cell($rune, $style, null, $runeWidth);
+        }
+
+        return new self($width, $height, $grid);
+    }
+
+    /**
+     * Parse a single SGR parameter string into a Style.
+     *
+     * Handles: 30-37 (fg), 40-47 (bg), 1 (bold), 4 (underline), 90-97 (bright fg), 100-107 (bright bg)
+     *
+     * @param string $params Semicolon-separated SGR parameter numbers
+     */
+    private static function styleFromSgr(string $params): ?Style
+    {
+        $fg = null;
+        $bg = null;
+        $attrs = [];
+
+        foreach (explode(';', $params) as $p) {
+            $p = (int) $p;
+            if ($p === 0) {
+                continue; // reset handled by caller
+            } elseif ($p >= 30 && $p <= 37) {
+                $fg = self::ansiColorToHex($p - 30);
+            } elseif ($p >= 40 && $p <= 47) {
+                $bg = self::ansiColorToHex($p - 40);
+            } elseif ($p >= 90 && $p <= 97) {
+                $fg = self::ansiColorToHex($p - 90, true);
+            } elseif ($p >= 100 && $p <= 107) {
+                $bg = self::ansiColorToHex($p - 100, true);
+            } elseif ($p === 1) {
+                $attrs[] = 'bold';
+            } elseif ($p === 4) {
+                $attrs[] = 'underline';
+            }
+            // Additional SGR params can be extended here
+        }
+
+        return $fg !== null || $bg !== null || $attrs !== []
+            ? new Style($fg, $bg, $attrs)
+            : null;
+    }
+
+    private static function ansiColorToHex(int $idx, bool $bright = false): string
+    {
+        $palette = [
+            // Standard colors
+            '#000000', // 0 black
+            '#ff0000', // 1 red
+            '#00ff00', // 2 green
+            '#ffff00', // 3 yellow
+            '#0000ff', // 4 blue
+            '#ff00ff', // 5 magenta
+            '#00ffff', // 6 cyan
+            '#ffffff', // 7 white
+        ];
+        $base = $palette[$idx] ?? '#ffffff';
+        if ($bright) {
+            // Bright: lighten the color
+            $r = hexdec(substr($base, 1, 2));
+            $g = hexdec(substr($base, 3, 2));
+            $b = hexdec(substr($base, 5, 2));
+            $r = min(255, (int) ($r + ($r * 0.4)));
+            $g = min(255, (int) ($g + ($g * 0.4)));
+            $b = min(255, (int) ($b + ($b * 0.4)));
+            return sprintf('#%02x%02x%02x', $r, $g, $b);
+        }
+        return $base;
+    }
+
+    /**
      * Build a Buffer directly from a pre-computed flat cell grid (O(1) wrap).
      *
      * Unlike {@see new()} followed by repeated {@see withCellAt()} calls

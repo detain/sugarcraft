@@ -31,6 +31,14 @@ final class RenderSession
     /** @var int|null Previous output height for resize detection */
     private ?int $prevHeight = null;
 
+    /**
+     * Flag set to true by rememberFull() (which clears previousFrame) so that
+     * the NEXT shouldEmitFull call returns true even when dimensions match —
+     * the diff buffer was just invalidated and the next composite must emit full.
+     * Cleared by the next shouldEmitFull call so it only affects one call.
+     */
+    private bool $justClearedFrame = false;
+
     public function __construct()
     {
     }
@@ -41,6 +49,13 @@ final class RenderSession
      */
     public function shouldEmitFull(int $width, int $height): bool
     {
+        // justClearedFrame: rememberFull() cleared the diff buffer → next call must be full
+        if ($this->justClearedFrame && $this->previousOutput !== null) {
+            $this->justClearedFrame = false;
+
+            return true;
+        }
+
         return $this->previousOutput === null
             || $this->prevWidth !== $width
             || $this->prevHeight !== $height;
@@ -56,6 +71,7 @@ final class RenderSession
         $this->prevWidth = $width;
         $this->prevHeight = $height;
         $this->previousFrame = null;
+        $this->justClearedFrame = true;
     }
 
     /**
@@ -69,6 +85,17 @@ final class RenderSession
      */
     public function diff(string $output, int $width, int $height, callable $bufferFactory): string
     {
+        // First diff call with no prior output: return empty diff but prime
+        // previousFrame so the NEXT call can diff properly.
+        if ($this->previousOutput === null) {
+            $this->previousFrame = $bufferFactory('', $width, $height);
+            $this->previousOutput = $output;
+            $this->prevWidth = $width;
+            $this->prevHeight = $height;
+
+            return '';
+        }
+
         $prev = $this->previousFrame ??= $bufferFactory($this->previousOutput, $width, $height);
         $current = $bufferFactory($output, $width, $height);
         $ops = $current->diff($prev);

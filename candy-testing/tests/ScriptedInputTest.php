@@ -228,4 +228,146 @@ final class ScriptedInputTest extends TestCase
         $msg = $messages[0];
         $this->assertSame(KeyType::Tab, $msg->type);
     }
+
+    public function testNamedKeyAppendsKeyMsgWithGivenType(): void
+    {
+        $input = ScriptedInput::new()->namedKey(KeyType::F1, 'F1');
+
+        $messages = $input->build();
+
+        $this->assertCount(1, $messages);
+        /** @var KeyMsg */
+        $msg = $messages[0];
+        $this->assertSame(KeyType::F1, $msg->type);
+        $this->assertSame('F1', $msg->rune);
+        $this->assertFalse($msg->ctrl);
+        $this->assertFalse($msg->alt);
+        $this->assertFalse($msg->shift);
+    }
+
+    public function testNamedKeyWithNoRune(): void
+    {
+        $input = ScriptedInput::new()->namedKey(KeyType::Insert);
+
+        $messages = $input->build();
+
+        /** @var KeyMsg */
+        $msg = $messages[0];
+        $this->assertSame(KeyType::Insert, $msg->type);
+        $this->assertSame('', $msg->rune);
+    }
+
+    public function testWheelAppendsMouseWheelMsg(): void
+    {
+        $input = ScriptedInput::new()->wheel(
+            \SugarCraft\Core\MouseButton::WheelUp,
+            10,
+            20
+        );
+
+        $messages = $input->build();
+
+        $this->assertCount(1, $messages);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\MouseWheelMsg::class, $messages[0]);
+        /** @var \SugarCraft\Core\Msg\MouseWheelMsg */
+        $msg = $messages[0];
+        $this->assertSame(10, $msg->x);
+        $this->assertSame(20, $msg->y);
+        $this->assertSame(\SugarCraft\Core\MouseButton::WheelUp, $msg->button);
+        $this->assertSame(MouseAction::Press, $msg->action);
+    }
+
+    public function testPasteAppendsPasteMsg(): void
+    {
+        $input = ScriptedInput::new()->paste('hello world');
+
+        $messages = $input->build();
+
+        $this->assertCount(1, $messages);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteMsg::class, $messages[0]);
+        /** @var \SugarCraft\Core\Msg\PasteMsg */
+        $msg = $messages[0];
+        $this->assertSame('hello world', $msg->content);
+    }
+
+    public function testPastePreservesNewlinesAndControls(): void
+    {
+        $content = "line1\nline2\r\nline3";
+        $input = ScriptedInput::new()->paste($content);
+
+        $messages = $input->build();
+
+        /** @var \SugarCraft\Core\Msg\PasteMsg */
+        $msg = $messages[0];
+        $this->assertSame($content, $msg->content);
+    }
+
+    public function testClipboardAppendsClipboardMsg(): void
+    {
+        $input = ScriptedInput::new()->clipboard('clipboard content');
+
+        $messages = $input->build();
+
+        $this->assertCount(1, $messages);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\ClipboardMsg::class, $messages[0]);
+        /** @var \SugarCraft\Core\Msg\ClipboardMsg */
+        $msg = $messages[0];
+        $this->assertSame('clipboard content', $msg->content);
+        $this->assertSame('c', $msg->selection);
+    }
+
+    public function testClipboardWithCustomSelection(): void
+    {
+        $input = ScriptedInput::new()->clipboard('secondary', 's');
+
+        $messages = $input->build();
+
+        /** @var \SugarCraft\Core\Msg\ClipboardMsg */
+        $msg = $messages[0];
+        $this->assertSame('secondary', $msg->content);
+        $this->assertSame('s', $msg->selection);
+    }
+
+    public function testKeyboardEnhancementsAppendsKeyboardEnhancementsMsg(): void
+    {
+        $flags = 0x01 | 0x02; // Example flags
+        $input = ScriptedInput::new()->keyboardEnhancements($flags);
+
+        $messages = $input->build();
+
+        $this->assertCount(1, $messages);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\KeyboardEnhancementsMsg::class, $messages[0]);
+        /** @var \SugarCraft\Core\Msg\KeyboardEnhancementsMsg */
+        $msg = $messages[0];
+        $this->assertSame($flags, $msg->flags);
+    }
+
+    public function testKeyboardEnhancementsWithZeroFlags(): void
+    {
+        $input = ScriptedInput::new()->keyboardEnhancements(0);
+
+        $messages = $input->build();
+
+        /** @var \SugarCraft\Core\Msg\KeyboardEnhancementsMsg */
+        $msg = $messages[0];
+        $this->assertSame(0, $msg->flags);
+    }
+
+    public function testChainingAllMethodsTogether(): void
+    {
+        $input = ScriptedInput::new()
+            ->namedKey(KeyType::F2, 'F2')
+            ->wheel(\SugarCraft\Core\MouseButton::WheelDown, 5, 10)
+            ->paste('pasted text')
+            ->clipboard('clip', 'c')
+            ->keyboardEnhancements(0xFF)
+            ->build();
+
+        $this->assertCount(5, $input);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\KeyMsg::class, $input[0]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\MouseWheelMsg::class, $input[1]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\PasteMsg::class, $input[2]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\ClipboardMsg::class, $input[3]);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\KeyboardEnhancementsMsg::class, $input[4]);
+    }
 }
