@@ -496,6 +496,7 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         $resultCount = count($result);
         while ($resultCount < $totalHeight) {
             $result[] = '';
+            $resultCount++;
         }
 
         return $result;
