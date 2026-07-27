@@ -75,6 +75,7 @@
     }
     var escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     var safe = escapeHtml(text);
+    /* codacy ignore node_non-literal-reg-expr */
     var parts = safe.split(new RegExp('(' + escaped + ')', 'gi'));
     var result = document.createDocumentFragment();
     parts.forEach(function (part, i) {
@@ -234,6 +235,7 @@
       case 'Enter':
         e.preventDefault();
         // Ensure selectedIndex is a valid integer array index
+        /* codacy ignore detect-object-injection */
         if (Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < count && items[selectedIndex]) {
           items[selectedIndex].click();
         }
