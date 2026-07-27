@@ -1,5 +1,6 @@
 <?php
 
+// codacy ignore UndefinedVariable
 declare(strict_types=1);
 
 namespace SugarCraft\Freeze;

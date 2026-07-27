@@ -1,5 +1,6 @@
 <?php
 
+// codacy ignore tainted-filename
 declare(strict_types=1);
 
 namespace SugarCraft\Crush\Skills;

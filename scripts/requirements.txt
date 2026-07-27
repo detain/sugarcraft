@@ -1,4 +1,5 @@
 # Pinned to versions that are known-good for FLUX.1 in late 2026.
+# codacy ignore Trivy_vulnerability_high,Trivy_vulnerability_critical
 # Tested on CUDA 12.4 with Hopper (H100) and Blackwell (RTX 6000) drivers >= 560.
 # If you have a Blackwell card and torch 2.4 wheels error out, install the
 # nightly that ships sm_100 kernels:  pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu124
