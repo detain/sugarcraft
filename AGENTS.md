@@ -19,7 +19,7 @@ PHP monorepo of 52 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ 
 
 ## Lib skeleton & composer.json
 
-Reference `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need `require` entry AND a `{type: path, url: "../<dep>", options:{symlink:true}}` repo for the FULL transitive closure.
+Reference `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <[EMAIL]>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need `require` entry AND a `{type: path, url: "../<dep>", options:{symlink:true}}` repo for the FULL transitive closure.
 
 PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`.
 
@@ -51,7 +51,7 @@ cd candy-core && composer install && vendor/bin/phpunit
 
 ## PR workflow
 
-Branches `ai/<slug>-<short>` (AI) / `feat/<slug>-<short>` (human). Title `<lib>: <summary>`. Body ends with `## Test plan` citing test count. Bundle 2-4 items. Ship-as-you-go: commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Author `Joe Huss <detain@interserver.net>`.
+Branches `ai/<slug>-<short>` (AI) / `feat/<slug>-<short>` (human). Title `<lib>: <summary>`. Body ends with `## Test plan` citing test count. Bundle 2-4 items. Ship-as-you-go: commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Author `Joe Huss <[EMAIL]>`.
 
 ## Audit-driven PRs
 

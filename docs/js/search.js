@@ -68,7 +68,12 @@
     if (!query.trim()) {
       return escapeHtml(text);
     }
-    var escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Validate query is a safe string before constructing regexp
+    var trimmed = query.trim();
+    if (!/^[\w\s-]+$/.test(trimmed)) {
+      return escapeHtml(text);
+    }
+    var escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     var safe = escapeHtml(text);
     var parts = safe.split(new RegExp('(' + escaped + ')', 'gi'));
     var result = document.createDocumentFragment();
@@ -137,7 +142,11 @@
       link.addEventListener('click', function (e) {
         e.preventDefault();
         closeModal();
-        window.location.href = item.url;
+        // Validate URL to prevent XSS via javascript: or data: URIs
+        var url = item.url;
+        if (typeof url === 'string' && /^[a-z][a-z0-9+.-]*:/i.test(url) && !/^(javascript|data|vbscript):/i.test(url)) {
+          window.location.href = url;
+        }
       });
 
       li.appendChild(link);
@@ -224,7 +233,8 @@
 
       case 'Enter':
         e.preventDefault();
-        if (typeof selectedIndex === 'number' && selectedIndex >= 0 && selectedIndex < count && items[selectedIndex]) {
+        // Ensure selectedIndex is a valid integer array index
+        if (Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < count && items[selectedIndex]) {
           items[selectedIndex].click();
         }
         break;

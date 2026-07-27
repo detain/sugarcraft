@@ -110,6 +110,12 @@ final class FontLoader
      */
     private function buildCandidates(string $family, string $style): array
     {
+        // Sanitize family name to prevent path traversal attacks
+        $family = basename($family);
+        if ($family === '' || strpbrk($family, '/\\') !== false) {
+            return [];
+        }
+
         $base = rtrim(str_replace(['-Regular', '-Bold', '-Italic', '-BoldItalic'], '', $family), '-');
 
         return match ($style) {

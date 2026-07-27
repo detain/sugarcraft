@@ -28,7 +28,7 @@ jobs:
     name: Split-push affected libs to sugarcraft/<lib>
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
         with:
           fetch-depth: 0   # splitsh-lite needs full history to compute the subtree split
 
@@ -162,7 +162,7 @@ jobs:
     name: Push docs/ to sugarcraft/sugarcraft.github.io
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
 
       - name: Mirror docs/ → sugarcraft.github.io master
         env:

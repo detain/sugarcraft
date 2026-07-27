@@ -13,7 +13,9 @@ final class SkillLoader
      */
     public function loadFromDirectory(string $dir): array
     {
-        if (!is_dir($dir)) {
+        // Resolve real path and validate the directory exists
+        $realDir = realpath($dir);
+        if ($realDir === false || !is_dir($realDir)) {
             return [];
         }
 

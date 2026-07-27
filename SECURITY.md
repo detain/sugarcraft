@@ -5,7 +5,7 @@
 If you discover a security vulnerability in any SugarCraft library,
 **please do not open a public issue**. Instead, email
 <!-- codacy ignore Agentlinter_security_no-pii-exposure -->
-**`detain@interserver.net`** with:
+**`[REPLACE_WITH_EMAIL]`** (intentionally public for security vulnerability reports) with:
 
 - The library affected (e.g. `candy-shell`, `candy-shine`).
 - A description of the vulnerability and its impact.

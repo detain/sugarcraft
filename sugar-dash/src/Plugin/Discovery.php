@@ -23,8 +23,9 @@ final class Discovery
      */
     public static function scan(string $directory): array
     {
-        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
-        if (!is_dir($directory)) {
+        // Resolve real path and validate the directory exists
+        $realDir = realpath($directory);
+        if ($realDir === false || !is_dir($realDir)) {
             return [];
         }
 

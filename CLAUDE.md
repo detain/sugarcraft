@@ -46,7 +46,7 @@ PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 
 ## PR workflow
 
-Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Bundle 2-4 related items. Branches `ai/<slug>-<short>`. Author `Joe Huss <detain@interserver.net>`.
+Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Bundle 2-4 related items. Branches `ai/<slug>-<short>`. Author `Joe Huss <[EMAIL]>`.
 
 ## Gotchas
 

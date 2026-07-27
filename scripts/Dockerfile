@@ -40,4 +40,9 @@ RUN pip install --upgrade pip && \
 
 # script lives at /repo/scripts/generate_icons.py via the bind mount
 WORKDIR /repo
+
+# Run as non-root user for security (Codacy: Semgrep_dockerfile.security.missing-user)
+RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -s /bin/sh -D appuser
+USER appuser
+
 CMD ["python", "/repo/scripts/generate_icons.py", "--help"]

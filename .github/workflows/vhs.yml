@@ -63,10 +63,10 @@ jobs:
         # the soak window passes without visual drift.
         lib: [candy-core]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@7c13dc2f0828548e4e6a444e3282e8e8d0f8f7a8
         with:
           php-version: '8.3'
           extensions: mbstring, intl, json, pcntl, gd, curl, ssh2, ffi
@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload rendered GIFs as artifact
         if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@897e2a38c65a4a5a5e5e6d7e8f9a0b1c2d3e4f5a
         with:
           name: vhs-candy-vcr-${{ matrix.lib }}
           path: ${{ matrix.lib }}/.vhs/*.gif
@@ -133,7 +133,7 @@ jobs:
     outputs:
       libs: ${{ steps.compute.outputs.libs }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
         with:
           fetch-depth: 2   # need HEAD~1 for the diff
 
@@ -224,7 +224,7 @@ jobs:
         # biggest lib) and gets parallelized into 4 batches.
         lib: [candy-core, candy-sprinkles, candy-forms, candy-focus, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, sugar-gallery, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, candy-files, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, sugar-reel, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
 
       - name: Check if lib needs rendering
         id: check
@@ -246,7 +246,7 @@ jobs:
 
       - name: Cache composer dependencies
         if: steps.check.outputs.needs_render == 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
         with:
           path: |
             ${{ matrix.lib }}/vendor/
@@ -286,7 +286,7 @@ jobs:
 
       - name: Upload rendered GIFs as artifact
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@897e2a38c65a4a5a5e5e6d7e8f9a0b1c2d3e4f5a
         with:
           name: gifs-${{ matrix.lib }}
           path: ${{ matrix.lib }}/.vhs/*.gif
@@ -322,10 +322,10 @@ jobs:
       matrix:
         batch: [0, 1, 2, 3]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
 
       - name: Cache composer dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@5fd5e4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
         with:
           path: |
             sugar-dash/vendor/
@@ -354,7 +354,7 @@ jobs:
           done
 
       - name: Upload rendered GIFs as artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@897e2a38c65a4a5a5e5e6d7e8f9a0b1c2d3e4f5a
         with:
           name: gifs-sugar-dash-batch-${{ matrix.batch }}
           path: sugar-dash/.vhs/*.gif
@@ -372,14 +372,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@b4ffde65f46336ab88af53be14092a9328e9c503
         with:
           # Fetch full history so we can reliably detect GIF deltas
           # vs. what was already committed at the trigger SHA.
           fetch-depth: 0
 
       - name: Download all GIF artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@7e5a4b1e3f3a7b9c0d1e2f3a4b5c6d7e8f9a0b1
         with:
           path: /tmp/gifs
           pattern: gifs-*
