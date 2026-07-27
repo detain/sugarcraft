@@ -27,6 +27,17 @@ use SugarCraft\Core\ImagePlacement;
  * shown in several places shares one id and paints at every marker. The id space
  * is the PUA window ({@see ImageOverlay::MAX_IMAGES}); once exhausted, further
  * images get a blank block rather than a wrong one.
+ *
+ * Widgets that take the bytes *and* the id — a poster card that renders its own
+ * marker, say — use {@see placeTracked()}, which returns both as a
+ * {@see PlacedImage}:
+ *
+ * ```php
+ * $placed = $layer->placeTracked($blob, $w, $h);
+ * if ($placed->imageId !== null) {
+ *     $card = $card->withImage($blob, $placed->imageId);
+ * }
+ * ```
  */
 final class ImageLayer
 {
@@ -40,19 +51,40 @@ final class ImageLayer
      * Register $bytes and return a $width × $height marker block to drop in the
      * frame (or a blank block of the same size once the id space is full).
      * Deduplicates by content, so repeated bytes reuse their id.
+     *
+     * Frame-composition callers want exactly this: a string to concatenate. Use
+     * {@see placeTracked()} instead when you also need the id that was assigned.
      */
     public function place(string $bytes, int $width, int $height): string
+    {
+        return $this->placeTracked($bytes, $width, $height)->marker;
+    }
+
+    /**
+     * {@see place()}, but also reporting the overlay id the bytes were assigned.
+     *
+     * The id is a property of the content (dedup is by `xxh3` of $bytes), so a
+     * repeat placement returns the id that content already holds — never a new
+     * one. It is `null` only when the id space is exhausted, in which case the
+     * returned marker is a blank block.
+     *
+     * Do not try to recover the id from `array_key_last(placements())`: a dedup
+     * hit re-assigns an existing key without moving it, so that reports the
+     * highest id rather than the one just placed, and the exhaustion branch
+     * writes no placement at all, so it reports a stale unrelated id.
+     */
+    public function placeTracked(string $bytes, int $width, int $height): PlacedImage
     {
         $digest = hash('xxh3', $bytes);
         $id = $this->idByDigest[$digest] ??= count($this->idByDigest);
 
         if ($id >= ImageOverlay::MAX_IMAGES) {
-            return self::blankBlock($width, $height);
+            return new PlacedImage(self::blankBlock($width, $height), null);
         }
 
         $this->placementById[$id] = new ImagePlacement($bytes, $width, $height);
 
-        return ImageOverlay::markerBlock($id, $width, $height);
+        return new PlacedImage(ImageOverlay::markerBlock($id, $width, $height), $id);
     }
 
     /**

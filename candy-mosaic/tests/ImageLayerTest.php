@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\ImagePlacement;
 use SugarCraft\Mosaic\ImageLayer;
+use SugarCraft\Mosaic\PlacedImage;
 
 final class ImageLayerTest extends TestCase
 {
@@ -58,5 +59,86 @@ final class ImageLayerTest extends TestCase
     {
         self::assertTrue((new ImageLayer())->isEmpty());
         self::assertSame([], (new ImageLayer())->placements());
+    }
+
+    public function testPlaceTrackedReportsTheFirstIdAndTheSameMarkerAsPlace(): void
+    {
+        $placed = (new ImageLayer())->placeTracked('SIXELBYTES', 6, 3);
+
+        self::assertInstanceOf(PlacedImage::class, $placed);
+        self::assertSame(0, $placed->imageId);
+
+        // The non-breaking guarantee: place() is a thin delegate, so the marker
+        // a frame-composition caller gets is byte-for-byte what it always was.
+        self::assertSame((new ImageLayer())->place('SIXELBYTES', 6, 3), $placed->marker);
+    }
+
+    public function testPlaceTrackedRegistersThePlacementJustLikePlace(): void
+    {
+        $layer = new ImageLayer();
+        $placed = $layer->placeTracked('SIXELBYTES', 6, 3);
+
+        self::assertStringContainsString(ImageOverlay::marker(0), $placed->marker);
+        self::assertStringNotContainsString('SIXELBYTES', $placed->marker, 'bytes stay out of the frame');
+
+        $placements = $layer->placements();
+        self::assertArrayHasKey(0, $placements);
+        self::assertSame('SIXELBYTES', $placements[0]->bytes);
+        self::assertFalse($layer->isEmpty());
+    }
+
+    public function testPlaceTrackedReturnsTheOriginalIdOnADedupHit(): void
+    {
+        $layer = new ImageLayer();
+
+        self::assertSame(0, $layer->placeTracked('ONE', 4, 1)->imageId);
+        self::assertSame(1, $layer->placeTracked('TWO', 4, 1)->imageId);
+        self::assertSame(2, $layer->placeTracked('THREE', 4, 1)->imageId);
+
+        // Re-placing the FIRST image must report id 0, not a fresh id and not
+        // the highest one. `??=` returns the existing value and re-assigning an
+        // existing key keeps its original insertion position, so the id cannot
+        // be recovered from the placement order.
+        $again = $layer->placeTracked('ONE', 4, 1);
+        self::assertSame(0, $again->imageId);
+        self::assertCount(3, $layer->placements(), 'a dedup hit adds no placement');
+
+        // This is precisely why placeTracked() exists: the obvious workaround
+        // disagrees with the truth here.
+        self::assertSame(2, array_key_last($layer->placements()));
+        self::assertNotSame(array_key_last($layer->placements()), $again->imageId);
+
+        // Same id → same marker as the original placement.
+        self::assertSame(ImageOverlay::markerBlock(0, 4, 1), $again->marker);
+    }
+
+    public function testPlaceTrackedGivesDistinctBytesAscendingIds(): void
+    {
+        $layer = new ImageLayer();
+        $ids = [];
+        foreach (['A', 'B', 'C', 'D'] as $bytes) {
+            $ids[] = $layer->placeTracked($bytes, 2, 1)->imageId;
+        }
+
+        self::assertSame([0, 1, 2, 3], $ids);
+    }
+
+    public function testPlaceTrackedReportsNullIdAndABlankMarkerOnceTheIdSpaceIsExhausted(): void
+    {
+        $layer = new ImageLayer();
+        for ($i = 0; $i < ImageOverlay::MAX_IMAGES; $i++) {
+            self::assertSame($i, $layer->placeTracked(pack('N', $i), 1, 1)->imageId);
+        }
+        self::assertCount(ImageOverlay::MAX_IMAGES, $layer->placements());
+
+        // Id MAX_IMAGES would fall outside the PUA marker window.
+        $overflow = $layer->placeTracked(pack('N', ImageOverlay::MAX_IMAGES), 6, 3);
+
+        self::assertNull($overflow->imageId);
+        self::assertSame("      \n      \n      ", $overflow->marker, 'a 6x3 block of spaces');
+        self::assertCount(ImageOverlay::MAX_IMAGES, $layer->placements(), 'no placement is recorded');
+
+        // place() degrades the same way it always did — a blank block, no throw.
+        self::assertSame($overflow->marker, $layer->place(pack('N', ImageOverlay::MAX_IMAGES), 6, 3));
     }
 }
