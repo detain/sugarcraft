@@ -54,7 +54,7 @@
 | [pterm/pterm](#ptermpterm) | Go | ~6000 | sugar-bits, candy-shine, candy-core |
 | [php-school/cli-menu](#php-schoolcli-menu) | PHP | ~1944 | sugar-bits, candy-shell |
 | [php-tui/php-tui](#php-tuiphp-tui) | PHP | ~2000 | candy-core, candy-sprinkles, sugar-bits |
-| [rasjonell/dashbrew](#rasjonell-dashbrew) | Go | ~100 | candy-core, candy-shine, sugar-charts |
+| [rasjonell/dashbrew](#rasjonelldashbrew) | Go | ~100 | candy-core, candy-shine, sugar-charts |
 | [ratatui/ratatui](#ratatuiratatui) | Rust | ~19600 | candy-core, sugar-bits, candy-sprinkles |
 | [ratatui/ratatui-image](#ratatuiratatui-image) | Rust | ~400 | candy-mosaic |
 | [textualize/textual](#textualizetextual) | Python | ~35000 | candy-core, sugar-bits, candy-sprinkles |

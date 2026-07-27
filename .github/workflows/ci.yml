@@ -222,7 +222,7 @@ jobs:
       # 5–10s × 164 cells = ~20 minutes of total CPU per push.
       - name: Compute PHP-extension cache key
         id: ext-cache
-        uses: shivammathur/cache-extensions@0f2e0e6b4f3a7c8d9e0f1a2b3c4d5e6f7a8b9c0d
+        uses: shivammathur/cache-extensions@9b476298b44f2e4d4268dd103ff4c3e216314e27
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.PHP_EXTENSIONS }}
@@ -427,7 +427,7 @@ jobs:
       # Same extension-cache pattern as the test job (see comment there).
       - name: Compute PHP-extension cache key
         id: ext-cache
-        uses: shivammathur/cache-extensions@0f2e0e6b4f3a7c8d9e0f1a2b3c4d5e6f7a8b9c0d
+        uses: shivammathur/cache-extensions@9b476298b44f2e4d4268dd103ff4c3e216314e27
         with:
           php-version: '8.3'
           extensions: ${{ env.PHP_EXTENSIONS }}
@@ -545,7 +545,7 @@ jobs:
 
       - name: Compute PHP-extension cache key
         id: ext-cache
-        uses: shivammathur/cache-extensions@0f2e0e6b4f3a7c8d9e0f1a2b3c4d5e6f7a8b9c0d
+        uses: shivammathur/cache-extensions@9b476298b44f2e4d4268dd103ff4c3e216314e27
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.PHP_EXTENSIONS }}

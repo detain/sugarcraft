@@ -42,7 +42,7 @@ final class ResendTransport implements Transport
         $body  = \curl_exec($ch);
         $code  = \curl_getinfo($ch, \CURLINFO_HTTP_CODE);
         $error = \curl_error($ch);
-        \curl_close($ch);
+        unset($ch);
 
         if ($error !== '') {
             throw new \RuntimeException(Lang::t('resend.network_error', ['error' => $error]));
