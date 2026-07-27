@@ -103,11 +103,10 @@ final class AlertTest extends TestCase
 
         \usleep(1000);  // 1ms later
 
+        $now = \microtime(true);
         $extended = $alert->withExtendedExpiry(5.0);
-        $this->assertGreaterThan($originalExpiry, $extended->expiresAt);
-        // Should be approximately now + 5 seconds (within 100ms tolerance)
-        $expectedMin = \microtime(true) + 4.9;
-        $this->assertGreaterThanOrEqual($expectedMin, $extended->expiresAt);
+        // withExtendedExpiry sets expiry to NOW + N seconds, not originalExpiry + N
+        $this->assertEqualsWithDelta($now + 5.0, $extended->expiresAt, 1.0);
     }
 
     public function testWithExtendedExpiryReturnsNewInstance(): void

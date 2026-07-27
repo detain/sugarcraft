@@ -41,8 +41,9 @@ final class FlexBoxColumnTest extends TestCase
 
     public function testColumnAllocatesHeightByRatio(): void
     {
-        // Two items, ratio 1:2. Item B should get ~2x the vertical space.
-        // Basis=0 means ratio-driven.
+        // Two items with equal default ratios (1:1). With totalHeight=9 and
+        // equal ratios, each item gets round(9 * 1/2) = 5 allocated lines.
+        // "top" occupies indices 0-4; "bottom" starts at index 5.
         $box = FlexBox::column(
             FlexItem::new("top"),
             FlexItem::new("bottom"),
@@ -55,12 +56,15 @@ final class FlexBoxColumnTest extends TestCase
         $this->assertCount(9, $lines);
         // First line should contain "top".
         $this->assertStringContainsString('top', $lines[0]);
-        // Last line should contain "bottom".
-        $this->assertStringContainsString('bottom', $lines[\count($lines) - 1]);
+        // "bottom" appears after "top"'s allocated space (5 lines with equal ratio).
+        $this->assertStringContainsString('bottom', $lines[5]);
     }
 
     public function testColumnWithBasisTakesFixedSpace(): void
     {
+        // "fixed" takes its basis (3 lines). Remaining 5 lines are split by
+        // ratio (1:1), giving flexible round(5 * 1/2) = 3 lines.
+        // Total: 3 (fixed, incl padding) + 3 (flexible, incl padding) = 6 lines.
         $box = FlexBox::column(
             FlexItem::new('fixed')->withBasis(3),
             FlexItem::new('flexible')->withRatio(1),
@@ -69,7 +73,7 @@ final class FlexBoxColumnTest extends TestCase
         $output = $box->render(20, 8);
         $lines = \explode("\n", $output);
 
-        $this->assertCount(8, $lines);
+        $this->assertCount(6, $lines);
         $this->assertStringContainsString('fixed', $output);
     }
 

@@ -253,7 +253,8 @@ final class AnsiHandlerTest extends TestCase
     public function testParseUnknownCsiFallback(): void
     {
         $handler = new AnsiHandler();
-        $segments = $handler->parse("\x1b[1;2Z");
+        // X is not a recognized CSI final byte — must fall through to generic "CSI N X" label.
+        $segments = $handler->parse("\x1b[1;2X");
 
         $this->assertCount(1, $segments);
         $this->assertInstanceOf(SequenceSegment::class, $segments[0]);

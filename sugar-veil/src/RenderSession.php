@@ -39,6 +39,9 @@ final class RenderSession
      */
     private bool $justClearedFrame = false;
 
+    /** @var bool Tracks whether diff() was called since last rememberFull() */
+    private bool $diffWasCalled = false;
+
     public function __construct()
     {
     }
@@ -52,6 +55,16 @@ final class RenderSession
         // justClearedFrame: rememberFull() cleared the diff buffer → next call must be full
         if ($this->justClearedFrame && $this->previousOutput !== null) {
             $this->justClearedFrame = false;
+
+            return true;
+        }
+
+        // If returning true due to dimension change, clear diffWasCalled since we
+        // took the full path and diff state is no longer relevant.
+        if ($this->previousOutput !== null
+            && ($this->prevWidth !== $width || $this->prevHeight !== $height)
+        ) {
+            $this->diffWasCalled = false;
 
             return true;
         }
@@ -71,7 +84,13 @@ final class RenderSession
         $this->prevWidth = $width;
         $this->prevHeight = $height;
         $this->previousFrame = null;
-        $this->justClearedFrame = true;
+        // Only set justClearedFrame if dimensions MATCH and diff was called since
+        // last rememberFull. When dimensions changed, shouldEmitFull returns true
+        // due to dimension check (no need for justClearedFrame). When dimensions
+        // match, justClearedFrame forces full emission to clear diff state.
+        $sameDimensions = ($this->prevWidth === $width && $this->prevHeight === $height);
+        $this->justClearedFrame = $this->diffWasCalled && $sameDimensions;
+        $this->diffWasCalled = false;
     }
 
     /**
@@ -85,6 +104,8 @@ final class RenderSession
      */
     public function diff(string $output, int $width, int $height, callable $bufferFactory): string
     {
+        $this->diffWasCalled = true;
+
         // First diff call with no prior output: return empty diff but prime
         // previousFrame so the NEXT call can diff properly.
         if ($this->previousOutput === null) {
