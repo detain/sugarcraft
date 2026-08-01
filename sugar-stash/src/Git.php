@@ -29,7 +29,7 @@ final class Git implements GitDriver
         $rows = [];
         foreach ($out as $line) {
             if ($line === '') continue;
-            if (str_starts_with($line, '##')) {
+            if (str_starts_with($line, '##') === TRUE) {
                 $rows[] = ['branch_summary' => trim(substr($line, 2))];
                 continue;
             }
@@ -338,7 +338,7 @@ final class Git implements GitDriver
      */
     private function assertNotTimedOut(array $result): void
     {
-        if ($result['timedOut']) {
+        if ($result['timedOut'] === TRUE) {
             throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => (string) $this->timeout]));
         }
     }

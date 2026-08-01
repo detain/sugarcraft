@@ -158,7 +158,7 @@ final readonly class InteractiveRebase
      */
     public function cycleAction(): self
     {
-        if ($this->selectingN || $this->commits === []) return $this;
+        if ($this->selectingN === TRUE || $this->commits === []) return $this;
         $current = $this->commits[$this->cursor] ?? null;
         if ($current === null) return $this;
 

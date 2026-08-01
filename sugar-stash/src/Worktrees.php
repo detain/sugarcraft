@@ -48,14 +48,14 @@ final readonly class WorktreeEntry
                 continue;
             }
 
-            if (str_starts_with($line, 'worktree ')) {
+            if (str_starts_with($line, 'worktree ') === TRUE) {
                 $pending['path'] = trim(substr($line, 9));
-            } elseif (str_starts_with($line, 'HEAD ')) {
+            } elseif (str_starts_with($line, 'HEAD ') === TRUE) {
                 $pending['HEAD'] = trim(substr($line, 5));
-            } elseif (str_starts_with($line, 'branch ')) {
+            } elseif (str_starts_with($line, 'branch ') === TRUE) {
                 $branch = trim(substr($line, 7));
                 // Strip "refs/heads/" prefix to get short name
-                if (str_starts_with($branch, 'refs/heads/')) {
+                if (str_starts_with($branch, 'refs/heads/') === TRUE) {
                     $branch = substr($branch, 11);
                 }
                 $pending['branch'] = $branch;

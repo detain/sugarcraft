@@ -73,7 +73,7 @@ final class Renderer
         }
 
         $mergeBar = '';
-        if ($a->collectingMergeTarget) {
+        if ($a->collectingMergeTarget === TRUE) {
             $mergeBar = "\n " . Style::new()->foreground(Color::hex('#a78bfa'))
                 ->render(Lang::t('merge.prompt') . $a->mergeTarget . '_');
         }
@@ -84,12 +84,12 @@ final class Renderer
         }
 
         $rebaseOverlay = '';
-        if ($a->showRebaseMenu) {
+        if ($a->showRebaseMenu === TRUE) {
             $rebaseOverlay = self::rebaseOverlay($a);
         }
 
         $overlay = '';
-        if ($a->showHelp) {
+        if ($a->showHelp === TRUE) {
             $overlay = self::helpOverlay($a);
         }
 
@@ -284,11 +284,11 @@ final class Renderer
 
             $st = Style::new();
             $line = self::sanitize($line);
-            if (str_starts_with($line, '+')) {
+            if (str_starts_with($line, '+') === TRUE) {
                 $st = $st->foreground(Color::hex('#6ee7b7'));
-            } elseif (str_starts_with($line, '-')) {
+            } elseif (str_starts_with($line, '-') === TRUE) {
                 $st = $st->foreground(Color::hex('#ff5f87'));
-            } elseif (str_starts_with($line, '@@')) {
+            } elseif (str_starts_with($line, '@@') === TRUE) {
                 $st = $st->foreground(Color::hex('#a78bfa'))->italic();
             } else {
                 $st = $st->foreground(Color::hex('#c5b6dd'));
@@ -392,14 +392,14 @@ final class Renderer
             '',
         ];
 
-        if ($wt->adding) {
+        if ($wt->adding === TRUE) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('worktree.add_prompt'));
             $lines[] = '  path: ' . Style::new()->foreground(Color::hex('#fde68a'))->render(self::sanitize($wt->newPath)) . '_';
             $lines[] = '  branch: ' . Style::new()->foreground(Color::hex('#fde68a'))->render(self::sanitize($wt->newBranch ?: 'HEAD')) . '_';
             $lines[] = '';
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('worktree.confirm_add');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('c') . '  ' . Lang::t('help.close_help');
-        } elseif ($wt->removing) {
+        } elseif ($wt->removing === TRUE) {
             $current = $wt->current();
             $lines[] = Style::new()->foreground(Color::hex('#ff5f87'))->render(Lang::t('worktree.remove_confirm', ['path' => self::sanitize($current?->path ?? '')]));
             $lines[] = '';
@@ -447,7 +447,7 @@ final class Renderer
             '',
         ];
 
-        if ($ir->selectingN) {
+        if ($ir->selectingN === TRUE) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('rebase_i.select_count'));
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#fde68a'))->render('n = ' . ($ir->countInput !== '' ? $ir->countInput : '_'));
             $lines[] = '';

@@ -95,7 +95,7 @@ final class App implements Model
         if ($msg instanceof WindowSizeMsg) {
             return [$this->withSize($msg->cols, $msg->rows), null];
         }
-        if (!$msg instanceof KeyMsg) {
+        if ($msg instanceof KeyMsg === FALSE) {
             return [$this, null];
         }
 
@@ -168,7 +168,7 @@ final class App implements Model
         }
 
         // Cherry-pick mode
-        if ($this->cherryPick !== null && $this->cherryPick->collecting) {
+        if ($this->cherryPick !== null && $this->cherryPick->collecting === TRUE) {
             if ($msg->type === KeyType::Escape) {
                 return [$this->withCherryPick(null), null];
             }
@@ -184,7 +184,7 @@ final class App implements Model
         // Worktrees overlay
         if ($this->worktrees !== null) {
             // When adding, only Escape (cancel), Enter (confirm), and Char (append to path) are processed
-            if ($this->worktrees->adding) {
+            if ($this->worktrees->adding === TRUE) {
                 if ($msg->type === KeyType::Escape) {
                     return [$this->withWorktrees($this->worktrees->cancelAdding()), null];
                 }
@@ -203,7 +203,7 @@ final class App implements Model
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
                 return [$this->withWorktrees($this->worktrees->startAdding()), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 'd' && !$this->worktrees->removing) {
+            if ($msg->type === KeyType::Char && $msg->rune === 'd' && $this->worktrees->removing === FALSE) {
                 return [$this->withWorktrees($this->worktrees->startRemoving()), null];
             }
             if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
@@ -233,7 +233,7 @@ final class App implements Model
                 if ($msg->type === KeyType::Enter) {
                     return [$this->confirmRebaseCount(), null];
                 }
-                if ($msg->type === KeyType::Char && ctype_digit($msg->rune)) {
+                if ($msg->type === KeyType::Char && ctype_digit($msg->rune) === TRUE) {
                     return [$this->withInteractiveRebase($this->interactiveRebase->withCountDigit($msg->rune)), null];
                 }
                 return [$this, null];
@@ -360,7 +360,7 @@ final class App implements Model
             return [$this->executeUndo(), null];
         }
         // Redo: Ctrl+r
-        if ($msg->ctrl && $msg->rune === 'r') {
+        if ($msg->ctrl === TRUE && $msg->rune === 'r') {
             return [$this->executeRedo(), null];
         }
         // Delete branch: D key (branches pane only, not current branch)
@@ -820,7 +820,7 @@ final class App implements Model
     /** Redo the last undone operation. */
     private function executeRedo(): self
     {
-        if (!$this->history->canRedo()) {
+        if ($this->history->canRedo() === FALSE) {
             return $this->withError(Lang::t('history.nothing_to_redo'));
         }
         $result = $this->history->redo();
@@ -1256,7 +1256,7 @@ final class App implements Model
     private function confirmRebaseCount(): self
     {
         $ir = $this->interactiveRebase;
-        if ($ir === null || !$ir->selectingN) return $this;
+        if ($ir === null || $ir->selectingN === FALSE) return $this;
         try {
             $log = $this->git->log(50);
             return $this->withInteractiveRebase($ir->confirmCount($log));
