@@ -694,11 +694,11 @@ final class Hermit
         // This preserves backward compatibility with the original per-item loop.
         if ($scored === []) {
             foreach ($this->allItems as $order => $item) {
-                if (!$fn($item)) {
+                if ($fn($item) === false) {
                     continue;
                 }
                 $result = $ranker->match($text, $item->value());
-                if ($result === null || !$result->isMatched()) {
+                if ($result === null || $result->isMatched() === false) {
                     continue;
                 }
                 $scored[] = ['item' => $item, 'score' => $result->score, 'order' => $order];

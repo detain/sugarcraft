@@ -292,7 +292,7 @@ final class Registry
         if (isset($this->labelValueCache[$name][$key])) {
             return;
         }
-        if (!isset($this->labelValueCache[$name])) {
+        if (isset($this->labelValueCache[$name]) === false) {
             $this->labelValueCache[$name] = [];
         }
         $this->labelValueCache[$name][$key] = $merged;

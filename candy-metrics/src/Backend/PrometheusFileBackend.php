@@ -317,7 +317,7 @@ final class PrometheusFileBackend implements Backend
 
         // --- Un-sampled descriptors: emit HELP + TYPE for descriptors with no samples ---
         foreach ($this->descriptors as $name => $descriptor) {
-            if (!isset($this->descriptorEmittedForFlush[$name])) {
+            if (isset($this->descriptorEmittedForFlush[$name]) === false) {
                 $body .= "# HELP {$name} " . self::escapeHelp($descriptor->help) . "\n";
                 $body .= "# TYPE {$name} {$descriptor->type}\n";
             }
@@ -337,7 +337,7 @@ final class PrometheusFileBackend implements Backend
             flock($fh, LOCK_UN);
             fclose($fh);
         }
-        if (!@rename($tmp, $this->path)) {
+        if (@rename($tmp, $this->path) === false) {
             throw new \RuntimeException(Lang::t('prom.rename_failed', ['tmp' => $tmp, 'dest' => $this->path]));
         }
     }
@@ -470,7 +470,7 @@ final class PrometheusFileBackend implements Backend
      */
     private function emitMetricLine(string $name, string $labels, float $value, string $defaultType): string
     {
-        if (!isset($this->typeEmittedForFlush[$name])) {
+        if (isset($this->typeEmittedForFlush[$name]) === false) {
             $this->typeEmittedForFlush[$name] = true;
             if (isset($this->descriptors[$name])) {
                 $d = $this->descriptors[$name];
