@@ -137,7 +137,7 @@ final class TableRendererTest extends TestCase
 
         // Frame 2: delta.
         $t2 = $t->setCursor(0)->withCursorStyle('7');
-        $frame2 = $renderer->render($t2);
+        $renderer->render($t2);
 
         // Reset.
         $renderer->reset();
