@@ -40,13 +40,13 @@ final class GlowModel implements Model
      */
     public function update(Msg $msg): array
     {
-        if ($this->exited) {
+        if ($this->exited === true) {
             return [$this, null];
         }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape
                 || ($msg->ctrl && $msg->rune === 'c')
-                || ($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl)) {
+                || ($msg->type === KeyType::Char && $msg->rune === 'q' && $msg->ctrl === false)) {
                 return [new self($this->viewport, true), Cmd::quit()];
             }
         }

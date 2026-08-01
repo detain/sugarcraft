@@ -78,11 +78,11 @@ final class RenderCommand extends Command
             || (string) $input->getOption('theme') !== 'ansi';
 
         if ($configPath !== '') {
-            if (!is_readable($configPath)) {
+            if (is_readable($configPath) === false) {
                 throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $configPath]));
             }
             $theme = self::loadThemeConfig($configPath);
-        } elseif (!$explicitTheme && !self::terminalSupportsColor()) {
+        } elseif ($explicitTheme === false && self::terminalSupportsColor() === false) {
             // No explicit theme AND terminal cannot render color → use notty.
             $theme = Theme::notty();
         } else {
@@ -95,7 +95,7 @@ final class RenderCommand extends Command
             ->withHyperlinks(!$input->getOption('no-hyperlinks'));
         $rendered   = $renderer->render($raw);
 
-        if (!$input->getOption('pager')) {
+        if ($input->getOption('pager') === false) {
             $output->writeln($rendered);
             return Command::SUCCESS;
         }
@@ -171,7 +171,7 @@ final class RenderCommand extends Command
             return is_string($contents) ? $contents : null;
         }
         $stream = $stream ?? STDIN;
-        if (!defined('STDIN') || !is_resource($stream) || TtyDetect::isAtty($stream)) {
+        if (defined('STDIN') === false || is_resource($stream) === false || TtyDetect::isAtty($stream) === true) {
             return null;
         }
         // Color decision now lives entirely in execute(); loadInput just reads stdin.

@@ -22,7 +22,7 @@ final class FileWatcher
      */
     public function hasChangedSince(int $mtime): bool
     {
-        if (!is_file($this->path)) {
+        if (is_file($this->path) === false) {
             return false;
         }
 
@@ -49,7 +49,7 @@ final class FileWatcher
      */
     public static function watch(string $path, int $intervalMs = 500): \Generator
     {
-        if (!is_file($path)) {
+        if (is_file($path) === false) {
             return;
         }
 
