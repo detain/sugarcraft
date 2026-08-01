@@ -37,6 +37,7 @@ final class SolverFactoryTest extends TestCase
 
         $warning = null;
         set_error_handler(static function (int $errno, string $errstr) use (&$warning): bool {
+            assert($errno === E_USER_WARNING);
             $warning = $errstr;
             return true;
         }, E_USER_WARNING);

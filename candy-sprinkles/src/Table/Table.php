@@ -365,7 +365,7 @@ final class Table
         }
         $left  = $this->borderSides[3] === true ? $b->middleLeft  : '';
         $right = $this->borderSides[1] === true ? $b->middleRight : '';
-        $mid   = $this->borderColumn   ? $b->middle      : '';
+        $mid   = $this->borderColumn === true ? $b->middle : '';
         return $left . implode($mid, $segments) . $right;
     }
 
