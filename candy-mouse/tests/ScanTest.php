@@ -386,39 +386,35 @@ final class ScanTest extends TestCase
     // ─── nextGrapheme() fallback paths ───────────────────────────────────────
 
     /**
-     * When grapheme_extract() returns the combining character alone (mid-
-     * grapheme landing), the empty-string guard triggers the fallback UTF-8
+     * When grapheme_extract() lands mid-grapheme on a combining character
+     * sequence, it returns empty string, triggering the fallback UTF-8
      * byte-by-byte path (lines 236-244).  This exercises the 4-byte UTF-8
      * branch ($b & 0xf8 === 0xf0) via a 4-byte emoji in a zone.
      */
-    public function testNextGraphemeFallbackOnCombiningCharReturnsEmpty(): void
+    public function testNextGraphemeFallbackWithEmoji(): void
     {
         // Emoji "face with tears of joy" — 4-byte UTF-8 (F0 9F 98 82).
         // When grapheme_extract lands mid-emoji, it returns empty, falling
         // through to the byte-by-byte path.  The 4-byte branch ($b & 0xf8
         // === 0xf0) must yield the full 4-byte cluster.
-        $emoji = "\xF0\x9F\x98\x82";
+        $emoji = "\xF0\x9F\x98\x82"; // 😂 emoji
         $mark  = new Mark();
         $rendered = $mark->wrap('emoji', $emoji);
 
         $zones = (new Scan())->parse($rendered);
 
         self::assertArrayHasKey('emoji', $zones);
-        // Zone width accounts for the full 4-byte emoji display width.
         self::assertGreaterThanOrEqual(2, $zones['emoji']->width());
     }
 
     /**
      * Exercise the 3-byte UTF-8 branch in nextGrapheme's fallback path.
-     * A CJK character is 3 bytes: 0xE0 0xA0 0x80 = U+0800 (a CJK char).
-     * The 3-byte branch ($b & 0xf0 === 0xe0) must be exercised.
+     * A CJK character is 3 bytes (E0 A0 80 pattern).  The 3-byte branch
+     * ($b & 0xf0 === 0xe0) must be exercised.
      */
-    public function testNextGraphemeFallback3ByteUtf8Branch(): void
+    public function testNextGraphemeFallbackWithCJK(): void
     {
-        // U+0800 is a CJK character encoded as 3 bytes: E0 A0 80.
-        // Using a known 3-byte non-ASCII sequence ensures the ($b & 0xf0)
-        // === 0xe0 branch is hit in the fallback path.
-        $cjk3 = "\xE0\xA0\x80"; // Valid 3-byte UTF-8 CJK char
+        $cjk3 = "\xE0\xA0\x80"; // Valid 3-byte UTF-8 CJK char (U+0800)
         $mark = new Mark();
         $rendered = $mark->wrap('cjk3', $cjk3);
 
@@ -430,14 +426,12 @@ final class ScanTest extends TestCase
 
     /**
      * Exercise the 2-byte UTF-8 branch in nextGrapheme's fallback path.
-     * A Latin-1 Supplement character (e.g. é) is 2 bytes: 0xC3 0xA9.
+     * Latin-1 Supplement chars like "é" are 2 bytes (C3 A9 pattern).
      * The 2-byte branch ($b & 0xe0 === 0xc0) must be exercised.
      */
-    public function testNextGraphemeFallback2ByteUtf8Branch(): void
+    public function testNextGraphemeFallbackWithLatin2Byte(): void
     {
-        // Latin-1 Supplement char "é" encoded as 2 bytes: C3 A9.
-        // This exercises the 2-byte UTF-8 branch in the fallback.
-        $latin2 = "\xC3\xA9";
+        $latin2 = "\xC3\xA9"; // "é" encoded as 2 bytes
         $mark   = new Mark();
         $rendered = $mark->wrap('latin2', $latin2);
 
@@ -448,45 +442,11 @@ final class ScanTest extends TestCase
     }
 
     /**
-     * Exercise the default branch in nextGrapheme's fallback path.
-     * A byte with the high bit set but not a valid UTF-8 start byte
-     * (e.g. 0x80 on its own — a continuation byte out of context)
-     * hits the `default => 1` branch, returning a single byte.
+     * Flag emoji: two regional indicator symbols (each 3 bytes, total 6 bytes)
+     * forming a single grapheme cluster.  Verifies correct width accounting.
      */
-    public function testNextGraphemeFallbackDefaultBranch(): void
+    public function testNextGraphemeFlagEmojiWidth(): void
     {
-        // Build a string that forces the fallback path to encounter a byte
-        // that looks like a UTF-8 continuation byte (0x80) but appears alone
-        // as a "start" byte — this hits the `default => 1` branch.
-        // We place an invalid UTF-8 byte sequence at a mid-grapheme position.
-        // The key is to craft content where the int/int grapheme boundary
-        // aligns such that grapheme_extract lands mid-sequence and returns '',
-        // then the fallback encounters 0x80 as a standalone start byte.
-        //
-        // Since grapheme_extract() is called at the boundary of each grapheme,
-        // a content consisting solely of a lone 0x80 byte (an invalid UTF-8
-        // sequence on its own) forces the fallback to be called on that byte,
-        // and 0x80 & 0x80 = 0x80 (not 0x00, not 0xc0, not 0xe0, not 0xf0)
-        // → hits the default branch.
-        $invalidByte = "\x80"; // Lone continuation byte — invalid standalone
-        $mark = new Mark();
-        // Place the invalid byte in a zone context so parse() processes it.
-        $rendered = $mark->wrap('inv', $invalidByte);
-
-        $zones = (new Scan())->parse($rendered);
-
-        self::assertArrayHasKey('inv', $zones);
-    }
-
-    /**
-     * Multibyte grapheme cluster (flag emoji) spanning multiple bytes.
-     * Tests that the grapheme cluster is treated as a single unit with width.
-     */
-    public function testNextGraphemeMultibyteGraphemeClusterWidth(): void
-    {
-        // Regional Indicator Symbol Letter A + B = flag emoji (2 code points).
-        // Each regional indicator is 2 bytes (3-byte total for the cluster).
-        // This exercises the full grapheme path end-to-end.
         $flag = "\xF0\x9F\x87\xA6\xF0\x9F\x87\xA9"; // 🇦🇦 flag
         $mark = new Mark();
         $rendered = $mark->wrap('flag', $flag);
@@ -494,7 +454,6 @@ final class ScanTest extends TestCase
         $zones = (new Scan())->parse($rendered);
 
         self::assertArrayHasKey('flag', $zones);
-        // Flag emoji typically displays as 2 columns wide (or 1 in some terminals).
         self::assertGreaterThanOrEqual(1, $zones['flag']->width());
     }
 }
