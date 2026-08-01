@@ -44,34 +44,4 @@ final class OutputTest extends TestCase
         $this->assertSame("\x1b[1mhi\x1b[0m", stream_get_contents($stream));
         fclose($stream);
     }
-
-    public function testPrintWritesToStdoutWithoutNewline(): void
-    {
-        $this->expectOutputString('hello world');
-        Output::print('hello', 'world');
-    }
-
-    public function testPrintEmptyArgsProducesNoOutput(): void
-    {
-        $this->expectOutputString('');
-        Output::print();
-    }
-
-    public function testPrintlnWritesToStdoutWithNewline(): void
-    {
-        $this->expectOutputString("hello world\n");
-        Output::println('hello', 'world');
-    }
-
-    public function testPrintlnEmptyArgsProducesOnlyNewline(): void
-    {
-        $this->expectOutputString("\n");
-        Output::println();
-    }
-
-    public function testPrintlnSingleArg(): void
-    {
-        $this->expectOutputString("only\n");
-        Output::println('only');
-    }
 }

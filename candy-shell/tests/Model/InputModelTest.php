@@ -51,4 +51,36 @@ final class InputModelTest extends TestCase
         $m = InputModel::newPrompt('your name');
         $this->assertSame('your name', $m->input->placeholder);
     }
+
+    public function testViewWithHeaderPrependsHeader(): void
+    {
+        $m = InputModel::newPrompt(header: 'Enter your name:');
+        $view = $m->view();
+        $this->assertStringStartsWith('Enter your name:', $view);
+    }
+
+    public function testViewWithoutHeaderIsJustBody(): void
+    {
+        $m = InputModel::newPrompt();
+        $body = $m->input->view();
+        $this->assertSame($body, $m->view());
+    }
+
+    public function testCharLimitRestrictsInput(): void
+    {
+        $m = InputModel::newPrompt(charLimit: 3);
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'a'));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'b'));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'c'));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'd')); // should be ignored
+        $this->assertSame('abc', $m->value());
+    }
+
+    public function testPreFilledValueIsEditable(): void
+    {
+        $m = InputModel::newPrompt(value: 'hello');
+        $this->assertSame('hello', $m->value());
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('hellox', $m->value());
+    }
 }

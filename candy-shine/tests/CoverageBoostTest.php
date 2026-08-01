@@ -10,6 +10,7 @@ use SugarCraft\Shine\Theme;
 use SugarCraft\Shine\Render\BlockStack;
 use SugarCraft\Shine\Render\BlockContext;
 use SugarCraft\Shine\Render\BlockKind;
+use SugarCraft\Shine\Style\StyleSheet;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -491,5 +492,230 @@ final class CoverageBoostTest extends TestCase
         // Should contain styled content.
         $this->assertStringContainsString('Term', $out);
         $this->assertStringContainsString('Definition', $out);
+    }
+
+    // ---- Theme factory methods (direct calls) ----------------------------
+
+    public function testDarkFactoryIsNotNull(): void
+    {
+        $t = Theme::dark();
+        $this->assertNotNull($t->heading1);
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testLightFactoryIsNotNull(): void
+    {
+        $t = Theme::light();
+        $this->assertNotNull($t->heading1);
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testDraculaFactoryIsNotNull(): void
+    {
+        $t = Theme::dracula();
+        $this->assertNotNull($t->heading1);
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testTokyoNightFactoryIsNotNull(): void
+    {
+        $t = Theme::tokyoNight();
+        $this->assertNotNull($t->heading1);
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testPinkFactoryIsNotNull(): void
+    {
+        $t = Theme::pink();
+        $this->assertNotNull($t->heading1);
+        $this->assertNotNull($t->strike);
+    }
+
+    // ---- StyleSheet private constructor via base() ----------------------
+
+    public function testStyleSheetBaseCreatesInstance(): void
+    {
+        $sheet = StyleSheet::base();
+        $this->assertInstanceOf(StyleSheet::class, $sheet);
+    }
+
+    public function testStyleSheetMutateReturnsNewInstance(): void
+    {
+        // mutate() is called internally by withBlockKindAtDepth.
+        // Test that the result is a different instance.
+        $sheet = StyleSheet::base();
+        $newSheet = $sheet->withBlockKindAtDepth(
+            \SugarCraft\Shine\Render\BlockKind::Paragraph,
+            \SugarCraft\Sprinkles\Style::new()->bold(),
+            0
+        );
+        $this->assertNotSame($sheet, $newSheet);
+    }
+
+    public function testStyleSheetWithBlockKindAtDepthCreatesNewInstance(): void
+    {
+        $sheet = StyleSheet::base();
+        $s1 = $sheet->withBlockKindAtDepth(
+            \SugarCraft\Shine\Render\BlockKind::Heading,
+            \SugarCraft\Sprinkles\Style::new()->bold(),
+            1
+        );
+        $s2 = $sheet->withBlockKindAtDepth(
+            \SugarCraft\Shine\Render\BlockKind::Heading,
+            \SugarCraft\Sprinkles\Style::new()->italic(),
+            2
+        );
+        // Different instances.
+        $this->assertNotSame($s1, $s2);
+        // Original unchanged.
+        $this->assertFalse($sheet->for(\SugarCraft\Shine\Render\BlockKind::Heading, 1)->isBold());
+    }
+
+    public function testStyleSheetStylesForReturnsAllDepthsForKnownKind(): void
+    {
+        $sheet = StyleSheet::base();
+        $styles = $sheet->stylesFor(BlockKind::Heading);
+        // StyleSheet::base() initializes all BlockKinds with depth 0 style.
+        $this->assertCount(1, $styles);
+        $this->assertArrayHasKey(0, $styles);
+    }
+
+    public function testStyleSheetForReturnsInitializedStyleForTable(): void
+    {
+        $sheet = StyleSheet::base();
+        // Table is a known BlockKind and gets initialized in base().
+        $style = $sheet->for(BlockKind::Table, 0);
+        // Should return Style::new() which is a no-op.
+        $this->assertSame('x', $style->render('x'));
+    }
+
+    // ---- Renderer copy() preserves values ------------------------------
+
+    public function testCopyPreservesAllOptions(): void
+    {
+        $r = new Renderer(
+            Theme::ansi(),
+            80,
+            false,   // emitHyperlinks
+            'https://base.url/',
+            true,    // tableWrap
+            false,   // inlineTableLinks
+            true,    // preservedNewLines
+            true,    // expandEmoji
+            false,   // sanitize
+        );
+
+        // Change only theme.
+        $r2 = $r->withTheme(Theme::plain());
+
+        // Verify other options preserved (we can't access private props directly,
+        // but we can verify behavior).
+        $this->assertNotSame($r->theme, $r2->theme);
+    }
+
+    // ---- Renderer withStandardStyle valid names ------------------------
+
+    public function testWithStandardStyleAnsi(): void
+    {
+        $r = Renderer::plain()->withStandardStyle('ansi');
+        $this->assertInstanceOf(Renderer::class, $r);
+    }
+
+    public function testWithStandardStyleDark(): void
+    {
+        $r = Renderer::plain()->withStandardStyle('dark');
+        $this->assertInstanceOf(Renderer::class, $r);
+    }
+
+    public function testWithStandardStyleLight(): void
+    {
+        $r = Renderer::plain()->withStandardStyle('light');
+        $this->assertInstanceOf(Renderer::class, $r);
+    }
+
+    public function testWithStandardStyleDracula(): void
+    {
+        $r = Renderer::plain()->withStandardStyle('dracula');
+        $this->assertInstanceOf(Renderer::class, $r);
+    }
+
+    public function testWithStandardStyleTokyoNight(): void
+    {
+        $r = Renderer::plain()->withStandardStyle('tokyo-night');
+        $this->assertInstanceOf(Renderer::class, $r);
+    }
+
+    public function testWithStandardStylePink(): void
+    {
+        $r = Renderer::plain()->withStandardStyle('pink');
+        $this->assertInstanceOf(Renderer::class, $r);
+    }
+
+    // ---- Renderer emoji with empty string -------------------------------
+
+    public function testExpandEmojiWithEmptyString(): void
+    {
+        $r = Renderer::plain()->withEmoji(true);
+        $out = $r->render('');
+        $this->assertSame('', $out);
+    }
+
+    // ---- Renderer isPlainStyle edge case --------------------------------
+
+    public function testRenderPreservesNewlines(): void
+    {
+        // Test that newlines in source are preserved in output.
+        $out = Renderer::plain()->render("line1\nline2");
+        $this->assertStringContainsString('line1', $out);
+        $this->assertStringContainsString('line2', $out);
+    }
+
+    // ---- Additional edge cases -----------------------------------------
+
+    public function testBlockStackDepthAfterMultiplePushes(): void
+    {
+        $stack = new BlockStack();
+        $this->assertSame(0, $stack->depth());
+
+        $stack->push(new BlockContext(
+            BlockKind::Paragraph,
+            depth: 1,
+            accumulatedIndent: 0,
+            cascadedStyle: Style::new(),
+        ));
+        $this->assertSame(1, $stack->depth());
+
+        $stack->push(new BlockContext(
+            BlockKind::Paragraph,
+            depth: 2,
+            accumulatedIndent: 0,
+            cascadedStyle: Style::new(),
+        ));
+        $this->assertSame(2, $stack->depth());
+    }
+
+    public function testBlockStackPeekAfterPush(): void
+    {
+        $stack = new BlockStack();
+        $ctx = new BlockContext(
+            BlockKind::Paragraph,
+            depth: 1,
+            accumulatedIndent: 0,
+            cascadedStyle: Style::new(),
+        );
+        $stack->push($ctx);
+        $this->assertSame($ctx, $stack->peek());
+    }
+
+    public function testBlockStackPeekKindAfterPush(): void
+    {
+        $stack = new BlockStack();
+        $stack->push(new BlockContext(
+            BlockKind::BlockQuote,
+            depth: 1,
+            accumulatedIndent: 2,
+            cascadedStyle: Style::new(),
+        ));
+        $this->assertSame(BlockKind::BlockQuote, $stack->peekKind());
     }
 }

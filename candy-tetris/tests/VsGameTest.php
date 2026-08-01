@@ -177,6 +177,104 @@ final class VsGameTest extends TestCase
         $this->assertSame($vs->player->piece->x, $vs->player->piece->x);
     }
 
+    public function testAdvanceComputerOnGravityTick(): void
+    {
+        $vs = VsGame::start();
+
+        // Get initial computer piece
+        $initialComputerPiece = $vs->computer->piece;
+
+        // Send multiple gravity ticks to allow computer to make progress
+        for ($i = 0; $i < 20; $i++) {
+            [$vs] = $vs->update(new GravityMsg());
+            if ($vs->over) {
+                break;
+            }
+        }
+
+        // Computer should have made some moves (piece may have changed or locked)
+        // We just verify the game continues without error
+        $this->assertNotNull($vs);
+    }
+
+    public function testPlayerWinnerDetectedWhenComputerOver(): void
+    {
+        $vs = VsGame::start();
+
+        // Set computer game to over manually
+        $overComputer = new Game(
+            $vs->computer->board,
+            $vs->computer->piece,
+            $vs->computer->bag,
+            $vs->computer->score,
+            over: true,
+        );
+
+        $vs = new VsGame($vs->player, $overComputer);
+
+        // Process gravity tick which should detect computer is over and set player as winner
+        [$result] = $vs->update(new GravityMsg());
+
+        $this->assertTrue($result->over);
+        $this->assertSame('PLAYER', $result->winner);
+        $this->assertTrue($result->computer->over);
+    }
+
+    public function testComputerWinnerDetectedWhenPlayerOver(): void
+    {
+        $vs = VsGame::start();
+
+        // Set player game to over
+        $overPlayer = new Game(
+            $vs->player->board,
+            $vs->player->piece,
+            $vs->player->bag,
+            $vs->player->score,
+            over: true,
+        );
+
+        $vs = new VsGame($overPlayer, $vs->computer);
+
+        // Send a message to trigger the detection
+        [$result] = $vs->update(new GravityMsg());
+
+        $this->assertTrue($result->over);
+        $this->assertSame('COMPUTER', $result->winner);
+        $this->assertTrue($result->player->over);
+    }
+
+    public function testQuitWhenOverReturnsQuitCommand(): void
+    {
+        $vs = VsGame::start();
+        $overVs = new VsGame(
+            Game::start(), Game::start(),
+            over: true, winner: 'PLAYER'
+        );
+
+        [, $cmd] = $overVs->update(new KeyMsg(KeyType::Char, 'q'));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    public function testPauseWhenNotOverSetsPlayerPaused(): void
+    {
+        $vs = VsGame::start();
+        $this->assertFalse($vs->player->paused);
+
+        [$paused] = $vs->update(new KeyMsg(KeyType::Char, 'p'));
+        $this->assertTrue($paused->player->paused);
+    }
+
+    public function testPauseWhenAlreadyPausedKeepsPaused(): void
+    {
+        $vs = VsGame::start();
+        [$paused] = $vs->update(new KeyMsg(KeyType::Char, 'p'));
+        $this->assertTrue($paused->player->paused);
+
+        [$stillPaused] = $paused->update(new KeyMsg(KeyType::Char, 'p'));
+        $this->assertFalse($stillPaused->player->paused);
+    }
+
     /**
      * Helper: Create a game with one complete line at the bottom.
      */

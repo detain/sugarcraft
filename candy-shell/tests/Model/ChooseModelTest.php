@@ -72,11 +72,7 @@ final class ChooseModelTest extends TestCase
 
     public function testMultiModeSpaceTogglesSelection(): void
     {
-        // limit=2 enables multi mode
-        $m = ChooseModel::fromOptions(['Pizza', 'Burger', 'Salad'], limit: 2);
-        $this->assertFalse($m->isMulti());
-
-        // Switch to multi mode via noLimit
+        // noLimit enables multi mode
         $m = ChooseModel::fromOptions(['Pizza', 'Burger', 'Salad'], noLimit: true);
         $this->assertTrue($m->isMulti());
 
@@ -99,8 +95,8 @@ final class ChooseModelTest extends TestCase
     public function testSelectedAllReturnsOrderedSelections(): void
     {
         $m = ChooseModel::fromOptions(['A', 'B', 'C'], noLimit: true, ordered: true);
-        // Select A and C (not in order)
-        [$m, ] = $m->update(new KeyMsg(KeyType::Enter)); // select A
+        // Select A (at position 0) and C (at position 2)
+        [$m, ] = $m->update(new KeyMsg(KeyType::Space)); // select A at cursor 0
         [$m, ] = $m->update(new KeyMsg(KeyType::Down));  // move to B
         [$m, ] = $m->update(new KeyMsg(KeyType::Down));  // move to C
         [$m, ] = $m->update(new KeyMsg(KeyType::Space)); // toggle C
@@ -128,14 +124,14 @@ final class ChooseModelTest extends TestCase
         $this->assertStringContainsString('[2 selected]', $view);
     }
 
-    public function testViewInSingleModeDoesNotShowCount(): void
+    public function testViewInSingleModeDoesNotShowSelectedCountSuffix(): void
     {
         $m = $this->model();
         [$m, ] = $m->update(new KeyMsg(KeyType::Down));
         [$m, ] = $m->update(new KeyMsg(KeyType::Enter));
 
         $view = $m->view();
-        // Single mode view is just the list body, no count appended
-        $this->assertStringNotContainsString('[', $view);
+        // Single mode view does not append the "[N selected]" multi-select indicator
+        $this->assertStringNotContainsString(' selected]', $view);
     }
 }

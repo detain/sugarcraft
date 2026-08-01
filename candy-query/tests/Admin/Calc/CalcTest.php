@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Tests\Admin\Calc;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Query\Admin\Calc\CacheHitRate;
+use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes;
 use SugarCraft\Query\Admin\Calc\RatePerSecond;
 use SugarCraft\Query\Admin\Calc\StatusVar;
 use SugarCraft\Query\Admin\Calc\TableOpenCacheHitRate;
@@ -163,6 +164,33 @@ final class CalcTest extends TestCase
         $elapsed = 10.0;
 
         $result = $maker->compute($current, $previous, $elapsed);
+
+        $this->assertEqualsWithDelta(1.0, $result['Queries'], 0.001);
+        $this->assertEqualsWithDelta(0.5, $result['a'], 0.001);
+        $this->assertEqualsWithDelta(0.5, $result['b'], 0.001);
+    }
+
+    public function testMakeTupleUpdateLast(): void
+    {
+        $maker = (new MakeTuple(','))
+            ->addRate('Queries')
+            ->addTupleRate('TableIO');
+
+        $snapshot = [
+            'Queries' => '100',
+            'TableIO' => 'a:5,b:15',
+        ];
+
+        $maker->updateLast($snapshot);
+
+        // Now compute with a later snapshot to verify updateLast worked
+        $current = [
+            'Queries' => '110',
+            'TableIO' => 'a:10,b:20',
+        ];
+        $elapsed = 10.0;
+
+        $result = $maker->compute($current, $snapshot, $elapsed);
 
         $this->assertEqualsWithDelta(1.0, $result['Queries'], 0.001);
         $this->assertEqualsWithDelta(0.5, $result['a'], 0.001);
@@ -399,5 +427,83 @@ final class CalcTest extends TestCase
         $result = $rate->compute($current, [], 0.0);
 
         $this->assertEqualsWithDelta(75.0, $result, 0.001);
+    }
+
+    // ===== InnoDBBufferPoolUsageBytes tests =====
+
+    public function testInnoDBBufferPoolUsageBytesComputesPercentage(): void
+    {
+        $pool = new \SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes();
+
+        // Innodb_buffer_pool_bytes_data = 8192 * 100 = 819200 bytes used
+        // Innodb_page_size = 8192 bytes per page
+        // Innodb_buffer_pool_pages_total = 100 pages total
+        // Usage = (819200 / 8192) / 100 * 100 = 100 / 100 * 100 = 100%
+        $current = [
+            'Innodb_buffer_pool_bytes_data' => '819200',
+            'Innodb_page_size' => '8192',
+            'Innodb_buffer_pool_pages_total' => '100',
+        ];
+        $result = $pool->compute($current, [], 0.0);
+
+        $this->assertEqualsWithDelta(100.0, $result, 0.001);
+    }
+
+    public function testInnoDBBufferPoolUsageBytesZeroPageSizeReturnsZero(): void
+    {
+        $pool = new \SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes();
+
+        $current = [
+            'Innodb_buffer_pool_bytes_data' => '819200',
+            'Innodb_page_size' => '0',
+            'Innodb_buffer_pool_pages_total' => '100',
+        ];
+        $result = $pool->compute($current, [], 0.0);
+
+        $this->assertSame(0.0, $result);
+    }
+
+    public function testInnoDBBufferPoolUsageBytesZeroPagesTotalReturnsZero(): void
+    {
+        $pool = new \SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes();
+
+        $current = [
+            'Innodb_buffer_pool_bytes_data' => '819200',
+            'Innodb_page_size' => '8192',
+            'Innodb_buffer_pool_pages_total' => '0',
+        ];
+        $result = $pool->compute($current, [], 0.0);
+
+        $this->assertSame(0.0, $result);
+    }
+
+    public function testInnoDBBufferPoolUsageBytesPartialUsage(): void
+    {
+        $pool = new \SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes();
+
+        // 50% usage
+        $current = [
+            'Innodb_buffer_pool_bytes_data' => '409600',
+            'Innodb_page_size' => '8192',
+            'Innodb_buffer_pool_pages_total' => '100',
+        ];
+        $result = $pool->compute($current, [], 0.0);
+
+        $this->assertEqualsWithDelta(50.0, $result, 0.001);
+    }
+
+    public function testInnoDBBufferPoolUsageBytesWithCustomKeys(): void
+    {
+        $pool = new \SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes('bytes_data', 'page_size', 'pages_total');
+
+        $current = [
+            'bytes_data' => '409600',
+            'page_size' => '4096',
+            'pages_total' => '100',
+        ];
+        $result = $pool->compute($current, [], 0.0);
+
+        // 409600 / 4096 = 100 pages used out of 100 total = 100%
+        $this->assertEqualsWithDelta(100.0, $result, 0.001);
     }
 }

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris\Tests;
 
+use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
+use SugarCraft\Tetris\Piece;
+use SugarCraft\Tetris\Tetromino;
 use SugarCraft\Tetris\VsGame;
 use SugarCraft\Tetris\VsRenderer;
 use PHPUnit\Framework\TestCase;

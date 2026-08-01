@@ -270,4 +270,67 @@ final class ProgramSimulatorTest extends TestCase
         $this->assertSame(99, $finalModel->count());
         $this->assertSame("Count: 99\n", $result->view);
     }
+
+    public function testPumpSubscriptionsEnqueuesProducedMessages(): void
+    {
+        // SubscriptionProducingModel has a subscription that produces KeyMsg('*')
+        // on each pump. The pumpSubscriptions() call should add this message to
+        // the queue, and it should be processed in the run loop.
+        $model = new SubscriptionProducingModel(0);
+        $program = new Program($model);
+        $sim = ProgramSimulator::for($program);
+
+        $result = $sim->run();
+
+        // The subscription produced KeyMsg('*'), which was processed via update(),
+        // incrementing the counter via update() (not via the subscription itself).
+        /** @var SubscriptionProducingModel $finalModel */
+        $finalModel = $result->model;
+        $this->assertSame(1, $finalModel->count());
+    }
+
+    public function testCmdLoopOverflowThrowsRuntimeException(): void
+    {
+        // InfiniteCmdLoopModel.update() always returns a cmd that produces
+        // the same message, creating an infinite loop. The applyMsg() method
+        // has overflow protection that throws after 10,000 cycles.
+        $model = new InfiniteCmdLoopModel(0);
+        $program = new Program($model);
+        $sim = ProgramSimulator::for($program);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/simulator.cmd_loop_overflow/');
+
+        $sim->run();
+    }
+
+    public function testWithRealCmdRunnerTrueExecutesCmds(): void
+    {
+        // Test that withRealCmdRunner(true) actually executes cmds.
+        // This is explicit "execute mode" which is the default but we test
+        // the explicit true case.
+        $sideEffect = 0;
+        $model = new class(0) implements Model {
+            private int $count;
+            public function __construct(int $initial) { $this->count = $initial; }
+            public function count(): int { return $this->count; }
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array {
+                return [new self($this->count + 1), static fn () => null];
+            }
+            public function view(): string|View { return "Count: {$this->count}\n"; }
+            public function subscriptions(): ?\SugarCraft\Core\Subscriptions { return null; }
+        };
+        $program = new Program($model);
+
+        $sim = ProgramSimulator::for($program)
+            ->withRealCmdRunner(true)
+            ->withFakeCmdRunner(static fn ($cmd) => null);
+
+        // Even with fakeRunner, executeCmds=true should have executed the cmd.
+        // But since fakeRunner returns null, no additional message is produced.
+        $result = $sim->run();
+
+        $this->assertIsArray($result->cmds);
+    }
 }

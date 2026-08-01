@@ -186,9 +186,28 @@ final class HslTest extends TestCase
 
     public function testParseEmptyHValueReturnsNull(): void
     {
-        // hsl(, 100%, 50%) - empty first argument
+        // hsl(, 100%, 50%) - empty first argument becomes '' after trim
         $this->assertNull(Hsl::parse('hsl(, 100%, 50%)'));
     }
+
+    public function testParseMalformedCloseParenReturnsNull(): void
+    {
+        $this->assertNull(Hsl::parse('hsl(0, 100%, 50%'));
+    }
+
+    public function testParseOnlyTwoValuesReturnsNull(): void
+    {
+        $this->assertNull(Hsl::parse('hsl(0, 100%)'));
+    }
+
+    public function testParseSValueWithoutPercentSuffix(): void
+    {
+        // S and L values may or may not have % suffix
+        $color = Hsl::parse('hsl(0, 100, 50)');
+        $this->assertNotNull($color);
+        $this->assertSame(255, $color->r);
+    }
+}
 
     public function testParseInvalidHValueReturnsNull(): void
     {

@@ -46,4 +46,35 @@ final class WriteModelTest extends TestCase
         [$m2, ] = $m->update(new KeyMsg(KeyType::Char, 'x'));
         $this->assertSame($m, $m2);
     }
+
+    public function testViewWithHeaderPrependsHeader(): void
+    {
+        $m = WriteModel::newPrompt(header: 'Enter your text:');
+        $view = $m->view();
+        $this->assertStringStartsWith('Enter your text:', $view);
+    }
+
+    public function testViewWithoutHeaderIsJustBody(): void
+    {
+        $m = WriteModel::newPrompt();
+        $body = $m->area->view();
+        $this->assertSame($body, $m->view());
+    }
+
+    public function testPreFilledValueIsEditable(): void
+    {
+        $m = WriteModel::newPrompt(value: "hello\nworld");
+        $this->assertSame("hello\nworld", $m->value());
+        [$m, ] = $m->update(new KeyMsg(KeyType::Enter));
+        [$m, ] = $m->update(new KeyMsg(KeyType::Char, '!'));
+        $this->assertSame("hello\nworld\n!", $m->value());
+    }
+
+    public function testWidthAndHeightPassedToArea(): void
+    {
+        $m = WriteModel::newPrompt(width: 40, height: 10);
+        // Just verify it doesn't throw and produces a view
+        $view = $m->view();
+        $this->assertNotEmpty($view);
+    }
 }

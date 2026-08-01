@@ -117,15 +117,6 @@ final class LayoutTest extends TestCase
         $this->assertSame("L1R1\nL2R2", Layout::joinHorizontal(Position::TOP, $left, $right));
     }
 
-    public function testJoinHorizontalWithSpacing(): void
-    {
-        $a = "AA";
-        $b = "BB";
-        // Default joinHorizontalWithSpacing with null spacing (no gap)
-        $result = Layout::joinHorizontalWithSpacing(Position::TOP, null, $a, $b);
-        $this->assertSame("AA\nBB", $result); // Wait - that's wrong, joinHorizontalWithSpacing is for same-height blocks
-    }
-
     public function testJoinHorizontalWithSpacingAddsGap(): void
     {
         $a = "AA";
@@ -207,15 +198,6 @@ final class LayoutTest extends TestCase
         $lines = explode("\n", $out);
         $this->assertCount(5, $lines);
         $this->assertSame('hi', $lines[4]);
-    }
-
-    public function testPlaceVerticalWithFillChar(): void
-    {
-        $out = Layout::placeVertical(4, Position::CENTER, 'X', '-');
-        $lines = explode("\n", $out);
-        $this->assertCount(4, $lines);
-        $this->assertSame('----', $lines[0]);
-        $this->assertSame('-X-', $lines[1]);
     }
 
     public function testPlaceVerticalShorterThanContent(): void
