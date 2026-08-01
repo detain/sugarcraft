@@ -531,27 +531,34 @@ jobs:
             chmod +x "$CODACY_DIR/codacy-coverage-reporter"
           fi
           
-          # Retry loop with 30s backoff
-          MAX_RETRIES=3
-          for attempt in $(seq 1 $MAX_RETRIES); do
-            echo "Codacy upload attempt $attempt of $MAX_RETRIES"
-            if "$CODACY_DIR/codacy-coverage-reporter" final \
+          # Step 1: upload the coverage report
+          if "$CODACY_DIR/codacy-coverage-reporter" report \
+            --api-token "$CODACY_API_TOKEN" \
+            --organization-provider "gh" \
+            --username "detain" \
+            --project-name "sugarcraft" \
+            -r "$COVERAGE_FILE" \
+            --commit-uuid "$GITHUB_SHA"; then
+            echo "Codacy report upload succeeded"
+          else
+            echo "Codacy report upload failed, retrying in 30s..."
+            sleep 30
+            "$CODACY_DIR/codacy-coverage-reporter" report \
               --api-token "$CODACY_API_TOKEN" \
               --organization-provider "gh" \
               --username "detain" \
               --project-name "sugarcraft" \
-              --coverage-reports "$COVERAGE_FILE" \
-              --commit-uuid "$GITHUB_SHA"; then
-              echo "Codacy upload succeeded on attempt $attempt"
-              exit 0
-            fi
-            if [ $attempt -lt $MAX_RETRIES ]; then
-              echo "Codacy upload failed, retrying in 30s..."
-              sleep 30
-            fi
-          done
-          echo "Codacy upload failed after $MAX_RETRIES attempts"
-          exit 1
+              -r "$COVERAGE_FILE" \
+              --commit-uuid "$GITHUB_SHA" || exit 1
+          fi
+
+          # Step 2: mark the commit as fully covered
+          "$CODACY_DIR/codacy-coverage-reporter" final \
+            --api-token "$CODACY_API_TOKEN" \
+            --organization-provider "gh" \
+            --username "detain" \
+            --project-name "sugarcraft" \
+            --commit-uuid "$GITHUB_SHA"
         env:
           CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
