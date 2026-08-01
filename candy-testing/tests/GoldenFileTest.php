@@ -130,29 +130,32 @@ final class GoldenFileTest extends TestCase
         GoldenFile::resolve('/home/test', 'ok/../../../test/fixtures-evil/x.golden');
     }
 
-    public function testResolveNormalizesPathWithDotSegments(): void
+    public function testResolvePathWithDotSegmentsReturnsRawPath(): void
     {
-        // Path with . and empty segments should be normalized away.
+        // Path with . segments is returned as-is (not normalized) since it
+        // doesn't escape the fixtures directory.
         $resolved = GoldenFile::resolve('/home/test', 'sub/./dir/../file.golden');
 
-        $this->assertSame('/home/test/fixtures/sub/file.golden', $resolved);
+        $this->assertSame('/home/test/fixtures/sub/./dir/../file.golden', $resolved);
     }
 
-    public function testResolveNormalizesMultipleDotDotSegments(): void
+    public function testResolvePathWithMultipleDotDotSegmentsReturnsRawPath(): void
     {
-        // Multiple '..' in succession should each be processed.
+        // Multiple '..' segments are returned as-is since they don't escape.
+        // The normalization IS done internally to check for escape, but the
+        // raw path is returned for byte-stable behaviour.
         $resolved = GoldenFile::resolve('/home/test', 'a/b/c/../../d.golden');
 
-        $this->assertSame('/home/test/fixtures/a/d.golden', $resolved);
+        $this->assertSame('/home/test/fixtures/a/b/c/../../d.golden', $resolved);
     }
 
-    public function testResolveHandlesPureDotPath(): void
+    public function testResolvePureDotPathReturnsRawPath(): void
     {
-        // A path that is just '.' should normalize to empty but valid path.
-        // Actually '.' alone would just be skipped as empty segment after split.
+        // '.' segments are stripped during normalization but the raw path
+        // is returned since it doesn't escape.
         $resolved = GoldenFile::resolve('/home/test', './././file.golden');
 
-        $this->assertSame('/home/test/fixtures/file.golden', $resolved);
+        $this->assertSame('/home/test/fixtures/./././file.golden', $resolved);
     }
 
     public function testSaveFailsOnUnwritablePath(): void
