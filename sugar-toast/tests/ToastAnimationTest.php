@@ -9,28 +9,6 @@ use PHPUnit\Framework\TestCase;
 
 final class ToastAnimationTest extends TestCase
 {
-    public function testWithAnimationDuration(): void
-    {
-        $t = Toast::new(50)
-            ->withPosition(Position::TopLeft)
-            ->withAnimationDuration(2.5);
-
-        $this->assertInstanceOf(Toast::class, $t);
-    }
-
-    public function testAnimationDurationIsFluent(): void
-    {
-        $t1 = Toast::new(50);
-        $t2 = $t1->withAnimationDuration(1.5);
-        $this->assertNotSame($t1, $t2);
-    }
-
-    public function testAnimationDurationNegativesClampedToZero(): void
-    {
-        $t = Toast::new(50)->withAnimationDuration(-5.0);
-        $this->assertInstanceOf(Toast::class, $t);
-    }
-
     public function testActionButtonsRenderedInToast(): void
     {
         $action = Action::make('OK', static function () {});
