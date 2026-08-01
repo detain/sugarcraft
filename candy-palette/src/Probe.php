@@ -153,7 +153,7 @@ final class Probe
      *
      * @internal
      */
-    public static function _reset(array $overrides = []): void
+    public static function _reset(): void
     {
         self::$infocmpPath = null;
     }

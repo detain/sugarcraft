@@ -94,7 +94,7 @@ final class Scan
                     $id = substr($rendered, $idStart, $idEnd - $idStart);
 
                     if ($isClose) {
-                        if (isset($this->open[$id])) {
+                        if (isset($this->open[$id]) === true) {
                             [$startCol, $startRow, $maxCol, $maxRow] = $this->open[$id];
                             // End marker sits after the last visible cell;
                             // back the end up by one column.
@@ -125,7 +125,7 @@ final class Scan
                     // longer address a single zone.  Reject it rather than emit
                     // a corrupt bbox, mirroring Mark::wrap()'s reject-on-invalid
                     // contract.
-                    if (isset($this->open[$id]) || isset($this->zones[$id])) {
+                    if ((isset($this->open[$id]) || isset($this->zones[$id])) === true) {
                         throw new \InvalidArgumentException(
                             'candy-mouse: duplicate zone id ' . var_export($id, true)
                             . ' in scanned render — every zone id must be unique '
@@ -226,7 +226,7 @@ final class Scan
      */
     private static function nextGrapheme(string $s, int $i): string
     {
-        if (function_exists('grapheme_extract')) {
+        if (function_exists('grapheme_extract') === true) {
             $next = 0;
             $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
             if (is_string($cluster) && $cluster !== '') {

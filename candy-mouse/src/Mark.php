@@ -129,7 +129,7 @@ final class Mark
             );
         }
 
-        if (!$this->enabled) {
+        if ($this->enabled === false) {
             return $content;
         }
 

@@ -65,7 +65,7 @@ final class ZoneClickTracker
         }
 
         if ($event->action === MouseAction::Release) {
-            if (!isset($this->pending[$btn])) {
+            if (isset($this->pending[$btn]) === false) {
                 // Release without a preceding press — ignore.
                 return null;
             }
@@ -80,7 +80,7 @@ final class ZoneClickTracker
             // Release on a different zone — clear state and return null per
             // the documented state machine: "waiting → Release on different zone
             // → clear state, idle".
-            if (!$pending['zone']->inBounds($event)) {
+            if ($pending['zone']->inBounds($event) === false) {
                 unset($this->pending[$btn]);
                 return null;
             }
@@ -99,7 +99,7 @@ final class ZoneClickTracker
      */
     public function setPressZone(Zone $zone, int $button): void
     {
-        if (isset($this->pending[$button])) {
+        if (isset($this->pending[$button]) === true) {
             $this->pending[$button]['zone'] = $zone;
         }
     }

@@ -87,7 +87,7 @@ final class Scanner
     {
         $result = [];
         foreach ($this->zones as $id => $zone) {
-            if (str_starts_with($id, $prefix)) {
+            if (str_starts_with($id, $prefix) === true) {
                 $result[$id] = $zone;
             }
         }
