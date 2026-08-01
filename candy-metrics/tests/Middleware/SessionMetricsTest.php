@@ -103,7 +103,7 @@ final class SessionMetricsTest extends TestCase
     {
         $b = new InMemoryBackend();
         $r = new Registry($b);
-        $mw = new SessionMetrics($r, fn(Session $s) => ['client_subnet' => '127.0.0.0/24']);
+        $mw = new SessionMetrics($r, fn(Session $_s) => ['client_subnet' => '127.0.0.0/24']);
         $mw->handle(Context::background(), $this->session(), fn() => null);
 
         $this->assertSame(

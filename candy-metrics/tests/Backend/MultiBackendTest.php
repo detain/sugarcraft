@@ -82,15 +82,15 @@ final class MultiBackendTest extends TestCase
     {
         // ThrowingBackend always throws on any emit.
         $throwing = new class implements \SugarCraft\Metrics\Backend {
-            public function counter(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function gauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function histogram(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function upDownCounter(string $name, float $amount, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function asyncCounter(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function asyncGauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function describe(Descriptor $descriptor): void { throw new \RuntimeException('always fails'); }
+            public function counter(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function gauge(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function histogram(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function upDownCounter(string $_name, float $_amount, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function asyncCounter(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function asyncGauge(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function describe(Descriptor $_descriptor): void { throw new \RuntimeException('always fails'); }
             public function flush(): void { throw new \RuntimeException('always fails'); }
-            public function remove(string $name, array $tags = []): void { throw new \RuntimeException('always fails'); }
+            public function remove(string $_name, array $_tags = []): void { throw new \RuntimeException('always fails'); }
             public function clear(): void { throw new \RuntimeException('always fails'); }
         };
 
@@ -111,15 +111,15 @@ final class MultiBackendTest extends TestCase
     public function testContinueOnErrorAggregatesAndRethrows(): void
     {
         $throwing = new class implements \SugarCraft\Metrics\Backend {
-            public function counter(string $name, float $value, array $tags = []): void { throw new \RuntimeException('first'); }
-            public function gauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('second'); }
-            public function histogram(string $name, float $value, array $tags = []): void { throw new \RuntimeException('third'); }
-            public function upDownCounter(string $name, float $amount, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function asyncCounter(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function asyncGauge(string $name, float $value, array $tags = []): void { throw new \RuntimeException('always fails'); }
-            public function describe(Descriptor $descriptor): void { throw new \RuntimeException('always fails'); }
+            public function counter(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('first'); }
+            public function gauge(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('second'); }
+            public function histogram(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('third'); }
+            public function upDownCounter(string $_name, float $_amount, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function asyncCounter(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function asyncGauge(string $_name, float $_value, array $_tags = []): void { throw new \RuntimeException('always fails'); }
+            public function describe(Descriptor $_descriptor): void { throw new \RuntimeException('always fails'); }
             public function flush(): void { throw new \RuntimeException('always fails'); }
-            public function remove(string $name, array $tags = []): void { throw new \RuntimeException('always fails'); }
+            public function remove(string $_name, array $_tags = []): void { throw new \RuntimeException('always fails'); }
             public function clear(): void { throw new \RuntimeException('always fails'); }
         };
 

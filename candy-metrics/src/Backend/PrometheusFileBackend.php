@@ -173,16 +173,6 @@ final class PrometheusFileBackend implements Backend
     {
         $body = '';
 
-        // Only process sampled metrics if something changed since last flush.
-        // This avoids re-serializing unchanged metrics and unnecessary file I/O.
-        $hasDirty = !(
-            $this->dirtyCounters === []
-            && $this->dirtyGauges === []
-            && $this->dirtyHistograms === []
-            && $this->dirtyUpDownCounters === []
-            && $this->dirtyAsyncCounters === []
-            && $this->dirtyAsyncGauges === []
-        );
         // Reset per-flush TYPE/HELP emission tracking.
         $this->typeEmittedForFlush = [];
         $this->descriptorEmittedForFlush = [];
