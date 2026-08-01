@@ -282,7 +282,7 @@ final class ProgramSimulator
         if ($this->fakeCmdRunner !== null) {
             $this->capturedCmds[] = $cmd;
             // Execute the cmd for side effects, then let fakeRunner inject a msg.
-            if ($this->executeCmds) {
+            if ($this->executeCmds === true) {
                 $cmd();
             }
             return ($this->fakeCmdRunner)($cmd);

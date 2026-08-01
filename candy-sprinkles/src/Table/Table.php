@@ -255,7 +255,7 @@ final class Table
         // to a floor of 1 cell content.
         if ($this->widthCap !== null) {
             $hasBorder = $this->border !== null;
-            $colOverhead = $hasBorder ? ($colCount * 2) : 0;
+            $colOverhead = $hasBorder === true ? ($colCount * 2) : 0;
             $borderOverhead = 0;
             if ($hasBorder) {
                 // Left + right corner characters
@@ -288,7 +288,7 @@ final class Table
         if ($hasBorder && $this->borderSides[0]) {
             $lines[] = $this->topBorderRow($widths);
         }
-        if ($hasHeaders) {
+        if ($hasHeaders === true) {
             $lines[] = $this->dataRow(
                 $this->padRow($this->headers, $colCount),
                 $widths,
@@ -332,8 +332,8 @@ final class Table
         foreach ($widths as $w) {
             $segments[] = str_repeat($b->top, $w + 2);
         }
-        $left  = $this->borderSides[3] ? $b->topLeft  : '';
-        $right = $this->borderSides[1] ? $b->topRight : '';
+        $left  = $this->borderSides[3] === true ? $b->topLeft  : '';
+        $right = $this->borderSides[1] === true ? $b->topRight : '';
         $mid   = $this->borderColumn   ? $b->middleTop : str_repeat($b->top, 0);
         return $left . implode($mid, $segments) . $right;
     }
@@ -347,8 +347,8 @@ final class Table
         foreach ($widths as $w) {
             $segments[] = str_repeat($b->bottom, $w + 2);
         }
-        $left  = $this->borderSides[3] ? $b->bottomLeft  : '';
-        $right = $this->borderSides[1] ? $b->bottomRight : '';
+        $left  = $this->borderSides[3] === true ? $b->bottomLeft  : '';
+        $right = $this->borderSides[1] === true ? $b->bottomRight : '';
         $mid   = $this->borderColumn   ? $b->middleBottom : str_repeat($b->bottom, 0);
         return $left . implode($mid, $segments) . $right;
     }
@@ -363,8 +363,8 @@ final class Table
         foreach ($widths as $w) {
             $segments[] = str_repeat($b->top, $w + 2);
         }
-        $left  = $this->borderSides[3] ? $b->middleLeft  : '';
-        $right = $this->borderSides[1] ? $b->middleRight : '';
+        $left  = $this->borderSides[3] === true ? $b->middleLeft  : '';
+        $right = $this->borderSides[1] === true ? $b->middleRight : '';
         $mid   = $this->borderColumn   ? $b->middle      : '';
         return $left . implode($mid, $segments) . $right;
     }

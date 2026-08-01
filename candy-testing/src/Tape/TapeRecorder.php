@@ -63,7 +63,7 @@ final class TapeRecorder
         int $height = 480,
         int $fontSize = 14,
     ): self {
-        if (!$this->headerWritten) {
+        if ($this->headerWritten === false) {
             $this->lines[] = 'Set Theme "' . $theme . '"';
             $this->lines[] = 'Set FontSize ' . $fontSize;
             $this->lines[] = 'Set Width ' . $width;
@@ -154,7 +154,7 @@ final class TapeRecorder
     public function save(): void
     {
         $dir = \dirname($this->outputPath);
-        if (!\is_dir($dir)) {
+        if (\is_dir($dir) === false) {
             \mkdir($dir, 0755, true);
         }
 

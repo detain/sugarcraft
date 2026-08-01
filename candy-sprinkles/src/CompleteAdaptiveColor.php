@@ -26,6 +26,6 @@ final class CompleteAdaptiveColor
 
     public function pick(bool $isDark, ColorProfile $profile): Color
     {
-        return ($isDark ? $this->dark : $this->light)->pick($profile);
+        return ($isDark === true ? $this->dark : $this->light)->pick($profile);
     }
 }
