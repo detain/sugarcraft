@@ -333,7 +333,7 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         }
 
         // Traceback to find matched indices
-        $indices = $this->traceback($traceback, $matrix, $maxI, $maxJ);
+        $indices = $this->traceback($traceback, $maxI, $maxJ);
 
         return new MatchResult(
             needle: $query,
@@ -355,12 +355,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
      * Traceback from max score position to get matched character indices.
      *
      * @param array<array<int>> $traceback Origin matrix
-     * @param array<array<int>> $matrix    Score matrix
      * @param int             $i          Row of max score
      * @param int             $j          Column of max score
      * @return list<int> Character indices of matched chars
      */
-    private function traceback(array $traceback, array $matrix, int $i, int $j): array
+    private function traceback(array $traceback, int $i, int $j): array
     {
         $indices = [];
         $currentI = $i;

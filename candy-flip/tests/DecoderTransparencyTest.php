@@ -16,7 +16,7 @@ final class DecoderTransparencyTest extends TestCase
      */
     public function testDecoderReadsTransparencyFromGce(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $path = sys_get_temp_dir() . '/trans-test-' . uniqid() . '.gif';
@@ -33,7 +33,7 @@ final class DecoderTransparencyTest extends TestCase
 
     public function testDecoderReadsDisposalMethodFromGce(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         // Build GIF with disposal = 2 (restore to background).
@@ -51,7 +51,7 @@ final class DecoderTransparencyTest extends TestCase
 
     public function testDecoderReturnsNullCellsForTransparentPixels(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $path = sys_get_temp_dir() . '/null-cell-test-' . uniqid() . '.gif';
@@ -60,15 +60,6 @@ final class DecoderTransparencyTest extends TestCase
             $frames = Decoder::decode($path, 2, 2);
             $this->assertNotEmpty($frames);
             $f = $frames[0];
-            // At least one cell should be null (transparent).
-            $hasNull = false;
-            foreach ($f->cells as $row) {
-                foreach ($row as $cell) {
-                    if ($cell === null) {
-                        $hasNull = true;
-                    }
-                }
-            }
             // If the transparent index covered a whole cell area, we expect null.
             // If not, the frame should still be valid (no crash).
             $this->assertIsArray($f->cells);

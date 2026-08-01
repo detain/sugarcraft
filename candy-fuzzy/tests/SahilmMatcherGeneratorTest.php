@@ -89,7 +89,8 @@ final class SahilmMatcherGeneratorTest extends TestCase
         $results = iterator_to_array($this->matcher->matchAllGenerator('app', $candidates), false);
 
         $this->assertNotEmpty($results);
-        for ($i = 1; $i < count($results); $i++) {
+        $resultCount = count($results);
+        for ($i = 1; $i < $resultCount; $i++) {
             $this->assertGreaterThanOrEqual($results[$i]->score, $results[$i - 1]->score);
         }
     }

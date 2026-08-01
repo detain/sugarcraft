@@ -32,7 +32,7 @@ final class FakeInterruptFlags
      */
     public function consume(): bool
     {
-        if (!$this->pending) {
+        if ($this->pending === false) {
             return false;
         }
 

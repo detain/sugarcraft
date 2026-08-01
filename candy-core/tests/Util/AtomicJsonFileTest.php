@@ -15,7 +15,7 @@ final class AtomicJsonFileTest extends TestCase
     {
         $this->tmpDir = sys_get_temp_dir() . \DIRECTORY_SEPARATOR
             . 'candy-core-atomicjson-' . bin2hex(random_bytes(8));
-        if (!mkdir($this->tmpDir, 0700, true) && !is_dir($this->tmpDir)) {
+        if (mkdir($this->tmpDir, 0700, true) === false && is_dir($this->tmpDir) === false) {
             $this->fail("Could not create temp dir: {$this->tmpDir}");
         }
     }

@@ -834,7 +834,7 @@ final class Program
         if ($this->options->unicodeMode) {
             $this->writeOutput(Ansi::unicodeOff());
         }
-        if ($this->options->hideCursor) {
+        if ($this->options->hideCursor === true) {
             $this->writeOutput(Ansi::cursorShow());
         }
         if ($this->options->useAltScreen) {
