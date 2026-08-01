@@ -147,7 +147,7 @@ final class Manager implements Model
                 ->withConfirm(ConfirmState::None, '');
         }
 
-        if (!$msg instanceof KeyMsg) {
+        if (($msg instanceof KeyMsg) === false) {
             return [$this, null];
         }
 
@@ -773,7 +773,7 @@ final class Manager implements Model
                 ->withInputBuffer(null);
         }
         // Path-traversal guard: reject names containing directory separators
-        if (str_contains($newName, '/') || str_contains($newName, '\\') || str_contains($newName, '..')) {
+        if (str_contains($newName, '/') === true || str_contains($newName, '\\') === true || str_contains($newName, '..') === true) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
                 ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))

@@ -175,7 +175,7 @@ final class ManagerMutateTest extends TestCase
                 'apply' => fn(Manager $m) => $this->invokePrivate(
                     $m,
                     'withActivePane',
-                    [static fn(Pane $p) => Pane::open('/home', $fs)],
+                    [static fn(Pane $_p) => Pane::open('/home', $fs)],
                 ),
                 'changed' => ['left', 'tabs'],
             ],

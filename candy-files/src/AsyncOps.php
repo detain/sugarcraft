@@ -131,7 +131,7 @@ final class AsyncOps
                             $deferred->resolve($results);
                         }
                     },
-                    function (\Throwable $e) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
+                    function (\Throwable $_e) use ($src, &$pending, &$index, &$results, $deferred, $total, &$startNext): void {
                         $results[$src] = false;
                         --$pending;
                         // Continue the pipeline by starting next pending copy

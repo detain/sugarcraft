@@ -36,7 +36,7 @@ final class ManagerRenameTest extends TestCase
                 continue;
             }
             $full = $path . '/' . $item;
-            if (is_dir($full)) {
+            if (is_dir($full) === true) {
                 $this->removeDir($full);
             } else {
                 @unlink($full);
