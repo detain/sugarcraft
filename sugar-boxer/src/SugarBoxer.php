@@ -733,7 +733,7 @@ final class SugarBoxer
             }
         }
 
-        return $result ?: [''];
+        return \count($result) > 0 ? $result : [''];
     }
 
     /**
@@ -776,7 +776,7 @@ final class SugarBoxer
             $chunks[] = $buf;
         }
 
-        return $chunks ?: [''];
+        return \count($chunks) > 0 ? $chunks : [''];
     }
 
     // -------------------------------------------------------------------------

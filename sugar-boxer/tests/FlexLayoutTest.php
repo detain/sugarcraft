@@ -37,7 +37,7 @@ final class FlexLayoutTest extends TestCase
     private function headerContentStatus(bool $grow): Node
     {
         $content = $this->boxer->leaf("c1\nc2\nc3\nc4\nc5\nc6\nc7\nc8")->withBorder(false);
-        $content = $grow ? $content->withGrow() : $content;
+        $content = $grow === true ? $content->withGrow() : $content;
 
         // spacing=1 → no inter-panel separators to collide with the 1-row leaves.
         return $this->boxer->vertical(

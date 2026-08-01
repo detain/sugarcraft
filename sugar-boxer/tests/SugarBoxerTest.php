@@ -596,8 +596,6 @@ final class SugarBoxerTest extends TestCase
             if (\trim($line) === '') continue;
             // Count visible chars (strip ANSI escapes for measurement)
             $stripped = \preg_replace('/\x1b\[[0-9;]*m/', '', $line);
-            $visible = \ltrim($stripped);
-            $leadingSpaces = \strlen($stripped) - \strlen($visible);
             $this->assertLessThanOrEqual(6, \strlen(\trim($stripped)), 'Content width should be clamped to maxWidth');
         }
     }
