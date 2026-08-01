@@ -298,12 +298,34 @@ final class ProgramSimulatorTest extends TestCase
         // InfiniteCmdLoopModel.update() always returns a cmd that produces
         // the same message, creating an infinite loop. The applyMsg() method
         // has overflow protection that throws after 10,000 cycles.
+        //
+        // To trigger the overflow, we need:
+        // 1. A message in the queue to start applyMsg()
+        // 2. Fake cmd runner that injects a message on each cmd execution
         $model = new InfiniteCmdLoopModel(0);
         $program = new Program($model);
-        $sim = ProgramSimulator::for($program);
+
+        // Send any message to populate the queue and trigger applyMsg()
+        $sim = ProgramSimulator::for($program)
+            ->withFakeCmdRunner(
+                static fn (): \SugarCraft\Core\Msg => new KeyMsg(
+                    type: KeyType::Char,
+                    rune: '+',
+                    alt: false,
+                    ctrl: false,
+                    shift: false,
+                )
+            )
+            ->send(new KeyMsg(
+                type: KeyType::Char,
+                rune: 'x', // Any initial message
+                alt: false,
+                ctrl: false,
+                shift: false,
+            ));
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessageMatches('/simulator.cmd_loop_overflow/');
+        $this->expectExceptionMessageMatches('/exceeded 10000 cycles/');
 
         $sim->run();
     }
