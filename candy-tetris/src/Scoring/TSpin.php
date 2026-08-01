@@ -93,7 +93,7 @@ final class TSpin
             if ($cx < 0 || $cx >= Board::COLS || $cy < 0 || $cy >= Board::ROWS) {
                 // Out of bounds = wall = filled
                 $filled[] = $name;
-            } elseif ($board->isOccupied($cx, $cy)) {
+            } elseif ($board->isOccupied($cx, $cy) === true) {
                 $filled[] = $name;
             }
         }

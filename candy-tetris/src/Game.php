@@ -285,7 +285,7 @@ final class Game implements Model
             'score' => $this->score->withDropPoints(2 * $dropDistance),
         ]);
         $game = $game->lockAndSpawn();
-        if ($game->over) {
+        if ($game->over === true) {
             return [$game, null];
         }
         return [$game, self::scheduleGravity($game->score)];

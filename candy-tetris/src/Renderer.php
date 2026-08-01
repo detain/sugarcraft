@@ -58,14 +58,14 @@ final class Renderer
         $sidebar  = self::renderSidebar($game);
         $body = Layout::joinHorizontal(0.0, $playfield, '  ', $sidebar);
 
-        if ($game->over) {
+        if ($game->over === true) {
             $banner = SprinklesStyle::new()
                 ->border(Border::rounded())
                 ->padding(1, 3)
                 ->render("GAME OVER\nfinal score: {$game->score->points}\npress q to quit");
             return $body . "\n\n" . $banner;
         }
-        if ($game->paused) {
+        if ($game->paused === true) {
             return $body . "\n\n[ paused — press p to resume ]";
         }
         return $body;
@@ -93,10 +93,10 @@ final class Renderer
                 if ($cellKind !== null) {
                     $rune = '█';
                     $style = self::blockStyle($cellKind);
-                } elseif (isset($pieceCells[$key])) {
+                } elseif (isset($pieceCells[$key]) === true) {
                     $rune = '█';
                     $style = self::blockStyle($piece->kind);
-                } elseif (isset($ghostCells[$key])) {
+                } elseif (isset($ghostCells[$key]) === true) {
                     $rune = '▒';
                     $style = self::ghostStyle($piece->kind);
                 }
@@ -133,7 +133,7 @@ final class Renderer
         $hold = '';
         if ($game->hold !== null) {
             $hold = "hold:\n" . self::renderMini($game->hold);
-            if (!$game->canHold) {
+            if ($game->canHold === false) {
                 $hold = SprinklesStyle::new()->dim(true)->render($hold);
             }
         } else {
@@ -159,7 +159,7 @@ final class Renderer
         $buf = Buffer::new(8, 2);
         for ($y = 0; $y < 2; $y++) {
             for ($x = 0; $x < 4; $x++) {
-                if (!isset($cells["$x,$y"])) {
+                if (isset($cells["$x,$y"]) === false) {
                     continue;
                 }
                 $cell = Cell::new(' ', self::blockStyle($kind));

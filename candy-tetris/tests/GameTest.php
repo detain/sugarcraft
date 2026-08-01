@@ -215,13 +215,13 @@ final class GameTest extends TestCase
         $lockDelaySeen = false;
 
         // Simulate piece falling to bottom then gravity ticks counting down
-        for ($i = 0; $i < 30 && !$lockDelaySeen; $i++) {
+        for ($i = 0; $i < 30 && $lockDelaySeen === false; $i++) {
             [$next] = $game->update(new GravityMsg());
             if ($next->lockDelayTicks < $game->lockDelayTicks) {
                 $lockDelaySeen = true;
             }
             $game = $next;
-            if ($next->over) break;
+            if ($next->over === true) break;
         }
 
         $this->assertTrue($lockDelaySeen, 'Lock delay should decrement when piece is at bottom');
