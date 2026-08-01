@@ -54,6 +54,8 @@ final class FixtureGit implements GitDriver
     /** @var list<string> */
     public array $worktreeRemoves = [];
     public bool $rebaseInProgressResult = false;
+    /** @var array<string, \Throwable> method => exception to throw */
+    public array $throwOn = [];
 
     public function __construct(array $statusRows, array $branchRows, array $logRows)
     {

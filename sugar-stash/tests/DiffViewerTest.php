@@ -126,4 +126,53 @@ final class DiffViewerTest extends TestCase
         $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
         $this->assertSame($lines, $dv->currentHunkLines());
     }
+
+    public function testFromRawDiffWithNoHunkMarkersPutsAllLinesInHeader(): void
+    {
+        $lines = ['diff --git a/src/A.php b/src/A.php', 'some diff content'];
+        $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
+        // No @@ markers → hunkStarts is empty, cursor is 0, header is all lines
+        $this->assertSame(0, $dv->hunkCount());
+        $this->assertSame(0, $dv->hunkCursor);
+        $this->assertSame($lines, $dv->header);
+        $this->assertSame($lines, $dv->currentHunkLines());
+    }
+
+    public function testWithHunkCursorOnEmptyHunkStartsReturnsZeroCursor(): void
+    {
+        $dv = DiffViewer::fromRawDiff('src/A.php', ['diff --git a/src/A.php b/src/A.php']);
+        // hunkStarts is [] → withHunkCursor should still work and set cursor to 0
+        $dv2 = $dv->withHunkCursor(5);
+        $this->assertSame(0, $dv2->hunkCursor);
+        $this->assertSame([], $dv2->hunkStarts);
+    }
+
+    public function testCurrentHunkPatchOnNoHunksReturnsImplodedLines(): void
+    {
+        $lines = ['diff --git a/src/A.php b/src/A.php', 'content'];
+        $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
+        $patch = $dv->currentHunkPatch();
+        // No header section since all lines are header when no hunks
+        $this->assertSame("diff --git a/src/A.php b/src/A.php\ncontent\n", $patch);
+    }
+
+    public function testFromRawDiffSeparatesHeaderFromHunkLines(): void
+    {
+        $lines = [
+            'diff --git a/src/A.php b/src/A.php',
+            '--- a/src/A.php',
+            '+++ b/src/A.php',
+            '@@ -1,3 +1,4 @@',
+            '-line 1',
+            '+line 1 modified',
+        ];
+        $dv = DiffViewer::fromRawDiff('src/A.php', $lines);
+        // Header should be lines 0-2 (before first @@)
+        $this->assertCount(3, $dv->header);
+        $this->assertSame('diff --git a/src/A.php b/src/A.php', $dv->header[0]);
+        $this->assertSame('--- a/src/A.php', $dv->header[1]);
+        $this->assertSame('+++ b/src/A.php', $dv->header[2]);
+        // Hunk starts at line index 3
+        $this->assertSame(3, $dv->hunkStarts[0]);
+    }
 }

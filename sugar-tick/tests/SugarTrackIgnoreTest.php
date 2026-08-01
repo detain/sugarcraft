@@ -108,4 +108,27 @@ final class SugarTrackIgnoreTest extends TestCase
         $this->assertFalse($ignore->isIgnored('# this is a comment'));  // comment itself not a pattern
         $this->assertTrue($ignore->isIgnored('debug.log'));  // *.log still works
     }
+
+    public function testLoadReturnsEmptyWhenFileCannotBeRead(): void
+    {
+        // Create a file that exists but cannot be read (permission denied)
+        $unreadable = $this->tmpDir . '/unreadable.ignore';
+        file_put_contents($unreadable, "*.log\n");
+        chmod($unreadable, 0000);
+
+        try {
+            // file() returns false when it cannot read the file, resulting in empty patterns
+            // Suppress the expected E_WARNING from file() failing to open unreadable file
+            set_error_handler(static fn (): bool => true);
+            try {
+                $ignore = SugarTrackIgnore::load($unreadable);
+                $this->assertFalse($ignore->isIgnored('debug.log'));
+                $this->assertFalse($ignore->isIgnored('any/file.php'));
+            } finally {
+                restore_error_handler();
+            }
+        } finally {
+            chmod($unreadable, 0644);
+        }
+    }
 }

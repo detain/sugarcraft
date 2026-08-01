@@ -20,10 +20,24 @@ final class StoreTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (glob($this->tmp . '/*') ?: [] as $f) {
-            unlink($f);
+        $this->removeDirRecursive($this->tmp);
+    }
+
+    private function removeDirRecursive(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
         }
-        rmdir($this->tmp);
+        $files = array_diff(scandir($dir) ?: [], ['.', '..']);
+        foreach ($files as $file) {
+            $path = $dir . '/' . $file;
+            if (is_dir($path)) {
+                $this->removeDirRecursive($path);
+            } else {
+                unlink($path);
+            }
+        }
+        rmdir($dir);
     }
 
     public function testAppendAndLoadDayRoundTrip(): void
@@ -255,5 +269,23 @@ final class StoreTest extends TestCase
         $this->assertStringContainsString('FILE_APPEND | LOCK_EX', $src);
         $this->assertStringContainsString('fgets(', $src);
         $this->assertStringNotContainsString('file_get_contents(', $src);
+    }
+
+    public function testAppendCreatesDirWhenMissing(): void
+    {
+        // Mirrors Store::append() lines 131-133: when dir does not exist,
+        // mkdir is called to create it before writing the file.
+        $nestedDir = $this->tmp . '/nested/deep/path';
+        $this->assertFalse(is_dir($nestedDir));
+
+        $s = new Store($nestedDir);
+        $day = new \DateTimeImmutable('2026-05-03');
+        $hb = new Heartbeat($day->getTimestamp(), 'proj', 'php', 'a.php', 60);
+
+        $s->append($hb);
+
+        $this->assertTrue(is_dir($nestedDir));
+        $loaded = $s->loadDay($day);
+        $this->assertCount(1, $loaded);
     }
 }

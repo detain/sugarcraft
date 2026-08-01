@@ -137,4 +137,23 @@ final class StashManagerTest extends TestCase
         $filtered = $sm->fuzzyFilter('a');
         $this->assertSame(0, $filtered->cursor);
     }
+
+    public function testWithStashesReturnsNewManagerWithUpdatedStashes(): void
+    {
+        $original = [
+            new StashEntry(0, 'a', 'main', 'first'),
+            new StashEntry(1, 'b', 'main', 'second'),
+        ];
+        $sm = new StashManager($original, cursor: 1);
+        $newEntries = [
+            new StashEntry(0, 'x', 'feature', 'only'),
+        ];
+        $updated = $sm->withStashes($newEntries);
+        $this->assertCount(1, $updated->stashes);
+        $this->assertSame('x', $updated->stashes[0]->sha);
+        // Cursor preserved
+        $this->assertSame(1, $updated->cursor);
+        // Original unchanged
+        $this->assertCount(2, $sm->stashes);
+    }
 }

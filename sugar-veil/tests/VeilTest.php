@@ -992,4 +992,147 @@ final class VeilTest extends TestCase
         // 100% backdrop should produce distinct (near-black) output vs 25%
         $this->assertNotSame(\trim($r25), \trim($r100), '25% and 100% opacity should produce visually distinct dim output');
     }
+
+    // ─── dimLine ANSI preservation ─────────────────────────────────────────────
+
+    /**
+     * Test that dimLine preserves lines that start with ANSI escape sequences.
+     * Lines starting with \e[ are returned unchanged (old FAINT behavior).
+     */
+    public function testDimLinePreservesAnsiPrefixedLines(): void
+    {
+        $v = Veil::new()->withBackdrop(100);
+
+        // Line starting with ANSI bold escape
+        $ansiLine = "\e[1mBOLD TEXT\e[0m";
+        $bg = str_repeat($ansiLine . "\n", 3);
+
+        $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
+        $lines = $this->veil->splitLines($result);
+
+        // The ANSI line should survive intact in the background
+        // (not dimmed with truecolor)
+        $this->assertStringContainsString("\e[1mBOLD TEXT\e[0m", $result);
+        // Should NOT contain the dim code 38;2;0;0;0 on that line since ANSI lines are preserved
+        $this->assertStringNotContainsString("38;2;0;0;0", $lines[1]);
+    }
+
+    /**
+     * Test that dimLine applies truecolor dimming to plain lines.
+     */
+    public function testDimLineDimsPlainLines(): void
+    {
+        $v = Veil::new()->withBackdrop(100);
+        $bg = "..........";
+
+        $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
+        $lines = $this->veil->splitLines($result);
+
+        // The background line (not the foreground row) should be dimmed with truecolor
+        $this->assertStringContainsString("38;2;0;0;0", $lines[1] ?? $lines[0]);
+    }
+
+    // ─── Composite off-screen right ────────────────────────────────────────────
+
+    /**
+     * Test composite when foreground x position is beyond background width.
+     * The foreground is entirely off-screen right, background should be dimmed.
+     */
+    public function testCompositeOffScreenRightDimsBackground(): void
+    {
+        $bg = "..........";  // 10 chars wide
+        $fg = "X";
+
+        // Large xOffset puts foreground way off-screen to the right
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 999);
+
+        // Background should still be present (dimmed) but no foreground visible
+        $this->assertStringContainsString('.', $result);
+        // The entire row should be dimmed since foreground is off-screen
+        $this->assertStringContainsString("38;2;", $result);
+    }
+
+    /**
+     * Test composite when foreground is partially off-screen right.
+     */
+    public function testCompositePartiallyOffScreenRight(): void
+    {
+        $bg = "....................";  // 20 chars
+        $fg = "XXXX";  // 4 chars
+
+        // xOffset of 18 puts the 4-char foreground starting at col 18, ending at col 21
+        // But background is only 20 wide, so last 2 chars of fg are off-screen
+        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 18);
+        $lines = $this->veil->splitLines($result);
+
+        // XX prefix visible (dimmed), then X over background, then XX suffix (dimmed)
+        $this->assertIsString($result);
+        // Should contain some dim codes for the off-screen portion
+        $this->assertStringContainsString("38;2;", $result);
+    }
+
+    // ─── Position accessors via withPosition ─────────────────────────────────
+
+    /**
+     * Test positionSet flag is true when withPosition is called.
+     */
+    public function testPositionSetFlagIsTrueAfterWithPosition(): void
+    {
+        $v = Veil::new()->withPosition(Position::TOP, Position::LEFT, x: 1, y: 2);
+
+        // The positionSet flag controls behavior in VeilStack::compositeAll()
+        // When true, per-veil positions are used; when false, passed positions are used.
+        // We test that withPosition sets all the related properties correctly.
+        $this->assertSame(Position::TOP, $v->vPosition());
+        $this->assertSame(Position::LEFT, $v->hPosition());
+        $this->assertSame(1, $v->positionX());
+        $this->assertSame(2, $v->positionY());
+    }
+
+    /**
+     * Test position accessors return defaults when withPosition not called.
+     */
+    public function testPositionAccessorsDefaultWhenNoWithPosition(): void
+    {
+        $v = Veil::new();
+
+        // Without withPosition, all should be defaults
+        $this->assertNull($v->vPosition());
+        $this->assertNull($v->hPosition());
+        $this->assertSame(0, $v->positionX());
+        $this->assertSame(0, $v->positionY());
+    }
+
+    // ─── isClickOutside edge cases ────────────────────────────────────────────
+
+    /**
+     * Test isClickOutside returns false immediately when clickOutsideDismiss
+     * is false (default), without checking scan state.
+     */
+    public function testIsClickOutsideReturnsFalseWhenDismissNotEnabled(): void
+    {
+        // Without withClickOutsideDismiss, clickOutsideDismiss is false by default
+        $v = Veil::new();
+        $mouse = new MouseMsg(999, 999, MouseButton::Left, MouseAction::Press);
+
+        // Should return false immediately (doesn't check scan state when disabled)
+        $this->assertFalse($v->isClickOutside($mouse));
+    }
+
+    // ─── Empty foreground edge case in composite ──────────────────────────────
+
+    /**
+     * Test composite with empty foreground at various positions.
+     */
+    public function testCompositeEmptyForegroundDimsBackground(): void
+    {
+        $v = Veil::new()->withBackdrop(50);
+        $bg = "............";
+
+        $result = $v->composite("", $bg, Position::CENTER, Position::CENTER);
+
+        // With empty fg, composite returns bg unchanged but with dimming applied
+        // Since fg is empty (height=0), all rows are "not covered" and get dimmed
+        $this->assertStringContainsString("38;2;", $result);
+    }
 }

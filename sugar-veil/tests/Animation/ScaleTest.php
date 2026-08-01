@@ -133,4 +133,38 @@ final class ScaleTest extends TestCase
         $this->assertSame('C', $lines[1]);
         $this->assertSame('D', $lines[2]);
     }
+
+    /**
+     * Test that Scale constructor with explicit easing parameter is covered.
+     * This exercises the constructor body when a non-null easing is passed.
+     */
+    public function testConstructorWithExplicitEasing(): void
+    {
+        $easing = CubicBezier::easeIn();
+        $scale = new Scale($easing);
+
+        // Use reflection to verify the easing was stored correctly
+        $prop = (new \ReflectionClass($scale))->getProperty('easing');
+        $prop->setAccessible(true);
+        $stored = $prop->getValue($scale);
+
+        $this->assertSame($easing, $stored);
+    }
+
+    /**
+     * Test Scale with even-number-of-lines content.
+     * At 50% progress with 4 lines: visibleCount = max(1, round(2)) = 2
+     * center = 2, startLine = floor(2 - 1) = 1
+     * Lines 1,2 shown (B, C in 0-indexed)
+     */
+    public function testScaleWithEvenLineCount(): void
+    {
+        $scale = new Scale();
+        $result = $scale->apply("A\nB\nC\nD", 0.5);
+        $lines = \explode("\n", $result);
+
+        $this->assertCount(2, $lines, 'At 50% progress with 4 lines, 2 lines should be visible');
+        $this->assertSame('B', $lines[0]);
+        $this->assertSame('C', $lines[1]);
+    }
 }

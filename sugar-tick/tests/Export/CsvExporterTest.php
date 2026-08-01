@@ -90,4 +90,17 @@ final class CsvExporterTest extends TestCase
         // fputcsv quotes fields containing commas, so we should see "has,comma" in quotes
         $this->assertStringContainsString('"has,comma"', $csv);
     }
+
+    public function testCarriageReturnPrefixIsNeutralized(): void
+    {
+        // Mirrors CsvExporter::safeCell() \r prefix neutralization
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: "project", language: "php", file: "\rand-clean.php", duration: 60),
+        ];
+
+        $rows = $this->exporter->rows($hbs);
+
+        // Lines starting with \r should be neutralized with leading quote
+        $this->assertSame("'\rand-clean.php", $rows[0][3]);
+    }
 }

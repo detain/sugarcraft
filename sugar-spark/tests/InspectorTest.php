@@ -761,4 +761,95 @@ final class InspectorTest extends TestCase
         $this->assertStringContainsString('truncated', $desc);
         $this->assertStringNotContainsString('256-color 0', $desc);
     }
+
+    // --- Additional describeOsc branches ---
+
+    public function testOscCursorColour(): void
+    {
+        // OSC 12 sets cursor colour.
+        $seg = Inspector::parse("\x1b]12;rgb:00/ff/00\x07")[0];
+        $this->assertStringContainsString('set cursor colour', $seg->describe());
+    }
+
+    public function testOscITerm2(): void
+    {
+        // OSC 9 without '4;' prefix is iTerm2.
+        $seg = Inspector::parse("\x1b]9;hello\x07")[0];
+        $this->assertStringContainsString('iTerm2', $seg->describe());
+        $this->assertStringNotContainsString('progress', $seg->describe());
+    }
+
+    public function testDescribeOscDirectly(): void
+    {
+        // Test describeOsc directly for complete branch coverage.
+        $this->assertStringContainsString('set window title', Inspector::describeOsc('0;title'));
+        $this->assertStringContainsString('set icon name', Inspector::describeOsc('1;icon'));
+        $this->assertStringContainsString('palette', Inspector::describeOsc('4;1;rgb:ff/00/00'));
+        $this->assertStringContainsString('cwd', Inspector::describeOsc('7;/path'));
+        $this->assertStringContainsString('hyperlink', Inspector::describeOsc('8;;https://example.com'));
+        $this->assertStringContainsString('progress', Inspector::describeOsc('9;4;1;42'));
+        $this->assertStringContainsString('iTerm2', Inspector::describeOsc('9;hello'));
+        $this->assertStringContainsString('set foreground colour', Inspector::describeOsc('10;rgb:ff/00/00'));
+        $this->assertStringContainsString('set background colour', Inspector::describeOsc('11;rgb:ff/00/00'));
+        $this->assertStringContainsString('set cursor colour', Inspector::describeOsc('12;rgb:ff/00/00'));
+        $this->assertStringContainsString('clipboard', Inspector::describeOsc('52;c;data'));
+        $this->assertStringContainsString('OSC 999;payload', Inspector::describeOsc('999;payload'));
+    }
+
+    // --- Additional describeApc branches ---
+
+    public function testDescribeApcGeneric(): void
+    {
+        // describeApc with unknown payload falls to default 'APC' label.
+        $out = Inspector::describeApc('unknownpayload');
+        $this->assertStringContainsString('APC', $out);
+        $this->assertStringNotContainsString('CandyZone', $out);
+        $this->assertStringNotContainsString('kitty graphics', $out);
+    }
+
+    // --- Additional describeDcs branches for coverage ---
+
+    public function testDescribeDcsWithFinalByte(): void
+    {
+        // describeDcs with final byte that doesn't match XTVERSION or sixel
+        // falls through to the "DCS + final" branch at lines 395-396.
+        $out = Inspector::describeDcs('payload', ord('x'));
+        $this->assertStringContainsString('DCS', $out);
+        $this->assertStringContainsString('payload', $out);
+    }
+
+    public function testDescribeDcsDecrpssReplyBranch(): void
+    {
+        // DECRPSS reply: CSI ?mode ; state $y - the '$$' prefix branch.
+        $out = Inspector::describeDcs('$$1;0', ord('r'));
+        $this->assertStringContainsString('DECRPSS reply', $out);
+    }
+
+    // --- Test reportAsJson directly ---
+
+    public function testReportAsJsonDirectly(): void
+    {
+        // Test reportAsJson with a mix of text and sequences.
+        $json = Inspector::reportAsJson("\x1b[31mred\x1b[0m");
+        $decoded = json_decode($json, true);
+        $this->assertIsArray($decoded);
+        $this->assertCount(3, $decoded); // sequence, text, sequence
+        $this->assertSame('sequence', $decoded[0]['type']);
+        $this->assertSame('text', $decoded[1]['type']);
+        $this->assertSame('red', $decoded[1]['content']);
+    }
+
+    // --- Test sanitizeLabelBytes via describeOsc ---
+
+    public function testSanitizeLabelBytesInOsc(): void
+    {
+        // OSC with embedded control bytes - sanitizeLabelBytes should neutralize them.
+        // This covers lines 467-482 in Inspector::sanitizeLabelBytes.
+        $seg = Inspector::parse("\x1b]0;title\x1bwith\x1fbad\x07bytes\x07")[0];
+        $desc = $seg->describe();
+        // The ESC byte should be replaced with 'ESC' token, not raw \x1b.
+        $this->assertStringNotContainsString("\x1b", $desc);
+        $this->assertStringContainsString('ESC', $desc);
+        $this->assertStringContainsString('set window title', $desc);
+    }
 }

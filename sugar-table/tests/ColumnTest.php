@@ -318,4 +318,149 @@ final class ColumnTest extends TestCase
         // Should fit without truncation (9 chars, 9 cells)
         $this->assertLessThanOrEqual(10, \SugarCraft\Core\Util\Width::of($lines[0]));
     }
+
+    // -------------------------------------------------------------------------
+    // withColumnWidth tests
+    // -------------------------------------------------------------------------
+
+    public function testWithColumnWidthFixed(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $col2 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Fixed);
+
+        $this->assertSame(\SugarCraft\Table\ColumnWidth::Fixed, $col2->columnWidth);
+        $this->assertSame(0.0, $col2->percentValue);
+        // Original unchanged
+        $this->assertSame(\SugarCraft\Table\ColumnWidth::Fixed, $col->columnWidth);
+    }
+
+    public function testWithColumnWidthPercent(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $col2 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 25.0);
+
+        $this->assertSame(\SugarCraft\Table\ColumnWidth::Percent, $col2->columnWidth);
+        $this->assertSame(25.0, $col2->percentValue);
+    }
+
+    public function testWithColumnWidthDynamic(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $col2 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Dynamic);
+
+        $this->assertSame(\SugarCraft\Table\ColumnWidth::Dynamic, $col2->columnWidth);
+    }
+
+    public function testWithColumnWidthContent(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $col2 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Content);
+
+        $this->assertSame(\SugarCraft\Table\ColumnWidth::Content, $col2->columnWidth);
+    }
+
+    public function testWithColumnWidthFlex(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $col2 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Flex);
+
+        $this->assertSame(\SugarCraft\Table\ColumnWidth::Flex, $col2->columnWidth);
+    }
+
+    public function testWithColumnWidthThrowsOnNegativePercent(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Percent value must be between 0.0 and 100.0');
+        $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, -5.0);
+    }
+
+    public function testWithColumnWidthThrowsOnPercentOver100(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Percent value must be between 0.0 and 100.0');
+        $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 150.0);
+    }
+
+    public function testWithColumnWidthBoundaryValues(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        // Exactly 0.0 and 100.0 should be valid
+        $col0 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 0.0);
+        $col100 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 100.0);
+        $this->assertSame(0.0, $col0->percentValue);
+        $this->assertSame(100.0, $col100->percentValue);
+    }
+
+    public function testWithColumnWidthImmutability(): void
+    {
+        $col = Column::new('id', 'ID', 10);
+        $col2 = $col->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 50.0);
+
+        $this->assertNotSame($col, $col2);
+        // Original unchanged
+        $this->assertSame(\SugarCraft\Table\ColumnWidth::Fixed, $col->columnWidth);
+        $this->assertSame(0.0, $col->percentValue);
+    }
+
+    // -------------------------------------------------------------------------
+    // withWrapMode tests
+    // -------------------------------------------------------------------------
+
+    public function testWithWrapModeNone(): void
+    {
+        $col = Column::new('text', 'Text', 10)->withWrapMode(WrapMode::None);
+        $this->assertSame(WrapMode::None, $col->wrapMode);
+    }
+
+    public function testWithWrapModeWordWrap(): void
+    {
+        $col = Column::new('text', 'Text', 10)->withWrapMode(WrapMode::WordWrap);
+        $this->assertSame(WrapMode::WordWrap, $col->wrapMode);
+    }
+
+    public function testWithWrapModeCharacter(): void
+    {
+        $col = Column::new('text', 'Text', 10)->withWrapMode(WrapMode::Character);
+        $this->assertSame(WrapMode::Character, $col->wrapMode);
+    }
+
+    public function testWithWrapModeAffectsRenderCell(): void
+    {
+        // WordWrap mode should wrap at word boundaries
+        $col = Column::new('text', 'Text', 8)->withWrapMode(WrapMode::WordWrap);
+        $lines = $col->renderCell('hello world foo');
+        // Should produce multiple lines since 'hello world foo' doesn't fit in 8 cells
+        $this->assertGreaterThan(1, \count($lines));
+    }
+
+    public function testWithWrapModeCharacterAffectsRenderCell(): void
+    {
+        // Character wrap mode should wrap at character boundaries
+        $col = Column::new('text', 'Text', 4)->withWrapMode(WrapMode::Character);
+        $lines = $col->renderCell('abcdefgh');
+        // Should produce multiple lines since 8 chars don't fit in 4-cell column
+        $this->assertGreaterThan(1, \count($lines));
+    }
+
+    public function testWithWrapModeNoneTruncates(): void
+    {
+        // None mode should truncate without wrapping
+        $col = Column::new('text', 'Text', 4)->withWrapMode(WrapMode::None);
+        $lines = $col->renderCell('abcdefgh');
+        // Should be a single truncated line
+        $this->assertCount(1, $lines);
+        $this->assertLessThanOrEqual(4, \SugarCraft\Core\Util\Width::of($lines[0]));
+    }
+
+    public function testWithWrapModeImmutability(): void
+    {
+        $col = Column::new('text', 'Text', 10);
+        $col2 = $col->withWrapMode(WrapMode::WordWrap);
+
+        $this->assertNotSame($col, $col2);
+        $this->assertSame(WrapMode::None, $col->wrapMode);
+        $this->assertSame(WrapMode::WordWrap, $col2->wrapMode);
+    }
 }

@@ -182,4 +182,19 @@ final class HeartbeatTest extends TestCase
         $hb = Heartbeat::fromArray(['time' => -100, 'duration' => 60, 'project' => 'p', 'language' => 'l', 'file' => 'f']);
         $this->assertSame(0, $hb->time);
     }
+
+    public function testFromArrayDefaultsTagsWhenNotArray(): void
+    {
+        // Mirrors Heartbeat::fromArray() lines 37-40: when tags is not an array,
+        // it falls back to empty array instead of using the invalid value
+        $hb = Heartbeat::fromArray([
+            'time' => 1700000000,
+            'project' => 'sugarcraft',
+            'language' => 'php',
+            'file' => '/src/a.php',
+            'duration' => 120,
+            'tags' => 'not-an-array',  // scalar should be treated as invalid
+        ]);
+        $this->assertSame([], $hb->tags);
+    }
 }
