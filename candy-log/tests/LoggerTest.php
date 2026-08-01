@@ -490,7 +490,7 @@ final class LoggerTest extends TestCase
         );
 
         // Create child with custom parts order (message first, then level)
-        $child = $log->withPartsOrder(\SugarCraft\Log\PartsOrder::custom([
+        $child = $log->withPartsOrder(new \SugarCraft\Log\PartsOrder([
             \SugarCraft\Log\PartsOrder::PART_MESSAGE,
             \SugarCraft\Log\PartsOrder::PART_LEVEL,
         ]));
@@ -540,7 +540,8 @@ final class LoggerTest extends TestCase
             stream: $stream,
         );
 
-        $log->printf('always shows %s', ['arg']);
+        // Pass arg as variadic param, not in context array (printf doesn't forward context to sprintf)
+        $log->printf('always shows %s', [], 'arg');
         \fclose($stream);
 
         $content = \file_get_contents($this->tempPath);

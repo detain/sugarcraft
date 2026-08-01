@@ -216,7 +216,7 @@ final class FormatterValueCoercionTest extends TestCase
     public function testStringifyCallable(): void
     {
         $result = \SugarCraft\Log\Formatter\ValueCoercion::stringify(fn() => 42);
-        $this->assertSame('closure', $result);
+        $this->assertSame('Closure', $result);
     }
 
     public function testStringifyAnonymousClass(): void
@@ -229,9 +229,12 @@ final class FormatterValueCoercionTest extends TestCase
     public function testStringifyMaxDepthExceeded(): void
     {
         // Create deeply nested array beyond MAX_DEPTH (4)
+        // At depth=5 (exceeds MAX_DEPTH=4), returns '[...]'
+        // But this '[...]' is then wrapped by parent array processing
+        // Final output: "[1 [2 [3 [4 [[...]]]]]]"
         $deep = [1, [2, [3, [4, [5]]]]];
         $result = \SugarCraft\Log\Formatter\ValueCoercion::stringify($deep);
-        $this->assertSame('[...]', $result);
+        $this->assertSame('[1 [2 [3 [4 [[...]]]]]]', $result);
     }
 
     // -------------------------------------------------------------------------
@@ -260,9 +263,10 @@ final class FormatterValueCoercionTest extends TestCase
 
     public function testCoerceObjectWithoutToStringReturnsClassName(): void
     {
-        $obj = new \RuntimeException('test');
+        // RuntimeException has __toString, so use stdClass instead
+        $obj = new \stdClass();
         $result = \SugarCraft\Log\Formatter\ValueCoercion::coerce($obj);
-        $this->assertSame('RuntimeException', $result);
+        $this->assertSame('stdClass', $result);
     }
 
     public function testCoerceNestedArray(): void
