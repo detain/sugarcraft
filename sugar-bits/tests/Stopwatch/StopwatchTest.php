@@ -139,4 +139,33 @@ final class StopwatchTest extends TestCase
         $this->assertTrue($s2->isRunning());
         $this->assertSame($s->id(), $s2->id());
     }
+
+    public function testInitReturnsNull(): void
+    {
+        $s = Stopwatch::new();
+        $this->assertNull($s->init());
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $s = Stopwatch::new();
+        $this->assertNull($s->subscriptions());
+    }
+
+    public function testViewFormatsElapsedTime(): void
+    {
+        $s = Stopwatch::new(1.0);
+        [$s, ] = $s->start();
+        [$s, ] = $s->update(new TickMsg($s->id));
+        [$s, ] = $s->update(new TickMsg($s->id));
+        $view = $s->view();
+        // After 2 ticks at 1.0 interval = 2.0 seconds elapsed
+        $this->assertNotSame('0:00', $view);
+    }
+
+    public function testNegativeIntervalRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Stopwatch::new(-1.0);
+    }
 }

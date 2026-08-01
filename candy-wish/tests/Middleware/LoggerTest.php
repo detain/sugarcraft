@@ -88,8 +88,10 @@ final class LoggerTest extends TestCase
 
     public function testConstructorWithInvalidNonResourceThrows(): void
     {
+        // Logger checks: null -> open stderr, string -> open file path, resource -> use as-is
+        // If it's not null, not a string, and not a resource, it throws InvalidArgumentException
         $this->expectException(\InvalidArgumentException::class);
-        new Logger('not a resource');
+        new Logger(12345);  // integer is neither null, string, nor resource
     }
 
     public function testWriteSilentlySkipsOnJsonEncodeFailure(): void

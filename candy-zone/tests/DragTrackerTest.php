@@ -274,4 +274,54 @@ final class DragTrackerTest extends TestCase
         $this->assertSame('a', $new->currentZoneId());
         $this->assertNotSame($old, $new);
     }
+
+    /**
+     * When a zone is removed from the manager mid-drag (e.g. re-render without the zone),
+     * release emits no message and leaves tracker state unchanged (the zone id
+     * strings remain even though the zones are gone from the manager).
+     */
+    public function testReleaseAfterZoneRemovedFromManagerEmitsNoMsg(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        // Press inside zone A to start drag.
+        [$tracker] = $tracker->update($this->press(2, 1));
+        $this->assertSame('a', $tracker->originZoneId());
+
+        // Simulate zone being removed from manager (e.g. component re-rendered without zone).
+        $m->clear('a');
+
+        // Release should not emit (origin zone no longer in manager) and returns unchanged tracker.
+        [$next, $msg] = $tracker->update($this->release(2, 1));
+
+        $this->assertNull($msg);
+        // Tracker state unchanged since emit was suppressed due to missing zone.
+        $this->assertSame('a', $next->originZoneId());
+        $this->assertSame('a', $next->currentZoneId());
+    }
+
+    /**
+     * Motion outside zones after having a currentZoneId set to null
+     * (transition from zone → outside) should not emit a message.
+     * This is the second motion-outside path in the update() method.
+     */
+    public function testSecondMotionOutsideZoneAfterAlreadyNullDoesNotEmit(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        // Press to start drag.
+        [$tracker] = $tracker->update($this->press(2, 1));
+        // Move outside - currentZoneId becomes null.
+        [$tracker] = $tracker->update($this->move(50, 1));
+        $this->assertNull($tracker->currentZoneId());
+
+        // Move again outside (still null) - should emit no message.
+        [$next, $msg] = $tracker->update($this->move(51, 1));
+
+        $this->assertNull($msg);
+        $this->assertNull($next->currentZoneId());
+        $this->assertSame('a', $next->originZoneId());
+    }
 }

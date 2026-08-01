@@ -12,7 +12,7 @@ use SugarCraft\Vt\Cell;
  *
  * This is distinct from SugarCraft\Vt\Cell\Cell which is the full Cell with SGR.
  */
-final class CellTest extends TestCase
+final class SimpleCellTest extends TestCase
 {
     public function testEmptyCellHasDefaultValues(): void
     {

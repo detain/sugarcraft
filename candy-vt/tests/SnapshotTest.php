@@ -67,7 +67,7 @@ final class SnapshotTest extends TestCase
     {
         $grid1 = new CellGrid(80, 24);
         $grid2 = new CellGrid(80, 24);
-        $grid1->put(0, 0, new \SugarCraft\Vt\Cell('X'));
+        $grid1->set(0, 0, new Cell('X'));
 
         $snap1 = new Snapshot($grid1, new Cursor(), 1.0);
         $snap2 = new Snapshot($grid2, new Cursor(), 1.0);
@@ -104,7 +104,7 @@ final class SnapshotTest extends TestCase
     {
         $grid1 = new CellGrid(80, 24);
         $grid2 = new CellGrid(80, 24);
-        $grid1->put(0, 0, new \SugarCraft\Vt\Cell('X'));
+        $grid1->set(0, 0, new Cell('X'));
 
         $cursor = new Cursor();
         $time = 1.0;
