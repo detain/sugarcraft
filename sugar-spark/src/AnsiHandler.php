@@ -142,7 +142,7 @@ final class AnsiHandler implements Handler
             $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
         }
 
-        if ($this->ss3Buffered) {
+        if ($this->ss3Buffered === true) {
             $this->segments[] = new SequenceSegment(
                 "\x1b" . chr($this->ss3Intermediate),
                 'SS3 ' . chr($this->ss3Intermediate),
@@ -153,7 +153,7 @@ final class AnsiHandler implements Handler
 
     public function printChar(string $rune): void
     {
-        if ($this->ss3Buffered) {
+        if ($this->ss3Buffered === true) {
             $this->segments[] = new SequenceSegment(
                 "\x1b" . chr($this->ss3Intermediate) . $rune,
                 Inspector::describeSs3($rune),
@@ -289,7 +289,7 @@ final class AnsiHandler implements Handler
     public function sosPmApcDispatch(string $kind, string $data): void
     {
         $isSosPm = $kind === 'sos' || $kind === 'pm';
-        if ($isSosPm) {
+        if ($isSosPm === true) {
             $this->sosPmInProgress = true;
             if ($data === '') {
                 $this->sosPmInProgress = false;
@@ -318,7 +318,7 @@ final class AnsiHandler implements Handler
 
         $this->segments[] = new SequenceSegment($rawBytes, $label);
 
-        if ($isSosPm) {
+        if ($isSosPm === true) {
             $this->sosPmInProgress = false;
         }
     }

@@ -200,7 +200,7 @@ final class Inspector
                 $kind = $code === 38 ? 'foreground' : 'background';
                 $sub  = (int) ($codes[$i + 1] ?? 0);
                 if ($sub === 5) {
-                    if (!isset($codes[$i + 2])) {
+                    if (isset($codes[$i + 2]) === false) {
                         $parts[] = "$kind truncated 256-color";
                         $i += 1; // Only the sub (5) was present.
                     } else {
@@ -208,13 +208,13 @@ final class Inspector
                         $i += 2;
                     }
                 } elseif ($sub === 2) {
-                    if (!isset($codes[$i + 2]) || !isset($codes[$i + 3]) || !isset($codes[$i + 4])) {
+                    if (isset($codes[$i + 2]) === false || isset($codes[$i + 3]) === false || isset($codes[$i + 4]) === false) {
                         $parts[] = "$kind truncated truecolor";
                         // Advance past only the params that were present.
                         $present = 1; // the '2' sub-param itself.
-                        if (isset($codes[$i + 2])) { $present++; }
-                        if (isset($codes[$i + 3])) { $present++; }
-                        if (isset($codes[$i + 4])) { $present++; }
+                        if (isset($codes[$i + 2]) === true) { $present++; }
+                        if (isset($codes[$i + 3]) === true) { $present++; }
+                        if (isset($codes[$i + 4]) === true) { $present++; }
                         $i += $present;
                     } else {
                         $parts[] = sprintf('%s rgb(%d,%d,%d)', $kind,
