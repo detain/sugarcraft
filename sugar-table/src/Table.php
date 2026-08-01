@@ -1401,7 +1401,7 @@ final class Table
                     $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices);
                     $bufferRow += $rowHeights[$ri];
                 } else {
-                    $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $visibleColumnIndices);
+                    $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $isSelected, $this->computedColumnWidths, $visibleColumnIndices);
                     $bufferRow++;
                 }
             }
@@ -1608,7 +1608,7 @@ final class Table
         return $this->writeRightEdge($buffer, $row, $col, $style);
     }
 
-    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, array $visibleColumnIndices): Buffer
+    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, bool $isSelected, array $computedWidths, array $visibleColumnIndices): Buffer
     {
         // Determine row-level style
         $rowStyle = '';

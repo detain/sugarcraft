@@ -296,7 +296,7 @@ final class Veil
      */
     public function isClickOutside(\SugarCraft\Core\Msg\MouseMsg $mouse): bool
     {
-        if (!$this->clickOutsideDismiss) {
+        if ($this->clickOutsideDismiss === FALSE) {
             return false;
         }
         if ($this->lastRendered === null) {
@@ -434,7 +434,7 @@ final class Veil
         $bgWidth  = $this->maxLineWidth($bgLines);
 
         // When autoSize is enabled, apply border chrome first and compute dimensions from bordered content
-        if ($this->autoSize) {
+        if ($this->autoSize === TRUE) {
             $foreground = $this->applyBorderChrome($foreground);
         }
 
@@ -495,7 +495,7 @@ final class Veil
 
         $fullOutput = \implode("\n", $output);
 
-        if ($this->session->shouldEmitFull($bgWidth, $bgHeight)) {
+        if ($this->session->shouldEmitFull($bgWidth, $bgHeight) === TRUE) {
             $this->session->rememberFull($fullOutput, $bgWidth, $bgHeight);
             return $fullOutput;
         }
@@ -660,7 +660,7 @@ final class Veil
                 // Skip ANSI escape sequences (CSI format: ESC [ ... letter)
                 if ($line[$pos] === "\e" && $pos + 1 < $lineLen && $line[$pos + 1] === '[') {
                     $pos += 2; // skip ESC [
-                    while ($pos < $lineLen && !\ctype_alpha($line[$pos])) {
+                    while ($pos < $lineLen && \ctype_alpha($line[$pos]) === FALSE) {
                         $pos++;
                     }
                     if ($pos < $lineLen) {

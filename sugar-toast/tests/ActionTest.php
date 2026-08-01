@@ -11,8 +11,7 @@ final class ActionTest extends TestCase
 {
     public function testConstruction(): void
     {
-        $called = false;
-        $callback = static function () use (&$called) { $called = true; };
+        $callback = static function () {};
 
         $action = new Action('Confirm', $callback);
 

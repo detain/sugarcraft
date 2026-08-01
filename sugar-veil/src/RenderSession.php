@@ -53,7 +53,7 @@ final class RenderSession
     public function shouldEmitFull(int $width, int $height): bool
     {
         // justClearedFrame: rememberFull() cleared the diff buffer → next call must be full
-        if ($this->justClearedFrame && $this->previousOutput !== null) {
+        if ($this->justClearedFrame === TRUE && $this->previousOutput !== null) {
             $this->justClearedFrame = false;
 
             return true;

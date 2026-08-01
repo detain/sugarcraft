@@ -54,9 +54,6 @@ final class Toast
     /** History log of dismissed alerts. */
     private HistoryLog $historyLog;
 
-    /** Fade animation duration in seconds (0 = disabled). */
-    private float $animationDuration = 0.0;
-
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -143,17 +140,6 @@ final class Toast
     public function withOverflow(Overflow $overflow): self
     {
         return $this->mutate(['overflow' => $overflow]);
-    }
-
-    /**
-     * Set fade animation duration in seconds.
-     *
-     * When > 0, a simple character-reveal animation hint is rendered.
-     * True CubicBezier easing requires the honey-bounce library (step 09.17).
-     */
-    public function withAnimationDuration(float $seconds): self
-    {
-        return $this->mutate(['animationDuration' => \max(0.0, $seconds)]);
     }
 
     /**

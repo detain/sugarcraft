@@ -57,15 +57,15 @@ final class Slide
         $vOffset = 0;
         $hOffset = 0;
 
-        if ($this->isLeftAnchor($vertical, $horizontal)) {
+        if ($this->isLeftAnchor($vertical, $horizontal) === TRUE) {
             $hOffset = (int) \round($factor * $fgWidth);
-        } elseif ($this->isRightAnchor($vertical, $horizontal)) {
+        } elseif ($this->isRightAnchor($vertical, $horizontal) === TRUE) {
             $hOffset = -(int) \round($factor * $fgWidth);
         }
 
-        if ($this->isTopAnchor($vertical, $horizontal)) {
+        if ($this->isTopAnchor($vertical, $horizontal) === TRUE) {
             $vOffset = (int) \round($factor * $fgHeight);
-        } elseif ($this->isBottomAnchor($vertical, $horizontal)) {
+        } elseif ($this->isBottomAnchor($vertical, $horizontal) === TRUE) {
             $vOffset = -(int) \round($factor * $fgHeight);
         }
 
