@@ -38,4 +38,40 @@ final class ProfileTest extends TestCase
         $this->assertNotEmpty(Profile::ANSI256->description());
         $this->assertNotEmpty(Profile::ANSI->description());
     }
+
+    public function testFromColorProfile(): void
+    {
+        $this->assertSame(Profile::TrueColor, Profile::fromColorProfile(\SugarCraft\Palette\ColorProfile::TrueColor));
+        $this->assertSame(Profile::ANSI256, Profile::fromColorProfile(\SugarCraft\Palette\ColorProfile::Ansi256));
+        $this->assertSame(Profile::ANSI, Profile::fromColorProfile(\SugarCraft\Palette\ColorProfile::Ansi));
+        $this->assertSame(Profile::Ascii, Profile::fromColorProfile(\SugarCraft\Palette\ColorProfile::Ascii));
+        $this->assertSame(Profile::NoTTY, Profile::fromColorProfile(\SugarCraft\Palette\ColorProfile::NoTTY));
+    }
+
+    public function testLabelAllCases(): void
+    {
+        $this->assertSame('TrueColor', Profile::TrueColor->label());
+        $this->assertSame('ANSI 256', Profile::ANSI256->label());
+        $this->assertSame('ANSI', Profile::ANSI->label());
+        $this->assertSame('ASCII', Profile::Ascii->label());
+        $this->assertSame('No TTY', Profile::NoTTY->label());
+    }
+
+    public function testDescriptionAllCases(): void
+    {
+        $this->assertSame('24-bit full color', Profile::TrueColor->description());
+        $this->assertSame('256-color palette', Profile::ANSI256->description());
+        $this->assertSame('16-color standard', Profile::ANSI->description());
+        $this->assertSame('black & white', Profile::Ascii->description());
+        $this->assertSame('colors disabled', Profile::NoTTY->description());
+    }
+
+    public function testMaxColorsAllCases(): void
+    {
+        $this->assertSame(16_777_216, Profile::TrueColor->maxColors());
+        $this->assertSame(256, Profile::ANSI256->maxColors());
+        $this->assertSame(16, Profile::ANSI->maxColors());
+        $this->assertSame(2, Profile::Ascii->maxColors());
+        $this->assertSame(0, Profile::NoTTY->maxColors());
+    }
 }

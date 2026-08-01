@@ -110,4 +110,20 @@ final class ScoreTest extends TestCase
         $this->assertSame(0, $at9->level);
         $this->assertSame(1, $at10->level);
     }
+
+    public function testGravityIntervalUsCalculatesCorrectly(): void
+    {
+        // framesPerRow at level 0 = 48
+        // gravityIntervalUs = 48 * 16667 = 800016
+        $s = new Score(0, 0, 0);
+        $this->assertSame(48 * 16_667, $s->gravityIntervalUs());
+    }
+
+    public function testGravityIntervalUsAtHighLevel(): void
+    {
+        // At level 29, framesPerRow = 1
+        // gravityIntervalUs = 1 * 16667 = 16667
+        $s = new Score(0, 0, 29);
+        $this->assertSame(16_667, $s->gravityIntervalUs());
+    }
 }

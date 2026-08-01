@@ -111,4 +111,48 @@ final class ProfileWriterTest extends TestCase
         $this->assertStringStartsWith("\x1b[3", $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
     }
+
+    public function testWriteDegradesTrueColorToASCII(): void
+    {
+        $mem = \fopen('php://memory', 'r+');
+        $writer = new ProfileWriter($mem, Profile::Ascii);
+        $writer->write("\x1b[38;2;255;0;0mred\x1b[0m");
+        \rewind($mem);
+        $out = \stream_get_contents($mem);
+        \fclose($mem);
+
+        // ASCII profile should degrade to black (30-37) or white (90-97) ANSI16
+        $this->assertTrue(
+            str_starts_with($out, "\x1b[3") || str_starts_with($out, "\x1b[9"),
+            "Expected ANSI 4-bit foreground, got: " . bin2hex($out)
+        );
+        $this->assertStringNotContainsString("\x1b[38;2;", $out);
+    }
+
+    public function testPrintfPassthroughForTrueColor(): void
+    {
+        $mem = \fopen('php://memory', 'r+');
+        $writer = new ProfileWriter($mem, Profile::TrueColor);
+        $input = "\x1b[38;2;100;50;255mX\x1b[0m";
+        $writer->printf("%s", $input);
+        \rewind($mem);
+        $out = \stream_get_contents($mem);
+        \fclose($mem);
+
+        $this->assertSame($input, $out);
+    }
+
+    public function testWriteDegradesAnsi256ForegroundToAnsi16(): void
+    {
+        // A sequence already in ANSI256 format degraded to ANSI
+        $mem = \fopen('php://memory', 'r+');
+        $writer = new ProfileWriter($mem, Profile::ANSI);
+        $writer->write("\x1b[38;5;196mred\x1b[0m");
+        \rewind($mem);
+        $out = \stream_get_contents($mem);
+        \fclose($mem);
+
+        $this->assertStringStartsWith("\x1b[3", $out);
+        $this->assertStringNotContainsString("\x1b[38;5;", $out);
+    }
 }

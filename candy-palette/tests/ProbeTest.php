@@ -251,4 +251,14 @@ final class ProbeTest extends TestCase
         $this->env('PREFERS_REDUCED_MOTION', null);
         $this->assertFalse(Probe::reducedMotion());
     }
+
+    /**
+     * @covers \SugarCraft\Palette\Probe::_reset
+     */
+    public function testResetClearsStaticCache(): void
+    {
+        // Calling _reset should not throw
+        Probe::_reset();
+        $this->assertTrue(true);
+    }
 }

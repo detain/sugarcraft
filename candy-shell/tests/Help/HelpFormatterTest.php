@@ -58,4 +58,17 @@ EXPECTED;
 
         $this->assertSame($normalize($expected), $normalize($output));
     }
+
+    public function testWriteOutputsFormattedContent(): void
+    {
+        require_once __DIR__ . '/../Fixtures/Command/DemoCommand.php';
+        $command = new DemoCommand();
+
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+        $this->formatter->write($output, $command);
+
+        $display = $output->fetch();
+        $this->assertStringContainsString('demo', $display);
+        $this->assertStringContainsString('A demo command with examples and aliases.', $display);
+    }
 }

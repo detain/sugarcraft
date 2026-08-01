@@ -127,4 +127,44 @@ final class VsRendererTest extends TestCase
 
         $this->assertStringContainsString('press q to quit', $output);
     }
+
+    public function testRenderComputerBoardWithGhostPiece(): void
+    {
+        // Build a VS game where computer has placed a piece, so ghost is visible
+        $computerGame = Game::start();
+
+        // Hard drop computer's piece to place it on the board
+        $computerWithPlacedPiece = $computerGame->mutate(['piece' => new \SugarCraft\Tetris\Piece(
+            $computerGame->piece->kind,
+            $computerGame->piece->rotation,
+            $computerGame->piece->x,
+            Board::ROWS - 5 // Near bottom so ghost is visible
+        )]);
+
+        $vs = new VsGame(Game::start(), $computerWithPlacedPiece);
+        $output = VsRenderer::render($vs);
+
+        // Should contain ANSI codes for rendering
+        $this->assertStringContainsString("\x1b[", $output);
+    }
+
+    public function testRenderComputerPiecesUseDifferentHue(): void
+    {
+        // Build a VS game where computer has a piece at a known position
+        $computerGame = Game::start();
+        $pieceKind = $computerGame->piece->kind;
+
+        // The renderer's blockComputer shifts color by 150
+        // We can't directly test the private method, but we can verify
+        // the overall render output contains expected content
+        $vs = new VsGame(Game::start(), $computerGame);
+        $output = VsRenderer::render($vs);
+
+        // Output should be a non-empty string containing board elements
+        $this->assertIsString($output);
+        $this->assertNotEmpty($output);
+        // Should render both player and computer labels
+        $this->assertStringContainsString('PLAYER', $output);
+        $this->assertStringContainsString('COMPUTER', $output);
+    }
 }

@@ -133,4 +133,35 @@ final class BoardTest extends TestCase
         $this->assertSame(1, $count);
         $this->assertTrue($cleared->isPerfectClear());
     }
+
+    public function testRowsReturnsCellsArray(): void
+    {
+        $b = new Board();
+        $rows = $b->rows();
+        $this->assertIsArray($rows);
+        $this->assertCount(Board::ROWS, $rows);
+        foreach ($rows as $row) {
+            $this->assertCount(Board::COLS, $row);
+        }
+    }
+
+    public function testRowsReturnsCopyNotReference(): void
+    {
+        $b = new Board();
+        $rows = $b->rows();
+        $rows[0][0] = Tetromino::I; // Modify returned array
+        // Original board should be unchanged
+        $this->assertNull($b->cellAt(0, 0));
+    }
+
+    public function testRowsWithCustomCells(): void
+    {
+        $customRows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $customRows[5][3] = Tetromino::T;
+        $customRows[10][7] = Tetromino::L;
+        $b = new Board($customRows);
+        $rows = $b->rows();
+        $this->assertSame(Tetromino::T, $rows[5][3]);
+        $this->assertSame(Tetromino::L, $rows[10][7]);
+    }
 }

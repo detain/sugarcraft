@@ -63,6 +63,39 @@ final class SrsKickTableTest extends TestCase
         $this->assertSame([[0, 0]], $kicks180, 'Unknown 180 transition for I-piece must return naive-only kick');
     }
 
+    public function testAllKicksReturnsFullTableForJlstz(): void
+    {
+        $all = SrsKickTable::allKicks(Tetromino::T);
+        $this->assertIsArray($all);
+        $this->assertArrayHasKey('0→R', $all);
+        $this->assertArrayHasKey('R→2', $all);
+        $this->assertArrayHasKey('2→L', $all);
+        $this->assertArrayHasKey('L→0', $all);
+        $this->assertArrayHasKey('R→0', $all);
+        $this->assertArrayHasKey('0→L', $all);
+        $this->assertArrayHasKey('L→2', $all);
+        $this->assertArrayHasKey('2→R', $all);
+        $this->assertArrayHasKey('0→2', $all);
+        $this->assertSame([[0, 0]], $all['0→2']);
+    }
+
+    public function testAllKicksReturnsFullTableForIPiece(): void
+    {
+        $all = SrsKickTable::allKicks(Tetromino::I);
+        $this->assertIsArray($all);
+        $this->assertArrayHasKey('0→R', $all);
+        $this->assertArrayHasKey('R→2', $all);
+        // I-piece has different kick values than JLSTZ
+        $this->assertNotSame(SrsKickTable::allKicks(Tetromino::T)['0→R'], $all['0→R']);
+    }
+
+    public function testAllKicksOPieceUsesJlstzTable(): void
+    {
+        $oAll = SrsKickTable::allKicks(Tetromino::O);
+        $tAll = SrsKickTable::allKicks(Tetromino::T);
+        $this->assertSame($tAll, $oAll, 'O-piece must use JLSTZ kick table');
+    }
+
     public static function jlstzKicksProvider(): array
     {
         return [

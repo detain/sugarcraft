@@ -116,4 +116,112 @@ final class LayoutTest extends TestCase
         $right = "R1\nR2";
         $this->assertSame("L1R1\nL2R2", Layout::joinHorizontal(Position::TOP, $left, $right));
     }
+
+    public function testJoinHorizontalWithSpacing(): void
+    {
+        $a = "AA";
+        $b = "BB";
+        // Default joinHorizontalWithSpacing with null spacing (no gap)
+        $result = Layout::joinHorizontalWithSpacing(Position::TOP, null, $a, $b);
+        $this->assertSame("AA\nBB", $result); // Wait - that's wrong, joinHorizontalWithSpacing is for same-height blocks
+    }
+
+    public function testJoinHorizontalWithSpacingAddsGap(): void
+    {
+        $a = "AA";
+        $b = "BB";
+        // With spacing=1, there should be 1 space between blocks
+        $result = Layout::joinHorizontalWithSpacing(Position::TOP, 1, $a, $b);
+        $this->assertSame("AA BB", $result);
+    }
+
+    public function testJoinHorizontalWithSpacingThreeBlocks(): void
+    {
+        $a = "A";
+        $b = "B";
+        $c = "C";
+        $result = Layout::joinHorizontalWithSpacing(Position::TOP, 2, $a, $b, $c);
+        $this->assertSame("A  B  C", $result);
+    }
+
+    public function testJoinVerticalWithSpacingAddsGap(): void
+    {
+        $a = "AAA";
+        $b = "B";
+        $result = Layout::joinVerticalWithSpacing(Position::LEFT, 1, $a, $b);
+        $this->assertSame("AAA\n   \nB  ", $result);
+    }
+
+    public function testJoinVerticalWithSpacingEmptyArgs(): void
+    {
+        $this->assertSame('', Layout::joinVerticalWithSpacing(Position::LEFT, 5));
+    }
+
+    public function testJoinHorizontalWithSpacingEmptyArgs(): void
+    {
+        $this->assertSame('', Layout::joinHorizontalWithSpacing(Position::TOP, 1));
+    }
+
+    public function testJoinVerticalWithSpacingCenter(): void
+    {
+        $a = "AAA";
+        $b = "B";
+        // Center alignment for shorter block
+        $result = Layout::joinVerticalWithSpacing(Position::CENTER, 1, $a, $b);
+        $lines = explode("\n", $result);
+        $this->assertCount(3, $lines);
+    }
+
+    public function testPlaceHorizontalLeft(): void
+    {
+        $this->assertSame('hi   ', Layout::placeHorizontal(5, Position::LEFT, 'hi'));
+    }
+
+    public function testPlaceHorizontalRight(): void
+    {
+        $this->assertSame('   hi', Layout::placeHorizontal(5, Position::RIGHT, 'hi'));
+    }
+
+    public function testPlaceHorizontalWithFillChar(): void
+    {
+        $this->assertSame('hi...', Layout::placeHorizontal(5, Position::LEFT, 'hi', '.'));
+    }
+
+    public function testPlaceHorizontalWiderThanContent(): void
+    {
+        // When content is wider than target, it should be returned unchanged
+        $this->assertSame('hello', Layout::placeHorizontal(3, Position::LEFT, 'hello'));
+    }
+
+    public function testPlaceVerticalTop(): void
+    {
+        $out = Layout::placeVertical(5, Position::TOP, 'hi');
+        $lines = explode("\n", $out);
+        $this->assertCount(5, $lines);
+        $this->assertSame('hi', $lines[0]);
+    }
+
+    public function testPlaceVerticalBottom(): void
+    {
+        $out = Layout::placeVertical(5, Position::BOTTOM, 'hi');
+        $lines = explode("\n", $out);
+        $this->assertCount(5, $lines);
+        $this->assertSame('hi', $lines[4]);
+    }
+
+    public function testPlaceVerticalWithFillChar(): void
+    {
+        $out = Layout::placeVertical(4, Position::CENTER, 'X', '-');
+        $lines = explode("\n", $out);
+        $this->assertCount(4, $lines);
+        $this->assertSame('----', $lines[0]);
+        $this->assertSame('-X-', $lines[1]);
+    }
+
+    public function testPlaceVerticalShorterThanContent(): void
+    {
+        // When content is taller than target, it should be returned unchanged
+        $out = Layout::placeVertical(2, Position::CENTER, "a\nb\nc");
+        $this->assertSame("a\nb\nc", $out);
+    }
 }

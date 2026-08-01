@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin\Calc;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Query\Admin\Calc\CacheHitRate;
 use SugarCraft\Query\Admin\Calc\RatePerSecond;
+use SugarCraft\Query\Admin\Calc\StatusVar;
+use SugarCraft\Query\Admin\Calc\TableOpenCacheHitRate;
 use SugarCraft\Query\Admin\Calc\TupleRatePerSecond;
 use SugarCraft\Query\Admin\Calc\MakeTuple;
 use SugarCraft\Query\Admin\StatusSnapshot;
@@ -111,6 +114,38 @@ final class CalcTest extends TestCase
         $this->assertSame([], $result);
     }
 
+    public function testTupleRatePerSecondUpdateLastAndIsInitialized(): void
+    {
+        $rate = new TupleRatePerSecond('TableIO');
+
+        $this->assertFalse($rate->isInitialized());
+
+        $rate->updateLast(['TableIO' => 'a:10,b:20']);
+
+        $this->assertTrue($rate->isInitialized());
+    }
+
+    public function testTupleRatePerSecondLastTuples(): void
+    {
+        $rate = new TupleRatePerSecond('TableIO');
+
+        $rate->updateLast(['TableIO' => 'a:10,b:20']);
+
+        $last = $rate->lastTuples();
+        $this->assertEqualsWithDelta(10.0, $last['a'], 0.001);
+        $this->assertEqualsWithDelta(20.0, $last['b'], 0.001);
+    }
+
+    public function testTupleRatePerSecondUpdateLastWithMissingKey(): void
+    {
+        $rate = new TupleRatePerSecond('TableIO');
+
+        $rate->updateLast(['OtherKey' => 'a:10']);
+
+        $this->assertFalse($rate->isInitialized());
+        $this->assertSame([], $rate->lastTuples());
+    }
+
     public function testMakeTupleComputesMultipleRates(): void
     {
         $maker = (new MakeTuple(','))
@@ -208,5 +243,161 @@ final class CalcTest extends TestCase
 
         $result = $rate->compute($current, $previous, $elapsed);
         $this->assertSame(0.0, $result);
+    }
+
+    // ===== StatusVar tests =====
+
+    public function testStatusVarComputeReturnsValue(): void
+    {
+        $var = new StatusVar('Uptime');
+
+        $current = ['Uptime' => '3600'];
+        $result = $var->compute($current, [], 0.0);
+
+        $this->assertSame('3600', $result);
+    }
+
+    public function testStatusVarComputeReturnsEmptyStringWhenMissing(): void
+    {
+        $var = new StatusVar('NonExistent');
+
+        $current = ['Uptime' => '3600'];
+        $result = $var->compute($current, [], 0.0);
+
+        $this->assertSame('', $result);
+    }
+
+    public function testStatusVarComputeInt(): void
+    {
+        $var = new StatusVar('Connections');
+
+        $current = ['Connections' => '42'];
+        $result = $var->computeInt($current, [], 0.0);
+
+        $this->assertSame(42, $result);
+    }
+
+    public function testStatusVarComputeIntReturnsZeroWhenMissing(): void
+    {
+        $var = new StatusVar('NonExistent');
+
+        $current = ['Connections' => '42'];
+        $result = $var->computeInt($current, [], 0.0);
+
+        $this->assertSame(0, $result);
+    }
+
+    public function testStatusVarComputeFloat(): void
+    {
+        $var = new StatusVar('Rate');
+
+        $current = ['Rate' => '3.14'];
+        $result = $var->computeFloat($current, [], 0.0);
+
+        $this->assertEqualsWithDelta(3.14, $result, 0.001);
+    }
+
+    public function testStatusVarComputeFloatReturnsZeroWhenMissing(): void
+    {
+        $var = new StatusVar('NonExistent');
+
+        $current = ['Rate' => '3.14'];
+        $result = $var->computeFloat($current, [], 0.0);
+
+        $this->assertSame(0.0, $result);
+    }
+
+    public function testStatusVarExistsReturnsTrue(): void
+    {
+        $var = new StatusVar('Uptime');
+
+        $current = ['Uptime' => '3600'];
+        $result = $var->exists($current);
+
+        $this->assertTrue($result);
+    }
+
+    public function testStatusVarExistsReturnsFalse(): void
+    {
+        $var = new StatusVar('NonExistent');
+
+        $current = ['Uptime' => '3600'];
+        $result = $var->exists($current);
+
+        $this->assertFalse($result);
+    }
+
+    // ===== CacheHitRate tests =====
+
+    public function testCacheHitRateComputesPercentage(): void
+    {
+        $rate = new CacheHitRate('blks_hit', 'blks_read');
+
+        $current = ['blks_hit' => '800', 'blks_read' => '200'];
+        $result = $rate->compute($current, [], 0.0);
+
+        $this->assertEqualsWithDelta(80.0, $result, 0.001);
+    }
+
+    public function testCacheHitRateZeroTotalReturnsZero(): void
+    {
+        $rate = new CacheHitRate('blks_hit', 'blks_read');
+
+        $current = [];
+        $result = $rate->compute($current, [], 0.0);
+
+        $this->assertSame(0.0, $result);
+    }
+
+    public function testCacheHitRateAllHitsReturns100(): void
+    {
+        $rate = new CacheHitRate('blks_hit', 'blks_read');
+
+        $current = ['blks_hit' => '1000', 'blks_read' => '0'];
+        $result = $rate->compute($current, [], 0.0);
+
+        $this->assertSame(100.0, $result);
+    }
+
+    public function testCacheHitRateAllMissesReturnsZero(): void
+    {
+        $rate = new CacheHitRate('blks_hit', 'blks_read');
+
+        $current = ['blks_hit' => '0', 'blks_read' => '1000'];
+        $result = $rate->compute($current, [], 0.0);
+
+        $this->assertSame(0.0, $result);
+    }
+
+    // ===== TableOpenCacheHitRate tests =====
+
+    public function testTableOpenCacheHitRateComputesPercentage(): void
+    {
+        $rate = new TableOpenCacheHitRate();
+
+        $current = ['Table_open_cache_hits' => '80', 'Table_open_cache_misses' => '20'];
+        $result = $rate->compute($current, [], 0.0);
+
+        $this->assertEqualsWithDelta(80.0, $result, 0.001);
+    }
+
+    public function testTableOpenCacheHitRateZeroTotalReturnsZero(): void
+    {
+        $rate = new TableOpenCacheHitRate();
+
+        $current = [];
+        $result = $rate->compute($current, [], 0.0);
+
+        $this->assertSame(0.0, $result);
+    }
+
+    public function testTableOpenCacheHitRateWithCustomKeys(): void
+    {
+        $rate = new TableOpenCacheHitRate('hits', 'misses');
+
+        $current = ['hits' => '75', 'misses' => '25'];
+        $result = $rate->compute($current, [], 0.0);
+
+        $this->assertEqualsWithDelta(75.0, $result, 0.001);
     }
 }

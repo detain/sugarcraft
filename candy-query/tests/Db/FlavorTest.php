@@ -133,4 +133,65 @@ final class FlavorTest extends TestCase
         $this->assertSame('postgres', Flavor::Postgres->value);
         $this->assertSame('sqlite', Flavor::Sqlite->value);
     }
+
+    // ===== detectFromDriver() tests =====
+
+    public function testDetectFromDriverSqlite(): void
+    {
+        $flavor = Flavor::detectFromDriver('sqlite');
+
+        $this->assertSame(Flavor::Sqlite, $flavor);
+    }
+
+    public function testDetectFromDriverPostgres(): void
+    {
+        $flavor = Flavor::detectFromDriver('pgsql');
+
+        $this->assertSame(Flavor::Postgres, $flavor);
+    }
+
+    public function testDetectFromDriverMysql(): void
+    {
+        $flavor = Flavor::detectFromDriver('mysql', '8.0.33');
+
+        $this->assertSame(Flavor::MySQL, $flavor);
+    }
+
+    public function testDetectFromDriverMysqlWithMariaDBVersionComment(): void
+    {
+        $flavor = Flavor::detectFromDriver(
+            'mysql',
+            '8.0.33',
+            'MySQL Community Server - GPL - MariaDB server: 10.11.4',
+        );
+
+        $this->assertSame(Flavor::MariaDB, $flavor);
+    }
+
+    public function testDetectFromDriverMysqlWithPerconaVersionComment(): void
+    {
+        $flavor = Flavor::detectFromDriver(
+            'mysql',
+            '8.0.33-18',
+            'MySQL Community Server - GPL - Percona Server (GPL)',
+        );
+
+        $this->assertSame(Flavor::Percona, $flavor);
+    }
+
+    public function testDetectFromDriverUnknownDriver(): void
+    {
+        $flavor = Flavor::detectFromDriver('unknown-driver');
+
+        $this->assertSame(Flavor::Sqlite, $flavor);
+    }
+
+    public function testDetectFromDriverWithPostgresVersionString(): void
+    {
+        // When driver is 'mysql' but version starts with PostgreSQL, detectFromVersionString
+        // is called and detects Postgres from the version string
+        $flavor = Flavor::detectFromDriver('mysql', 'PostgreSQL 16.0');
+
+        $this->assertSame(Flavor::Postgres, $flavor);
+    }
 }

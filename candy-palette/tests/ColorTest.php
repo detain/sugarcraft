@@ -190,4 +190,134 @@ final class ColorTest extends TestCase
         $this->assertFalse(\SugarCraft\Palette\ColorProfile::NoTTY->allowsColor());
         $this->assertTrue(\SugarCraft\Palette\ColorProfile::Ascii->allowsColor());
     }
+
+    // -------------------------------------------------------------------------
+    // ansi16Sgr
+    // -------------------------------------------------------------------------
+
+    public function testAnsi16SgrForegroundBasic(): void
+    {
+        // Foreground base is 30, so index 0 → 30, index 7 → 37
+        $this->assertSame(30, Color::ansi16Sgr(0, false));
+        $this->assertSame(37, Color::ansi16Sgr(7, false));
+    }
+
+    public function testAnsi16SgrForegroundBright(): void
+    {
+        // Bright foreground base is 90, so index 8 → 90, index 15 → 97
+        $this->assertSame(90, Color::ansi16Sgr(8, false));
+        $this->assertSame(97, Color::ansi16Sgr(15, false));
+    }
+
+    public function testAnsi16SgrBackgroundBasic(): void
+    {
+        // Background base is 40, so index 0 → 40, index 7 → 47
+        $this->assertSame(40, Color::ansi16Sgr(0, true));
+        $this->assertSame(47, Color::ansi16Sgr(7, true));
+    }
+
+    public function testAnsi16SgrBackgroundBright(): void
+    {
+        // Bright background base is 100, so index 8 → 100, index 15 → 107
+        $this->assertSame(100, Color::ansi16Sgr(8, true));
+        $this->assertSame(107, Color::ansi16Sgr(15, true));
+    }
+
+    // -------------------------------------------------------------------------
+    // toAnsi16Index
+    // -------------------------------------------------------------------------
+
+    public function testToAnsi16IndexDarkColorNotBright(): void
+    {
+        // Black has zero brightness so should not get bright offset
+        $c = new Color(0, 0, 0);
+        $idx = $c->toAnsi16Index();
+        $this->assertLessThan(8, $idx);
+    }
+
+    public function testToAnsi16IndexBrightColorGetsBrightOffset(): void
+    {
+        // Bright red has high brightness so should get bright offset (add 8)
+        $c = StandardColors::$brightRed;
+        $idx = $c->toAnsi16Index();
+        $this->assertGreaterThanOrEqual(8, $idx);
+    }
+
+    // -------------------------------------------------------------------------
+    // fromAnsi256Index
+    // -------------------------------------------------------------------------
+
+    public function testFromAnsi256IndexGreyRamp(): void
+    {
+        // Index 232 is the first greyscale color
+        $c = Color::fromAnsi256Index(232);
+        $this->assertSame($c->r, $c->g);
+        $this->assertSame($c->g, $c->b);
+        // First grey is 8,8,8
+        $this->assertSame(8, $c->r);
+    }
+
+    public function testFromAnsi256IndexCubeRange(): void
+    {
+        // Pure red in the 6x6x6 cube is index 196
+        $c = Color::fromAnsi256Index(196);
+        // Should be approximately red (high R, low G, low B)
+        // r=255, g=0, b=0 for pure red
+        $this->assertSame(255, $c->r);
+        $this->assertSame(0, $c->g);
+        $this->assertSame(0, $c->b);
+    }
+
+    public function testFromAnsi256IndexLastGrey(): void
+    {
+        // Index 255 is the last greyscale color
+        $c = Color::fromAnsi256Index(255);
+        $this->assertSame($c->r, $c->g);
+        $this->assertSame($c->g, $c->b);
+        // Last grey is 238,238,238
+        $this->assertSame(238, $c->r);
+    }
+
+    // -------------------------------------------------------------------------
+    // Direct ANSI escape tests
+    // -------------------------------------------------------------------------
+
+    public function testToAnsi16Background(): void
+    {
+        $c = new Color(0, 0, 0);
+        $bg = $c->toAnsi16Background();
+        $this->assertStringStartsWith("\x1b[40m", $bg);
+    }
+
+    public function testToAnsi256Foreground(): void
+    {
+        $c = new Color(255, 0, 0);
+        $fg = $c->toAnsi256Foreground();
+        $this->assertStringStartsWith("\x1b[38;5;", $fg);
+        $this->assertStringEndsWith("m", $fg);
+    }
+
+    // -------------------------------------------------------------------------
+    // ColorProfile label
+    // -------------------------------------------------------------------------
+
+    public function testColorProfileLabelAnsi256(): void
+    {
+        $this->assertSame('ANSI 256', \SugarCraft\Palette\ColorProfile::Ansi256->label());
+    }
+
+    public function testColorProfileLabelTrueColor(): void
+    {
+        $this->assertSame('TrueColor', \SugarCraft\Palette\ColorProfile::TrueColor->label());
+    }
+
+    public function testColorProfileLabelNoTTY(): void
+    {
+        $this->assertSame('No TTY', \SugarCraft\Palette\ColorProfile::NoTTY->label());
+    }
+
+    public function testColorProfileLabelAscii(): void
+    {
+        $this->assertSame('ASCII', \SugarCraft\Palette\ColorProfile::Ascii->label());
+    }
 }

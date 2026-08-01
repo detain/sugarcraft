@@ -225,4 +225,72 @@ final class PaletteTest extends TestCase
         $this->assertInstanceOf(Color::class, $converted);
         $this->assertNotNull($converted->toAnsi256Index());
     }
+
+    // -------------------------------------------------------------------------
+    // convert (instance method)
+    // -------------------------------------------------------------------------
+
+    public function testConvertUsesDetectedProfile(): void
+    {
+        $p = new Palette(null, ['FORCE_COLOR' => '3']); // TrueColor
+        $c = new Color(100, 150, 200);
+        $converted = $p->convert($c);
+        // TrueColor passthrough - should be identical
+        $this->assertSame(100, $converted->r);
+        $this->assertSame(150, $converted->g);
+        $this->assertSame(200, $converted->b);
+    }
+
+    public function testConvertToAnsi256(): void
+    {
+        $p = new Palette(null, ['FORCE_COLOR' => '2']); // ANSI256
+        $c = new Color(107, 80, 255);
+        $converted = $p->convert($c);
+        // Should be a different color in the ANSI256 palette
+        $this->assertInstanceOf(Color::class, $converted);
+    }
+
+    public function testConvertToAscii(): void
+    {
+        $p = new Palette(null, ['FORCE_COLOR' => '0']); // Ascii
+        $c = new Color(255, 0, 0); // bright red
+        $converted = $p->convert($c);
+        // Ascii converts to near-white (bright) or near-black
+        $this->assertContains($converted->r, [0, 255]);
+    }
+
+    // -------------------------------------------------------------------------
+    // degrade
+    // -------------------------------------------------------------------------
+
+    public function testDegradeNoTTYStripsAnsi(): void
+    {
+        $p = new Palette(null, ['NO_COLOR' => '1']);
+        $degraded = $p->degrade("\x1b[38;2;255;0;0mred\x1b[0m");
+        $this->assertSame('red', $degraded);
+    }
+
+    public function testDegradeTrueColorPassthrough(): void
+    {
+        $p = new Palette(null, ['FORCE_COLOR' => '3']); // TrueColor
+        $input = "\x1b[38;2;100;50;255mX\x1b[0m";
+        $degraded = $p->degrade($input);
+        $this->assertSame($input, $degraded);
+    }
+
+    public function testDegradeAnsi256(): void
+    {
+        $p = new Palette(null, ['FORCE_COLOR' => '2']); // ANSI256
+        $degraded = $p->degrade("\x1b[38;2;255;0;0mred\x1b[0m");
+        $this->assertStringStartsWith("\x1b[38;5;", $degraded);
+        $this->assertStringNotContainsString("\x1b[38;2;", $degraded);
+    }
+
+    public function testDegradeAnsi(): void
+    {
+        $p = new Palette(null, ['FORCE_COLOR' => '1']); // ANSI
+        $degraded = $p->degrade("\x1b[38;2;255;0;0mred\x1b[0m");
+        $this->assertStringStartsWith("\x1b[3", $degraded);
+        $this->assertStringNotContainsString("\x1b[38;2;", $degraded);
+    }
 }

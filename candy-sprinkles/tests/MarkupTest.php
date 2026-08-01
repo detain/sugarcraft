@@ -255,4 +255,44 @@ final class MarkupTest extends TestCase
             $this->assertSame(205, $fg->b);
         }
     }
+
+    public function testParseStrikethroughAlias(): void
+    {
+        // "strikethrough" should work the same as "strike"
+        $cells = Markup::parse('[strikethrough]hello[/]', Style::new());
+        foreach ($cells as $cell) {
+            $this->assertTrue($cell->style->isStrikethrough());
+        }
+    }
+
+    public function testParseUnknownTagIsIgnored(): void
+    {
+        // An unknown tag should not crash - it should be ignored
+        $cells = Markup::parse('[unknown-tag]hello[/]', Style::new());
+        $this->assertSame('hello', implode(array_map(fn(Cell $c) => $c->rune, $cells)));
+    }
+
+    public function testParseMixedColorTags(): void
+    {
+        $cells = Markup::parse('[bright-green]text[/]', Style::new());
+        foreach ($cells as $cell) {
+            $fg = $cell->style->getForeground();
+            $this->assertNotNull($fg);
+            $this->assertSame(0, $fg->r);
+            $this->assertSame(255, $fg->g);
+            $this->assertSame(0, $fg->b);
+        }
+    }
+
+    public function testParseBrightColorsAllVariants(): void
+    {
+        // Test bright-black, bright-white for completeness
+        $cells = Markup::parse('[bright-black]a[/]', Style::new());
+        $fg = $cells[0]->style->getForeground();
+        $this->assertSame(127, $fg->r);
+
+        $cells = Markup::parse('[bright-white]a[/]', Style::new());
+        $fg = $cells[0]->style->getForeground();
+        $this->assertSame(255, $fg->r);
+    }
 }

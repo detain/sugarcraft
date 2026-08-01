@@ -155,4 +155,36 @@ final class RealProcessTest extends TestCase
         $proc->terminate();
         $this->assertSame(0, $proc->close());
     }
+
+    public function testStdoutBytesReturnsSameAsStdout(): void
+    {
+        $proc = RealProcess::spawn(
+            ['/bin/sh', '-c', 'echo hello world'],
+            captureStdout: true,
+            captureStderr: false,
+        );
+        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
+            usleep(10_000);
+        }
+        $this->assertSame(0, $proc->exitCode());
+        // stdoutBytes() and stdout() should return the same thing.
+        $this->assertSame($proc->stdout(), $proc->stdoutBytes());
+        $proc->close();
+    }
+
+    public function testStderrBytesReturnsSameAsStderr(): void
+    {
+        $proc = RealProcess::spawn(
+            ['/bin/sh', '-c', 'echo error >&2'],
+            captureStdout: false,
+            captureStderr: true,
+        );
+        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
+            usleep(10_000);
+        }
+        $this->assertSame(0, $proc->exitCode());
+        // stderrBytes() and stderr() should return the same thing.
+        $this->assertSame($proc->stderr(), $proc->stderrBytes());
+        $proc->close();
+    }
 }
