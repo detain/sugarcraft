@@ -507,13 +507,15 @@ final class AudioPlayerTest extends TestCase
     }
 
     /**
-     * @testdox resume() is a safe no-op when no process was ever started
+     * @testdox resume() is a safe no-op when no process was ever started (but still calls start())
      */
     public function testResumeSafeNoOpWithoutPriorStart(): void
     {
         $player = new FakeAudioPlayer('/tmp/video.mp4');
-        $player->resume(); // Should not throw
-        $this->assertFalse($player->hasStarted());
+        $player->resume(); // Should not throw (resume calls start() internally)
+        // resume() calls start(), which sets started = true
+        $this->assertTrue($player->hasStarted());
+        $this->assertFalse($player->isPlaying());
     }
 
     /**

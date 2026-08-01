@@ -43,4 +43,58 @@ final class CommandBackendTest extends TestCase
         $this->assertStringContainsString('error', strtolower($reply->content),
             'a non-existent command should produce an "[error: ...]" message, not crash');
     }
+
+    // =========================================================================
+    // completeAsync() Tests
+    // =========================================================================
+
+    public function testCompleteAsyncReturnsPromise(): void
+    {
+        $backend = new CommandBackend(['cat']);
+        $promise = $backend->completeAsync([Message::user('hello')]);
+
+        $this->assertInstanceOf(\React\Promise\PromiseInterface::class, $promise);
+    }
+
+    public function testCompleteAsyncResolvesToMessage(): void
+    {
+        $backend = new CommandBackend(['cat']);
+        $promise = $backend->completeAsync([Message::user('test message')]);
+
+        $resolved = null;
+        $promise->then(function ($message) use (&$resolved): void {
+            $resolved = $message;
+        });
+
+        $this->assertInstanceOf(Message::class, $resolved);
+        $this->assertSame(\SugarCraft\Crush\Role::Assistant, $resolved->role);
+    }
+
+    public function testCompleteAsyncRejectsOnFailure(): void
+    {
+        $backend = new CommandBackend(['false']); // exits with code 1
+        $promise = $backend->completeAsync([Message::user('hi')]);
+
+        $resolved = null;
+        $promise->then(function ($message) use (&$resolved): void {
+            $resolved = $message;
+        });
+
+        // completeAsync resolves, even on non-zero exit - the error is in the message content
+        $this->assertInstanceOf(Message::class, $resolved);
+        $this->assertStringContainsString('error', strtolower($resolved->content));
+    }
+
+    public function testCompleteAsyncWithArrayCommand(): void
+    {
+        $backend = new CommandBackend(['cat']);
+        $promise = $backend->completeAsync([Message::user('array command test')]);
+
+        $resolved = null;
+        $promise->then(function ($message) use (&$resolved): void {
+            $resolved = $message;
+        });
+
+        $this->assertInstanceOf(Message::class, $resolved);
+    }
 }

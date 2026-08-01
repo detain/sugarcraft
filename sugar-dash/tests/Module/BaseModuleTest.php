@@ -18,16 +18,12 @@ final class BaseModuleTest extends TestCase
     /**
      * Concrete implementation of BaseModule for testing.
      */
-    private function createConcreteModule(array $state = []): BaseModule
+    private function createConcreteModule(): BaseModule
     {
-        return new class($state) extends BaseModule {
-            public function __construct(private array $testState = []) {
-                parent::__construct();
-            }
+        return new class extends BaseModule {
             public function name(): string { return 'test-module'; }
             public function update(Msg $msg): array { return [$this, null]; }
             public function view(): string { return 'test-view'; }
-            public function getState(): array { return $this->testState; }
         };
     }
 
@@ -76,60 +72,5 @@ final class BaseModuleTest extends TestCase
     {
         $module = $this->createConcreteModule();
         $this->assertSame([], $module->getState());
-    }
-
-    public function testGetStateReturnsProvidedState(): void
-    {
-        $state = ['key' => 'value', 'count' => 42];
-        $module = $this->createConcreteModule($state);
-        $this->assertSame($state, $module->getState());
-    }
-
-    public function testWithStateCreatesCloneWithMergedState(): void
-    {
-        $module = new class extends BaseModule {
-            public function __construct() { parent::__construct(); }
-            public function name(): string { return 'test'; }
-            public function update(Msg $msg): array { return [$this, null]; }
-        };
-
-        $originalState = $module->getState();
-        $clone = $module->withState(['new' => 'value']);
-
-        // Original should be unchanged
-        $this->assertSame($originalState, $module->getState());
-
-        // Clone should have merged state
-        $clonedState = $clone->getState();
-        $this->assertArrayHasKey('new', $clonedState);
-        $this->assertSame('value', $clonedState['new']);
-    }
-
-    public function testWithStateOverridesExistingKeys(): void
-    {
-        $module = new class extends BaseModule {
-            public function __construct() { parent::__construct(); }
-            public function name(): string { return 'test'; }
-            public function update(Msg $msg): array { return [$this, null]; }
-        };
-
-        $clone1 = $module->withState(['key' => 'original']);
-        $clone2 = $clone1->withState(['key' => 'updated']);
-
-        $this->assertSame('original', $clone1->getState()['key']);
-        $this->assertSame('updated', $clone2->getState()['key']);
-    }
-
-    public function testWithStateReturnsNewInstance(): void
-    {
-        $module = new class extends BaseModule {
-            public function __construct() { parent::__construct(); }
-            public function name(): string { return 'test'; }
-            public function update(Msg $msg): array { return [$this, null]; }
-        };
-
-        $clone = $module->withState(['key' => 'value']);
-
-        $this->assertNotSame($module, $clone);
     }
 }

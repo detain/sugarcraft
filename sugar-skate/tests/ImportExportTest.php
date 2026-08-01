@@ -266,4 +266,161 @@ final class ImportExportTest extends TestCase
         }
         $this->assertTrue($hasTtl, 'Entry with TTL should appear in list');
     }
+
+    // ─── ExportCommand error paths ─────────────────────────────────────────────
+
+    public function testExportToStringThrowsOnUnknownFormat(): void
+    {
+        $cli = new \SugarCraft\Skate\Cli\ExportCommand($this->store);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Unknown export format: csv");
+        $cli->exportToString('csv');
+    }
+
+    public function testExportToStringWithDbName(): void
+    {
+        $this->store->set('key@region', 'value');
+
+        $cli = new \SugarCraft\Skate\Cli\ExportCommand($this->store);
+        $output = $cli->exportToString('json', 'region');
+
+        $this->assertStringContainsString('key@region', $output);
+        $this->assertStringContainsString('value', $output);
+    }
+
+    public function testExportToStringWithPattern(): void
+    {
+        $this->store->set('temp-1', 'a');
+        $this->store->set('temp-2', 'b');
+        $this->store->set('keep', 'c');
+
+        $cli = new \SugarCraft\Skate\Cli\ExportCommand($this->store);
+        $output = $cli->exportToString('json', null, 'temp-*');
+
+        $decoded = \json_decode($output, true);
+        $this->assertArrayHasKey('temp-1', $decoded);
+        $this->assertArrayHasKey('temp-2', $decoded);
+        $this->assertArrayNotHasKey('keep', $decoded);
+    }
+
+    public function testExportToStringYamlWithDbName(): void
+    {
+        $this->store->set('token@mydb', 'secret', false, 3600);
+
+        $cli = new \SugarCraft\Skate\Cli\ExportCommand($this->store);
+        $output = $cli->exportToString('yaml', 'mydb');
+
+        // YAML export should include the TTL prefix line
+        $this->assertStringContainsString('skate_ttl_token@mydb', $output);
+        $this->assertStringContainsString('token@mydb', $output);
+    }
+
+    public function testExportRunReturnsOneOnException(): void
+    {
+        $cli = new \SugarCraft\Skate\Cli\ExportCommand($this->store);
+
+        // Calling run() with invalid format should catch the exception and return 1
+        $exitCode = $cli->run('invalid-format');
+        $this->assertSame(1, $exitCode);
+    }
+
+    // ─── YamlImporter fallback parser syntax error ──────────────────────────
+
+    public function testYamlFallbackParserThrowsOnSyntaxError(): void
+    {
+        // The fallback parser throws "Syntax error" when it encounters malformed YAML
+        $yaml = "[this is definitely not valid yaml: {nested";
+        $importer = new YamlImporter($this->store);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Syntax error');
+        $importer->importFromString($yaml, false);
+    }
+
+    public function testYamlFallbackParserHandlesDocumentMarkers(): void
+    {
+        // Document markers --- and ... should be skipped
+        $yaml = "---\nkey1: value1\n...\n---\nkey2: value2\n";
+        $importer = new YamlImporter($this->store);
+        $count = $importer->importFromString($yaml, false);
+
+        $this->assertSame(2, $count);
+        $this->assertSame('value1', $this->store->get('key1'));
+        $this->assertSame('value2', $this->store->get('key2'));
+    }
+
+    public function testYamlFallbackParserHandlesComments(): void
+    {
+        $yaml = "# This is a comment\nkey: value\n# Another comment";
+        $importer = new YamlImporter($this->store);
+        $count = $importer->importFromString($yaml, false);
+
+        $this->assertSame(1, $count);
+        $this->assertSame('value', $this->store->get('key'));
+    }
+
+    // ─── JsonImporter with TTL constructor options ───────────────────────────
+
+    public function testJsonImporterWithTtlConstructorOption(): void
+    {
+        $json = '{"opt-key": "opt-value"}';
+        $importer = new JsonImporter($this->store, ['ttl' => ['opt-key' => 1800]]);
+        $importer->importFromString($json, false);
+
+        $entry = $this->store->entry('opt-key');
+        $this->assertNotNull($entry->expiresAt);
+    }
+
+    public function testJsonImporterTtlOptionsMergeWithFileTtl(): void
+    {
+        // Constructor TTL + file TTL should merge; file takes precedence
+        $path = $this->tmpDir . '/merge.json';
+        \file_put_contents($path, \json_encode([
+            '_ttl' => ['file-key' => 7200],
+            'file-key' => 'file-value',
+            'opt-key' => 'opt-value',
+        ]));
+
+        // opt-key has TTL from constructor, file-key has TTL from file
+        $importer = new JsonImporter($this->store, ['ttl' => ['opt-key' => 1800]]);
+        $importer->importFromFile($path, false);
+
+        $fileEntry = $this->store->entry('file-key');
+        $optEntry = $this->store->entry('opt-key');
+
+        $this->assertNotNull($fileEntry->expiresAt);
+        $this->assertNotNull($optEntry->expiresAt);
+    }
+
+    // ─── JsonImporter single-database atomic path ─────────────────────────────
+
+    public function testJsonImporterAtomicSingleDatabaseCommits(): void
+    {
+        $path = $this->tmpDir . '/single-atomic.json';
+        \file_put_contents($path, '{"a":"1","b":"2","c":"3"}');
+
+        $importer = new JsonImporter($this->store);
+        $count = $importer->importFromFile($path, true);
+
+        $this->assertSame(3, $count);
+        $this->assertSame('1', $this->store->get('a'));
+        $this->assertSame('2', $this->store->get('b'));
+        $this->assertSame('3', $this->store->get('c'));
+    }
+
+    // ─── YamlImporter atomic single-database path ───────────────────────────
+
+    public function testYamlImporterAtomicSingleDatabaseCommits(): void
+    {
+        $path = $this->tmpDir . '/single-atomic.yaml';
+        \file_put_contents($path, "x: 1\ny: 2\n");
+
+        $importer = new YamlImporter($this->store);
+        $count = $importer->importFromFile($path, true);
+
+        $this->assertSame(2, $count);
+        $this->assertSame('1', $this->store->get('x'));
+        $this->assertSame('2', $this->store->get('y'));
+    }
 }

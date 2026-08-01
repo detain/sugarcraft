@@ -134,4 +134,27 @@ final class StreamingCommandBackendTest extends TestCase
             unlink($script);
         }
     }
+
+    // =========================================================================
+    // completeAsync() Tests
+    // Note: completeAsync() uses Loop::futureTick() which requires a running
+    // event loop. We verify it returns a PromiseInterface without testing
+    // resolution (the synchronous complete() method is tested above).
+    // =========================================================================
+
+    public function testCompleteAsyncReturnsPromise(): void
+    {
+        $script = sys_get_temp_dir() . '/stream_async_' . uniqid() . '.sh';
+        file_put_contents($script, "#!/bin/bash\necho 'async test'");
+        chmod($script, 0755);
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $promise = $backend->completeAsync([Message::user('hello')]);
+
+            $this->assertInstanceOf(\React\Promise\PromiseInterface::class, $promise);
+        } finally {
+            unlink($script);
+        }
+    }
 }

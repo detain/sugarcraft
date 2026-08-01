@@ -391,6 +391,28 @@ final class ChatTest extends TestCase
         $this->assertFalse($next->inFlight);
     }
 
+    public function testBackendAccessor(): void
+    {
+        $backend = new EchoBackend();
+        $chat = new Chat(backend: $backend);
+        $this->assertSame($backend, $chat->backend());
+    }
+
+    public function testBackendAccessorWithDefaultBackend(): void
+    {
+        $chat = new Chat();
+        // Default backend is EchoBackend
+        $this->assertInstanceOf(\SugarCraft\Crush\Backend\EchoBackend::class, $chat->backend());
+    }
+
+    public function testBackendPreservedOnInput(): void
+    {
+        $backend = new EchoBackend();
+        $chat = new Chat(backend: $backend);
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame($backend, $next->backend());
+    }
+
     /**
      * Benchmark: diff-based view() emits fewer bytes than full re-render
      * for small changes between consecutive frames.

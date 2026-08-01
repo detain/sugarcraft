@@ -575,4 +575,244 @@ final class FfmpegDecoderTest extends TestCase
         $this->assertLessThan($ssIdx, $reconnectIdx, 'reconnect block precedes -ss');
         $this->assertLessThan($inputIdx, $ssIdx, '-ss precedes -i');
     }
+
+    // -------------------------------------------------------------------------
+    // getExitCode() — returns the ffmpeg exit code after close()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox getExitCode() returns null before any process was opened
+     */
+    public function testGetExitCodeReturnsNullBeforeOpen(): void
+    {
+        $decoder = new FfmpegDecoder();
+        $this->assertNull($decoder->getExitCode());
+    }
+
+    /**
+     * @testdox getExitCode() returns null while process is still running
+     */
+    public function testGetExitCodeReturnsNullWhileRunning(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-exitcode-' . getmypid() . '.mp4';
+        $wd = proc_open(
+            ['sh', '-c', 'sleep 20; pkill -9 -f sugar-reel-test-exitcode'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $wdPipes,
+        );
+
+        try {
+            $gen = proc_open(
+                [Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                    '-f', 'lavfi', '-i', 'testsrc=duration=2:size=64x48:rate=10',
+                    '-y', $clip],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $genPipes,
+            );
+            foreach ($genPipes as $p) {
+                if (is_resource($p)) { fclose($p); }
+            }
+            proc_close($gen);
+
+            $decoder = new FfmpegDecoder();
+            $decoder->open($clip, 16, 12, 10.0, Mode::HalfBlock);
+
+            $this->assertNull($decoder->getExitCode(), 'exit code should be null while process is running');
+
+            $decoder->close();
+            // After close, exit code is set (0 if successful)
+            $this->assertNotNull($decoder->getExitCode());
+        } finally {
+            if (isset($wd) && is_resource($wd)) {
+                proc_terminate($wd);
+                proc_close($wd);
+            }
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
+    }
+
+    /**
+     * @testdox getExitCode() returns 0 for successful decode after close()
+     */
+    public function testGetExitCodeReturnsZeroOnSuccess(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-exitcode0-' . getmypid() . '.mp4';
+
+        $gen = proc_open(
+            [Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                '-f', 'lavfi', '-i', 'testsrc=duration=1:size=64x48:rate=10',
+                '-y', $clip],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $genPipes,
+        );
+        foreach ($genPipes as $p) {
+            if (is_resource($p)) { fclose($p); }
+        }
+        proc_close($gen);
+
+        try {
+            $decoder = new FfmpegDecoder();
+            $decoder->open($clip, 16, 12, 10.0, Mode::HalfBlock);
+
+            // Read all frames to let ffmpeg finish
+            while ($decoder->next() !== null) {
+            }
+
+            $decoder->close();
+            $this->assertSame(0, $decoder->getExitCode(), 'ffmpeg should exit with code 0 on success');
+        } finally {
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // reopen() — close and re-open with new parameters
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox reopen() closes the previous decoder and opens with new parameters
+     */
+    public function testReopenClosesAndReopensWithNewParams(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-reopen-' . getmypid() . '.mp4';
+
+        $gen = proc_open(
+            [Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                '-f', 'lavfi', '-i', 'testsrc=duration=2:size=320x240:rate=15',
+                '-y', $clip],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $genPipes,
+        );
+        foreach ($genPipes as $p) {
+            if (is_resource($p)) { fclose($p); }
+        }
+        proc_close($gen);
+
+        try {
+            $decoder = new FfmpegDecoder();
+            // First open with one set of params
+            $decoder->open($clip, 20, 15, 15.0, Mode::HalfBlock);
+
+            // Reopen with different params
+            $decoder->reopen($clip, 40, 30, 30.0, Mode::QuarterBlock);
+
+            // Verify we can decode frames with the new parameters
+            $frame = $decoder->next();
+            $this->assertNotNull($frame, 'should be able to decode after reopen');
+            $this->assertSame(80, $frame->w, 'QuarterBlock: 40 cols * 2 cols per cell = 80');
+            $this->assertSame(60, $frame->h, 'QuarterBlock: 30 rows * 2 rows per cell = 60');
+
+            $decoder->close();
+            $this->assertNull($decoder->next(), 'next() should return null after close');
+        } finally {
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // fps() — returns the cached fps from the last open() call
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox fps() returns 0.0 before any open() call
+     */
+    public function testFpsReturnsZeroBeforeOpen(): void
+    {
+        $decoder = new FfmpegDecoder();
+        $this->assertSame(0.0, $decoder->fps());
+    }
+
+    /**
+     * @testdox fps() returns the fps passed to open()
+     */
+    public function testFpsReturnsOpenedFps(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-fps-' . getmypid() . '.mp4';
+
+        $gen = proc_open(
+            [Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                '-f', 'lavfi', '-i', 'testsrc=duration=1:size=64x48:rate=10',
+                '-y', $clip],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $genPipes,
+        );
+        foreach ($genPipes as $p) {
+            if (is_resource($p)) { fclose($p); }
+        }
+        proc_close($gen);
+
+        try {
+            $decoder = new FfmpegDecoder();
+            $decoder->open($clip, 16, 12, 24.5, Mode::HalfBlock);
+
+            $this->assertSame(24.5, $decoder->fps());
+
+            $decoder->close();
+            // fps remains cached after close
+            $this->assertSame(24.5, $decoder->fps());
+        } finally {
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
+    }
+
+    /**
+     * @testdox fps() is updated when reopen() is called with a different fps
+     */
+    public function testFpsIsUpdatedOnReopen(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-fps-reopen-' . getmypid() . '.mp4';
+
+        $gen = proc_open(
+            [Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                '-f', 'lavfi', '-i', 'testsrc=duration=1:size=64x48:rate=10',
+                '-y', $clip],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $genPipes,
+        );
+        foreach ($genPipes as $p) {
+            if (is_resource($p)) { fclose($p); }
+        }
+        proc_close($gen);
+
+        try {
+            $decoder = new FfmpegDecoder();
+            $decoder->open($clip, 16, 12, 15.0, Mode::HalfBlock);
+            $this->assertSame(15.0, $decoder->fps());
+
+            $decoder->reopen($clip, 16, 12, 30.0, Mode::HalfBlock);
+            $this->assertSame(30.0, $decoder->fps());
+        } finally {
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
+    }
 }

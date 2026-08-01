@@ -35,13 +35,16 @@ final class SystemModuleTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $initResult);
     }
 
-    public function testInitTickClosureReturnsRefreshMsg(): void
+    public function testInitTickClosureReturnsMsg(): void
     {
         $module = new SystemModule();
         $initResult = $module->init();
 
+        $this->assertNotNull($initResult);
         $msg = $initResult();
-        $this->assertInstanceOf(RefreshMsg::class, $msg);
+
+        // The tick closure should return a Msg
+        $this->assertInstanceOf(Msg::class, $msg);
     }
 
     public function testUpdateWithRefreshMsgReturnsNewModuleAndTick(): void

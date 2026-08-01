@@ -286,4 +286,27 @@ final class DatabaseTest extends TestCase
             });
         });
     }
+
+    // ─── close: idempotent database shutdown ─────────────────────────────────
+
+    public function testCloseIsIdempotent(): void
+    {
+        // close() should not throw, even when called multiple times.
+        $this->db->set('x', 'y');
+        $this->db->close();
+        $this->db->close(); // Second call should be no-op.
+
+        // We just verify no exception is thrown on close().
+        $this->assertTrue(true);
+    }
+
+    public function testCloseThenSetThrowsError(): void
+    {
+        $this->db->set('before-close', 'value');
+        $this->db->close();
+
+        // After close, set() throws an Error because the connection is closed.
+        $this->expectException(\Error::class);
+        $this->db->set('after-close', 'value');
+    }
 }

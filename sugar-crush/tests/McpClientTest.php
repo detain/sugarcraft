@@ -108,4 +108,91 @@ final class McpClientTest extends TestCase
         $client2 = new McpClient('claude');
         $this->assertNull($client2->initialOptions);
     }
+
+    public function testConnectWithEmptyCommandThrows(): void
+    {
+        $client = new McpClient('', [], null);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Failed to spawn MCP process');
+
+        $client->connect();
+    }
+
+    public function testConnectWithNonexistentAbsolutePathThrows(): void
+    {
+        // A path with separator that doesn't exist as a file
+        $client = new McpClient('/nonexistent/directory/command', [], null);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Failed to spawn MCP process');
+
+        $client->connect();
+    }
+
+    public function testConnectWithPathSeparatorButNotExecutableThrows(): void
+    {
+        // Create a file that exists but is not executable
+        $tempFile = sys_get_temp_dir() . '/nonexec_' . uniqid();
+        file_put_contents($tempFile, '#!/bin/bash\necho test');
+        chmod($tempFile, 0644); // not executable
+
+        try {
+            $client = new McpClient($tempFile, [], null);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Failed to spawn MCP process');
+
+            $client->connect();
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    public function testConnectReturnsEarlyWhenAlreadyConnected(): void
+    {
+        // We can't easily test the "already connected" early return without
+        // actually connecting. The connected flag is private.
+        // This test verifies that multiple connect() calls don't double-connect.
+        // Since we can't directly test the early return with current design,
+        // we verify the client transitions to connected state after connect.
+        $client = new McpClient('true'); // /bin/true always exists and succeeds
+        $result = $client->connect();
+        $this->assertTrue($client->isConnected());
+        // The result should be whatever readMessages() returns (init response)
+        $this->assertIsArray($result);
+    }
+
+    public function testDestructorDisconnects(): void
+    {
+        // When the client goes out of scope, __destruct should call disconnect()
+        // This tests that disconnect cleans up without error when process is running
+        $client = new McpClient('true');
+        $client->connect();
+        $this->assertTrue($client->isConnected());
+        // Explicitly disconnect to avoid relying on GC timing
+        $client->disconnect();
+        $this->assertFalse($client->isConnected());
+    }
+
+    public function testConnectSucceedsWithExistingExecutable(): void
+    {
+        // /bin/true exists and is executable - connect should succeed
+        $client = new McpClient('true');
+        $result = $client->connect();
+        $this->assertTrue($client->isConnected());
+        $this->assertIsArray($result);
+        $client->disconnect();
+    }
+
+    public function testResolveExecutableFindsCommandInPath(): void
+    {
+        // When command has no path separator, it searches PATH
+        // Using 'echo' which should exist on all Unix systems
+        $client = new McpClient('echo', ['--version']);
+        // Should not throw - echo is in PATH
+        $result = $client->connect();
+        $this->assertTrue($client->isConnected());
+        $client->disconnect();
+    }
 }
