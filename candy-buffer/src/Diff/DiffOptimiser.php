@@ -53,7 +53,7 @@ final class DiffOptimiser
         $lastStyleOp = null;
         $lastStyleOpIdx = -1;
 
-        foreach ($ops as $i => $op) {
+        foreach ($ops as $op) {
             if ($op instanceof SetStyleOp) {
                 if ($lastStyleOp !== null) {
                     // Replace the earlier style op with the later one.

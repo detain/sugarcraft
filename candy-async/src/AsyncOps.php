@@ -258,7 +258,7 @@ final class AsyncOps
         $cooldown = false;
 
         return static function (...$args) use ($fn, $seconds, $loop, &$cooldown): void {
-            if ($cooldown) {
+            if ($cooldown === true) {
                 return;
             }
             $cooldown = true;

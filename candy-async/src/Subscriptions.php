@@ -45,7 +45,7 @@ final class Subscriptions implements Subscription
             // Guard against self-composition to prevent infinite recursion.
             return;
         }
-        if ($this->unsubscribed) {
+        if ($this->unsubscribed === true) {
             // Already disposed \u2014 dispose the new subscription immediately.
             $subscription->unsubscribe();
             return;

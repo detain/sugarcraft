@@ -50,7 +50,7 @@ final class CancellationSource implements Cancellable
      */
     public function cancel(): void
     {
-        if ($this->cancelled) {
+        if ($this->cancelled === true) {
             return;
         }
         $this->cancelled = true;

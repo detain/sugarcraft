@@ -45,7 +45,7 @@ final class CancellationToken
      */
     public function acceptCancellationSource(): void
     {
-        if ($this->cancelled) {
+        if ($this->cancelled === true) {
             return;
         }
         $this->cancelled = true;
@@ -70,7 +70,7 @@ final class CancellationToken
      */
     public function fireCallbacks(): void
     {
-        if ($this->callbacksFired) {
+        if ($this->callbacksFired === true) {
             return;
         }
         $this->callbacksFired = true;

@@ -293,7 +293,6 @@ final class ParserOverflowTest extends TestCase
         $csis = $handler->filter('csi');
         $oscs = $handler->filter('osc');
         $prints = $handler->filter('print');
-        $executes = $handler->filter('execute');
 
         $this->assertCount(3, $csis, 'Three CSI sequences should be dispatched');
         $this->assertCount(1, $oscs, 'One OSC should be dispatched');
