@@ -332,6 +332,110 @@ final class TextFormatterTest extends TestCase
         );
 
         $this->assertStringNotContainsString("\x1b", $line);
-        $this->assertSame(1, \substr_count($line, "\n"));
+        $this->assertSame(1, \substr_count($line, "\n'));
     }
+
+    // -------------------------------------------------------------------------
+    // TextFormatter withStyles / withPartsOrder
+    // -------------------------------------------------------------------------
+
+    public function testTextFormatterWithStylesCreatesNewInstance(): void
+    {
+        $tf = new TextFormatter(false, null, false, false);
+        $newStyles = Styles::default();
+        $tf2 = $tf->withStyles($newStyles);
+
+        // Original should be unchanged
+        $line1 = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+        // New instance should use new styles
+        $line2 = $tf2->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+
+        $this->assertNotSame($tf, $tf2);
+        $this->assertSame('msg', \trim($line1));
+        $this->assertSame('msg', \trim($line2));
+    }
+
+    public function testTextFormatterWithPartsOrderCreatesNewInstance(): void
+    {
+        $tf = new TextFormatter(false, null, false, false);
+        $newOrder = \SugarCraft\Log\PartsOrder::custom([
+            \SugarCraft\Log\PartsOrder::PART_MESSAGE,
+            \SugarCraft\Log\PartsOrder::PART_LEVEL,
+        ]);
+        $tf2 = $tf->withPartsOrder($newOrder);
+
+        $this->assertNotSame($tf, $tf2);
+        // Verify the parts order was changed by checking output
+        $line1 = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+        $line2 = $tf2->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, null);
+
+        // Original starts with INF, custom order starts with msg
+        $this->assertStringStartsWith('INF', \trim($line1));
+        $this->assertStringStartsWith('msg', \trim($line2));
+    }
+
+    // -------------------------------------------------------------------------
+    // LogfmtFormatter escape() with special characters
+    // -------------------------------------------------------------------------
+
+    public function testLogfmtFormatterEscapeQuotesValue(): void
+    {
+        $lf = new LogfmtFormatter(false);
+        // Value with space and quotes should be quoted
+        $line = $lf->format(Level::Info, 'test', ['k' => 'value with space'], new \DateTimeImmutable(), null, null);
+
+        // Should contain quoted value
+        $this->assertStringContainsString('"value with space"', $line);
+    }
+
+    public function testLogfmtFormatterEscapeNewlineInValue(): void
+    {
+        $lf = new LogfmtFormatter(false);
+        $line = $lf->format(Level::Info, 'test', ['k' => "line1\nline2"], new \DateTimeImmutable(), null, null);
+
+        // Newline should be escaped, not literal
+        $this->assertStringContainsString('\\n', $line);
+        $this->assertStringNotContainsString("\n", $line);
+    }
+
+    public function testLogfmtFormatterEscapeTabInValue(): void
+    {
+        $lf = new LogfmtFormatter(false);
+        $line = $lf->format(Level::Info, 'test', ['k' => "col1\tcol2"], new \DateTimeImmutable(), null, null);
+
+        // Tab should be escaped
+        $this->assertStringContainsString('\\t', $line);
+        $this->assertStringNotContainsString("\t", $line);
+    }
+
+    public function testLogfmtFormatterEscapeEqualsInValue(): void
+    {
+        $lf = new LogfmtFormatter(false);
+        $line = $lf->format(Level::Info, 'test', ['k' => 'a=b'], new \DateTimeImmutable(), null, null);
+
+        // Value with = should be quoted
+        $this->assertStringContainsString('"a=b"', $line);
+    }
+
+    // -------------------------------------------------------------------------
+    // PartsOrder default and custom
+    // -------------------------------------------------------------------------
+
+    public function testPartsOrderDefaultHasExpectedParts(): void
+    {
+        $order = \SugarCraft\Log\PartsOrder::default();
+        $this->assertContains(\SugarCraft\Log\PartsOrder::PART_TIMESTAMP, $order->parts);
+        $this->assertContains(\SugarCraft\Log\PartsOrder::PART_LEVEL, $order->parts);
+        $this->assertContains(\SugarCraft\Log\PartsOrder::PART_MESSAGE, $order->parts);
+    }
+
+    public function testPartsOrderCustomAcceptsArray(): void
+    {
+        $order = \SugarCraft\Log\PartsOrder::custom([
+            \SugarCraft\Log\PartsOrder::PART_LEVEL,
+            \SugarCraft\Log\PartsOrder::PART_MESSAGE,
+        ]);
+        $this->assertCount(2, $order->parts);
+    }
+}
 }

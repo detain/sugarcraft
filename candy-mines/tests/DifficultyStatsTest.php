@@ -112,6 +112,32 @@ final class DifficultyStatsTest extends TestCase
     }
 
     /**
+     * Test expectNullableInt throws when a nullable field (like easyBest) is
+     * present but not int — exercises the !is_int($v) branch in expectNullableInt.
+     */
+    public function testLoadThrowsOnNonIntegerNullableField(): void
+    {
+        // easyBest is nullable, but we write a string instead.
+        $payload = json_encode([
+            'version' => 1,
+            'data' => [
+                'easyGames' => 0,
+                'easyWins' => 0,
+                'easyBest' => 'not-an-int',
+                'mediumGames' => 0,
+                'mediumWins' => 0,
+                'mediumBest' => null,
+                'expertGames' => 0,
+                'expertWins' => 0,
+                'expertBest' => null,
+            ],
+        ]);
+        file_put_contents($this->persistencePath, $payload);
+        $this->expectException(\RuntimeException::class);
+        DifficultyStats::load($this->persistencePath);
+    }
+
+    /**
      * Full round-trip through the AtomicJsonFile-backed store, exercising
      * every field including the nullable best-time slots. Pins the save()
      * payload mapping: a swapped/zeroed field would surface here.

@@ -826,4 +826,102 @@ final class HermitTest extends TestCase
         $bg2 = implode("\n", array_fill(0, 5, str_repeat(' ', 24)));
         $this->assertSame($frame2, $h2->View($bg2), 'frame 2 View() output must be byte-identical');
     }
+
+    public function testTtySizeReturnsFallbackOnException(): void
+    {
+        // ttySize() is a private method that catches exceptions from Tty::size()
+        // and returns a fallback [80, 24]. Test this via reflection.
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('ttySize');
+        $method->setAccessible(true);
+
+        // Invoke ttySize directly — it will try to query the TTY.
+        // The exception path (line 327) returns fallback [80, 24].
+        $result = $method->invoke($h);
+
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('cols', $result);
+        $this->assertArrayHasKey('rows', $result);
+        // Fallback values are 80x24
+        $this->assertSame(80, $result['cols']);
+        $this->assertSame(24, $result['rows']);
+    }
+
+    public function testApplyRankedFilterFallbackWhenMatchAllReturnsEmpty(): void
+    {
+        // When ranker->matchAll() returns an empty array, applyRankedFilter
+        // falls back to per-item match() calls (lines 695-706).
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('applyRankedFilter');
+        $method->setAccessible(true);
+
+        // Create a mock ranker where matchAll returns empty but match returns valid results.
+        $matchResult = new MatchResult('a', 'apple', 1, [0]);
+        $mockRanker = $this->createMock(FuzzyMatcher::class);
+        $mockRanker->method('matchAll')->willReturn([]);  // Empty!
+        $mockRanker->method('match')->willReturn($matchResult);
+
+        $result = $method->invoke($h, $mockRanker, 'a');
+
+        // Should still find 'apple' via the fallback per-item loop.
+        $this->assertNotEmpty($result);
+        $this->assertSame('apple', $result[0]->value());
+    }
+
+    public function testPrintableTextStripsOscSequences(): void
+    {
+        // printableText must strip OSC (Operating System Command) sequences.
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('printableText');
+        $method->setAccessible(true);
+
+        // OSC sequences: \e]0;title\e\\ (set terminal title) or \e]2;title\e\\
+        $withOsc = "\x1b]0;Hello World\x1b\\";
+        $result = $method->invoke($h, $withOsc);
+        $this->assertSame('Hello World', $result);
+    }
+
+    public function testPrintableTextStripsDcsSequences(): void
+    {
+        // printableText must strip DCS (Device Control String) sequences.
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('printableText');
+        $method->setAccessible(true);
+
+        // DCS sequence: \eP...\\  or \eP...ST
+        $withDcs = "\x1bP1;2;3\x1b\\";
+        $result = $method->invoke($h, $withDcs);
+        $this->assertSame('', $result);
+    }
+
+    public function testPrintableTextStripsSopPmApcSequences(): void
+    {
+        // printableText must strip SOS (Start of String), PM (Privacy Message),
+        // and APC (Application Program Command) sequences.
+        $h = $this->makeHermit()->show();
+
+        $reflection = new \ReflectionClass($h);
+        $method = $reflection->getMethod('printableText');
+        $method->setAccessible(true);
+
+        // SOS sequence: \eX...\x1b\\  or \eX...ST
+        $withSos = "\x1bXHello\x1b\\";
+        $this->assertSame('Hello', $method->invoke($h, $withSos));
+
+        // PM sequence: \e^...\x1b\\ or \e^...ST
+        $withPm = "\x1b^Secret\x1b\\";
+        $this->assertSame('Secret', $method->invoke($h, $withPm));
+
+        // APC sequence: \e_...\x1b\\ or \e_...ST
+        $withApc = "\x1b_APC payload\x1b\\";
+        $this->assertSame('APC payload', $method->invoke($h, $withApc));
+    }
 }

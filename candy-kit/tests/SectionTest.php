@@ -83,4 +83,68 @@ final class SectionTest extends TestCase
     {
         $this->assertSame('─ A ─', Section::header('A', Theme::plain(), leftPad: 1, width: null));
     }
+
+    public function testSubHeaderWithEmptyLabelRendersOnlyDivider(): void
+    {
+        $out = Section::subHeader('', Theme::plain(), indent: 4, width: 20);
+        // Empty label means no styled text, just indent + trailing rune fill.
+        $this->assertStringStartsWith('    ', $out);
+        $this->assertSame(20, Width::string($out));
+    }
+
+    public function testSubHeaderWithExplicitWidth(): void
+    {
+        $out = Section::subHeader('Opts', Theme::plain(), indent: 2, width: 30, rune: '·');
+        $this->assertSame(30, Width::string($out));
+        $this->assertStringContainsString('Opts', $out);
+    }
+
+    public function testSubHeaderDefaultIndentIsFour(): void
+    {
+        $out = Section::subHeader('x', Theme::plain());
+        // Default indent=4 means 4 leading spaces.
+        $this->assertStringStartsWith('    ', $out);
+    }
+
+    public function testSubHeaderNullWidthEndsAfterTrailingRune(): void
+    {
+        $out = Section::subHeader('X', Theme::plain(), indent: 2, width: null);
+        // null width: head + one rune, no fill calculation.
+        $this->assertStringStartsWith('  ', $out);
+    }
+
+    public function testSubHeaderWithAnsiThemeEmitsStyle(): void
+    {
+        $out = Section::subHeader('Opts', Theme::ansi(), indent: 2, width: 20);
+        // ansi accent style emits SGR on the label.
+        $this->assertStringContainsString("\x1b[", $out);
+    }
+
+    public function testHeaderEmptyLabelRendersWithoutStyling(): void
+    {
+        $out = Section::header('', Theme::plain(), leftPad: 2, width: 20);
+        // Empty label → no styled text, just pad runes + fill.
+        $this->assertStringStartsWith('──', $out);
+        $this->assertSame(20, Width::string($out));
+    }
+
+    public function testHeaderWithZeroLeftPad(): void
+    {
+        $out = Section::header('Hi', Theme::plain(), leftPad: 0, width: 20);
+        $this->assertSame(20, Width::string($out));
+        $this->assertStringContainsString('Hi', $out);
+    }
+
+    public function testRuleWithNullWidthProducesMinimumTwoCells(): void
+    {
+        $out = Section::rule(Theme::plain(), width: null);
+        // When width is null, rule() uses min 2 cells of rune.
+        $this->assertGreaterThanOrEqual(2, Width::string($out));
+    }
+
+    public function testRuleDefaultWidthIs80(): void
+    {
+        $out = Section::rule(Theme::plain());
+        $this->assertSame(80, Width::string($out));
+    }
 }

@@ -114,4 +114,51 @@ final class StatsTest extends TestCase
             ->withGame(Difficulty::EASY, false, null);
         $this->assertSame(1, $stats->wins(Difficulty::EASY));
     }
+
+    // ─── wins() per difficulty (uncovered MEDIUM/EXPERT branches) ─────────────
+
+    public function testWinsReturnsCorrectCountForMedium(): void
+    {
+        $stats = (new Stats())
+            ->withGame(Difficulty::MEDIUM, true, 45)
+            ->withGame(Difficulty::MEDIUM, true, 60)
+            ->withGame(Difficulty::MEDIUM, false, null);
+        $this->assertSame(2, $stats->wins(Difficulty::MEDIUM));
+        $this->assertSame(3, $stats->gamesPlayed(Difficulty::MEDIUM));
+    }
+
+    public function testWinsReturnsCorrectCountForExpert(): void
+    {
+        $stats = (new Stats())
+            ->withGame(Difficulty::EXPERT, true, 120)
+            ->withGame(Difficulty::EXPERT, false, null)
+            ->withGame(Difficulty::EXPERT, false, null);
+        $this->assertSame(1, $stats->wins(Difficulty::EXPERT));
+        $this->assertSame(3, $stats->gamesPlayed(Difficulty::EXPERT));
+    }
+
+    public function testWinRateForMediumAndExpert(): void
+    {
+        $stats = (new Stats())
+            ->withGame(Difficulty::MEDIUM, true, 50)
+            ->withGame(Difficulty::MEDIUM, false, null)
+            ->withGame(Difficulty::MEDIUM, true, 40)
+            ->withGame(Difficulty::EXPERT, true, 100)
+            ->withGame(Difficulty::EXPERT, false, null);
+        $this->assertEqualsWithDelta(66.67, $stats->winRate(Difficulty::MEDIUM), 0.01);
+        $this->assertEqualsWithDelta(50.0, $stats->winRate(Difficulty::EXPERT), 0.01);
+    }
+
+    public function testBestTimePerDifficulty(): void
+    {
+        $stats = (new Stats())
+            ->withGame(Difficulty::MEDIUM, true, 60)
+            ->withGame(Difficulty::MEDIUM, true, 45)  // better
+            ->withGame(Difficulty::EXPERT, true, 200)
+            ->withGame(Difficulty::EXPERT, true, 150); // better
+        $this->assertSame(45, $stats->bestTime(Difficulty::MEDIUM));
+        $this->assertSame(150, $stats->bestTime(Difficulty::EXPERT));
+        // EASY should remain unset
+        $this->assertNull($stats->bestTime(Difficulty::EASY));
+    }
 }

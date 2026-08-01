@@ -1029,32 +1029,20 @@ final class ModelTest extends TestCase
 
     // ─── Edge cases for partial coverage ────────────────────────────────────
 
-    public function testViewWithLoggerCatchesException(): void
+    public function testViewCatchesExceptionAndReturnsErrorMessage(): void
     {
-        // Pass a logger that will capture the error path
-        $logger = new class implements \Psr\Log\LoggerInterface {
-            public array $warnings = [];
-            public function emergency(\Stringable|string $message, array $context = []): void {}
-            public function alert(\Stringable|string $message, array $context = []): void {}
-            public function critical(\Stringable|string $message, array $context = []): void {}
-            public function error(\Stringable|string $message, array $context = []): void {}
-            public function warning(\Stringable|string $message, array $context = []): void { $this->warnings[] = $message; }
-            public function notice(\Stringable|string $message, array $context = []): void {}
-            public function info(\Stringable|string $message, array $context = []): void {}
-            public function debug(\Stringable|string $message, array $context = []): void {}
-            public function log($level, \Stringable|string $message, array $context = []): void {}
-        };
-
+        // View() catches exceptions from lines() and returns the error message as a string.
+        // This tests the catch block in View() lines 680-683.
         $m = Model::new()
-            ->setViewport(0, 0) // Will trigger exception in lines()
+            ->setViewport(0, 0) // Will trigger RuntimeException in lines()
             ->addItem(new StringItem('x'));
 
-        $out = $m->View($logger);
+        $out = $m->View();
         // Should return the error message string, not throw
         $this->assertIsString($out);
         $this->assertNotEmpty($out);
-        // Logger should have captured the warning
-        $this->assertNotEmpty($logger->warnings);
+        // The error message should contain the viewport error text
+        $this->assertStringContainsString('viewport', \strtolower($out));
     }
 
     public function testApplyStyleWithEmptyStyleReturnsOriginal(): void

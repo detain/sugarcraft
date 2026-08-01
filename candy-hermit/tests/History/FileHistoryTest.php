@@ -182,6 +182,8 @@ final class FileHistoryTest extends TestCase
     {
         // A relative path that resolves inside baseDir should work.
         // This exercises the else-branch in confine() where isAbsolute is false.
+        // The subdirectory must exist for realpath to resolve it.
+        \mkdir($this->baseDir . '/subdir', 0700, true);
         $history = new FileHistory('subdir/history.jsonl', $this->baseDir);
         $history->append(new FilteredItem(1, 'relative'));
 

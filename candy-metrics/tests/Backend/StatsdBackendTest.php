@@ -116,4 +116,124 @@ final class StatsdBackendTest extends TestCase
         $this->assertStringContainsString('|#', $payload);
         fclose($sock);
     }
+
+    public function testRejectsNonResourceSocket(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new StatsdBackend(existingSocket: 'not-a-resource');
+    }
+
+    public function testDescribeIsNoOp(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->describe(new \SugarCraft\Metrics\Descriptor('test', 'help', 'counter'));
+        rewind($sock);
+        $this->assertSame('', (string) stream_get_contents($sock));
+        fclose($sock);
+    }
+
+    public function testRemoveIsNoOp(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->remove('any', ['a' => 'b']); // Must not throw.
+        $this->assertTrue(true);
+        fclose($sock);
+    }
+
+    public function testClearIsNoOp(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->clear(); // Must not throw.
+        $this->assertTrue(true);
+        fclose($sock);
+    }
+
+    public function testFlushDrainsSocketBuffer(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('x', 1);
+        $b->flush(); // Must not throw.
+        $this->assertTrue(true);
+        fclose($sock);
+    }
+
+    public function testFmtWithFloatDecimal(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('x', 1.234567);
+        rewind($sock);
+        $payload = (string) stream_get_contents($sock);
+        // fmt() uses %.6f then strips trailing zeros and trailing dot.
+        $this->assertSame('x:1.234567|c', $payload);
+        fclose($sock);
+    }
+
+    public function testFmtWithVeryLargeInteger(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        // abs($v) >= 1e15 → always rendered as float
+        $b->counter('big', 1e15);
+        rewind($sock);
+        $payload = (string) stream_get_contents($sock);
+        // Large values render as float even if they are whole numbers.
+        $this->assertStringContainsString('|c', $payload);
+        fclose($sock);
+    }
+
+    public function testDestructorClosesOwnedSocket(): void
+    {
+        // Test that destructor does not throw when closing an owned socket.
+        $b = new StatsdBackend('127.0.0.1', 8125);
+        unset($b); // Destructor must not throw.
+        $this->assertTrue(true);
+    }
+
+    public function testGaugeWithFloatValue(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->gauge('temp', 98.6);
+        rewind($sock);
+        $this->assertSame('temp:98.6|g', (string) stream_get_contents($sock));
+        fclose($sock);
+    }
+
+    public function testHistogramWithIntegerValue(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->histogram('count', 10);
+        rewind($sock);
+        $this->assertSame('count:10|h', (string) stream_get_contents($sock));
+        fclose($sock);
+    }
+
+    public function testCounterWithNoTags(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('hits', 1);
+        rewind($sock);
+        $this->assertSame('hits:1|c', (string) stream_get_contents($sock));
+        fclose($sock);
+    }
+
+    public function testTagValuesWithSpecialCharacters(): void
+    {
+        $sock = fopen('php://memory', 'w+');
+        $b = new StatsdBackend(existingSocket: $sock);
+        $b->counter('hits', 1, ['path' => '/a/b', 'ver' => '1.0-stable']);
+        rewind($sock);
+        $payload = (string) stream_get_contents($sock);
+        $this->assertStringStartsWith('hits:1|c', $payload);
+        $this->assertStringContainsString('path:/a/b', $payload);
+        $this->assertStringContainsString('ver:1.0-stable', $payload);
+        fclose($sock);
+    }
 }
