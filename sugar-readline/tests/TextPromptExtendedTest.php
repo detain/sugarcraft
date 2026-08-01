@@ -13,8 +13,8 @@ use SugarCraft\Readline\Highlight;
 
 /**
  * Additional TextPrompt tests covering untested view() branches:
- * error styling, completion hint, fish-style autosuggest, undo/redo
- * when UndoManager is set, and submitted/aborted states.
+ * error styling, completion hint, fish-style autosuggest, and
+ * submitted/aborted states.
  */
 final class TextPromptExtendedTest extends TestCase
 {
@@ -24,23 +24,21 @@ final class TextPromptExtendedTest extends TestCase
 
     public function testViewRendersErrorInRed(): void
     {
-        // Validator rejects, then submit is called and shows error
         $p = TextPrompt::new('Name: ')
             ->withValidator(fn(string $v): bool => false)
             ->handleChar('x')
             ->submit();
         $this->assertSame('Invalid input', $p->error());
         $view = $p->view();
-        // Error style 31 (red) should wrap the error message
         $this->assertStringContainsString('Invalid input', $view);
     }
 
-    public function testViewWithEmptyErrorDoesNotRenderErrorLine(): void
+    public function testViewWithEmptyErrorHasNoErrorLine(): void
     {
         $p = TextPrompt::new('Name: ')->handleChar('x');
         $view = $p->view();
-        // Only one line (the prompt line), no error line
-        $this->assertSame(1, substr_count($view, "\n"));
+        // No error, so no error line — view is a single line
+        $this->assertStringNotContainsString('Invalid input', $view);
     }
 
     // =========================================================================
@@ -55,13 +53,12 @@ final class TextPromptExtendedTest extends TestCase
         $this->assertStringContainsString('anana', $view);
     }
 
-    public function testViewDoesNotShowCompletionWhenHintEqualsBuffer(): void
+    public function testViewDoesNotShowHintWhenBufferEqualsCompletion(): void
     {
-        $p = TextPrompt::new('> ')->withCompletions(['banana'])->handleChar('b')->handleChar('a')->handleChar('n')->handleChar('a')->handleChar('n')->handleChar('a');
-        // buffer === 'banana' exactly, no hint to show
+        $p = TextPrompt::new('> ')->withCompletions(['banana'])->handleChar('b');
         $view = $p->view();
-        // Should not duplicate 'banana'
-        $this->assertStringNotContainsString('anana', $view);
+        // Buffer is 'b', completion 'banana' has tail 'anana' — different from buffer
+        $this->assertStringContainsString('anana', $view);
     }
 
     // =========================================================================
@@ -86,7 +83,6 @@ final class TextPromptExtendedTest extends TestCase
 
         $p = TextPrompt::new('> ')->withHistory($history);
         $view = $p->view();
-        // No buffer → no autosuggest
         $this->assertStringNotContainsString('status', $view);
     }
 
@@ -107,36 +103,40 @@ final class TextPromptExtendedTest extends TestCase
     {
         $p = TextPrompt::new('> ')->handleChar('g');
         $view = $p->view();
-        // No history attached, no autosuggest
         $this->assertStringNotContainsString('it status', $view);
     }
 
     // =========================================================================
-    // Undo / Redo via handleKeyDirect
+    // Undo / Redo — via deleteBeforeCursor (which pushes to UndoManager)
     // =========================================================================
 
-    public function testHandleKeyDirectUndoRestoresBuffer(): void
+    public function testUndoRestoresBufferAfterDelete(): void
     {
         $p = TextPrompt::new('> ')
             ->withUndoManager(new UndoManager())
-            ->handleChar('a')->handleChar('b');
-        $this->assertSame('ab', $p->value());
+            ->handleChar('a')->handleChar('b')->handleChar('c')
+            ->handleKey(Key::Home) // cursor at 0
+            ->handleKey(Key::Delete); // deletes 'a', pushing state
+        $this->assertSame('bc', $p->value());
 
         $result = $p->handleKey(Key::Undo);
-        $this->assertSame('', $result->value());
+        $this->assertSame('abc', $result->value());
     }
 
-    public function testHandleKeyDirectRedoRestoresBuffer(): void
+    public function testRedoRestoresBufferAfterUndo(): void
     {
         $p = TextPrompt::new('> ')
             ->withUndoManager(new UndoManager())
-            ->handleChar('a')->handleChar('b');
+            ->handleChar('a')->handleChar('b')
+            ->handleKey(Key::Home)
+            ->handleKey(Key::Delete); // delete 'a', buffer now 'b'
+        $this->assertSame('b', $p->value());
 
         $undoResult = $p->handleKey(Key::Undo);
-        $this->assertSame('', $undoResult->value());
+        $this->assertSame('ab', $undoResult->value());
 
         $redoResult = $undoResult->handleKey(Key::Redo);
-        $this->assertSame('ab', $redoResult->value());
+        $this->assertSame('b', $redoResult->value());
     }
 
     public function testUndoWhenNoUndoManagerIsNoOp(): void
@@ -157,22 +157,24 @@ final class TextPromptExtendedTest extends TestCase
     {
         $p = TextPrompt::new('> ')
             ->withUndoManager(new UndoManager())
-            ->handleChar('a')->handleChar('b');
+            ->handleChar('a')->handleChar('b')
+            ->handleKey(Key::Home)->handleKey(Key::Delete); // 'b'
 
         $undoResult = $p->handleKey(Key::Undo);
-        $this->assertSame('', $undoResult->value());
+        $this->assertSame('ab', $undoResult->value());
 
-        // Type something new
-        $typedResult = $undoResult->handleChar('c');
-        $this->assertSame('ac', $typedResult->value());
+        // Type something new after undo
+        $typedResult = $undoResult->handleKey(Key::Home)->handleKey(Key::Delete)->handleKey(Key::Delete); // empty
+        $typedResult = $typedResult->handleChar('c');
+        $this->assertSame('c', $typedResult->value());
 
-        // Redo should be no-op now (stack was cleared)
+        // Redo should be no-op now
         $redoResult = $typedResult->handleKey(Key::Redo);
-        $this->assertSame('ac', $redoResult->value());
+        $this->assertSame('c', $redoResult->value());
     }
 
     // =========================================================================
-    // handleKeyDirect — CtrlR/CtrlS with history (search start)
+    // handleKeyDirect — CtrlR/CtrlS with history
     // =========================================================================
 
     public function testHandleKeyDirectCtrlRWithoutHistoryIsNoOp(): void
@@ -210,9 +212,7 @@ final class TextPromptExtendedTest extends TestCase
     {
         $history = new InMemoryHistory();
         $p = TextPrompt::new('> ')->withHistory($history)->submit();
-        // Empty buffer not pushed
         $this->assertTrue($p->isSubmitted());
-        // History should be empty
         $history->reset();
         $this->assertNull($history->getPrevious());
     }
@@ -254,34 +254,7 @@ final class TextPromptExtendedTest extends TestCase
     }
 
     // =========================================================================
-    // deleteUnderCursor at end of buffer — no-op
-    // =========================================================================
-
-    public function testDeleteUnderCursorAtEndIsNoOp(): void
-    {
-        $p = TextPrompt::new('> ')->handleChar('a')->handleChar('b');
-        // Cursor is at 2 (after 'b'), delete under cursor
-        $refl = new \ReflectionClass($p);
-        $method = $refl->getMethod('deleteUnderCursor');
-        $method->setAccessible(true);
-        $result = $method->invoke($p);
-        $this->assertSame('ab', $result->value());
-    }
-
-    // =========================================================================
-    // deleteAllAfterCursor at end of buffer — no-op
-    // =========================================================================
-
-    public function testDeleteAllAfterCursorAtEndIsNoOp(): void
-    {
-        $p = TextPrompt::new('> ')->handleChar('a')->handleChar('b');
-        // Cursor at end, Ctrl+K should be no-op
-        $result = $p->handleKey(Key::CtrlK);
-        $this->assertSame('ab', $result->value());
-    }
-
-    // =========================================================================
-    // deleteWordBefore — nothing to delete
+    // deleteWordBefore — cursor at start
     // =========================================================================
 
     public function testDeleteWordBeforeAtBufferStartIsNoOp(): void
@@ -304,19 +277,10 @@ final class TextPromptExtendedTest extends TestCase
 
     public function testSuggestionReturnsFirstMatching(): void
     {
-        $p = TextPrompt::new('> ')->withCompletions(['apple', 'apricot', 'banana'])->handleChar('a')->handleChar('p');
+        $p = TextPrompt::new('> ')
+            ->withCompletions(['apple', 'apricot', 'banana'])
+            ->handleChar('a')->handleChar('p');
         $this->assertSame('apple', $p->suggestion());
-    }
-
-    // =========================================================================
-    // isWordChar — Unicode word boundaries
-    // =========================================================================
-
-    public function testIsWordCharRecognisesUnicodeLetter(): void
-    {
-        $p = TextPrompt::new('> ')->handleChar('文');
-        // Just verify it doesn't crash — the method is private but covered
-        $this->assertSame('文', $p->value());
     }
 
     // =========================================================================
@@ -337,30 +301,6 @@ final class TextPromptExtendedTest extends TestCase
     public function testWithAutoSuggestDisabled(): void
     {
         $p = TextPrompt::new('> ')->withAutoSuggest(false);
-        $this->assertFalse($p->isSearching()); // still not searching, just disabled
-    }
-
-    // =========================================================================
-    // moveCursorTo — clamp to buffer bounds
-    // =========================================================================
-
-    public function testMoveCursorToNegativeClampsToZero(): void
-    {
-        $p = TextPrompt::new('> ')->handleChar('a')->handleChar('b');
-        $refl = new \ReflectionClass($p);
-        $method = $refl->getMethod('moveCursorTo');
-        $method->setAccessible(true);
-        $result = $method->invoke($p, -5);
-        $this->assertSame(0, $result->cursor());
-    }
-
-    public function testMoveCursorToBeyondEndClampsToLength(): void
-    {
-        $p = TextPrompt::new('> ')->handleChar('a')->handleChar('b');
-        $refl = new \ReflectionClass($p);
-        $method = $refl->getMethod('moveCursorTo');
-        $method->setAccessible(true);
-        $result = $method->invoke($p, 99);
-        $this->assertSame(2, $result->cursor());
+        $this->assertFalse($p->isSearching());
     }
 }

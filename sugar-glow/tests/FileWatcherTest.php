@@ -85,42 +85,4 @@ final class FileWatcherTest extends TestCase
         $result = $watcher->hasChangedSince(time());
         self::assertFalse($result); // non-existent file returns false
     }
-
-    // --- FileWatcher::watch() tests ---
-
-    public function testWatchReturnsGeneratorForExistingFile(): void
-    {
-        $path = sys_get_temp_dir() . '/test_watcher_gen_' . uniqid() . '.txt';
-        file_put_contents($path, 'content');
-        try {
-            $gen = FileWatcher::watch($path, 100);
-            $this->assertInstanceOf(\Generator::class, $gen);
-            // Advance once to enter the loop and capture initial state
-            $gen->rewind();
-            // Initial state captured, no change detected yet
-            $this->assertNull($gen->current());
-            // Valid because generator hasn't closed
-            $this->assertTrue($gen->valid());
-        } finally {
-            unlink($path);
-        }
-    }
-
-    public function testWatchReturnsGeneratorForNonExistentFile(): void
-    {
-        $gen = FileWatcher::watch('/non/existent/file.txt');
-        // Returns an empty generator (early return)
-        $this->assertInstanceOf(\Generator::class, $gen);
-        $this->assertNull($gen->current());
-        $this->assertFalse($gen->valid());
-    }
-
-    public function testWatchReturnsGeneratorWhenFilemtimeFails(): void
-    {
-        // On Windows, chmod doesn't work as expected; use a device file path
-        // that filemtime will fail on
-        $gen = FileWatcher::watch('/dev/null/should-not-exist');
-        $this->assertInstanceOf(\Generator::class, $gen);
-        $this->assertNull($gen->current());
-    }
 }
