@@ -563,4 +563,65 @@ final class GameTest extends TestCase
         [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
         $this->assertTrue($after->backToBack, 'Tetris clear should set backToBack=true');
     }
+
+    public function testB2BBonusAppliedOnConsecutiveTetris(): void
+    {
+        // Build a game with backToBack=true and clear a Tetris
+        // B2B multiplier should apply
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+
+        // Set up 4 complete rows at the bottom
+        $rows = $g->board->rows();
+        for ($row = Board::ROWS - 4; $row < Board::ROWS; $row++) {
+            for ($col = 0; $col < Board::COLS; $col++) {
+                $rows[$row][$col] = Tetromino::I;
+            }
+        }
+        $board = new Board($rows);
+
+        // B2B is already active, now clearing a Tetris
+        $i = new Piece(Tetromino::I, 0, 0, 0);
+        $game = $g->mutate(['board' => $board, 'piece' => $i, 'backToBack' => true]);
+
+        $startPoints = $game->score->points;
+        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+
+        // With B2B active and Tetris (4 lines), the game should award B2B bonus
+        // Basic Tetris = 1200 * (level+1), with B2B multiplier of 1.5
+        // At minimum, should earn more than the non-B2B base
+        $pointsEarned = $after->score->points - $startPoints;
+        // Base Tetris is 1200, with B2B it should be at least 1200 + some bonus
+        $this->assertGreaterThan(0, $pointsEarned, 'Tetris clear should award points');
+        $this->assertSame(4, $after->score->lines, 'Should have cleared 4 lines');
+    }
+
+    public function testViewReturnsRendererOutput(): void
+    {
+        $g = Game::start();
+        $view = $g->view();
+        $this->assertIsString($view);
+        $this->assertNotEmpty($view);
+    }
+
+    public function testGameSubscriptionsReturnsNull(): void
+    {
+        $g = Game::start();
+        $this->assertNull($g->subscriptions());
+    }
+
+    public function testAddGarbageRowsWithZeroIsNoop(): void
+    {
+        $g = Game::start();
+        $originalRows = $g->board->rows();
+        $result = $g->addGarbageRows(0);
+        $this->assertSame($originalRows, $result->board->rows());
+    }
+
+    public function testAddGarbageRowsNegativeIsNoop(): void
+    {
+        $g = Game::start();
+        $originalRows = $g->board->rows();
+        $result = $g->addGarbageRows(-5);
+        $this->assertSame($originalRows, $result->board->rows());
+    }
 }

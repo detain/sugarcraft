@@ -170,4 +170,33 @@ final class VsRendererTest extends TestCase
         $this->assertStringContainsString('PLAYER', $output);
         $this->assertStringContainsString('COMPUTER', $output);
     }
+
+    public function testRenderComputerBoardWithPlacedPieces(): void
+    {
+        // Build a VS game where computer has placed pieces on the board
+        $computerGame = Game::start();
+
+        // Create a board with some pieces already placed for computer
+        $rows = $computerGame->board->rows();
+        $rows[20][3] = Tetromino::T;
+        $rows[20][4] = Tetromino::T;
+        $rows[21][3] = Tetromino::T;
+        $rows[21][4] = Tetromino::T;
+        $computerBoard = new Board($rows);
+
+        // Keep the piece at a position where it and its ghost will render
+        $computerWithPlacedPieces = new Game(
+            $computerBoard,
+            $computerGame->piece,
+            $computerGame->bag,
+            $computerGame->score,
+        );
+
+        $vs = new VsGame(Game::start(), $computerWithPlacedPieces);
+        $output = VsRenderer::render($vs);
+
+        // Should render ANSI codes for the computer board with pieces
+        $this->assertStringContainsString("\x1b[", $output);
+        $this->assertStringContainsString('COMPUTER', $output);
+    }
 }
