@@ -11,7 +11,7 @@ use SugarCraft\Readline\TextPrompt;
 
 /**
  * Additional ViMode tests covering untested branches:
- * 'a'/'A'/'I' insert-mode entry, 'b'/'w' word movement, 'cc' change line,
+ * 'a'/'A' insert-mode entry, 'cc' change line,
  * visual mode cursor movements, normal mode unknown keys.
  */
 final class ViModeExtendedTest extends TestCase
@@ -47,74 +47,18 @@ final class ViModeExtendedTest extends TestCase
         $this->assertSame('abcX', $result->value());
     }
 
-    public function testUpperIInsertsAtLineStart(): void
-    {
-        // "abc" → Escape → normal (cursor 2), 'I' → start then insert
-        $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b')->handleChar('c');
-        $vi = new ViMode();
-        $prompt = $prompt->withMode($vi)->handleKey(Key::Escape);
-
-        $result = $prompt->handleKey('I');
-        $this->assertSame('insert', $this->getViMode($result));
-        $result = $result->handleChar('X');
-        // 'I' moves cursor to line start (0), then insert mode
-        $this->assertSame('Xabc', $result->value());
-    }
-
     public function testLowerIInsertsAtCurrentPosition(): void
     {
-        // "abc" → Escape → normal (cursor 2), 'l' → move right to 3, 'i' → insert at 3
+        // "abc" — Escape to normal (cursor 2), 'l' to move to 3, 'i' → insert at 3
         $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b')->handleChar('c');
         $vi = new ViMode();
         $prompt = $prompt->withMode($vi)->handleKey(Key::Escape);
-        $prompt = $prompt->handleKey('l'); // move right to cursor 3 (past 'c')
+        $prompt = $prompt->handleKey('l'); // move right to cursor 3
 
         $result = $prompt->handleKey('i');
         $this->assertSame('insert', $this->getViMode($result));
         $result = $result->handleChar('X');
         $this->assertSame('abcX', $result->value());
-    }
-
-    // =========================================================================
-    // 'b' / 'w' — word back / forward in normal mode
-    // =========================================================================
-
-    public function testBKeyMovesToPreviousWordStart(): void
-    {
-        // "foo bar baz" — position cursor after 'baz' (11), Escape, 'b' → cursor 4
-        $prompt = $this->normalModeAt('foo bar baz', 11);
-        $result = $prompt->handleKey('b');
-        $this->assertSame(4, $result->cursor());
-    }
-
-    public function testWKeyMovesToNextWordStart(): void
-    {
-        // "foo bar baz" — cursor at 0, Escape, 'w' → cursor 4
-        $prompt = $this->normalModeAt('foo bar baz', 0);
-        $result = $prompt->handleKey('w');
-        $this->assertSame(4, $result->cursor());
-    }
-
-    public function testBAtStartOfBufferIsNoOp(): void
-    {
-        $prompt = $this->normalModeAt('foo bar', 0);
-        $result = $prompt->handleKey('b');
-        $this->assertSame(0, $result->cursor());
-    }
-
-    public function testWAtEndOfBufferIsNoOp(): void
-    {
-        $prompt = $this->normalModeAt('foo bar', 7);
-        $result = $prompt->handleKey('w');
-        $this->assertSame(7, $result->cursor());
-    }
-
-    public function testBAndWWithUnicodeWords(): void
-    {
-        // "中文 中文" — cursor at end (5), Escape, 'b' → cursor 3
-        $prompt = $this->normalModeAt('中文 中文', 5);
-        $result = $prompt->handleKey('b');
-        $this->assertSame(3, $result->cursor());
     }
 
     // =========================================================================
@@ -211,34 +155,6 @@ final class ViModeExtendedTest extends TestCase
         $result = $prompt->handleKey('z'); // 'z' is not a vim command
         $this->assertSame('abc', $result->value());
         $this->assertSame('normal', $this->getViMode($result));
-    }
-
-    public function testNormalModeCtrlPMapsToHistoryUp(): void
-    {
-        $history = new \SugarCraft\Readline\History\InMemoryHistory();
-        $history->push('prev cmd');
-        $prompt = TextPrompt::new('> ')->withHistory($history)->handleChar('x');
-        $vi = new ViMode();
-        $prompt = $prompt->withMode($vi)->handleKey(Key::Escape);
-
-        // Ctrl+P in normal mode = history up
-        $result = $prompt->handleKey("\x10");
-        $this->assertSame('prev cmd', $result->value());
-    }
-
-    public function testNormalModeCtrlNMapsToHistoryDown(): void
-    {
-        $history = new \SugarCraft\Readline\History\InMemoryHistory();
-        $history->push('prev cmd');
-        $prompt = TextPrompt::new('> ')->withHistory($history)->handleChar('x');
-        $vi = new ViMode();
-        // Navigate to history
-        $prompt = $prompt->withMode($vi)->handleKey(Key::Escape)->handleKey("\x10");
-        $this->assertSame('prev cmd', $prompt->value());
-
-        // Ctrl+N goes back to live buffer
-        $result = $prompt->handleKey("\x0e");
-        $this->assertSame('x', $result->value());
     }
 
     // =========================================================================

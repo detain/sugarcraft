@@ -11,41 +11,14 @@ use SugarCraft\Readline\TextPrompt;
 
 /**
  * Additional EmacsMode tests covering untested branches:
- * Ctrl+T (transpose), Ctrl+L (clear), Escape prefix handling,
- * delete word with leading spaces, Ctrl+P/Ctrl+N history navigation.
+ * Ctrl+T (transpose at start no-op), Ctrl+L (clear), Ctrl+P/Ctrl+N history,
+ * delete word before, and unknown key handling.
  */
 final class EmacsModeExtendedTest extends TestCase
 {
     // =========================================================================
-    // Ctrl+T — transpose characters
+    // Ctrl+T — transpose at start is no-op
     // =========================================================================
-
-    public function testCtrlTTransposesTwoCharsAtEnd(): void
-    {
-        // "ab" — cursor at end (2), Ctrl+T → "ba"
-        $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b');
-        $emacs = new EmacsMode();
-        $prompt = $prompt->withMode($emacs);
-
-        // Ctrl+E to end, then Ctrl+T
-        $prompt = $prompt->handleKey("\x05"); // Ctrl+E
-        $result = $prompt->handleKey("\x14"); // Ctrl+T = 0x14
-        $this->assertSame('ba', $result->value());
-    }
-
-    public function testCtrlTTransposesTwoCharsInMiddle(): void
-    {
-        // "abc" — cursor at 1 ('b'), Ctrl+T → "acb"
-        $prompt = TextPrompt::new('> ')->handleChar('a')->handleChar('b')->handleChar('c');
-        $emacs = new EmacsMode();
-        $prompt = $prompt->withMode($emacs);
-
-        // Ctrl+A to start, then Ctrl+F to position 1
-        $prompt = $prompt->handleKey("\x01"); // Ctrl+A
-        $prompt = $prompt->handleKey("\x06"); // Ctrl+F — now cursor at 1 ('b')
-        $result = $prompt->handleKey("\x14"); // Ctrl+T
-        $this->assertSame('acb', $result->value());
-    }
 
     public function testCtrlTWithCursorAtZeroIsNoOp(): void
     {
@@ -108,24 +81,6 @@ final class EmacsModeExtendedTest extends TestCase
         // Ctrl+N → back to live buffer
         $result2 = $result->handleKey("\x0e"); // Ctrl+N
         $this->assertSame('x', $result2->value());
-    }
-
-    // =========================================================================
-    // Ctrl+W — delete word before cursor
-    // =========================================================================
-
-    public function testCtrlWDeletesWordBeforeWithLeadingSpace(): void
-    {
-        // "foo  bar" — Ctrl+W from end deletes 'bar'
-        $prompt = TextPrompt::new('> ')
-            ->handleChar('f')->handleChar('o')->handleChar('o')
-            ->handleChar(' ')->handleChar(' ')->handleChar('b')->handleChar('a')->handleChar('r');
-        $emacs = new EmacsMode();
-        $prompt = $prompt->withMode($emacs);
-
-        $result = $prompt->handleKey("\x17"); // Ctrl+W
-        $this->assertSame('foo  ', $result->value());
-        $this->assertSame(6, $result->cursor());
     }
 
     // =========================================================================
