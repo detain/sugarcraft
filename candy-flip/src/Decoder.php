@@ -34,10 +34,10 @@ final class Decoder
     /** @return list<Frame> */
     public static function decode(string $path, int $cellsW, int $cellsH): array
     {
-        if (!is_file($path)) {
+        if (is_file($path) === false) {
             throw new \RuntimeException(Lang::t('decoder.no_file', ['path' => $path]));
         }
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             throw new \RuntimeException(Lang::t('decoder.no_gd'));
         }
         $bytes = file_get_contents($path);
@@ -172,7 +172,7 @@ final class Decoder
         // Build a minimal single-frame GIF in memory.
         $gifData = '';
         $gifData .= substr($bytes, 0, 13);
-        if ($hasGlobal) {
+        if ($hasGlobal === true) {
             $gifData .= substr($bytes, 13, $globalBytes);
         }
         // GCE block.
@@ -186,7 +186,7 @@ final class Decoder
             . chr($transparent && $transparentIndex >= 0 ? $transparentIndex : 0)
             . "\x00";
         // Local color table when present.
-        if ($hasLct) {
+        if ($hasLct === true) {
             $lctOffset = $offset + 10;
             $gifData .= substr($bytes, $lctOffset, $lctBytes);
         }

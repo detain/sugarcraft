@@ -62,7 +62,7 @@ final class Composite implements Model
                 // Practically children always return their own type, but guard
                 // for robustness: if the new model isn't a Component, retain
                 // the old child instance.
-                if (!$child instanceof Component) {
+                if ($child instanceof Component === false) {
                     return [$this, $cmd];
                 }
                 $children = $this->children;

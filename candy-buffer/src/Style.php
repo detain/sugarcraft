@@ -103,7 +103,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with bold toggled on or off. */
     public function withBold(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_BOLD)
             : ($this->attrs & ~self::ATTR_BOLD)]);
     }

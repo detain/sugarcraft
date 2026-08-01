@@ -58,17 +58,17 @@ final class VimKeyHandler
         $keyLower = strtolower($key);
 
         return match ($state) {
-            VimState::Insert => self::handleInsertMode($keyLower, $key, $features, $ctrl),
-            VimState::Normal => self::handleNormalMode($keyLower, $key, $features, $ctrl),
-            VimState::Visual => self::handleVisualMode($keyLower, $key, $features, $ctrl),
-            VimState::VisualLine => self::handleVisualLineMode($keyLower, $key, $features, $ctrl),
+            VimState::Insert => self::handleInsertMode($keyLower, $features, $ctrl),
+            VimState::Normal => self::handleNormalMode($keyLower, $features, $ctrl),
+            VimState::Visual => self::handleVisualMode($keyLower, $features, $ctrl),
+            VimState::VisualLine => self::handleVisualLineMode($keyLower, $features, $ctrl),
         };
     }
 
     /**
      * Handle a key in Insert mode.
      */
-    private static function handleInsertMode(string $keyLower, string $key, int $features, bool $ctrl): ?VimAction
+    private static function handleInsertMode(string $keyLower, int $features, bool $ctrl): ?VimAction
     {
         // Escape enters normal mode
         if ($keyLower === 'esc') {
@@ -107,7 +107,7 @@ final class VimKeyHandler
     /**
      * Handle a key in Normal mode.
      */
-    private static function handleNormalMode(string $keyLower, string $key, int $features, bool $ctrl): ?VimAction
+    private static function handleNormalMode(string $keyLower, int $features, bool $ctrl): ?VimAction
     {
         if (!($features & self::FEAT_NORMAL)) {
             return VimAction::NoOp;
@@ -185,7 +185,7 @@ final class VimKeyHandler
     /**
      * Handle a key in Visual mode.
      */
-    private static function handleVisualMode(string $keyLower, string $key, int $features, bool $ctrl): ?VimAction
+    private static function handleVisualMode(string $keyLower, int $features, bool $ctrl): ?VimAction
     {
         if (!($features & self::FEAT_VISUAL)) {
             return VimAction::EnterNormalMode;
@@ -215,7 +215,7 @@ final class VimKeyHandler
     /**
      * Handle a key in Visual-line mode.
      */
-    private static function handleVisualLineMode(string $keyLower, string $key, int $features, bool $ctrl): ?VimAction
+    private static function handleVisualLineMode(string $keyLower, int $features, bool $ctrl): ?VimAction
     {
         if (!($features & self::FEAT_VISUAL_LINE)) {
             return VimAction::EnterNormalMode;
