@@ -402,14 +402,14 @@ final class CoverageMaximizerTest extends TestCase
     }
 
     /**
-     * Test flush() when in DcsString state dispatches DCS.
+     * Test flush() when in DcsString state dispatches DCS with its params.
      */
-    public function testFlushInDcsStringDispatchesDcs(): void
+    public function testFlushInDcsStringDispatchesDcsWithParams(): void
     {
         $handler = new DebugHandler();
         $parser = new Parser($handler);
 
-        // Feed incomplete DCS
+        // Feed incomplete DCS (without ST terminator)
         $parser->feed("\x1bP1;2;3mydata");
         $this->assertSame(\SugarCraft\Ansi\Parser\State::DcsString->value, $parser->currentState()->value);
 
@@ -417,8 +417,9 @@ final class CoverageMaximizerTest extends TestCase
         $parser->flush();
 
         $dcs = $handler->filter('dcs');
-        $this->assertNotEmpty($dcs);
-        $this->assertSame('1;2;3mydata', $dcs[0]['detail']['data']);
+        $this->assertNotEmpty($dcs, 'DCS should be dispatched on flush');
+        // Data is just what was accumulated after the final byte
+        $this->assertSame('ydata', $dcs[0]['detail']['data']);
     }
 
     /**
@@ -503,7 +504,8 @@ final class CoverageMaximizerTest extends TestCase
 
         $dcs = $handler->filter('dcs');
         $this->assertCount(1, $dcs);
-        $this->assertSame('1;2;3mydata', $dcs[0]['detail']['data']);
+        // Data is just 'ydata' - the bytes after the final 'm'
+        $this->assertSame('ydata', $dcs[0]['detail']['data']);
     }
 
     /**

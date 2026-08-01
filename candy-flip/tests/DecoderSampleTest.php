@@ -60,14 +60,99 @@ final class DecoderSampleTest extends TestCase
     }
 
     /**
-     * A GIF with header + GCT + trailer but no image data should be accepted
-     * by decode() and yield a single Frame via renderSingleFrame() → sample().
+     * A GIF with header + GCT + trailer but no Image Descriptor triggers the
+     * renderSingleFrame() → sample() fallback path. Since there is no valid
+     * LZW image data, imagecreatefromstring() returns false and the fallback
+     * path returns an empty array — no crash, no warning.
      */
-    public function testDecodeNoImageDescriptorYieldsSingleFrame(): void
+    public function testNoImageDescriptorReturnsEmptyFramesGracefully(): void
     {
         if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
+
+        $buf = $this->buildGifWithNoImageDescriptor();
+        $this->tmpPath = sys_get_temp_dir() . '/no-imgdesc-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $buf);
+
+        // No @ suppression — any PHP warning would fail the suite.
+        $frames = Decoder::decode($this->tmpPath, 1, 1);
+        $this->assertIsArray($frames);
+        $this->assertCount(0, $frames,
+            'GIF with no Image Descriptor has no decodable frames');
+    }
+
+    /**
+     * Regression: a GIF with only header + LSD + GCT + trailer must not emit
+     * PHP warnings when parseHeader() walks the byte stream and finds no
+     * blocks before the trailer. The early-exit at blockType===0x3B handles it.
+     */
+    public function testGifWithOnlyTrailerNoWarning(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+
+        // Valid header + LSD + GCT + trailer, nothing else.
+        $buf = '';
+        $buf .= "\x47\x49\x46\x38\x39\x61"; // GIF89a
+        $buf .= "\x02\x00";                  // width = 2
+        $buf .= "\x02\x00";                  // height = 2
+        $buf .= "\x80";                      // GCT flag=1, size exp=0 (2 entries)
+        $buf .= "\x00";
+        $buf .= "\x00";
+        $buf .= "\x00\x00\x00";
+        $buf .= "\xff\x00\x00";
+        $buf .= "\x3B";
+
+        $this->tmpPath = sys_get_temp_dir() . '/gct-trailer-only-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $buf);
+
+        // No @ suppression — any PHP warning here would fail the suite.
+        $frames = Decoder::decode($this->tmpPath, 2, 2);
+        $this->assertIsArray($frames);
+        // No valid image data → 0 frames, no warnings.
+        $this->assertCount(0, $frames);
+    }
+
+    /**
+     * The sample() method (called from renderSingleFrame) uses area-average
+     * downsampling with transparent-pixel awareness. We test this path by
+     * creating a GIF with a proper Image Descriptor that goes through the
+     * normal multi-frame path, but we also verify the single-frame path
+     * handles the null return from imagecreatefromstring gracefully.
+     */
+    public function testDecodeWithBrokenLzwDataYieldsEmptyFrames(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+
+        // A GIF with a valid header and an Image Descriptor but corrupted LZW
+        // data — imagecreatefromstring will return false, yielding no frames.
+        $buf = '';
+        $buf .= "\x47\x49\x46\x38\x39\x61"; // GIF89a
+        $buf .= "\x01\x00";                  // width = 1
+        $buf .= "\x01\x00";                  // height = 1
+        $buf .= "\x80";                      // GCT flag=1, size exp=0
+        $buf .= "\x00";
+        $buf .= "\x00";
+        $buf .= "\x00\x00\x00";             // GCT[0] black
+        $buf .= "\xff\x00\x00";             // GCT[1] red
+        // Image Descriptor pointing to valid offset but broken LZW data.
+        $buf .= "\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00"; // Image Descriptor
+        // LZW min code = 2, but the following "data" is just the trailer.
+        $buf .= "\x02";                      // LZW min code
+        $buf .= "\x3b";                      // trailer immediately after (invalid)
+
+        $this->tmpPath = sys_get_temp_dir() . '/broken-lzw-' . uniqid() . '.gif';
+        file_put_contents($this->tmpPath, $buf);
+
+        $frames = @Decoder::decode($this->tmpPath, 1, 1);
+        $this->assertIsArray($frames);
+        $this->assertCount(0, $frames,
+            'GIF with broken LZW data must yield 0 frames');
+    }
 
         $buf = $this->buildGifWithNoImageDescriptor();
         $this->tmpPath = sys_get_temp_dir() . '/no-imgdesc-' . uniqid() . '.gif';

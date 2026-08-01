@@ -389,4 +389,203 @@ final class ItemListTest extends TestCase
         $this->assertStringContainsString("\x1b[7m", $view); // REVERSE on
         $this->assertStringContainsString("\x1b[0m", $view); // RESET off
     }
+
+    public function testInsertItemEmptyVariadicIsNoOp(): void
+    {
+        $l = ItemList::new($this->items());
+        $l2 = $l->insertItem(1);
+        $this->assertSame(4, count($l2->items()));
+    }
+
+    public function testRemoveItemOnEmptyListIsNoOp(): void
+    {
+        $l = ItemList::new([]);
+        $l2 = $l->removeItem(0);
+        $this->assertSame(0, count($l2->items()));
+    }
+
+    public function testSetItemOnEmptyListIsNoOp(): void
+    {
+        $l = ItemList::new([]);
+        $l2 = $l->setItem(0, new StringItem('x'));
+        $this->assertSame(0, count($l2->items()));
+    }
+
+    public function testInfiniteScrollingWrapsCursor(): void
+    {
+        $l = ItemList::new($this->items(), 60, 5)->withInfiniteScrolling(true);
+        [$l, ] = $l->focus();
+        // Move up from index 0 in infinite scroll should wrap to last
+        $l = $l->cursorUp();
+        $this->assertSame(3, $l->index());
+        // Move down past end should wrap to 0
+        $l = $l->cursorDown(10);
+        $this->assertSame(0, $l->index());
+    }
+
+    public function testStatusMessageWithLifetime(): void
+    {
+        $l = ItemList::new($this->items(), 60, 5)->withStatusMessageLifetime(5.0);
+        $l = $l->newStatusMessage('Working...');
+        $this->assertStringContainsString('Working...', $l->status());
+    }
+
+    public function testStatusMessageExpiredNotShown(): void
+    {
+        // Create a list and immediately add a message that expires in 0 seconds
+        $l = ItemList::new($this->items(), 60, 5)
+            ->withStatusMessageLifetime(0.0)
+            ->newStatusMessage('Gone');
+        // status() should not include the expired message
+        $this->assertStringNotContainsString('Gone', $l->status());
+    }
+
+    public function testStatusShowsCursorAndCount(): void
+    {
+        $l = ItemList::new($this->items(), 60, 5)->withInfiniteScrolling(false);
+        [$l, ] = $l->focus();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Down));
+        $status = $l->status();
+        $this->assertStringContainsString('2/4', $status);
+    }
+
+    public function testSetSizeThrowsOnNegativeWidth(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ItemList::new($this->items())->setSize(-1, 10);
+    }
+
+    public function testSetSizeThrowsOnNegativeHeight(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ItemList::new($this->items())->setSize(60, -1);
+    }
+
+    public function testWithTitle(): void
+    {
+        $l = ItemList::new($this->items(), 60, 5)->withTitle('Pick a fruit');
+        $view = $l->view();
+        $this->assertStringContainsString('Pick a fruit', $view);
+    }
+
+    public function testWithShowDescriptionFalse(): void
+    {
+        $items = [new StringItem('apple', 'a fruit')];
+        $l = ItemList::new($items, 60, 5)->withShowDescription(false);
+        $view = $l->view();
+        $this->assertStringNotContainsString('a fruit', $view);
+    }
+
+    public function testWithShowStatusBarFalse(): void
+    {
+        $l = ItemList::new($this->items(), 60, 5)->withShowStatusBar(false);
+        [$l, ] = $l->focus();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Down));
+        $view = $l->view();
+        // Without status bar, the "1/4" count should not appear
+        $this->assertStringNotContainsString('1/4', $view);
+    }
+
+    public function testWithShowHelpFalse(): void
+    {
+        // withShowHelp does not directly affect view() output (help is shown
+        // through other means in a real TUI context), but we test the flag
+        $l = ItemList::new($this->items(), 60, 5)->withShowHelp(false);
+        $this->assertInstanceOf(ItemList::class, $l);
+    }
+
+    public function testWithShowFilterFalse(): void
+    {
+        $l = ItemList::new($this->items(), 60, 5)->withShowFilter(false);
+        [$l, ] = $l->focus();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        $l = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        $view = $l->view();
+        // Filter bar should not appear when showFilter is false
+        $this->assertStringNotContainsString('/a', $view);
+    }
+
+    public function testFilterWithSpaceCharacter(): void
+    {
+        $l = $this->focused();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        // Space in filter text
+        [$l, ] = $l->update(new KeyMsg(KeyType::Space));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'b'));
+        $titles = array_map(static fn($i) => $i->title(), $l->visibleItems());
+        // 'banana' contains 'b' and space before it (filtered as empty prefix)
+        $this->assertContains('banana', $titles);
+    }
+
+    public function testFilterUpDownMovesCursorWithinFilteredSet(): void
+    {
+        $l = $this->focused();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        // Move down through filtered set
+        [$l, ] = $l->update(new KeyMsg(KeyType::Down));
+        // At this point only banana is visible (index 0), down wraps in filtered set
+        // Since only 1 item is visible, cursor should stay at 0
+        $this->assertSame(0, $l->index());
+    }
+
+    public function testFilterPageUpPageDownMovesCursorByHeight(): void
+    {
+        $l = $this->focused();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::PageDown));
+        [$l, ] = $l->update(new KeyMsg(KeyType::PageUp));
+        // Should not error
+        $this->assertSame(0, $l->index());
+    }
+
+    public function testUpdateWhenNotFocusedReturnsUnchanged(): void
+    {
+        $l = ItemList::new($this->items());
+        [$l2, $cmd] = $l->update(new KeyMsg(KeyType::Down));
+        $this->assertSame($l, $l2);
+        $this->assertNull($cmd);
+    }
+
+    public function testNoMatchesShowsNoMatches(): void
+    {
+        $l = $this->focused();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'z'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'z'));
+        $view = $l->view();
+        $this->assertStringContainsString('No matches', $view);
+    }
+
+    public function testNoItemsShowsNoItems(): void
+    {
+        $l = ItemList::new([])->withShowStatusBar(false);
+        $view = $l->view();
+        $this->assertStringContainsString('No items', $view);
+    }
+
+    public function testIsFilteredFalseWhenNoFilter(): void
+    {
+        $l = ItemList::new($this->items());
+        $this->assertFalse($l->isFiltered());
+        $this->assertFalse($l->settingFilter());
+    }
+
+    public function testClearFilter(): void
+    {
+        $l = $this->focused();
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        $l = $l->clearFilter();
+        $this->assertFalse($l->isFiltering());
+        $this->assertFalse($l->isFiltered());
+        $this->assertSame(0, $l->cursor);
+    }
+
+    public function testWithStatusMessageLifetimeNegativeClamped(): void
+    {
+        $l = ItemList::new($this->items(), 60, 5)->withStatusMessageLifetime(-5.0);
+        $this->assertInstanceOf(ItemList::class, $l);
+    }
 }

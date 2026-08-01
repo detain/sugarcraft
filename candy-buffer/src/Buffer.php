@@ -187,29 +187,29 @@ final class Buffer implements \JsonSerializable
             : null;
     }
 
-    private static function ansiColorToHex(int $idx, bool $bright = false): string
+    private static function ansiColorToHex(int $idx, bool $bright = false): int
     {
         $palette = [
             // Standard colors
-            '#000000', // 0 black
-            '#ff0000', // 1 red
-            '#00ff00', // 2 green
-            '#ffff00', // 3 yellow
-            '#0000ff', // 4 blue
-            '#ff00ff', // 5 magenta
-            '#00ffff', // 6 cyan
-            '#ffffff', // 7 white
+            0x000000, // 0 black
+            0xff0000, // 1 red
+            0x00ff00, // 2 green
+            0xffff00, // 3 yellow
+            0x0000ff, // 4 blue
+            0xff00ff, // 5 magenta
+            0x00ffff, // 6 cyan
+            0xffffff, // 7 white
         ];
-        $base = $palette[$idx] ?? '#ffffff';
+        $base = $palette[$idx] ?? 0xffffff;
         if ($bright) {
             // Bright: lighten the color
-            $r = hexdec(substr($base, 1, 2));
-            $g = hexdec(substr($base, 3, 2));
-            $b = hexdec(substr($base, 5, 2));
+            $r = ($base >> 16) & 0xff;
+            $g = ($base >> 8) & 0xff;
+            $b = $base & 0xff;
             $r = min(255, (int) ($r + ($r * 0.4)));
             $g = min(255, (int) ($g + ($g * 0.4)));
             $b = min(255, (int) ($b + ($b * 0.4)));
-            return sprintf('#%02x%02x%02x', $r, $g, $b);
+            return ($r << 16) | ($g << 8) | $b;
         }
         return $base;
     }

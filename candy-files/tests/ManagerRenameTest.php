@@ -96,4 +96,139 @@ final class ManagerRenameTest extends TestCase
         // Since rename uses pendingOpDest, and it equals current name, performRename returns cancelled
         $this->assertSame(ConfirmState::RenameSelected, $m->confirm);
     }
+
+    public function testRenameTypingAccumulatesInputBuffer(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame(ConfirmState::RenameSelected, $m->confirm);
+
+        // Type 'n'
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertSame('n', $m->inputBuffer);
+
+        // Type 'e'
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame('ne', $m->inputBuffer);
+
+        // Type 'w'
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertSame('new', $m->inputBuffer);
+    }
+
+    public function testRenameBackspaceRemovesLastChar(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+
+        // Type 'new'
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertSame('new', $m->inputBuffer);
+
+        // Backspace
+        [$m] = $m->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertSame('ne', $m->inputBuffer);
+    }
+
+    public function testRenameEscapeCancels(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame(ConfirmState::RenameSelected, $m->confirm);
+
+        // Type some characters
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame('ne', $m->inputBuffer);
+
+        // Escape should cancel
+        [$cancelled] = $m->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertSame(ConfirmState::None, $cancelled->confirm);
+        $this->assertNull($cancelled->inputBuffer);
+        $this->assertStringContainsString('cancelled', $cancelled->status);
+    }
+
+    public function testRenameEmptyBufferCancels(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame(ConfirmState::RenameSelected, $m->confirm);
+
+        // Press Enter with empty buffer should cancel
+        [$cancelled] = $m->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(ConfirmState::None, $cancelled->confirm);
+        $this->assertStringContainsString('cancelled', $cancelled->status);
+    }
+
+    public function testRenameWithPathTraversalBlocked(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+
+        // Try to type a path traversal attempt
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '.'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '.'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'v'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'i'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'l'));
+
+        // Enter to confirm - should fail due to path traversal
+        [$result] = $m->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(ConfirmState::None, $result->confirm);
+        $this->assertStringContainsString('failed', $result->status);
+        // Original file should still exist
+        $this->assertFileExists($file);
+    }
+
+    public function testRenameSuccessful(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'test content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+
+        // Type new name
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'w'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'a'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame('newname', $m->inputBuffer);
+
+        // Confirm with Enter
+        [$renamed] = $m->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(ConfirmState::None, $renamed->confirm);
+        $this->assertFileDoesNotExist($file);
+        $this->assertFileExists($this->tmpDir . '/newname.txt');
+        $this->assertSame('test content', file_get_contents($this->tmpDir . '/newname.txt'));
+    }
 }
