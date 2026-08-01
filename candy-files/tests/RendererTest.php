@@ -83,4 +83,80 @@ final class RendererTest extends TestCase
         $out = Renderer::render($m);
         $this->assertNotSame('', $out);
     }
+
+    public function testRenderShowsTabBarWhenMultipleTabs(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        // Duplicate tab to create multiple tabs
+        $m = $m->duplicateTab();
+        $this->assertTrue($m->showTabBar);
+        $out = Renderer::render($m);
+        // Tab bar should show the tab labels
+        $this->assertStringContainsString('/', $out);
+    }
+
+    public function testRenderShowsSearchUIWhenSearching(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        // Start search
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertNotNull($m->searchQuery);
+        $out = Renderer::render($m);
+        // Should show "Search:" label
+        $this->assertStringContainsString('Search:', $out);
+        // Should show search query
+        $this->assertStringContainsString('Search: ', $out);
+    }
+
+    public function testRenderSearchShowsNoMatchMessage(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        // Start search and type something that matches nothing
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertSame([], $m->searchResults);
+        $out = Renderer::render($m);
+        // Should show "(no matches)" message
+        $this->assertStringContainsString('(no matches)', $out);
+    }
+
+    public function testRenderSearchShowsResultsWithCounter(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        // Start search and type 're' which should match readme.txt
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'r'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertNotEmpty($m->searchResults);
+        $out = Renderer::render($m);
+        // Should show counter like "1/2" or similar
+        $this->assertMatchesRegularExpression('/\d+\/\d+/', $out);
+    }
+
+    public function testRenderCursorAdvancesWithMultipleMoves(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        // Move down a few times
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        $out = Renderer::render($m);
+        // Should still show cursor arrow
+        $this->assertStringContainsString('▸', $out);
+    }
+
+    public function testRenderTruncatesLongDirectoryNames(): void
+    {
+        $tree = [
+            '/a-very-long-directory-name-that-exceeds-thirty-chars' => [
+                new Entry('file.txt', false, 1024, 0),
+            ],
+        ];
+        $fs = static fn(string $p): array => $tree[$p] ?? [];
+        $m = Manager::start('/a-very-long-directory-name-that-exceeds-thirty-chars', '/a-very-long-directory-name-that-exceeds-thirty-chars', $fs);
+        $out = Renderer::render($m);
+        // The long path should be truncated with "..."
+        $this->assertStringContainsString('…', $out);
+    }
 }

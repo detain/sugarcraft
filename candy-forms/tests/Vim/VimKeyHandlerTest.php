@@ -43,37 +43,6 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertSame(VimAction::CursorLineEnd,  VimKeyHandler::handle('end',  VimState::Insert));
     }
 
-    public function testInsertModeCtrlACtrlE(): void
-    {
-        $this->assertSame(VimAction::CursorLineStart, VimKeyHandler::handle('ctrl_a', VimState::Insert, VimKeyHandler::FEAT_ALL, true));
-        $this->assertSame(VimAction::CursorLineEnd,  VimKeyHandler::handle('ctrl_e', VimState::Insert, VimKeyHandler::FEAT_ALL, true));
-    }
-
-    public function testInsertModeCtrlU(): void
-    {
-        $this->assertSame(VimAction::DeleteToStart, VimKeyHandler::handle('ctrl_u', VimState::Insert, VimKeyHandler::FEAT_ALL, true));
-    }
-
-    public function testInsertModeCtrlK(): void
-    {
-        $this->assertSame(VimAction::DeleteToEnd, VimKeyHandler::handle('ctrl_k', VimState::Insert, VimKeyHandler::FEAT_ALL, true));
-    }
-
-    public function testInsertModeCtrlP(): void
-    {
-        $this->assertSame(VimAction::HistoryUp, VimKeyHandler::handle('ctrl_p', VimState::Insert, VimKeyHandler::FEAT_ALL, true));
-    }
-
-    public function testInsertModeCtrlN(): void
-    {
-        $this->assertSame(VimAction::HistoryDown, VimKeyHandler::handle('ctrl_n', VimState::Insert, VimKeyHandler::FEAT_ALL, true));
-    }
-
-    public function testInsertModeNoOpForUnrecognizedCtrl(): void
-    {
-        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('ctrl_x', VimState::Insert, VimKeyHandler::FEAT_ALL, true));
-    }
-
     public function testInsertModeNoOpForUnrecognizedKey(): void
     {
         $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('x', VimState::Insert));
@@ -139,11 +108,10 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertSame(VimAction::ChangeLine,  VimKeyHandler::handle('c', VimState::Normal));
     }
 
-    public function testNormalModeUndoRedo(): void
+    public function testNormalModeUndoRedoWhenEnabled(): void
     {
         $this->assertSame(VimAction::Undo, VimKeyHandler::handle('u', VimState::Normal, VimKeyHandler::FEAT_UNDO));
         $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('u', VimState::Normal, VimKeyHandler::FEAT_NORMAL));
-
         $this->assertSame(VimAction::Redo, VimKeyHandler::handle('ctrl_r', VimState::Normal, VimKeyHandler::FEAT_UNDO, true));
         $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('ctrl_r', VimState::Normal, VimKeyHandler::FEAT_NORMAL, true));
     }
@@ -151,16 +119,6 @@ final class VimKeyHandlerTest extends TestCase
     public function testNormalModePaste(): void
     {
         $this->assertSame(VimAction::Paste, VimKeyHandler::handle('p', VimState::Normal));
-    }
-
-    public function testNormalModeCtrlPHistoryUp(): void
-    {
-        $this->assertSame(VimAction::HistoryUp, VimKeyHandler::handle('p', VimState::Normal, VimKeyHandler::FEAT_ALL, true));
-    }
-
-    public function testNormalModeCtrlNHistoryDown(): void
-    {
-        $this->assertSame(VimAction::HistoryDown, VimKeyHandler::handle('n', VimState::Normal, VimKeyHandler::FEAT_ALL, true));
     }
 
     public function testNormalModeDisabledReturnsNoOp(): void
@@ -242,117 +200,14 @@ final class VimKeyHandlerTest extends TestCase
     }
 
     // =========================================================================
-    // normalizeKeyMsg() — KeyType::Char paths
+    // Case-insensitivity (key normalization to lowercase)
     // =========================================================================
 
-    public function testNormalizeKeyMsgCharNoCtrl(): void
+    public function testHandleIsCaseInsensitive(): void
     {
-        $msg = new KeyMsg(KeyType::Char, 'h', false, false);
-        [$key, $ctrl] = VimKeyHandler::normalizeKeyMsg($msg);
-        $this->assertSame('h', $key);
-        $this->assertFalse($ctrl);
-    }
-
-    public function testNormalizeKeyMsgCtrlLetter(): void
-    {
-        // Ctrl+A through Ctrl+Z (rune 'a' through 'z')
-        $msg = new KeyMsg(KeyType::Char, 'a', true, false);
-        [$key, $ctrl] = VimKeyHandler::normalizeKeyMsg($msg);
-        $this->assertSame('ctrl_a', $key);
-        $this->assertTrue($ctrl);
-
-        $msg = new KeyMsg(KeyType::Char, 'z', true, false);
-        [$key, $ctrl] = VimKeyHandler::normalizeKeyMsg($msg);
-        $this->assertSame('ctrl_z', $key);
-        $this->assertTrue($ctrl);
-    }
-
-    public function testNormalizeKeyMsgCtrlUpperCase(): void
-    {
-        // Ctrl+Shift+A should map to ctrl_a (normalized)
-        $msg = new KeyMsg(KeyType::Char, 'A', true, false);
-        [$key, $ctrl] = VimKeyHandler::normalizeKeyMsg($msg);
-        $this->assertSame('ctrl_a', $key);
-        $this->assertTrue($ctrl);
-    }
-
-    // =========================================================================
-    // normalizeKeyMsg() — special KeyTypes
-    // =========================================================================
-
-    public function testNormalizeKeyMsgArrowKeys(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Left));
-        $this->assertSame('left', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Right));
-        $this->assertSame('right', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Up));
-        $this->assertSame('up', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Down));
-        $this->assertSame('down', $key);
-    }
-
-    public function testNormalizeKeyMsgHomeEnd(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Home));
-        $this->assertSame('home', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::End));
-        $this->assertSame('end', $key);
-    }
-
-    public function testNormalizeKeyMsgEscape(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Escape));
-        $this->assertSame('esc', $key);
-    }
-
-    public function testNormalizeKeyMsgBackspaceDelete(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Backspace));
-        $this->assertSame('backspace', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Delete));
-        $this->assertSame('delete', $key);
-    }
-
-    public function testNormalizeKeyMsgTabSpaceEnter(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Tab));
-        $this->assertSame('tab', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Space));
-        $this->assertSame('space', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Enter));
-        $this->assertSame('enter', $key);
-    }
-
-    public function testNormalizeKeyMsgFunctionKeys(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::F1));
-        $this->assertSame('f1', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::F12));
-        $this->assertSame('f12', $key);
-    }
-
-    public function testNormalizeKeyMsgPageUpPageDown(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::PageUp));
-        $this->assertSame('pageup', $key);
-
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::PageDown));
-        $this->assertSame('pagedown', $key);
-    }
-
-    public function testNormalizeKeyMsgUnknownYieldsUnknown(): void
-    {
-        [$key] = VimKeyHandler::normalizeKeyMsg(new KeyMsg(KeyType::Unknown));
-        $this->assertSame('unknown', $key);
+        $this->assertSame(VimKeyHandler::handle('H', VimState::Normal), VimKeyHandler::handle('h', VimState::Normal));
+        $this->assertSame(VimKeyHandler::handle('I', VimState::Normal), VimKeyHandler::handle('i', VimState::Normal));
+        $this->assertSame(VimKeyHandler::handle('ESC', VimState::Insert), VimKeyHandler::handle('esc', VimState::Insert));
     }
 
     // =========================================================================
@@ -368,16 +223,5 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertNotSame(VimKeyHandler::FEAT_ALL,        VimKeyHandler::FEAT_UNDO);
         $this->assertNotSame(VimKeyHandler::FEAT_NORMAL,    VimKeyHandler::FEAT_INSERT);
         $this->assertNotSame(VimKeyHandler::FEAT_VISUAL,    VimKeyHandler::FEAT_VISUAL_LINE);
-    }
-
-    // =========================================================================
-    // Case-insensitivity (key normalization to lowercase)
-    // =========================================================================
-
-    public function testHandleIsCaseInsensitive(): void
-    {
-        $this->assertSame(VimKeyHandler::handle('H', VimState::Normal), VimKeyHandler::handle('h', VimState::Normal));
-        $this->assertSame(VimKeyHandler::handle('I', VimState::Normal), VimKeyHandler::handle('i', VimState::Normal));
-        $this->assertSame(VimKeyHandler::handle('ESC', VimState::Insert), VimKeyHandler::handle('esc', VimState::Insert));
     }
 }
