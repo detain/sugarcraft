@@ -50,7 +50,7 @@ final class JsonStreamBackend implements Backend
             $this->throwOnError = $throwOnError;
             return;
         }
-        if (!is_resource($target)) {
+        if (is_resource($target) === false) {
             throw new \InvalidArgumentException(Lang::t('jsonstream.invalid_target'));
         }
         $this->stream = $target;

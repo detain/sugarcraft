@@ -122,7 +122,7 @@ final class GoldenRenderTest extends TestCase
         $keySpace = new KeyMsg(KeyType::Space, '');
         [$g] = $g->update($keySpace);
 
-        [$output, $scanner] = Renderer::renderWithScanner($g);
+        [, $scanner] = Renderer::renderWithScanner($g);
 
         $b = $g->board;
         for ($y = 0; $y < $b->height; $y++) {

@@ -34,7 +34,7 @@ final class Descriptor
         if ($help === '') {
             throw new \InvalidArgumentException('Descriptor help must be non-empty');
         }
-        if (!in_array($type, ['counter', 'gauge', 'histogram', 'summary'], true)) {
+        if (in_array($type, ['counter', 'gauge', 'histogram', 'summary'], true) === false) {
             throw new \InvalidArgumentException("Descriptor type must be one of: counter, gauge, histogram, summary; got '{$type}'");
         }
         foreach ($labelKeys as $k) {

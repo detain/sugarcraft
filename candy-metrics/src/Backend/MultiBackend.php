@@ -106,7 +106,7 @@ final class MultiBackend implements Backend
      */
     private function fanout(callable $op): void
     {
-        if (!$this->continueOnError) {
+        if ($this->continueOnError === false) {
             foreach ($this->children as $b) {
                 $op($b);
             }

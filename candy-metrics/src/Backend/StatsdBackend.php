@@ -44,7 +44,7 @@ final class StatsdBackend implements Backend
         $existingSocket = null,
     ) {
         if ($existingSocket !== null) {
-            if (!is_resource($existingSocket)) {
+            if (is_resource($existingSocket) === false) {
                 throw new \InvalidArgumentException(Lang::t('statsd.socket_not_resource'));
             }
             $this->sock = $existingSocket;
