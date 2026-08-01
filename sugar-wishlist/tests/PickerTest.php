@@ -31,7 +31,8 @@ final class PickerTest extends TestCase
         rewind($in);
 
         $p = new class($in, $out) extends Picker {
-            protected function setRawMode(bool $on): void { /* noop in tests */ }
+            /** @param unused */
+            protected function setRawMode(bool $_on): void { /* noop in tests */ }
         };
         return [$in, $out, $p];
     }
@@ -134,7 +135,8 @@ final class PickerTest extends TestCase
         rewind($in);
 
         $p = new class($in, $out) extends Picker {
-            public function setRawMode(bool $on): void { /* noop */ }
+            /** @param unused */
+            public function setRawMode(bool $_on): void { /* noop */ }
         };
 
         $ref = new ReflectionMethod($p, 'highlightLine');
@@ -170,7 +172,8 @@ final class PickerTest extends TestCase
         rewind($in);
 
         $p = new class($in, $out) extends Picker {
-            public function setRawMode(bool $on): void { /* noop */ }
+            /** @param unused */
+            public function setRawMode(bool $_on): void { /* noop */ }
         };
 
         $ref = new ReflectionMethod($p, 'highlightLine');
@@ -192,7 +195,8 @@ final class PickerTest extends TestCase
         rewind($in);
 
         $p = new class($in, $out) extends Picker {
-            public function setRawMode(bool $on): void { /* noop */ }
+            /** @param unused */
+            public function setRawMode(bool $_on): void { /* noop */ }
         };
 
         $endpoints = [

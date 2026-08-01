@@ -26,7 +26,8 @@ final class PickerSanitizeTest extends TestCase
         rewind($in);
 
         $p = new class($in, $out) extends Picker {
-            public function setRawMode(bool $on): void { /* noop in tests */ }
+            /** @param unused */
+            public function setRawMode(bool $_on): void { /* noop in tests */ }
         };
         return [$in, $out, $p];
     }

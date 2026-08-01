@@ -41,7 +41,7 @@ final class SshConfigParser
         $currentOptions = [];
         $inGlobalBlock = false;
 
-        foreach (explode("\n", $raw) as $lineNum => $rawLine) {
+        foreach (explode("\n", $raw) as $rawLine) {
             $line = preg_replace('/\s+#.*$/', '', $rawLine) ?? $rawLine;
             $line = trim($line);
             if ($line === '') {

@@ -26,7 +26,8 @@ final class PickerDescriptionTest extends TestCase
         rewind($in);
 
         $p = new class($in, $out) extends Picker {
-            protected function setRawMode(bool $on): void { /* noop in tests */ }
+            /** @param unused */
+            protected function setRawMode(bool $_on): void { /* noop in tests */ }
         };
         return [$in, $out, $p];
     }
