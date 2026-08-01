@@ -227,4 +227,28 @@ final class ClickCounterTest extends TestCase
         $this->assertSame(1, $new->clickCount());
         $this->assertNotSame($new, $mid);
     }
+
+    /**
+     * Cover interval expiry path (line 105: elapsedMs > clickIntervalMs branch).
+     * We use a 1ms interval and wait long enough to force expiry.
+     */
+    public function testIntervalExpiryEmitsNoMsgAndResetsStreak(): void
+    {
+        $m = $this->buildManager();
+        $counter = new ClickCounter($m, 1); // 1ms window
+
+        // First click in zone A.
+        [$counter] = $counter->update($this->press(2, 1));
+        $this->assertSame(1, $counter->clickCount());
+
+        // Wait for interval to expire (2ms > 1ms).
+        usleep(2500); // 2.5µs = 2500ns = 0.0025ms... actually we need ms
+        usleep(5000); // 5ms - enough for 1ms interval to expire
+
+        // Second click after expiry — should restart streak at 1, not emit double.
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+
+        $this->assertNull($msg);
+        $this->assertSame(1, $counter->clickCount());
+    }
 }

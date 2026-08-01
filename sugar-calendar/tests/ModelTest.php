@@ -215,4 +215,65 @@ final class ModelTest extends TestCase
 
         $this->assertSame($picker, $model->picker());
     }
+
+    public function testUpdateWithEscapeClearsDate(): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'));
+
+        // First select a date
+        $keyMsg = new KeyMsg(KeyType::Right);
+        [$model, ] = $model->update($keyMsg);
+        $keyMsg = new KeyMsg(KeyType::Enter);
+        [$model, ] = $model->update($keyMsg);
+
+        $this->assertTrue($model->picker()->IsSelecting());
+
+        // Escape should clear the selection via handleKey(DatePicker::KEY_ESCAPE)
+        $keyMsg = new KeyMsg(KeyType::Escape);
+        [$nextModel, $cmd] = $model->update($keyMsg);
+
+        $this->assertFalse($nextModel->picker()->IsSelecting());
+        $this->assertNull($nextModel->picker()->SelectedDate());
+        $this->assertNull($cmd);
+    }
+
+    public function testModelRecordsDateSelectedInNonRangeMode(): void
+    {
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+
+        // Navigate to a valid day cell (May 1, 2026 is at index 5)
+        for ($i = 0; $i < 5; $i++) {
+            $model = $model->update(new KeyMsg(KeyType::Right))[0];
+        }
+
+        // Press Enter to select - this should trigger date_selected in non-range mode
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+
+        $this->assertTrue($store->hasEvents(), 'date_selected must be recorded when date is selected in non-range mode');
+        $events = $store->release();
+        $this->assertCount(1, $events);
+        $this->assertSame('date_selected', $events[0]['type']);
+        $this->assertSame('2026-05-01', $events[0]['payload']['date']);
+    }
+
+    public function testModelEscapeKeyGoesToHandleKeyEscape(): void
+    {
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true);
+
+        // Set range start first
+        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
+        for ($i = 0; $i < $firstDow; $i++) {
+            $model = $model->update(new KeyMsg(KeyType::Right))[0];
+        }
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];
+
+        $this->assertNotNull($model->picker()->rangeStart());
+
+        // Escape should clear the range
+        $model = $model->update(new KeyMsg(KeyType::Escape))[0];
+        $this->assertNull($model->picker()->rangeStart());
+        $this->assertNull($model->picker()->rangeEnd());
+    }
 }

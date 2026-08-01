@@ -156,4 +156,25 @@ final class SpringChainTest extends TestCase
         $this->assertSame($posOne, $posTwo);
         $this->assertSame($runOne->activeStage(), $runTwo->activeStage());
     }
+
+    public function testTickOnCompletedChainReturnsCompleteState(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $chain = SpringChain::new([[$spring, 0.0, 0.0, 100.0]]);
+
+        // Advance until complete
+        for ($i = 0; $i < 600; $i++) {
+            [, $complete, $chain] = $chain->tick();
+            if ($complete) {
+                break;
+            }
+        }
+        $this->assertTrue($chain->isComplete());
+
+        // Calling tick on already-complete chain returns early with complete=true
+        [$positions, $complete, $newChain] = $chain->tick();
+        $this->assertTrue($complete);
+        $this->assertSame($chain->currentPositions(), $positions);
+        $this->assertSame($chain->activeStage(), $newChain->activeStage());
+    }
 }

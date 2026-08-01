@@ -411,4 +411,117 @@ final class GameTest extends TestCase
         @chmod($tmp, 0755);
         @rmdir($tmp);
     }
+
+    public function testInitReturnsTickCmd(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0);
+        $result = $g->init();
+        $this->assertNotNull($result);
+        // The result is a Closure that when called returns a TickRequest
+        $this->assertInstanceOf(\Closure::class, $result);
+        $tickRequest = $result();
+        // Cmd::tick returns a TickRequest wrapping the produce closure
+        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tickRequest);
+    }
+
+    public function testUpdateWithUnhandledMsgTypeReturnsSelf(): void
+    {
+        // An unrecognized Msg type should fall through to return [$this, null]
+        $g = Game::start(static fn(int $_max): int => 0);
+        $otherMsg = new class implements \SugarCraft\Core\Msg {};
+        [$next, $cmd] = $g->update($otherMsg);
+        $this->assertSame($g, $next);
+        $this->assertNull($cmd);
+    }
+
+    public function testViewReturnsString(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0);
+        $view = $g->view();
+        $this->assertIsString($view);
+        $this->assertNotEmpty($view);
+    }
+
+    public function testTickNAdvancesGameState(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0);
+        $this->assertSame(0, $g->tickIndex);
+        $g2 = $g->tickN(10);
+        $this->assertSame(10, $g2->tickIndex);
+        // Bird should have moved (fallen) due to gravity
+        $this->assertNotEquals($g->bird->row(), $g2->bird->row());
+    }
+
+    public function testAdvanceDropsPipesOffScreen(): void
+    {
+        // A pipe at x=0 is off-screen immediately and should be dropped
+        $bird = Bird::spawn(Game::BIRD_COL, 9.0);
+        $pipe = new Pipe(0, gapY: 9, gapHeight: 6);
+        $g = new Game(bird: $bird, pipes: [$pipe], highScores: []);
+        $next = $g->tickN(1);
+        $this->assertCount(0, $next->pipes);
+    }
+
+    public function testAdvanceSlidesPipesLeft(): void
+    {
+        $bird = Bird::spawn(Game::BIRD_COL, 9.0);
+        $pipe = new Pipe(Game::WIDTH - 1, gapY: 9, gapHeight: 6);
+        $g = new Game(bird: $bird, pipes: [$pipe], highScores: []);
+        $next = $g->tickN(1);
+        $this->assertCount(1, $next->pipes);
+        $this->assertSame(Game::WIDTH - 2, $next->pipes[0]->x);
+    }
+
+    public function testHighScoreWithPositiveScoreEqualToCurrentHighDoesNotSetNewRecord(): void
+    {
+        $g = new Game(
+            bird: Game::start(static fn(int $_max): int => 0)->bird,
+            pipes: [],
+            highScores: [10],
+        );
+        // Score equal to current high should not set newRecord
+        $g2 = $g->withHighScore(10);
+        $this->assertSame($g, $g2);
+        $this->assertFalse($g2->newRecord);
+    }
+
+    public function testPersistHighScoresGracefullyHandlesWriteFailure(): void
+    {
+        // Create a pre-existing scores file that we make read-only.
+        // When persistHighScores() tries to write and fails, the exception
+        // is caught by the try/catch in update() and swallowed, so the
+        // game loop continues without crashing.
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        $path = $tmp . '/.honey-flap/scores.json';
+        file_put_contents($path, json_encode([1, 2, 3]));
+        chmod($path, 0444); // read-only (may not work as root)
+
+        // Create a bird below the floor so it crashes on advance()
+        $bird = Bird::spawn(Game::BIRD_COL, (float) Game::HEIGHT);
+        for ($i = 0; $i < 5; $i++) {
+            $bird = $bird->tick();
+        }
+        $g = new Game(
+            bird: $bird,
+            pipes: [],
+            score: 99,
+            highScores: [],
+            configDir: $tmp,
+        );
+
+        // update() should not throw even if persist fails - error is swallowed
+        try {
+            [$updated, $cmd] = $g->update(new TickMsg());
+            $this->assertTrue($updated->crashed);
+            $this->assertTrue($updated->newRecord);
+            // The command should be a batch containing the persist cmd
+            $this->assertNotNull($cmd);
+        } finally {
+            @chmod($path, 0644);
+            @unlink($path);
+            @rmdir($tmp . '/.honey-flap');
+            @rmdir($tmp);
+        }
+    }
 }

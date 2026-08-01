@@ -189,4 +189,87 @@ final class TreeTest extends TestCase
         $this->assertStringContainsString('a b', $view);
         $this->assertStringNotContainsString("a\nb", $view);
     }
+
+    public function testFromListFactory(): void
+    {
+        $roots = [
+            Node::branch('a', Node::leaf('a1')),
+            Node::leaf('b'),
+        ];
+        $t = Tree::fromList($roots);
+        $this->assertSame(3, $t->visibleCount());
+    }
+
+    public function testFocusAndBlur(): void
+    {
+        $t = $this->sample();
+        $this->assertFalse($t->isFocused());
+
+        [$t, $cmd] = $t->focus();
+        $this->assertTrue($t->isFocused());
+        $this->assertNull($cmd);
+
+        $t = $t->blur();
+        $this->assertFalse($t->isFocused());
+    }
+
+    public function testSetRoots(): void
+    {
+        $t = $this->sample()->setRoots(Node::leaf('new'));
+        $this->assertSame(1, $t->visibleCount());
+        $this->assertSame('new', $t->selectedNode()?->label);
+    }
+
+    public function testVisibleRowsReturnsFullStructure(): void
+    {
+        $t = $this->sample();
+        $rows = $t->visibleRows();
+        $this->assertCount(6, $rows);
+        $this->assertSame('src', $rows[0]['label']);
+        $this->assertSame(0, $rows[0]['depth']);
+        $this->assertFalse($rows[0]['leaf']);
+        $this->assertTrue($rows[0]['expanded']);
+        $this->assertSame('Tree.php', $rows[1]['label']);
+        $this->assertSame(1, $rows[1]['depth']);
+    }
+
+    public function testExpandAndCollapseAtCursor(): void
+    {
+        $t = $this->focused($this->sample());
+        $this->assertSame(6, $t->visibleCount());
+
+        $t = $t->expandAtCursor();
+        $this->assertSame(6, $t->visibleCount(), 'already expanded should be no-op');
+
+        $t = $t->collapseAtCursor();
+        $this->assertSame(4, $t->visibleCount());
+
+        $t = $t->collapseAtCursor();
+        $this->assertSame(4, $t->visibleCount(), 'already collapsed should be no-op');
+    }
+
+    public function testInitReturnsNull(): void
+    {
+        $t = $this->sample();
+        $this->assertNull($t->init());
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $t = $this->sample();
+        $this->assertNull($t->subscriptions());
+    }
+
+    public function testWithSize(): void
+    {
+        $t = $this->sample()->withSize(40, 5);
+        $this->assertSame(40, $t->width);
+        $this->assertSame(5, $t->height);
+    }
+
+    public function testNegativeDimensionsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Tree::new(Node::leaf('a'))->withSize(-1, 10);
+    }
 }

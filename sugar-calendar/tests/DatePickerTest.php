@@ -624,4 +624,87 @@ final class DatePickerTest extends TestCase
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // handleRangeEnter edge cases
+    // -------------------------------------------------------------------------
+
+    public function testHandleRangeEnterWithNullDateIsNoOp(): void
+    {
+        // Cursor at index 0 (empty cell before May 1, 2026)
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true);
+
+        // Cursor is at 0 (empty cell), Enter should be a no-op
+        $dp = $dp->handleKey('enter');
+
+        $this->assertNull($dp->rangeStart(),
+            'Enter on empty cell must not set rangeStart');
+        $this->assertNull($dp->rangeEnd());
+    }
+
+    public function testHandleRangeEnterWhenBothSetStartsFresh(): void
+    {
+        // Set up a complete range first
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true);
+
+        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
+        for ($i = 0; $i < $firstDow; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+        // First Enter: rangeStart = May 1
+        $dp = $dp->handleKey('enter');
+
+        // Move to May 5
+        for ($i = 0; $i < 4; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+        // Second Enter: rangeEnd = May 5
+        $dp = $dp->handleKey('enter');
+
+        $this->assertNotNull($dp->rangeStart());
+        $this->assertNotNull($dp->rangeEnd());
+
+        // Move to May 10
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+        // Third Enter: both were set, so start fresh with May 10
+        $dp = $dp->handleKey('enter');
+
+        $this->assertSame('2026-05-10', $dp->rangeStart()->format('Y-m-d'),
+            'Third Enter when both set must start fresh');
+        $this->assertNull($dp->rangeEnd(),
+            'Third Enter when both set must clear rangeEnd');
+    }
+
+    // -------------------------------------------------------------------------
+    // selectedTodayStyle: day is both today AND selected
+    // -------------------------------------------------------------------------
+
+    public function testSelectedTodayStyleWhenDateIsBothTodayAndSelected(): void
+    {
+        // Pin "today" to May 15, 2026 and move cursor to May 15
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        // Navigate to May 15 (firstDow=5 for May 1, so May 15 is at index 5+14=19)
+        for ($i = 0; $i < 19; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        // Verify we're on May 15
+        $this->assertSame('2026-05-15', $dp->dateAtCursor()?->format('Y-m-d'));
+
+        // Select the date
+        $dp = $dp->SelectDate();
+
+        $this->assertTrue($dp->IsSelecting());
+        $this->assertSame('2026-05-15', $dp->SelectedDate()?->format('Y-m-d'));
+
+        // View must render (the selectedTodayStyle branch applies)
+        $view = $dp->View();
+        $this->assertIsString($view);
+    }
 }

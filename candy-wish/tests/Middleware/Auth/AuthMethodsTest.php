@@ -95,4 +95,21 @@ final class AuthMethodsTest extends TestCase
         $banner = trim($read());
         $this->assertSame('SSH_AUTH_METHODS a b c', $banner);
     }
+
+    public function testConstructorWithInvalidStdoutThrowsInvalidArgumentException(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new AuthMethods(['publickey'], 'not a resource');
+    }
+
+    public function testConstructorWithNullStdoutOpensPhpStdout(): void
+    {
+        // null stdout should open php://stdout without throwing
+        $am = new AuthMethods(['publickey'], null);
+        $reached = false;
+        $am->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached);
+    }
 }

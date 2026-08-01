@@ -173,4 +173,28 @@ final class ProjectileTest extends TestCase
         $this->assertEqualsWithDelta(9.81, Projectile::GRAVITY,          1e-9);
         $this->assertEqualsWithDelta(53.0, Projectile::TERMINAL_GRAVITY, 1e-9);
     }
+
+    public function testVelocityAccessorReturnsVelocityVector(): void
+    {
+        $v = new Vector(1.0, 2.0, 3.0);
+        $p = Projectile::new(
+            deltaTime:    1.0,
+            position:     Point::zero(),
+            velocity:     $v,
+            acceleration: Vector::zero(),
+        );
+        $this->assertSame($v, $p->velocity());
+    }
+
+    public function testAccelerationAccessorReturnsAccelerationVector(): void
+    {
+        $a = Projectile::gravity();
+        $p = Projectile::new(
+            deltaTime:    1.0,
+            position:     Point::zero(),
+            velocity:     Vector::zero(),
+            acceleration: $a,
+        );
+        $this->assertSame($a, $p->acceleration());
+    }
 }

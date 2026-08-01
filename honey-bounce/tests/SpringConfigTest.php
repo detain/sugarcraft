@@ -77,4 +77,22 @@ final class SpringConfigTest extends TestCase
         }
         $this->assertEqualsWithDelta(100.0, $pos, 0.1);
     }
+
+    /**
+     * @dataProvider invalidMassProvider
+     */
+    public function testMassLessThanOrEqualToZeroThrowsException(float $mass): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("SpringConfig mass must be > 0; got {$mass}");
+        new SpringConfig(tension: 100.0, friction: 10.0, mass: $mass);
+    }
+
+    public static function invalidMassProvider(): array
+    {
+        return [
+            'zero mass'     => [0.0],
+            'negative mass' => [-1.0],
+        ];
+    }
 }

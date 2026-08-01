@@ -226,4 +226,71 @@ final class ProgressTest extends TestCase
         // 42% of 10 = 4.2 → rounds to 4
         $this->assertSame('####...... 4/10', $p->view());
     }
+
+    public function testIncrPercent(): void
+    {
+        $p = Progress::new()->withWidth(10)->withShowPercent(false)->withRunes('#', '.')->withPercent(0.3);
+        $incr = $p->incrPercent(0.2);
+        $this->assertSame(0.5, $incr->percent);
+    }
+
+    public function testDecrPercent(): void
+    {
+        $p = Progress::new()->withWidth(10)->withShowPercent(false)->withRunes('#', '.')->withPercent(0.5);
+        $decr = $p->decrPercent(0.2);
+        $this->assertSame(0.3, $decr->percent);
+    }
+
+    public function testWithRunes(): void
+    {
+        $p = Progress::new()->withRunes('X', '-');
+        $this->assertSame('X', $p->fullChar);
+        $this->assertSame('-', $p->emptyChar);
+    }
+
+    public function testWithEmptyColor(): void
+    {
+        $c = \SugarCraft\Core\Util\Color::hex('#888888');
+        $p = Progress::new()->withEmptyColor($c);
+        $this->assertSame($c, $p->emptyColor);
+    }
+
+    public function testWithRenderModeLine(): void
+    {
+        $p = Progress::new()
+            ->withWidth(5)
+            ->withShowPercent(false)
+            ->withPercent(0.5)
+            ->withRenderMode(\SugarCraft\Bits\Progress\ProgressRenderMode::Line);
+        $view = $p->view();
+        // Line mode uses ━ (filled) and ─ (empty)
+        $this->assertStringContainsString("\xe2\x94\x81", $view); // ━
+        $this->assertStringContainsString("\xe2\x94\x80", $view); // ─
+    }
+
+    public function testWithRenderModeSlim(): void
+    {
+        $p = Progress::new()
+            ->withWidth(5)
+            ->withShowPercent(false)
+            ->withPercent(0.5)
+            ->withRenderMode(\SugarCraft\Bits\Progress\ProgressRenderMode::Slim);
+        $view = $p->view();
+        // Slim mode uses ▌ (filled) and ▒ (empty)
+        $this->assertStringContainsString("\xe2\x96\x8c", $view); // ▌
+        $this->assertStringContainsString("\xe2\x96\x92", $view); // ▒
+    }
+
+    public function testViewAsRendersAtGivenPercent(): void
+    {
+        $p = Progress::new()->withWidth(10)->withShowPercent(false)->withRunes('#', '.');
+        $view = $p->viewAs(0.5);
+        $this->assertSame('#####.....', $view);
+    }
+
+    public function testToStringCallsView(): void
+    {
+        $p = Progress::new()->withWidth(10)->withShowPercent(false)->withRunes('#', '.')->withPercent(0.5);
+        $this->assertSame($p->view(), (string) $p);
+    }
 }

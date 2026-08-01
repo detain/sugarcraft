@@ -180,4 +180,39 @@ final class RateLimitTest extends TestCase
         $this->assertSame(0600, $mode, sprintf('state file must be 0600, got %04o', $mode));
         fclose($err);
     }
+
+    public function testPenalizeWithZeroTokensDoesNothing(): void
+    {
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        $rl = new RateLimit($this->statePath, 3, 0.0, $err);
+
+        // Penalize with 0 tokens - should be a no-op
+        $rl->penalize($this->session('10.0.0.1'), 0.0);
+
+        // Session should still be allowed (3 tokens, 0 used = 3 left)
+        $ok = 0;
+        $rl->handle(Context::background(), $this->session('10.0.0.1'), function () use (&$ok): void { $ok++; });
+        $this->assertSame(1, $ok, 'zero penalty should not consume tokens');
+        fclose($err);
+    }
+
+    public function testPenalizeWithNegativeTokensDoesNothing(): void
+    {
+        $err = fopen('php://memory', 'w+');
+        $this->assertNotFalse($err);
+        $rl = new RateLimit($this->statePath, 3, 0.0, $err);
+
+        // First use one token
+        $rl->handle(Context::background(), $this->session('10.0.0.2'), function () {});
+
+        // Penalize with negative - should be a no-op (tokens <= 0.0 check)
+        $rl->penalize($this->session('10.0.0.2'), -1.0);
+
+        // Should still have 2 tokens left
+        $ok = 0;
+        $rl->handle(Context::background(), $this->session('10.0.0.2'), function () use (&$ok): void { $ok++; });
+        $this->assertSame(1, $ok, 'negative penalty should not consume tokens');
+        fclose($err);
+    }
 }

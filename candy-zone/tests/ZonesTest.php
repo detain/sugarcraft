@@ -11,6 +11,15 @@ use PHPUnit\Framework\TestCase;
 
 final class ZonesTest extends TestCase
 {
+    private function click(int $x, int $y): \SugarCraft\Core\Msg\MouseMsg
+    {
+        return new \SugarCraft\Core\Msg\MouseMsg(
+            $x, $y,
+            \SugarCraft\Core\MouseButton::Left,
+            \SugarCraft\Core\MouseAction::Press
+        );
+    }
+
     protected function tearDown(): void
     {
         Zones::setDefaultManager(null);
@@ -86,5 +95,53 @@ final class ZonesTest extends TestCase
         $this->assertSame('b-', $b->prefix());
         // Doesn't affect the default manager.
         $this->assertNotSame($a, Zones::defaultManager());
+    }
+
+    public function testAnyInBoundsReturnsHitZone(): void
+    {
+        Zones::scan(Zones::mark('btn', 'OK'));
+        $hit = Zones::anyInBounds($this->click(1, 1));
+        $this->assertNotNull($hit);
+        $this->assertSame('btn', $hit->id);
+    }
+
+    public function testAnyInBoundsReturnsNullForMiss(): void
+    {
+        Zones::scan(Zones::mark('btn', 'OK'));
+        $this->assertNull(Zones::anyInBounds($this->click(50, 50)));
+    }
+
+    public function testAnyInBoundsReturnsNullForNonMouseMsg(): void
+    {
+        Zones::scan(Zones::mark('btn', 'OK'));
+        $this->assertNull(Zones::anyInBounds(
+            new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'a')
+        ));
+    }
+
+    /**
+     * Zones::anyInBoundsAndUpdate routes a hit to the model via MsgZoneInBounds.
+     */
+    public function testAnyInBoundsAndUpdateRoutesHitToModel(): void
+    {
+        Zones::scan(Zones::mark('btn', 'OK'));
+        $model = new ZoneRoutingModel();
+        [$next] = Zones::anyInBoundsAndUpdate($model, $this->click(1, 1));
+        $this->assertInstanceOf(ZoneRoutingModel::class, $next);
+        $this->assertNotNull($next->lastInBoundsHit);
+        $this->assertSame('btn', $next->lastInBoundsHit->zone->id);
+    }
+
+    /**
+     * Zones::anyInBoundsAndUpdate passes through on miss.
+     */
+    public function testAnyInBoundsAndUpdatePassesThroughOnMiss(): void
+    {
+        Zones::scan(Zones::mark('btn', 'OK'));
+        $model = new ZoneRoutingModel();
+        $miss = $this->click(50, 50);
+        [$next] = Zones::anyInBoundsAndUpdate($model, $miss);
+        $this->assertNull($next->lastInBoundsHit);
+        $this->assertNotNull($next->lastPlainMouse);
     }
 }

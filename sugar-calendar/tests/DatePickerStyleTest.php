@@ -262,6 +262,24 @@ final class DatePickerStyleTest extends TestCase
         $this->assertNotSame($this->dp, $dp);
     }
 
+    public function testSgrToBufferStyleBackgroundColors(): void
+    {
+        // Background colors 40-47 (black, red, green, yellow, blue, magenta, cyan, white)
+        $style = $this->invokeSgrToBufferStyle('44'); // blue background
+        $this->assertNotNull($style);
+        $this->assertNotNull($style->bg());
+    }
+
+    public function testSgrToBufferStyleCombinedFgBg(): void
+    {
+        // Combined foreground (30-37) + background (40-47) + bold (1)
+        $style = $this->invokeSgrToBufferStyle('1;31;44');
+        $this->assertNotNull($style);
+        $this->assertTrue($style->hasBold());
+        $this->assertNotNull($style->fg());
+        $this->assertNotNull($style->bg());
+    }
+
     private function invokeSgrToBufferStyle(string $sgr): ?Style
     {
         $ref = new \ReflectionClass($this->dp);

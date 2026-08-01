@@ -106,4 +106,97 @@ final class AnimatedProgressTest extends TestCase
         // Target is 100%, current should be much less; verify NOT 100% yet.
         $this->assertStringNotContainsString('100%', $out);
     }
+
+    public function testWithWidth(): void
+    {
+        $p = AnimatedProgress::new()->withWidth(60);
+        $this->assertSame(60, $p->progress->width);
+    }
+
+    public function testWithRunes(): void
+    {
+        $p = AnimatedProgress::new()->withRunes('#', '.');
+        $this->assertSame('#', $p->progress->fullChar);
+        $this->assertSame('.', $p->progress->emptyChar);
+    }
+
+    public function testWithShowPercent(): void
+    {
+        $p = AnimatedProgress::new()->withShowPercent(false);
+        $this->assertFalse($p->progress->showPercent);
+    }
+
+    public function testWithFillColor(): void
+    {
+        $c = \SugarCraft\Core\Util\Color::hex('#ff0000');
+        $p = AnimatedProgress::new()->withFillColor($c);
+        $this->assertSame($c, $p->progress->fillColor);
+    }
+
+    public function testWithEmptyColor(): void
+    {
+        $c = \SugarCraft\Core\Util\Color::hex('#0000ff');
+        $p = AnimatedProgress::new()->withEmptyColor($c);
+        $this->assertSame($c, $p->progress->emptyColor);
+    }
+
+    public function testWithColorProfile(): void
+    {
+        $p = AnimatedProgress::new()->withColorProfile(\SugarCraft\Core\Util\ColorProfile::Ansi256);
+        $this->assertSame(\SugarCraft\Core\Util\ColorProfile::Ansi256, $p->progress->profile);
+    }
+
+    public function testWithGradient(): void
+    {
+        $a = \SugarCraft\Core\Util\Color::hex('#ff0000');
+        $b = \SugarCraft\Core\Util\Color::hex('#0000ff');
+        $p = AnimatedProgress::new()->withGradient($a, $b);
+        $this->assertSame($a, $p->progress->gradientStart);
+        $this->assertSame($b, $p->progress->gradientEnd);
+    }
+
+    public function testWithSolidFill(): void
+    {
+        $c = \SugarCraft\Core\Util\Color::hex('#00ff00');
+        $p = AnimatedProgress::new()->withSolidFill($c);
+        $this->assertSame($c, $p->progress->fillColor);
+    }
+
+    public function testWithDefaultGradient(): void
+    {
+        $p = AnimatedProgress::new()->withDefaultGradient();
+        $this->assertNotNull($p->progress->gradientStart);
+        $this->assertNotNull($p->progress->gradientEnd);
+    }
+
+    public function testWithPercentFormat(): void
+    {
+        $p = AnimatedProgress::new()->withPercentFormat('%5.1f%%');
+        $this->assertSame('%5.1f%%', $p->progress->percentFormat);
+    }
+
+    public function testWithSpringOptions(): void
+    {
+        $p = AnimatedProgress::new()->withSpringOptions(10.0, 0.5);
+        $this->assertSame(10.0, $p->angularFrequency);
+        $this->assertSame(0.5, $p->dampingRatio);
+    }
+
+    public function testWithFps(): void
+    {
+        $p = AnimatedProgress::new()->withFps(30.0);
+        $this->assertSame(30.0, $p->fps);
+    }
+
+    public function testInitReturnsNull(): void
+    {
+        $p = AnimatedProgress::new();
+        $this->assertNull($p->init());
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $p = AnimatedProgress::new();
+        $this->assertNull($p->subscriptions());
+    }
 }
