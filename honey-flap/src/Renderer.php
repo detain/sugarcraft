@@ -68,7 +68,7 @@ final class Renderer
         // Pipe walls.
         foreach ($g->pipes as $p) {
             if ($p->x !== $x) continue;
-            if ($p->collides($x, $y)) {
+            if ($p->collides($x, $y) === true) {
                 return Style::new()->foreground(Color::hex('#6ee7b7'))->render('▓');
             }
             // Inside the gap: just air.
