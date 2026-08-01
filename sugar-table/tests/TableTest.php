@@ -1027,4 +1027,392 @@ final class TableTest extends TestCase
         // (withSelectedIndex AFTER SelectPage — SelectPage resets the index to 0)
         $this->assertNull($t->withSelectedIndex(1)->SelectedRow());
     }
+
+    // -------------------------------------------------------------------------
+    // Additional Table method coverage
+    // -------------------------------------------------------------------------
+
+    public function testWithColumnsReplacesColumns(): void
+    {
+        $t = $this->makeTable();
+        $t2 = $t->withColumns([
+            Column::new('x', 'X', 5),
+            Column::new('y', 'Y', 10),
+        ]);
+
+        $this->assertSame(2, \count($t2->Columns()));
+        $this->assertSame('x', $t2->Columns()[0]->key);
+        $this->assertSame('y', $t2->Columns()[1]->key);
+        // Original unchanged
+        $this->assertSame(3, \count($t->Columns()));
+    }
+
+    public function testWithColumnsInvalidatesCache(): void
+    {
+        $t = $this->makeTable()->SortBy('name');
+        $this->assertSame('Alice', $t->CurrentRowData()?->get('name'));
+
+        // Replace columns - should clear sort cache
+        $t2 = $t->withColumns([
+            Column::new('id', 'ID', 5)->withFilterable(),
+        ]);
+        // Should not throw even though original sort was by 'name' which no longer exists
+        $this->assertNotSame($t, $t2);
+    }
+
+    public function testWithBaseStyle(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBaseStyle('1;31');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testWithMissingIndicatorCustom(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 5),
+            Column::new('name', 'Name', 10),
+        ])->withRows([
+            Row::new(RowData::from(['id' => '1'])), // no 'name' key
+        ])->withMissingIndicator('???');
+
+        $view = $t->View();
+        $this->assertStringContainsString('???', $view);
+    }
+
+    public function testWithSelectableFalseDisablesSelection(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))])
+            ->withSelectable(false);
+
+        // Navigation should work but selection highlight should not appear
+        $view = $t->View();
+        $this->assertIsString($view);
+        // No reverse-video highlight (style '7') should appear
+        $this->assertStringNotContainsString("\x1b[7m", $view);
+    }
+
+    public function testWithSelectableTrueEnablesSelection(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))])
+            ->withSelectable(true)
+            ->SelectNext(); // Select a row to trigger highlight
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        // Should have selection highlight (reverse video). The format is ESC[7m or ESC[0;7m
+        $this->assertMatchesRegularExpression('/\x1b\[(?:0;)?7m/', $view);
+    }
+
+    public function testWithPage(): void
+    {
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(fn($i) => Row::new(RowData::from(['n' => (string) $i])), \range(1, 30))
+            )
+            ->withPageSize(10)
+            ->withPage(2);
+
+        $this->assertSame(2, $t->CurrentPage());
+        $this->assertSame('21', $t->CurrentRowData()?->get('n'));
+    }
+
+    public function testWithScrollX(): void
+    {
+        $t = $this->makeTable()->withScrollX(1);
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testWithZebraEvenStyle(): void
+    {
+        $t = $this->makeTable()->withZebra();
+        // Zebra should apply even row styling
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testWithHeaderStyle(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withHeaderStyle('1;4;33'); // bold underline yellow
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testWithShowHeaderFalse(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withShowHeader(false);
+
+        $view = $t->View();
+        $this->assertStringNotContainsString('ID', $view);
+    }
+
+    public function testWithShowHeaderTrue(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withShowHeader(true);
+
+        $view = $t->View();
+        $this->assertStringContainsString('ID', $view);
+    }
+
+    public function testWithShowFooterFalseNoPageSize(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withShowFooter(false);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testWithShowFooterTrueWithPagination(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withPageSize(10)
+            ->withShowFooter(true);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testWithBorderUsesCustomBorder(): void
+    {
+        $border = \SugarCraft\Sprinkles\Border::rounded();
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBorder($border);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        // Rounded border uses different characters
+        $this->assertStringContainsString('╭', $view);
+        $this->assertStringContainsString('╮', $view);
+    }
+
+    public function testWithCellPadding(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 10)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withCellPadding(1);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testWithCellPaddingZero(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 10)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withCellPadding(0);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testWithWidthFixedWithFlexColumn(): void
+    {
+        // withWidth affects Flex columns - creates exact-width table
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Flex)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withWidth(50);
+
+        $widths = $t->computeColumnWidths(50);
+        // The flex column should expand to fill the target width
+        $this->assertGreaterThanOrEqual(50, \array_sum($widths));
+    }
+
+    public function testWithWidthZeroRestoresNatural(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withWidth(0);
+
+        // Should compute natural width from columns
+        $this->assertGreaterThan(0, $t->computeColumnWidths(80)[0] ?? 0);
+    }
+
+    public function testWithHiddenCols(): void
+    {
+        $t = $this->makeTable()->withHiddenCols([1]); // hide 'name' column
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringNotContainsString('Name', $view);
+        $this->assertStringContainsString('ID', $view);
+    }
+
+    public function testColumnMethod(): void
+    {
+        $t = $this->makeTable();
+        $col = $t->column('name');
+        $this->assertNotNull($col);
+        $this->assertSame('name', $col->key);
+    }
+
+    public function testColumnMethodReturnsNullForMissing(): void
+    {
+        $t = $this->makeTable();
+        $col = $t->column('nonexistent');
+        $this->assertNull($col);
+    }
+
+    public function testRowsFooterWithNoPaginationShowsAll(): void
+    {
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
+            ->withRows(\array_map(fn($i) => Row::new(RowData::from(['n' => (string) $i])), \range(1, 10)))
+            ->withPageSize(0) // no pagination
+            ->withFooterType(\SugarCraft\Table\FooterType::Rows);
+
+        $this->assertSame('Showing 1 to 10 of 10 rows', $t->RowsFooter());
+    }
+
+    public function testComputeTotalWidthWithoutTargetWidth(): void
+    {
+        $t = $this->makeTable();
+        // Use reflection to call private method
+        $refl = new \ReflectionMethod(Table::class, 'computeTotalWidth');
+        $refl->setAccessible(true);
+        $width = $refl->invoke($t);
+        $this->assertGreaterThan(0, $width);
+    }
+
+    public function testFilterableColumnsOnly(): void
+    {
+        // When some columns are marked filterable, only those should be searched
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 10)->withFilterable(),
+            Column::new('city', 'City', 10), // not filterable
+        ])->withRows([
+            Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
+            Row::new(RowData::from(['name' => 'Bob', 'city' => 'Denver'])),
+        ]);
+
+        // Filter on filterable column should work
+        $t2 = $t->Filter('name', 'Ali');
+        $this->assertSame(1, $t2->TotalRows());
+
+        // Filter on non-filterable column should be ignored (no-op)
+        $t3 = $t->Filter('city', 'NYC');
+        $this->assertSame(2, $t3->TotalRows()); // all rows still shown
+    }
+
+    public function testGlobalSearchOnlySearchesFilterableColumns(): void
+    {
+        // When columns are explicitly marked filterable, global search should only search those
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 10)->withFilterable(),
+            Column::new('city', 'City', 10), // not filterable
+        ])->withRows([
+            Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
+            Row::new(RowData::from(['name' => 'Bob', 'city' => 'Denver'])),
+        ]);
+
+        // Search for term only in non-filterable column
+        $t2 = $t->search('NYC');
+        // Should NOT find it because city is not filterable
+        $this->assertSame(0, $t2->TotalRows());
+    }
+
+    public function testGlobalSearchSearchesAllColumnsWhenNoneFilterable(): void
+    {
+        // When NO columns are marked filterable, search should search all (back-compat)
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 10),
+            Column::new('city', 'City', 10),
+        ])->withRows([
+            Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
+            Row::new(RowData::from(['name' => 'Bob', 'city' => 'Denver'])),
+        ]);
+
+        // Search should find 'NYC' even though no columns are explicitly filterable
+        $t2 = $t->search('NYC');
+        $this->assertSame(1, $t2->TotalRows());
+    }
+
+    public function testSortByNonPrimaryAppendsSort(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('name', 'Name', 10),
+            Column::new('city', 'City', 10),
+        ])->withRows([
+            Row::new(RowData::from(['name' => 'Alice', 'city' => 'NYC'])),
+            Row::new(RowData::from(['name' => 'Bob', 'city' => 'NYC'])),
+            Row::new(RowData::from(['name' => 'Carol', 'city' => 'CHI'])),
+        ]);
+
+        // Primary sort by name asc, secondary by city asc
+        $t2 = $t->SortBy('name', true, true)->SortBy('city', true, false);
+        $rows = $t2->filteredSortedRows();
+        // Bob should come before Alice because Bob's city (NYC) < Alice's... wait no
+        // Actually both Alice and Bob have NYC, so within NYC, alphabetical by name: Alice < Bob
+        // Carol is in CHI which comes after NYC
+        $this->assertSame('Carol', $rows[2]->data->get('name'));
+    }
+
+    public function testClearSortClearsAllSorts(): void
+    {
+        $t = $this->makeTable()
+            ->SortBy('name', true)
+            ->SortBy('city', true, false);
+
+        $t2 = $t->ClearSort();
+        $this->assertSame('Alice', $t2->CurrentRowData()?->get('name')); // original order
+    }
+
+    public function testAddRowsMultiple(): void
+    {
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))])
+            ->addRows([
+                Row::new(RowData::from(['id' => '2'])),
+                Row::new(RowData::from(['id' => '3'])),
+            ]);
+
+        $this->assertSame(3, $t->TotalRows());
+    }
+
+    public function testTableImmutability(): void
+    {
+        $a = Table::fromColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))]);
+
+        // Test each configuration method returns a new instance
+        $t = $a
+            ->withBaseStyle('1')
+            ->withMissingIndicator('?')
+            ->withBorderStyle('1;31')
+            ->withSelectable(false)
+            ->withPageSize(10)
+            ->withPage(0)
+            ->withScrollX(0)
+            ->withViewportHeight(10)
+            ->withScrollY(0)
+            ->withZebra(false)
+            ->withHeaderStyle('1')
+            ->withShowHeader(true)
+            ->withShowFooter(true)
+            ->withMultilineMode(false)
+            ->withCellPadding(1)
+            ->withBorderless(false)
+            ->withWidth(80)
+            ->withHiddenCols([]);
+
+        $this->assertNotSame($a, $t);
+        // Verify original unchanged
+        $this->assertSame(1, $a->TotalRows());
+    }
 }

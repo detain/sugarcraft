@@ -66,7 +66,10 @@ final class FixtureGit implements GitDriver
 
     public function status(): array   { return $this->statusRows; }
     public function branches(): array { return $this->branchRows; }
-    public function log(int $limit = 25): array { return $this->logRows; }
+    public function log(int $limit = 25): array {
+        if (isset($this->throwOn['log'])) { throw $this->throwOn['log']; }
+        return $this->logRows;
+    }
     public function stage(string $path): void   { $this->stages[]   = $path; }
     public function unstage(string $path): void { $this->unstages[] = $path; }
     public function checkout(string $branch): void { $this->checkouts[] = $branch; }
@@ -86,13 +89,19 @@ final class FixtureGit implements GitDriver
     public function rebaseSkip(): void { $this->rebaseSkipCalled = true; }
     public function reset(): void { $this->resetCalled = true; }
 
-    public function stashList(): array { return $this->stashListResult; }
+    public function stashList(): array {
+        if (isset($this->throwOn['stashList'])) { throw $this->throwOn['stashList']; }
+        return $this->stashListResult;
+    }
     public function stashApply(string $stashRef): void { $this->stashApplies[] = $stashRef; }
     public function stashDrop(string $stashRef): void { $this->stashDrops[] = $stashRef; }
     public function cherryPick(string $commit): void { $this->cherryPicks[] = $commit; }
     public function cherryPickContinue(): void { $this->cherryPickContinueCalled = true; }
     public function cherryPickAbort(): void { $this->cherryPickAbortCalled = true; }
-    public function worktreeList(): array { return $this->worktreeListResult; }
+    public function worktreeList(): array {
+        if (isset($this->throwOn['worktreeList'])) { throw $this->throwOn['worktreeList']; }
+        return $this->worktreeListResult;
+    }
     public function worktreeAdd(string $path, string $branch): void { $this->worktreeAdds[] = ['path' => $path, 'branch' => $branch]; }
     public function worktreeRemove(string $path): void { $this->worktreeRemoves[] = $path; }
     public function rebaseInProgress(): bool { return $this->rebaseInProgressResult; }

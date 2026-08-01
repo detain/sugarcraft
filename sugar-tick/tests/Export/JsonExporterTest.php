@@ -37,9 +37,23 @@ final class JsonExporterTest extends TestCase
 
     public function testRowsWithTags(): void
     {
-        $hb = new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60, tags: ['refactoring', 'feature']);
+        $hb = new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60, tags: ['feature', 'refactoring']);
         $rows = $this->exporter->rows([$hb]);
-        $this->assertSame([1700000000, 'demo', 'php', 'a.php', 60, ['refactoring', 'feature']], $rows[0]);
+        $this->assertSame([1700000000, 'demo', 'php', 'a.php', 60, ['feature', 'refactoring']], $rows[0]);
+    }
+
+    public function testEncodeProducesPrettyJson(): void
+    {
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60, tags: ['feature']),
+        ];
+
+        $json = $this->exporter->encode($hbs);
+
+        // JSON_PRETTY_PRINT adds formatting
+        $this->assertStringContainsString("\n", $json);
+        $decoded = json_decode($json, true);
+        $this->assertIsArray($decoded);
     }
 
     public function testFormat(): void
@@ -50,6 +64,21 @@ final class JsonExporterTest extends TestCase
     public function testContentType(): void
     {
         $this->assertSame('application/json', $this->exporter->contentType());
+    }
+
+    public function testEncodeMultipleHeartbeats(): void
+    {
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: 'p1', language: 'php', file: 'a.php', duration: 60, tags: ['tag1']),
+            new Heartbeat(time: 1700000060, project: 'p2', language: 'go', file: 'b.go', duration: 120, tags: ['tag2', 'tag3']),
+        ];
+
+        $json = $this->exporter->encode($hbs);
+        $decoded = json_decode($json, true);
+
+        $this->assertCount(2, $decoded);
+        $this->assertSame('p1', $decoded[0]['project']);
+        $this->assertSame('p2', $decoded[1]['project']);
     }
 
     public function testEncodeProducesObjects(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Stickers\Tests;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use SugarCraft\Stickers\Table\{Column, Table};
 
 /**
@@ -119,7 +120,11 @@ final class ColumnTest extends TestCase
     public function testWithStyleAcceptsEmptyString(): void
     {
         $col = Column::make('Test', 10)->withStyle('');
-        $this->assertSame('', $col->title);
+        // Empty style is allowed; verify via reflection that ansiStyle is empty
+        $rc = new ReflectionClass($col);
+        $p = $rc->getProperty('ansiStyle');
+        $p->setAccessible(true);
+        $this->assertSame('', $p->getValue($col));
     }
 
     public function testWithStyleAcceptsDigitsOnly(): void

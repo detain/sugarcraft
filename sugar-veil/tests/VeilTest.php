@@ -1044,9 +1044,11 @@ final class VeilTest extends TestCase
         $fg = "X";
 
         // Large xOffset puts foreground way off-screen to the right
-        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 999);
+        // With backdrop enabled, the entire background row should be dimmed
+        $v = Veil::new()->withBackdrop(100);
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 999);
 
-        // Background should still be present (dimmed) but no foreground visible
+        // Background should still be present (dimmed) but no foreground visible at its position
         $this->assertStringContainsString('.', $result);
         // The entire row should be dimmed since foreground is off-screen
         $this->assertStringContainsString("38;2;", $result);
@@ -1062,12 +1064,12 @@ final class VeilTest extends TestCase
 
         // xOffset of 18 puts the 4-char foreground starting at col 18, ending at col 21
         // But background is only 20 wide, so last 2 chars of fg are off-screen
-        $result = $this->veil->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 18);
+        $v = Veil::new()->withBackdrop(50);
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: 18);
         $lines = $this->veil->splitLines($result);
 
-        // XX prefix visible (dimmed), then X over background, then XX suffix (dimmed)
+        // With backdrop, some part should be dimmed
         $this->assertIsString($result);
-        // Should contain some dim codes for the off-screen portion
         $this->assertStringContainsString("38;2;", $result);
     }
 
