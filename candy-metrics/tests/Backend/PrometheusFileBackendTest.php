@@ -192,4 +192,197 @@ final class PrometheusFileBackendTest extends TestCase
             @rmdir($dir);
         }
     }
+
+    public function testFlushWithNonDirtyMetricsStillEmitsThem(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('always_on', 1.0);
+        $b->flush();
+
+        // Modify directly to simulate a non-dirty metric (another process wrote to same file).
+        // After first flush the dirty flag is cleared.
+        // Now call flush again with no new data — the metric should still be emitted.
+        file_put_contents($this->path, '');
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('always_on 1', $content);
+    }
+
+    public function testHistogramWithTagsEmitsAllBucketLines(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->histogram('lat', 0.05, ['route' => '/api']);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        // Bucket lines with route label.
+        $this->assertStringContainsString('lat_bucket{route="/api",le="0.05"} 1', $content);
+        $this->assertStringContainsString('lat_bucket{route="/api",le="+Inf"} 1', $content);
+        $this->assertStringContainsString('lat_count{route="/api"} 1', $content);
+        $this->assertStringContainsString('lat_sum{route="/api"} 0.05', $content);
+    }
+
+    public function testRemoveIsNoOp(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('hits', 5);
+        $b->remove('hits', []); // No-op — must not throw or alter data.
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('hits 5', $content);
+    }
+
+    public function testClearIsNoOp(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('hits', 5);
+        $b->clear(); // No-op — must not throw.
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        // Clear does not affect the Prometheus textfile backend.
+        $this->assertStringContainsString('hits 5', $content);
+    }
+
+    public function testDescribeWithNoSamplesEmitsDescriptorOnly(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->describe(new Descriptor('defined_but_unused', 'Not yet observed', 'gauge'));
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('# HELP defined_but_unused Not yet observed', $content);
+        $this->assertStringContainsString('# TYPE defined_but_unused gauge', $content);
+        $this->assertStringNotContainsString('defined_but_unused 0', $content);
+    }
+
+    public function testSanitizeNamePrefixesDigitWithUnderscore(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('123abc', 1);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('_123abc 1', $content);
+        $this->assertStringContainsString('# TYPE _123abc counter', $content);
+    }
+
+    public function testSanitizeKeyPrefixesDigitWithUnderscore(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('hits', 1, ['123tag' => 'v']);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('hits{_123tag="v"} 1', $content);
+    }
+
+    public function testUpDownCounterAccumulation(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->upDownCounter('conns', 3.0);
+        $b->upDownCounter('conns', -1.0);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('conns 2', $content);
+        $this->assertStringContainsString('# TYPE conns gauge', $content);
+    }
+
+    public function testAsyncCounterEmitsGaugeFormat(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->asyncCounter('jvm_gc_count', 10.0);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('jvm_gc_count 10', $content);
+        $this->assertStringContainsString('# TYPE jvm_gc_count counter', $content);
+    }
+
+    public function testAsyncGaugeEmitsGauge(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->asyncGauge('heap_used', 128.5);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('heap_used 128.5', $content);
+        $this->assertStringContainsString('# TYPE heap_used gauge', $content);
+    }
+
+    public function testHistogramBucketBoundaries(): void
+    {
+        $b = new PrometheusFileBackend($this->path, buckets: [0.01, 0.1, 1.0]);
+        $b->histogram('lat', 0.05); // Falls in 0.1 bucket
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('lat_bucket{le="0.01"} 0', $content);
+        $this->assertStringContainsString('lat_bucket{le="0.1"} 1', $content);
+        $this->assertStringContainsString('lat_bucket{le="1"} 1', $content);
+        $this->assertStringContainsString('lat_bucket{le="+Inf"} 1', $content);
+    }
+
+    public function testCustomBucketsWithTags(): void
+    {
+        $b = new PrometheusFileBackend($this->path, buckets: [1.0, 10.0]);
+        $b->histogram('lat', 5.0, ['method' => 'GET']);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('lat_bucket{method="GET",le="1"} 0', $content);
+        $this->assertStringContainsString('lat_bucket{method="GET",le="10"} 1', $content);
+        $this->assertStringContainsString('lat_bucket{method="GET",le="+Inf"} 1', $content);
+    }
+
+    public function testCannotOpenTmpPathThrows(): void
+    {
+        $dir = sys_get_temp_dir() . '/candy-metrics-prom-tmp-' . uniqid();
+        mkdir($dir);
+        $path = $dir . '/nested/file.prom'; // Cannot be created
+
+        $b = new PrometheusFileBackend($path);
+        $b->counter('x', 1);
+
+        // The explicit flush() surfaces the exception.
+        // The destructor warning (from @fopen inside flush) is unavoidable
+        // without modifying production code. We suppress it for this test.
+        $this->expectException(\RuntimeException::class);
+        try {
+            $b->flush();
+        } catch (\RuntimeException $e) {
+            // Clean up $b's internal state so the destructor doesn't re-trigger flush.
+            // We need to destroy $b while error_reporting is still silenced.
+            (function (PrometheusFileBackend $inst): void {
+                $inst->counter('x', 0); // marks dirty again — but we suppress flush via @ below
+            })($b);
+            // Suppress the destructor warning caused by the subsequent flush failure.
+            @$b = null;
+            throw $e; // re-throw so expectException sees it.
+        }
+
+        // Should not reach here.
+        @unlink($dir . '/nested/file.prom.tmp');
+        @rmdir($dir);
+    }
+
+    public function testEmitTypeEmitsOncePerFlushCycleForDescriptorWithSamples(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->describe(new Descriptor('described_metric', 'Has descriptor and samples', 'counter'));
+        $b->counter('described_metric', 1.0);
+        $b->counter('described_metric', 2.0, ['tag' => 'v']);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        // HELP and TYPE should appear once for the family, not per label set.
+        $this->assertSame(1, substr_count($content, '# HELP described_metric'));
+        $this->assertSame(1, substr_count($content, '# TYPE described_metric counter'));
+        // But both sample lines should be present.
+        $this->assertStringContainsString('described_metric 1', $content);
+        $this->assertStringContainsString('described_metric{tag="v"} 2', $content);
+    }
 }

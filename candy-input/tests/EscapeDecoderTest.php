@@ -1392,4 +1392,198 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount(1, $paste);
         $this->assertInstanceOf(PasteEvent::class, $paste[0]);
     }
+
+    // ─── Kitty F13-F24 key codes ──────────────────────────────────────────
+
+    public function testKittyF13(): void
+    {
+        // CSI ? 25 ; Ps u — F13
+        $events = $this->decoder->decode("\x1b[?25;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('F13', $events[0]->key);
+    }
+
+    public function testKittyF14(): void
+    {
+        $events = $this->decoder->decode("\x1b[?26;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('F14', $events[0]->key);
+    }
+
+    public function testKittyF15(): void
+    {
+        $events = $this->decoder->decode("\x1b[?28;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('F15', $events[0]->key);
+    }
+
+    public function testKittyF16(): void
+    {
+        $events = $this->decoder->decode("\x1b[?29;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('F16', $events[0]->key);
+    }
+
+    public function testKittyF17(): void
+    {
+        $events = $this->decoder->decode("\x1b[?31;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('F17', $events[0]->key);
+    }
+
+    public function testKittyF18IsSpace(): void
+    {
+        // Note: code 32 maps to Space, not F18 (conflict in original mapping)
+        $events = $this->decoder->decode("\x1b[?32;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('Space', $events[0]->key);
+    }
+
+    public function testKittyF19(): void
+    {
+        $events = $this->decoder->decode("\x1b[?33;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('F19', $events[0]->key);
+    }
+
+    public function testKittyF20(): void
+    {
+        $events = $this->decoder->decode("\x1b[?34;0u");
+        $this->assertCount(1, $events);
+        $this->assertSame('F20', $events[0]->key);
+    }
+
+    // F21-F24 (codes 35-38) are not in the mapping, so they return null events
+
+    // ─── SGR mouse drag (motion flag) ─────────────────────────────────────
+
+    public function testSgrMouseDrag(): void
+    {
+        // Button 32 = button 0 with motion flag (bit 5) set
+        // Motion flag takes precedence over press action
+        $events = $this->decoder->decode("\x1b[<32;10;5M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertSame(MouseEvent::BUTTON_LEFT, $m->button);
+        $this->assertSame(MouseEvent::ACTION_DRAG, $m->action);
+    }
+
+    public function testSgrMouseDragWithModifiers(): void
+    {
+        // Button 36 = button 0 with motion flag (32) + Shift (4)
+        $events = $this->decoder->decode("\x1b[<36;10;5M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertSame(MouseEvent::BUTTON_LEFT, $m->button);
+        $this->assertSame(MouseEvent::ACTION_DRAG, $m->action);
+        $this->assertTrue($m->modifiers->includes(KeyModifier::SHIFT));
+    }
+
+    public function testSgrMouseDragRight(): void
+    {
+        // Button 34 = button 2 with motion flag (32)
+        $events = $this->decoder->decode("\x1b[<34;10;5M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertSame(MouseEvent::BUTTON_RIGHT, $m->button);
+        $this->assertSame(MouseEvent::ACTION_DRAG, $m->action);
+    }
+
+    // ─── SS3 partial sequences ────────────────────────────────────────────
+
+    public function testSS3PartialBuffersIncomplete(): void
+    {
+        // Just ESC O without final byte
+        $events = $this->decoder->decode("\x1bO");
+        $this->assertCount(0, $events);
+        $this->assertSame("\x1bO", $this->decoder->remainder());
+    }
+
+    // ─── Kitty partial sequences ──────────────────────────────────────────
+
+    public function testKittyPartialSequence(): void
+    {
+        // Incomplete Kitty sequence
+        $events = $this->decoder->decode("\x1b[?97");
+        $this->assertCount(0, $events);
+    }
+
+    public function testKittyKeyReleaseWithModifiers(): void
+    {
+        // Key release: modifiers OR 0x20
+        // Shift (1) + release bit (0x20) = 33
+        $events = $this->decoder->decode("\x1b[?97;33u");
+        $this->assertCount(1, $events);
+        $this->assertSame('ReleaseA', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+    }
+
+    public function testKittyKeyReleaseWithCtrl(): void
+    {
+        // Ctrl (4) + release bit (0x20) = 36
+        $events = $this->decoder->decode("\x1b[?97;36u");
+        $this->assertCount(1, $events);
+        $this->assertSame('ReleaseA', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testKittyKeyReleaseWithAlt(): void
+    {
+        // Alt (2) + release bit (0x20) = 34
+        $events = $this->decoder->decode("\x1b[?97;34u");
+        $this->assertCount(1, $events);
+        $this->assertSame('ReleaseA', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+    }
+
+    // ─── SGR incomplete sequences ────────────────────────────────────────
+
+    public function testSgrMouseIncompleteNoMOrM(): void
+    {
+        // Just CSI < Pb ; x ; y without M or m
+        $events = $this->decoder->decode("\x1b[<0;10;5");
+        $this->assertCount(0, $events);
+        $this->assertNotSame('', $this->decoder->remainder());
+    }
+
+    public function testSgrMouseWrongParamCount(): void
+    {
+        // Only 2 params instead of 3
+        $events = $this->decoder->decode("\x1b[<0;10M");
+        $this->assertCount(0, $events);
+    }
+
+    // ─── Paste event edge cases ────────────────────────────────────────────
+
+    public function testPasteOverflowTruncation(): void
+    {
+        // Large paste that exceeds MAX_SIZE
+        $this->decoder->decode("\x1b[200~");
+        $large = str_repeat('x', PasteEvent::MAX_SIZE + 1000);
+        $events = $this->decoder->decode($large . "\x1b[201~");
+
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(PasteEvent::class, $events[0]);
+        // Should be truncated to MAX_SIZE
+        $this->assertSame(PasteEvent::MAX_SIZE, strlen($events[0]->content));
+    }
+
+    // ─── Mixed escape sequences ───────────────────────────────────────────
+
+    public function testAlternateSS3AndCSIArrows(): void
+    {
+        // Some terminals use SS3 for arrows
+        $events = $this->decoder->decode("\x1bOA\x1b[B");
+        $this->assertCount(2, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame('ArrowDown', $events[1]->key);
+    }
+
+    public function testCsiWithIntermediateBytes(): void
+    {
+        // CSI with intermediate bytes should not be recognized as a standard key
+        $events = $this->decoder->decode("\x1b[1;2;3A");
+        // This doesn't match the modified arrow pattern (needs exactly 1 or 2 params)
+        $this->assertCount(0, $events);
+    }
 }

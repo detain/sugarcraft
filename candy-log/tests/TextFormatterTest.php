@@ -381,8 +381,8 @@ final class TextFormatterTest extends TestCase
     public function testLogfmtFormatterEscapeQuotesValue(): void
     {
         $lf = new LogfmtFormatter(false);
-        // Value with space and quotes should be quoted
-        $line = $lf->format(Level::Info, 'test', ['k' => 'value with space'], new \DateTimeImmutable(), null, null);
+        // Value with space should be quoted
+        $line = $lf->format(Level::Info, 'test', ['key' => 'value with space'], new \DateTimeImmutable(), null, null);
 
         // Should contain quoted value
         $this->assertStringContainsString('"value with space"', $line);

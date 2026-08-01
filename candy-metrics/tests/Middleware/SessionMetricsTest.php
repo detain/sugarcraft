@@ -113,4 +113,187 @@ final class SessionMetricsTest extends TestCase
             ]),
         );
     }
+
+    public function testExtraTagsReturningEmptyArrayStillRecords(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r, fn(Session $_s) => []);
+        $mw->handle(Context::background(), $this->session(), fn() => null);
+
+        $this->assertSame(
+            1.0,
+            $b->counterValue('wish.session.connect', [
+                'user' => 'alice', 'term' => 'xterm-256color',
+            ]),
+        );
+    }
+
+    public function testNormalizeTagCappedAtExactlyMaxLength(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r);
+
+        // Exactly 64 chars — at the boundary, no truncation.
+        $exactUser = str_repeat('a', 64);
+        $session = $this->session($exactUser, 'xterm');
+        $mw->handle(Context::background(), $session, fn() => null);
+
+        $keys = array_values(array_filter(
+            array_keys($b->counters()),
+            static fn(string $k): bool => str_starts_with($k, 'wish.session.connect'),
+        ));
+        $this->assertCount(1, $keys);
+        $this->assertStringContainsString('user=' . $exactUser, $keys[0]);
+    }
+
+    public function testNormalizeTagTruncatesOverMaxLength(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r);
+
+        // 65 chars — one over the max, should be truncated.
+        $overUser = str_repeat('b', 65);
+        $session = $this->session($overUser, 'xterm');
+        $mw->handle(Context::background(), $session, fn() => null);
+
+        $keys = array_values(array_filter(
+            array_keys($b->counters()),
+            static fn(string $k): bool => str_starts_with($k, 'wish.session.connect'),
+        ));
+        $this->assertCount(1, $keys);
+        $this->assertStringContainsString('user=' . str_repeat('b', 64), $keys[0]);
+        $this->assertStringNotContainsString('user=' . str_repeat('b', 65), $keys[0]);
+    }
+
+    public function testDurationTimerRecordsPositiveValue(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r);
+        $mw->handle(Context::background(), $this->session(), function (): void {
+            usleep(5000); // 5ms
+        });
+
+        $samples = $b->histogramValues('wish.session.duration', [
+            'user' => 'alice', 'term' => 'xterm-256color',
+        ]);
+        $this->assertCount(1, $samples);
+        $this->assertGreaterThanOrEqual(0.005, $samples[0]);
+    }
+
+    public function testCounterFailureIsSwallowedAndSessionContinues(): void
+    {
+        $throwing = new class implements \SugarCraft\Metrics\Backend {
+            public function counter(string $name, float $value, array $tags = []): void
+            {
+                throw new \RuntimeException('counter always fails');
+            }
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void {}
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(\SugarCraft\Metrics\Descriptor $descriptor): void {}
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void {}
+            public function clear(): void {}
+        };
+
+        $r = new Registry($throwing);
+        $mw = new SessionMetrics($r);
+        $ran = false;
+        $mw->handle(Context::background(), $this->session(), function () use (&$ran): void {
+            $ran = true;
+        });
+        // The session next() must have been called despite counter() throwing.
+        $this->assertTrue($ran);
+    }
+
+    public function testTimerFailureIsSwallowedAndSessionContinues(): void
+    {
+        $throwing = new class implements \SugarCraft\Metrics\Backend {
+            public bool $counterCalled = false;
+            public function counter(string $name, float $value, array $tags = []): void
+            {
+                $this->counterCalled = true;
+            }
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void
+            {
+                throw new \RuntimeException('histogram fails');
+            }
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(\SugarCraft\Metrics\Descriptor $descriptor): void {}
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void {}
+            public function clear(): void {}
+        };
+
+        $throwingBackend = new class implements \SugarCraft\Metrics\Backend {
+            public bool $counterCalled = false;
+            public function counter(string $name, float $value, array $tags = []): void
+            {
+                $this->counterCalled = true;
+            }
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void {}
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(\SugarCraft\Metrics\Descriptor $descriptor): void {}
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void {}
+            public function clear(): void {}
+        };
+
+        $r = new Registry($throwingBackend);
+        $mw = new SessionMetrics($r);
+        $ran = false;
+        $mw->handle(Context::background(), $this->session(), function () use (&$ran): void {
+            $ran = true;
+        });
+        // Both counter and timer (histogram) failures must be swallowed.
+        $this->assertTrue($ran);
+        $this->assertTrue($throwingBackend->counterCalled);
+    }
+
+    public function testErrorCounterFailureIsSwallowed(): void
+    {
+        $throwing = new class implements \SugarCraft\Metrics\Backend {
+            public bool $counterCalled = false;
+            public function counter(string $name, float $value, array $tags = []): void
+            {
+                $this->counterCalled = true;
+            }
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void {}
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(\SugarCraft\Metrics\Descriptor $descriptor): void {}
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void {}
+            public function clear(): void {}
+        };
+
+        $r = new Registry($throwing);
+        $mw = new SessionMetrics($r);
+        $ran = false;
+        try {
+            $mw->handle(Context::background(), $this->session(), function () use (&$ran): void {
+                $ran = true;
+                throw new \RuntimeException('next fails');
+            });
+            $this->fail('Expected RuntimeException to propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('next fails', $e->getMessage());
+        }
+        // The session ran and the exception propagated.
+        $this->assertTrue($ran);
+    }
 }

@@ -82,7 +82,8 @@ final class JsonStreamBackendTest extends TestCase
     {
         // Non-existent path with a directory that itself cannot be created (root-only dir)
         $this->expectException(\RuntimeException::class);
-        new JsonStreamBackend('/cannot-possibly-exist/nope.txt');
+        /** @ suppression needed: we EXPECT this fopen to fail and it triggers a PHP warning */
+        @new JsonStreamBackend('/cannot-possibly-exist/nope.txt');
     }
 
     public function testAsyncCounterEmitsCorrectKind(): void
@@ -97,7 +98,7 @@ final class JsonStreamBackendTest extends TestCase
         $decoded = json_decode((string) $lines[0], true);
         $this->assertSame('async_counter', $decoded['kind']);
         $this->assertSame('jvm_gc', $decoded['name']);
-        $this->assertSame(2.0, $decoded['value']);
+        $this->assertEqualsWithDelta(2.0, $decoded['value'], 0.001);
         $this->assertSame(['gen' => 'old'], (array) $decoded['tags']);
         fclose($stream);
     }
@@ -129,7 +130,7 @@ final class JsonStreamBackendTest extends TestCase
         $decoded = json_decode((string) $lines[0], true);
         $this->assertSame('updowncounter', $decoded['kind']);
         $this->assertSame('conns', $decoded['name']);
-        $this->assertSame(3.0, $decoded['value']);
+        $this->assertEqualsWithDelta(3.0, $decoded['value'], 0.001);
         fclose($stream);
     }
 

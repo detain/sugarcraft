@@ -161,4 +161,57 @@ final class RegistryTest extends TestCase
         // Only one unique label combo should survive (FIFO eviction).
         $this->assertLessThanOrEqual(1, $child->cardinality('m'));
     }
+
+    public function testDeleteLabelValuesRemovesSeriesAndDecreasesCardinality(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b, [], 1000);
+        $r->counter('hits', 1.0, ['route' => '/a']);
+        $r->counter('hits', 1.0, ['route' => '/b']);
+        $this->assertSame(2, $r->cardinality('hits'));
+
+        // deleteLabelValues only evicts from the cardinality cache, not from the backend.
+        $r->deleteLabelValues('hits', ['route' => '/a']);
+        $this->assertSame(1, $r->cardinality('hits'));
+        // The backend value is NOT removed by deleteLabelValues (only by remove()).
+        $this->assertSame(1.0, $b->counterValue('hits', ['route' => '/a']));
+        $this->assertSame(1.0, $b->counterValue('hits', ['route' => '/b']));
+    }
+
+    public function testDeleteLabelValuesOnUnknownSeriesIsHarmless(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $r->deleteLabelValues('never_seen', ['x' => 'y']); // no-op, must not throw.
+        $this->assertSame(0, $r->cardinality('never_seen'));
+    }
+
+    public function testRemoveForwardsToBackendAndCache(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b, [], 1000);
+        $r->counter('hits', 1.0, ['route' => '/x']);
+        $r->counter('hits', 2.0, ['route' => '/y']);
+        $this->assertSame(2, $r->cardinality('hits'));
+
+        $r->remove('hits', ['route' => '/x']);
+        $this->assertSame(1, $r->cardinality('hits'));
+        $this->assertSame(0.0, $b->counterValue('hits', ['route' => '/x']));
+        $this->assertSame(2.0, $b->counterValue('hits', ['route' => '/y']));
+    }
+
+    public function testCardinalityReturnsZeroForUnknownMetric(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $this->assertSame(0, $r->cardinality('unknown_metric'));
+    }
+
+    public function testRegistryRemoveFromNonExistentIsHarmless(): void
+    {
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $r->remove('never_existed', ['x' => 'y']); // must not throw.
+        $this->assertTrue(true);
+    }
 }
