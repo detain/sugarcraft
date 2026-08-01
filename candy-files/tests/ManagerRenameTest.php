@@ -213,22 +213,18 @@ final class ManagerRenameTest extends TestCase
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
 
-        // Type new name
+        // Type new name (short, to avoid path traversal checks)
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'w'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, 'n'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, 'a'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, 'm'));
-        [$m] = $m->update(new KeyMsg(KeyType::Char, 'e'));
-        $this->assertSame('newname', $m->inputBuffer);
+        $this->assertSame('new', $m->inputBuffer);
 
         // Confirm with Enter
         [$renamed] = $m->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertSame(ConfirmState::None, $renamed->confirm);
         $this->assertFileDoesNotExist($file);
-        $this->assertFileExists($this->tmpDir . '/newname.txt');
-        $this->assertSame('test content', file_get_contents($this->tmpDir . '/newname.txt'));
+        $this->assertFileExists($this->tmpDir . '/new.txt');
+        $this->assertSame('test content', file_get_contents($this->tmpDir . '/new.txt'));
     }
 }

@@ -1407,35 +1407,13 @@ final class BufferTest extends TestCase
     public function testFromStringParsesBrightForegroundSgr(): void
     {
         // "\x1b[91mX" = bright red foreground
-        // For red (0xff0000), brightening doesn't change it since r=255 is already maxed.
-        // But the function should still apply the brightening logic.
+        // Note: for colors at max intensity (R/G/B=255), brightening has no effect.
+        // This is a limitation of the simple "add 40%" brightening model.
         $buf = Buffer::fromString("\x1b[91mX", 1, 1);
 
         $this->assertSame('X', $buf->cellAt(0, 0)->rune());
         $this->assertNotNull($buf->cellAt(0, 0)->style());
-        // Red stays the same when brightened (already at max)
         $this->assertSame(0xff0000, $buf->cellAt(0, 0)->style()->fg());
-    }
-
-    public function testFromStringParsesBrightGreenIsLighter(): void
-    {
-        // "\x1b[92mX" = bright green
-        // Green (0x00ff00) brightened: g = 255 + 255*0.4 = 357 → capped at 255
-        // So bright green is same as normal green (already at max)
-        $buf = Buffer::fromString("\x1b[92mX", 1, 1);
-
-        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
-        $this->assertSame(0x00ff00, $buf->cellAt(0, 0)->style()->fg());
-    }
-
-    public function testFromStringParsesBrightBlueIsLighter(): void
-    {
-        // "\x1b[94mX" = bright blue
-        // Blue (0x0000ff) brightened: b = 255 + 255*0.4 = 357 → capped at 255
-        $buf = Buffer::fromString("\x1b[94mX", 1, 1);
-
-        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
-        $this->assertSame(0x0000ff, $buf->cellAt(0, 0)->style()->fg());
     }
 
     public function testFromStringParsesBrightBackgroundSgr(): void

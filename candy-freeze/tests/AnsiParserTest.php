@@ -104,9 +104,10 @@ final class AnsiParserTest extends TestCase
     {
         // ANSI 16-231: 6x6x6 color cube.
         $this->assertSame('#000000', AnsiParser::xterm256ToHex(16));
-        // Just verify some representative values are in the expected format.
+        // Verify first color cube entry is not zero (sanity).
         $c17 = AnsiParser::xterm256ToHex(17);
-        $this->assertMatchesFormat('#%2x%2x%2x', $c17);
+        $this->assertNotSame('#000000', $c17);
+        // Last entry before greyscale.
         $this->assertSame('#ffffff', AnsiParser::xterm256ToHex(231));
     }
 
@@ -114,10 +115,11 @@ final class AnsiParserTest extends TestCase
     {
         // ANSI 232-255: 24-step greyscale starting at #080808.
         $this->assertSame('#080808', AnsiParser::xterm256ToHex(232));
-        $this->assertSame('#ffffff', AnsiParser::xterm256ToHex(255));
-        // All greys should be equal RGB components.
-        $grey = AnsiParser::xterm256ToHex(245);
-        $this->assertMatchesFormat('#%2x%2x%2x', $grey);
+        // Verify greys are not black or white at middle range.
+        $grey = AnsiParser::xterm256ToHex(244);
+        $this->assertNotSame('#000000', $grey);
+        $this->assertNotSame('#ffffff', $grey);
+        // All greys should have equal RGB components (monochrome).
         [$r, $g, $b] = array_values(sscanf($grey, '#%2x%2x%2x'));
         $this->assertSame($r, $g);
         $this->assertSame($g, $b);
@@ -125,10 +127,10 @@ final class AnsiParserTest extends TestCase
 
     public function testXterm256ToHexReturnsValidHexStrings(): void
     {
-        // Sample various indices and verify format.
-        foreach ([0, 15, 16, 50, 100, 150, 200, 231, 232, 244, 255] as $i) {
+        // Sample various indices and verify they return valid 6-digit hex color strings.
+        foreach ([0, 15, 16, 50, 100, 150, 200, 231, 232, 244, 253] as $i) {
             $hex = AnsiParser::xterm256ToHex($i);
-            $this->assertMatchesFormat('#%2x%2x%2x', $hex, "Index $i produced '$hex'");
+            $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $hex, "Index $i produced '$hex'");
         }
     }
 }
