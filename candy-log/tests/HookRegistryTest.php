@@ -16,9 +16,8 @@ final class HookRegistryTest extends TestCase
     {
         $registry = new HookRegistry();
 
-        $called = false;
-        $id = $registry->onLevel(Level::Info, function () use (&$called): void {
-            $called = true;
+        $id = $registry->onLevel(Level::Info, function (): void {
+            // Callback registered; actual invocation tested separately
         });
 
         $this->assertIsInt($id);

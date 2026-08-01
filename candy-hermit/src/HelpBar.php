@@ -29,7 +29,7 @@ final class HelpBar
         foreach ($shortcuts as $key => $description) {
             $this->shortcuts[(string) $key] = (string) $description;
         }
-        if (!$visible) {
+        if ($visible === false) {
             $this->visible = false;
         }
     }
@@ -66,7 +66,7 @@ final class HelpBar
      */
     public function render(): string
     {
-        if (!$this->visible || $this->shortcuts === []) {
+        if ($this->visible === false || $this->shortcuts === []) {
             return '';
         }
 

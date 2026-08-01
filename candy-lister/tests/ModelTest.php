@@ -293,7 +293,7 @@ final class ModelTest extends TestCase
         $this->model = $this->model->addItem(new StringItem('apple'));
         $this->assertNull($this->model->filterState);
 
-        $filtered = $this->model->withFilterFn(fn($v) => true);
+        $filtered = $this->model->withFilterFn(fn() => true);
         $this->assertSame(FilterState::filtering, $filtered->filterState);
     }
 
@@ -671,7 +671,7 @@ final class ModelTest extends TestCase
             ->setSuffixer(new DefaultSuffixer());
 
         // Render unfiltered model first (stores previousFrame in $m)
-        $frame1 = $m->View();
+        $m->View();
 
         // Apply filter: different line set → next View() must be full, not delta
         $filtered = $m->withFilterFn(fn($v) => (string) $v === 'banana');

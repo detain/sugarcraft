@@ -47,7 +47,7 @@ final class FileHistory
     private static function confine(string $path, string $baseDir): string
     {
         $realBase = \realpath($baseDir);
-        if ($realBase === false || !\is_dir($realBase)) {
+        if ($realBase === false || \is_dir($realBase) === false) {
             throw new \InvalidArgumentException(
                 \sprintf('Hermit history base directory does not exist: %s', $baseDir),
             );
@@ -107,7 +107,7 @@ final class FileHistory
      */
     public function all(): array
     {
-        if (!\is_file($this->path)) {
+        if (\is_file($this->path) === false) {
             return [];
         }
 

@@ -501,7 +501,7 @@ final class Hermit
      */
     public function View(string $backgroundView): string
     {
-        if (!$this->isShown) {
+        if ($this->isShown === false) {
             return $backgroundView;
         }
 

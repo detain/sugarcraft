@@ -43,14 +43,12 @@ final class Counter implements Model
 
     public function update(Msg $msg): array
     {
-        if (!$msg instanceof KeyMsg) {
+        if ($msg instanceof KeyMsg === false) {
             return [$this, null];
         }
         // Mirrors charmbracelet/bubbletea-app-template/Program.update
         // quit with q (plain), Esc, or ctrl+c
-        if (($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl)
-            || $msg->type === KeyType::Escape
-            || ($msg->ctrl && $msg->rune === 'c')) {
+        if ($this->shouldQuit($msg)) {
             return [$this, Cmd::quit()];
         }
         return [match ($msg->type) {

@@ -31,7 +31,7 @@ final class StatusBar
     {
         $this->message = $message;
         // Visible trait initializes $visible = true; re-apply if false passed.
-        if (!$visible) {
+        if ($visible === false) {
             $this->visible = false;
         }
     }
@@ -94,7 +94,7 @@ final class StatusBar
      */
     public function render(): string
     {
-        if (!$this->visible) {
+        if ($this->visible === false) {
             return '';
         }
 

@@ -241,13 +241,13 @@ final class GreedySolver implements LayoutSolver
                 $reservedFixed += $c->n;
             } elseif ($c instanceof Percentage) {
                 // boxer-compat rounds (distribute() uses round()); default floors.
-                $size = $this->roundSplit
+                $size = $this->roundSplit === true
                     ? (int) round($totalWidth * $c->n / 100)
                     : (int) floor($totalWidth * $c->n / 100);
                 $rawSizes[] = $size;
                 $reservedFixed += $size;
             } elseif ($c instanceof Ratio) {
-                $size = $this->roundSplit
+                $size = $this->roundSplit === true
                     ? (int) round($totalWidth * $c->numerator / $c->denominator)
                     : (int) floor($totalWidth * $c->numerator / $c->denominator);
                 $rawSizes[] = $size;
@@ -271,7 +271,7 @@ final class GreedySolver implements LayoutSolver
 
         // Step 2: handle overflow — total exceeds area
         if ($totalReserved > $totalWidth) {
-            if ($this->truncateOverflow) {
+            if ($this->truncateOverflow === true) {
                 // Truncate proportionally
                 $scale = $totalWidth / $totalReserved;
                 foreach ($rawSizes as $i => $size) {
@@ -336,7 +336,7 @@ final class GreedySolver implements LayoutSolver
 
                     $used = array_sum($rawSizes);
                     $diff = $totalWidth - $used;
-                    if ($this->remainderToLast) {
+                    if ($this->remainderToLast === true) {
                         // boxer-compat: the LAST region absorbs the entire
                         // remainder, mirroring sugar-boxer distribute() where the
                         // final child = span - sum(others). The remainder can be
@@ -504,7 +504,7 @@ final class GreedySolver implements LayoutSolver
                 break;
             }
         }
-        if (!$hasMax) {
+        if ($hasMax === false) {
             return $rawSizes;
         }
 
@@ -543,7 +543,7 @@ final class GreedySolver implements LayoutSolver
         $recipients = [];
         $recipientWeights = [];
 
-        if ($hasMin) {
+        if ($hasMin === true) {
             // Give reclaimed space to Min constraints
             $recipients = $minRecipients;
             $recipientWeights = $minWeights;
