@@ -58,7 +58,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeRows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/rows.*negative/');
+        $this->expectExceptionMessage('winsize fields must be non-negative');
 
         SizeIoctl::pack(-1, 80);
     }
@@ -66,7 +66,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeCols(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/cols.*negative/');
+        $this->expectExceptionMessage('winsize fields must be non-negative');
 
         SizeIoctl::pack(24, -1);
     }
@@ -74,7 +74,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeXpix(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/xpix.*negative/');
+        $this->expectExceptionMessage('winsize fields must be non-negative');
 
         SizeIoctl::pack(24, 80, -1, 0);
     }
@@ -82,7 +82,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeYpix(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/ypix.*negative/');
+        $this->expectExceptionMessage('winsize fields must be non-negative');
 
         SizeIoctl::pack(24, 80, 0, -1);
     }

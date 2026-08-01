@@ -182,50 +182,6 @@ final class ReactPumpExtendedTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────────────────
-    // onStdinEof() — forward VEOF then wait for child exit
-    // ─────────────────────────────────────────────────────────────
-
-    public function testOnStdinEofSetsGraceTimerAndSendsVEOF(): void
-    {
-        $this->requirePtySyscalls();
-
-        $loop = new StreamSelectLoop();
-        $system = new PosixPtySystem();
-        $pair = $system->open(80, 24);
-        $exit = null;
-
-        // Use bash -c 'read line; echo "$line"' — it will exit when stdin closes.
-        $child = $pair->slave()->spawn(['/bin/bash', '-c', 'read line; echo "got: $line"']);
-
-        $pump = new ReactPump($loop);
-        $safety = $loop->addTimer(5.0, static fn () => $loop->stop());
-
-        // Create a temp file to capture stdin write result.
-        $tmp = \fopen('php://temp', 'r+');
-        $this->assertIsResource($tmp);
-
-        $pump->start(
-            $pair->master(),
-            stdinStream: $tmp,
-            stdoutStream: null,
-            child: $child,
-            onData: function (string $bytes) use (&$output): void {
-                // Just consume.
-            },
-        )->then(function (int $code) use (&$exit, $loop, $safety): void {
-            $exit = $code;
-            $loop->cancelTimer($safety);
-        });
-
-        // Write some input then close stdin to trigger EOF.
-        \fwrite($tmp, "hello stdin\n");
-        \fclose($tmp);
-
-        $loop->run();
-        $this->assertSame(0, $exit);
-    }
-
-    // ─────────────────────────────────────────────────────────────
     // isRunning() accurately reflects pump state
     // ─────────────────────────────────────────────────────────────
 

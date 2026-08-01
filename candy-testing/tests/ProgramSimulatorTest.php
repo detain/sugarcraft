@@ -6,8 +6,12 @@ namespace SugarCraft\Testing\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Core\View;
 use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\TestResult;
 

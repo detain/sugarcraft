@@ -110,11 +110,19 @@ final class LibcExtendedTest extends TestCase
         $ffi = Libc::libutil();
 
         $this->assertInstanceOf(\FFI::class, $ffi);
-        // openpty should be available in the libutil handle on Linux.
-        $this->assertTrue(
-            \method_exists($ffi, 'openpty'),
-            'libutil FFI should expose openpty on Linux',
-        );
+        // openpty should be callable via the libutil handle on Linux.
+        // We verify by calling it (result rc=0 means pts pair created).
+        $masterPtr = $ffi->new('int[1]');
+        $slavePtr = $ffi->new('int[1]');
+        $rc = $ffi->openpty(\FFI::addr($masterPtr[0]), \FFI::addr($slavePtr[0]), null, null, null);
+        $this->assertSame(0, $rc, 'openpty on Linux via libutil should succeed');
+        // Clean up.
+        if ($masterPtr[0] >= 0) {
+            $ffi->close($masterPtr[0]);
+        }
+        if ($slavePtr[0] >= 0) {
+            $ffi->close($slavePtr[0]);
+        }
     }
 
     public function testLibutilOnDarwinReturnsLibcFFI(): void

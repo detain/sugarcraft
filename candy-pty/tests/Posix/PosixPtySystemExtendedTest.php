@@ -93,15 +93,15 @@ final class PosixPtySystemExtendedTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Private constructor
+    // Class is instantiable (default public constructor)
     // ─────────────────────────────────────────────────────────────
 
-    public function testConstructorIsPrivate(): void
+    public function testClassIsInstantiable(): void
     {
-        $reflection = new \ReflectionClass(PosixPtySystem::class);
-        $constructor = $reflection->getConstructor();
-        $this->assertNotNull($constructor);
-        $this->assertTrue($constructor->isPrivate());
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $this->assertInstanceOf(PosixPtySystem::class, $system);
     }
 
     // ─────────────────────────────────────────────────────────────

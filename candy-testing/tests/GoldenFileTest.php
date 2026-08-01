@@ -129,4 +129,66 @@ final class GoldenFileTest extends TestCase
         $this->expectException(\RuntimeException::class);
         GoldenFile::resolve('/home/test', 'ok/../../../test/fixtures-evil/x.golden');
     }
+
+    public function testResolveNormalizesPathWithDotSegments(): void
+    {
+        // Path with . and empty segments should be normalized away.
+        $resolved = GoldenFile::resolve('/home/test', 'sub/./dir/../file.golden');
+
+        $this->assertSame('/home/test/fixtures/sub/file.golden', $resolved);
+    }
+
+    public function testResolveNormalizesMultipleDotDotSegments(): void
+    {
+        // Multiple '..' in succession should each be processed.
+        $resolved = GoldenFile::resolve('/home/test', 'a/b/c/../../d.golden');
+
+        $this->assertSame('/home/test/fixtures/a/d.golden', $resolved);
+    }
+
+    public function testResolveHandlesPureDotPath(): void
+    {
+        // A path that is just '.' should normalize to empty but valid path.
+        // Actually '.' alone would just be skipped as empty segment after split.
+        $resolved = GoldenFile::resolve('/home/test', './././file.golden');
+
+        $this->assertSame('/home/test/fixtures/file.golden', $resolved);
+    }
+
+    public function testSaveFailsOnUnwritablePath(): void
+    {
+        // Attempting to save to a path where file_put_contents would fail
+        // should throw a RuntimeException.
+        // On Unix, /dev/full simulates disk full; on Windows we test with
+        // a read-only directory path.
+        if (is_dir('/dev/full')) {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessageMatches('/write_failed/');
+            GoldenFile::save('/dev/full/test.golden', 'content');
+        } else {
+            // Skip on platforms without /dev/full
+            $this->markTestSkipped('/dev/full not available on this platform');
+        }
+    }
+
+    public function testResolveHandlesAbsolutePathAsRelative(): void
+    {
+        // A path with leading slash is treated as fixtures-relative (stripped),
+        // not as an absolute filesystem path.
+        $resolved = GoldenFile::resolve('/home/test', '/subdir/file.golden');
+
+        $this->assertSame('/home/test/fixtures/subdir/file.golden', $resolved);
+    }
+
+    public function testResolveEmptyRelativeBecomesFileInFixtures(): void
+    {
+        // Edge case: if relative is empty or just '/', what happens?
+        // ltrim('/') on empty string gives '/' which stays.
+        // But resolve() with empty string would give fixtures/FILENAME since
+        // ltrim('', '/') is empty, then '/' + '' = '/', prepended to base gives
+        // base fixtures path with trailing slash.
+        // This is an edge case that shouldn't happen in practice.
+        $resolved = GoldenFile::resolve('/home/test', '');
+        $this->assertSame('/home/test/fixtures', $resolved);
+    }
 }
