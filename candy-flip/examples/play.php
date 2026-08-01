@@ -15,7 +15,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Flip\Decoder;
 use SugarCraft\Flip\Player;
 
-if (!extension_loaded('gd')) {
+if (extension_loaded('gd') === false) {
     fwrite(STDERR, "candy-flip example: ext-gd is required\n");
     exit(1);
 }

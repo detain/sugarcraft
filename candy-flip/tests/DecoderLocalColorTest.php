@@ -19,7 +19,7 @@ final class DecoderLocalColorTest extends TestCase
      */
     public function testDecoderUsesLocalColorTable(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $gif = $this->buildGifWithLocalColorTable();

@@ -49,7 +49,7 @@ final class DecoderTest extends TestCase
      */
     public function testDecoderResolvesPaletteColorsToRgb(int $r, int $g, int $b): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
 
@@ -87,7 +87,7 @@ final class DecoderTest extends TestCase
 
     public function testDecodeReturnsFrames(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $frames = Decoder::decode($this->gifPath, 1, 1);
@@ -96,7 +96,7 @@ final class DecoderTest extends TestCase
 
     public function testDecodeReturnsCorrectDimensions(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $frames = Decoder::decode($this->gifPath, 2, 2);
@@ -141,7 +141,7 @@ final class DecoderTest extends TestCase
      */
     public function testRejectsZeroCellGrid(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $this->expectException(\RuntimeException::class);
@@ -150,7 +150,7 @@ final class DecoderTest extends TestCase
 
     public function testRejectsNegativeCellGrid(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $this->expectException(\RuntimeException::class);
@@ -163,7 +163,7 @@ final class DecoderTest extends TestCase
      */
     public function testRejectsOversizedCellGrid(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $this->expectException(\RuntimeException::class);
@@ -181,7 +181,7 @@ final class DecoderTest extends TestCase
      */
     public function testDecodeHandlesLargeLzwSubBlocks(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         // A 120x60 gradient yields several 254-byte LZW sub-blocks.
@@ -213,7 +213,7 @@ final class DecoderTest extends TestCase
      */
     public function testDecodeHandlesTruncatedSubBlockOverrun(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         // Build a GIF where an extension sub-block length byte claims 255 bytes
@@ -255,7 +255,7 @@ final class DecoderTest extends TestCase
      */
     public function testDecodeHandlesTruncatedGraphicControlExtension(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         // Valid GIF89a header + logical screen descriptor (no GCT), then a

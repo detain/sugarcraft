@@ -97,7 +97,7 @@ final class DecoderCompositingTest extends TestCase
      */
     public function testAllDisposalMethodsAreAccepted(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
 
@@ -157,7 +157,7 @@ final class DecoderCompositingTest extends TestCase
      */
     public function testDisposalPreviousRestoresFromSnapshot(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
 
@@ -236,7 +236,7 @@ final class DecoderCompositingTest extends TestCase
      */
     public function testDisposalPreviousRestoresPriorFramePixels(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             $this->markTestSkipped('ext-gd not available');
         }
         $gif = $this->buildDisposalPreviousGif();

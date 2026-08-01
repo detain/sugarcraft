@@ -19,7 +19,7 @@ final class PerFrameTimingTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!extension_loaded('gd')) {
+        if (extension_loaded('gd') === false) {
             self::markTestSkipped('ext-gd not available');
         }
         $this->gifPath = sys_get_temp_dir() . '/multi-frame-' . uniqid() . '.gif';
