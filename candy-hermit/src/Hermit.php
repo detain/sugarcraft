@@ -755,26 +755,32 @@ final class Hermit
 
             public function execute(int $byte): void
             {
+                // Required by Handler interface; we only care about printable chars.
             }
 
             public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
             {
+                // Required by Handler interface; CSI sequences are not relevant for text extraction.
             }
 
             public function escDispatch(int $final, int $intermediate): void
             {
+                // Required by Handler interface; ESC sequences are not relevant for text extraction.
             }
 
             public function oscDispatch(string $data): void
             {
+                // Required by Handler interface; OSC sequences are not relevant for text extraction.
             }
 
             public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
             {
+                // Required by Handler interface; DCS sequences are not relevant for text extraction.
             }
 
             public function sosPmApcDispatch(string $kind, string $data): void
             {
+                // Required by Handler interface; SOS/PM/APC sequences are not relevant for text extraction.
             }
         };
 
