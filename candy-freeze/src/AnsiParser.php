@@ -117,8 +117,9 @@ final class SgrStateHandler implements Handler
         $this->textBuf .= $rune;
     }
 
-    public function execute(int $byte): void
+    public function execute(int $_byte): void
     {
+        // Interface required; byte value not needed for SGR-only handler.
     }
 
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
@@ -131,8 +132,9 @@ final class SgrStateHandler implements Handler
         $this->state = $this->applySgr($params, $this->state);
     }
 
-    public function escDispatch(int $final, int $intermediate): void
+    public function escDispatch(int $_final, int $_intermediate): void
     {
+        // Interface required; not needed for SGR-only handler.
     }
 
     public function oscDispatch(string $data): void
@@ -143,8 +145,9 @@ final class SgrStateHandler implements Handler
     {
     }
 
-    public function sosPmApcDispatch(string $kind, string $data): void
+    public function sosPmApcDispatch(string $_kind, string $_data): void
     {
+        // Interface required; SOS/PM/APC sequences not needed for SGR-only handler.
     }
 
     private function applySgr(array $params, SgrState $cur): SgrState

@@ -42,9 +42,6 @@ final class EscapeDecoder
      */
     private const MAX_SEQUENCE_LENGTH = 128;
 
-    /** @var list<Event> */
-    private array $buffer = [];
-
     /** Remaining bytes after last decode() that couldn't form a complete sequence */
     private string $remainder = '';
 
@@ -88,7 +85,7 @@ final class EscapeDecoder
         $this->remainder = '';
 
         // Handle in-progress bracketed paste
-        if ($this->inPaste) {
+        if ($this->inPaste === true) {
             return $this->handlePasteStream($stream);
         }
 

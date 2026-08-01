@@ -448,7 +448,7 @@ final class GreedySolver implements LayoutSolver
 
         $weights = [];
         foreach ($constraints as $c) {
-            if (!$c instanceof Fill) {
+            if ($c instanceof Fill === false) {
                 throw new \InvalidArgumentException(
                     'Min-share floor supports only Fill constraints (proportional split); got ' . $c::class
                 );

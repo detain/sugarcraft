@@ -91,7 +91,7 @@ final class LayoutCalculatorTest extends TestCase
             cellH: 17.0,
         );
 
-        [$maxCols, $gutter] = $result;
+        [, $gutter] = $result;
 
         // Gutter: max(2, strlen("100")) + 2 = max(2, 3) + 2 = 5
         $this->assertSame(5, $gutter);
