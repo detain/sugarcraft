@@ -128,7 +128,7 @@ final class Help
      */
     public function updateWithBinding(Msg $msg, Binding $toggle): self
     {
-        if (!$msg instanceof KeyMsg || $toggle->disabled) {
+        if (!($msg instanceof KeyMsg) || $toggle->disabled) {
             return $this;
         }
         if (!$this->keyMatches($msg, $toggle)) {

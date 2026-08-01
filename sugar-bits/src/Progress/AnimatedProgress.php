@@ -73,7 +73,7 @@ final class AnimatedProgress implements Model
 
     public function update(Msg $msg): array
     {
-        if (!$msg instanceof SpringTickMsg) {
+        if (!($msg instanceof SpringTickMsg)) {
             return [$this, null];
         }
         if (!$this->animating) {

@@ -204,7 +204,7 @@ final class SugarBoxer
 
     private function renderLeaf(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
     {
-        $b = $node->border ? 1 : 0;
+        $b = $node->border === true ? 1 : 0;
         $p = $node->padding;
 
         $cx = $x + $b;          // content left
@@ -246,7 +246,7 @@ final class SugarBoxer
 
         if ($pcw <= 0 || $pch <= 0) return;
 
-        if ($node->border) {
+        if ($node->border === true) {
             $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
 
@@ -285,7 +285,7 @@ final class SugarBoxer
 
         // Flex children grow to fill the leftover after fixed siblings; without
         // any flex child, fall back to distributing width by minWidth weights.
-        if ($this->hasFlex($children)) {
+        if ($this->hasFlex($children) === true) {
             // Single-pass: build bases and flexes arrays together
             $bases = [];
             $flexes = [];
@@ -361,7 +361,7 @@ final class SugarBoxer
         // Flex children grow to fill the leftover after fixed siblings; without
         // any flex child, fall back to distributing height by minHeight weights
         // (the historical 1/3-style split).
-        if ($this->hasFlex($children)) {
+        if ($this->hasFlex($children) === true) {
             // Single-pass: build bases and flexes arrays together
             $bases = [];
             $flexes = [];
@@ -539,7 +539,7 @@ final class SugarBoxer
         // The line's own trailing escapes (e.g. an SGR reset) ride on the last
         // cell when the whole line fit; if we truncated mid-line they belonged to
         // clipped cells and are dropped (reset safety below still closes the span).
-        if (!$truncated && $trailing !== '' && $lastCol >= 0) {
+        if ($truncated === false && $trailing !== '' && $lastCol >= 0) {
             $cells[$y][$x + $lastCol] .= $trailing;
             $styleOpen = $this->sgrLeavesStyleOpen($trailing, $styleOpen);
         }
@@ -636,7 +636,7 @@ final class SugarBoxer
         if ($hasGrapheme === null) {
             $hasGrapheme = \function_exists('grapheme_extract');
         }
-        if ($hasGrapheme) {
+        if ($hasGrapheme === true) {
             $next    = 0;
             $cluster = \grapheme_extract($s, 1, \GRAPHEME_EXTR_COUNT, $i, $next);
             if (\is_string($cluster) && $cluster !== '') {
@@ -708,7 +708,7 @@ final class SugarBoxer
                 $result[] = $paragraphLine;
                 continue;
             }
-            $words = \preg_split('/\s+/', $paragraphLine) ?: [];
+            $words = \preg_split('/\s+/', $paragraphLine) !== false ? \preg_split('/\s+/', $paragraphLine) : [];
             $current = '';
 
             foreach ($words as $word) {

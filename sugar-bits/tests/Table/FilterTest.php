@@ -156,7 +156,7 @@ final class FilterTest extends TestCase
     {
         $t = $this->table()
             ->withFilterable(true)
-            ->withFilterPredicate(static fn(array $row): bool => true);
+            ->withFilterPredicate(static fn(array $_row): bool => true);
 
         $t2 = $t->withFilterPredicate(null);
         $this->assertNull($t2->getFilterPredicate());

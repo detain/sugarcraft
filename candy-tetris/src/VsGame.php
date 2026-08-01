@@ -67,7 +67,7 @@ final class VsGame implements Model
     public function update(Msg $msg): array
     {
         // If game is over, only accept quit
-        if ($this->over) {
+        if ($this->over === true) {
             if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
                 return [$this, Cmd::quit()];
             }
@@ -87,7 +87,7 @@ final class VsGame implements Model
         }
 
         // When paused, only schedule a tick (player input is ignored, computer pauses)
-        if ($this->player->paused) {
+        if ($this->player->paused === true) {
             return [$this, self::scheduleTick($this->player)];
         }
 
@@ -95,7 +95,7 @@ final class VsGame implements Model
         [$newPlayer, ] = $this->player->update($msg);
 
         // Check if player's game is over (computer wins)
-        if ($newPlayer->over) {
+        if ($newPlayer->over === true) {
             return $this->withComputerWinner($newPlayer);
         }
 
@@ -107,7 +107,7 @@ final class VsGame implements Model
         // Note: player KeyMsg is NOT forwarded to computer (computer is AI-controlled)
 
         // Check if computer's game is over (player wins)
-        if ($newComputer->over) {
+        if ($newComputer->over === true) {
             return $this->withPlayerWinner($newPlayer, $newComputer);
         }
 
@@ -127,10 +127,10 @@ final class VsGame implements Model
         }
 
         // Check for game over after garbage
-        if ($finalPlayer->over) {
+        if ($finalPlayer->over === true) {
             return $this->withComputerWinner($finalPlayer);
         }
-        if ($processedComputer->over) {
+        if ($processedComputer->over === true) {
             return $this->withPlayerWinner($finalPlayer, $processedComputer);
         }
 

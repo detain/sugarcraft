@@ -56,7 +56,7 @@ final class Paginator implements Model
      */
     public function update(Msg $msg): array
     {
-        if (!$msg instanceof KeyMsg) {
+        if (!($msg instanceof KeyMsg)) {
             return [$this, null];
         }
         return match (true) {

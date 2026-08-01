@@ -183,7 +183,7 @@ final class Node
         // When enabling the border, use rounded chars as default if no
         // borderStyle is set.  When disabling, leave borderStyle untouched —
         // it can still be composed via withBorderStyle() later.
-        $borderStyle = $show
+        $borderStyle = $show === true
             ? ($this->borderStyle ?? Border::rounded())
             : $this->borderStyle;
         return $this->with(border: $show, borderStyle: $borderStyle);
@@ -291,7 +291,7 @@ final class Node
         // subtree traversal (it already re-walks the children for the max).
         if ($this->kind === self::HORIZONTAL) {
             $childWidths = \array_sum(\array_map(fn(Node $c) => $c->totalWidth(), $this->children));
-            $extra = $this->border ? 2 : 0;
+            $extra = $this->border === true ? 2 : 0;
             return $childWidths + $gaps + $extra + $marginW;
         }
 
@@ -299,7 +299,7 @@ final class Node
         $maxChild = \count($this->children) > 0
             ? \max(...\array_map(fn(Node $c) => $c->totalWidth(), $this->children))
             : 0;
-        $extra = $this->border ? 2 : 0;
+        $extra = $this->border === true ? 2 : 0;
         return $maxChild + $gaps + $extra + $marginW;
     }
 
@@ -312,7 +312,7 @@ final class Node
 
         if ($this->kind === self::LEAF) {
             $inner = $this->minHeight;
-            if ($this->border) $inner += 2;
+            if ($this->border === true) $inner += 2;
             if ($this->padding > 0) $inner += $this->padding * 2;
             return $inner + $marginH;
         }
@@ -320,7 +320,7 @@ final class Node
         if ($this->kind === self::VERTICAL) {
             $childHeights = \array_sum(\array_map(fn(Node $c) => $c->totalHeight(), $this->children));
             $gaps = (\count($this->children) - 1) * $this->spacing;
-            $extra = $this->border ? 2 : 0;
+            $extra = $this->border === true ? 2 : 0;
             return $childHeights + $gaps + $extra + $marginH;
         }
 
@@ -328,7 +328,7 @@ final class Node
         $maxChild = \count($this->children) > 0
             ? \max(...\array_map(fn(Node $c) => $c->totalHeight(), $this->children))
             : 0;
-        $extra = $this->border ? 2 : 0;
+        $extra = $this->border === true ? 2 : 0;
         return $maxChild + $extra + $marginH;
     }
 
@@ -364,7 +364,7 @@ final class Node
     ): self {
         // Preserve existing value when sentinel is passed (no arg).
         // Explicitly pass null to clear.
-        $resolvedBorderStyle = $borderStyle === self::preserve()
+            $resolvedBorderStyle = $borderStyle === self::preserve()
             ? $this->borderStyle
             : ($borderStyle ?? ($this->borderStyle ?? null));
 
@@ -396,7 +396,7 @@ final class Node
             $spacing     ?? $this->spacing,
             $resolvedBorderStyle,
             $resolvedStyle,
-            $title       ?: $this->title,
+            $title !== '' ? $title : $this->title,
             $margin      !== [0, 0, 0, 0] ? $margin : $this->margin,
             $resolvedAlignH,
             $resolvedAlignV,

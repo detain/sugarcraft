@@ -121,7 +121,7 @@ final class Table implements Model
      */
     public function update(Msg $msg): array
     {
-        if (!$msg instanceof KeyMsg || !$this->focused) {
+        if (!($msg instanceof KeyMsg) || !$this->focused) {
             return [$this, null];
         }
         return match (true) {

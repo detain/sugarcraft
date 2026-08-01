@@ -56,7 +56,7 @@ final class Computer
             $maxXPos = Board::COLS - $pieceWidth;
             for ($dx = -$minX; $dx <= $maxXPos; $dx++) {
                 $moved = $rotated->moved($dx, 0);
-                if (!$board->fits($moved)) {
+                if ($board->fits($moved) === false) {
                     continue;
                 }
 
@@ -133,7 +133,7 @@ final class Computer
             for ($row = Board::HIDDEN_ROWS; $row < Board::ROWS; $row++) {
                 if ($rows[$row][$col] !== null) {
                     $blockSeen = true;
-                } elseif ($blockSeen) {
+                } elseif ($blockSeen === true) {
                     $holes++;
                 }
             }
@@ -156,11 +156,11 @@ final class Computer
             for ($col = 0; $col < Board::COLS; $col++) {
                 if ($rowCells[$col] !== null) {
                     $hasBlock = true;
-                } elseif ($hasBlock) {
+                } elseif ($hasBlock === true) {
                     $hasGap = true;
                 }
             }
-            if ($hasBlock && $hasGap) {
+            if ($hasBlock === true && $hasGap === true) {
                 // Count individual gap cells
                 for ($col = 0; $col < Board::COLS; $col++) {
                     if ($rowCells[$col] === null) {
@@ -186,7 +186,7 @@ final class Computer
                     break;
                 }
             }
-            if ($full) {
+            if ($full === true) {
                 $lines++;
             }
         }

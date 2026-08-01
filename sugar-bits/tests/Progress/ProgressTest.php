@@ -136,7 +136,7 @@ final class ProgressTest extends TestCase
         $p = Progress::new()
             ->withWidth(4)
             ->withShowPercent(false)
-            ->withColorFunc(static function (int $i, int $n, float $pct): Color {
+            ->withColorFunc(static function (int $_i, int $_n, float $pct): Color {
                 return Color::hex('#000000');
             })
             ->withPercent(1.0);

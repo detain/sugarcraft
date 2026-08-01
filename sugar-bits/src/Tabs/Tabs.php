@@ -123,7 +123,7 @@ final class Tabs implements Model
             return [$this, null];
         }
 
-        if (!$msg instanceof KeyMsg || !$this->focused) {
+        if (!($msg instanceof KeyMsg) || !$this->focused) {
             return [$this, null];
         }
 

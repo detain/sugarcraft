@@ -44,7 +44,7 @@ final class VsRenderer
 
         $body = Layout::joinHorizontal(0.0, $playerPanel, $vsDivider, $computerPanel);
 
-        if ($game->over) {
+        if ($game->over === true) {
             $winnerText = $game->winner === 'PLAYER' ? 'YOU WIN!' : 'COMPUTER WINS!';
             $banner = Style::new()
                 ->border(Border::rounded())
@@ -77,15 +77,15 @@ final class VsRenderer
                 $key = "$x,$y";
                 $cellKind = $rows[$y][$x] ?? null;
                 if ($cellKind !== null) {
-                    $line .= $isComputer ? self::blockComputer($cellKind) : self::block($cellKind);
+                    $line .= $isComputer === true ? self::blockComputer($cellKind) : self::block($cellKind);
                     continue;
                 }
-                if (isset($pieceCells[$key])) {
-                    $line .= $isComputer ? self::blockComputer($piece->kind) : self::block($piece->kind);
+                if (isset($pieceCells[$key]) === true) {
+                    $line .= $isComputer === true ? self::blockComputer($piece->kind) : self::block($piece->kind);
                     continue;
                 }
-                if (isset($ghostCells[$key])) {
-                    $line .= $isComputer ? self::ghostComputer($piece->kind) : self::ghost($piece->kind);
+                if (isset($ghostCells[$key]) === true) {
+                    $line .= $isComputer === true ? self::ghostComputer($piece->kind) : self::ghost($piece->kind);
                     continue;
                 }
                 $line .= '··';
@@ -93,7 +93,7 @@ final class VsRenderer
             $lines[] = $line;
         }
 
-        $title = $isComputer ? 'COMPUTER' : 'PLAYER';
+        $title = $isComputer === true ? 'COMPUTER' : 'PLAYER';
         $titleBlock = Style::new()
             ->bold(true)
             ->render($title);

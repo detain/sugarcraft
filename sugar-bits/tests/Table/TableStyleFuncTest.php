@@ -112,7 +112,7 @@ final class TableStyleFuncTest extends TestCase
 
     public function testStyleFuncNullClearsTheOverride(): void
     {
-        $t = $this->newTable()->styleFunc(static fn(int $row, int $col) => Style::new()->bold());
+        $t = $this->newTable()            ->styleFunc(static fn(int $_row, int $col) => Style::new()->bold());
         $this->assertNotNull($t->getStyleFunc());
         $t = $t->styleFunc(null);
         $this->assertNull($t->getStyleFunc());
@@ -128,7 +128,7 @@ final class TableStyleFuncTest extends TestCase
             ->withStyles(new \SugarCraft\Bits\Table\Styles(
                 cell: Style::new()->italic(),
             ))
-            ->styleFunc(static fn(int $row, int $col): Style => Style::new()->underline());
+            ->styleFunc(static fn(int $_row, int $col): Style => Style::new()->underline());
         $view = $t->view();
         // Italic (SGR 3) from row-level Styles + Underline (SGR 4) from styleFunc.
         $this->assertStringContainsString("\x1b[3m", $view);
