@@ -656,7 +656,7 @@ final class Hermit
         $itemsByValue = [];
         $originalOrder = [];
         foreach ($this->allItems as $order => $item) {
-            if (!$fn($item)) {
+            if ($fn($item) === false) {
                 continue;
             }
             $value = $item->value();
@@ -675,7 +675,7 @@ final class Hermit
         /** @var list<array{item: Item, score: int, order: int}> $scored */
         $scored = [];
         foreach ($results as $result) {
-            if ($result === null || !$result->isMatched()) {
+            if ($result === null || $result->isMatched() === false) {
                 continue;
             }
             $item = $itemsByValue[$result->haystack] ?? null;
@@ -818,7 +818,7 @@ final class Hermit
                     $matched = true;
                 }
             }
-            if (!$matched) {
+            if ($matched === false) {
                 $result .= $chars[$i];
                 $i++;
             }

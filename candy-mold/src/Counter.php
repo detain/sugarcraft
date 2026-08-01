@@ -73,4 +73,20 @@ final class Counter implements Model
     {
         return null;
     }
+
+    /** Determines if the given key message should trigger program quit. */
+    private function shouldQuit(KeyMsg $msg): bool
+    {
+        // quit with q (plain, no modifiers), Esc, or ctrl+c
+        if ($msg->type === KeyType::Char && $msg->rune === 'q' && $msg->ctrl === false) {
+            return true;
+        }
+        if ($msg->type === KeyType::Escape) {
+            return true;
+        }
+        if ($msg->ctrl && $msg->rune === 'c') {
+            return true;
+        }
+        return false;
+    }
 }
