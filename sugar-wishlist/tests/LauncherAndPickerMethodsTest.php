@@ -584,6 +584,7 @@ final class LauncherAndPickerMethodsTest extends TestCase
         $endpoints = [new Endpoint(name: 'test', host: 'test.example.com')];
         $p->pick($endpoints);
 
+        rewind($out);
         $output = stream_get_contents($out);
         $this->assertStringContainsString('select', $output);
         $this->assertStringContainsString('connect', $output);
@@ -599,18 +600,17 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function stripControlsPublic(string $s): string
-            {
-                return $this->stripControls($s);
-            }
         };
 
+        $ref = new \ReflectionMethod($p, 'stripControls');
+        $ref->setAccessible(true);
+
         // Control chars should be stripped
-        $result = $p->stripControlsPublic("\x01\x02test\x03");
+        $result = $ref->invoke($p, "\x01\x02test\x03");
         $this->assertSame('test', $result);
 
         // CR/LF should be preserved
-        $result = $p->stripControlsPublic("line1\nline2\rline3");
+        $result = $ref->invoke($p, "line1\nline2\rline3");
         $this->assertSame("line1\nline2\rline3", $result);
     }
 
@@ -621,14 +621,13 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function stripControlsPublic(string $s): string
-            {
-                return $this->stripControls($s);
-            }
         };
 
+        $ref = new \ReflectionMethod($p, 'stripControls');
+        $ref->setAccessible(true);
+
         // BEL (0x07), VT (0x0B), etc should be stripped
-        $result = $p->stripControlsPublic("a\x07b\x0bcd");
+        $result = $ref->invoke($p, "a\x07b\x0bcd");
         $this->assertSame('abcd', $result);
     }
 }
