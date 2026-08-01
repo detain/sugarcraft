@@ -85,4 +85,86 @@ final class FileWatcherTest extends TestCase
         $result = $watcher->hasChangedSince(time());
         self::assertFalse($result); // non-existent file returns false
     }
+
+    // --- FileWatcher::watch() tests ---
+
+    public function testWatchReturnsGenerator(): void
+    {
+        $path = sys_get_temp_dir() . '/test_watcher_gen_' . uniqid() . '.txt';
+        file_put_contents($path, 'content');
+        try {
+            $gen = FileWatcher::watch($path, 100);
+            $this->assertInstanceOf(\Generator::class, $gen);
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function testWatchReturnsEarlyForNonExistentFile(): void
+    {
+        $gen = FileWatcher::watch('/non/existent/file.txt');
+        // A generator that returns early produces no values
+        $this->assertInstanceOf(\Generator::class, $gen);
+        $this->assertNull($gen->current());
+    }
+
+    public function testWatchReturnsEarlyWhenFilemtimeFails(): void
+    {
+        // Create a file, then revoke read permissions so filemtime fails
+        $path = sys_get_temp_dir() . '/test_watcher_perm_' . uniqid() . '.txt';
+        file_put_contents($path, 'content');
+        try {
+            chmod($path, 0o000);
+            $gen = FileWatcher::watch($path);
+            $this->assertInstanceOf(\Generator::class, $gen);
+            $this->assertNull($gen->current());
+        } finally {
+            chmod($path, 0o644);
+            unlink($path);
+        }
+    }
+
+    public function testWatchYieldsTrueOnFileModification(): void
+    {
+        $path = sys_get_temp_dir() . '/test_watcher_yield_' . uniqid() . '.txt';
+        file_put_contents($path, 'initial content');
+        try {
+            $gen = FileWatcher::watch($path, 50);
+            $this->assertInstanceOf(\Generator::class, $gen);
+
+            // Advance the generator to let it read initial state
+            $gen->rewind();
+            // Initial mtime/size captured, no yield yet
+            $this->assertNull($gen->current());
+
+            // Modify the file
+            sleep(1);
+            file_put_contents($path, 'modified content');
+
+            // Advance again - should yield true
+            $gen->send(null);
+            $this->assertTrue($gen->current());
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function testWatchYieldsTrueOnSizeChange(): void
+    {
+        $path = sys_get_temp_dir() . '/test_watcher_size_' . uniqid() . '.txt';
+        file_put_contents($path, 'content');
+        try {
+            $gen = FileWatcher::watch($path, 50);
+            $gen->rewind();
+            $this->assertNull($gen->current());
+
+            // Truncate and rewrite - same mtime but different size
+            file_put_contents($path, 'x');
+
+            $gen->send(null);
+            $this->assertTrue($gen->current());
+        } finally {
+            unlink($path);
+        }
+    }
 }

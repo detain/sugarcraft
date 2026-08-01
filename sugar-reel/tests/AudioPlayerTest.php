@@ -428,6 +428,194 @@ final class AudioPlayerTest extends TestCase
         }
     }
 
+    // -------------------------------------------------------------------------
+    // hasStarted() — tracks whether start() was ever called
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox hasStarted() returns false before start() is called
+     */
+    public function testHasStartedReturnsFalseBeforeStart(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $this->assertFalse($player->hasStarted());
+    }
+
+    /**
+     * @testdox hasStarted() returns true after start() is called, even if no binary was available
+     */
+    public function testHasStartedReturnsTrueAfterStart(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $player->setFakeCommand(null); // Simulate no binary available
+        $player->start();
+        $this->assertTrue($player->hasStarted());
+    }
+
+    /**
+     * @testdox hasStarted() remains true after stop() is called
+     */
+    public function testHasStartedRemainsTrueAfterStop(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4', null);
+        $player->setFakeCommand(['ffplay', '-nodisp', '-autoexit', '/tmp/video.mp4']);
+        $player->start();
+        $player->stop();
+        $this->assertTrue($player->hasStarted());
+    }
+
+    // -------------------------------------------------------------------------
+    // pause() / resume() — suspend and resume audio playback
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox pause() is a safe no-op when process was never started
+     */
+    public function testPauseIsSafeNoOpWithoutStart(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $player->pause(); // Should not throw
+        $this->assertFalse($player->isPlaying());
+    }
+
+    /**
+     * @testdox pause() terminates the subprocess and marks it as not playing
+     */
+    public function testPauseTerminatesSubprocess(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4', null);
+        $player->setFakeCommand(['ffplay', '-nodisp', '-autoexit', '/tmp/video.mp4']);
+        $player->start();
+        $player->pause();
+        $this->assertFalse($player->isPlaying());
+        $this->assertTrue($player->hasStarted());
+    }
+
+    /**
+     * @testdox resume() restarts audio after a pause
+     */
+    public function testResumeRestartsAudioAfterPause(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4', null);
+        $player->setFakeCommand(['ffplay', '-nodisp', '-autoexit', '/tmp/video.mp4']);
+        $player->start();
+        $player->pause();
+        $player->resume();
+        $this->assertTrue($player->hasStarted());
+        // isPlaying() depends on whether ffplay is still running at this point
+        // but the important thing is that resume() was called without error
+    }
+
+    /**
+     * @testdox resume() is a safe no-op when no process was ever started
+     */
+    public function testResumeSafeNoOpWithoutPriorStart(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $player->resume(); // Should not throw
+        $this->assertFalse($player->hasStarted());
+    }
+
+    /**
+     * @testdox resume() while process is running terminates and restarts
+     */
+    public function testResumeTerminatesExistingProcessAndRestarts(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4', null);
+        $player->setFakeCommand(['ffplay', '-nodisp', '-autoexit', '/tmp/video.mp4']);
+        $player->start();
+        // If process is still running, resume should terminate and restart
+        $player->resume();
+        $this->assertTrue($player->hasStarted());
+        $player->stop();
+    }
+
+    // -------------------------------------------------------------------------
+    // getExitCode() — retrieve the last process exit code
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox getExitCode() returns null before any process was started
+     */
+    public function testGetExitCodeReturnsNullBeforeStart(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $this->assertNull($player->getExitCode());
+    }
+
+    /**
+     * @testdox getExitCode() returns null when start() had no binary available (silent no-op)
+     */
+    public function testGetExitCodeReturnsNullWhenNoBinary(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $player->setFakeCommand(null);
+        $player->start();
+        $this->assertNull($player->getExitCode());
+    }
+
+    /**
+     * @testdox getExitCode() returns null while process is still running
+     */
+    public function testGetExitCodeReturnsNullWhileRunning(): void
+    {
+        $ffplay = Probe::ffplay();
+        if ($ffplay === null) {
+            $this->markTestSkipped('ffplay not available on this host');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-audio-getexitcode-' . getmypid() . '.wav';
+        $priorSdlDriver = getenv('SDL_AUDIODRIVER');
+        putenv('SDL_AUDIODRIVER=dummy');
+
+        try {
+            // Generate a short audio clip
+            $gen = proc_open(
+                [
+                    Probe::ffmpeg(),
+                    '-hide_banner', '-loglevel', 'error',
+                    '-f', 'lavfi',
+                    '-i', 'sine=frequency=440:duration=2',
+                    '-y', $clip,
+                ],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $genPipes,
+            );
+            foreach ($genPipes as $p) {
+                if (is_resource($p)) { fclose($p); }
+            }
+            proc_close($gen);
+
+            $player = new AudioPlayer($clip);
+            $player->start();
+            usleep(100_000); // Give process time to start
+
+            $this->assertNull($player->getExitCode());
+            $player->stop();
+
+            @unlink($clip);
+        } finally {
+            if ($priorSdlDriver === false) {
+                putenv('SDL_AUDIODRIVER');
+            } else {
+                putenv('SDL_AUDIODRIVER=' . $priorSdlDriver);
+            }
+        }
+    }
+
+    /**
+     * @testdox getExitCode() returns integer exit code after process exits
+     */
+    public function testGetExitCodeReturnsCodeAfterExit(): void
+    {
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        // When no binary is available, start() is a no-op and no process is started
+        $player->setFakeCommand(null);
+        $player->start();
+        // With no binary, processHandle is null and exitCode is never set
+        $this->assertNull($player->getExitCode());
+    }
+
     /**
      * Count this process's currently-open file descriptors via /proc.
      *

@@ -89,6 +89,15 @@ final class NavStackTest extends TestCase
         $this->assertSame(80, $s->current()->data['brightness']);
     }
 
+    public function testUpdateTopOnEmptyStackIsNoOp(): void
+    {
+        $s = new NavStack();
+        $result = $s->updateTop(['key' => 'value']);
+        // Must not throw, must return $this, and stack must remain empty
+        $this->assertSame($s, $result);
+        $this->assertTrue($s->isEmpty());
+    }
+
     public function testNavigationItemData(): void
     {
         $item = new NavigationItem('Settings', ['key' => 'value']);

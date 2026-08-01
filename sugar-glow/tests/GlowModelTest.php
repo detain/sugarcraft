@@ -140,4 +140,42 @@ final class GlowModelTest extends TestCase
         $m = GlowModel::fromContent($this->content(2), 80, 5);
         $this->assertTrue($m->viewport->atBottom());
     }
+
+    public function testInitReturnsNull(): void
+    {
+        $m = GlowModel::fromContent($this->content(3));
+        $this->assertNull($m->init());
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $m = GlowModel::fromContent($this->content(3));
+        $this->assertNull($m->subscriptions());
+    }
+
+    public function testFromContentWithDefaultDimensions(): void
+    {
+        $m = GlowModel::fromContent("line1\nline2");
+        $this->assertStringContainsString('line1', $m->view());
+        $this->assertFalse($m->isExited());
+    }
+
+    public function testFromContentClampsHeightToAtLeastOne(): void
+    {
+        // height of 0 should be clamped to 1
+        $m = GlowModel::fromContent("line1\nline2", 80, 0);
+        $this->assertStringContainsString('line1', $m->view());
+    }
+
+    public function testUpdateWithNonKeyMsgDelegatesToViewport(): void
+    {
+        $m = GlowModel::fromContent($this->content(3), 80, 3);
+        // Pass a non-KeyMsg (e.g., MouseMsg or Tick) - should delegate to viewport
+        $msg = new \SugarCraft\Core\Msg\MouseMsg(0, 0, false, false);
+        [$next, $cmd] = $m->update($msg);
+        // Model should not have exited
+        $this->assertFalse($next->isExited());
+        // Cmd may be null or some viewport response
+        $this->assertNull($cmd);
+    }
 }

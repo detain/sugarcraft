@@ -84,4 +84,117 @@ final class NoticePositionTest extends TestCase
             $this->assertInstanceOf(ToastPosition::class, $position->toToastPosition());
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Vertical alignment
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testVerticalReturnsTopForTopPositions(): void
+    {
+        $this->assertSame('top', NoticePosition::TopLeft->vertical());
+        $this->assertSame('top', NoticePosition::TopCenter->vertical());
+        $this->assertSame('top', NoticePosition::TopRight->vertical());
+    }
+
+    public function testVerticalReturnsBottomForBottomPositions(): void
+    {
+        $this->assertSame('bottom', NoticePosition::BottomLeft->vertical());
+        $this->assertSame('bottom', NoticePosition::BottomCenter->vertical());
+        $this->assertSame('bottom', NoticePosition::BottomRight->vertical());
+    }
+
+    public function testVerticalReturnsCenterForCenterPositions(): void
+    {
+        $this->assertSame('center', NoticePosition::CenterLeft->vertical());
+        $this->assertSame('center', NoticePosition::CenterRight->vertical());
+        $this->assertSame('center', NoticePosition::Center->vertical());
+    }
+
+    public function testVerticalReturnsAnchorForAnchorPosition(): void
+    {
+        $this->assertSame('anchor', NoticePosition::Anchor->vertical());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Horizontal alignment
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testHorizontalReturnsLeftForLeftPositions(): void
+    {
+        $this->assertSame('left', NoticePosition::TopLeft->horizontal());
+        $this->assertSame('left', NoticePosition::BottomLeft->horizontal());
+        $this->assertSame('left', NoticePosition::CenterLeft->horizontal());
+    }
+
+    public function testHorizontalReturnsRightForRightPositions(): void
+    {
+        $this->assertSame('right', NoticePosition::TopRight->horizontal());
+        $this->assertSame('right', NoticePosition::BottomRight->horizontal());
+        $this->assertSame('right', NoticePosition::CenterRight->horizontal());
+    }
+
+    public function testHorizontalReturnsCenterForCenterPositions(): void
+    {
+        $this->assertSame('center', NoticePosition::TopCenter->horizontal());
+        $this->assertSame('center', NoticePosition::BottomCenter->horizontal());
+        $this->assertSame('center', NoticePosition::Center->horizontal());
+    }
+
+    public function testHorizontalReturnsAnchorForAnchorPosition(): void
+    {
+        $this->assertSame('anchor', NoticePosition::Anchor->horizontal());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Corner detection
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testIsCornerReturnsTrueForCorners(): void
+    {
+        $this->assertTrue(NoticePosition::TopLeft->isCorner());
+        $this->assertTrue(NoticePosition::TopRight->isCorner());
+        $this->assertTrue(NoticePosition::BottomLeft->isCorner());
+        $this->assertTrue(NoticePosition::BottomRight->isCorner());
+    }
+
+    public function testIsCornerReturnsFalseForNonCorners(): void
+    {
+        $nonCorners = [
+            NoticePosition::TopCenter,
+            NoticePosition::BottomCenter,
+            NoticePosition::CenterLeft,
+            NoticePosition::CenterRight,
+            NoticePosition::Center,
+            NoticePosition::Anchor,
+        ];
+
+        foreach ($nonCorners as $position) {
+            $this->assertFalse($position->isCorner(), "{$position->name} should not be a corner");
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Center detection
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testIsCenterReturnsTrueOnlyForCenter(): void
+    {
+        $this->assertTrue(NoticePosition::Center->isCenter());
+
+        $notCenter = [
+            NoticePosition::TopLeft,
+            NoticePosition::TopCenter,
+            NoticePosition::TopRight,
+            NoticePosition::BottomLeft,
+            NoticePosition::BottomCenter,
+            NoticePosition::BottomRight,
+            NoticePosition::CenterLeft,
+            NoticePosition::CenterRight,
+            NoticePosition::Anchor,
+        ];
+
+        foreach ($notCenter as $position) {
+            $this->assertFalse($position->isCenter(), "{$position->name} should not be center");
+        }
+    }
 }

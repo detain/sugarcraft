@@ -169,7 +169,9 @@ final class SmtpSecurityTest extends TestCase
      */
     private function forkFakeServer(bool $advertiseStartTls): array
     {
-        $server = @\stream_socket_server('tcp://127.0.0.1:0', _, $errstr);
+        $errno  = 0;
+        $errstr = '';
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
         if ($server === false) {
             $this->markTestSkipped("cannot bind loopback server: {$errstr}");
         }

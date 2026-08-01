@@ -568,4 +568,148 @@ final class StoreTest extends TestCase
     {
         $this->assertSame('', Store::sanitizeForTty(''));
     }
+
+    // ─── defaultDatabase: getter for the configured default db name ─────────
+
+    public function testDefaultDatabaseReturnsConfiguredDefault(): void
+    {
+        $this->assertSame('testdb', $this->store->defaultDatabase());
+    }
+
+    public function testDefaultDatabaseWithCustomName(): void
+    {
+        $customStore = new Store($this->tmpDir, 'myDb');
+        $this->assertSame('myDb', $customStore->defaultDatabase());
+    }
+
+    // ─── suggestSimilar error-path: get() emits suggestion to stderr ────────
+
+    public function testGetEmitsSuggestionToStderr(): void
+    {
+        // Pre-condition: populate a key that 'colr' is one edit away from.
+        $this->store->set('color', 'blue');
+
+        // Capture stderr so we can verify the suggestion message.
+        $tmpFile = $this->tmpDir . '/stderr.txt';
+        \file_put_contents($tmpFile, '');
+
+        // Override STDERR temporarily via proc_open capture
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        // Use in-memory stream to capture output
+        $proc = \proc_open(
+            [\PHP_BINARY, '-r', <<<'PHP'
+                $store = new SugarCraft\Skate\Store($argv[1], 'testdb');
+                $store->set('color', 'blue');
+                $store->get('colr');
+                PHP,
+                $this->tmpDir],
+            $descriptors,
+            $pipes,
+            null,
+            ['XDG_CONFIG_HOME' => $this->tmpDir]
+        );
+
+        $stderr = \stream_get_contents($pipes[2]);
+        \fclose($pipes[0]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
+
+        $this->assertStringContainsString("did you mean 'color'", $stderr);
+    }
+
+    public function testGetWithLevenshteinSuggestion(): void
+    {
+        // 'aproduct' is 2 edits from 'a-product' (insert hyphen = 1, but different)
+        // Levenshtein distance of 'aproduct' -> 'a-product' is 1 (insertion)
+        $this->store->set('a-product', 'value');
+        $this->store->set('another', 'other');
+
+        // Capture stderr
+        $tmpFile = $this->tmpDir . '/stderr2.txt';
+        \file_put_contents($tmpFile, '');
+
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open(
+            [\PHP_BINARY, '-r', <<<'PHP'
+                $store = new SugarCraft\Skate\Store($argv[1], 'testdb');
+                $store->set('a-product', 'value');
+                $store->get('aproduct');
+                PHP,
+                $this->tmpDir],
+            $descriptors,
+            $pipes,
+            null,
+            ['XDG_CONFIG_HOME' => $this->tmpDir]
+        );
+
+        $stderr = \stream_get_contents($pipes[2]);
+        \fclose($pipes[0]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
+
+        $this->assertStringContainsString("did you mean", $stderr);
+    }
+
+    // ─── dbPath validation: path traversal prevention ─────────────────────────
+
+    public function testDbPathThrowsOnEmptyName(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid database name');
+
+        $reflection = new \ReflectionClass($this->store);
+        $method = $reflection->getMethod('dbPath');
+        $method->setAccessible(true);
+        $method->invoke($this->store, '');
+    }
+
+    public function testDbPathThrowsOnInvalidChars(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('only letters, digits');
+
+        $reflection = new \ReflectionClass($this->store);
+        $method = $reflection->getMethod('dbPath');
+        $method->setAccessible(true);
+        $method->invoke($this->store, 'foo@bar');
+    }
+
+    // ─── isPattern: glob character detection ──────────────────────────────────
+
+    public function testIsPatternReturnsTrueForStar(): void
+    {
+        $reflection = new \ReflectionClass($this->store);
+        $method = $reflection->getMethod('isPattern');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($this->store, 'temp-*'));
+    }
+
+    public function testIsPatternReturnsTrueForQuestionMark(): void
+    {
+        $reflection = new \ReflectionClass($this->store);
+        $method = $reflection->getMethod('isPattern');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($this->store, 'item?'));
+    }
+
+    public function testIsPatternReturnsFalseForPlainKey(): void
+    {
+        $reflection = new \ReflectionClass($this->store);
+        $method = $reflection->getMethod('isPattern');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($this->store, 'plainkey'));
+    }
 }

@@ -308,4 +308,43 @@ final class BreadcrumbTest extends TestCase
         // Must not be split into 'A' and 'B'
         $this->assertStringNotContainsString('A › B ›', $result);
     }
+
+    // ─── truncateSegment() private method coverage ───────────────────────────
+
+    public function testTruncateSegmentWithZeroBudgetReturnsEmpty(): void
+    {
+        $bc = new Breadcrumb();
+        $reflection = new \ReflectionClass($bc);
+        $method = $reflection->getMethod('truncateSegment');
+        $method->setAccessible(true);
+
+        // budget = 0 triggers the budget <= 0 early-return
+        $result = $method->invoke($bc, 'AnyText', 0);
+        $this->assertSame('', $result);
+    }
+
+    public function testTruncateSegmentWhenSegmentFitsBudgetReturnsUnmodified(): void
+    {
+        $bc = new Breadcrumb();
+        $reflection = new \ReflectionClass($bc);
+        $method = $reflection->getMethod('truncateSegment');
+        $method->setAccessible(true);
+
+        // budget = 100 is far larger than 'Hi' width of 2 → early-return at line 235
+        $result = $method->invoke($bc, 'Hi', 100);
+        $this->assertSame('Hi', $result);
+    }
+
+    public function testTruncateSegmentWhenEllipsisFillsBudgetTruncatesHard(): void
+    {
+        $bc = new Breadcrumb();
+        $reflection = new \ReflectionClass($bc);
+        $method = $reflection->getMethod('truncateSegment');
+        $method->setAccessible(true);
+
+        // '…' is 1 cell wide; budget = 1 means no room for content
+        // ellipsisWidth (1) >= budget (1) → hard-cut to budget at line 241
+        $result = $method->invoke($bc, 'Hello', 1);
+        $this->assertLessThanOrEqual(1, Width::string($result));
+    }
 }
