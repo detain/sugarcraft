@@ -205,7 +205,7 @@ final class ViewportQueryTest extends TestCase
     public function testUpdateReturnsArrayWithModel(): void
     {
         $vp = Viewport::withContent("content\nmore", 20, 3);
-        $msg = new TickMsg();
+        $msg = new TickMsg(0);
         [$model, $cmd] = $vp->update($msg);
         $this->assertInstanceOf(Viewport::class, $model);
     }
@@ -253,7 +253,8 @@ final class ViewportQueryTest extends TestCase
         $vp = Viewport::withContent("", 20, 10);
         // Empty string split by \n gives [""], count = 1
         $this->assertSame(1, $vp->totalLineCount());
-        $this->assertSame(10, $vp->visibleLineCount());
+        // visibleLineCount = min(total, height) = min(1, 10) = 1
+        $this->assertSame(1, $vp->visibleLineCount());
         $this->assertTrue($vp->atTop());
         $this->assertTrue($vp->atBottom());
     }

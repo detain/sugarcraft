@@ -202,7 +202,7 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
     public function testReadKeyReturnsSingleByte(): void
     {
-        // Test that a single byte key is returned correctly
+        // Test that a single byte key is returned correctly using reflection
         $in = fopen('php://memory', 'w+');
         $out = fopen('php://memory', 'w+');
         fwrite($in, 'a');  // Single 'a' key
@@ -210,13 +210,11 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function readKeyPublic(): string
-            {
-                return $this->readKey();
-            }
         };
 
-        $key = $p->readKeyPublic();
+        $ref = new \ReflectionMethod($p, 'readKey');
+        $ref->setAccessible(true);
+        $key = $ref->invoke($p);
         $this->assertSame('a', $key);
     }
 
@@ -230,13 +228,11 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function readKeyPublic(): string
-            {
-                return $this->readKey();
-            }
         };
 
-        $key = $p->readKeyPublic();
+        $ref = new \ReflectionMethod($p, 'readKey');
+        $ref->setAccessible(true);
+        $key = $ref->invoke($p);
         $this->assertSame("\x03", $key);
     }
 
@@ -250,13 +246,11 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function readKeyPublic(): string
-            {
-                return $this->readKey();
-            }
         };
 
-        $key = $p->readKeyPublic();
+        $ref = new \ReflectionMethod($p, 'readKey');
+        $ref->setAccessible(true);
+        $key = $ref->invoke($p);
         $this->assertSame("\x1b[B", $key);
     }
 
@@ -270,13 +264,11 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function readKeyPublic(): string
-            {
-                return $this->readKey();
-            }
         };
 
-        $key = $p->readKeyPublic();
+        $ref = new \ReflectionMethod($p, 'readKey');
+        $ref->setAccessible(true);
+        $key = $ref->invoke($p);
         $this->assertSame("\x1b[A", $key);
     }
 
@@ -290,13 +282,11 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function readKeyPublic(): string
-            {
-                return $this->readKey();
-            }
         };
 
-        $key = $p->readKeyPublic();
+        $ref = new \ReflectionMethod($p, 'readKey');
+        $ref->setAccessible(true);
+        $key = $ref->invoke($p);
         $this->assertSame("\x1b", $key);
     }
 
@@ -310,13 +300,11 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p = new class($in, $out) extends Picker {
             protected function setRawMode(bool $on): void { }
-            public function readKeyPublic(): string
-            {
-                return $this->readKey();
-            }
         };
 
-        $key = $p->readKeyPublic();
+        $ref = new \ReflectionMethod($p, 'readKey');
+        $ref->setAccessible(true);
+        $key = $ref->invoke($p);
         $this->assertSame("\x1bX", $key);
     }
 
@@ -338,10 +326,80 @@ final class LauncherAndPickerMethodsTest extends TestCase
 
         $p->pick($endpoints);
 
+        rewind($out);  // Rewind to read from beginning
         $output = stream_get_contents($out);
         $this->assertStringContainsString('wishlist', $output);
         $this->assertStringContainsString('prod', $output);
         $this->assertStringContainsString('filter:', $output);
+    }
+
+    public function testPickWithDescriptionShown(): void
+    {
+        $in = fopen('php://memory', 'w+');
+        $out = fopen('php://memory', 'w+');
+        fwrite($in, "\r");  // Enter
+        rewind($in);
+
+        $p = new class($in, $out) extends Picker {
+            protected function setRawMode(bool $on): void { }
+        };
+
+        $endpoints = [
+            new Endpoint(name: 'prod', host: 'prod.example.com', description: 'Prod env'),
+        ];
+
+        $p->pick($endpoints);
+
+        rewind($out);
+        $output = stream_get_contents($out);
+        $this->assertStringContainsString('Prod env', $output);
+    }
+
+    public function testPickNoMatchesShowsNoMatchesMessage(): void
+    {
+        $in = fopen('php://memory', 'w+');
+        $out = fopen('php://memory', 'w+');
+        fwrite($in, "nonexistent\r");  // Filter that matches nothing
+        rewind($in);
+
+        $p = new class($in, $out) extends Picker {
+            protected function setRawMode(bool $on): void { }
+        };
+
+        $endpoints = [
+            new Endpoint(name: 'prod', host: 'prod.example.com'),
+        ];
+
+        $p->pick($endpoints);
+
+        rewind($out);
+        $output = stream_get_contents($out);
+        $this->assertStringContainsString('no matches', $output);
+    }
+
+    public function testPickHighlightsMatchedCharacters(): void
+    {
+        // Type "prd" which partially matches "prod" 
+        $in = fopen('php://memory', 'w+');
+        $out = fopen('php://memory', 'w+');
+        fwrite($in, "prd\r");
+        rewind($in);
+
+        $p = new class($in, $out) extends Picker {
+            protected function setRawMode(bool $on): void { }
+        };
+
+        $endpoints = [
+            new Endpoint(name: 'prod', host: 'prod.example.com'),
+            new Endpoint(name: 'dev', host: 'dev.example.com'),
+        ];
+
+        $p->pick($endpoints);
+
+        rewind($out);
+        $output = stream_get_contents($out);
+        // ANSI bold+cyan should be in output
+        $this->assertStringContainsString("\x1b[1;36m", $output);
     }
 
     public function testPickWithDescriptionShown(): void

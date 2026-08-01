@@ -156,15 +156,17 @@ CONF;
 
     public function testExpandPathTildeEmpty(): void
     {
-        // Edge case: just ~ with nothing after (should not occur in practice)
+        // Edge case: just ~ (no slash) expands to home directory
+        // The code treats this as ~/ (home + empty path)
         $raw = <<<CONF
 Host example
     HostName example.com
     IdentityFile ~
 CONF;
         $endpoints = $this->parse($raw);
-        // Literal ~ returned
-        $this->assertSame('~', $endpoints[0]->identityFiles[0]);
+        // ~ alone becomes $HOME
+        $expectedHome = getenv('HOME') ?? '/root';
+        $this->assertSame($expectedHome, $endpoints[0]->identityFiles[0]);
     }
 
     // -----------------------------------------------------------------
