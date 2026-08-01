@@ -471,4 +471,96 @@ final class GameTest extends TestCase
         $this->assertSame(10, $rotated->piece->y, 'the [-1,0] kick must not change y');
         $this->assertTrue($rotated->board->fits($rotated->piece), 'the kicked position must fit');
     }
+
+    public function testComboCounterIncreasesOnConsecutiveClears(): void
+    {
+        // Build a game with combo=2 and verify it increments on next clear
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $game = $g->mutate(['combo' => 2]);
+
+        // Place a piece that will clear a line
+        $rows = $game->board->rows();
+        for ($col = 0; $col < Board::COLS; $col++) {
+            if ($col === 1 || $col === 2) {
+                continue;
+            }
+            $rows[Board::ROWS - 1][$col] = Tetromino::I;
+        }
+        $board = new Board($rows);
+        $o = new Piece(Tetromino::O, 0, 0, 0);
+        $game = $game->mutate(['board' => $board, 'piece' => $o, 'score' => new Score()]);
+
+        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        $this->assertSame(3, $after->combo, 'Combo should increment from 2 to 3 after a line clear');
+    }
+
+    public function testComboResetsToZeroOnNoClear(): void
+    {
+        // Build a game with combo=5
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $game = $g->mutate(['combo' => 5]);
+
+        // Hard drop without clearing any lines (place piece on empty area)
+        $piece = new Piece(Tetromino::I, 0, 0, 0);
+        $game = $game->mutate(['piece' => $piece]);
+
+        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        $this->assertSame(0, $after->combo, 'Combo should reset to 0 when no lines are cleared');
+    }
+
+    public function testHoldSwapFailsWhenHeldPieceDoesNotFit(): void
+    {
+        // Create a game where hold is active and hold contains a piece
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+
+        // First hold to put something in hold
+        [$withHold] = $g->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertNotNull($withHold->hold);
+
+        // Now hard drop and spawn new piece, then fill the board so held piece won't fit
+        [$dropped] = $withHold->update(new KeyMsg(KeyType::Char, ' '));
+
+        // Fill the spawn zone (top rows) except one column
+        $rows = $dropped->board->rows();
+        for ($r = 0; $r < 4; $r++) {  // HIDDEN_ROWS = 4
+            for ($col = 0; $col < Board::COLS; $col++) {
+                if ($col !== 0) {  // Leave column 0 empty for spawn
+                    $rows[$r][$col] = Tetromino::I;
+                }
+            }
+        }
+        $blockedBoard = new Board($rows);
+        $game = $dropped->mutate(['board' => $blockedBoard]);
+
+        // After hard drop, canHold is re-enabled (true)
+        $this->assertTrue($game->canHold);
+
+        // Now hold should swap with held piece, but held piece (O) won't fit in column 0
+        // because O needs 2 columns. So the hold swap should fail (return same game).
+        [$result] = $game->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertSame($game->piece, $result->piece, 'Hold swap should fail when held piece cannot fit');
+        $this->assertTrue($result->canHold, 'canHold should remain true after failed swap (unchanged state)');
+    }
+
+    public function testBackToBackAfterTetrisClear(): void
+    {
+        // Build a game with backToBack=false and clear a Tetris (4 lines)
+        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+
+        // Set up 4 complete rows at the bottom
+        $rows = $g->board->rows();
+        for ($row = Board::ROWS - 4; $row < Board::ROWS; $row++) {
+            for ($col = 0; $col < Board::COLS; $col++) {
+                $rows[$row][$col] = Tetromino::I;
+            }
+        }
+        $board = new Board($rows);
+
+        // Place I piece to clear all 4 rows
+        $i = new Piece(Tetromino::I, 0, 0, 0);
+        $game = $g->mutate(['board' => $board, 'piece' => $i, 'backToBack' => false]);
+
+        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        $this->assertTrue($after->backToBack, 'Tetris clear should set backToBack=true');
+    }
 }

@@ -195,7 +195,7 @@ final class ProgramSimulator
         }
 
         foreach ($subs->all() as $subscription) {
-            $msg = $subscription->produce();
+            $msg = ($subscription->produce)();
             if ($msg !== null) {
                 $this->queue[] = $msg;
             }

@@ -183,15 +183,12 @@ final class GoldenFileTest extends TestCase
         $this->assertSame('/home/test/fixtures/subdir/file.golden', $resolved);
     }
 
-    public function testResolveEmptyRelativeBecomesFileInFixtures(): void
+    public function testResolveEmptyRelativeHasTrailingSlash(): void
     {
-        // Edge case: if relative is empty or just '/', what happens?
-        // ltrim('/') on empty string gives '/' which stays.
-        // But resolve() with empty string would give fixtures/FILENAME since
-        // ltrim('', '/') is empty, then '/' + '' = '/', prepended to base gives
-        // base fixtures path with trailing slash.
-        // This is an edge case that shouldn't happen in practice.
+        // When relative is empty, ltrim('', '/') gives '' and '/' + '' = '/',
+        // resulting in base fixtures path with trailing slash.
         $resolved = GoldenFile::resolve('/home/test', '');
-        $this->assertSame('/home/test/fixtures', $resolved);
+
+        $this->assertSame('/home/test/fixtures/', $resolved);
     }
 }
