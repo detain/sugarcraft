@@ -361,7 +361,7 @@ final class HermitTest extends TestCase
     public function testAttachSigwinchInstallsHandler(): void
     {
         // attachSigwinch returns true only when SIGWINCH + pcntl are available.
-        if (!\function_exists('pcntl_signal') || !\defined('SIGWINCH')) {
+        if (\function_exists('pcntl_signal') === false || \defined('SIGWINCH') === false) {
             $this->markTestSkipped('SIGWINCH or pcntl not available');
         }
 

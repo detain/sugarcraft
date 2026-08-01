@@ -380,7 +380,7 @@ final class GreedySolver implements LayoutSolver
                     $diff = $totalWidth - $usedWidth;
                     if ($diff !== 0) {
                         $order = range(0, $totalCount - 1);
-                        if ($this->remainderToLast) {
+                        if ($this->remainderToLast === true) {
                             $order = array_reverse($order);
                         }
                         foreach ($order as $i) {
