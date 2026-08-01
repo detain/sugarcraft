@@ -127,7 +127,7 @@ final class Spinner
         $action = $this->action;
         // Fork-and-spin where pcntl is available; fall back to running
         // the action inline (no animation) elsewhere.
-        if (!function_exists('pcntl_fork')) {
+        if (function_exists('pcntl_fork') === FALSE) {
             $action();
             return;
         }
@@ -162,42 +162,42 @@ final class Spinner
         $hadAsyncSignals = false;
         $prevSigintHandler = null;
         $prevSigtermHandler = null;
-        if ($pid > 0 && function_exists('pcntl_signal') && function_exists('pcntl_async_signals') && function_exists('pcntl_signal_get_handler')) {
+        if ($pid > 0 && function_exists('pcntl_signal') === TRUE && function_exists('pcntl_async_signals') === TRUE && function_exists('pcntl_signal_get_handler') === TRUE) {
             $hadAsyncSignals = true;
             pcntl_async_signals(true);
             // Capture previous handlers BEFORE installing new ones so we can restore them.
             $prevSigintHandler = pcntl_signal_get_handler(SIGINT);
             $prevSigtermHandler = pcntl_signal_get_handler(SIGTERM);
             pcntl_signal(SIGINT, function (int $signo) use ($pid, $isTty) {
-                if ($pid > 0 && function_exists('posix_kill')) {
+                if ($pid > 0 && function_exists('posix_kill') === TRUE) {
                     posix_kill($pid, SIGTERM);
                 }
                 pcntl_waitpid($pid, $waitStatus);
-                if ($isTty) {
+                if ($isTty === TRUE) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }
                 pcntl_signal($signo, SIG_DFL);
-                if (function_exists('posix_kill')) {
+                if (function_exists('posix_kill') === TRUE) {
                     posix_kill(posix_getpid(), $signo);
                 }
             });
             pcntl_signal(SIGTERM, function (int $signo) use ($pid, $isTty) {
-                if ($pid > 0 && function_exists('posix_kill')) {
+                if ($pid > 0 && function_exists('posix_kill') === TRUE) {
                     posix_kill($pid, SIGTERM);
                 }
                 pcntl_waitpid($pid, $waitStatus);
-                if ($isTty) {
+                if ($isTty === TRUE) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }
                 pcntl_signal($signo, SIG_DFL);
-                if (function_exists('posix_kill')) {
+                if (function_exists('posix_kill') === TRUE) {
                     posix_kill(posix_getpid(), $signo);
                 }
             });
         }
         while (true) {
             $glyph = $this->style->frames[$frame % count($this->style->frames)];
-            if ($isTty) {
+            if ($isTty === TRUE) {
                 fwrite(STDERR, "\r" . $glyph . $titlePrefix);
             }
             usleep(max(50_000, $usleepInterval)); // 50ms floor caps animation at 20fps; stock styles top out at ~12fps (miniDot) so this never bites, but a custom high-fps Style is clamped here.
@@ -210,7 +210,7 @@ final class Spinner
             $frame++;
         }
         // Restore previous signal handlers (avoid re-entrant calls from now on).
-        if ($hadAsyncSignals) {
+        if ($hadAsyncSignals === TRUE) {
             if ($prevSigintHandler !== null) {
                 pcntl_signal(SIGINT, $prevSigintHandler);
             }
@@ -218,7 +218,7 @@ final class Spinner
                 pcntl_signal(SIGTERM, $prevSigtermHandler);
             }
         }
-        if ($isTty) {
+        if ($isTty === TRUE) {
             // Erase the spinner line cleanly.
             fwrite(STDERR, "\r\x1b[2K");
         }
@@ -226,7 +226,7 @@ final class Spinner
         // Note: the original exception type/message cannot cross the fork
         // boundary; only the exit code is available to the parent.
         // $waitStatus was captured in the loop when the child was reaped.
-        if (pcntl_wifexited($waitStatus) && pcntl_wexitstatus($waitStatus) !== 0) {
+        if (pcntl_wifexited($waitStatus) === TRUE && pcntl_wexitstatus($waitStatus) !== 0) {
             throw new \RuntimeException('Spinner action failed (exit code ' . pcntl_wexitstatus($waitStatus) . ')');
         }
     }

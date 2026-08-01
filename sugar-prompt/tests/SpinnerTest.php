@@ -33,7 +33,7 @@ final class SpinnerTest extends TestCase
         $s->run();
         // pcntl_fork case: the parent never observes $ran (child mutates
         // its own copy), so allow either branch.
-        if (!function_exists('pcntl_fork')) {
+        if (function_exists('pcntl_fork') === FALSE) {
             $this->assertTrue($ran);
         } else {
             $this->assertTrue(true);
@@ -49,7 +49,7 @@ final class SpinnerTest extends TestCase
 
     public function testForkChildRunsActionViaSideChannel(): void
     {
-        if (!function_exists('pcntl_fork')) {
+        if (function_exists('pcntl_fork') === FALSE) {
             $this->markTestSkipped('pcntl required');
         }
         // On pcntl hosts the action runs in a forked child — in-memory
@@ -70,7 +70,7 @@ final class SpinnerTest extends TestCase
 
     public function testRunReraisesActionFailure(): void
     {
-        if (!function_exists('pcntl_fork')) {
+        if (function_exists('pcntl_fork') === FALSE) {
             $this->markTestSkipped('pcntl required');
         }
         $s = Spinner::new()

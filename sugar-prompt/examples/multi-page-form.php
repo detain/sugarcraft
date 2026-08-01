@@ -52,7 +52,7 @@ $form = Form::groups(
 
 (new Program($form))->run();
 
-if ($form->isSubmitted()) {
+if ($form->isSubmitted() === TRUE) {
     echo "\nValues:\n";
     foreach ($form->values() as $key => $val) {
         echo "  $key = " . var_export($val, true) . "\n";

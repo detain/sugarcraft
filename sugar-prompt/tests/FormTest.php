@@ -137,7 +137,9 @@ final class FormTest extends TestCase
         [$form, ] = $form->update(new KeyMsg(KeyType::Tab));
         $focusedCount = 0;
         foreach ($form->activeFields() as $f) {
-            if ($f->isFocused()) $focusedCount++;
+            if ($f->isFocused() === TRUE) {
+                $focusedCount++;
+            }
         }
         $this->assertSame(1, $focusedCount);
     }
@@ -271,7 +273,7 @@ final class FormTest extends TestCase
         $form = Form::groups(
             \SugarCraft\Prompt\Group::new(Input::new('a')),
             \SugarCraft\Prompt\Group::new(Input::new('b'))
-                ->withHideFunc(static fn(array $values): bool => true),
+                ->withHideFunc(static fn(array $_values): bool => true),
             \SugarCraft\Prompt\Group::new(Input::new('c')),
         );
         // Tab from group 0 → should jump to group 2 (group 1 hidden).
@@ -300,7 +302,7 @@ final class FormTest extends TestCase
     {
         $form = Form::new(
             Input::new('a'),
-            Input::new('b')->withHideFunc(static fn(array $v) => true),
+            Input::new('b')->withHideFunc(static fn(array $_v) => true),
         );
         $b = $form->activeFields()[1];
         $this->assertTrue($b->isHidden([]));

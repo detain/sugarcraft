@@ -29,7 +29,7 @@ final class AliasResolutionTest extends TestCase
 
         // Traits cannot be aliased via class_alias() in PHP; the stub class exists
         // for backward compatibility but does not actually re-export the trait.
-        if ($isTrait) {
+        if ($isTrait === TRUE) {
             $this->markTestSkipped("Trait {$expectedTarget} cannot be class_alias'd — see CALIBER_LEARNINGS.md");
             return;
         }
@@ -106,10 +106,10 @@ final class AliasResolutionTest extends TestCase
             $className = $formsNamespace . str_replace('/', '\\', substr($relativePath, 0, -4));
             // Skip traits — PHP class_alias() cannot alias traits; stub classes
             // exist for BC but do not functionally re-export the trait.
-            if (!class_exists($className) && !interface_exists($className) && !trait_exists($className)) {
+            if (class_exists($className) === FALSE && interface_exists($className) === FALSE && trait_exists($className) === FALSE) {
                 continue;
             }
-            if (trait_exists($className)) {
+            if (trait_exists($className) === TRUE) {
                 continue; // Traits cannot be aliased; handled by stub classes.
             }
             $formsClasses[] = $className;
@@ -150,16 +150,16 @@ final class AliasResolutionTest extends TestCase
             $promptAlias = $promptNamespace . $shortName;
 
             // Skip if the Prompt class doesn't exist yet.
-            if (!class_exists($promptAlias) && !interface_exists($promptAlias)) {
+            if (class_exists($promptAlias) === FALSE && interface_exists($promptAlias) === FALSE) {
                 // Check if this is from a pre-existing debt namespace
                 $isPreExistingDebt = false;
                 foreach ($preExistingDebt as $ns) {
-                    if (str_starts_with($shortName, $ns)) {
+                    if (str_starts_with($shortName, $ns) === TRUE) {
                         $isPreExistingDebt = true;
                         break;
                     }
                 }
-                if (!$isPreExistingDebt) {
+                if ($isPreExistingDebt === FALSE) {
                     $missing[] = $shortName;
                 }
                 continue;
@@ -167,7 +167,7 @@ final class AliasResolutionTest extends TestCase
 
             // Verify it aliases back to the Forms class.
             // Skip Forms\Fuzzy\* — deprecated in favor of candy-fuzzy.
-            if (str_starts_with($shortName, 'Fuzzy\\')) {
+            if (str_starts_with($shortName, 'Fuzzy\\') === TRUE) {
                 continue;
             }
             $this->assertSame(
