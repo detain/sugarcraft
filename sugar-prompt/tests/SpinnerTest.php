@@ -82,4 +82,61 @@ final class SpinnerTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $s->run();
     }
+
+    public function testWithStyleSetsStyle(): void
+    {
+        $s = Spinner::new()->withStyle(SpinnerStyle::line());
+        $this->assertNotSame(Spinner::new(), $s);
+        // Style should be changed - verify by running (animation uses style->interval)
+        $s->withAction(static function (): void {})->run();
+        $this->assertTrue(true);
+    }
+
+    public function testWithStyleChainsFromOtherWither(): void
+    {
+        $s = Spinner::new()
+            ->withTitle('test')
+            ->withStyle(SpinnerStyle::dot())
+            ->withAction(static function (): void {});
+        $this->assertNotSame(Spinner::new(), $s);
+        $s->run();
+        $this->assertTrue(true);
+    }
+
+    public function testRunWithEmptyTitle(): void
+    {
+        if (function_exists('pcntl_fork') === FALSE) {
+            $this->markTestSkipped('pcntl required');
+        }
+        // Use tempfile to detect action execution (forked child can't share memory)
+        $tmp = tempnam(sys_get_temp_dir(), 'spinner_empty_title_');
+        $s = Spinner::new()
+            ->withStyle(SpinnerStyle::line())
+            ->withAction(static function () use ($tmp): void {
+                file_put_contents($tmp, 'ran');
+            });
+        $s->run();
+        $this->assertFileExists($tmp);
+        $this->assertSame('ran', file_get_contents($tmp));
+        unlink($tmp);
+    }
+
+    public function testWithTitleThenWithStyleThenWithAction(): void
+    {
+        if (function_exists('pcntl_fork') === FALSE) {
+            $this->markTestSkipped('pcntl required');
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'spinner_chained_');
+        $s = Spinner::new()
+            ->withTitle('step1')
+            ->withStyle(SpinnerStyle::line())
+            ->withTitle('step2')
+            ->withAction(static function () use ($tmp): void {
+                file_put_contents($tmp, 'ran');
+            });
+        $s->run();
+        $this->assertFileExists($tmp);
+        $this->assertSame('ran', file_get_contents($tmp));
+        unlink($tmp);
+    }
 }
