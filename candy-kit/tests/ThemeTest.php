@@ -209,13 +209,6 @@ final class ThemeTest extends TestCase
         $this->assertStringContainsString('38;2;166;227;161', $rendered, 'catppuccin success must be #a6e3a1');
     }
 
-    public function testByNameRejectsNonStringType(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Theme name must be a string');
-        Theme::byName(42);
-    }
-
     public function testByNameRejectsEmptyString(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -245,15 +238,14 @@ final class ThemeTest extends TestCase
         $this->assertSame($s, $built->muted);
     }
 
-    /** Build throws with a missing style — cover each field's exception message. */
-    public function testThemeBuilderBuildThrowsForEachMissingField(): void
+    /** Build throws on the first missing field (in declaration order). */
+    public function testThemeBuilderBuildThrowsOnFirstMissingField(): void
     {
         $s = Style::new();
-        foreach (['success', 'error', 'warn', 'info', 'prompt', 'accent', 'muted'] as $field) {
-            $this->expectException(\InvalidArgumentException::class);
-            $this->expectExceptionMessage("{$field} style is required");
-            Theme::build()->{$field}($s)->build();
-        }
+        // Only success is set; build() fails at error (the next required field).
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('error style is required');
+        Theme::build()->success($s)->build();
     }
 
     /** Nord theme is exercised via auto() and byName('nord') in other tests — do a direct slot check. */

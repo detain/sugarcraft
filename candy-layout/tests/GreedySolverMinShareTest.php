@@ -153,6 +153,29 @@ final class GreedySolverMinShareTest extends TestCase
         );
     }
 
+    public function testNegativeReserveGapRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new GreedySolver(minShare: 0, reserveGap: -1, reserveLead: 0);
+    }
+
+    public function testNegativeReserveLeadRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new GreedySolver(minShare: 0, reserveGap: 0, reserveLead: -1);
+    }
+
+    public function testPureMinConstraintRejectedUnderFloor(): void
+    {
+        // solveMinShare only accepts Fill constraints — pure Min must throw
+        $this->expectException(\InvalidArgumentException::class);
+        GreedySolver::new()->withMinShare(1)->solve(
+            Region::fromSize(20, 1),
+            Direction::Horizontal,
+            [Constraint::min(5), Constraint::min(3)],
+        );
+    }
+
     // ── Functional: single / multi region ──────────────────────────────────
 
     public function testSingleRegionTakesFullSpan(): void

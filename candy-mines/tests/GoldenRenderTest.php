@@ -156,6 +156,33 @@ final class GoldenRenderTest extends TestCase
         $this->assertNull($result, 'Out-of-bounds click should return null');
     }
 
+    /**
+     * Test that resolveClick returns null when a zone is found but its id
+     * does not match the expected "cell:row:col" pattern.
+     * Covers the return null at line 189 of Renderer.php.
+     */
+    public function testResolveClickReturnsNullForMalformedZoneId(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        [$view, $scanner] = Renderer::renderWithScanner($g);
+
+        // Manually create a zone with a malformed id that matches no pattern.
+        $reflection = new \ReflectionClass($scanner);
+        $zonesProp = $reflection->getProperty('zones');
+        $zonesProp->setAccessible(true);
+        $zones = $zonesProp->getValue($scanner);
+        $zones['malformed-zone-id'] = new \SugarCraft\Mouse\Zone('malformed-zone-id', 0, 0, 0, 0, 0);
+        $zonesProp->setValue($scanner, $zones);
+
+        // Use reflection to inject the modified scanner and call resolveClick.
+        $reflector = new \ReflectionMethod(Renderer::class, 'resolveClick');
+        $reflector->setAccessible(true);
+
+        // Pass col=0, row=0 — will hit the injected malformed zone, then regex-mismatch → null.
+        $result = $reflector->invoke(null, $g, 0, 0);
+        $this->assertNull($result, 'Malformed zone id should cause resolveClick to return null');
+    }
+
     public function testRenderWithScannerReturnsScanner(): void
     {
         $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);

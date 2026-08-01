@@ -78,6 +78,36 @@ final class GreedySolverCompatTest extends TestCase
         $this->assertNotSame($base, $mutated);
     }
 
+    public function testWithOverflowTruncationExplicitEnable(): void
+    {
+        // withoutOverflowTruncation() flips truncateOverflow to false
+        $compat = GreedySolver::compat();
+        $this->assertFalse($compat->truncateOverflow);
+
+        // Re-enable it via withOverflowTruncation(true)
+        $reEnabled = $compat->withOverflowTruncation(true);
+        $this->assertTrue($reEnabled->truncateOverflow);
+        // Other flags stay the same
+        $this->assertTrue($reEnabled->roundSplit);
+        $this->assertTrue($reEnabled->remainderToLast);
+        // Original compat instance untouched
+        $this->assertFalse($compat->truncateOverflow);
+    }
+
+    public function testWithOverflowTruncationExplicitDisable(): void
+    {
+        // Default solver has truncateOverflow=true
+        $default = GreedySolver::new();
+        $this->assertTrue($default->truncateOverflow);
+
+        // Explicitly disable it
+        $disabled = $default->withOverflowTruncation(false);
+        $this->assertFalse($disabled->truncateOverflow);
+        // Re-enable
+        $reEnabled = $disabled->withOverflowTruncation(true);
+        $this->assertTrue($reEnabled->truncateOverflow);
+    }
+
     // ── Single flex ─────────────────────────────────────────────────────────
 
     public function testCompatSingleFlexFillsRemainingSpan(): void

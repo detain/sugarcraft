@@ -208,6 +208,40 @@ final class DifficultyStatsTest extends TestCase
     }
 
     /**
+     * Missing 'data' key in the envelope must throw RuntimeException
+     * (checked before version, so missing data also hits that branch first).
+     */
+    public function testLoadThrowsWhenDataKeyMissing(): void
+    {
+        $payload = json_encode([
+            'version' => 1,
+            // 'data' intentionally missing
+        ]);
+        file_put_contents($this->persistencePath, $payload);
+        $this->expectException(\RuntimeException::class);
+        DifficultyStats::load($this->persistencePath);
+    }
+
+    /**
+     * Unsupported version number must throw RuntimeException with the
+     * version value in the message.
+     */
+    public function testLoadThrowsOnUnsupportedVersion(): void
+    {
+        $payload = json_encode([
+            'version' => 99,
+            'data' => [
+                'easyGames' => 0, 'easyWins' => 0, 'easyBest' => null,
+                'mediumGames' => 0, 'mediumWins' => 0, 'mediumBest' => null,
+                'expertGames' => 0, 'expertWins' => 0, 'expertBest' => null,
+            ],
+        ]);
+        file_put_contents($this->persistencePath, $payload);
+        $this->expectException(\RuntimeException::class);
+        DifficultyStats::load($this->persistencePath);
+    }
+
+    /**
      * On-disk backward-compat: files written by the pre-migration save()
      * were COMPACT `{"version":1,"data":{...}}`. load() must still read them
      * byte-for-byte, so existing stats files survive the format switch to

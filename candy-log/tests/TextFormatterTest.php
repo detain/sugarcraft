@@ -438,4 +438,3 @@ final class TextFormatterTest extends TestCase
         $this->assertCount(2, $order->parts);
     }
 }
-}

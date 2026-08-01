@@ -29,7 +29,7 @@ final class ReactInputDriverTest extends TestCase
      *
      * @param list<Event> $sink
      */
-    private function makeDriver(array &$sink): ThroughStream
+    private function makeDriver(array &$sink): ReactInputDriver
     {
         $upstream = new ThroughStream();
         $driver = new ReactInputDriver($upstream);
@@ -37,7 +37,7 @@ final class ReactInputDriverTest extends TestCase
             $sink[] = $event;
         });
 
-        return $upstream;
+        return $driver;
     }
 
     /**
@@ -47,10 +47,10 @@ final class ReactInputDriverTest extends TestCase
     public function testOversizedChunkDropsNothing(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
         $size = 20000; // > 2 * 8192, so at least three slices
-        $upstream->write(str_repeat('a', $size));
+        $driver->write(str_repeat('a', $size));
 
         $this->assertCount($size, $events);
         foreach ($events as $event) {
@@ -68,11 +68,11 @@ final class ReactInputDriverTest extends TestCase
     public function testCsiSequenceStraddlingBoundaryDecodesWhole(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
         $pad = 8191; // ESC lands at offset 8191 == last byte of first slice
         $chunk = str_repeat('a', $pad) . "\x1b[C" . str_repeat('b', 5);
-        $upstream->write($chunk);
+        $driver->write($chunk);
 
         // Compare against a whole-chunk decode by a fresh decoder — the driver
         // must produce byte-identical events despite slicing internally.
@@ -100,11 +100,11 @@ final class ReactInputDriverTest extends TestCase
     public function testUtf8CodepointStraddlingBoundaryDecodesWhole(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
         $euro = "\xe2\x82\xac";
         $chunk = str_repeat('a', 8191) . $euro . str_repeat('b', 3);
-        $upstream->write($chunk);
+        $driver->write($chunk);
 
         $this->assertCount(8191 + 1 + 3, $events);
         $euroEvents = array_values(array_filter(
@@ -122,9 +122,9 @@ final class ReactInputDriverTest extends TestCase
     public function testSmallChunkUnchanged(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $upstream->write("abc");
+        $driver->write("abc");
 
         $this->assertCount(3, $events);
         $this->assertSame(['a', 'b', 'c'], array_map(
@@ -139,9 +139,9 @@ final class ReactInputDriverTest extends TestCase
     public function testSmallEscapeSequenceUnchanged(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $upstream->write("\x1b[C"); // ArrowRight
+        $driver->write("\x1b[C"); // ArrowRight
 
         $this->assertCount(1, $events);
         $this->assertInstanceOf(KeyEvent::class, $events[0]);
@@ -223,57 +223,51 @@ final class ReactInputDriverTest extends TestCase
     public function testIsReadableWhenNotClosedOrPaused(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $this->assertTrue($upstream->isReadable());
+        $this->assertTrue($driver->isReadable());
     }
 
     public function testIsNotReadableWhenClosed(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
-        $upstream->close();
+        $driver = $this->makeDriver($events);
+        $driver->close();
 
-        $this->assertFalse($upstream->isReadable());
+        $this->assertFalse($driver->isReadable());
     }
 
     public function testIsNotReadableWhenPaused(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
-        $upstream->pause();
+        $driver = $this->makeDriver($events);
+        $driver->pause();
 
-        $this->assertFalse($upstream->isReadable());
+        $this->assertFalse($driver->isReadable());
     }
 
     // ─── pause() / resume() ─────────────────────────────────────────────────
 
-    public function testPauseSetsPausedFlag(): void
+    /**
+     * When paused, events should be buffered and not emitted until resume.
+     */
+    public function testPauseBuffersEvents(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $upstream->write('abc');
-        $upstream->pause();
+        $driver->pause();
+        $driver->write('ab');
 
-        // When paused, events are buffered, not emitted
+        // When paused, events are buffered in the driver, not emitted
         $this->assertCount(0, $events);
 
-        $upstream->resume();
+        $driver->resume();
 
         // After resume, buffered events are emitted
-        $this->assertCount(3, $events);
-    }
-
-    public function testPauseResumesUnderlyingStream(): void
-    {
-        $events = [];
-        $upstream = $this->makeDriver($events);
-
-        $upstream->pause();
-
-        // The underlying stream should also be paused
-        $this->assertFalse($upstream->isReadable());
+        $this->assertCount(2, $events);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertSame('b', $events[1]->key);
     }
 
     // ─── close() ────────────────────────────────────────────────────────────
@@ -282,28 +276,28 @@ final class ReactInputDriverTest extends TestCase
     {
         $events = [];
         $closeCalled = false;
-        $upstream = $this->makeDriver($events);
-        $upstream->on('close', function () use (&$closeCalled): void {
+        $driver = $this->makeDriver($events);
+        $driver->on('close', function () use (&$closeCalled): void {
             $closeCalled = true;
         });
 
-        $upstream->close();
+        $driver->close();
 
         $this->assertTrue($closeCalled);
-        $this->assertFalse($upstream->isReadable());
+        $this->assertFalse($driver->isReadable());
     }
 
     public function testCloseIdempotent(): void
     {
         $events = [];
         $closeCount = 0;
-        $upstream = $this->makeDriver($events);
-        $upstream->on('close', function () use (&$closeCount): void {
+        $driver = $this->makeDriver($events);
+        $driver->on('close', function () use (&$closeCount): void {
             $closeCount++;
         });
 
-        $upstream->close();
-        $upstream->close(); // Second close should be no-op
+        $driver->close();
+        $driver->close(); // Second close should be no-op
 
         $this->assertSame(1, $closeCount);
     }
@@ -311,70 +305,41 @@ final class ReactInputDriverTest extends TestCase
     public function testCloseRemovesAllListeners(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
-        $upstream->on('data', function (Event $e) use (&$events): void {
+        $driver = $this->makeDriver($events);
+        $driver->on('data', function (Event $e) use (&$events): void {
             $events[] = $e;
         });
 
-        $upstream->write('a');
+        $driver->write('a');
         $this->assertCount(1, $events);
 
-        $upstream->close();
-        $upstream->write('b'); // Should not emit
+        $driver->close();
 
+        // After close, subsequent writes should not emit events
+        $driver->write('b');
         $this->assertCount(1, $events);
     }
 
     public function testCloseStopsPausedState(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $upstream->pause();
-        $this->assertFalse($upstream->isReadable());
+        $driver->pause();
+        $this->assertFalse($driver->isReadable());
 
-        $upstream->close();
-        $this->assertFalse($upstream->isReadable());
-    }
-
-    // ─── emitEvent() buffering ──────────────────────────────────────────────
-
-    public function testEmitEventBuffersWhenPaused(): void
-    {
-        $events = [];
-        $upstream = $this->makeDriver($events);
-
-        $upstream->pause();
-        $upstream->write('ab'); // Should buffer, not emit
-
-        $this->assertCount(0, $events);
-    }
-
-    public function testBufferedEventsEmittedOnResume(): void
-    {
-        $events = [];
-        $upstream = $this->makeDriver($events);
-
-        $upstream->pause();
-        $upstream->write('ab');
-
-        $this->assertCount(0, $events);
-
-        $upstream->resume();
-
-        $this->assertCount(2, $events);
-        $this->assertSame('a', $events[0]->key);
-        $this->assertSame('b', $events[1]->key);
+        $driver->close();
+        $this->assertFalse($driver->isReadable());
     }
 
     public function testEmitEventIgnoresWhenClosed(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $upstream->close();
-        // Trying to emit when closed should be no-op
-        $upstream->write('a');
+        $driver->close();
+        // Trying to write after close should not emit
+        $driver->write('a');
 
         $this->assertCount(0, $events);
     }
@@ -386,37 +351,37 @@ final class ReactInputDriverTest extends TestCase
         $events = [];
         $errorEvent = null;
         $closeCount = 0;
-        $upstream = $this->makeDriver($events);
-        $upstream->on('error', function (\Throwable $e) use (&$errorEvent): void {
+        $driver = $this->makeDriver($events);
+        $driver->on('error', function (\Throwable $e) use (&$errorEvent): void {
             $errorEvent = $e;
         });
-        $upstream->on('close', function () use (&$closeCount): void {
+        $driver->on('close', function () use (&$closeCount): void {
             $closeCount++;
         });
 
-        $upstream->emit('error', [new \RuntimeException('test error')]);
+        $driver->emit('error', [new \RuntimeException('test error')]);
 
         $this->assertInstanceOf(\RuntimeException::class, $errorEvent);
         $this->assertSame(1, $closeCount);
-        $this->assertFalse($upstream->isReadable());
+        $this->assertFalse($driver->isReadable());
     }
 
     public function testErrorIgnoresWhenAlreadyClosed(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
-        $upstream->close();
+        $driver = $this->makeDriver($events);
+        $driver->close();
 
         $errorCount = 0;
         $closeCount = 0;
-        $upstream->on('error', function () use (&$errorCount): void {
+        $driver->on('error', function () use (&$errorCount): void {
             $errorCount++;
         });
-        $upstream->on('close', function () use (&$closeCount): void {
+        $driver->on('close', function () use (&$closeCount): void {
             $closeCount++;
         });
 
-        $upstream->emit('error', [new \RuntimeException('test')]);
+        $driver->emit('error', [new \RuntimeException('test')]);
 
         $this->assertSame(0, $errorCount);
         $this->assertSame(0, $closeCount);
@@ -428,12 +393,12 @@ final class ReactInputDriverTest extends TestCase
     {
         $events = [];
         $endCalled = false;
-        $upstream = $this->makeDriver($events);
-        $upstream->on('end', function () use (&$endCalled): void {
+        $driver = $this->makeDriver($events);
+        $driver->on('end', function () use (&$endCalled): void {
             $endCalled = true;
         });
 
-        $upstream->emit('end');
+        $driver->emit('end');
 
         $this->assertTrue($endCalled);
     }
@@ -441,54 +406,27 @@ final class ReactInputDriverTest extends TestCase
     public function testEndClosesStream(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $upstream->emit('end');
+        $driver->emit('end');
 
-        $this->assertFalse($upstream->isReadable());
+        $this->assertFalse($driver->isReadable());
     }
 
     public function testEndIgnoresWhenAlreadyClosed(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
-        $upstream->close();
+        $driver = $this->makeDriver($events);
+        $driver->close();
 
         $endCount = 0;
-        $upstream->on('end', function () use (&$endCount): void {
+        $driver->on('end', function () use (&$endCount): void {
             $endCount++;
         });
 
-        $upstream->emit('end');
+        $driver->emit('end');
 
         $this->assertSame(0, $endCount);
-    }
-
-    public function testEndFlushesBufferedEvents(): void
-    {
-        $events = [];
-        $upstream = $this->makeDriver($events);
-
-        $upstream->pause();
-        $upstream->write('ab');
-
-        $this->assertCount(0, $events);
-
-        // Resume first so events can be emitted
-        $upstream->resume();
-        $this->assertCount(2, $events);
-
-        // Clear and pause again for end test
-        $events = [];
-        $upstream->pause();
-        $upstream->write('xy');
-
-        // End should emit remaining buffered events before closing
-        // We need to resume first for events to flow
-        $upstream->emit('end');
-
-        // At this point the events should have been flushed
-        $this->assertCount(0, $events); // They were already emitted on resume
     }
 
     // ─── pipe() ────────────────────────────────────────────────────────────
@@ -496,10 +434,10 @@ final class ReactInputDriverTest extends TestCase
     public function testPipeReturnsWritableStreamInterface(): void
     {
         $events = [];
-        $upstream = $this->makeDriver($events);
+        $driver = $this->makeDriver($events);
 
-        $dest = new \React\Stream\ThroughStream();
-        $result = $upstream->pipe($dest);
+        $dest = new ThroughStream();
+        $result = $driver->pipe($dest);
 
         $this->assertInstanceOf(\React\Stream\WritableStreamInterface::class, $result);
     }
@@ -510,17 +448,102 @@ final class ReactInputDriverTest extends TestCase
     {
         $events = [];
         $errorEvent = null;
-        $upstream = $this->makeDriver($events);
-        $upstream->on('error', function (\Throwable $e) use (&$errorEvent): void {
+        $driver = $this->makeDriver($events);
+        $driver->on('error', function (\Throwable $e) use (&$errorEvent): void {
             $errorEvent = $e;
         });
 
-        // Manually trigger handleChunk with invalid data that could cause issues
-        // Since handleChunk is private, we test through the stream interface
-        // by ensuring the driver handles malformed input gracefully
-        $upstream->write("\x1b[");
-        // Partial CSI should not cause exception
+        // Partial CSI should not cause exception - handled gracefully
+        $driver->write("\x1b[");
 
         $this->assertNull($errorEvent);
+    }
+
+    // ─── write() after close does not cause issues ─────────────────────────
+
+    public function testWriteAfterCloseIsIgnored(): void
+    {
+        $events = [];
+        $driver = $this->makeDriver($events);
+        $driver->close();
+
+        // Writing after close should not crash or emit events
+        $driver->write("test");
+
+        $this->assertCount(0, $events);
+    }
+
+    // ─── sliceChunk edge cases ─────────────────────────────────────────────
+
+    public function testSliceChunkExactlyAtLimit(): void
+    {
+        // Exactly 8192 bytes - should be one piece
+        $chunk = str_repeat('a', 8192);
+        $pieces = ReactInputDriver::sliceChunk($chunk);
+
+        $this->assertCount(1, $pieces);
+        $this->assertSame($chunk, $pieces[0]);
+    }
+
+    public function testSliceChunkJustOverLimit(): void
+    {
+        // Just over 8192 bytes - should be two pieces
+        $chunk = str_repeat('a', 8193);
+        $pieces = ReactInputDriver::sliceChunk($chunk);
+
+        $this->assertCount(2, $pieces);
+        $this->assertSame(8192, strlen($pieces[0]));
+        $this->assertSame(1, strlen($pieces[1]));
+        $this->assertSame($chunk, implode('', $pieces));
+    }
+
+    public function testSliceChunkEscAtBoundaryCarriedToNextPiece(): void
+    {
+        // ESC at position 8191 (last byte of first piece) should be carried
+        $chunk = str_repeat('a', 8191) . "\x1b[C";
+        $pieces = ReactInputDriver::sliceChunk($chunk);
+
+        // First piece should NOT end with lone ESC
+        // It should include the ESC since it begins an escape sequence
+        $this->assertGreaterThan(1, count($pieces));
+        $this->assertSame($chunk, implode('', $pieces));
+    }
+
+    public function testSliceChunkEscEscSplitCorrectly(): void
+    {
+        // ESC ESC at boundary - the second ESC should be carried to next piece
+        $chunk = str_repeat('a', 8190) . "\x1b\x1b";
+        $pieces = ReactInputDriver::sliceChunk($chunk);
+
+        $this->assertSame($chunk, implode('', $pieces));
+    }
+
+    public function testSliceChunkMultipleEscapes(): void
+    {
+        // Multiple ESC sequences throughout
+        $chunk = "abc\x1b[Cdef\x1b[Dghi\x1b[A";
+        $pieces = ReactInputDriver::sliceChunk($chunk);
+
+        $this->assertSame($chunk, implode('', $pieces));
+    }
+
+    // ─── handleEnd with buffered events ──────────────────────────────────────
+
+    public function testEndEmitsBufferedEventsBeforeClosing(): void
+    {
+        $events = [];
+        $driver = $this->makeDriver($events);
+
+        // Write some data while not paused
+        $driver->write('ab');
+
+        // 'end' event should trigger handleEnd which closes the stream
+        // The events should have been emitted already
+        $this->assertCount(2, $events);
+
+        $driver->emit('end');
+
+        // After end, stream is closed
+        $this->assertFalse($driver->isReadable());
     }
 }

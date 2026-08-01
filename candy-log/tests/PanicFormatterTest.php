@@ -161,4 +161,101 @@ final class PanicFormatterTest extends TestCase
         $this->assertStringNotContainsString('supersecret-token', $out);
         $this->assertStringContainsString('[redacted]', $out);
     }
+
+    public function testShowLocalsTruncatesLongScalarArgs(): void
+    {
+        $f = PanicFormatter::pretty(showLocals: true);
+
+        // Create an exception with a backtrace frame carrying a long string arg (> 40 chars)
+        $e = new \RuntimeException('long args test');
+        $traceProp = new \ReflectionProperty(\Exception::class, 'trace');
+        $traceProp->setAccessible(true);
+        $longString = str_repeat('x', 60); // 60 chars, exceeds 40 char limit
+        $traceProp->setValue($e, [[
+            'file' => __FILE__,
+            'line' => 100,
+            'function' => 'process',
+            'class' => 'Test',
+            'type' => '->',
+            'args' => [$longString],
+        ]]);
+
+        $out = $f->format($e);
+
+        // Long string should be truncated to 40 chars + ellipsis
+        $this->assertStringContainsString('xxxx', $out);
+        $this->assertStringContainsString('…', $out);
+        $this->assertStringNotContainsString($longString, $out);
+    }
+
+    public function testShowLocalsHandlesNonScalarArgs(): void
+    {
+        $f = PanicFormatter::pretty(showLocals: true);
+
+        // Create an exception with a backtrace frame carrying a non-scalar arg (array)
+        $e = new \RuntimeException('non-scalar args test');
+        $traceProp = new \ReflectionProperty(\Exception::class, 'trace');
+        $traceProp->setAccessible(true);
+        $traceProp->setValue($e, [[
+            'file' => __FILE__,
+            'line' => 100,
+            'function' => 'process',
+            'class' => 'Test',
+            'type' => '->',
+            'args' => [['key' => 'value']], // array arg
+        ]]);
+
+        $out = $f->format($e);
+
+        // Non-scalar should be shown as its type, not cause error
+        $this->assertIsString($out);
+        $this->assertStringContainsString('array', $out);
+    }
+
+    public function testShowLocalsHandlesObjectArg(): void
+    {
+        $f = PanicFormatter::pretty(showLocals: true);
+
+        // Create an exception with an object arg
+        $e = new \RuntimeException('object args test');
+        $traceProp = new \ReflectionProperty(\Exception::class, 'trace');
+        $traceProp->setAccessible(true);
+        $traceProp->setValue($e, [[
+            'file' => __FILE__,
+            'line' => 100,
+            'function' => 'process',
+            'class' => 'Test',
+            'type' => '->',
+            'args' => [new \stdClass()],
+        ]]);
+
+        $out = $f->format($e);
+
+        // Object arg should be shown as "object"
+        $this->assertIsString($out);
+        $this->assertStringContainsString('object', $out);
+    }
+
+    public function testFormatBacktraceRedactsMultiplePaths(): void
+    {
+        $f = PanicFormatter::pretty(showLocals: false, redactPaths: ['/etc/secrets', '/var/token']);
+
+        $e = new \RuntimeException('test');
+        $traceProp = new \ReflectionProperty(\Exception::class, 'trace');
+        $traceProp->setAccessible(true);
+        $traceProp->setValue($e, [[
+            'file' => '/etc/secrets/config.php',
+            'line' => 10,
+            'function' => 'load',
+            'class' => 'Config',
+            'type' => '->',
+            'args' => [],
+        ]]);
+
+        $out = $f->format($e);
+
+        // Path should be redacted
+        $this->assertStringContainsString('[redacted]', $out);
+        $this->assertStringNotContainsString('/etc/secrets', $out);
+    }
 }
