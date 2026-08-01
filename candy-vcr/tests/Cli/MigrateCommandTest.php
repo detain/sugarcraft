@@ -113,8 +113,9 @@ final class MigrateCommandTest extends TestCase
 
     public function testMigrateAlreadyAtLatestVersion(): void
     {
+        // V1 can be migrated to V2 via V1ToV2Migrator, so this test uses version 2
         $path = tempnam(sys_get_temp_dir(), 'cv-migrate-');
-        $this->writeCassette($path, 1);
+        $this->writeCassette($path, 2);
         try {
             $stdout = fopen('php://memory', 'w+');
             $stderr = fopen('php://memory', 'w+');

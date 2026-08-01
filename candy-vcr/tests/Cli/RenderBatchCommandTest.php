@@ -54,6 +54,7 @@ final class RenderBatchCommandTest extends TestCase
         $dir = sys_get_temp_dir() . '/cv-batch-test-' . uniqid();
         mkdir($dir);
         mkdir($dir . '/subdir');
+        mkdir($dir . '/subdir/deep');
 
         file_put_contents($dir . '/root.tape', 'Set Theme "TokyoNight"');
         file_put_contents($dir . '/subdir/nested.tape', 'Type "hello"');
