@@ -332,16 +332,18 @@ final class OHLCChartTest extends TestCase
 
     // ─── Legend Items Tests ───────────────────────────────────────────────
 
-    public function testWithLegendItemsDirectly(): void
+    public function testWithLegendItemsAppearsInView(): void
     {
         $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
-        $chart = OHLCChart::new([$bar], 6, 3)
+        $out = OHLCChart::new([$bar], 20, 3)
             ->withLegend(true)
             ->withLegendItems([
                 ['label' => 'Series A', 'color' => 'red'],
                 ['label' => 'Series B', 'color' => 'blue'],
-            ]);
-        $this->assertCount(2, $chart->legendItems);
+            ])
+            ->view();
+        $this->assertStringContainsString('Series A', $out);
+        $this->assertStringContainsString('Series B', $out);
     }
 
     public function testShortFormAliasesAll(): void

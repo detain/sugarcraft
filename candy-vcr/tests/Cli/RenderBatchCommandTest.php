@@ -13,6 +13,14 @@ use SugarCraft\Vcr\Cli\RenderBatchCommand;
  */
 final class RenderBatchCommandTest extends TestCase
 {
+    private function invokeCollectTapeFiles(string $dir, bool $recursive): array
+    {
+        $ref = new \ReflectionMethod(\SugarCraft\Vcr\Cli\RenderBatchCommand::class, 'collectTapeFiles');
+        $ref->setAccessible(true);
+        $cmd = new \SugarCraft\Vcr\Cli\RenderBatchCommand();
+        return $ref->invoke($cmd, $dir, $recursive);
+    }
+
     public function testCollectTapeFilesNonRecursive(): void
     {
         $dir = sys_get_temp_dir() . '/cv-batch-test-' . uniqid();
@@ -25,16 +33,7 @@ final class RenderBatchCommandTest extends TestCase
         file_put_contents($dir . '/d.TAPE', 'also not');
 
         try {
-            $cmd = new class extends RenderBatchCommand {
-                public function collectFilesPublic(string $dir, bool $recursive): array
-                {
-                    return $this->collectTapeFiles($dir, $recursive);
-                }
-            };
-
-            $files = (function () use ($cmd, $dir) {
-                return $cmd->collectFilesPublic($dir, false);
-            })();
+            $files = $this->invokeCollectTapeFiles($dir, false);
 
             // Only lowercase .tape files should be collected
             $this->assertCount(2, $files);
@@ -61,16 +60,7 @@ final class RenderBatchCommandTest extends TestCase
         file_put_contents($dir . '/subdir/deep/file.tape', 'Enter');
 
         try {
-            $cmd = new class extends RenderBatchCommand {
-                public function collectFilesPublic(string $dir, bool $recursive): array
-                {
-                    return $this->collectTapeFiles($dir, $recursive);
-                }
-            };
-
-            $files = (function () use ($cmd, $dir) {
-                return $cmd->collectFilesPublic($dir, true);
-            })();
+            $files = $this->invokeCollectTapeFiles($dir, true);
 
             $this->assertCount(3, $files);
             $basenames = array_map('basename', $files);
@@ -96,16 +86,7 @@ final class RenderBatchCommandTest extends TestCase
         mkdir($dir . '/fake.tape');
 
         try {
-            $cmd = new class extends RenderBatchCommand {
-                public function collectFilesPublic(string $dir, bool $recursive): array
-                {
-                    return $this->collectTapeFiles($dir, $recursive);
-                }
-            };
-
-            $files = (function () use ($cmd, $dir) {
-                return $cmd->collectFilesPublic($dir, false);
-            })();
+            $files = $this->invokeCollectTapeFiles($dir, false);
 
             $this->assertCount(0, $files);
         } finally {
