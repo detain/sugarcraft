@@ -536,11 +536,11 @@ jobs:
             echo "Codacy upload attempt $attempt of $MAX_RETRIES"
             if "$CODACY_DIR/codacy-coverage-reporter" final \
               --api-token "$CODACY_API_TOKEN" \
-              --organization "gh" \
+              --organization-provider "gh" \
               --username "detain" \
-              --project "sugarcraft" \
+              --project-name "sugarcraft" \
               --coverage-reports "$COVERAGE_FILE" \
-              --commit "$GITHUB_SHA"; then
+              --commit-uuid "$GITHUB_SHA"; then
               echo "Codacy upload succeeded on attempt $attempt"
               exit 0
             fi
