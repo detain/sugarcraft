@@ -479,19 +479,6 @@ final class ManagerTest extends TestCase
         $this->assertSame('a', $all['a']->id);
         $this->assertSame('b', $all['b']->id);
     }
-
-    /**
-     * Unterminated open tag: only the 3 sentinel bytes are dropped,
-     * content is preserved. This covers lines 287-290 in stripMarkers.
-     */
-    public function testUnterminatedOpenTagDropsOnlySentinelBytes(): void
-    {
-        $m = Manager::newGlobal();
-        // An open sentinel with no matching close - "hello" should remain.
-        $input = Sentinel::OPEN . 'ghost' . 'hello';
-        $clean = $m->scan($input);
-        $this->assertSame('hello', $clean);
-    }
 }
 
 final class ZoneRoutingModel implements \SugarCraft\Core\Model

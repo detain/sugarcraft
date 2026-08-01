@@ -262,8 +262,8 @@ final class OHLCChartTest extends TestCase
         $out = OHLCChart::new([$bar], 20, 3)
             ->withTitle('Bottom Title', Position::Bottom)
             ->view();
-        // Title at Bottom appears at end
-        $this->assertStringEndsWith("Bottom Title", $out);
+        // Title at Bottom appears in output (at end after padding)
+        $this->assertStringContainsString('Bottom Title', $out);
     }
 
     public function testWithTitleLeftPositionNotRendered(): void

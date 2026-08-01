@@ -173,6 +173,19 @@ final class DatePickerStyleTest extends TestCase
         $this->assertSame(1, $w);
     }
 
+    public function testGraphemeWidthControlChar(): void
+    {
+        // ASCII control chars (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) return 0
+        $w = $this->invokeGraphemeWidth("\x01");
+        $this->assertSame(0, $w, 'Control char 0x01 must return width 0');
+
+        $w = $this->invokeGraphemeWidth("\x7f");
+        $this->assertSame(0, $w, 'DEL char 0x7F must return width 0');
+
+        $w = $this->invokeGraphemeWidth("\x0b"); // vertical tab
+        $this->assertSame(0, $w, 'VT char 0x0B must return width 0');
+    }
+
     public function testPlaceStringAtWideCharTruncatesAtWidth(): void
     {
         $buf = Buffer::new(5, 3);

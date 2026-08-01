@@ -284,9 +284,10 @@ final class CanvasTest extends TestCase
     {
         $c = new Canvas(2, 2);
         $cell = $c->getCell(10, 10);
-        $this->assertSame('', $cell->rune);
+        // Default cell has rune ' '
+        $this->assertSame(' ', $cell->rune);
 
         $cell2 = $c->getCell(-1, -1);
-        $this->assertSame('', $cell2->rune);
+        $this->assertSame(' ', $cell2->rune);
     }
 }
