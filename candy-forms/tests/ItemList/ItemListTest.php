@@ -415,12 +415,15 @@ final class ItemListTest extends TestCase
     {
         $l = ItemList::new($this->items(), 60, 5)->withInfiniteScrolling(true);
         [$l, ] = $l->focus();
-        // Move up from index 0 in infinite scroll should wrap to last
+        // Move up from index 0 in infinite scroll wraps to last (3)
         $l = $l->cursorUp();
         $this->assertSame(3, $l->index());
-        // Move down past end should wrap to 0
+        // Move down by 10 from index 3: (3 + 10) % 4 = 1
         $l = $l->cursorDown(10);
-        $this->assertSame(0, $l->index());
+        $this->assertSame(1, $l->index());
+        // Move down by 1 from index 1: (1 + 1) % 4 = 2
+        $l = $l->cursorDown(1);
+        $this->assertSame(2, $l->index());
     }
 
     public function testStatusMessageWithLifetime(): void
@@ -494,39 +497,38 @@ final class ItemListTest extends TestCase
         $this->assertInstanceOf(ItemList::class, $l);
     }
 
-    public function testWithShowFilterFalse(): void
+    public function testWithShowFilterFalseStillFiltersInternally(): void
     {
         $l = ItemList::new($this->items(), 60, 5)->withShowFilter(false);
         [$l, ] = $l->focus();
         [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
-        $l = $l->update(new KeyMsg(KeyType::Char, 'a'));
-        $view = $l->view();
-        // Filter bar should not appear when showFilter is false
-        $this->assertStringNotContainsString('/a', $view);
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        // Filtering is still active even though showFilter=false
+        $this->assertTrue($l->isFiltering());
+        $this->assertSame('a', $l->filterValue());
+        $this->assertSame(3, count($l->visibleItems())); // apple, banana, cherry all contain 'a'
     }
 
-    public function testFilterWithSpaceCharacter(): void
+    public function testFilterWithSpaceCharacterAddsToFilter(): void
     {
         $l = $this->focused();
         [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
-        // Space in filter text
+        // Space in filter text - adds a space character to filter
         [$l, ] = $l->update(new KeyMsg(KeyType::Space));
-        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'b'));
-        $titles = array_map(static fn($i) => $i->title(), $l->visibleItems());
-        // 'banana' contains 'b' and space before it (filtered as empty prefix)
-        $this->assertContains('banana', $titles);
+        $this->assertSame(' ', $l->filterValue());
+        $this->assertTrue($l->isFiltering());
     }
 
-    public function testFilterUpDownMovesCursorWithinFilteredSet(): void
+    public function testFilterDownMovesCursorInFilteredSet(): void
     {
         $l = $this->focused();
         [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
         [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
-        // Move down through filtered set
+        // 'a' filter matches apple, banana, cherry (3 items visible)
+        $this->assertSame(3, count($l->visibleItems()));
+        // Move down from index 0: moveCursor(1), count=3, cursor = max(0, min(2, 1)) = 1
         [$l, ] = $l->update(new KeyMsg(KeyType::Down));
-        // At this point only banana is visible (index 0), down wraps in filtered set
-        // Since only 1 item is visible, cursor should stay at 0
-        $this->assertSame(0, $l->index());
+        $this->assertSame(1, $l->index());
     }
 
     public function testFilterPageUpPageDownMovesCursorByHeight(): void

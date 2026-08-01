@@ -846,4 +846,251 @@ final class ModelTest extends TestCase
         $this->assertLessThan($bytes1, $bytes2, 'Frame 2 delta should be smaller than full re-render');
         $this->assertLessThan($bytes1, $bytes3, 'Frame 3 delta should be smaller than full re-render');
     }
+
+    // ─── Untested public methods ─────────────────────────────────────────────
+
+    public function testSetLineOffset(): void
+    {
+        $m = $this->model->setLineOffset(10);
+        $this->assertSame(10, $m->lineOffset);
+    }
+
+    public function testAddItems(): void
+    {
+        $m = $this->model->addItems(
+            new StringItem('a'),
+            new StringItem('b'),
+            new StringItem('c'),
+        );
+        $this->assertSame(3, $m->length());
+        $this->assertSame('a', (string) $m->cursorItem());
+    }
+
+    public function testAddItemsFromArray(): void
+    {
+        // Strings should be auto-wrapped in StringItem
+        $m = $this->model->addItemsFromArray(['apple', 'banana', 'cherry']);
+        $this->assertSame(3, $m->length());
+        $this->assertSame('apple', (string) $m->cursorItem());
+    }
+
+    public function testAddItemsFromArrayWithStringableObjects(): void
+    {
+        // Stringable objects should pass through directly
+        $m = $this->model->addItemsFromArray([new StringItem('x'), new StringItem('y')]);
+        $this->assertSame(2, $m->length());
+    }
+
+    public function testCursorPageUp(): void
+    {
+        // Use small height to make page movement more obvious
+        $m = Model::new()->setViewport(80, 3);
+        for ($i = 0; $i < 10; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+        $m = $m->setCursor(5);
+        $this->assertSame(5, $m->cursorIndex());
+
+        // Page up by 1: 5 - (3 * 1) = 2
+        $m2 = $m->cursorPageUp();
+        $this->assertSame(2, $m2->cursorIndex());
+
+        // Page up by 2: 2 - (3 * 2) = -4 → clamped to 0
+        $m3 = $m2->cursorPageUp(2);
+        $this->assertSame(0, $m3->cursorIndex());
+    }
+
+    public function testCursorPageDown(): void
+    {
+        // Use small height to make page movement more obvious
+        $m = Model::new()->setViewport(80, 3);
+        for ($i = 0; $i < 10; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+        $m = $m->setCursor(1);
+        $this->assertSame(1, $m->cursorIndex());
+
+        // Page down by 1: 1 + 3 = 4
+        $m2 = $m->cursorPageDown();
+        $this->assertSame(4, $m2->cursorIndex());
+
+        // Page down again: 4 + 3 = 7
+        $m3 = $m2->cursorPageDown();
+        $this->assertSame(7, $m3->cursorIndex());
+    }
+
+    public function testCursorPageDownClampsToEnd(): void
+    {
+        $m = $this->model;
+        for ($i = 0; $i < 5; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+        $m = $m->setCursor(0)->cursorPageDown(100);
+        $this->assertSame(4, $m->cursorIndex()); // Last index
+    }
+
+    public function testCursorToStart(): void
+    {
+        $m = $this->model;
+        for ($i = 0; $i < 3; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+        $m = $m->setCursor(2);
+        $this->assertSame(2, $m->cursorIndex());
+
+        $m2 = $m->cursorToStart();
+        $this->assertSame(0, $m2->cursorIndex());
+    }
+
+    public function testCursorToEnd(): void
+    {
+        $m = $this->model;
+        for ($i = 0; $i < 3; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+        // cursorToEnd goes to the last item
+        $m2 = $m->cursorToEnd();
+        $this->assertSame(2, $m2->cursorIndex());
+    }
+
+    public function testItemAt(): void
+    {
+        $m = $this->model;
+        for ($i = 0; $i < 3; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+
+        $this->assertSame('item 0', (string) $m->itemAt(0));
+        $this->assertSame('item 1', (string) $m->itemAt(1));
+        $this->assertSame('item 2', (string) $m->itemAt(2));
+    }
+
+    public function testItemAtThrowsOutOfBounds(): void
+    {
+        $m = $this->model->addItem(new StringItem('only one'));
+        $this->expectException(\OutOfBoundsException::class);
+        $m->itemAt(5);
+    }
+
+    public function testItemAtThrowsOnNegativeIndex(): void
+    {
+        $m = $this->model->addItem(new StringItem('only one'));
+        $this->expectException(\OutOfBoundsException::class);
+        $m->itemAt(-1);
+    }
+
+    public function testTryItemAt(): void
+    {
+        $m = $this->model;
+        for ($i = 0; $i < 3; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+
+        $this->assertSame('item 0', (string) $m->tryItemAt(0));
+        $this->assertSame('item 1', (string) $m->tryItemAt(1));
+        $this->assertNull($m->tryItemAt(99));
+        $this->assertNull($m->tryItemAt(-1));
+    }
+
+    public function testGetItemIds(): void
+    {
+        $m = Model::new();
+        for ($i = 0; $i < 3; $i++) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+
+        $ids = $m->getItemIds();
+        $this->assertCount(3, $ids);
+        $this->assertNotContains($ids[0], \array_slice($ids, 1));
+        // IDs should be strictly increasing
+        $this->assertGreaterThan($ids[0], $ids[1]);
+        $this->assertGreaterThan($ids[1], $ids[2]);
+    }
+
+    public function testLinesStreamReturnsGenerator(): void
+    {
+        $m = $this->model
+            ->addItem(new StringItem('apple'))
+            ->addItem(new StringItem('banana'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setViewport(80, 24);
+
+        $stream = $m->linesStream();
+        $this->assertInstanceOf(\Generator::class, $stream);
+
+        $lines = [];
+        foreach ($stream as $line) {
+            $lines[] = $line;
+        }
+        $this->assertNotEmpty($lines);
+        $this->assertStringContainsString('apple', $lines[0]);
+    }
+
+    // ─── Edge cases for partial coverage ────────────────────────────────────
+
+    public function testViewWithLoggerCatchesException(): void
+    {
+        // Pass a logger that will capture the error path
+        $logger = new class implements \Psr\Log\LoggerInterface {
+            public array $warnings = [];
+            public function emergency(\Stringable|string $message, array $context = []): void {}
+            public function alert(\Stringable|string $message, array $context = []): void {}
+            public function critical(\Stringable|string $message, array $context = []): void {}
+            public function error(\Stringable|string $message, array $context = []): void {}
+            public function warning(\Stringable|string $message, array $context = []): void { $this->warnings[] = $message; }
+            public function notice(\Stringable|string $message, array $context = []): void {}
+            public function info(\Stringable|string $message, array $context = []): void {}
+            public function debug(\Stringable|string $message, array $context = []): void {}
+            public function log($level, \Stringable|string $message, array $context = []): void {}
+        };
+
+        $m = Model::new()
+            ->setViewport(0, 0) // Will trigger exception in lines()
+            ->addItem(new StringItem('x'));
+
+        $out = $m->View($logger);
+        // Should return the error message string, not throw
+        $this->assertIsString($out);
+        $this->assertNotEmpty($out);
+        // Logger should have captured the warning
+        $this->assertNotEmpty($logger->warnings);
+    }
+
+    public function testApplyStyleWithEmptyStyleReturnsOriginal(): void
+    {
+        // When style is empty, applyStyle should return the original string
+        // This exercises the early return at line 829-830
+        $m = $this->model->addItem(new StringItem('test'));
+        $m->lineStyle = ''; // Direct bypass of setter
+
+        $lines = $m->lines();
+        $this->assertNotEmpty($lines);
+        $this->assertSame('test', $lines[0]);
+    }
+
+    public function testLinesViewportFollowBottomGap(): void
+    {
+        // When cursor is within cursorOffset of bottom AND more lines remain below,
+        // the viewport-follow logic shifts the window down.
+        // This exercises lines 600-624.
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->setCursorOffset(2)
+            ->addItem(new StringItem('item 0'))
+            ->addItem(new StringItem('item 1'))
+            ->addItem(new StringItem('item 2'))
+            ->addItem(new StringItem('item 3'))
+            ->addItem(new StringItem('item 4'))
+            ->addItem(new StringItem('item 5'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer());
+
+        // Cursor at index 0, initially visible. Move cursor near bottom.
+        $m2 = $m->setCursor(4);
+        $lines = $m2->lines();
+        $this->assertNotEmpty($lines);
+        // The viewport should have shifted to keep cursor 2 lines from bottom
+        $this->assertLessThanOrEqual(5, \count($lines));
+    }
 }

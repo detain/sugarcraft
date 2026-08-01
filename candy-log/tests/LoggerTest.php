@@ -417,4 +417,154 @@ final class LoggerTest extends TestCase
         $this->assertSame(1, $spy->calls);
         $this->assertStringContainsString('baked', \file_get_contents($this->tempPath));
     }
+
+    // -------------------------------------------------------------------------
+    // withMinLevel - creates child logger with different level threshold
+    // -------------------------------------------------------------------------
+
+    public function testWithMinLevelCreatesChildWithNewThreshold(): void
+    {
+        $log = $this->logger(Level::Debug);
+        $child = $log->withMinLevel(Level::Error);
+
+        // Parent still logs Debug
+        $log->debug('parent debug');
+        \fclose($this->tempFile);
+        $parentContent = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('parent debug', $parentContent);
+
+        // Reopen for child
+        $this->tempFile = \fopen($this->tempPath, 'w');
+        // Child filters out Debug
+        $child->debug('child debug should not appear');
+        \fclose($this->tempFile);
+        $childContent = \file_get_contents($this->tempPath);
+        $this->assertSame('', $childContent);
+    }
+
+    public function testWithMinLevelDoesNotAffectParent(): void
+    {
+        $log = $this->logger(Level::Debug);
+        $child = $log->withMinLevel(Level::Error);
+
+        // Child is at Error threshold
+        $this->assertFalse($child->enabled(Level::Debug));
+        // Parent is still at Debug threshold
+        $this->assertTrue($log->enabled(Level::Debug));
+    }
+
+    // -------------------------------------------------------------------------
+    // setStyles / styles - text formatter styling
+    // -------------------------------------------------------------------------
+
+    public function testStylesReturnsStylesObject(): void
+    {
+        $log = $this->logger();
+        $styles = $log->styles();
+        $this->assertInstanceOf(\SugarCraft\Log\Styles::class, $styles);
+    }
+
+    public function testSetStylesUpdatesTextFormatter(): void
+    {
+        $log = $this->logger();
+        $newStyles = \SugarCraft\Log\Styles::default();
+        $log->setStyles($newStyles);
+
+        // Should not throw - styles were applied
+        $log->info('styled message');
+        $this->assertTrue(true);
+    }
+
+    // -------------------------------------------------------------------------
+    // setPartsOrder / withPartsOrder - text formatter part ordering
+    // -------------------------------------------------------------------------
+
+    public function testWithPartsOrderCreatesChildWithReorderedParts(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $stream,
+        );
+
+        // Create child with custom parts order (message first, then level)
+        $child = $log->withPartsOrder(\SugarCraft\Log\PartsOrder::custom([
+            \SugarCraft\Log\PartsOrder::PART_MESSAGE,
+            \SugarCraft\Log\PartsOrder::PART_LEVEL,
+        ]));
+
+        $child->info('test message');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        // Message should appear before level indicator
+        $msgPos = \strpos($content, 'test message');
+        $levelPos = \strpos($content, 'INF');
+        $this->assertNotFalse($msgPos);
+        $this->assertNotFalse($levelPos);
+        $this->assertLessThan($levelPos, $msgPos);
+    }
+
+    public function testSetPartsOrderUpdatesTextFormatter(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $stream,
+        );
+
+        $log->setPartsOrder(\SugarCraft\Log\PartsOrder::default());
+        $log->info('test');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('INF', $content);
+        $this->assertStringContainsString('test', $content);
+    }
+
+    // -------------------------------------------------------------------------
+    // printf - bypasses level filter
+    // -------------------------------------------------------------------------
+
+    public function testPrintfBypassesLevelFilter(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Error, // Very high threshold
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $stream,
+        );
+
+        $log->printf('always shows %s', ['arg']);
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('always shows', $content);
+        $this->assertStringContainsString('arg', $content);
+    }
+
+    // -------------------------------------------------------------------------
+    // withOutput throws on invalid stream
+    // -------------------------------------------------------------------------
+
+    public function testWithOutputThrowsOnInvalidInput(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(
+            level: Level::Debug,
+            reportTimestamp: false,
+            reportCaller: false,
+            stream: $stream,
+        );
+        \fclose($stream);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('stream must be a valid resource');
+        $log->withOutput('not a resource');
+    }
 }

@@ -190,4 +190,79 @@ final class ThemeTest extends TestCase
             Style::new(), Style::new(), Style::new(), null,
         );
     }
+
+    /** Directly exercise Theme::charm() — a preset not routed through byName. */
+    public function testCharmThemeDirectly(): void
+    {
+        $t = Theme::charm();
+        // charm pink #ff5fd2 → truecolor SGR 38;2;255;95;210
+        $rendered = $t->prompt->render('x');
+        $this->assertStringContainsString('38;2;255;95;210', $rendered, 'charm prompt must be #ff5fd2');
+    }
+
+    /** Directly exercise Theme::catppuccin() — a preset not routed through byName. */
+    public function testCatppuccinThemeDirectly(): void
+    {
+        $t = Theme::catppuccin();
+        // catppuccin green #a6e3a1 → truecolor SGR 38;2;166;227;161
+        $rendered = $t->success->render('x');
+        $this->assertStringContainsString('38;2;166;227;161', $rendered, 'catppuccin success must be #a6e3a1');
+    }
+
+    public function testByNameRejectsNonStringType(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Theme name must be a string');
+        Theme::byName(42);
+    }
+
+    public function testByNameRejectsEmptyString(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Theme::byName('');
+    }
+
+    /** ThemeBuilder individual fluent methods — cover each setter directly. */
+    public function testThemeBuilderIndividualSetters(): void
+    {
+        $s = Style::new()->bold();
+        $builder = Theme::build();
+        $this->assertSame($builder, $builder->success($s));
+        $this->assertSame($builder, $builder->error($s));
+        $this->assertSame($builder, $builder->warn($s));
+        $this->assertSame($builder, $builder->info($s));
+        $this->assertSame($builder, $builder->prompt($s));
+        $this->assertSame($builder, $builder->accent($s));
+        $this->assertSame($builder, $builder->muted($s));
+        $built = $builder->build();
+        // All fields should reference the identical $s instance (same Style object).
+        $this->assertSame($s, $built->success);
+        $this->assertSame($s, $built->error);
+        $this->assertSame($s, $built->warn);
+        $this->assertSame($s, $built->info);
+        $this->assertSame($s, $built->prompt);
+        $this->assertSame($s, $built->accent);
+        $this->assertSame($s, $built->muted);
+    }
+
+    /** Build throws with a missing style — cover each field's exception message. */
+    public function testThemeBuilderBuildThrowsForEachMissingField(): void
+    {
+        $s = Style::new();
+        foreach (['success', 'error', 'warn', 'info', 'prompt', 'accent', 'muted'] as $field) {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage("{$field} style is required");
+            Theme::build()->{$field}($s)->build();
+        }
+    }
+
+    /** Nord theme is exercised via auto() and byName('nord') in other tests — do a direct slot check. */
+    public function testNordThemeDirectly(): void
+    {
+        $t = Theme::nord();
+        // nord green #a3be8c → 38;2;163;190;140
+        $this->assertStringContainsString('38;2;163;190;140', $t->success->render('x'));
+        // nord red #bf616a → 38;2;191;97;106
+        $this->assertStringContainsString('38;2;191;97;106', $t->error->render('x'));
+    }
 }

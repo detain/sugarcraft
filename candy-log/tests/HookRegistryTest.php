@@ -127,4 +127,75 @@ final class HookRegistryTest extends TestCase
         $this->assertSame(Level::Info, $receivedLevel);
         $this->assertSame('hello hook', $receivedMessage);
     }
+
+    public function testRemoveUnregistersHandler(): void
+    {
+        $registry = new HookRegistry();
+        $called = false;
+
+        $id = $registry->onLevel(Level::Info, function () use (&$called): void {
+            $called = true;
+        });
+
+        // Verify it fires before removal
+        $registry->fire(Level::Info, 'info', 'msg', []);
+        $this->assertTrue($called);
+
+        // Remove the handler
+        $called = false;
+        $registry->remove($id);
+
+        // Verify it no longer fires after removal
+        $registry->fire(Level::Info, 'info', 'msg', []);
+        $this->assertFalse($called);
+    }
+
+    public function testRemoveWithInvalidIdIsNoOp(): void
+    {
+        $registry = new HookRegistry();
+        $called = false;
+
+        $registry->onLevel(Level::Info, function () use (&$called): void {
+            $called = true;
+        });
+
+        // Remove with invalid ID should not affect the registered handler
+        $registry->remove(9999);
+        $registry->remove(-1);
+
+        $registry->fire(Level::Info, 'info', 'msg', []);
+        $this->assertTrue($called);
+    }
+
+    public function testFireSkipsNullHandlersInArray(): void
+    {
+        $registry = new HookRegistry();
+        $called = false;
+
+        $id = $registry->onLevel(Level::Info, function () use (&$called): void {
+            $called = true;
+        });
+
+        // Remove the handler, creating a null slot
+        $registry->remove($id);
+
+        // Fire should skip the null slot and not call anything
+        $registry->fire(Level::Info, 'info', 'msg', []);
+        $this->assertFalse($called);
+    }
+
+    public function testFireAtHigherLevelTriggersLowerThresholdHandler(): void
+    {
+        $registry = new HookRegistry();
+        $called = false;
+
+        // Handler registered for Info level
+        $registry->onLevel(Level::Info, function () use (&$called): void {
+            $called = true;
+        });
+
+        // Fire at Error level (higher than Info) - should still trigger
+        $registry->fire(Level::Error, 'error', 'msg', []);
+        $this->assertTrue($called);
+    }
 }

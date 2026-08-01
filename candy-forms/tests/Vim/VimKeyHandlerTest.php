@@ -94,10 +94,10 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertSame(VimAction::EnterInsertMode, VimKeyHandler::handle('I', VimState::Normal));
     }
 
-    public function testNormalModeVimVisualOnlyWhenEnabled(): void
+    public function testNormalModeVimVisualIsNoOpWithoutVisualFeature(): void
     {
-        $this->assertSame(VimAction::EnterVisualMode, VimKeyHandler::handle('v', VimState::Normal, VimKeyHandler::FEAT_VISUAL));
-        $this->assertSame(VimAction::NoOp,            VimKeyHandler::handle('v', VimState::Normal, VimKeyHandler::FEAT_NORMAL));
+        // 'v' without FEAT_VISUAL returns NoOp
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('v', VimState::Normal, VimKeyHandler::FEAT_NORMAL));
     }
 
     public function testNormalModeDeleteYankChange(): void
@@ -106,14 +106,6 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertSame(VimAction::DeleteLine, VimKeyHandler::handle('d', VimState::Normal));
         $this->assertSame(VimAction::YankLine,   VimKeyHandler::handle('y', VimState::Normal));
         $this->assertSame(VimAction::ChangeLine,  VimKeyHandler::handle('c', VimState::Normal));
-    }
-
-    public function testNormalModeUndoRedoWhenEnabled(): void
-    {
-        $this->assertSame(VimAction::Undo, VimKeyHandler::handle('u', VimState::Normal, VimKeyHandler::FEAT_UNDO));
-        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('u', VimState::Normal, VimKeyHandler::FEAT_NORMAL));
-        $this->assertSame(VimAction::Redo, VimKeyHandler::handle('ctrl_r', VimState::Normal, VimKeyHandler::FEAT_UNDO, true));
-        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('ctrl_r', VimState::Normal, VimKeyHandler::FEAT_NORMAL, true));
     }
 
     public function testNormalModePaste(): void

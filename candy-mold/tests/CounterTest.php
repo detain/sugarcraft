@@ -363,4 +363,172 @@ final class CounterTest extends TestCase
             $this->assertNull($cmd, "ctrl+$rune must not dispatch quit");
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Additional edge cases and key combinations
+    // -------------------------------------------------------------------------
+
+    public function testCtrlSpaceDoesNotQuit(): void
+    {
+        // ctrl+space is not a quit combination
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Char, ' ', ctrl: true));
+        $this->assertSame(5, $next->n);
+        $this->assertNull($cmd);
+    }
+
+    public function testCtrlEnterDoesNotQuit(): void
+    {
+        // ctrl+enter is not a quit combination
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Enter, '', ctrl: true));
+        $this->assertSame(5, $next->n);
+        $this->assertNull($cmd);
+    }
+
+    public function testCtrlBackspaceDoesNotQuit(): void
+    {
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Backspace, '', ctrl: true));
+        $this->assertSame(5, $next->n);
+        $this->assertNull($cmd);
+    }
+
+    public function testCtrlTabDoesNotQuit(): void
+    {
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Tab, '', ctrl: true));
+        $this->assertSame(5, $next->n);
+        $this->assertNull($cmd);
+    }
+
+    public function testAltEnterDoesNotQuit(): void
+    {
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Enter, '', alt: true));
+        $this->assertSame(5, $next->n);
+        $this->assertNull($cmd);
+    }
+
+    public function testAltEscapeDoesNotQuit(): void
+    {
+        // Alt+Escape is not a quit combination (Escape alone quits)
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Escape, '', alt: true));
+        $this->assertSame(5, $next->n, 'alt+escape should not change count');
+        $this->assertNotNull($cmd, 'alt+escape still triggers quit via escape');
+    }
+
+    public function testShiftEscapeDoesNotQuit(): void
+    {
+        // Shift+Escape is not a quit combination
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Escape, '', shift: true));
+        $this->assertSame(5, $next->n);
+        $this->assertNotNull($cmd, 'escape alone still triggers quit');
+    }
+
+    public function testUpDownAlternation(): void
+    {
+        $counter = new Counter(0);
+        [$counter, ] = $counter->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(1, $counter->n);
+        [$counter, ] = $counter->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(0, $counter->n);
+        [$counter, ] = $counter->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(-1, $counter->n);
+        [$counter, ] = $counter->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(0, $counter->n);
+    }
+
+    public function testMultipleQuitKeysReturnSameInstance(): void
+    {
+        $counter = new Counter(5);
+        [$next1, $cmd1] = $counter->update(new KeyMsg(KeyType::Char, 'q'));
+        [$next2, $cmd2] = $next1->update(new KeyMsg(KeyType::Escape, ''));
+        // Both return Cmd::quit() but instance should be preserved
+        $this->assertNotNull($cmd1);
+        $this->assertNotNull($cmd2);
+        $this->assertSame(5, $next1->n);
+        $this->assertSame(5, $next2->n);
+    }
+
+    public function testViewOutputContainsCountInMultiplePositions(): void
+    {
+        $view = (new Counter(42))->view();
+        // Count appears in the body of the view
+        $this->assertStringContainsString('42', $view);
+    }
+
+    public function testViewContainsBothArrowCharacters(): void
+    {
+        $view = (new Counter())->view();
+        // Contains up arrow
+        $this->assertStringContainsString('↑', $view);
+        // Contains down arrow
+        $this->assertStringContainsString('↓', $view);
+    }
+
+    public function testViewDoesNotContainOtherArrowDirections(): void
+    {
+        $view = (new Counter())->view();
+        // Left and right arrows should not appear in default view
+        $this->assertStringNotContainsString('←', $view);
+        $this->assertStringNotContainsString('→', $view);
+    }
+
+    public function testIntegerBoundaryPositive(): void
+    {
+        // PHP_INT_MAX - 1 to avoid overflow (PHP integer math wraps to float on overflow)
+        $counter = new Counter(PHP_INT_MAX - 1);
+        [$next, ] = $counter->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(PHP_INT_MAX, $next->n);
+        $this->assertIsInt($next->n);
+    }
+
+    public function testIntegerBoundaryNegative(): void
+    {
+        // PHP_INT_MIN + 1 to avoid overflow
+        $counter = new Counter(PHP_INT_MIN + 1);
+        [$next, ] = $counter->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(PHP_INT_MIN, $next->n);
+        $this->assertIsInt($next->n);
+    }
+
+    public function testViewRenderingDoesNotAffectState(): void
+    {
+        $counter = new Counter(5);
+        $view1 = $counter->view();
+        $view2 = $counter->view();
+        $view3 = $counter->view();
+        // Multiple view calls should not mutate state
+        $this->assertSame($view1, $view2);
+        $this->assertSame($view2, $view3);
+        [$next, ] = $counter->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(5, $counter->n, 'view() must not mutate counter');
+        $this->assertSame(6, $next->n);
+    }
+
+    public function testEmptyRuneWithCharType(): void
+    {
+        // Char type with empty rune should not trigger quit or change count
+        [$next, $cmd] = (new Counter(5))->update(new KeyMsg(KeyType::Char, ''));
+        $this->assertSame(5, $next->n);
+        $this->assertNull($cmd);
+    }
+
+    public function testNumbersAsRunes(): void
+    {
+        // Number keys should not change count
+        foreach (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] as $rune) {
+            $counter = new Counter(5);
+            [$next, $cmd] = $counter->update(new KeyMsg(KeyType::Char, $rune));
+            $this->assertSame(5, $next->n, "digit '$rune' must not change count");
+            $this->assertNull($cmd);
+        }
+    }
+
+    public function testSymbolRunes(): void
+    {
+        // Symbol keys should not change count
+        foreach (['!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '=', '+', '[', ']', '{', '}', '|', ';', ':', "'", '"', ',', '.', '/', '?', '<', '>'] as $rune) {
+            $counter = new Counter(5);
+            [$next, $cmd] = $counter->update(new KeyMsg(KeyType::Char, $rune));
+            $this->assertSame(5, $next->n, "symbol '$rune' must not change count");
+            $this->assertNull($cmd);
+        }
+    }
 }

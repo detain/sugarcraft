@@ -91,4 +91,44 @@ final class HelpTextTest extends TestCase
         $this->assertStringNotContainsString("\x07", $out);
         $this->assertStringContainsString('desc', $out);
     }
+
+    public function testRenderWithEmptyDescriptionOmitsBlock(): void
+    {
+        $out = HelpText::render(
+            usage: 'myapp [flags]',
+            sections: ['flags' => ['--help' => 'show help']],
+            description: '',
+            theme: Theme::plain(),
+        );
+        // Description block must be absent; USAGE and FLAGS sections still present.
+        $this->assertStringContainsString('USAGE', $out);
+        $this->assertStringContainsString('FLAGS', $out);
+        $this->assertStringNotContainsString('A CLI tool.', $out);
+    }
+
+    public function testRenderRowsWithEmptyArrayReturnsEmpty(): void
+    {
+        $out = HelpText::renderRows([], Theme::plain());
+        $this->assertSame('', $out);
+    }
+
+    public function testRenderWithNoSectionsRendersUsageOnly(): void
+    {
+        $out = HelpText::render('myapp', [], theme: Theme::plain());
+        $this->assertStringContainsString('USAGE', $out);
+        $this->assertStringContainsString('myapp', $out);
+    }
+
+    public function testRenderWithThemeDefaultFallsBackToAnsi(): void
+    {
+        // Passing null theme should use Theme::ansi() internally.
+        // Indirectly verify by checking SGR sequences appear (ansi theme adds styles).
+        $out = HelpText::render(
+            usage: 'myapp',
+            sections: ['flags' => ['-v' => 'verbose']],
+            description: 'A tool.',
+        );
+        // The accent/prompt styles in ansi theme emit SGR.
+        $this->assertStringContainsString("\x1b[", $out);
+    }
 }

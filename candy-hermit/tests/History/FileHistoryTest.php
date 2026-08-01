@@ -165,4 +165,29 @@ final class FileHistoryTest extends TestCase
             $this->assertSame("item_" . ($i + 1), $items[$i]->value());
         }
     }
+
+    public function testConfineRejectsNonExistentBaseDir(): void
+    {
+        // When the baseDir does not exist, confine() must throw an
+        // InvalidArgumentException rather than silently failing.
+        $nonExistent = \sys_get_temp_dir() . '/hermit_nonexistent_base_' . \uniqid();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('base directory does not exist');
+
+        new FileHistory($this->tmpPath, $nonExistent);
+    }
+
+    public function testConfineHandlesRelativePathInsideBaseDir(): void
+    {
+        // A relative path that resolves inside baseDir should work.
+        // This exercises the else-branch in confine() where isAbsolute is false.
+        $history = new FileHistory('subdir/history.jsonl', $this->baseDir);
+        $history->append(new FilteredItem(1, 'relative'));
+
+        $items = $history->all();
+        $this->assertCount(1, $items);
+        $this->assertSame('relative', $items[0]->value());
+        $this->assertStringStartsWith(\realpath($this->baseDir), $history->path());
+    }
 }
