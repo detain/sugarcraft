@@ -530,4 +530,28 @@ final class TabsTest extends TestCase
             'Output contains a severed ANSI escape sequence',
         );
     }
+
+    public function testInitReturnsNull(): void
+    {
+        $t = $this->tabs();
+        $this->assertNull($t->init());
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $t = $this->tabs();
+        $this->assertNull($t->subscriptions());
+    }
+
+    public function testActiveAccessor(): void
+    {
+        $t = $this->tabs();
+        $this->assertSame(0, $t->active());
+    }
+
+    public function testLabelsAccessor(): void
+    {
+        $t = $this->tabs(['A', 'B']);
+        $this->assertSame(['A', 'B'], $t->labels());
+    }
 }

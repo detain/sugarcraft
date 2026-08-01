@@ -175,4 +175,22 @@ final class TimerTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         Timer::new(1.0)->withInterval(0.0);
     }
+
+    public function testInitReturnsNull(): void
+    {
+        $t = Timer::new(5.0);
+        $this->assertNull($t->init());
+    }
+
+    public function testSubscriptionsReturnsNull(): void
+    {
+        $t = Timer::new(5.0);
+        $this->assertNull($t->subscriptions());
+    }
+
+    public function testViewRendersRemainingTime(): void
+    {
+        $t = Timer::new(5.0);
+        $this->assertSame('0:05', $t->view());
+    }
 }

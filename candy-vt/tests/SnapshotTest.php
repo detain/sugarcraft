@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\CellGrid;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;

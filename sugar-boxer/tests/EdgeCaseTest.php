@@ -224,18 +224,21 @@ final class EdgeCaseTest extends TestCase
     public function testRenderZeroWidthViewport(): void
     {
         $layout = Node::leaf('content')->withBorder(false);
-        // When width is 0, array_fill(0, 0, ...) returns empty array, which
-        // causes issues. The code does not guard against 0 width.
-        // This test documents the current behavior (exception).
-        $this->expectException(\ValueError::class);
-        $this->boxer->render($layout, 0, 5);
+        // width=0 → array_fill(0, 0, ...) creates empty arrays → result is 5 empty rows.
+        $result = $this->boxer->render($layout, 0, 5);
+        $this->assertIsString($result);
+        $lines = \explode("\n", $result);
+        $this->assertCount(5, $lines);
     }
 
     public function testRenderZeroHeightViewport(): void
     {
         $layout = Node::leaf('content')->withBorder(false);
-        $this->expectException(\ValueError::class);
-        $this->boxer->render($layout, 10, 0);
+        // height=0 → array_fill(0, 0, ...) creates empty outer array → result is empty.
+        $result = $this->boxer->render($layout, 10, 0);
+        $this->assertIsString($result);
+        // With height 0, there are no rows to fill.
+        $this->assertSame('', $result);
     }
 
     public function testRenderNegativeWidthViewport(): void
@@ -653,14 +656,15 @@ final class EdgeCaseTest extends TestCase
     public function testRenderHorizontalChildMaxWidthClampsWidth(): void
     {
         // SHORT gets minWidth=5 so it gets allocated space; maxWidth=3 then
-        // clamps what actually renders inside that space.
+        // clamps what actually renders inside that space to 3 columns ("SHO").
         $layout = Node::horizontal(
             Node::leaf('SHORT')->withBorder(false)->withMinWidth(5)->withMaxWidth(3),
             Node::leaf('LONGER')->withBorder(false)->withMinWidth(10)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
         $result = $this->boxer->render($layout, 25, 1);
-        $this->assertStringContainsString('SHORT', $result);
+        // SHORT's content is clamped to "SHO" (3 cols) by maxWidth.
+        $this->assertStringContainsString('SHO', $result);
         $this->assertStringContainsString('LONGER', $result);
     }
 
@@ -671,15 +675,18 @@ final class EdgeCaseTest extends TestCase
     public function testRenderVerticalChildMaxHeightClampsHeight(): void
     {
         // TOP gets minHeight=3 so it gets allocated space; maxHeight=2 then
-        // clamps what actually renders inside that space.
+        // clamps content to 2 lines. Content is T1/T2/T3 → only T1 and T2 show.
         $layout = Node::vertical(
             Node::leaf("T1\nT2\nT3")->withBorder(false)->withMinHeight(3)->withMaxHeight(2),
             Node::leaf("B1\nB2\nB3\nB4\nB5")->withBorder(false)->withMinHeight(5)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
         $result = $this->boxer->render($layout, 20, 12);
-        $this->assertStringContainsString('TOP', $result);  // via "T1" etc.
-        $this->assertStringContainsString('BOTTOM', $result); // via "B1" etc.
+        // T1 and T2 should appear (clamped by maxHeight=2), T3 is cut off.
+        $this->assertStringContainsString('T1', $result);
+        $this->assertStringContainsString('T2', $result);
+        $this->assertStringNotContainsString('T3', $result);
+        $this->assertStringContainsString('B1', $result);
     }
 
     // -------------------------------------------------------------------------

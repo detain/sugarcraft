@@ -218,18 +218,14 @@ final class ModelTest extends TestCase
 
     public function testUpdateWithNonKeyMsgIsStable(): void
     {
-        // Escape in non-range mode is a no-op in DatePicker::handleKey.
-        // Verify Model::update does not crash and returns same picker state.
+        // Non-KeyMsg returns same picker unchanged (no-op branch)
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
+        $initialIndex = $model->picker()->CursorIndex();
 
-        // Non-KeyMsg (e.g., Tick) returns same picker unchanged
-        $msg = new \SugarCraft\Core\Msg\TickMsg();
+        $msg = new class implements \SugarCraft\Core\Msg {};
         [$nextModel, $cmd] = $model->update($msg);
 
-        $this->assertSame(
-            $model->picker()->CursorIndex(),
-            $nextModel->picker()->CursorIndex()
-        );
+        $this->assertSame($initialIndex, $nextModel->picker()->CursorIndex());
         $this->assertNull($cmd);
     }
 

@@ -455,6 +455,43 @@ final class ManagerTest extends TestCase
         [$next2] = $m->anyInBoundsAndUpdate($model, $this->click(13, 1));
         $this->assertSame('cell:3', $next2->lastInBoundsHit->zone->id);
     }
+
+    public function testPrefixReturnsIdPrefix(): void
+    {
+        $m = Manager::newPrefix('my-');
+        $this->assertSame('my-', $m->prefix());
+
+        $m2 = Manager::newPrefix();
+        // Auto-generated prefix should end with '-' and be non-empty.
+        $this->assertNotSame('', $m2->prefix());
+        $this->assertSame('-', substr($m2->prefix(), -1));
+    }
+
+    public function testAllReturnsAllZones(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('a', 'AAA') . $m->mark('b', 'BBB'));
+
+        $all = $m->all();
+        $this->assertCount(2, $all);
+        $this->assertArrayHasKey('a', $all);
+        $this->assertArrayHasKey('b', $all);
+        $this->assertSame('a', $all['a']->id);
+        $this->assertSame('b', $all['b']->id);
+    }
+
+    /**
+     * Unterminated open tag: only the 3 sentinel bytes are dropped,
+     * content is preserved. This covers lines 287-290 in stripMarkers.
+     */
+    public function testUnterminatedOpenTagDropsOnlySentinelBytes(): void
+    {
+        $m = Manager::newGlobal();
+        // An open sentinel with no matching close - "hello" should remain.
+        $input = Sentinel::OPEN . 'ghost' . 'hello';
+        $clean = $m->scan($input);
+        $this->assertSame('hello', $clean);
+    }
 }
 
 final class ZoneRoutingModel implements \SugarCraft\Core\Model
