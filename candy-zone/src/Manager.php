@@ -105,7 +105,7 @@ final class Manager
     {
         // CSI ? 1003 h = enable all event mode
         // CSI ? 1003 l = disable
-        return $on ? "\x1b[?1003h" : "\x1b[?1003l";
+        return $on === true ? "\x1b[?1003h" : "\x1b[?1003l";
     }
 
     /** Read-only accessor for the prefix this manager prepends to ids. */
@@ -218,7 +218,7 @@ final class Manager
         $hit = null;
         $smallestArea = PHP_INT_MAX;
         foreach ($this->zones as $zone) {
-            if ($zone->inBounds($mouse)) {
+            if ($zone->inBounds($mouse) === true) {
                 $area = $zone->width() * $zone->height();
                 if ($area < $smallestArea) {
                     $smallestArea = $area;

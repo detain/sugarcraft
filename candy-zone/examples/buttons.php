@@ -31,7 +31,7 @@ $click = new MouseMsg(5, 1, MouseButton::Left, MouseAction::Press);
 
 foreach (['btn:ok', 'btn:cancel'] as $id) {
     $z = $mgr->get($id);
-    if ($z !== null && $z->inBounds($click)) {
+    if ($z !== null && $z->inBounds($click) === true) {
         echo "  click hit: $id\n";
     }
 }
