@@ -229,7 +229,7 @@ final class Scan
         if (function_exists('grapheme_extract') === true) {
             $next = 0;
             $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
-            if (is_string($cluster) && $cluster !== '') {
+            if (is_string($cluster) === true && $cluster !== '') {
                 return $cluster;
             }
         }

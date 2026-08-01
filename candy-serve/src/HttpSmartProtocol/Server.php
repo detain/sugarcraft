@@ -174,7 +174,6 @@ final class Server
             return $this->errorResponse(404, 'Not found');
         }
 
-        $repoPart = $parts[0];
         $actionPart = $parts[1] ?? '';
 
         // Handle info/refs request (advertisement)
@@ -705,30 +704,6 @@ final class Server
         }
 
         return $wants;
-    }
-
-    /**
-     * Process receive-pack push.
-     */
-    private function processReceivePack(Repo $repo, string $body): string
-    {
-        // Send refs advertisement
-        $refs = $repo->refs();
-        $lines = [];
-        $caps = 'report-status delete-refs side-band-64k';
-        $firstRef = \key($refs) ?: 'refs/heads/main';
-        $firstHash = \current($refs) ?: \str_repeat('0', 40);
-        $lines[] = "{$firstHash} {$firstRef}\x00 {$caps}";
-        foreach ($refs as $ref => $hash) {
-            if ($ref === $firstRef) continue;
-            $lines[] = "{$hash} {$ref}";
-        }
-        $lines[] = '';  // flush
-
-        // In a full implementation, we would receive the pack data and apply it
-        // For now, just send the advertisement
-
-        return $this->encodePktLines($lines);
     }
 
     /**

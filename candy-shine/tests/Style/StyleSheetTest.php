@@ -15,7 +15,6 @@ final class StyleSheetTest extends TestCase
     public function testBaseReturnsDeterministicDefaults(): void
     {
         $sheet = StyleSheet::base();
-        $sheet2 = StyleSheet::base();
 
         // BlockQuote at depth 0 gets neutral style (theme controls styling).
         // The StyleSheet provides depth-based overrides, not theme replacements.

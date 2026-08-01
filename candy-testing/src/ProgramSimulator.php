@@ -154,7 +154,8 @@ final class ProgramSimulator
         // Process queued messages in order.
         // Use index pointer so subscription-pumped messages (appended
         // mid-loop) are also processed in the same run cycle.
-        for ($i = 0; $i < count($this->queue); $i++) {
+        $queueCount = count($this->queue);
+        for ($i = 0; $i < $queueCount; $i++) {
             $msg = $this->queue[$i];
             [$model, ] = $this->applyMsg($model, $msg);
             // Pump subscriptions after each message to capture produce output.
@@ -290,7 +291,7 @@ final class ProgramSimulator
         // Capture the cmd (for inspection) and optionally execute.
         $this->capturedCmds[] = $cmd;
 
-        if (!$this->executeCmds) {
+        if ($this->executeCmds === false) {
             // Capture-only mode: don't execute side-effecting cmds.
             return null;
         }

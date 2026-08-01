@@ -111,7 +111,7 @@ final class GoldenFile
             if ($segment === '..') {
                 if ($out !== [] && \end($out) !== '..') {
                     \array_pop($out);
-                } elseif (!$isAbsolute) {
+                } elseif ($isAbsolute === false) {
                     $out[] = '..';
                 }
                 continue;
