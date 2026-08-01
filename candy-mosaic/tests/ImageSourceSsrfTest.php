@@ -198,7 +198,7 @@ final class ImageSourceSsrfTest extends TestCase
 
     private function freePort(): int
     {
-        $sock = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $sock = @stream_socket_server('tcp://127.0.0.1:0', $_, $errstr);
         if ($sock === false) {
             return 0;
         }
