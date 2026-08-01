@@ -307,4 +307,72 @@ final class PosterCardTest extends TestCase
 
         self::assertSame(2, PosterCard::clearFitCache(), 'each geometry memoizes its own body');
     }
+
+    public function testProgressBarAtExactBounds(): void
+    {
+        // Progress at exactly 0.0 should produce an empty bar
+        // posterHeight=1 gives 1 poster row + 1 title row + 1 progress row = 3 lines total
+        $zero = (new PosterCard('1', 'X', null, 0.0))->render(false, 10, 1);
+        $zeroLines = explode("\n", $zero);
+        self::assertCount(3, $zeroLines, '3 lines: poster + title + progress');
+        $zeroProgressLine = $zeroLines[2]; // progress is the 3rd line
+        self::assertSame(str_repeat('░', 10), $zeroProgressLine, 'progress 0.0 produces full empty bar');
+
+        // Progress at exactly 1.0 should produce a full bar
+        $full = (new PosterCard('1', 'X', null, 1.0))->render(false, 10, 1);
+        $fullLines = explode("\n", $full);
+        $fullProgressLine = $fullLines[2];
+        self::assertSame(str_repeat('▓', 10), $fullProgressLine, 'progress 1.0 produces full filled bar');
+
+        // Progress in the middle
+        $mid = (new PosterCard('1', 'X', null, 0.5))->render(false, 10, 1);
+        $midLines = explode("\n", $mid);
+        $midProgressLine = $midLines[2];
+        self::assertSame(10, Layout::width($midProgressLine), 'mid-progress bar is exactly 10 cells wide');
+    }
+
+    public function testStripC0RemovesVariousControlBytes(): void
+    {
+        // Test that various C0 control characters are stripped from plain titles
+        // beyond just ESC (\x1B) and Bell (\x07) which are tested elsewhere
+        $titleWithC0 = "Movie\x00\x01\x02\x03\x04\x05\x06\x08\x0B\x0C\x0E\x0F"
+            . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1C\x1D\x1E\x1F\x7F";
+        $card = new PosterCard('1', $titleWithC0);
+        $out = $card->render(false, 20, 1);
+        $titleLine = explode("\n", $out)[1];
+
+        // All C0 controls should be stripped, leaving only "Movie"
+        self::assertStringContainsString('Movie', $titleLine);
+        self::assertStringNotContainsString("\x00", $titleLine, 'NUL stripped');
+        self::assertStringNotContainsString("\x01", $titleLine, 'SOH stripped');
+        self::assertStringNotContainsString("\x7F", $titleLine, 'DEL stripped');
+    }
+
+    public function testHasPosterWhenBothPosterAndPosterImageAreNull(): void
+    {
+        $card = new PosterCard('1', 'Title');
+        self::assertFalse($card->hasPoster(), 'hasPoster is false when both poster and posterImage are null');
+    }
+
+    public function testHasPosterWhenOnlyPosterImageIsSet(): void
+    {
+        $card = (new PosterCard('1', 'Title'))->withImage('bytes', 1);
+        self::assertTrue($card->hasPoster(), 'hasPoster is true when only posterImage is set');
+    }
+
+    public function testProgressBarWidthNormalization(): void
+    {
+        // At width 10, progress 0.3 should give 3 filled cells
+        $card = (new PosterCard('1', 'X', null, 0.3))->withPoster("poster");
+        $lines = explode("\n", $card->render(false, 10, 3));
+
+        // Count filled and empty cells in the progress bar (last line)
+        $progressLine = $lines[count($lines) - 1];
+        $filled = substr_count($progressLine, '▓');
+        $empty = substr_count($progressLine, '░');
+
+        self::assertSame(10, $filled + $empty, 'progress bar has exactly 10 cells');
+        self::assertSame(3, $filled, 'progress 0.3 × width 10 = 3 filled cells');
+        self::assertSame(7, $empty, '10 - 3 = 7 empty cells');
+    }
 }

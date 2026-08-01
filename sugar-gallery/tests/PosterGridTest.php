@@ -373,4 +373,37 @@ final class PosterGridTest extends TestCase
         self::assertGreaterThan(0, PosterGrid::clearBoxCache());
         self::assertSame(0, PosterGrid::clearBoxCache(), 'a second clear finds an empty memo');
     }
+
+    public function testNewClampsGeometryToMinimums(): void
+    {
+        // cardWidth below 4 is clamped to 4, posterHeight below 1 is clamped to 1
+        $g = PosterGrid::new(1, 0, -5, -3);
+
+        // Use reflection to check internal values since geometry accessors compute from them
+        $reflection = new \ReflectionClass($g);
+        $cardWidth = $reflection->getProperty('cardWidth');
+        $cardWidth->setAccessible(true);
+        $posterHeight = $reflection->getProperty('posterHeight');
+        $posterHeight->setAccessible(true);
+
+        self::assertSame(4, $cardWidth->getValue($g), 'cardWidth floored at 4');
+        self::assertSame(1, $posterHeight->getValue($g), 'posterHeight floored at 1');
+    }
+
+    public function testClearBoxCacheOnEmptyCacheReturnsZero(): void
+    {
+        PosterGrid::clearBoxCache(); // ensure clean state
+        self::assertSame(0, PosterGrid::clearBoxCache(), 'clearing an empty cache returns 0');
+    }
+
+    public function testWithItemsReplacesExistingCardAtSameIndex(): void
+    {
+        $g = $this->grid(10)->withItem(5, new PosterCard('5', 'Original'));
+        self::assertSame('Original', $g->item(5)?->title);
+
+        // Replacing at the same index
+        $g = $g->withItem(5, new PosterCard('5', 'Replacement'));
+        self::assertSame('Replacement', $g->item(5)?->title);
+        self::assertSame(1, $g->loadedCount(), 'count unchanged since we replaced');
+    }
 }

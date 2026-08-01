@@ -190,4 +190,74 @@ final class RailTest extends TestCase
         self::assertSame($byNew->scroll, $byNew2->scroll);
         self::assertCount(2, $byNew->cards);
     }
+
+    public function testWithCursorOnEmptyRailReturnsEmptyRail(): void
+    {
+        $rail = new Rail('R');
+        $moved = $rail->withCursor(5);
+
+        // On an empty rail, withCursor should return a rail with empty cards
+        self::assertTrue($moved->isEmpty());
+        self::assertSame(0, $moved->cursor);
+        self::assertSame(0, $moved->scroll);
+    }
+
+    public function testPerRowEdgeCases(): void
+    {
+        // perRow should always return at least 1
+        self::assertSame(1, Rail::perRow(1, 100, 2), 'always at least one card even if card is wider');
+        self::assertSame(1, Rail::perRow(10, 10, 0), 'at least one even with zero spacing');
+        self::assertSame(1, Rail::perRow(10, 10, -1), 'negative spacing treated as zero');
+
+        // Exactly fitting
+        self::assertSame(3, Rail::perRow(34, 10, 2), '(34+2)/(10+2) = 3');
+    }
+
+    public function testFocusedCardOnEmptyRail(): void
+    {
+        $rail = new Rail('R');
+        self::assertNull($rail->focusedCard(), 'empty rail has no focused card');
+    }
+
+    public function testRenderWithCardsLargerThanPerRow(): void
+    {
+        // 10 cards with perRow=4 means 3 visible + scroll
+        $rail = new Rail('R', $this->cards(10));
+        $rail = $rail->moveCursor(5, 4); // cursor 5, scroll should adjust
+
+        $out = $rail->render(50, true, 10, 2, 2);
+
+        // Should contain all visible cards
+        self::assertStringContainsString('Card 5', $out, 'focused card is visible');
+        self::assertStringNotContainsString('Card 8', $out, 'card beyond visible window not rendered');
+    }
+
+    public function testMoveCursorNegativeDeltaClampsToZero(): void
+    {
+        $rail = new Rail('R', $this->cards(5));
+        $moved = $rail->moveCursor(-10, 3);
+
+        self::assertSame(0, $moved->cursor);
+        self::assertSame(0, $moved->scroll);
+    }
+
+    public function testWithCardsWithSingleCard(): void
+    {
+        $rail = new Rail('R', $this->cards(1));
+        $single = $rail->withCards([new PosterCard('0', 'Only')]);
+
+        self::assertSame(1, count($single->cards));
+        self::assertSame('Only', $single->cards[0]->title);
+        self::assertSame(0, $single->cursor, 'cursor reset to 0');
+    }
+
+    public function testWithCardNotFoundLeavesRailUnchanged(): void
+    {
+        $rail = new Rail('R', $this->cards(2));
+        $unchanged = $rail->withCard(new PosterCard('99', 'Ghost'));
+
+        self::assertCount(2, $unchanged->cards);
+        self::assertSame('Card 0', $unchanged->cards[0]->title);
+        self::assertSame('Card 1', $unchanged->cards[1]->title);
+    }
 }
