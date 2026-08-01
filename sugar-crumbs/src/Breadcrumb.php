@@ -148,7 +148,7 @@ final class Breadcrumb
                 ? ($this->itemRenderer)($item, $i)
                 : null;
 
-            if ($title !== null && !\is_string($title)) {
+            if ($title !== null && \is_string($title) === FALSE) {
                 throw new \InvalidArgumentException('itemRenderer must return string|null');
             }
 
@@ -189,7 +189,7 @@ final class Breadcrumb
         // Truncate from the left if too wide
         if ($this->maxWidth > 0 && $this->effectiveWidth(\implode($this->separator, $titles)) > $this->maxWidth) {
             [$titles, $elided] = $this->truncate($titles);
-            $prefix = $elided ? $this->truncator : '';
+            $prefix = $elided === true ? $this->truncator : '';
             $result = $prefix . \implode($this->separator, $titles);
 
             // Left-dropping bottoms out at the single most-recent crumb; if even

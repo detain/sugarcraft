@@ -228,7 +228,7 @@ final class NavStack
             $item = $items[$i];
             $isLast = ($i === \count($items) - 1);
             $escaped = \htmlspecialchars($item->title, \ENT_QUOTES, 'UTF-8');
-            if ($isLast) {
+            if ($isLast === true) {
                 $parts[] = '<span aria-current="page">' . $escaped . '</span>';
             } else {
                 $parts[] = '<span>' . $escaped . '</span>';
