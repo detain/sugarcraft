@@ -670,9 +670,9 @@ final class Program
                     'cmd' => is_array($cmd) ? implode(' ', $cmd) : $cmd,
                 ]));
             }
-            if ($req->captureOutput) {
-                $stdout = is_resource($pipes[1]) ? (string) stream_get_contents($pipes[1]) : '';
-                $stderr = is_resource($pipes[2]) ? (string) stream_get_contents($pipes[2]) : '';
+            if ($req->captureOutput === true) {
+                $stdout = is_resource($pipes[1]) === true ? (string) stream_get_contents($pipes[1]) : '';
+                $stderr = is_resource($pipes[2]) === true ? (string) stream_get_contents($pipes[2]) : '';
                 if (is_resource($pipes[1])) {
                     fclose($pipes[1]);
                 }
@@ -792,7 +792,7 @@ final class Program
         if ($this->options->useAltScreen) {
             $this->writeOutput(Ansi::altScreenEnter());
         }
-        if ($this->options->hideCursor) {
+        if ($this->options->hideCursor === true) {
             $this->writeOutput(Ansi::cursorHide());
         }
         // Bubble Tea v2 enables grapheme-cluster mode (DEC 2027) by
@@ -1103,7 +1103,7 @@ final class Program
         }
         // SIGCONT can fire spuriously (kill -CONT $$) — turn it into a
         // ResumeMsg so models that care can re-emit state.
-        if (defined('SIGCONT')) {
+        if (defined('SIGCONT') === true) {
             pcntl_signal(SIGCONT, function (): void {
                 $this->send(new ResumeMsg());
             });
@@ -1152,7 +1152,7 @@ final class Program
         $wantedIds = [];
         foreach ($wanted->all() as $sub) {
             $wantedIds[$sub->id] = true;
-            if (!isset($this->activeSubscriptions[$sub->id])) {
+            if (isset($this->activeSubscriptions[$sub->id]) === false) {
                 $this->activeSubscriptions[$sub->id] = [
                     $this->startSubscription($sub),
                     $sub,

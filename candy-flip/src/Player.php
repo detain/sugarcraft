@@ -70,7 +70,7 @@ final class Player implements Model
                 ), null];
             }
         }
-        if ($msg instanceof TickMsg && !$this->paused && $this->frames !== []) {
+        if ($msg instanceof TickMsg && $this->paused === false && $this->frames !== []) {
             $next = $this->withIndex($this->index + 1);
             // Use $this (current frame) not $next (advanced frame) so that
             // scheduleTick() reads the CURRENT frame's delay, not the next.

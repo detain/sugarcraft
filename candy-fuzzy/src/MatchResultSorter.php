@@ -24,7 +24,7 @@ final class MatchResultSorter
     public static function sort(array $results): array
     {
         usort($results, static fn(MatchResult $a, MatchResult $b) =>
-            ($b->score <=> $a->score) ?: ($a->haystack <=> $b->haystack)
+            (($b->score <=> $a->score) ?: ($a->haystack <=> $b->haystack))
         );
 
         return $results;

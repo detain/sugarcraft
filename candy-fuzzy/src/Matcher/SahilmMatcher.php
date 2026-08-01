@@ -165,7 +165,7 @@ final class SahilmMatcher implements FuzzyMatcher
                 }
 
                 // Consecutive match bonus
-                if ($prevMatch) {
+                if ($prevMatch === true) {
                     $charScore += self::CONSECUTIVE_BONUS;
                 }
 

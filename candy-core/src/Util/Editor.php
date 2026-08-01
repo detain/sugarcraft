@@ -172,7 +172,7 @@ final class Editor
         }
         $first = strtok(trim($out), "\r\n");
         // strtok returns false when string is empty, otherwise a non-empty token
-        return $first ?: null;
+        return $first !== false ? $first : null;
     }
 
     private static function makeTempFile(string $extension): string

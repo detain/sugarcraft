@@ -111,7 +111,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with reverse toggled on or off. */
     public function withReverse(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_REVERSE)
             : ($this->attrs & ~self::ATTR_REVERSE)]);
     }
@@ -119,7 +119,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with italic toggled on or off. */
     public function withItalic(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_ITALIC)
             : ($this->attrs & ~self::ATTR_ITALIC)]);
     }
@@ -127,7 +127,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with underline toggled on or off. */
     public function withUnderline(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_UNDERLINE)
             : ($this->attrs & ~self::ATTR_UNDERLINE)]);
     }
@@ -135,7 +135,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with strike toggled on or off. */
     public function withStrike(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_STRIKE)
             : ($this->attrs & ~self::ATTR_STRIKE)]);
     }
@@ -143,7 +143,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with faint toggled on or off. */
     public function withFaint(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_FAINT)
             : ($this->attrs & ~self::ATTR_FAINT)]);
     }
@@ -151,7 +151,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with blink toggled on or off. */
     public function withBlink(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_BLINK)
             : ($this->attrs & ~self::ATTR_BLINK)]);
     }
@@ -159,7 +159,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with overline toggled on or off. */
     public function withOverline(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_OVERLINE)
             : ($this->attrs & ~self::ATTR_OVERLINE)]);
     }
@@ -167,7 +167,7 @@ final class Style implements \JsonSerializable
     /** Return a new Style with invisible toggled on or off. */
     public function withInvisible(bool $on = true): self
     {
-        return $this->mutate(['attrs' => $on
+        return $this->mutate(['attrs' => $on === true
             ? ($this->attrs | self::ATTR_INVISIBLE)
             : ($this->attrs & ~self::ATTR_INVISIBLE)]);
     }
