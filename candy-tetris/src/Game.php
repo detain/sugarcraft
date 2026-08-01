@@ -335,11 +335,11 @@ final class Game implements Model
         $b2bActive = $this->backToBack && $b2bEligible;
 
         // B2B bonus: 1.5× multiplier when B2B is active
-        $b2bMultiplier = $b2bActive ? self::B2B_MULTIPLIER : 1.0;
+        $b2bMultiplier = $b2bActive === true ? self::B2B_MULTIPLIER : 1.0;
 
         // T-Spin scoring: mini gets 100, full T-Spin gets 400 (pre-multiplier)
         $tspinPoints = 0;
-        if ($tspin->active) {
+        if ($tspin->active === true) {
             $tspinPoints = $tspin->mini
                 ? TSpin::T_SPIN_MINI_POINTS
                 : TSpin::T_SPIN_POINTS;
@@ -363,7 +363,7 @@ final class Game implements Model
         $bonus = $b2bBonus + (int) (($tspinPoints + $comboBonus) * $levelForBonus);
 
         // Perfect clear bonus
-        if ($cleared->isPerfectClear()) {
+        if ($cleared->isPerfectClear() === true) {
             $bonus += self::PERFECT_CLEAR_BONUS * $levelForBonus;
         }
 
@@ -374,7 +374,7 @@ final class Game implements Model
         );
 
         $newPiece = self::spawn($this->bag->next());
-        if (!$cleared->fits($newPiece)) {
+        if ($cleared->fits($newPiece) === false) {
             return $this->mutate([
                 'board' => $cleared,
                 'piece' => $newPiece,
@@ -415,7 +415,7 @@ final class Game implements Model
      */
     private function tryHold(): array
     {
-        if (!$this->canHold) {
+        if ($this->canHold === false) {
             return [$this, null];
         }
 
@@ -432,7 +432,7 @@ final class Game implements Model
         } else {
             // Swap current piece with held piece
             $swappedPiece = new Piece($this->hold, 0, $this->piece->x, Board::HIDDEN_ROWS - 4);
-            if (!$this->board->fits($swappedPiece)) {
+            if ($this->board->fits($swappedPiece) === false) {
                 // Can't place held piece - don't hold
                 return [$this, null];
             }
@@ -444,7 +444,7 @@ final class Game implements Model
             ]);
         }
 
-        if ($game->over) {
+        if ($game->over === true) {
             return [$game, null];
         }
         return [$game, self::scheduleGravity($game->score)];
@@ -513,7 +513,7 @@ final class Game implements Model
         $newBoard = new Board($rows);
 
         // Check if the current piece is still valid after adding garbage
-        if (!$newBoard->fits($this->piece)) {
+        if ($newBoard->fits($this->piece) === false) {
             return $this->mutate([
                 'board' => $newBoard,
                 'over' => true,

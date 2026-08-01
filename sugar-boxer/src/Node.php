@@ -278,7 +278,7 @@ final class Node
 
         if ($this->kind === self::LEAF) {
             $inner = $this->minWidth;
-            if ($this->border) $inner += 2;
+            if ($this->border === true) $inner += 2;
             if ($this->padding > 0) $inner += $this->padding * 2;
             return $inner + $marginW;
         }

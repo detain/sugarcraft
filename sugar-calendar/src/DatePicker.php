@@ -67,7 +67,6 @@ final class DatePicker
     private string $selectedStyle     = '1;36';  // bold cyan
     private string $selectedTodayStyle = '1;33'; // bold yellow
     private string $cursorStyle       = '7';     // reverse
-    private string $normalDayStyle    = '';
     private string $rangeStyle        = '1;35'; // bold magenta (range highlight)
 
     // -------------------------------------------------------------------------
@@ -704,7 +703,6 @@ final class DatePicker
             }
 
             $isToday   = $dayNum === $todayDay && $this->viewMonth === $todayMonth && $this->viewYear === $todayYear;
-            $isCurrentMonth = $dayNum >= 1 && $dayNum <= $daysInMonth;
 
             $cellDate = $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
             $isInRange = $range !== null && $range->contains($cellDate);

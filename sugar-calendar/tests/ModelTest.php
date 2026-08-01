@@ -190,7 +190,7 @@ final class ModelTest extends TestCase
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
 
         $keyMsg = new KeyMsg(KeyType::Right);
-        [$nextModel, $cmd] = $model->update($keyMsg);
+        [$nextModel] = $model->update($keyMsg);
 
         // No store, no error - model still works
         $this->assertSame(1, $nextModel->picker()->CursorIndex() - $model->picker()->CursorIndex());
