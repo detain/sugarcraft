@@ -122,7 +122,7 @@ final class StyleParser
                 continue;
             }
 
-            [$key, $value] = str_contains($attr, ':')
+            [$key, $value] = str_contains($attr, ':') === true
                 ? explode(':', $attr, 2)
                 : [$attr, null];
 

@@ -787,10 +787,6 @@ MD;
     public function testAutolinkFallsBackToLinkWhenAutolinkNotSet(): void
     {
         // When autolink is not explicitly set (null), bare URL uses link style.
-        // Use a theme where link has a visible style but autolink is null.
-        $plainTheme = Theme::plain();
-        $linkStyle = $plainTheme->link->underline();
-        // Create theme with link=underline, autolink=null (default).
         // NOTE: we cannot actually pass null to constructor; Theme constructor
         // requires Style instances. Instead test that the explicit link style
         // is used when autolink===link (plain theme uses same no-op for both).

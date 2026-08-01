@@ -59,7 +59,7 @@ final readonly class TestResult
     public function assertCmdContains(callable $filter): void
     {
         foreach ($this->cmds as $cmd) {
-            if ($filter($cmd)) {
+            if ($filter($cmd) === true) {
                 Assert::assertTrue(true);
                 return;
             }

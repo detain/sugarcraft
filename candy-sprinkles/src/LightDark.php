@@ -28,7 +28,7 @@ final class LightDark
 
     public static function pick(bool $isDark, Color $light, Color $dark): Color
     {
-        return $isDark ? $dark : $light;
+        return $isDark === true ? $dark : $light;
     }
 
     /**

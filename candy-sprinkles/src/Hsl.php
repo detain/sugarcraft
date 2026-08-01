@@ -75,7 +75,7 @@ final class Hsl
         // Parse S value (may have % suffix)
         $sStr = trim($parts[1]);
         $sHasPercent = str_ends_with($sStr, '%');
-        $sStrClean = $sHasPercent ? rtrim($sStr, '%') : $sStr;
+        $sStrClean = $sHasPercent === true ? rtrim($sStr, '%') : $sStr;
         $s = (float) filter_var($sStrClean, FILTER_VALIDATE_FLOAT);
         if ($s === false || $sStrClean === '') {
             return null;
