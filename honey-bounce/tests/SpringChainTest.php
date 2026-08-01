@@ -29,7 +29,7 @@ final class SpringChainTest extends TestCase
         $positions = [];
         for ($i = 0; $i < 600; $i++) {
             [$positions, $complete, $chain] = $chain->tick();
-            if ($complete) {
+            if ($complete === true) {
                 break;
             }
         }
@@ -79,7 +79,7 @@ final class SpringChainTest extends TestCase
 
         $complete = false;
         $positions = [];
-        for ($i = 0; $i < 2000 && !$complete; $i++) {
+        for ($i = 0; $i < 2000 && $complete === false; $i++) {
             [$positions, $complete, $chain] = $chain->tick();
         }
 

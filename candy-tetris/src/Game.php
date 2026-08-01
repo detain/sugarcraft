@@ -131,7 +131,7 @@ final class Game implements Model
 
     public function update(Msg $msg): array
     {
-        if ($this->over) {
+        if ($this->over === true) {
             if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
                 return [$this, Cmd::quit()];
             }
@@ -211,7 +211,7 @@ final class Game implements Model
             }
             $game = $this->lockAndSpawn();
         }
-        if ($game->over) {
+        if ($game->over === true) {
             return [$game, null];
         }
         return [$game, self::scheduleGravity($game->score)];
@@ -225,7 +225,7 @@ final class Game implements Model
             // Only re-arm when lock delay is active (max > 0) and the
             // piece is already touching the ground (can't move further down).
             $changes = ['piece' => $next];
-            if ($this->lockDelayMax > 0 && !$this->board->fits($this->piece->moved(0, 1))) {
+            if ($this->lockDelayMax > 0 && $this->board->fits($this->piece->moved(0, 1)) === false) {
                 $changes['lockDelayTicks'] = $this->lockDelayMax;
             }
             return $this->mutate($changes);
@@ -245,7 +245,7 @@ final class Game implements Model
                     'piece' => $candidate,
                     'preLockRotation' => $candidate->rotation,
                 ];
-                if ($this->lockDelayMax > 0 && !$this->board->fits($this->piece->moved(0, 1))) {
+                if ($this->lockDelayMax > 0 && $this->board->fits($this->piece->moved(0, 1)) === false) {
                     $changes['lockDelayTicks'] = $this->lockDelayMax;
                 }
                 return $this->mutate($changes);
@@ -264,7 +264,7 @@ final class Game implements Model
                 'piece' => $next,
                 'score' => $this->score->withDropPoints(1),
             ];
-            if ($this->lockDelayMax > 0 && !$this->board->fits($this->piece->moved(0, 1))) {
+            if ($this->lockDelayMax > 0 && $this->board->fits($this->piece->moved(0, 1)) === false) {
                 $changes['lockDelayTicks'] = $this->lockDelayMax;
             }
             return $this->mutate($changes);
@@ -311,7 +311,7 @@ final class Game implements Model
         }
         // Apply horizontal shift if it fits
         $shifted = $piece->moved($dx, 0);
-        if ($this->board->fits($shifted)) {
+        if ($this->board->fits($shifted) === true) {
             $piece = $shifted;
         }
         // Hard-drop: find resting position and lock+spawn

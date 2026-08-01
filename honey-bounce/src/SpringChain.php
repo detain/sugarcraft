@@ -80,7 +80,7 @@ final class SpringChain
 
         [$spring, $pos, $vel, $target] = $this->stages[$this->activeIndex];
 
-        if ($this->isSettled($pos, $vel, $target)) {
+        if ($this->isSettled($pos, $vel, $target) === true) {
             $newActiveIndex = $this->activeIndex + 1;
             return [$this->currentPositions(), $newActiveIndex >= count($this->stages), new self($this->stages, $newActiveIndex)];
         }
@@ -103,7 +103,7 @@ final class SpringChain
     public function currentPositions(): array
     {
         $positions = [];
-        foreach ($this->stages as [$spring, $pos, $vel, $target]) {
+        foreach ($this->stages as [, $pos, $vel, $target]) {
             $positions[] = $pos;
         }
         return $positions;

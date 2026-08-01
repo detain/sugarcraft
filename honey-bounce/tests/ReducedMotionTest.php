@@ -36,7 +36,7 @@ final class ReducedMotionTest extends TestCase
         putenv('REDUCE_MOTION=0');
 
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
-        [$pos, $vel] = $spring->update(0.0, 0.0, 100.0);
+        [$pos] = $spring->update(0.0, 0.0, 100.0);
 
         // With normal motion, the position should NOT instantly be at target
         // (unless this happens to be the exact frame it converges)
@@ -96,7 +96,7 @@ final class ReducedMotionTest extends TestCase
         putenv('PREFERS_REDUCED_MOTION');
 
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
-        [$posNormal, $velNormal] = $spring->update(0.0, 0.0, 100.0);
+        [$posNormal] = $spring->update(0.0, 0.0, 100.0);
 
         // Enable reduced motion
         putenv('REDUCE_MOTION=1');

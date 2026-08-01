@@ -87,7 +87,7 @@ final class Game implements Model
      */
     private static function readScores(string $path): array
     {
-        if (!file_exists($path)) {
+            if (file_exists($path) === false) {
             return [];
         }
         $contents = @file_get_contents($path);
@@ -185,7 +185,7 @@ final class Game implements Model
     private function persistHighScores(): void
     {
         $dir = dirname($this->highScoreFilePath);
-        if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+        if (is_dir($dir) === false && mkdir($dir, 0700, true) === false && is_dir($dir) === false) {
             throw new \RuntimeException("Cannot create high score directory: {$dir}");
         }
         $json = json_encode($this->highScores, JSON_PRETTY_PRINT);
@@ -211,13 +211,13 @@ final class Game implements Model
             if ($msg->type === KeyType::Char && $msg->rune === 'r') {
                 return [self::start($this->rand, $this->configDir), $this->init()];
             }
-            if ($this->crashed) {
+            if ($this->crashed === true) {
                 return [$this, null];
             }
             $isFlap = $msg->type === KeyType::Space
                 || $msg->type === KeyType::Up
                 || ($msg->type === KeyType::Char && $msg->rune === 'w');
-            if ($isFlap) {
+            if ($isFlap === true) {
                 return [$this->withBird($this->bird->flap()), null];
             }
             return [$this, null];
@@ -231,9 +231,9 @@ final class Game implements Model
             // path. The write itself lives in persistHighScores() (single
             // source of truth); the Cmd wrapper only defers it off the render
             // loop and swallows I/O errors so a full disk can't crash the game.
-            if ($next->crashed) {
+            if ($next->crashed === true) {
                 $updated = $next->withHighScore($next->score);
-                if ($updated->newRecord) {
+                if ($updated->newRecord === true) {
                     $persistCmd = static function () use ($updated): ?Msg {
                         try {
                             $updated->persistHighScores();
@@ -268,7 +268,7 @@ final class Game implements Model
         $pipes = [];
         foreach ($this->pipes as $p) {
             $next = $p->tick();
-            if (!$next->isOffScreen()) {
+            if ($next->isOffScreen() === false) {
                 $pipes[] = $next;
             }
         }
@@ -294,9 +294,9 @@ final class Game implements Model
         // Collision: bird hits a pipe, hits the floor, or hits the top wall.
         // y = -0.5 rounds to 0 = safe; y <= -0.51 rounds to -1 = crash.
         $crashed = $bird->row() < 0 || $bird->row() >= self::HEIGHT;
-        if (!$crashed) {
+        if ($crashed === false) {
             foreach ($pipes as $p) {
-                if ($p->collides($bird->x, $bird->row())) {
+                if ($p->collides($bird->x, $bird->row()) === true) {
                     $crashed = true;
                     break;
                 }

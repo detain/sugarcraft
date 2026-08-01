@@ -40,7 +40,7 @@ final class Renderer
         $score = Style::new()->bold()->foreground(Color::hex('#fde68a'))
             ->render("score: {$g->score}");
         $highScore = $g->highScore();
-        if ($g->crashed) {
+        if ($g->crashed === true) {
             $highScoreLine = '';
             if ($g->newRecord && $g->score > 0) {
                 $highScoreLine = Style::new()->bold()->foreground(Color::hex('#6ee7b7'))

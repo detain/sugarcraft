@@ -105,7 +105,7 @@ final class Board
                     break;
                 }
             }
-            if ($full) {
+            if ($full === true) {
                 $cleared++;
             } else {
                 $remaining[] = $row;
@@ -125,7 +125,7 @@ final class Board
         $candidate = $piece;
         while (true) {
             $next = $candidate->moved(0, 1);
-            if (!$this->fits($next)) {
+            if ($this->fits($next) === false) {
                 return $candidate;
             }
             $candidate = $next;

@@ -119,7 +119,7 @@ final class Spring
      */
     public function update(float $pos, float $vel, float $target): array
     {
-        if ($this->reducedMotionOverride ?? Probe::reducedMotion()) {
+        if (($this->reducedMotionOverride ?? Probe::reducedMotion()) === true) {
             return [$target, 0.0];
         }
 

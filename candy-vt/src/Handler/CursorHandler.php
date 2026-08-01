@@ -44,7 +44,7 @@ final class CursorHandler
             'F' => $cursor->withRow(max($minRow, $cursor->row - $count))->withCol(0),
             'G' => $cursor->withCol($this->clampCol($count - 1, $buffer)),
             'd' => $cursor->withRow($this->clampRowOrigin($count - 1, $scrollTop, $scrollBottom, $originMode, $buffer)),
-            'H', 'f' => $this->cup($params, $cursor, $buffer, $scrollTop, $scrollBottom, $originMode),
+            'H', 'f' => $this->cup($params, $cursor, $buffer, $scrollTop, $originMode),
             's' => $cursor->save(),
             'u' => $cursor->restore(),
             default => $cursor,
@@ -52,7 +52,7 @@ final class CursorHandler
     }
 
     /** @param list<int> $params */
-    private function cup(array $params, Cursor $cursor, Buffer $buffer, int $scrollTop, int $scrollBottom, bool $originMode): Cursor
+    private function cup(array $params, Cursor $cursor, Buffer $buffer, int $scrollTop, bool $originMode): Cursor
     {
         $row = $params[0] ?? -1;
         $col = $params[1] ?? -1;
