@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Fuzzy\ScoringProfile;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(SmithWatermanMatcher::class)]
@@ -309,5 +310,180 @@ final class SmithWatermanMatcherTest extends TestCase
         $explicit = $this->matcher->matchAll('app', $candidates, null, 1);
 
         $this->assertEquals($withDefaults, $explicit);
+    }
+
+    #[Test]
+    public function testScoreReturnsIntegerScore(): void
+    {
+        $score = $this->matcher->score('hello', 'hello');
+
+        $this->assertIsInt($score);
+        $this->assertGreaterThan(0, $score);
+    }
+
+    #[Test]
+    public function testScoreEmptyQueryReturnsZero(): void
+    {
+        $score = $this->matcher->score('', 'hello');
+
+        $this->assertSame(0, $score);
+    }
+
+    #[Test]
+    public function testScoreEmptyCandidateReturnsZero(): void
+    {
+        $score = $this->matcher->score('hello', '');
+
+        $this->assertSame(0, $score);
+    }
+
+    #[Test]
+    public function testScoreConsecutiveMatchesHigherThanScattered(): void
+    {
+        $scoreConsec = $this->matcher->score('ello', 'hello');
+        $scoreNonConsec = $this->matcher->score('hlo', 'hello');
+
+        $this->assertGreaterThan($scoreNonConsec, $scoreConsec);
+    }
+
+    #[Test]
+    public function testScoreNoMatchReturnsZero(): void
+    {
+        $score = $this->matcher->score('xyz', 'hello');
+
+        $this->assertSame(0, $score);
+    }
+
+    #[Test]
+    public function testScoreOverLengthQueryUsesFallback(): void
+    {
+        // Create matcher with maxQueryLength=2
+        $matcher = new SmithWatermanMatcher(null, 2, 1000);
+        // Query "hello" (5 chars) exceeds maxQueryLength of 2
+        $score = $matcher->score('hello', 'hello');
+
+        // Should use SahilmMatcher fallback and still return a valid score
+        $this->assertGreaterThan(0, $score);
+    }
+
+    #[Test]
+    public function testScoreOverLengthCandidateUsesFallback(): void
+    {
+        // Create matcher with maxCandidateLength=2
+        $matcher = new SmithWatermanMatcher(null, 1000, 2);
+        // Candidate "hello" (5 chars) exceeds maxCandidateLength of 2
+        $score = $matcher->score('hello', 'hello');
+
+        // Should use SahilmMatcher fallback and still return a valid score
+        $this->assertGreaterThan(0, $score);
+    }
+
+    #[Test]
+    public function testScoreEquivalentToMatchScore(): void
+    {
+        $matchResult = $this->matcher->match('ello', 'hello');
+        $scoreOnly = $this->matcher->score('ello', 'hello');
+
+        $this->assertSame($matchResult?->score ?? 0, $scoreOnly);
+    }
+
+    #[Test]
+    public function testNewFactoryCreatesInstance(): void
+    {
+        $matcher = SmithWatermanMatcher::new();
+
+        $this->assertInstanceOf(SmithWatermanMatcher::class, $matcher);
+    }
+
+    #[Test]
+    public function testNewFactoryWithProfile(): void
+    {
+        $profile = ScoringProfile::strict();
+        $matcher = SmithWatermanMatcher::new($profile);
+
+        $this->assertSame($profile, $matcher->profile());
+    }
+
+    #[Test]
+    public function testProfileReturnsScoringProfile(): void
+    {
+        $profile = $this->matcher->profile();
+
+        $this->assertInstanceOf(ScoringProfile::class, $profile);
+    }
+
+    #[Test]
+    public function testConstructorThrowsOnInvalidMaxQueryLength(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Length caps must be >= 1');
+
+        new SmithWatermanMatcher(null, 0, 1000);
+    }
+
+    #[Test]
+    public function testConstructorThrowsOnInvalidMaxCandidateLength(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Length caps must be >= 1');
+
+        new SmithWatermanMatcher(null, 1000, 0);
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorYieldsRankedResults(): void
+    {
+        $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
+
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('app', $candidates) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertNotEmpty($results);
+        // Should be sorted by score descending
+        $resultCount = count($results);
+        for ($i = 1; $i < $resultCount; $i++) {
+            $this->assertGreaterThanOrEqual($results[$i]->score, $results[$i - 1]->score);
+        }
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorWithLimit(): void
+    {
+        $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
+
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('app', $candidates, limit: 2) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertCount(2, $results);
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorWithMinScore(): void
+    {
+        $candidates = ['hello', 'hey', 'h', 'xyz'];
+
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('he', $candidates, minScore: 10) as $result) {
+            $results[] = $result;
+        }
+
+        foreach ($results as $result) {
+            $this->assertGreaterThanOrEqual(10, $result->score);
+        }
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorEmptyQueryYieldsNothing(): void
+    {
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('', ['hello', 'world']) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertSame([], $results);
     }
 }

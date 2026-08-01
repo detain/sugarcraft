@@ -205,4 +205,186 @@ final class FilePickerTest extends TestCase
         $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
         $this->assertSame(['sub', 'a.txt', 'b.md'], $names);
     }
+
+    public function testSortBySize(): void
+    {
+        $p = FilePicker::new($this->root)->withSortMode(\SugarCraft\Forms\FilePicker\SortMode::Size);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        // 'sub' dir is first (dirs always first regardless of secondary sort)
+        // Within files, a.txt (1 byte) < b.md (1 byte) — alphabetical tiebreak
+        $this->assertSame(['sub', 'a.txt', 'b.md'], $names);
+    }
+
+    public function testSortByMtime(): void
+    {
+        $p = FilePicker::new($this->root)->withSortMode(\SugarCraft\Forms\FilePicker\SortMode::MTime);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        // Directories first, then by mtime (files created at same time in setUp)
+        $this->assertSame(['sub', 'a.txt', 'b.md'], $names);
+    }
+
+    public function testSortByNameReverse(): void
+    {
+        $p = FilePicker::new($this->root)
+            ->withSortMode(\SugarCraft\Forms\FilePicker\SortMode::Name, true);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        // 'sub' first (dirs always first), then files reverse-alpha: sub, b.md, a.txt
+        $this->assertSame(['sub', 'b.md', 'a.txt'], $names);
+    }
+
+    public function testSortBySizeReverse(): void
+    {
+        $p = FilePicker::new($this->root)
+            ->withSortMode(\SugarCraft\Forms\FilePicker\SortMode::Size, true);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        $this->assertSame(['sub', 'a.txt', 'b.md'], $names);
+    }
+
+    public function testRightArrowActivatesEntry(): void
+    {
+        $p = $this->focused();
+        // sub is at cursor 0
+        [$p, ] = $p->update(new KeyMsg(KeyType::Right));
+        $this->assertSame(rtrim($this->root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'sub', $p->cwd);
+    }
+
+    public function testLeftArrowAscends(): void
+    {
+        $p = $this->focused();
+        [$p, ] = $p->update(new KeyMsg(KeyType::Enter));   // descend
+        [$p, ] = $p->update(new KeyMsg(KeyType::Left));     // ascend back
+        $this->assertSame(rtrim($this->root, DIRECTORY_SEPARATOR), $p->cwd);
+    }
+
+    public function testWidthAccessorReturnsZero(): void
+    {
+        $p = FilePicker::new($this->root);
+        $this->assertSame(0, $p->width());
+    }
+
+    public function testErrorAccessorReturnsNullByDefault(): void
+    {
+        $p = FilePicker::new($this->root);
+        $this->assertNull($p->error());
+    }
+
+    public function testWithHeightClampsToOne(): void
+    {
+        $p = FilePicker::new($this->root)->withHeight(0);
+        $this->assertSame(1, $p->height());
+
+        $p = FilePicker::new($this->root)->withHeight(-5);
+        $this->assertSame(1, $p->height());
+    }
+
+    public function testWithShowIconsNoOpOnEmptyEntries(): void
+    {
+        $emptyDir = sys_get_temp_dir() . '/candy-fp-empty-' . bin2hex(random_bytes(4));
+        mkdir($emptyDir);
+        try {
+            $p = FilePicker::new($emptyDir)->withShowIcons(true);
+            $this->assertSame('', $p->view());
+        } finally {
+            @rmdir($emptyDir);
+        }
+    }
+
+    public function testWithShowSizeNoOpOnEmptyEntries(): void
+    {
+        $emptyDir = sys_get_temp_dir() . '/candy-fp-empty-' . bin2hex(random_bytes(4));
+        mkdir($emptyDir);
+        try {
+            $p = FilePicker::new($emptyDir)->withShowSize(true);
+            $this->assertSame('', $p->view());
+        } finally {
+            @rmdir($emptyDir);
+        }
+    }
+
+    public function testUpdateIgnoresNonKeyMsg(): void
+    {
+        $p = $this->focused();
+        $orig = $p;
+        [$p, ] = $p->update(new \SugarCraft\Core\Msg\MouseMsg());
+        $this->assertSame($orig->cwd, $p->cwd);
+    }
+
+    public function testUpdateIgnoresWhenUnfocused(): void
+    {
+        $p = FilePicker::new($this->root);
+        [$p, ] = $p->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($p->cwd);
+        $this->assertNull($p->selected());
+    }
+
+    public function testEndKeyMovesToLastEntry(): void
+    {
+        $p = $this->focused();
+        [$p, ] = $p->update(new KeyMsg(KeyType::End));
+        // sub (0), a.txt (1), b.md (2) → cursor at 2
+        $this->assertSame(2, $p->cursor);
+    }
+
+    public function testHomeKeyMovesToFirstEntry(): void
+    {
+        $p = $this->focused();
+        [$p, ] = $p->update(new KeyMsg(KeyType::Down));
+        [$p, ] = $p->update(new KeyMsg(KeyType::Down));
+        [$p, ] = $p->update(new KeyMsg(KeyType::Home));
+        $this->assertSame(0, $p->cursor);
+    }
+
+    public function testAscendAtRootDoesNothing(): void
+    {
+        $p = FilePicker::new(DIRECTORY_SEPARATOR);
+        [$p, ] = $p->focus();
+        [$p, ] = $p->update(new KeyMsg(KeyType::Backspace));
+        $this->assertSame(DIRECTORY_SEPARATOR, $p->cwd);
+    }
+
+    public function testActivateEmptyDoesNothing(): void
+    {
+        $emptyDir = sys_get_temp_dir() . '/candy-fp-empty-' . bin2hex(random_bytes(4));
+        mkdir($emptyDir);
+        try {
+            $p = FilePicker::new($emptyDir);
+            [$p, ] = $p->focus();
+            [$p, ] = $p->update(new KeyMsg(KeyType::Enter));
+            $this->assertNull($p->selected());
+        } finally {
+            @rmdir($emptyDir);
+        }
+    }
+
+    public function testSortModeRefreshesEntries(): void
+    {
+        $p = FilePicker::new($this->root)->withSortMode(\SugarCraft\Forms\FilePicker\SortMode::Name);
+        $this->assertCount(3, $p->entries);
+    }
+
+    public function testRefreshReReadsDirectory(): void
+    {
+        $p = FilePicker::new($this->root);
+        $count = count($p->entries);
+
+        // Add a new file
+        file_put_contents($this->root . '/new.txt', 'new');
+        $p = $p->refresh();
+        $this->assertSame($count + 1, count($p->entries));
+    }
+
+    public function testAllowedExtensionsWithDotPrefix(): void
+    {
+        $p = FilePicker::new($this->root)->withAllowedExtensions(['.txt', '.md']);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        $this->assertSame(['sub', 'a.txt', 'b.md'], $names);
+    }
+
+    public function testSelectOnDirWhenDirNotAllowed(): void
+    {
+        $p = $this->focused()->withDirAllowed(false);
+        [$p, ] = $p->update(new KeyMsg(KeyType::Enter));
+        // selected stays null because dirAllowed is false
+        $this->assertNull($p->selected());
+    }
 }

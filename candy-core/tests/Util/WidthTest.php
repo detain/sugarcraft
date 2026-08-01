@@ -221,4 +221,99 @@ final class WidthTest extends TestCase
 
         $memoProp->setValue(null, []); // don't leak state into sibling tests
     }
+
+    public function testDropAnsiDropsPrefixCells(): void
+    {
+        // "hello" = 5 cells, drop first 3 → "lo" (ANSI-stripped)
+        $this->assertSame('lo', Width::dropAnsi('hello', 3));
+    }
+
+    public function testDropAnsiPreservesTrailingAnsi(): void
+    {
+        // Drop 3 cells from colored text, trailing color reset preserved.
+        $s = "\x1b[31mhello\x1b[0m";
+        $out = Width::dropAnsi($s, 3);
+        $this->assertSame("\x1b[31mlo\x1b[0m", $out);
+    }
+
+    public function testDropAnsiZeroReturnsFull(): void
+    {
+        $this->assertSame('hello', Width::dropAnsi('hello', 0));
+    }
+
+    public function testDropAnsiNegativeReturnsFull(): void
+    {
+        // Negative skip is treated as 0 (early-exit guard)
+        $this->assertSame('hello', Width::dropAnsi('hello', -5));
+    }
+
+    public function testDropAnsiDropsWideCharWhole(): void
+    {
+        // "日本" = 4 cells, "日" = 2 cells wide. Dropping 1 cell (landing mid-grapheme)
+        // should drop the whole wide cluster, leaving only "本".
+        $out = Width::dropAnsi('日本', 1);
+        $this->assertSame('本', $out);
+    }
+
+    public function testDropAnsiPreservesAnsiInDroppedRegion(): void
+    {
+        // ANSI in the dropped prefix is preserved in output prefix.
+        $s = "he\x1b[31mllo\x1b[0m";
+        $out = Width::dropAnsi($s, 2);
+        // ANSI sequences from dropped region appear in output
+        $this->assertSame("\x1b[31mllo\x1b[0m", $out);
+    }
+
+    public function testTakeAnsiTakesPrefixCells(): void
+    {
+        // "hello" = 5 cells, take first 3 → "hel"
+        $this->assertSame('hel', Width::takeAnsi('hello', 3));
+    }
+
+    public function testTakeAnsiPreservesAnsiInRegion(): void
+    {
+        // Take 2 cells from colored text, color sequences preserved.
+        $s = "\x1b[31mhello\x1b[0m";
+        $out = Width::takeAnsi($s, 2);
+        $this->assertSame("\x1b[31mhe\x1b[0m", $out);
+    }
+
+    public function testTakeAnsiZeroReturnsEmpty(): void
+    {
+        $this->assertSame('', Width::takeAnsi('hello', 0));
+    }
+
+    public function testTakeAnsiNegativeReturnsEmpty(): void
+    {
+        // Negative take is treated as 0 (early-exit guard)
+        $this->assertSame('', Width::takeAnsi('hello', -5));
+    }
+
+    public function testTakeAnsiIncludesWideCharWhole(): void
+    {
+        // "日本" = 4 cells, taking 1 cell (landing mid-grapheme) should include
+        // the whole wide cluster, giving "日" (2 cells).
+        $out = Width::takeAnsi('日本', 1);
+        $this->assertSame('日', $out);
+    }
+
+    public function testTakeAnsiPreservesTrailingAnsi(): void
+    {
+        // When take lands inside a wide grapheme, trailing ANSI after the
+        // cut point should still be captured.
+        $s = "日\x1b[31m本\x1b[0m";
+        $out = Width::takeAnsi($s, 1);
+        // "日" is taken (wide char), trailing sequences preserved
+        $this->assertStringContainsString('日', $out);
+    }
+
+    public function testDropAnsiEmptyString(): void
+    {
+        $this->assertSame('', Width::dropAnsi('', 5));
+    }
+
+    public function testTakeAnsiEmptyString(): void
+    {
+        $this->assertSame('', Width::takeAnsi('', 5));
+    }
 }

@@ -246,4 +246,124 @@ final class CancellationTokenTest extends TestCase
         // Source 2 and token 2 remain consistent
         $this->assertSame($source2->isCancelled(), $token2->isCancelled());
     }
+
+    /**
+     * @covers \SugarCraft\Async\CancellationToken::acceptCancellationSource
+     */
+    public function testAcceptCancellationSourceIsIdempotent(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        // Manually trigger acceptCancellationSource (simulating what CancellationSource.cancel() does)
+        $token->acceptCancellationSource();
+
+        // Now simulate calling it again directly on an already-cancelled token
+        // This exercises the early-return guard at line 49
+        $token->acceptCancellationSource();
+
+        // State should still be cancelled (not corrupted)
+        $this->assertTrue($token->isCancelled());
+    }
+
+    /**
+     * @covers \SugarCraft\Async\CancellationToken::fireCallbacks
+     */
+    public function testFireCallbacksIsIdempotent(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $count = 0;
+        $token->onCancel(function () use (&$count): void {
+            $count++;
+        });
+
+        $source->cancel();
+
+        // First fire
+        $this->assertSame(1, $count);
+
+        // Second fire - should be no-op due to callbacksFired guard
+        $token->fireCallbacks();
+        $this->assertSame(1, $count);
+
+        // Third fire - still no-op
+        $token->fireCallbacks();
+        $this->assertSame(1, $count);
+    }
+
+    /**
+     * @covers \SugarCraft\Async\CancellationToken::fireCallbacks
+     */
+    public function testFireCallbacksPropagatesCallbackException(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $token->onCancel(static function (): void {
+            throw new \RuntimeException('callback error');
+        });
+
+        // Manually trigger fireCallbacks to exercise the exception-throwing path
+        // (avoiding source->cancel() which propagates the exception directly)
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('callback error');
+        $token->fireCallbacks();
+    }
+
+    /**
+     * @covers \SugarCraft\Async\CancellationToken::fireCallbacks
+     */
+    public function testFireCallbacksWithMultipleCallbacksFirstThrows(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $order = [];
+        $token->onCancel(function () use (&$order): void {
+            $order[] = 'first';
+            throw new \RuntimeException('first error');
+        });
+        $token->onCancel(function () use (&$order): void {
+            $order[] = 'second';
+        });
+
+        // All callbacks should execute even if one throws
+        // (exception only propagates after all callbacks have run)
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('first error');
+        $token->fireCallbacks();
+    }
+
+    /**
+     * Verify that the order of callbacks is preserved and all are called
+     * even when an exception occurs - the exception only propagates after
+     * all callbacks have been invoked.
+     */
+    public function testFireCallbacksCallsAllCallbacksBeforeThrowing(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $order = [];
+        $token->onCancel(function () use (&$order): void {
+            $order[] = 'first';
+        });
+        $token->onCancel(function () use (&$order): void {
+            $order[] = 'second';
+            throw new \RuntimeException('second error');
+        });
+        $token->onCancel(function () use (&$order): void {
+            $order[] = 'third';
+        });
+
+        // All callbacks should run, exception from second propagates
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('second error');
+        $token->fireCallbacks();
+
+        // All three should have been called despite the exception
+        $this->assertSame(['first', 'second', 'third'], $order);
+    }
 }

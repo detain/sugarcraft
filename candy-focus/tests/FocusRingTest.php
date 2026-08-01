@@ -640,4 +640,182 @@ final class FocusRingTest extends TestCase
             'maintained enabledPositions must equal a freshly-computed list',
         );
     }
+
+    // ─── Coverage: next() / previous() wrap-around branches ─────────────────
+
+    /**
+     * next() on 3-element ring with focus on first (index 0): wraps to index 1.
+     * This exercises the primary (currentEnabledIdx !== false) branch.
+     */
+    public function testNextFromFirstOnThreeElementRing(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c'); // index 0
+        self::assertSame('b', $ring->next()->current());
+    }
+
+    /**
+     * previous() on 2-element ring from first (index 0) wraps to index 1 ('b').
+     * Exercises the currentEnabledIdx !== false wrap-around branch (lines 342-345).
+     */
+    public function testPreviousFromFirstOnTwoElementRingWrapsToSecond(): void
+    {
+        $ring = FocusRing::of('a', 'b'); // index 0
+        self::assertSame('b', $ring->previous()->current());
+    }
+
+    /**
+     * previous() on 3-element ring from first (index 0) wraps to last (index 2).
+     * Exercises the currentEnabledIdx !== false wrap-around branch (lines 342-345).
+     */
+    public function testPreviousFromFirstOnThreeElementRingWrapsToLast(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c'); // index 0
+        self::assertSame('c', $ring->previous()->current());
+    }
+
+    /**
+     * previous() on 3-element ring from last (index 2) wraps to first (index 0).
+     * Exercises the currentEnabledIdx !== false wrap-around branch (lines 342-345).
+     */
+    public function testPreviousFromLastOnThreeElementRingWrapsToFirst(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('c'); // index 2
+        self::assertSame('b', $ring->previous()->current());
+    }
+
+    /**
+     * previous() on ring where current is disabled but another enabled exists
+     * BEFORE current in traversal order. Exercises the "current is disabled,
+     * find previous enabled" branch (lines 331-339).
+     */
+    public function testPreviousWhenCurrentDisabledFindsEnabledBeforeCurrent(): void
+    {
+        // enabledPositions = [0, 2]; index = 1 ('b', disabled)
+        // previous should find index 0 ('a')
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b');
+        self::assertSame('a', $ring->previous()->current());
+    }
+
+    /**
+     * next() on ring where current is disabled but another enabled exists
+     * AFTER current in traversal order. Exercises the "current is disabled,
+     * find next enabled" branch (lines 291-299).
+     */
+    public function testNextWhenCurrentDisabledFindsEnabledAfterCurrent(): void
+    {
+        // enabledPositions = [0, 2]; index = 1 ('b', disabled)
+        // next should find index 2 ('c')
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b');
+        self::assertSame('c', $ring->next()->current());
+    }
+
+    /**
+     * next() when current is disabled and only one OTHER region is enabled
+     * (sole enabled, so wrap would land on self → noOp). This exercises
+     * the "sole enabled" early-return guard (line 285) while current is disabled.
+     */
+    public function testNextCurrentDisabledOnlyOneOtherEnabledIsNoOp(): void
+    {
+        // 'a' focused and enabled, 'b' and 'c' disabled
+        $ring = FocusRing::of('a', 'b', 'c')->focus('a')->disable('b')->disable('c');
+        self::assertSame('a', $ring->next()->current(), 'only one enabled so next is noOp');
+    }
+
+    /**
+     * previous() when current is disabled and only one OTHER region is enabled
+     * (sole enabled, so wrap would land on self → noOp). Exercises line 325-327
+     * while current is disabled.
+     */
+    public function testPreviousCurrentDisabledOnlyOneOtherEnabledIsNoOp(): void
+    {
+        // 'c' focused and enabled, 'a' and 'b' disabled
+        $ring = FocusRing::of('a', 'b', 'c')->focus('c')->disable('a')->disable('b');
+        self::assertSame('c', $ring->previous()->current(), 'only one enabled so previous is noOp');
+    }
+
+    /**
+     * next() when current is enabled but all OTHER regions are disabled
+     * (sole enabled → noOp at line 285).
+     */
+    public function testNextAllOtherRegionsDisabledIsNoOp(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('a')->disable('b')->disable('c');
+        self::assertSame('a', $ring->current());
+        self::assertSame($ring, $ring->next());
+    }
+
+    /**
+     * previous() when current is enabled but all OTHER regions are disabled
+     * (sole enabled → noOp at line 325).
+     */
+    public function testPreviousAllOtherRegionsDisabledIsNoOp(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('a')->disable('b')->disable('c');
+        self::assertSame($ring, $ring->previous());
+    }
+
+    /**
+     * Verify that disabling the currently-focused region does NOT move focus
+     * (focus stays put, next traversal will move it). This is a key invariant.
+     */
+    public function testDisableFocusedRegionKeepsFocusUntilTraversal(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b');
+        $ring = $ring->disable('b');
+
+        self::assertSame('b', $ring->current(), 'focus stays on disabled region');
+        self::assertTrue($ring->isFocused('b'));
+        self::assertFalse($ring->isEnabled('b'));
+    }
+
+    /**
+     * previous() wraps correctly through a long chain of disabled regions.
+     */
+    public function testPreviousWrapsThroughDisabledChain(): void
+    {
+        // All except 'a' are disabled. From 'a', previous wraps back to itself.
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b')->disable('c')->disable('d');
+        self::assertSame('a', $ring->previous()->current(), 'sole enabled wraps to self');
+    }
+
+    /**
+     * next() wraps correctly through a long chain of disabled regions.
+     */
+    public function testNextWrapsThroughDisabledChain(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b')->disable('c')->disable('d');
+        self::assertSame('a', $ring->next()->current(), 'sole enabled wraps to self');
+    }
+
+    /**
+     * next() from a disabled first region lands on the first enabled after it
+     * (the second region in a 3-element ring). This exercises the "current is
+     * disabled, find next enabled" loop branch (lines 291-299).
+     */
+    public function testNextSkipsDisabledFirstToLandOnSecond(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('a')->disable('a');
+        self::assertSame('b', $ring->next()->current());
+    }
+
+    /**
+     * With 4 regions, disabling the first two causes next() to land on the
+     * third (first enabled after both disabled). This verifies the disabled-
+     * current loop branch runs to offset=2.
+     */
+    public function testNextSkipsDisabledFirstAndSecondToLandOnThird(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->focus('a')->disable('a')->disable('b');
+        self::assertSame('c', $ring->next()->current());
+    }
+
+    /**
+     * Edge: three regions, focus on middle, disable the last.
+     * previous() should land on the first (skipping disabled last).
+     */
+    public function testPreviousSkipsDisabledLastToLandOnFirst(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('c');
+        self::assertSame('a', $ring->previous()->current());
+    }
 }

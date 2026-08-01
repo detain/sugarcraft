@@ -225,4 +225,83 @@ final class DiffEncoderTest extends TestCase
         // Note: row=0 → 1-based row=1, so full CUP form is \x1b[1;6H.
         $this->assertSame("\x1b[1;6H", $bytes);
     }
+
+    public function testEncodeSetHyperlinkCloseWhenLinkAlreadyClosed(): void
+    {
+        // SetHyperlinkOp(null) when currentLinkUrl is already null should return empty
+        $ops = [new SetHyperlinkOp(null)];
+        $bytes = $this->encoder->encode($ops);
+
+        $this->assertSame('', $bytes);
+    }
+
+    public function testEncodeOpenThenCloseHyperlink(): void
+    {
+        $link = Hyperlink::new('https://example.com');
+        $ops = [
+            new SetHyperlinkOp($link),
+            new SetCellOp([Cell::new('L', null, $link)]),
+            new SetHyperlinkOp(null),
+        ];
+        $bytes = $this->encoder->encode($ops);
+
+        // OSC 8 open, rune, OSC 8 close
+        $this->assertStringContainsString('https://example.com', $bytes);
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $bytes);
+        $this->assertStringContainsString('L', $bytes);
+    }
+
+    public function testEncodeMoveCursorZeroPositionIsNoOp(): void
+    {
+        // Initial cursor is (1,1) 1-based = (0,0) 0-based.
+        // MoveCursorOp(0,0) is a no-op since we're already there.
+        $ops = [new MoveCursorOp(0, 0)];
+        $bytes = $this->encoder->encode($ops);
+
+        $this->assertSame('', $bytes);
+    }
+
+    public function testEncodeEraseRunPositiveCount(): void
+    {
+        $ops = [new EraseRunOp(3)];
+        $bytes = $this->encoder->encode($ops);
+
+        $this->assertSame("\x1b[3X", $bytes);
+    }
+
+    public function testEncodeEncodeStateIsResetBetweenCalls(): void
+    {
+        // First encode sets cursor to (6,6) 1-based and applies bold style
+        $this->encoder->encode([
+            new MoveCursorOp(5, 5),
+            new SetStyleOp(Style::bold()),
+        ]);
+
+        // Second encode should start fresh with cursor at (1,1) 1-based
+        // MoveCursorOp(0,0) is a no-op when starting from reset state
+        $bytes = $this->encoder->encode([new MoveCursorOp(0, 0)]);
+        $this->assertSame('', $bytes);
+
+        // But moving to a different position should emit CUP
+        $bytes2 = $this->encoder->encode([new MoveCursorOp(4, 3)]);
+        $this->assertSame("\x1b[4;5H", $bytes2); // 5,4 0-based = 4,5 1-based
+    }
+
+    public function testEncodeCompositeOpsWithHyperlinkTransition(): void
+    {
+        $link1 = Hyperlink::new('https://a.com');
+        $link2 = Hyperlink::new('https://b.com');
+
+        $ops = [
+            new SetCellOp([Cell::new('A', null, $link1)]),
+            new SetCellOp([Cell::new('B', null, $link2)]),
+        ];
+
+        $bytes = $this->encoder->encode($ops);
+
+        // Should contain both URLs and close before switching
+        $this->assertStringContainsString('https://a.com', $bytes);
+        $this->assertStringContainsString('https://b.com', $bytes);
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $bytes);
+    }
 }

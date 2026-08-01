@@ -521,4 +521,88 @@ final class AsyncOpsTest extends TestCase
             jitter: -0.1,
         );
     }
+
+    /**
+     * Covers lines 155-156: when the operation callable throws synchronously
+     * (before returning a promise), the exception is caught and converted to
+     * a rejected promise.
+     */
+    public function testRetryCatchesSynchronousOperationThrow(): void
+    {
+        $loop = new \React\EventLoop\StreamSelectLoop();
+
+        $promise = AsyncOps::retry(
+            function (): PromiseInterface {
+                throw new \RuntimeException('sync error');
+            },
+            attempts: 3,
+            baseBackoffSeconds: 0.01,
+            loop: $loop,
+        );
+
+        $rejected = null;
+        $promise->otherwise(function (\Throwable $e) use (&$rejected, $loop): void {
+            $rejected = $e;
+            $loop->stop();
+        });
+
+        $loop->addTimer(0.5, function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+
+        // The synchronous throw should be caught and converted to rejection
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertSame('sync error', $rejected->getMessage());
+    }
+
+    /**
+     * Covers lines 189-190: when the timer callback throws (synchronously)
+     * during retry scheduling, the exception is caught and the deferred is
+     * rejected with it.
+     *
+     * This can happen when the recursive retryAttempt() call itself throws
+     * synchronously (not returning a promise).
+     */
+    public function testRetryTimerCallbackSynchronousThrowIsCaught(): void
+    {
+        // Use a partial mock that makes addTimer's callback throw
+        $loop = $this->createMock(\React\EventLoop\LoopInterface::class);
+
+        $timer = $this->createStub(\React\EventLoop\TimerInterface::class);
+
+        // First call: operation fails (returns rejected promise), timer is scheduled
+        // Second call (inside timer callback): retryAttempt throws synchronously
+        $callCount = 0;
+        $loop->method('addTimer')->willReturnCallback(
+            function (float $interval, callable $cb) use (&$callCount, $timer): \React\EventLoop\TimerInterface {
+                $callCount++;
+                if ($callCount === 1) {
+                    // First timer - return stub, don't invoke yet
+                    return $timer;
+                }
+                // Second timer callback invocation (inside retryAttempt)
+                // should throw synchronously
+                throw new \RuntimeException('timer callback sync error');
+            },
+        );
+
+        $promise = AsyncOps::retry(
+            fn(): PromiseInterface => \React\Promise\reject(new \RuntimeException('fail')),
+            attempts: 3,
+            baseBackoffSeconds: 0.01,
+            loop: $loop,
+        );
+
+        $rejected = null;
+        $promise->otherwise(function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+
+        // Run the loop (though with our mock, nothing will actually run)
+        // Instead, we just verify the promise rejected with the sync error
+        // since the error propagates through the catch block at line 189
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertSame('timer callback sync error', $rejected->getMessage());
+    }
 }

@@ -172,4 +172,37 @@ final class DiffOptimiserTest extends TestCase
         $this->assertSame(0, $result[0]->row);
     }
 
+    public function testOptimiseMergesMultipleAdjacentSameStyleCells(): void
+    {
+        $style = Style::bold();
+        $ops = [
+            new SetCellOp([Cell::new('A', $style)]),
+            new SetCellOp([Cell::new('B', $style)]),
+            new SetCellOp([Cell::new('C', $style)]),
+        ];
+        $result = $this->optimiser->optimise($ops);
+
+        // After merge, all cells should be in one SetCellOp
+        $setCells = array_filter($result, fn($op) => $op instanceof SetCellOp);
+        $this->assertNotEmpty($setCells);
+    }
+
+    public function testOptimiseEmptySetCellOpMergesIntoPrevious(): void
+    {
+        // An empty SetCellOp between two same-style cells merges them
+        $ops = [
+            new SetCellOp([Cell::new('A')]),
+            new SetCellOp([]), // empty - no-op but merges with adjacent
+            new SetCellOp([Cell::new('B')]),
+        ];
+        $result = $this->optimiser->optimise($ops);
+
+        // Empty op merges with neighbors of same style into one SetCellOp
+        $setCells = array_filter($result, fn($op) => $op instanceof SetCellOp);
+        $this->assertCount(1, $setCells);
+        $cells = array_values($setCells)[0]->cells;
+        $this->assertCount(2, $cells);
+        $this->assertSame('A', $cells[0]->rune());
+        $this->assertSame('B', $cells[1]->rune());
+    }
 }

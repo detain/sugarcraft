@@ -329,4 +329,82 @@ final class SahilmMatcherTest extends TestCase
 
         $this->assertEquals($withDefaults, $explicit);
     }
+
+    #[Test]
+    public function testMatchAllGeneratorReturnsGenerator(): void
+    {
+        $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
+
+        $result = $this->matcher->matchAllGenerator('app', $candidates);
+
+        $this->assertInstanceOf(\Generator::class, $result);
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorYieldsCorrectResults(): void
+    {
+        $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
+
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('app', $candidates) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertNotEmpty($results);
+        // Should be sorted by score descending
+        $resultCount = count($results);
+        for ($i = 1; $i < $resultCount; $i++) {
+            $this->assertGreaterThanOrEqual($results[$i]->score, $results[$i - 1]->score);
+        }
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorWithLimit(): void
+    {
+        $candidates = ['apple', 'applet', 'application', 'apply', 'apricot'];
+
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('app', $candidates, limit: 2) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertCount(2, $results);
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorWithMinScore(): void
+    {
+        $candidates = ['hello', 'hey', 'h', 'xyz'];
+
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('he', $candidates, minScore: 10) as $result) {
+            $results[] = $result;
+        }
+
+        foreach ($results as $result) {
+            $this->assertGreaterThanOrEqual(10, $result->score);
+        }
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorEmptyQueryYieldsNothing(): void
+    {
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('', ['hello', 'world']) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertSame([], $results);
+    }
+
+    #[Test]
+    public function testMatchAllGeneratorEmptyCandidatesYieldsNothing(): void
+    {
+        $results = [];
+        foreach ($this->matcher->matchAllGenerator('hello', []) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertSame([], $results);
+    }
 }

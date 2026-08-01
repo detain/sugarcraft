@@ -78,4 +78,57 @@ final class AnsiParserTest extends TestCase
         $this->assertSame('#00ff00', $segs[0]->bg); // truecolor 0;255;0
         $this->assertSame('colored', $segs[0]->text);
     }
+
+    public function testXterm256ToHexPalette(): void
+    {
+        // ANSI 0-15 are the 16-color palette.
+        $this->assertSame('#000000', AnsiParser::xterm256ToHex(0));
+        $this->assertSame('#cd0000', AnsiParser::xterm256ToHex(1));
+        $this->assertSame('#00cd00', AnsiParser::xterm256ToHex(2));
+        $this->assertSame('#cdcd00', AnsiParser::xterm256ToHex(3));
+        $this->assertSame('#0000ee', AnsiParser::xterm256ToHex(4));
+        $this->assertSame('#cd00cd', AnsiParser::xterm256ToHex(5));
+        $this->assertSame('#00cdcd', AnsiParser::xterm256ToHex(6));
+        $this->assertSame('#e5e5e5', AnsiParser::xterm256ToHex(7));
+        $this->assertSame('#7f7f7f', AnsiParser::xterm256ToHex(8));
+        $this->assertSame('#ff0000', AnsiParser::xterm256ToHex(9));
+        $this->assertSame('#00ff00', AnsiParser::xterm256ToHex(10));
+        $this->assertSame('#ffff00', AnsiParser::xterm256ToHex(11));
+        $this->assertSame('#5c5cff', AnsiParser::xterm256ToHex(12));
+        $this->assertSame('#ff00ff', AnsiParser::xterm256ToHex(13));
+        $this->assertSame('#00ffff', AnsiParser::xterm256ToHex(14));
+        $this->assertSame('#ffffff', AnsiParser::xterm256ToHex(15));
+    }
+
+    public function testXterm256ToHex256ColorRange(): void
+    {
+        // ANSI 16-231: 6x6x6 color cube.
+        $this->assertSame('#000000', AnsiParser::xterm256ToHex(16));
+        // Just verify some representative values are in the expected format.
+        $c17 = AnsiParser::xterm256ToHex(17);
+        $this->assertMatchesFormat('#%2x%2x%2x', $c17);
+        $this->assertSame('#ffffff', AnsiParser::xterm256ToHex(231));
+    }
+
+    public function testXterm256ToHexGreyscaleRange(): void
+    {
+        // ANSI 232-255: 24-step greyscale starting at #080808.
+        $this->assertSame('#080808', AnsiParser::xterm256ToHex(232));
+        $this->assertSame('#ffffff', AnsiParser::xterm256ToHex(255));
+        // All greys should be equal RGB components.
+        $grey = AnsiParser::xterm256ToHex(245);
+        $this->assertMatchesFormat('#%2x%2x%2x', $grey);
+        [$r, $g, $b] = array_values(sscanf($grey, '#%2x%2x%2x'));
+        $this->assertSame($r, $g);
+        $this->assertSame($g, $b);
+    }
+
+    public function testXterm256ToHexReturnsValidHexStrings(): void
+    {
+        // Sample various indices and verify format.
+        foreach ([0, 15, 16, 50, 100, 150, 200, 231, 232, 244, 255] as $i) {
+            $hex = AnsiParser::xterm256ToHex($i);
+            $this->assertMatchesFormat('#%2x%2x%2x', $hex, "Index $i produced '$hex'");
+        }
+    }
 }

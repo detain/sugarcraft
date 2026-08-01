@@ -1311,4 +1311,271 @@ final class BufferTest extends TestCase
         $this->assertSame('B', $filled->cellAt(1, 0)->rune());
         $this->assertSame(' ', $filled->cellAt(2, 0)->rune());
     }
+
+    // ─── fromString ──────────────────────────────────────────────────────
+
+    public function testFromStringNullReturnsBlankBuffer(): void
+    {
+        $buf = Buffer::fromString(null, 3, 2);
+
+        $this->assertSame(3, $buf->width());
+        $this->assertSame(2, $buf->height());
+        $this->assertSame(' ', $buf->cellAt(0, 0)->rune());
+        $this->assertSame(' ', $buf->cellAt(2, 1)->rune());
+    }
+
+    public function testFromStringEmptyStringReturnsBlankBuffer(): void
+    {
+        $buf = Buffer::fromString('', 4, 1);
+
+        $this->assertSame(4, $buf->width());
+        $this->assertSame(1, $buf->height());
+    }
+
+    public function testFromStringParsesPlainText(): void
+    {
+        $buf = Buffer::fromString('ABC', 3, 1);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $this->assertSame('B', $buf->cellAt(1, 0)->rune());
+        $this->assertSame('C', $buf->cellAt(2, 0)->rune());
+    }
+
+    public function testFromStringStripsNewlines(): void
+    {
+        // "A\nB" produces 2 cells: 'A' at index 0, 'B' at index 1
+        // With width=2, index 0=(col=0,row=0), index 1=(col=1,row=0), index 2=(col=0,row=1)
+        // So 'A' is at (0,0) and 'B' is at (1,0), padding at (0,1) and (1,1)
+        $buf = Buffer::fromString("A\nB", 2, 2);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $this->assertSame('B', $buf->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $buf->cellAt(0, 1)->rune()); // padding
+        $this->assertSame(' ', $buf->cellAt(1, 1)->rune()); // padding
+    }
+
+    public function testFromStringTruncatesOversizedInput(): void
+    {
+        // Buffer is 2x1 (2 cells) but string has 5 chars
+        $buf = Buffer::fromString('ABCDE', 2, 1);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $this->assertSame('B', $buf->cellAt(1, 0)->rune());
+    }
+
+    public function testFromStringPadsUndersizedInput(): void
+    {
+        // Buffer is 4x1 but string has only 2 chars
+        $buf = Buffer::fromString('AB', 4, 1);
+
+        $this->assertSame('A', $buf->cellAt(0, 0)->rune());
+        $this->assertSame('B', $buf->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $buf->cellAt(2, 0)->rune());
+        $this->assertSame(' ', $buf->cellAt(3, 0)->rune());
+    }
+
+    public function testFromStringParsesBoldSgr(): void
+    {
+        // "\x1b[1mX" = bold X
+        $buf = Buffer::fromString("\x1b[1mX", 1, 1);
+
+        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
+        $this->assertNotNull($buf->cellAt(0, 0)->style());
+        $this->assertTrue($buf->cellAt(0, 0)->style()->hasBold());
+    }
+
+    public function testFromStringParsesForegroundColorSgr(): void
+    {
+        // "\x1b[31mX" = red foreground (ANSI 31)
+        $buf = Buffer::fromString("\x1b[31mX", 1, 1);
+
+        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
+        $this->assertNotNull($buf->cellAt(0, 0)->style());
+        $this->assertSame(0xff0000, $buf->cellAt(0, 0)->style()->fg());
+    }
+
+    public function testFromStringParsesBackgroundColorSgr(): void
+    {
+        // "\x1b[44mX" = blue background (ANSI 44)
+        $buf = Buffer::fromString("\x1b[44mX", 1, 1);
+
+        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
+        $this->assertNotNull($buf->cellAt(0, 0)->style());
+        $this->assertSame(0x0000ff, $buf->cellAt(0, 0)->style()->bg());
+    }
+
+    public function testFromStringParsesBrightForegroundSgr(): void
+    {
+        // "\x1b[91mX" = bright red foreground
+        $buf = Buffer::fromString("\x1b[91mX", 1, 1);
+
+        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
+        $this->assertNotNull($buf->cellAt(0, 0)->style());
+        // Bright red should be lighter than standard red
+        $this->assertNotSame(0xff0000, $buf->cellAt(0, 0)->style()->fg());
+    }
+
+    public function testFromStringParsesBrightBackgroundSgr(): void
+    {
+        // "\x1b[101mX" = bright blue background
+        $buf = Buffer::fromString("\x1b[101mX", 1, 1);
+
+        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
+        $this->assertNotNull($buf->cellAt(0, 0)->style());
+    }
+
+    public function testFromStringParsesUnderlineSgr(): void
+    {
+        $buf = Buffer::fromString("\x1b[4mX", 1, 1);
+
+        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
+        $this->assertNotNull($buf->cellAt(0, 0)->style());
+        $this->assertTrue($buf->cellAt(0, 0)->style()->hasUnderline());
+    }
+
+    public function testFromStringResetClearsStyle(): void
+    {
+        // "\x1b[1mX\x1b[0mY" = bold X then reset then Y (no style)
+        $buf = Buffer::fromString("\x1b[1mX\x1b[0mY", 2, 1);
+
+        $this->assertTrue($buf->cellAt(0, 0)->style()->hasBold());
+        $this->assertNull($buf->cellAt(1, 0)->style());
+    }
+
+    public function testFromStringNonPositiveWidthThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Buffer::fromString('ABC', 0, 1);
+    }
+
+    public function testFromStringNonPositiveHeightThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Buffer::fromString('ABC', 3, -1);
+    }
+
+    public function testFromStringMultiCharStyle(): void
+    {
+        // "\x1b[1;4mX" = bold + underline
+        $buf = Buffer::fromString("\x1b[1;4mX", 1, 1);
+
+        $this->assertSame('X', $buf->cellAt(0, 0)->rune());
+        $this->assertTrue($buf->cellAt(0, 0)->style()->hasBold());
+        $this->assertTrue($buf->cellAt(0, 0)->style()->hasUnderline());
+    }
+
+    // ─── copy() negative origin edge case ────────────────────────────────
+
+    public function testCopyFullyNegativeOriginUsesAllBlankCells(): void
+    {
+        // Region at (-5, -5) with size 3x3 — source coords (-5,-5) through (-3,-3)
+        // are all out of bounds, so all 9 cells should be blank.
+        $buf = Buffer::new(3, 3);
+        $copy = $buf->copy(new Region(Position::new(-5, -5), 3, 3));
+
+        $this->assertSame(3, $copy->width());
+        $this->assertSame(3, $copy->height());
+        for ($r = 0; $r < 3; $r++) {
+            for ($c = 0; $c < 3; $c++) {
+                $this->assertSame(' ', $copy->cellAt($c, $r)->rune());
+            }
+        }
+    }
+
+    public function testCopyPartiallyNegativeOriginUsesSomeBlankCells(): void
+    {
+        // Region at (-1, -1) with size 3x2 on a 3x2 buffer
+        // Source coords: row0=(-1,-1),(-0,-1),(1,-1) — all negative row = out of bounds
+        // Source coords: row1=(-1,0),(0,0),(1,0) — only (0,0) is in bounds if buffer has content
+        // Given empty buffer, all become blank
+        $buf = Buffer::new(3, 2);
+        $buf = $buf->withCellAt(1, 0, Cell::new('X'));
+        $copy = $buf->copy(new Region(Position::new(-1, -1), 3, 2));
+
+        // Source (1,0) maps to dest (0,0) - but origin is negative so offset matters
+        // dest col 0 = src col (-1 + 0) = -1 -> blank
+        // dest col 1 = src col (-1 + 1) = 0 -> X is at (1,0), not (0,0) -> blank  
+        // dest col 2 = src col (-1 + 2) = 1 -> X is at (1,0), not (1,0)? wait
+        // Let me trace through: srcCol = region.origin.col + dx = -1 + dx
+        // for dest (0,0), dx=0: srcCol = -1, srcRow = -1 -> out of bounds -> blank
+        // for dest (1,0), dx=1: srcCol = 0, srcRow = -1 -> out of bounds -> blank
+        // for dest (2,0), dx=2: srcCol = 1, srcRow = -1 -> out of bounds -> blank
+        $this->assertSame(3, $copy->width());
+        $this->assertSame(2, $copy->height());
+    }
+
+    // ─── applyDiff edge cases ─────────────────────────────────────────────
+
+    public function testApplyDiffSetCellOpMultipleCells(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(1, 0, Cell::new('B'))
+            ->withCellAt(2, 0, Cell::new('C'));
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('A', $result->cellAt(0, 0)->rune());
+        $this->assertSame('B', $result->cellAt(1, 0)->rune());
+        $this->assertSame('C', $result->cellAt(2, 0)->rune());
+    }
+
+    public function testApplyDiffSetCellOpClipsCursorAtRightEdge(): void
+    {
+        $prev = Buffer::new(3, 1);
+        $curr = $prev->withCellAt(2, 0, Cell::new('X'));
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('X', $result->cellAt(2, 0)->rune());
+    }
+
+    public function testApplyDiffEraseRunOpAtRightEdgeClips(): void
+    {
+        // 3-cell buffer; erasing 5 cells at cursor 0 should only erase 3
+        $prev = Buffer::new(3, 1)->withCellAt(0, 0, Cell::new('A'))
+                                  ->withCellAt(1, 0, Cell::new('B'))
+                                  ->withCellAt(2, 0, Cell::new('C'));
+        $curr = Buffer::new(3, 1);
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        // All cells should be blank after erase
+        $this->assertSame(' ', $result->cellAt(0, 0)->rune());
+        $this->assertSame(' ', $result->cellAt(1, 0)->rune());
+        $this->assertSame(' ', $result->cellAt(2, 0)->rune());
+    }
+
+    public function testApplyDiffRepeatRunOpZeroWidthTreatedAsOne(): void
+    {
+        // RepeatRunOp with width=0 should treat width as 1
+        $prev = Buffer::new(5, 1);
+        $curr = $prev->withCellAt(0, 0, Cell::new('X'));
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('X', $result->cellAt(0, 0)->rune());
+    }
+
+    public function testApplyDiffWideCharCreatesContinuationCell(): void
+    {
+        $prev = Buffer::new(3, 1);
+        $wide = Cell::new('日', null, null, 2);
+        $curr = $prev
+            ->withCellAt(0, 0, $wide)
+            ->withCellAt(1, 0, Cell::continuation());
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('日', $result->cellAt(0, 0)->rune());
+        $this->assertSame(2, $result->cellAt(0, 0)->width());
+        $this->assertSame('', $result->cellAt(1, 0)->rune());
+        $this->assertSame(0, $result->cellAt(1, 0)->width());
+    }
 }

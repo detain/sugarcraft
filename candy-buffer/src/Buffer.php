@@ -175,15 +175,15 @@ final class Buffer implements \JsonSerializable
             } elseif ($p >= 100 && $p <= 107) {
                 $bg = self::ansiColorToHex($p - 100, true);
             } elseif ($p === 1) {
-                $attrs[] = 'bold';
+                $attrs[] = Style::ATTR_BOLD;
             } elseif ($p === 4) {
-                $attrs[] = 'underline';
+                $attrs[] = Style::ATTR_UNDERLINE;
             }
             // Additional SGR params can be extended here
         }
 
         return $fg !== null || $bg !== null || $attrs !== []
-            ? new Style($fg, $bg, $attrs)
+            ? new Style($fg, $bg, array_sum($attrs))
             : null;
     }
 
