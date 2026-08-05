@@ -342,13 +342,17 @@ final class AgentManagerTest extends TestCase
         $agent2 = $this->createAgent(name: 'parallel-agent-2', prompt: 'Agent 2');
         $agent3 = $this->createAgent(name: 'parallel-agent-3', prompt: 'Agent 3');
 
+        $subAgent1 = new SubAgent(id: 'sub1', agent: $agent1, task: 'Task 1');
+        $subAgent2 = new SubAgent(id: 'sub2', agent: $agent2, task: 'Task 2');
+        $subAgent3 = new SubAgent(id: 'sub3', agent: $agent3, task: 'Task 3');
+
         $request = new CompleteRequest(
             model: 'test-model',
             messages: [new \SugarCraft\Crush\Messages\UserMessage('Execute all tasks')],
         );
 
         $results = [];
-        foreach ($agentManager->executeAll([$agent1, $agent2, $agent3], $request) as $result) {
+        foreach ($agentManager->executeAll([$subAgent1, $subAgent2, $subAgent3], $request) as $result) {
             $results[$result->agentId] = $result;
         }
 
@@ -365,7 +369,7 @@ final class AgentManagerTest extends TestCase
         }
     }
 
-    public function testExecuteAllCreatesSubAgentsFromAgents(): void
+    public function testExecuteAllDelegatesToWorkerPool(): void
     {
         $blockingExecutor = $this->createMock(\SugarCraft\Crush\Agents\ExecutorInterface::class);
         $blockingExecutor->method('execute')
@@ -399,20 +403,74 @@ final class AgentManagerTest extends TestCase
         );
 
         $agent = $this->createAgent(name: 'exec-agent', prompt: 'Execute prompt');
+        $subAgent = new SubAgent(id: 'pooled-sub', agent: $agent, task: 'Shared task message');
 
         $request = new CompleteRequest(
             model: 'test-model',
-            messages: [new \SugarCraft\Crush\Messages\UserMessage('Shared task message')],
+            messages: [new \SugarCraft\Crush\Messages\UserMessage('Ignored')],
         );
 
         $results = [];
-        foreach ($agentManager->executeAll([$agent], $request) as $result) {
+        foreach ($agentManager->executeAll([$subAgent], $request) as $result) {
             $results[] = $result;
         }
 
         $this->assertCount(1, $results);
         $this->assertStringContainsString('Shared task message', $results[0]->output ?? '');
         $this->assertStringContainsString('exec-agent', $results[0]->output ?? '');
+    }
+
+    public function testExecuteAllRegistersSubAgentsForTracking(): void
+    {
+        $customExecutor = $this->createMock(\SugarCraft\Crush\Agents\ExecutorInterface::class);
+        $customExecutor->method('execute')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                return new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Result',
+                );
+            });
+        $customExecutor->method('executeStream')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                yield new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Result',
+                );
+            });
+        $customExecutor->method('cancel')->willReturnCallback(function (string $id) {});
+        $customExecutor->method('cancelAll')->willReturnCallback(function () {});
+
+        $workerPool = new \SugarCraft\Crush\Agents\AgentWorkerPool(
+            maxConcurrent: 5,
+            executor: $customExecutor,
+        );
+
+        $agentManager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: $workerPool,
+        );
+
+        $agent = $this->createAgent(name: 'track-agent', prompt: 'Track prompt');
+        $subAgent = new SubAgent(id: 'track-sub', agent: $agent, task: 'Track task');
+
+        $request = new CompleteRequest(
+            model: 'test-model',
+            messages: [new \SugarCraft\Crush\Messages\UserMessage('Track test')],
+        );
+
+        $results = [];
+        foreach ($agentManager->executeAll([$subAgent], $request) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertCount(1, $results);
+
+        // Sub-agent must be registered so it can be looked up
+        $tracked = $agentManager->getSubAgent('track-sub');
+        $this->assertSame($subAgent, $tracked);
     }
 
     public function testExecuteAllUsesProvidedWorkerPool(): void
@@ -449,14 +507,15 @@ final class AgentManagerTest extends TestCase
         );
 
         $agent = $this->createAgent(name: 'pooled-agent', prompt: 'Pooled agent prompt');
+        $subAgent = new SubAgent(id: 'custom-pool-sub', agent: $agent, task: 'Pooled task');
 
         $request = new CompleteRequest(
             model: 'test-model',
-            messages: [new \SugarCraft\Crush\Messages\UserMessage('Pooled task')],
+            messages: [new \SugarCraft\Crush\Messages\UserMessage('Ignored')],
         );
 
         $results = [];
-        foreach ($agentManager->executeAll([$agent], $request) as $result) {
+        foreach ($agentManager->executeAll([$subAgent], $request) as $result) {
             $results[] = $result;
         }
 

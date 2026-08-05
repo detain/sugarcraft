@@ -147,39 +147,26 @@ final class AgentManager
     }
 
     /**
-     * Execute multiple agents in parallel using AgentWorkerPool.
+     * Execute multiple sub-agents in parallel via AgentWorkerPool.
      *
-     * @param Agent[] $agents
+     * @param SubAgent[] $agents
      * @return \Generator<AgentResult>
+     * @see P1.S10 for wiring AgentWorkerPool into Chat; callers migrating from Agent[] must now pass SubAgent[]
      */
     public function executeAll(array $agents, CompleteRequest $request): \Generator
     {
         $pool = $this->workerPool ?? new AgentWorkerPool();
 
-        // Build SubAgent objects from the given agents, using the task from
-        // the request messages (assumes first UserMessage is the task).
-        $messages = $request->messages;
-        $task = '';
-        if (isset($messages[0]) && $messages[0] instanceof \SugarCraft\Crush\Messages\UserMessage) {
-            $task = $messages[0]->content();
-        } else {
-            throw new \InvalidArgumentException('First message in request must be a UserMessage');
-        }
-
-        $subAgents = [];
+        // Register each sub-agent so it is trackable via getSubAgent().
         foreach ($agents as $agent) {
-            $subAgent = new SubAgent(
-                id: uniqid('pool_'),
-                agent: $agent,
-                task: $task,
-            );
-            $subAgents[] = $subAgent;
-            $this->subAgents[$subAgent->id] = $subAgent;
+            assert($agent instanceof SubAgent, 'executeAll requires SubAgent[]');
+            if ($agent->task === '') {
+                throw new \InvalidArgumentException('SubAgent task cannot be empty');
+            }
+            $this->subAgents[$agent->id] = $agent;
         }
 
-        foreach ($pool->executeAll($subAgents, $request) as $result) {
-            yield $result;
-        }
+        yield from $pool->executeAll($agents, $request);
     }
 
     /**
