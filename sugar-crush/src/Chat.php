@@ -14,6 +14,12 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Workflows\WorkflowEngine;
+use SugarCraft\Crush\Workflows\WorkflowLoadException;
+use SugarCraft\Crush\Workflows\WorkflowNotFoundException;
+use SugarCraft\Crush\Workflows\WorkflowNotRunningException;
+use SugarCraft\Crush\Workflows\WorkflowResult;
+use SugarCraft\Crush\Workflows\WorkflowStatus;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -44,6 +50,9 @@ final class Chat implements Model
 {
     private readonly Backend $backend;
 
+    /** @var WorkflowEngine|null Optional workflow engine for /workflow command */
+    private readonly ?WorkflowEngine $workflowEngine;
+
     /** @var Buffer|null Previous rendered frame for diff-based emission */
     private ?Buffer $previousFrame = null;
 
@@ -72,8 +81,10 @@ final class Chat implements Model
         private readonly ?\Closure $onToolCall = null,
         private readonly ?\SugarCraft\Crush\Agents\AgentPoolConfig $agentPoolConfig = null,
         private readonly ?\SugarCraft\Crush\Agents\AgentWorkerPool $effectivePool = null,
+        ?WorkflowEngine $workflowEngine = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
+        $this->workflowEngine = $workflowEngine;
     }
 
     public function init(): ?\Closure
@@ -102,6 +113,7 @@ final class Chat implements Model
                 onToolCall: $this->onToolCall,
                 agentPoolConfig: $this->agentPoolConfig,
                 effectivePool: $this->effectivePool,
+                workflowEngine: $this->workflowEngine,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -171,6 +183,7 @@ final class Chat implements Model
             onToolCall: $this->onToolCall,
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
         );
 
         $backend = $this->backend;
@@ -328,6 +341,22 @@ final class Chat implements Model
     }
 
     /**
+     * Create a new Chat with an explicit workflow engine.
+     */
+    public function withWorkflowEngine(WorkflowEngine $engine): self
+    {
+        return $this->mutate(['workflowEngine' => $engine]);
+    }
+
+    /**
+     * Get the workflow engine, if set.
+     */
+    public function workflowEngine(): ?WorkflowEngine
+    {
+        return $this->workflowEngine;
+    }
+
+    /**
      * Merge changes into a new Chat instance.
      *
      * Only constructor-promoted properties are passed through to avoid
@@ -350,6 +379,7 @@ final class Chat implements Model
             'agentPoolConfig' => $this->agentPoolConfig,
             'effectivePool' => $this->effectivePool,
             'backend' => $this->backend,
+            'workflowEngine' => $this->workflowEngine,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -368,6 +398,7 @@ final class Chat implements Model
             onToolCall: $this->onToolCall,
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
         );
     }
 
@@ -384,6 +415,7 @@ final class Chat implements Model
             onToolCall: $this->onToolCall,
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
         );
     }
 
@@ -409,6 +441,7 @@ final class Chat implements Model
             onToolCall: $this->onToolCall,
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
         );
     }
 
@@ -431,6 +464,7 @@ final class Chat implements Model
             onToolCall: $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
         );
     }
 
@@ -456,6 +490,12 @@ final class Chat implements Model
         if ($text === '') {
             return [$this, null];
         }
+
+        // Handle /workflow commands locally without calling the backend
+        if (str_starts_with($text, '/workflow')) {
+            return $this->handleWorkflowCommand($text);
+        }
+
         $next = new self(
             history: [...$this->history, Message::user($text)],
             inputBuf: '',
@@ -467,6 +507,7 @@ final class Chat implements Model
             onToolCall: $this->onToolCall,
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
         );
         $backend = $this->backend;
         $history = $next->history;
@@ -478,6 +519,231 @@ final class Chat implements Model
             );
         });
         return [$next, $cmd];
+    }
+
+    /**
+     * Handle /workflow commands locally.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleWorkflowCommand(string $inputText): array
+    {
+        // Check if workflow engine is configured
+        if ($this->workflowEngine === null) {
+            $response = "Workflow engine not configured. Set a WorkflowEngine to use /workflow commands.";
+            return $this->workflowResponse($inputText, $response);
+        }
+
+        $afterWorkflow = ltrim(substr($inputText, 9));
+        if ($afterWorkflow === '') {
+            return $this->workflowHelpResponse($inputText);
+        }
+
+        $parts = preg_split('/\s+/', $afterWorkflow, 2);
+        $command = $parts[0];
+        $args = $parts[1] ?? '';
+
+        return match ($command) {
+            'run' => $this->workflowRun($inputText, $args),
+            'pause' => $this->workflowPause($inputText, $args),
+            'resume' => $this->workflowResume($inputText, $args),
+            'status' => $this->workflowStatus($inputText, $args),
+            'list' => $this->workflowList($inputText),
+            default => $this->workflowHelpResponse($inputText, "Unknown command '{$command}'."),
+        };
+    }
+
+    /**
+     * Return a workflow command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function workflowResponse(string $inputText, string $response): array
+    {
+        $next = new self(
+            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+        );
+        return [$next, null];
+    }
+
+    /**
+     * Show help text for /workflow command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function workflowHelpResponse(string $inputText, ?string $error = null): array
+    {
+        $lines = [];
+        if ($error !== null) {
+            $lines[] = "**Error:** {$error}";
+            $lines[] = '';
+        }
+        $lines[] = '**Available /workflow commands:**';
+        $lines[] = '';
+        $lines[] = '`/workflow run <name> [key=val ...]` — Run a workflow by name with optional context';
+        $lines[] = '`/workflow pause <workflowId>` — Pause a running workflow';
+        $lines[] = '`/workflow resume <workflowId>` — Resume a paused workflow';
+        $lines[] = '`/workflow status <workflowId>` — Check workflow status';
+        $lines[] = '`/workflow list` — List available workflows';
+        $lines[] = '`/workflow` — Show this help text';
+
+        return $this->workflowResponse($inputText, implode("\n", $lines));
+    }
+
+    /**
+     * Handle /workflow run command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function workflowRun(string $inputText, string $args): array
+    {
+        $argParts = preg_split('/\s+/', $args);
+        $workflowName = $argParts[0] ?? '';
+
+        if ($workflowName === '') {
+            return $this->workflowHelpResponse($inputText, "Usage: /workflow run <name> [key=val ...]");
+        }
+
+        // Parse key=val context pairs
+        $context = [];
+        foreach (array_slice($argParts, 1) as $pair) {
+            if (str_contains($pair, '=')) {
+                [$k, $v] = explode('=', $pair, 2);
+                $context[trim($k)] = trim($v);
+            }
+        }
+
+        try {
+            $result = $this->workflowEngine->run($workflowName, $context);
+            $response = "**Workflow '{$workflowName}' completed**\n\n";
+            $response .= "ID: `{$result->workflowId}`\n";
+            $response .= "Status: {$result->status->value}\n";
+            $response .= "Stages completed: " . count($result->stageResults) . "\n";
+            $response .= "Total tokens: {$result->totalTokens}\n";
+            $response .= "Total cost: \${$result->totalCost}";
+        } catch (WorkflowNotFoundException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (WorkflowLoadException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->workflowResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /workflow pause command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function workflowPause(string $inputText, string $args): array
+    {
+        $workflowId = trim($args);
+
+        if ($workflowId === '') {
+            return $this->workflowHelpResponse($inputText, "Usage: /workflow pause <workflowId>");
+        }
+
+        try {
+            $this->workflowEngine->pause($workflowId);
+            $response = "Workflow `{$workflowId}` has been paused.";
+        } catch (WorkflowNotRunningException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->workflowResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /workflow resume command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function workflowResume(string $inputText, string $args): array
+    {
+        $workflowId = trim($args);
+
+        if ($workflowId === '') {
+            return $this->workflowHelpResponse($inputText, "Usage: /workflow resume <workflowId>");
+        }
+
+        try {
+            $result = $this->workflowEngine->resume($workflowId);
+            $response = "**Workflow '{$workflowId}' resumed and completed**\n\n";
+            $response .= "ID: `{$result->workflowId}`\n";
+            $response .= "Status: {$result->status->value}\n";
+            $response .= "Stages completed: " . count($result->stageResults) . "\n";
+            $response .= "Total tokens: {$result->totalTokens}\n";
+            $response .= "Total cost: \${$result->totalCost}";
+        } catch (WorkflowNotRunningException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (WorkflowNotFoundException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->workflowResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /workflow status command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function workflowStatus(string $inputText, string $args): array
+    {
+        $workflowId = trim($args);
+
+        if ($workflowId === '') {
+            return $this->workflowHelpResponse($inputText, "Usage: /workflow status <workflowId>");
+        }
+
+        try {
+            $status = $this->workflowEngine->getStatus($workflowId);
+            $response = "Workflow `{$workflowId}` status: **{$status->value}**";
+        } catch (WorkflowNotRunningException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->workflowResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /workflow list command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function workflowList(string $inputText): array
+    {
+        $workflows = $this->workflowEngine->registry->list();
+
+        if ($workflows === []) {
+            $response = "No workflows found in `~/.sugar-crush/workflows/`.";
+        } else {
+            $lines = ['**Available workflows:**'];
+            foreach ($workflows as $i => $name) {
+                $lines[] = ($i + 1) . ". `{$name}`";
+            }
+            $response = implode("\n", $lines);
+        }
+
+        return $this->workflowResponse($inputText, $response);
     }
 
     private function withInputBuf(string $buf): self
