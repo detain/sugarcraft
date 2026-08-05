@@ -60,4 +60,28 @@ final readonly class Teammate
     {
         return TeammateStatus::Idle;
     }
+
+    /**
+     * Returns a new Teammate instance with the given worktree path associated.
+     *
+     * This wires the teammate to a specific worktree for atomic task claiming:
+     * when a teammate claims a task in a team with worktree isolation enabled,
+     * the worktree is atomically associated with that claim.
+     *
+     * @param string $worktreePath Absolute filesystem path to the teammate's worktree.
+     * @return self A new Teammate instance with the worktree path set.
+     */
+    public function withWorktreePath(string $worktreePath): self
+    {
+        return new self(
+            id: $this->id,
+            teamId: $this->teamId,
+            name: $this->name,
+            type: $this->type,
+            model: $this->model,
+            tools: $this->tools,
+            worktreePath: $worktreePath,
+            branch: $this->branch,
+        );
+    }
 }

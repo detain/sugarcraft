@@ -236,4 +236,95 @@ final class TeammateTest extends TestCase
 
         $this->assertSame([], $teammate->tools);
     }
+
+    // -------------------------------------------------------------------------
+    // withWorktreePath() - immutable fluent setter for worktree association
+    // -------------------------------------------------------------------------
+
+    public function testWithWorktreePathReturnsNewInstance(): void
+    {
+        $teammate = new Teammate(
+            id: 'teammate-wt',
+            teamId: 'team-wt',
+            name: 'worktree-test',
+            type: AgentType::Coder,
+            model: 'test-model',
+            tools: ['Read', 'Edit'],
+        );
+
+        $this->assertNull($teammate->worktreePath);
+
+        $newTeammate = $teammate->withWorktreePath('/home/user/.sugar-crush/worktrees/teammate-wt');
+
+        // Original is unchanged (immutability)
+        $this->assertNull($teammate->worktreePath);
+        // New instance has the worktree path
+        $this->assertSame('/home/user/.sugar-crush/worktrees/teammate-wt', $newTeammate->worktreePath);
+        // Other properties preserved
+        $this->assertSame('teammate-wt', $newTeammate->id);
+        $this->assertSame('team-wt', $newTeammate->teamId);
+        $this->assertSame('worktree-test', $newTeammate->name);
+        $this->assertSame(AgentType::Coder, $newTeammate->type);
+        $this->assertSame(['Read', 'Edit'], $newTeammate->tools);
+    }
+
+    public function testWithWorktreePathOverwritesExistingPath(): void
+    {
+        $teammate = new Teammate(
+            id: 'teammate-wt2',
+            teamId: 'team-wt2',
+            name: 'worktree-overwrite',
+            type: AgentType::Coder,
+            model: 'test-model',
+            tools: [],
+            worktreePath: '/old/worktree/path',
+            branch: 'old-branch',
+        );
+
+        $newTeammate = $teammate->withWorktreePath('/new/worktree/path');
+
+        $this->assertSame('/old/worktree/path', $teammate->worktreePath);
+        $this->assertSame('/new/worktree/path', $newTeammate->worktreePath);
+        $this->assertSame('old-branch', $newTeammate->branch);
+    }
+
+    public function testWithWorktreePathPreservesBranch(): void
+    {
+        $teammate = new Teammate(
+            id: 'teammate-branch',
+            teamId: 'team-branch',
+            name: 'branch-test',
+            type: AgentType::Reviewer,
+            model: 'test-model',
+            tools: [],
+            branch: 'agent-teammate-branch-20260101',
+        );
+
+        $newTeammate = $teammate->withWorktreePath('/sugar-crush/worktrees/teammate-branch');
+
+        $this->assertNull($teammate->worktreePath);
+        $this->assertSame('/sugar-crush/worktrees/teammate-branch', $newTeammate->worktreePath);
+        $this->assertSame('agent-teammate-branch-20260101', $newTeammate->branch);
+    }
+
+    public function testWithWorktreePathInstancesAreDistinct(): void
+    {
+        $teammate = new Teammate(
+            id: 'teammate-distinct',
+            teamId: 'team-distinct',
+            name: 'distinct-test',
+            type: AgentType::Coder,
+            model: 'test-model',
+            tools: [],
+        );
+
+        $newTeammate = $teammate->withWorktreePath('/path/a');
+        $newTeammate2 = $teammate->withWorktreePath('/path/b');
+
+        $this->assertNotSame($teammate, $newTeammate);
+        $this->assertNotSame($teammate, $newTeammate2);
+        $this->assertNotSame($newTeammate, $newTeammate2);
+        $this->assertSame('/path/a', $newTeammate->worktreePath);
+        $this->assertSame('/path/b', $newTeammate2->worktreePath);
+    }
 }
