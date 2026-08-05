@@ -13,10 +13,11 @@ use SugarCraft\Crush\ToolCall;
  * PermissionRule matching is glob-style: Bash(composer update *), Read(./.env), mcp__git__*
  * A rule matches when the ToolCall name matches the pattern portion.
  *
- * Three modes are implemented here (P2B.S2):
- * - Default:  reads silently; writes/networking always Ask
+ * Four modes are implemented here (P2B.S2 + P2B.S3):
+ * - Default:     reads silently; writes/networking always Ask
  * - AcceptEdits: scoped filesystem writes auto-Allow; everything else Ask
- * - Plan:    all writes Deny; reads Allow
+ * - Plan:        all writes Deny; reads Allow
+ * - Auto:        everything runs gated by SafetyClassifier; 3-strike / 20-total circuit breaker
  *
  * @see PermissionMode for the full set of modes
  */
@@ -26,6 +27,19 @@ final class PermissionGate
      * Filesystem operations that AcceptEdits may auto-approve when scoped to the working directory.
      */
     private const SCOPED_WRITE_TOOLS = ['mkdir', 'touch', 'mv', 'cp', 'rm', 'rmdir'];
+
+    /**
+     * Circuit-breaker thresholds for Auto mode.
+     */
+    private const STRIKE_THRESHOLD = 3;
+    private const TOTAL_BLOCK_THRESHOLD = 20;
+
+    // -------------------------------------------------------------------------
+    // Auto-mode circuit breaker state
+    // -------------------------------------------------------------------------
+    private int $consecutiveBlocks = 0;
+    private int $totalBlocks = 0;
+    private ?string $lastBlockedCategory = null;
 
     public function __construct(
         private readonly PermissionMode $mode,
@@ -50,8 +64,8 @@ final class PermissionGate
             PermissionMode::Default => $this->evaluateDefault($call),
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call),
             PermissionMode::Plan => $this->evaluatePlan($call),
-            // P2B.S3 / P2B.S4 handle the remaining modes
-            PermissionMode::Auto,
+            PermissionMode::Auto => $this->evaluateAuto($call),
+            // P2B.S4 handles DontAsk and BypassPermissions
             PermissionMode::DontAsk,
             PermissionMode::BypassPermissions => PermissionDecision::Ask,
         };
@@ -128,6 +142,49 @@ final class PermissionGate
 
         // Everything else (network, shell commands, non-scoped writes) asks
         return PermissionDecision::Ask;
+    }
+
+    /**
+     * Auto: everything runs gated by SafetyClassifier; circuit breaker triggers Ask after
+     * 3 consecutive blocks of the same category OR 20 total blocks in the session.
+     *
+     * @see SafetyClassifier for the 13 dangerous-action categories.
+     */
+    private function evaluateAuto(ToolCall $call): PermissionDecision
+    {
+        // SafetyClassifier is the gatekeeper for Auto mode
+        if ($this->classifier === null) {
+            // No classifier available — behave like BypassPermissions: allow everything
+            return PermissionDecision::Allow;
+        }
+
+        $category = $this->classifier->classify($call);
+
+        // Action is safe — reset counters and allow
+        if ($category === null) {
+            $this->consecutiveBlocks = 0;
+            $this->lastBlockedCategory = null;
+            return PermissionDecision::Allow;
+        }
+
+        // Dangerous action blocked — update circuit breaker state
+        if ($category === $this->lastBlockedCategory) {
+            ++$this->consecutiveBlocks;
+        } else {
+            $this->consecutiveBlocks = 1;
+            $this->lastBlockedCategory = $category;
+        }
+        ++$this->totalBlocks;
+
+        // Circuit breaker thresholds
+        if ($this->consecutiveBlocks >= self::STRIKE_THRESHOLD) {
+            return PermissionDecision::Ask;
+        }
+        if ($this->totalBlocks >= self::TOTAL_BLOCK_THRESHOLD) {
+            return PermissionDecision::Ask;
+        }
+
+        return PermissionDecision::Deny;
     }
 
     /**
