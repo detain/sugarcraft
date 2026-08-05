@@ -27,6 +27,42 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
  */
 final class Renderer
 {
+    /**
+     * Render two panes in a split layout.
+     *
+     * This is the in-process split pane renderer: composes multiple pane
+     * contents into a tmux-like layout without external dependencies.
+     * Panes expand proportionally on resize based on the SplitLayout's
+     * stored ratio.
+     *
+     * @param string        $topOrLeft    Content of the first pane.
+     * @param string        $bottomOrRight Content of the second pane.
+     * @param SplitDirection $direction   Split orientation (horizontal/vertical).
+     * @param int           $topOrLeftNumerator   Proportion of first pane (default 1).
+     * @param int           $totalDenominator    Total proportion units (default 2).
+     * @return string Rendered split layout with divider.
+     *
+     * @see SplitLayout for proportional sizing and resize behavior.
+     */
+    public static function renderWithSplit(
+        string $topOrLeft,
+        string $bottomOrRight,
+        SplitDirection $direction,
+        int $topOrLeftNumerator = 1,
+        int $totalDenominator = 2,
+    ): string {
+        $layout = new SplitLayout(
+            $topOrLeft,
+            $bottomOrRight,
+            $direction,
+            $topOrLeftNumerator,
+            $totalDenominator,
+        );
+
+        $size = self::getTerminalSize();
+
+        return $layout->render($size['cols'], $size['rows']);
+    }
     private static ?array $terminalSize = null;
 
     public static function setSize(int $cols, int $rows): void
