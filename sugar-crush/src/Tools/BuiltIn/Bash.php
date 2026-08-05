@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -17,6 +18,10 @@ use SugarCraft\Crush\Tools\ToolResult;
  * reach anything the PHP process can — jailing free-form shell by rewriting the
  * command string is not sound, so we don't pretend to.
  *
+ * When a worktree PathJail is injected, the `cd` prefix targets the worktree
+ * root so git/file operations run within that isolated tree. The command
+ * itself is still unconstrained.
+ *
  * Callers that need containment have two layers: run the process itself in a
  * real jail/container, and/or opt into
  * {@see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook}, a heuristic
@@ -26,6 +31,7 @@ final readonly class Bash implements Tool
 {
     public function __construct(
         private ?string $root = null,
+        private ?AgentPathJail $worktreeJail = null,
     ) {}
 
     public function name(): string
@@ -52,7 +58,9 @@ final readonly class Bash implements Tool
         $command = $args['command'] ?? '';
         $output = [];
         $exitCode = 0;
-        $cwd = $this->root ?? null;
+        // Worktree jail takes precedence over root for isolated teammates;
+        // jailPath('') returns the worktree root when path is empty.
+        $cwd = $this->worktreeJail?->jailPath('') ?? $this->root ?? null;
         // Mirrors charmbracelet/bubbletea.*.Exec.
         // Use bash -c to interpret shell syntax; escapeshellarg prevents command injection.
         if ($cwd !== null) {

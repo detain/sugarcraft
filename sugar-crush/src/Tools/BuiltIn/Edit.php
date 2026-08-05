@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
@@ -15,6 +16,7 @@ final readonly class Edit implements Tool
     public function __construct(
         private ?string $root = null,
         private int $maxBytes = self::DEFAULT_MAX_BYTES,
+        private ?AgentPathJail $worktreeJail = null,
     ) {}
 
     public function name(): string
@@ -54,7 +56,16 @@ final readonly class Edit implements Tool
             );
         }
 
-        if ($this->root !== null) {
+        if ($this->worktreeJail !== null) {
+            $path = $this->worktreeJail->jailPath($path);
+            if (!$this->worktreeJail->isAllowed($path)) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: 'Error: path outside worktree',
+                    isError: true,
+                );
+            }
+        } elseif ($this->root !== null) {
             $resolved = PathJail::resolve($this->root, $path);
             if ($resolved === null) {
                 return new ToolResult(
