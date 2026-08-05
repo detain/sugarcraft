@@ -616,4 +616,243 @@ final class WorkflowEngineTest extends TestCase
         $this->assertStringContainsString('step-1-output', $result->stageResults[0]->output);
         $this->assertStringContainsString('step-2-output', $result->stageResults[0]->output);
     }
+
+    public function testPausePersistsState(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('pause-test')
+            ->description('Test pause persistence')
+            ->stage('stage-1', Tasks::agent('coder')->prompt('Step 1'))
+            ->stage('stage-2', Tasks::agent('coder')->prompt('Step 2'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $callCount = 0;
+        $this->mockExecutor
+            ->expects($this->exactly(2))
+            ->method('execute')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                return $this->successfulAgentResult("output-{$callCount}", 100 * $callCount, 0.01 * $callCount);
+            });
+
+        // Run the workflow to populate state
+        $this->engine->run('pause-test', []);
+
+        // Override HOME to a temp directory so we don't pollute ~/.sugar-crush/
+        $oldHome = $_SERVER['HOME'] ?? '/root';
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-pause-test-' . uniqid();
+        mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $_SERVER['HOME'] = $tmpDir;
+
+        try {
+            // Now pause the completed workflow
+            $this->engine->pause('pause-test');
+
+            $pauseFile = $tmpDir . '/.sugar-crush/workflows/.running/pause-test.json';
+            $this->assertFileExists($pauseFile);
+
+            $data = json_decode(file_get_contents($pauseFile), true);
+            $this->assertSame('pause-test', $data['workflowId']);
+            $this->assertSame('paused', $data['status']);
+            // Context should contain stage outputs
+            $this->assertSame('output-1', $data['context']['stage-1.output'] ?? null);
+            $this->assertSame('output-2', $data['context']['stage-2.output'] ?? null);
+            // Stages completed should reflect both stages finished
+            $this->assertSame(2, $data['stagesCompleted']);
+            $this->assertSame(300, $data['totalTokens']);
+        } finally {
+            $_SERVER['HOME'] = $oldHome;
+            // Clean up
+            @unlink($tmpDir . '/.sugar-crush/workflows/.running/pause-test.json');
+            @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
+            @rmdir($tmpDir . '/.sugar-crush/workflows');
+            @rmdir($tmpDir . '/.sugar-crush');
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testResumeContinuesFromPausedState(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('resume-test')
+            ->description('Test resume continuation')
+            ->stage('stage-1', Tasks::agent('coder')->prompt('Step 1'))
+            ->stage('stage-2', Tasks::agent('coder')->prompt('Step 2'))
+            ->stage('stage-3', Tasks::agent('coder')->prompt('Step 3'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        // Use a callback that tracks calls and returns distinct outputs
+        $callCount = 0;
+        $this->mockExecutor
+            ->expects($this->any())
+            ->method('execute')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                // On initial run: calls 1,2,3 succeed
+                // On resume: calls 4,5 succeed (callCount persists across run and resume)
+                return $this->successfulAgentResult("output-{$callCount}", 100 * $callCount, 0.01 * $callCount);
+            });
+
+        // Override HOME to a temp directory
+        $oldHome = $_SERVER['HOME'] ?? '/root';
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-resume-test-' . uniqid();
+        mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $_SERVER['HOME'] = $tmpDir;
+
+        try {
+            // Run the workflow — all 3 stages succeed, callCount becomes 3
+            $result = $this->engine->run('resume-test', []);
+            $this->assertSame(3, $callCount);
+            $this->assertSame(WorkflowStatus::Completed, $result->status);
+
+            // Simulate a pause file that says only stage 1 was completed
+            // (for testing resume continuation, not full workflow completion)
+            $pauseFile = $tmpDir . '/.sugar-crush/workflows/.running/resume-test.json';
+            $pauseData = [
+                'workflowId' => 'resume-test',
+                'workflowPath' => 'resume-test',
+                'status' => 'paused',
+                'stagesCompleted' => 1,
+                'context' => [
+                    'stage-1.output' => 'output-1',
+                ],
+                'stageResults' => [
+                    [
+                        'stageName' => 'stage-1',
+                        'status' => 'completed',
+                        'output' => 'output-1',
+                        'error' => null,
+                        'agents' => [
+                            [
+                                'agentId' => 'agent-1',
+                                'status' => 'completed',
+                                'output' => 'output-1',
+                                'error' => null,
+                                'tokensUsed' => 100,
+                                'costUsd' => 0.01,
+                                'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                                'completedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                            ],
+                        ],
+                        'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                        'completedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                    ],
+                ],
+                'totalTokens' => 100,
+                'totalCost' => 0.01,
+                'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            ];
+            file_put_contents($pauseFile, json_encode($pauseData, JSON_PRETTY_PRINT));
+
+            // Resume the workflow — should continue from stage 2 (index 1)
+            // callCount continues from 3 to 4, 5 for the two resumed stages
+            $resumeResult = $this->engine->resume('resume-test');
+
+            // Verify resume ran 2 more stages (stages 2 and 3)
+            $this->assertSame(5, $callCount);
+
+            // Context from pause file should be preserved
+            $this->assertSame('output-1', $resumeResult->context['stage-1.output']);
+
+            // stage-2.output should be from the resumed stage 2 (callCount=4 -> output-4)
+            // stage-3.output should be from the resumed stage 3 (callCount=5 -> output-5)
+            $this->assertSame('output-4', $resumeResult->context['stage-2.output'] ?? null);
+            $this->assertSame('output-5', $resumeResult->context['stage-3.output'] ?? null);
+        } finally {
+            $_SERVER['HOME'] = $oldHome;
+            @unlink($pauseFile);
+            @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
+            @rmdir($tmpDir . '/.sugar-crush/workflows');
+            @rmdir($tmpDir . '/.sugar-crush');
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testPauseOnNonExistentWorkflowThrows(): void
+    {
+        $this->expectException(\SugarCraft\Crush\Workflows\WorkflowNotRunningException::class);
+        $this->expectExceptionMessageMatches('/No result found for workflow/i');
+
+        $this->engine->pause('never-ran-workflow');
+    }
+
+    public function testResumeWithMissingPauseFileThrows(): void
+    {
+        // Override HOME to a temp directory with no pause file
+        $oldHome = $_SERVER['HOME'] ?? '/root';
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-pause-' . uniqid();
+        mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $_SERVER['HOME'] = $tmpDir;
+
+        try {
+            $this->expectException(\SugarCraft\Crush\Workflows\WorkflowNotRunningException::class);
+            $this->expectExceptionMessageMatches('/No paused workflow found/i');
+
+            $this->engine->resume('nonexistent-pause-file');
+        } finally {
+            $_SERVER['HOME'] = $oldHome;
+            @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
+            @rmdir($tmpDir . '/.sugar-crush/workflows');
+            @rmdir($tmpDir . '/.sugar-crush');
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testGetStatusWithMissingPauseFileThrows(): void
+    {
+        // Override HOME to a temp directory with no pause file
+        $oldHome = $_SERVER['HOME'] ?? '/root';
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-missing-status-' . uniqid();
+        mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $_SERVER['HOME'] = $tmpDir;
+
+        try {
+            $this->expectException(\SugarCraft\Crush\Workflows\WorkflowNotRunningException::class);
+            $this->expectExceptionMessageMatches('/No pause file found/i');
+
+            $this->engine->getStatus('nonexistent-pause-file');
+        } finally {
+            $_SERVER['HOME'] = $oldHome;
+            @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
+            @rmdir($tmpDir . '/.sugar-crush/workflows');
+            @rmdir($tmpDir . '/.sugar-crush');
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testGetStatusReturnsPausedStatus(): void
+    {
+        // Override HOME to a temp directory
+        $oldHome = $_SERVER['HOME'] ?? '/root';
+        $tmpDir = sys_get_temp_dir() . '/sugar-crush-status-test-' . uniqid();
+        mkdir($tmpDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $_SERVER['HOME'] = $tmpDir;
+
+        try {
+            // Manually create a pause file
+            $pauseFile = $tmpDir . '/.sugar-crush/workflows/.running/test-wf.json';
+            $pauseData = [
+                'workflowId' => 'test-wf',
+                'status' => 'paused',
+                'workflowPath' => 'some-workflow',
+                'stagesCompleted' => 2,
+            ];
+            file_put_contents($pauseFile, json_encode($pauseData));
+
+            $status = $this->engine->getStatus('test-wf');
+
+            $this->assertSame(WorkflowStatus::Paused, $status);
+        } finally {
+            $_SERVER['HOME'] = $oldHome;
+            @unlink($pauseFile);
+            @rmdir($tmpDir . '/.sugar-crush/workflows/.running');
+            @rmdir($tmpDir . '/.sugar-crush/workflows');
+            @rmdir($tmpDir . '/.sugar-crush');
+            @rmdir($tmpDir);
+        }
+    }
 }

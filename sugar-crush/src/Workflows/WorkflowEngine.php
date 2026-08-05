@@ -23,6 +23,11 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  */
 final class WorkflowEngine
 {
+    private const PAUSE_DIR = '.running';
+
+    /** @var array<string, WorkflowResult> */
+    private array $resultsByName = [];
+
     public function __construct(
         private readonly WorkflowRegistry $registry = new WorkflowRegistry(),
         private readonly AgentWorkerPool $pool = new AgentWorkerPool(),
@@ -40,7 +45,10 @@ final class WorkflowEngine
     public function run(string $workflowPath, array $context = []): WorkflowResult
     {
         $workflow = $this->registry->load($workflowPath);
-        return $this->runFromWorkflow($workflow, $context);
+        $result = $this->runFromWorkflow($workflow, $context, 0, null);
+        $this->resultsByName[$workflowPath] = $result;
+
+        return $result;
     }
 
     /**
@@ -74,7 +82,167 @@ final class WorkflowEngine
             );
         }
 
-        return $this->runFromWorkflow($workflow, $context);
+        return $this->runFromWorkflow($workflow, $context, 0, null);
+    }
+
+    /**
+     * Persist the current state of a workflow so it can be resumed later.
+     *
+     * Looks up the workflow result stored by run() (keyed by workflow name/path)
+     * and writes a pause file to `~/.sugar-crush/workflows/.running/{$workflowId}.json`
+     * containing: stages completed, context, stage results, token/cost totals, and timing.
+     *
+     * @param string $workflowId The workflow name/path used when calling run().
+     * @throws WorkflowNotRunningException When no result is found for this workflowId.
+     */
+    public function pause(string $workflowId): void
+    {
+        if (!isset($this->resultsByName[$workflowId])) {
+            throw new WorkflowNotRunningException(
+                "No result found for workflow '{$workflowId}'. Run the workflow first before pausing."
+            );
+        }
+
+        $result = $this->resultsByName[$workflowId];
+        $pauseFile = $this->getPauseFilePath($workflowId);
+
+        $data = [
+            'workflowId' => $workflowId,
+            'workflowPath' => $workflowId,
+            'status' => WorkflowStatus::Paused->value,
+            'stagesCompleted' => count($result->stageResults),
+            'context' => $result->context,
+            'stageResults' => array_map(
+                fn(StageResult $sr) => $this->serializeStageResult($sr),
+                $result->stageResults,
+            ),
+            'totalTokens' => $result->totalTokens,
+            'totalCost' => $result->totalCost,
+            'startedAt' => $result->startedAt->format(\DateTimeInterface::ATOM),
+            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+        ];
+
+        $dir = dirname($pauseFile);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        file_put_contents($pauseFile, json_encode($data, JSON_PRETTY_PRINT) . "\n");
+    }
+
+    /**
+     * Reload a paused workflow from its persisted state and continue execution.
+     *
+     * @param string $workflowId The unique workflow identifier.
+     * @return WorkflowResult The final result after the resumed workflow completes.
+     * @throws WorkflowNotRunningException When no pause file exists for this workflow.
+     * @throws WorkflowNotFoundException   When the workflow definition can no longer be loaded.
+     */
+    public function resume(string $workflowId): WorkflowResult
+    {
+        $pauseFile = $this->getPauseFilePath($workflowId);
+
+        if (!file_exists($pauseFile)) {
+            throw new WorkflowNotRunningException(
+                "No paused workflow found with ID '{$workflowId}'"
+            );
+        }
+
+        $data = json_decode(file_get_contents($pauseFile), true);
+
+        $workflowPath = $data['workflowPath'] ?? null;
+        if ($workflowPath === null) {
+            throw new WorkflowNotRunningException(
+                "Pause file for '{$workflowId}' is corrupt: missing 'workflowPath' field"
+            );
+        }
+
+        $workflow = $this->registry->load($workflowPath);
+
+        return $this->runFromWorkflow(
+            $workflow,
+            $data['context'] ?? [],
+            $data['stagesCompleted'] ?? 0,
+            $workflowId,
+        );
+    }
+
+    /**
+     * Return the current status of a workflow from its persisted pause file.
+     *
+     * @param string $workflowId The unique workflow identifier.
+     * @return WorkflowStatus The status stored in the pause file.
+     * @throws WorkflowNotRunningException When no pause file exists for this workflow.
+     */
+    public function getStatus(string $workflowId): WorkflowStatus
+    {
+        $pauseFile = $this->getPauseFilePath($workflowId);
+
+        if (!file_exists($pauseFile)) {
+            throw new WorkflowNotRunningException(
+                "No pause file found for workflow '{$workflowId}'"
+            );
+        }
+
+        $data = json_decode(file_get_contents($pauseFile), true);
+        $statusValue = $data['status'] ?? null;
+
+        if ($statusValue === null) {
+            throw new WorkflowNotRunningException(
+                "Pause file for '{$workflowId}' is corrupt: missing 'status' field"
+            );
+        }
+
+        try {
+            return WorkflowStatus::from($statusValue);
+        } catch (\ValueError) {
+            throw new WorkflowNotRunningException(
+                "Pause file for '{$workflowId}' is corrupt: invalid status value '{$statusValue}'"
+            );
+        }
+    }
+
+    /**
+     * Build the filesystem path to a workflow's pause file.
+     */
+    private function getPauseFilePath(string $workflowId): string
+    {
+        if (str_contains($workflowId, '..') || str_contains($workflowId, '/')) {
+            throw new \InvalidArgumentException('workflowId must not contain path separators or ..');
+        }
+        $home = $_SERVER['HOME'] ?? '/root';
+
+        return $home . '/.sugar-crush/workflows/' . self::PAUSE_DIR . '/' . $workflowId . '.json';
+    }
+
+    /**
+     * Serialize a StageResult to a plain array for JSON storage in pause files.
+     *
+     * @return array<string, mixed>
+     */
+    private function serializeStageResult(StageResult $sr): array
+    {
+        return [
+            'stageName' => $sr->stageName,
+            'status' => $sr->status->value,
+            'output' => $sr->output,
+            'error' => $sr->error,
+            'agents' => array_map(
+                fn(AgentResult $ar) => [
+                    'agentId' => $ar->agentId,
+                    'status' => $ar->status->value,
+                    'output' => $ar->output,
+                    'error' => $ar->error?->getMessage(),
+                    'tokensUsed' => $ar->tokensUsed,
+                    'costUsd' => $ar->costUsd,
+                    'startedAt' => $ar->startedAt?->format(\DateTimeInterface::ATOM),
+                    'completedAt' => $ar->completedAt?->format(\DateTimeInterface::ATOM),
+                ],
+                $sr->agents,
+            ),
+            'startedAt' => $sr->startedAt->format(\DateTimeInterface::ATOM),
+            'completedAt' => $sr->completedAt?->format(\DateTimeInterface::ATOM),
+        ];
     }
 
     /**
@@ -89,11 +257,13 @@ final class WorkflowEngine
      * Parallel and pipeline stages are not yet implemented (P4.S11-13).
      * They currently throw an UnsupportedStageTypeException.
      *
-     * @param Workflow $workflow The workflow definition to execute.
-     * @param array    $context  Key-value pairs for {{variable}} interpolation.
+     * @param Workflow         $workflow           The workflow definition to execute.
+     * @param array            $context            Key-value pairs for {{variable}} interpolation.
+     * @param int              $currentStageIndex  Index of the first stage to execute (0 = start fresh).
+     * @param string|null      $workflowIdOverride Use this workflowId instead of generating a new one (for resume).
      * @return WorkflowResult
      */
-    private function runFromWorkflow(Workflow $workflow, array $context): WorkflowResult
+    private function runFromWorkflow(Workflow $workflow, array $context, int $currentStageIndex, ?string $workflowIdOverride): WorkflowResult
     {
         $startedAt = new \DateTimeImmutable();
         $stageResults = [];
@@ -103,7 +273,12 @@ final class WorkflowEngine
         // Clone context so we don't mutate the caller's array
         $context = [...$context];
 
-        foreach ($workflow->stages as $stage) {
+        foreach ($workflow->stages as $stageIndex => $stage) {
+            // Skip stages that were already completed (resume support)
+            if ($stageIndex < $currentStageIndex) {
+                continue;
+            }
+
             $stageStartedAt = new \DateTimeImmutable();
 
             $stageType = $stage['type'] ?? '';
@@ -172,7 +347,7 @@ final class WorkflowEngine
             // Fail fast: stop processing on first stage failure
             if ($stageResult->isFailure()) {
                 return new WorkflowResult(
-                    workflowId: $this->generateWorkflowId($workflow),
+                    workflowId: $workflowIdOverride ?? $this->generateWorkflowId($workflow),
                     status: WorkflowStatus::Failed,
                     stageResults: $stageResults,
                     context: $context,
@@ -185,7 +360,7 @@ final class WorkflowEngine
         }
 
         return new WorkflowResult(
-            workflowId: $this->generateWorkflowId($workflow),
+            workflowId: $workflowIdOverride ?? $this->generateWorkflowId($workflow),
             status: WorkflowStatus::Completed,
             stageResults: $stageResults,
             context: $context,
