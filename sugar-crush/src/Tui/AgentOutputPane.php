@@ -8,45 +8,32 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 
-/**
- * Renders the per-agent streaming output pane — real-time visibility into
- * each running agent's live response buffer.
- *
- * Output format (peek mode — last N lines in a compact tile):
- *   ┌─────────────────────────────────────────────┐
- *   │ ● name  [status]  model  1,234 tok | $0.0042│
- *   │ last line of output                         │
- *   │ prev line of output                         │
- *   └─────────────────────────────────────────────┘
- *
- * Output format (attach mode — focused full-width view):
- *   ┌─ name ──────────────────────────────────────┐
- *   │ ● [status]  model  1,234 tok | $0.0042     │
- *   │ full output line 1                         │
- *   │ full output line 2                         │
- *   │ …                                          │
- *   │ full output line N  [lines: N]              │
- *   └─────────────────────────────────────────────┘
- *
- * Colour-coded left border mirrors AgentStatusBar / AgentViewPane:
- *   Green  (#9ece6a): actively producing output
- *   Yellow (#e0af68): waiting for tool results
- *   Red    (#f7768e): error condition
- *   Gray   (#7d6e98): completed / stopped
- *
- * Mirrors charmbracelet/crush per-agent streaming display design.
- */
-final class AgentOutputPane
-{
-    /** Hex values matched to AgentStatusBar::STATUS_HEX. */
-    private const STATUS_HEX = [
-        'working'   => '#9ece6a',
-        'waiting'   => '#e0af68',
-        'streaming' => '#7aa2f7',
-        'failed'    => '#f7768e',
-        'completed' => '#7d6e98',
-        'stopped'   => '#7d6e98',
-    ];
+    /**
+     * Colour-coded left border mirrors AgentStatusBar / AgentViewPane:
+     *   Green  (#9ece6a): actively producing output
+     *   Yellow (#e0af68): waiting for tool results OR stalled
+     *   Red    (#f7768e): error condition
+     *   Gray   (#7d6e98): completed / stopped
+     *
+     * When a stall warning is active the border switches to amber (#e0af68)
+     * and a "⚠ stalled" indicator appears in the header line.
+     *
+     * Mirrors charmbracelet/crush per-agent streaming display design.
+     */
+    final class AgentOutputPane
+    {
+        /** Hex values matched to AgentStatusBar::STATUS_HEX. */
+        private const STATUS_HEX = [
+            'working'   => '#9ece6a',
+            'waiting'   => '#e0af68',
+            'streaming' => '#7aa2f7',
+            'failed'    => '#f7768e',
+            'completed' => '#7d6e98',
+            'stopped'   => '#7d6e98',
+        ];
+
+        /** Amber used for stall warning — same as waiting but semantically distinct. */
+        private const STALL_HEX = '#e0af68';
 
     /** Maximum output lines shown in peek mode. */
     public const PEEK_LINES = 4;
@@ -61,17 +48,30 @@ final class AgentOutputPane
      */
     public static function render(AgentOutputState $state, int $width, int $height, Mode $mode = Mode::Peek): string
     {
-        $borderColor = self::borderColor($state->status);
-        $agentColor  = self::statusColor($state->status);
+        $isStalled = $state->stallWarning !== null;
+        $borderColor = $isStalled
+            ? Color::hex(self::STALL_HEX)
+            : self::borderColor($state->status);
+        $agentColor  = $isStalled
+            ? Color::hex(self::STALL_HEX)
+            : self::statusColor($state->status);
 
         // ── Header line ───────────────────────────────────────────────────
-        // "● name  [status]  model  tok | $cost"
+        // "● name  [status]  model  tok | $cost  ⚠ stalled"
         $dot     = Style::new()->foreground($agentColor)->render("\u{25CF}");
         $name    = Style::new()->bold()->foreground($agentColor)->render($state->name);
         $status  = Style::new()->foreground($agentColor)->render('[' . $state->status . ']');
         $model   = Style::new()->foreground(Color::hex('#7aa2f7'))->render($state->model);
         $usage   = Style::new()->foreground(Color::hex('#565676'))->render($state->usageDisplay());
         $header  = "{$dot} {$name} {$status}  {$model}  {$usage}";
+
+        if ($isStalled) {
+            $stallIndicator = Style::new()
+                ->foreground(Color::hex(self::STALL_HEX))
+                ->bold()
+                ->render('  ⚠ stalled');
+            $header .= $stallIndicator;
+        }
 
         // ── Output buffer lines ────────────────────────────────────────────
         $lines = $state->outputBuffer;

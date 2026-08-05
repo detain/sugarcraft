@@ -33,6 +33,8 @@ final class AgentOutputState extends AgentDisplayState
         public string $model,
         /** Live output buffer: lines of text received so far from the agent. */
         public array $outputBuffer,
+        /** Stall warning when the agent's output has stalled, null otherwise. */
+        public ?StallWarning $stallWarning = null,
     ) {
         parent::__construct(
             name: $name,
@@ -47,7 +49,7 @@ final class AgentOutputState extends AgentDisplayState
     /**
      * Wrap an existing AgentDisplayState with output-specific fields.
      */
-    public static function fromDisplayState(AgentDisplayState $display, string $model, array $outputBuffer = []): self
+    public static function fromDisplayState(AgentDisplayState $display, string $model, array $outputBuffer = [], ?StallWarning $stallWarning = null): self
     {
         return new self(
             name: $display->name,
@@ -58,6 +60,7 @@ final class AgentOutputState extends AgentDisplayState
             costUsd: $display->costUsd,
             model: $model,
             outputBuffer: $outputBuffer,
+            stallWarning: $stallWarning,
         );
     }
 }
