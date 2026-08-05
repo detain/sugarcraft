@@ -348,6 +348,287 @@ final class TaskListTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // claimTask
+    // -------------------------------------------------------------------------
+
+    public function testClaimTaskReturnsTrueWhenTaskIsClaimable(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('claimable', 'team-claim', 'Claim me'));
+
+        $result = $list->claimTask('claimable', 'teammate-a');
+
+        $this->assertTrue($result);
+        $task = $list->getTask('claimable');
+        $this->assertSame(TaskStatus::InProgress, $task->status);
+        $this->assertSame('teammate-a', $task->assignedTo);
+        $this->assertNotNull($task->claimedAt);
+    }
+
+    public function testClaimTaskReturnsFalseWhenAlreadyClaimed(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('already-claimed', 'team-claim', 'Claim me'));
+
+        // First claim succeeds
+        $first = $list->claimTask('already-claimed', 'teammate-a');
+        $this->assertTrue($first);
+
+        // Second claim fails
+        $second = $list->claimTask('already-claimed', 'teammate-b');
+        $this->assertFalse($second);
+    }
+
+    public function testClaimTaskReturnsFalseWhenTaskDoesNotExist(): void
+    {
+        $list = new TaskList($this->dbPath);
+
+        $result = $list->claimTask('non-existent', 'teammate-a');
+
+        $this->assertFalse($result);
+    }
+
+    public function testClaimTaskReturnsFalseWhenTaskIsNotPending(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('in-progress', 'team-claim', 'Already started', status: TaskStatus::InProgress));
+
+        $result = $list->claimTask('in-progress', 'teammate-a');
+
+        $this->assertFalse($result);
+    }
+
+    public function testClaimTaskReturnsFalseWhenAssignedToAnotherTeammate(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $task = new Task(
+            id: 'assigned-task',
+            teamId: 'team-claim',
+            title: 'Already assigned',
+            description: 'Desc',
+            prompt: 'Do it.',
+            assignedTo: 'teammate-x', // Already assigned to someone else
+            status: TaskStatus::Pending,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+        );
+        $list->addTask($task);
+
+        $result = $list->claimTask('assigned-task', 'teammate-a');
+
+        $this->assertFalse($result);
+    }
+
+    public function testClaimTaskReturnsTrueForTaskAssignedToSameTeammate(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $task = new Task(
+            id: 'my-task',
+            teamId: 'team-claim',
+            title: 'My task',
+            description: 'Desc',
+            prompt: 'Do it.',
+            assignedTo: 'teammate-a', // Assigned to same teammate
+            status: TaskStatus::Pending,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+        );
+        $list->addTask($task);
+
+        $result = $list->claimTask('my-task', 'teammate-a');
+
+        $this->assertTrue($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // claimTask with dependencies
+    // -------------------------------------------------------------------------
+
+    public function testClaimTaskWithDepsBlockedWhenDepNotCompleted(): void
+    {
+        $list = new TaskList($this->dbPath);
+        // Task depends on 'dep-task' which is not completed
+        $list->addTask($this->makeTask('blocked-task', 'team-deps', 'Blocked', ['dep-task']));
+
+        $result = $list->claimTask('blocked-task', 'teammate-a');
+
+        $this->assertFalse($result);
+        $task = $list->getTask('blocked-task');
+        $this->assertSame(TaskStatus::Pending, $task->status);
+    }
+
+    public function testClaimTaskWithDepsSucceedsWhenDepCompleted(): void
+    {
+        $list = new TaskList($this->dbPath);
+        // Add the dependency task and complete it
+        $list->addTask($this->makeTask('dep-task', 'team-deps', 'Dependency'));
+        $list->completeTask('dep-task', 'done');
+
+        // Now add the dependent task
+        $list->addTask($this->makeTask('ready-task', 'team-deps', 'Ready now', ['dep-task']));
+
+        $result = $list->claimTask('ready-task', 'teammate-a');
+
+        $this->assertTrue($result);
+        $task = $list->getTask('ready-task');
+        $this->assertSame(TaskStatus::InProgress, $task->status);
+    }
+
+    public function testClaimTaskWithMultipleDepsAllMustBeCompleted(): void
+    {
+        $list = new TaskList($this->dbPath);
+        // Add two dependency tasks
+        $list->addTask($this->makeTask('dep-1', 'team-deps', 'Dep 1'));
+        $list->addTask($this->makeTask('dep-2', 'team-deps', 'Dep 2'));
+        // Complete only one
+        $list->completeTask('dep-1', 'done');
+
+        // Task depends on both
+        $list->addTask($this->makeTask('waiting-task', 'team-deps', 'Waiting', ['dep-1', 'dep-2']));
+
+        $result = $list->claimTask('waiting-task', 'teammate-a');
+
+        $this->assertFalse($result);
+
+        // Complete the second dependency
+        $list->completeTask('dep-2', 'done');
+
+        $result = $list->claimTask('waiting-task', 'teammate-a');
+
+        $this->assertTrue($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // addDependency
+    // -------------------------------------------------------------------------
+
+    public function testAddDependencyAppendsToExistingDependencies(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('task-with-dep', 'team-add', 'Has dep', ['existing-dep']));
+
+        $list->addDependency('task-with-dep', 'new-dep');
+
+        $task = $list->getTask('task-with-dep');
+        $this->assertSame(['existing-dep', 'new-dep'], $task->dependsOn);
+    }
+
+    public function testAddDependencyDoesNotDuplicate(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('task-no-dup', 'team-add', 'No dup', ['some-dep']));
+
+        $list->addDependency('task-no-dup', 'some-dep'); // Add same dep again
+
+        $task = $list->getTask('task-no-dup');
+        $this->assertSame(['some-dep'], $task->dependsOn);
+    }
+
+    public function testAddDependencyThrowsWhenTaskNotFound(): void
+    {
+        $list = new TaskList($this->dbPath);
+
+        $this->expectException(\SQLite3Exception::class);
+        $list->addDependency('non-existent-task', 'some-dep');
+    }
+
+    // -------------------------------------------------------------------------
+    // getUnblockedTasks
+    // -------------------------------------------------------------------------
+
+    public function testGetUnblockedTasksReturnsUnblockedTasks(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('unblocked-1', 'team-ub', 'First'));
+        $list->addTask($this->makeTask('unblocked-2', 'team-ub', 'Second'));
+
+        $unblocked = $list->getUnblockedTasks('teammate-a');
+
+        $this->assertCount(2, $unblocked);
+    }
+
+    public function testGetUnblockedTasksExcludesTaskAssignedToOther(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('others-task', 'team-ub', 'Others', [], TaskStatus::Pending, 'teammate-x'));
+
+        $unblocked = $list->getUnblockedTasks('teammate-a');
+
+        $this->assertCount(0, $unblocked);
+    }
+
+    public function testGetUnblockedTasksExcludesTaskWithIncompleteDeps(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('blocked', 'team-ub', 'Blocked', ['missing-dep']));
+
+        $unblocked = $list->getUnblockedTasks('teammate-a');
+
+        $this->assertCount(0, $unblocked);
+    }
+
+    public function testGetUnblockedTasksIncludesTaskWithCompletedDeps(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('dep', 'team-ub', 'Dep'));
+        $list->completeTask('dep', 'done');
+        $list->addTask($this->makeTask('now-unblocked', 'team-ub', 'Now free', ['dep']));
+
+        $unblocked = $list->getUnblockedTasks('teammate-a');
+
+        $this->assertCount(1, $unblocked);
+        $this->assertSame('now-unblocked', $unblocked[0]->id);
+    }
+
+    public function testGetUnblockedTasksFiltersByTeammateAssignment(): void
+    {
+        $list = new TaskList($this->dbPath);
+        // Unassigned task - visible to all
+        $list->addTask($this->makeTask('unassigned', 'team-ub', 'Unassigned'));
+        // Task assigned to teammate-a - visible only to teammate-a
+        $list->addTask($this->makeTask('mine', 'team-ub', 'Mine', [], TaskStatus::Pending, 'teammate-a'));
+        // Task assigned to teammate-b - not visible to teammate-a
+        $list->addTask($this->makeTask('theirs', 'team-ub', 'Theirs', [], TaskStatus::Pending, 'teammate-b'));
+
+        $unblocked = $list->getUnblockedTasks('teammate-a');
+
+        $this->assertCount(2, $unblocked);
+        $ids = array_map(fn(Task $t) => $t->id, $unblocked);
+        $this->assertContains('unassigned', $ids);
+        $this->assertContains('mine', $ids);
+        $this->assertNotContains('theirs', $ids);
+    }
+
+    // -------------------------------------------------------------------------
+    // Concurrent claim simulation
+    // -------------------------------------------------------------------------
+
+    public function testConcurrentClaimPreventsDoubleClaim(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('race-task', 'team-race', 'Race condition'));
+
+        // Simulate two teammates trying to claim simultaneously by using
+        // separate TaskList instances pointing to the same database.
+        // The second claim should fail because the task is no longer pending.
+        $first = $list->claimTask('race-task', 'teammate-a');
+        $this->assertTrue($first);
+
+        // Create a new instance (simulating a different process)
+        $list2 = new TaskList($this->dbPath);
+        $second = $list2->claimTask('race-task', 'teammate-b');
+
+        $this->assertFalse($second);
+
+        // Verify the task is still assigned to the first claimer
+        $task = $list->getTask('race-task');
+        $this->assertSame('teammate-a', $task->assignedTo);
+        $this->assertSame(TaskStatus::InProgress, $task->status);
+    }
+
+    // -------------------------------------------------------------------------
     // Helper
     // -------------------------------------------------------------------------
 
@@ -360,6 +641,7 @@ final class TaskListTest extends TestCase
         string $title,
         array $dependsOn = [],
         TaskStatus $status = TaskStatus::Pending,
+        ?string $assignedTo = null,
     ): Task {
         return new Task(
             id: $id,
@@ -367,7 +649,7 @@ final class TaskListTest extends TestCase
             title: $title,
             description: "Description for {$title}",
             prompt: "Prompt for {$title}",
-            assignedTo: null,
+            assignedTo: $assignedTo,
             status: $status,
             result: null,
             error: null,

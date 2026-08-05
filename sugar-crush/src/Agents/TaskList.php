@@ -200,6 +200,120 @@ final class TaskList
     }
 
     // -------------------------------------------------------------------------
+    // Claiming — atomic via per-task flock
+    // -------------------------------------------------------------------------
+
+    /**
+     * Atomically claim a task for a teammate.
+     *
+     * Uses a per-task lock file to ensure no two teammates can claim the same
+     * task simultaneously. A task can only be claimed if:
+     *   1. It exists and is in 'pending' status
+     *   2. All of its dependencies have been completed
+     *   3. It is either unassigned or assigned to the claiming teammate
+     *
+     * @return bool true if the claim succeeded, false if the task is not claimable
+     */
+    public function claimTask(string $taskId, string $teammateId): bool
+    {
+        // Per-task lock file prevents concurrent claim attempts on the same task
+        $lockPath = $this->lockPathFor($taskId);
+        $lockFp = $this->acquireTaskLock($lockPath);
+
+        try {
+            $task = $this->getTaskWithoutLock($taskId);
+
+            // Task must exist and be pending
+            if ($task === null || $task->status !== TaskStatus::Pending) {
+                return false;
+            }
+
+            // Task must be unassigned or assigned to this teammate
+            if ($task->assignedTo !== null && $task->assignedTo !== $teammateId) {
+                return false;
+            }
+
+            // All dependencies must be completed
+            if (!$this->allDependenciesCompleted($task->dependsOn)) {
+                return false;
+            }
+
+            // Claim the task — update status and assignee atomically
+            $this->claimTaskInner($taskId, $teammateId);
+
+            return true;
+        } finally {
+            $this->releaseTaskLock($lockFp, $lockPath);
+        }
+    }
+
+    /**
+     * Add a dependency to a task.
+     *
+     * The dependent task will not be claimable until the dependency is completed.
+     *
+     * @throws \SQLite3Exception When the task does not exist
+     */
+    public function addDependency(string $taskId, string $dependsOn): void
+    {
+        $handle = $this->openForWrite();
+
+        // Fetch current dependencies
+        $stmt = $this->db->prepare('SELECT depends_on FROM tasks WHERE id = :id');
+        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(\SQLITE3_ASSOC);
+        $stmt->close();
+
+        if ($row === false) {
+            $this->closeForWrite($handle);
+            throw new \SQLite3Exception("Task not found: {$taskId}");
+        }
+
+        $deps = json_decode($row['depends_on'], true, 512, JSON_THROW_ON_ERROR);
+        if (!in_array($dependsOn, $deps, true)) {
+            $deps[] = $dependsOn;
+        }
+
+        // Update the depends_on array
+        $updateStmt = $this->db->prepare('UPDATE tasks SET depends_on = :depends_on WHERE id = :id');
+        $updateStmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $updateStmt->bindValue(':depends_on', json_encode($deps, JSON_THROW_ON_ERROR), \SQLITE3_TEXT);
+        $updateStmt->execute();
+        $updateStmt->close();
+
+        $this->closeForWrite($handle);
+    }
+
+    /**
+     * Return all tasks that are unblocked and available for a teammate to claim.
+     *
+     * A task is unblocked when:
+     *   - It is in 'pending' status
+     *   - All of its dependencies have been completed
+     *   - It is either unassigned or assigned to the given teammate
+     *
+     * @return Task[]
+     */
+    public function getUnblockedTasks(string $teammateId): array
+    {
+        $allPending = $this->getPendingTasks();
+
+        return array_values(array_filter(
+            $allPending,
+            function (Task $task) use ($teammateId): bool {
+                // Must be unassigned or assigned to this teammate
+                if ($task->assignedTo !== null && $task->assignedTo !== $teammateId) {
+                    return false;
+                }
+
+                // All dependencies must be completed
+                return $this->allDependenciesCompleted($task->dependsOn);
+            }
+        ));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -280,5 +394,113 @@ final class TaskList
             completedAt: $row['completed_at'] !== null ? new \DateTimeImmutable($row['completed_at']) : null,
             dependsOn: json_decode($row['depends_on'] ?? '[]', true, 512, JSON_THROW_ON_ERROR),
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // Claiming helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Get a task by ID without acquiring any locks.
+     *
+     * FOR INTERNAL USE ONLY — call only when already holding a task lock.
+     */
+    private function getTaskWithoutLock(string $taskId): ?Task
+    {
+        $stmt = $this->db->prepare('SELECT * FROM tasks WHERE id = :id');
+        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+
+        $tasks = $this->rowsToTasks($result);
+        $stmt->close();
+
+        return $tasks[0] ?? null;
+    }
+
+    /**
+     * Perform the actual claim update — caller must hold the task lock.
+     */
+    private function claimTaskInner(string $taskId, string $teammateId): void
+    {
+        $now = (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM);
+
+        $stmt = $this->db->prepare(
+            <<<'SQL'
+            UPDATE tasks
+            SET status = :status, assigned_to = :assigned_to, claimed_at = :claimed_at
+            WHERE id = :id
+            SQL
+        );
+        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $stmt->bindValue(':status', TaskStatus::InProgress->value, \SQLITE3_TEXT);
+        $stmt->bindValue(':assigned_to', $teammateId, \SQLITE3_TEXT);
+        $stmt->bindValue(':claimed_at', $now, \SQLITE3_TEXT);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    /**
+     * Check whether all given dependency task IDs have been completed.
+     *
+     * @param string[] $dependsOn
+     */
+    private function allDependenciesCompleted(array $dependsOn): bool
+    {
+        if (empty($dependsOn)) {
+            return true;
+        }
+
+        foreach ($dependsOn as $depId) {
+            $dep = $this->getTaskWithoutLock($depId);
+            if ($dep === null || $dep->status !== TaskStatus::Completed) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Generate the lock file path for a specific task.
+     */
+    private function lockPathFor(string $taskId): string
+    {
+        return \dirname($this->dbPath) . '/task_locks/' . $taskId . '.lock';
+    }
+
+    /**
+     * Acquire an exclusive lock on a task's lock file.
+     *
+     * @throws \RuntimeException When the lock cannot be acquired
+     */
+    private function acquireTaskLock(string $lockPath): mixed
+    {
+        $dir = \dirname($lockPath);
+        if (!\is_dir($dir)) {
+            \mkdir($dir, 0755, true);
+        }
+
+        $fp = \fopen($lockPath, 'a');
+        if ($fp === false) {
+            throw new \RuntimeException("Cannot open lock file: {$lockPath}");
+        }
+        if (!\flock($fp, \LOCK_EX)) {
+            \fclose($fp);
+            throw new \RuntimeException("Cannot acquire task lock: {$lockPath}");
+        }
+
+        return $fp;
+    }
+
+    /**
+     * Release the task lock and remove the lock file.
+     */
+    private function releaseTaskLock(mixed $fp, string $lockPath): void
+    {
+        \flock($fp, \LOCK_UN);
+        \fclose($fp);
+        if (\file_exists($lockPath)) {
+            \unlink($lockPath);
+        }
     }
 }
