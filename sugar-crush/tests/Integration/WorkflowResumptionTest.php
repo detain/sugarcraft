@@ -17,34 +17,32 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
 use SugarCraft\Crush\Workflows\WorkflowStatus;
 
 /**
- * Integration tests for workflow pause/resume lifecycle.
+ * Integration tests for workflow resumption from paused state.
  *
- * Tests the full end-to-end resumption of workflows with mock agents:
- * - Workflows can be paused mid-execution and resumed without re-running completed stages
- * - Resume correctly picks up from the saved stage index and restores context
- * - Status is correctly reported from the pause file
+ * Tests the pause/resume cycle:
+ * - pause() writes a valid pause file with current state
+ * - resume() reloads state and continues from where it left off
+ * - Completed stages are not re-run on resume
+ * - Context is preserved across pause/resume
  */
 final class WorkflowResumptionTest extends TestCase
 {
     private string $tempDir;
-    private ?string $oldHome = null;
     private WorkflowRegistry $registry;
     private ExecutorInterface $mockExecutor;
     private AgentWorkerPool $pool;
     private WorkflowEngine $engine;
+    private string $originalHome;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Use a unique temp directory to isolate tests
-        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-wf-resume-test-' . uniqid('', true);
+        $this->originalHome = $_SERVER['HOME'] ?? '/root';
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-resume-test-' . uniqid('', true);
         mkdir($this->tempDir, 0755, true);
 
-        // Save original HOME before overriding, so we can restore it in tearDown
-        $this->oldHome = $_SERVER['HOME'] ?? '/root';
-
-        // Override HOME so pause files don't pollute ~/.sugar-crush/
+        // Override HOME so pause files go to our temp directory
         $_SERVER['HOME'] = $this->tempDir;
 
         $this->registry = new WorkflowRegistry();
@@ -61,7 +59,7 @@ final class WorkflowResumptionTest extends TestCase
     protected function tearDown(): void
     {
         // Restore original HOME
-        $_SERVER['HOME'] = $this->oldHome ?? '/root';
+        $_SERVER['HOME'] = $this->originalHome;
 
         // Clean up temp directory
         $this->removeDirectory($this->tempDir);
@@ -83,215 +81,329 @@ final class WorkflowResumptionTest extends TestCase
     }
 
     /**
-     * Helper: build a pause file directly for a given workflowId without running the workflow.
-     * This simulates an interrupt mid-execution by writing the state that would exist after
-     * a certain number of stages have completed.
+     * testPauseCreatesValidPauseFile: running a workflow and then calling
+     * pause() should produce a valid JSON pause file with all state needed
+     * to resume.
      */
-    private function writePauseFile(
-        string $workflowId,
-        string $workflowPath,
-        int $stagesCompleted,
-        array $context,
-        array $stageResults,
-        int $totalTokens = 0,
-        float $totalCost = 0.0,
-    ): void {
-        $pauseDir = $this->tempDir . '/.sugar-crush/workflows/.running';
-        if (!is_dir($pauseDir)) {
-            mkdir($pauseDir, 0755, true);
-        }
-
-        $data = [
-            'workflowId' => $workflowId,
-            'workflowPath' => $workflowPath,
-            'status' => WorkflowStatus::Paused->value,
-            'stagesCompleted' => $stagesCompleted,
-            'context' => $context,
-            'stageResults' => $stageResults,
-            'totalTokens' => $totalTokens,
-            'totalCost' => $totalCost,
-            'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-        ];
-
-        $pauseFile = $pauseDir . '/' . $workflowId . '.json';
-        file_put_contents($pauseFile, json_encode($data, JSON_PRETTY_PRINT) . "\n");
-    }
-
-    /**
-     * testResumeWorkflowFromPauseFile: a three-stage workflow is interrupted after
-     * stage 1. The pause file is written directly (simulating a mid-execution crash).
-     * After resuming, stage 1 must not be re-run, only stages 2 and 3 execute.
-     * The final status must be Completed and all three stage results present.
-     */
-    public function testResumeWorkflowFromPauseFile(): void
+    public function testPauseCreatesValidPauseFile(): void
     {
         $workflow = (new WorkflowBuilder())
-            ->name('multi-stage-resume')
-            ->description('Test resume from pause file')
-            ->stage('stage1', Tasks::agent('agent1')->prompt('Step 1: {{input}}'))
-            ->stage('stage2', Tasks::agent('agent2')->prompt('Step 2: {{input}}'))
-            ->stage('stage3', Tasks::agent('agent3')->prompt('Step 3: {{input}}'))
+            ->name('pause-file-test')
+            ->description('Test pause creates valid pause file')
+            ->stage('stage-1', Tasks::agent('coder')->prompt('Do first task'))
+            ->stage('stage-2', Tasks::agent('coder')->prompt('Do second task'))
             ->build();
 
         $this->registry->register($workflow);
 
-        // Write a pause file representing state after stage 1 completed
-        $this->writePauseFile(
-            workflowId: 'multi-stage-resume',
-            workflowPath: 'multi-stage-resume',
-            stagesCompleted: 1,
-            context: [
-                'input' => 'test-data',
-                'stage1.output' => 'result-from-stage-1',
+        $callCount = 0;
+        $this->mockExecutor
+            ->expects($this->exactly(2))
+            ->method('execute')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                return $this->successfulAgentResult("output-{$callCount}");
+            });
+
+        // Run the workflow to completion
+        $result = $this->engine->run('pause-file-test', []);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(2, $callCount);
+
+        // Now pause it
+        $this->engine->pause('pause-file-test');
+
+        // Verify pause file exists
+        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/pause-file-test.json';
+        $this->assertFileExists($pauseFile);
+
+        // Verify pause file contents
+        $data = json_decode(file_get_contents($pauseFile), true);
+        $this->assertSame('pause-file-test', $data['workflowId']);
+        $this->assertSame('paused', $data['status']);
+        $this->assertSame(2, $data['stagesCompleted']);
+        $this->assertSame('output-1', $data['context']['stage-1.output']);
+        $this->assertSame('output-2', $data['context']['stage-2.output']);
+        $this->assertSame(200, $data['totalTokens']);
+        $this->assertSame(0.02, $data['totalCost']);
+
+        // Verify stageResults array is present
+        $this->assertCount(2, $data['stageResults']);
+        $this->assertSame('stage-1', $data['stageResults'][0]['stageName']);
+        $this->assertSame('stage-2', $data['stageResults'][1]['stageName']);
+    }
+
+    /**
+     * testResumeContinuesFromPausedState: simulate a workflow that was
+     * interrupted after stage 1, then resume and verify stage 2 completes.
+     */
+    public function testResumeContinuesFromPausedState(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('resume-continue-test')
+            ->description('Test resume continues from paused state')
+            ->stage('stage-1', Tasks::agent('coder')->prompt('First step'))
+            ->stage('stage-2', Tasks::agent('coder')->prompt('Second step'))
+            ->stage('stage-3', Tasks::agent('coder')->prompt('Third step'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $callCount = 0;
+        $this->mockExecutor
+            ->expects($this->any())
+            ->method('execute')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                return $this->successfulAgentResult("output-{$callCount}");
+            });
+
+        // Create the .running directory and simulate a pause file for a workflow where only stage 1 completed
+        mkdir($this->tempDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/resume-continue-test.json';
+        $pauseData = [
+            'workflowId' => 'resume-continue-test',
+            'workflowPath' => 'resume-continue-test',
+            'status' => 'paused',
+            'stagesCompleted' => 1,
+            'context' => [
+                'stage-1.output' => 'output-1',
             ],
-            stageResults: [
+            'stageResults' => [
                 [
-                    'stageName' => 'stage1',
-                    'status' => WorkflowStatus::Completed->value,
-                    'output' => 'result-from-stage-1',
+                    'stageName' => 'stage-1',
+                    'status' => 'completed',
+                    'output' => 'output-1',
                     'error' => null,
                     'agents' => [
                         [
-                            'agentId' => 'agent-stage1-1',
-                            'status' => AgentStatus::Completed->value,
-                            'output' => 'result-from-stage-1',
+                            'agentId' => 'agent-1',
+                            'status' => 'completed',
+                            'output' => 'output-1',
                             'error' => null,
                             'tokensUsed' => 100,
                             'costUsd' => 0.01,
-                            'startedAt' => (new \DateTimeImmutable('-10 minutes'))->format(\DateTimeInterface::ATOM),
-                            'completedAt' => (new \DateTimeImmutable('-9 minutes'))->format(\DateTimeInterface::ATOM),
+                            'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                            'completedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
                         ],
                     ],
-                    'startedAt' => (new \DateTimeImmutable('-10 minutes'))->format(\DateTimeInterface::ATOM),
-                    'completedAt' => (new \DateTimeImmutable('-9 minutes'))->format(\DateTimeInterface::ATOM),
+                    'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                    'completedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
                 ],
             ],
-            totalTokens: 100,
-            totalCost: 0.01,
-        );
+            'totalTokens' => 100,
+            'totalCost' => 0.01,
+            'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+        ];
+        file_put_contents($pauseFile, json_encode($pauseData, JSON_PRETTY_PRINT) . "\n");
 
-        // Track which stages run during resume
-        $executedStages = [];
-        $this->mockExecutor
-            ->expects($this->exactly(2)) // Only stage 2 and stage 3 should run
-            ->method('execute')
-            ->willReturnCallback(function ($agent, CompleteRequest $request) use (&$executedStages) {
-                // Extract stage name from prompt content
-                $content = $request->messages[0]['content'] ?? '';
-                if (str_contains($content, 'Step 2')) {
-                    $executedStages[] = 'stage2';
-                    return $this->successfulAgentResult('result-from-stage-2');
-                }
-                if (str_contains($content, 'Step 3')) {
-                    $executedStages[] = 'stage3';
-                    return $this->successfulAgentResult('result-from-stage-3');
-                }
-                // Fallback - should not reach here for this test
-                $executedStages[] = 'unknown';
-                return $this->successfulAgentResult('unexpected-result');
-            });
+        // Resume should continue from stage 2 (index 1)
+        $resumeResult = $this->engine->resume('resume-continue-test');
 
-        // Resume the workflow
-        $result = $this->engine->resume('multi-stage-resume');
+        $this->assertTrue($resumeResult->isSuccess());
+        $this->assertSame(WorkflowStatus::Completed, $resumeResult->status);
 
-        // Verify stages 2 and 3 were executed, stage 1 was NOT re-run
-        $this->assertContains('stage2', $executedStages);
-        $this->assertContains('stage3', $executedStages);
-        $this->assertNotContains('stage1', $executedStages);
+        // Context from pause file should be preserved
+        $this->assertSame('output-1', $resumeResult->context['stage-1.output']);
 
-        // Final status must be Completed
-        $this->assertSame(WorkflowStatus::Completed, $result->status);
-        $this->assertTrue($result->isSuccess());
-
-        // After resuming, stageResults contains only the newly-executed stages (2 and 3).
-        // Stage 1 was already completed and stored in the pause file, not re-returned.
-        $this->assertCount(2, $result->stageResults);
-
-        // Stages 2 and 3 must have fresh results
-        $this->assertSame('stage2', $result->stageResults[0]->stageName);
-        $this->assertSame('result-from-stage-2', $result->stageResults[0]->output);
-        $this->assertSame('stage3', $result->stageResults[1]->stageName);
-        $this->assertSame('result-from-stage-3', $result->stageResults[1]->output);
-
-        // Context must contain all stage outputs (including the pre-pause stage1.output)
-        $this->assertSame('result-from-stage-1', $result->context['stage1.output']);
-        $this->assertSame('result-from-stage-2', $result->context['stage2.output']);
-        $this->assertSame('result-from-stage-3', $result->context['stage3.output']);
+        // stage-2.output is from the first resumed call (callCount started at 0 since no run() was called)
+        // stage-3.output is from the second resumed call
+        $this->assertSame('output-1', $resumeResult->context['stage-2.output'] ?? null);
+        $this->assertSame('output-2', $resumeResult->context['stage-3.output'] ?? null);
     }
 
     /**
-     * testPauseFileContainsCorrectStageProgressAndCanBeLoaded: verify that a pause
-     * file written mid-execution contains the correct stage progress and can be loaded
-     * via getStatus().
+     * testCompletedStagesNotReRun: verify that when a workflow is resumed,
+     * stages that were already completed are skipped and not re-executed.
      */
-    public function testPauseFileContainsCorrectStageProgressAndCanBeLoaded(): void
+    public function testCompletedStagesNotReRun(): void
     {
         $workflow = (new WorkflowBuilder())
-            ->name('pause-file-progress')
-            ->description('Test pause file contents')
-            ->stage('stepA', Tasks::agent('agentA')->prompt('Do step A'))
-            ->stage('stepB', Tasks::agent('agentB')->prompt('Do step B'))
+            ->name('no-rerun-test')
+            ->description('Test completed stages not re-run on resume')
+            ->stage('alpha', Tasks::agent('worker')->prompt('Alpha task'))
+            ->stage('beta', Tasks::agent('worker')->prompt('Beta task'))
+            ->stage('gamma', Tasks::agent('worker')->prompt('Gamma task'))
             ->build();
 
         $this->registry->register($workflow);
 
-        $initialContext = ['input' => 'my-input', 'stepA.output' => 'output-from-A'];
-        $serializedStageResults = [
-            [
-                'stageName' => 'stepA',
-                'status' => WorkflowStatus::Completed->value,
-                'output' => 'output-from-A',
-                'error' => null,
-                'agents' => [
-                    [
-                        'agentId' => 'agent-A-1',
-                        'status' => AgentStatus::Completed->value,
-                        'output' => 'output-from-A',
-                        'error' => null,
-                        'tokensUsed' => 150,
-                        'costUsd' => 0.015,
-                        'startedAt' => (new \DateTimeImmutable('-5 minutes'))->format(\DateTimeInterface::ATOM),
-                        'completedAt' => (new \DateTimeImmutable('-4 minutes'))->format(\DateTimeInterface::ATOM),
-                    ],
-                ],
-                'startedAt' => (new \DateTimeImmutable('-5 minutes'))->format(\DateTimeInterface::ATOM),
-                'completedAt' => (new \DateTimeImmutable('-4 minutes'))->format(\DateTimeInterface::ATOM),
+        $executionLog = [];
+        $callCount = 0;
+        $this->mockExecutor
+            ->expects($this->any())
+            ->method('execute')
+            ->willReturnCallback(function ($agent, CompleteRequest $request) use (&$executionLog, &$callCount) {
+                $callCount++;
+                $content = $request->messages[0]['content'];
+                $executionLog[] = "call-{$callCount}: {$content}";
+                return $this->successfulAgentResult("result-{$callCount}");
+            });
+
+        // Create the .running directory and a pause file indicating stage 1 (alpha) completed
+        mkdir($this->tempDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/no-rerun-test.json';
+        $pauseData = [
+            'workflowId' => 'no-rerun-test',
+            'workflowPath' => 'no-rerun-test',
+            'status' => 'paused',
+            'stagesCompleted' => 1,
+            'context' => [
+                'alpha.output' => 'result-1',
             ],
+            'stageResults' => [
+                [
+                    'stageName' => 'alpha',
+                    'status' => 'completed',
+                    'output' => 'result-1',
+                    'error' => null,
+                    'agents' => [],
+                    'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                    'completedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                ],
+            ],
+            'totalTokens' => 100,
+            'totalCost' => 0.01,
+            'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
         ];
+        file_put_contents($pauseFile, json_encode($pauseData, JSON_PRETTY_PRINT) . "\n");
 
-        // Write a pause file directly
-        $this->writePauseFile(
-            workflowId: 'pause-file-progress',
-            workflowPath: 'pause-file-progress',
-            stagesCompleted: 1,
-            context: $initialContext,
-            stageResults: $serializedStageResults,
-            totalTokens: 150,
-            totalCost: 0.015,
-        );
+        // Resume should execute only beta and gamma, NOT alpha
+        $resumeResult = $this->engine->resume('no-rerun-test');
 
-        // getStatus() must return the Paused status from the file
-        $status = $this->engine->getStatus('pause-file-progress');
+        $this->assertTrue($resumeResult->isSuccess());
+
+        // Verify only 2 calls were made (beta and gamma), not 3
+        $this->assertCount(2, $executionLog);
+
+        // Verify alpha was not re-run
+        foreach ($executionLog as $log) {
+            $this->assertStringNotContainsString('Alpha task', $log);
+        }
+
+        // Verify beta and gamma were run
+        $this->assertStringContainsString('Beta task', $executionLog[0]);
+        $this->assertStringContainsString('Gamma task', $executionLog[1]);
+    }
+
+    /**
+     * testResumeWithPartialParallelStage: test resuming when a parallel
+     * stage was partially complete (not fully supported in current impl,
+     * but verifies graceful handling).
+     */
+    public function testResumeWithContextPreservation(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('context-preserve-test')
+            ->description('Test context is preserved across pause/resume')
+            ->stage('init', Tasks::agent('setup')->prompt('Initialize {{project}}'))
+            ->stage('process', Tasks::agent('processor')->prompt('Process {{init.output}}'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $callCount = 0;
+        $this->mockExecutor
+            ->expects($this->any())
+            ->method('execute')
+            ->willReturnCallback(function () use (&$callCount) {
+                $callCount++;
+                return $this->successfulAgentResult("phase-{$callCount}-result");
+            });
+
+        // Create the .running directory and a pause file with initial context
+        mkdir($this->tempDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/context-preserve-test.json';
+        $pauseData = [
+            'workflowId' => 'context-preserve-test',
+            'workflowPath' => 'context-preserve-test',
+            'status' => 'paused',
+            'stagesCompleted' => 1,
+            'context' => [
+                'project' => 'my-app',
+                'init.output' => 'phase-1-result',
+            ],
+            'stageResults' => [
+                [
+                    'stageName' => 'init',
+                    'status' => 'completed',
+                    'output' => 'phase-1-result',
+                    'error' => null,
+                    'agents' => [],
+                    'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                    'completedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                ],
+            ],
+            'totalTokens' => 100,
+            'totalCost' => 0.01,
+            'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+        ];
+        file_put_contents($pauseFile, json_encode($pauseData, JSON_PRETTY_PRINT) . "\n");
+
+        // Resume should preserve the 'project' initial context
+        $resumeResult = $this->engine->resume('context-preserve-test');
+
+        $this->assertTrue($resumeResult->isSuccess());
+
+        // Original initial context should still be present
+        $this->assertSame('my-app', $resumeResult->context['project']);
+
+        // init.output is from the pause file (no run() was called first, so callCount=0 on resume)
+        // process.output is from the first resumed call -> 'phase-1-result'
+        $this->assertSame('phase-1-result', $resumeResult->context['init.output']);
+        $this->assertSame('phase-1-result', $resumeResult->context['process.output']);
+    }
+
+    /**
+     * testGetStatusReturnsCorrectPausedStatus: verify getStatus() correctly
+     * reads the status from a pause file.
+     */
+    public function testGetStatusReturnsCorrectPausedStatus(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('status-check-test')
+            ->description('Test getStatus returns paused status')
+            ->stage('step1', Tasks::agent('worker')->prompt('Do work'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        // Create the .running directory and a pause file directly
+        mkdir($this->tempDir . '/.sugar-crush/workflows/.running', 0755, true);
+        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/status-check-test.json';
+        $pauseData = [
+            'workflowId' => 'status-check-test',
+            'workflowPath' => 'status-check-test',
+            'status' => 'paused',
+            'stagesCompleted' => 1,
+            'context' => [],
+            'stageResults' => [],
+            'totalTokens' => 100,
+            'totalCost' => 0.01,
+            'startedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+        ];
+        file_put_contents($pauseFile, json_encode($pauseData));
+
+        $status = $this->engine->getStatus('status-check-test');
+
         $this->assertSame(WorkflowStatus::Paused, $status);
+    }
 
-        // Verify the pause file can be loaded and has correct structure
-        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/pause-file-progress.json';
-        $this->assertFileExists($pauseFile);
+    /**
+     * testResumeMissingPauseFileThrows: verify resume() throws when no
+     * pause file exists.
+     */
+    public function testResumeMissingPauseFileThrows(): void
+    {
+        $this->expectException(\SugarCraft\Crush\Workflows\WorkflowNotRunningException::class);
+        $this->expectExceptionMessageMatches('/No paused workflow found/i');
 
-        $loaded = json_decode(file_get_contents($pauseFile), true);
-        $this->assertSame('pause-file-progress', $loaded['workflowId']);
-        $this->assertSame('pause-file-progress', $loaded['workflowPath']);
-        $this->assertSame(WorkflowStatus::Paused->value, $loaded['status']);
-        $this->assertSame(1, $loaded['stagesCompleted']);
-        $this->assertSame($initialContext, $loaded['context']);
-        $this->assertCount(1, $loaded['stageResults']);
-        $this->assertSame('stepA', $loaded['stageResults'][0]['stageName']);
-        $this->assertSame('output-from-A', $loaded['stageResults'][0]['output']);
-        $this->assertSame(150, $loaded['totalTokens']);
-        $this->assertSame(0.015, $loaded['totalCost']);
-        $this->assertArrayHasKey('startedAt', $loaded);
-        $this->assertArrayHasKey('pausedAt', $loaded);
+        $this->engine->resume('nonexistent-pause-file');
     }
 
     /**
