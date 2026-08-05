@@ -1,7 +1,7 @@
 {
     "P0": {"status": "not_started"},
     "P1": {"status": "not_started"},
-    "P2": {"status": "not_started"},
+    "P2": {"status": "done"},
     "P2B": {"status": "not_started"},
     "P3": {"status": "not_started"},
     "P4": {"status": "not_started"},

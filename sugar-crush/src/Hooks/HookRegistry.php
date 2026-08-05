@@ -10,6 +10,16 @@ final class HookRegistry
     private array $hooks = [
         'PreToolUse' => [],
         'PostToolUse' => [],
+        'Stop' => [],
+        'SubagentStop' => [],
+        'SessionStart' => [],
+        'SessionEnd' => [],
+        'UserPromptSubmit' => [],
+        'PreCompact' => [],
+        'Notification' => [],
+        'TeammateIdle' => [],
+        'TaskCreated' => [],
+        'TaskCompleted' => [],
     ];
 
     /** @var array<string, bool> disabled hooks */
@@ -68,12 +78,28 @@ final class HookRegistry
                 continue;
             }
 
-            if (preg_match('/' . $hook->matcher() . '/i', $toolName)) {
+            if ($this->matcherMatches($hook->matcher(), $toolName)) {
                 $matches[] = $hook;
             }
         }
 
         return $matches;
+    }
+
+    /**
+     * Returns true if the given pattern matches the tool name.
+     *
+     * Validates the pattern compiles before use to avoid PREG_* errors
+     * from malformed regex patterns in hook matcher() implementations.
+     */
+    private function matcherMatches(string $pattern, string $toolName): bool
+    {
+        // Validate the pattern compiles before use
+        if (@preg_match('/' . $pattern . '/i', '') === false) {
+            return false;
+        }
+
+        return preg_match('/' . $pattern . '/i', $toolName) === 1;
     }
 
     /**

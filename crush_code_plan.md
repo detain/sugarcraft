@@ -1168,6 +1168,8 @@ This is a strict superset of the existing MODIFY-capable hook contract — `Audi
 - `src/Permissions/SafetyClassifier.php`
 - `src/Hooks/HookEvent.php` (enum of the eleven events above)
 - `src/Hooks/HookDispatcher.php`
+- `src/Hooks/HookDispatchResult.php` (required as return type and factory-method target by `HookDispatcher`)
+- `tests/Hooks/HookDispatchResultTest.php`
 
 ### Files to Modify
 - `src/Agents/AgentManager.php` — resolve each spawned agent's `PermissionGate` from its preset before wiring tools
