@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Agents\Team;
+use SugarCraft\Crush\Agents\TeamConfig;
+use SugarCraft\Crush\Agents\TeamManager;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -521,6 +524,125 @@ final class AgentManagerTest extends TestCase
 
         $this->assertCount(1, $results);
         $this->assertSame('Custom pool result', $results[0]->output);
+    }
+
+    // -------------------------------------------------------------------------
+    // Team management
+    // -------------------------------------------------------------------------
+
+    public function testSetAndGetTeamManager(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+
+        $this->agentManager->setTeamManager($teamManager);
+
+        $this->assertSame($teamManager, $this->agentManager->getTeamManager());
+    }
+
+    public function testCreateTeamDelegates(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $this->agentManager->setTeamManager($teamManager);
+
+        $team = $this->agentManager->createTeam('test-team', 'Test Team', 'lead-agent-1');
+
+        $this->assertInstanceOf(Team::class, $team);
+        $this->assertSame('test-team', $team->id);
+        $this->assertSame('Test Team', $team->name);
+        $this->assertSame('lead-agent-1', $team->leadAgentId);
+
+        // Verify it was actually registered in TeamManager
+        $this->assertSame($team, $teamManager->getTeam('test-team'));
+    }
+
+    public function testGetTeamDelegates(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $this->agentManager->setTeamManager($teamManager);
+
+        // Create a team directly via TeamManager
+        $created = $teamManager->createTeam('existing-team', 'Existing Team', 'lead-agent-2');
+
+        // AgentManager should return it via getTeam
+        $retrieved = $this->agentManager->getTeam('existing-team');
+
+        $this->assertSame($created, $retrieved);
+    }
+
+    public function testGetTeamThrowsWhenNoTeamManager(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
+
+        $this->agentManager->getTeam('any-team');
+    }
+
+    public function testHasTeamDelegates(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $this->agentManager->setTeamManager($teamManager);
+
+        // Create a team directly via TeamManager
+        $teamManager->createTeam('known-team', 'Known Team', 'lead-agent-3');
+
+        $this->assertTrue($this->agentManager->hasTeam('known-team'));
+        $this->assertFalse($this->agentManager->hasTeam('unknown-team'));
+    }
+
+    public function testHasTeamThrowsWhenNoTeamManager(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
+
+        $this->agentManager->hasTeam('any-team');
+    }
+
+    public function testRemoveTeamDelegates(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $this->agentManager->setTeamManager($teamManager);
+
+        // Create a team via AgentManager
+        $created = $this->agentManager->createTeam('removable-team', 'Removable Team', 'lead-agent-4');
+        $this->assertTrue($this->agentManager->hasTeam('removable-team'));
+
+        // Remove via AgentManager
+        $removed = $this->agentManager->removeTeam('removable-team');
+
+        $this->assertSame($created, $removed);
+        $this->assertFalse($this->agentManager->hasTeam('removable-team'));
+        $this->assertFalse($teamManager->hasTeam('removable-team'));
+    }
+
+    public function testRemoveTeamThrowsWhenNoTeamManager(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
+
+        $this->agentManager->removeTeam('any-team');
+    }
+
+    public function testCreateTeamThrowsWhenNoTeamManager(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
+
+        $this->agentManager->createTeam('new-team', 'New Team', 'lead-agent-5');
+    }
+
+    public function testCreateTeamConflictDelegates(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $this->agentManager->setTeamManager($teamManager);
+
+        // Create first team succeeds
+        $this->agentManager->createTeam('duplicate-team', 'First Team', 'lead-agent-6');
+
+        // Create same teamId again should throw TeamManager's exception
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Team "duplicate-team" already exists.');
+
+        $this->agentManager->createTeam('duplicate-team', 'Second Team', 'lead-agent-7');
     }
 
     // -------------------------------------------------------------------------

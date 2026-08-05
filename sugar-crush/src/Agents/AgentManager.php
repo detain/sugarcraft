@@ -16,6 +16,8 @@ final class AgentManager
     /** @var array<string, SubAgent> */
     private array $subAgents = [];
 
+    private ?TeamManager $teamManager = null;
+
     public function __construct(
         private ProviderInterface $provider,
         private SkillRegistry $skillRegistry,
@@ -188,5 +190,86 @@ final class AgentManager
     public function removeSubAgent(string $id): void
     {
         unset($this->subAgents[$id]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Team management
+    // -------------------------------------------------------------------------
+
+    /**
+     * Set the team manager instance.
+     */
+    public function setTeamManager(TeamManager $teamManager): void
+    {
+        $this->teamManager = $teamManager;
+    }
+
+    /**
+     * Get the team manager instance.
+     */
+    public function getTeamManager(): ?TeamManager
+    {
+        return $this->teamManager;
+    }
+
+    /**
+     * Create a new team and register it.
+     *
+     * @throws \RuntimeException When no team manager is set
+     * @throws \InvalidArgumentException When a team with the given ID already exists
+     */
+    public function createTeam(
+        string $teamId,
+        string $name,
+        string $leadAgentId,
+        ?TeamConfig $config = null,
+    ): Team {
+        if ($this->teamManager === null) {
+            throw new \RuntimeException('TeamManager has not been set on AgentManager');
+        }
+
+        return $this->teamManager->createTeam($teamId, $name, $leadAgentId, $config);
+    }
+
+    /**
+     * Fetch a team by its ID.
+     *
+     * @throws \RuntimeException When no team manager is set
+     */
+    public function getTeam(string $teamId): ?Team
+    {
+        if ($this->teamManager === null) {
+            throw new \RuntimeException('TeamManager has not been set on AgentManager');
+        }
+
+        return $this->teamManager->getTeam($teamId);
+    }
+
+    /**
+     * Check whether a team exists (is registered).
+     *
+     * @throws \RuntimeException When no team manager is set
+     */
+    public function hasTeam(string $teamId): bool
+    {
+        if ($this->teamManager === null) {
+            throw new \RuntimeException('TeamManager has not been set on AgentManager');
+        }
+
+        return $this->teamManager->hasTeam($teamId);
+    }
+
+    /**
+     * Unregister and return a team by ID.
+     *
+     * @throws \RuntimeException When no team manager is set
+     */
+    public function removeTeam(string $teamId): ?Team
+    {
+        if ($this->teamManager === null) {
+            throw new \RuntimeException('TeamManager has not been set on AgentManager');
+        }
+
+        return $this->teamManager->removeTeam($teamId);
     }
 }
