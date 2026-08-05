@@ -63,6 +63,62 @@ final class Renderer
 
         return $layout->render($size['cols'], $size['rows']);
     }
+
+    /**
+     * Render two panes in a split layout, routing to multiplexer or in-process.
+     *
+     * This method detects whether a terminal multiplexer (TMUX or iTerm2)
+     * is active in the current environment and routes accordingly:
+     *
+     * - When multiplexer is active: delegates to MultiplexerSplitPane for
+     *   potential native multiplexer rendering (currently falls back to
+     *   in-process when native integration is unavailable).
+     *
+     * - When no multiplexer: uses the in-process SplitLayout renderer
+     *   directly (same as renderWithSplit).
+     *
+     * This is the preferred entry point for split pane rendering as it
+     * automatically adapts to the execution environment.
+     *
+     * @param string         $topOrLeft    Content of the first pane.
+     * @param string         $bottomOrRight Content of the second pane.
+     * @param SplitDirection $direction   Split orientation.
+     * @param int            $cols         Available columns (defaults to terminal width).
+     * @param int            $rows         Available rows (defaults to terminal height).
+     * @return string Rendered split layout with divider.
+     *
+     * @see MultiplexerSplitPane::isActive()
+     * @see SplitLayout for the in-process implementation.
+     */
+    public static function renderForCurrentEnvironment(
+        string $topOrLeft,
+        string $bottomOrRight,
+        SplitDirection $direction,
+        int $cols = 0,
+        int $rows = 0,
+    ): string {
+        $multiplexer = new MultiplexerSplitPane();
+
+        if ($multiplexer->isActive()) {
+            if ($cols <= 0 || $rows <= 0) {
+                $size = self::getTerminalSize();
+                $cols = $cols > 0 ? $cols : $size['cols'];
+                $rows = $rows > 0 ? $rows : $size['rows'];
+            }
+
+            return $multiplexer->renderWithMultiplexer(
+                $topOrLeft,
+                $bottomOrRight,
+                $direction,
+                $cols,
+                $rows,
+            );
+        }
+
+        // No multiplexer - use in-process renderer directly
+        return self::renderWithSplit($topOrLeft, $bottomOrRight, $direction);
+    }
+
     private static ?array $terminalSize = null;
 
     public static function setSize(int $cols, int $rows): void
