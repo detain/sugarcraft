@@ -140,10 +140,12 @@ final class Chat implements Model
      */
     private function handleToolCalls(Message $message): array
     {
-        // P1.S10: When running multiple independent tools in parallel, migrate to:
-        //   $subAgents = array_map(fn($tc) => $agentManager->createSubAgent('tool-agent', $tc->name), $message->toolCalls);
-        //   $results = $agentManager->executeAll($subAgents, $request);
-        // This delegates to AgentWorkerPool for concurrent execution via AgentManager::executeAll().
+        // P1.S10 TODO: When running multiple independent tools in parallel, delegate to
+        //   AgentWorkerPool via a future AgentManager instance instead of executing them
+        //   sequentially here. The migration path will be:
+        //     1. Create SubAgent instances from each tool call
+        //     2. Call AgentManager::executeAll($subAgents, $request) which uses the pool
+        //   For now, tools execute sequentially in the current process.
         $toolResults = [];
         foreach ($message->toolCalls as $toolCall) {
             $result = $this->executeTool($toolCall);
@@ -259,9 +261,19 @@ final class Chat implements Model
     /**
      * Get the effective worker pool, if set.
      */
-    public function workerPool(): ?\SugarCraft\Crush\Agents\AgentWorkerPool
+    public function pool(): ?\SugarCraft\Crush\Agents\AgentWorkerPool
     {
         return $this->effectivePool;
+    }
+
+    /**
+     * Backward-compatible alias for pool().
+     *
+     * @deprecated Use pool() instead. This alias exists to ease migration.
+     */
+    public function workerPool(): ?\SugarCraft\Crush\Agents\AgentWorkerPool
+    {
+        return $this->pool();
     }
 
     /**
@@ -285,9 +297,15 @@ final class Chat implements Model
                     . 'Call withWorkerPool() or withAgentPoolConfig() first.'
                 );
             }
-            $pool = new \SugarCraft\Crush\Agents\AgentWorkerPool(
-                maxConcurrent: $this->agentPoolConfig->maxConcurrent,
+            // Wire config fields inline: create executor with timeout, pass maxConcurrent
+            // to constructor, and apply stopOnFirstFailure via the pool's fluent setter.
+            $executor = new \SugarCraft\Crush\Agents\ProcessExecutor(
+                timeoutSeconds: $this->agentPoolConfig->defaultTimeoutSeconds,
             );
+            $pool = (new \SugarCraft\Crush\Agents\AgentWorkerPool(
+                maxConcurrent: $this->agentPoolConfig->maxConcurrent,
+                executor: $executor,
+            ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
         }
 
         return $pool->executeAll($agents, $request);
@@ -464,18 +482,7 @@ final class Chat implements Model
 
     private function withInputBuf(string $buf): self
     {
-        return new self(
-            history: $this->history,
-            inputBuf: $buf,
-            inFlight: $this->inFlight,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-        );
+        return $this->mutate(['inputBuf' => $buf]);
     }
 
     /**

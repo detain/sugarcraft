@@ -461,7 +461,7 @@ final class ChatTest extends TestCase
         $pool = new AgentWorkerPool(maxConcurrent: 3);
         $chat2 = $chat->withWorkerPool($pool);
         $this->assertNotSame($chat, $chat2);
-        $this->assertSame($pool, $chat2->workerPool());
+        $this->assertSame($pool, $chat2->pool());
     }
 
     public function testWithAgentPoolConfigReturnsNewInstance(): void
@@ -478,7 +478,7 @@ final class ChatTest extends TestCase
         $pool = new AgentWorkerPool(maxConcurrent: 3);
         $chat = (new Chat())->withWorkerPool($pool);
         [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
-        $this->assertSame($pool, $next->workerPool());
+        $this->assertSame($pool, $next->pool());
     }
 
     public function testAgentPoolConfigPreservedOnInput(): void
@@ -494,7 +494,7 @@ final class ChatTest extends TestCase
         $pool = new AgentWorkerPool(maxConcurrent: 3);
         $chat = (new Chat())->withWorkerPool($pool);
         $chat2 = $chat->withStreaming(true);
-        $this->assertSame($pool, $chat2->workerPool());
+        $this->assertSame($pool, $chat2->pool());
     }
 
     public function testAgentPoolConfigPreservedOnToolRegistration(): void
