@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\Isolation;
 use SugarCraft\Crush\Agents\SubAgent;
 
 /**
@@ -51,6 +52,9 @@ final class SubAgentTest extends TestCase
         $this->assertSame('', $subAgent->output);
         $this->assertNull($subAgent->completedAt);
         $this->assertNull($subAgent->error);
+        $this->assertSame(300, $subAgent->timeout);
+        $this->assertSame(0, $subAgent->maxRetries);
+        $this->assertSame(Isolation::None, $subAgent->isolation);
     }
 
     public function testConstructorWithDefaultCreatedAt(): void
@@ -71,6 +75,30 @@ final class SubAgentTest extends TestCase
         $this->assertInstanceOf(\DateTimeImmutable::class, $subAgent->createdAt);
         $this->assertGreaterThanOrEqual($before, $subAgent->createdAt);
         $this->assertLessThanOrEqual($after, $subAgent->createdAt);
+    }
+
+    public function testConstructorWithCustomTimeoutMaxRetriesAndIsolation(): void
+    {
+        $agent = $this->createAgent();
+        $createdAt = new \DateTimeImmutable('2024-01-15T10:00:00Z');
+
+        $subAgent = new SubAgent(
+            id: 'custom_fields_test',
+            agent: $agent,
+            task: 'Task with custom config',
+            createdAt: $createdAt,
+            timeout: 600,
+            maxRetries: 3,
+            isolation: Isolation::Worktree,
+        );
+
+        $this->assertSame('custom_fields_test', $subAgent->id);
+        $this->assertSame($agent, $subAgent->agent);
+        $this->assertSame('Task with custom config', $subAgent->task);
+        $this->assertSame($createdAt, $subAgent->createdAt);
+        $this->assertSame(600, $subAgent->timeout);
+        $this->assertSame(3, $subAgent->maxRetries);
+        $this->assertSame(Isolation::Worktree, $subAgent->isolation);
     }
 
     // -------------------------------------------------------------------------
@@ -224,6 +252,9 @@ final class SubAgentTest extends TestCase
         $this->assertSame('2024-01-15T10:00:00+00:00', $array['created_at']);
         $this->assertSame('2024-01-15T10:00:05+00:00', $array['completed_at']);
         $this->assertNull($array['error']);
+        $this->assertSame(300, $array['timeout']);
+        $this->assertSame(0, $array['max_retries']);
+        $this->assertSame('none', $array['isolation']);
     }
 
     public function testToArrayWithError(): void

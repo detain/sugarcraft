@@ -27,6 +27,9 @@ final class SubAgent
         public readonly Agent $agent,
         public readonly string $task,
         public readonly \DateTimeImmutable $createdAt = new \DateTimeImmutable(),
+        public readonly int $timeout = 300,
+        public readonly int $maxRetries = 0,
+        public readonly Isolation $isolation = Isolation::None,
     ) {
         $this->status = self::STATUS_PENDING;
         $this->output = '';
@@ -69,6 +72,9 @@ final class SubAgent
             'created_at' => $this->createdAt->format('c'),
             'completed_at' => $this->completedAt?->format('c'),
             'error' => $this->error,
+            'timeout' => $this->timeout,
+            'max_retries' => $this->maxRetries,
+            'isolation' => $this->isolation->value,
         ];
     }
 }
