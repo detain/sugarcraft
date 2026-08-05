@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Permissions\PermissionGate;
+
 final class SubAgent
 {
     public const STATUS_PENDING = 'pending';
@@ -32,6 +34,7 @@ final class SubAgent
         public readonly Isolation $isolation = Isolation::None,
         public readonly ?string $teamId = null,
         public readonly ?string $teamAgentId = null,
+        public readonly ?PermissionGate $permissionGate = null,
     ) {
         $this->status = self::STATUS_PENDING;
         $this->output = '';
@@ -79,6 +82,7 @@ final class SubAgent
             'isolation' => $this->isolation->value,
             'team_id' => $this->teamId,
             'team_agent_id' => $this->teamAgentId,
+            'has_permission_gate' => $this->permissionGate !== null,
         ];
     }
 }

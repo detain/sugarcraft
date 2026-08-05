@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\ToolCall;
 
 final class AgentManager
 {
@@ -18,10 +21,14 @@ final class AgentManager
 
     private ?TeamManager $teamManager = null;
 
+    /**
+     * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
+     */
     public function __construct(
         private ProviderInterface $provider,
         private SkillRegistry $skillRegistry,
         private ?AgentWorkerPool $workerPool = null,
+        private ?\Closure $permissionGateFactory = null,
     ) {}
 
     /**
@@ -65,23 +72,44 @@ final class AgentManager
 
     /**
      * Create and start a subagent.
+     *
+     * @param PermissionMode|null $permissionMode Override the default permission mode for this sub-agent.
+     *                                            When null, uses PermissionMode::Default.
      */
-    public function createSubAgent(string $agentName, string $task): SubAgent
+    public function createSubAgent(string $agentName, string $task, ?PermissionMode $permissionMode = null): SubAgent
     {
         $agent = $this->get($agentName);
         if ($agent === null) {
             throw new \RuntimeException("Unknown agent: $agentName");
         }
 
+        $mode = $permissionMode ?? PermissionMode::Default;
+        $gate = $this->createPermissionGate($mode);
+
         $subAgent = new SubAgent(
             id: uniqid('subagent_'),
             agent: $agent,
             task: $task,
+            permissionGate: $gate,
         );
 
         $this->subAgents[$subAgent->id] = $subAgent;
 
         return $subAgent;
+    }
+
+    /**
+     * Create a PermissionGate from a PermissionMode using the configured factory,
+     * or return a default gate if no factory is configured.
+     */
+    private function createPermissionGate(PermissionMode $mode): PermissionGate
+    {
+        if ($this->permissionGateFactory !== null) {
+            return ($this->permissionGateFactory)($mode);
+        }
+
+        // Default factory: create a basic gate with no custom rules
+        return new PermissionGate($mode);
     }
 
     /**
@@ -131,11 +159,22 @@ final class AgentManager
                 $subAgent->status = SubAgent::STATUS_STREAMING;
 
                 foreach ($this->provider->completeStream($request) as $response) {
+                    // Evaluate tool calls through the permission gate if set
+                    if ($response->toolCalls !== null && $subAgent->permissionGate !== null) {
+                        $this->evaluateToolCalls($response->toolCalls, $subAgent);
+                    }
+
                     $subAgent->output .= $response->content;
                     yield $subAgent;
                 }
             } else {
                 $response = $this->provider->complete($request);
+
+                // Evaluate tool calls through the permission gate if set
+                if ($response->toolCalls !== null && $subAgent->permissionGate !== null) {
+                    $this->evaluateToolCalls($response->toolCalls, $subAgent);
+                }
+
                 $subAgent->output = $response->content;
             }
 
@@ -145,6 +184,45 @@ final class AgentManager
             $subAgent->status = SubAgent::STATUS_FAILED;
             $subAgent->error = $e->getMessage();
             throw $e;
+        }
+    }
+
+    /**
+     * Evaluate tool calls through the sub-agent's permission gate.
+     * Denied tool calls cause the sub-agent to fail immediately.
+     * Ask decisions also fail since sub-agents cannot prompt for user input.
+     *
+     * @param array<ToolCall> $toolCalls
+     * @throws \RuntimeException When a tool call is denied or requires user input
+     */
+    private function evaluateToolCalls(array $toolCalls, SubAgent $subAgent): void
+    {
+        if ($subAgent->permissionGate === null) {
+            return;
+        }
+
+        foreach ($toolCalls as $toolCall) {
+            $decision = $subAgent->permissionGate->evaluate($toolCall);
+
+            if ($decision === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
+                $subAgent->status = SubAgent::STATUS_FAILED;
+                $subAgent->error = sprintf(
+                    'Tool call "%s" denied by permission gate (mode: %s)',
+                    $toolCall->name,
+                    $subAgent->permissionGate->mode()->value,
+                );
+                throw new \RuntimeException($subAgent->error);
+            }
+
+            if ($decision === \SugarCraft\Crush\Permissions\PermissionDecision::Ask) {
+                $subAgent->status = SubAgent::STATUS_FAILED;
+                $subAgent->error = sprintf(
+                    'Tool call "%s" requires user input but sub-agents cannot prompt (mode: %s)',
+                    $toolCall->name,
+                    $subAgent->permissionGate->mode()->value,
+                );
+                throw new \RuntimeException($subAgent->error);
+            }
         }
     }
 

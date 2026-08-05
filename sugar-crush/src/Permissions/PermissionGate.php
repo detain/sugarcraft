@@ -49,6 +49,14 @@ final class PermissionGate
     ) {}
 
     /**
+     * Returns the permission mode this gate was configured with.
+     */
+    public function mode(): PermissionMode
+    {
+        return $this->mode;
+    }
+
+    /**
      * Evaluate a tool call and return the permission decision for the current mode.
      */
     public function evaluate(ToolCall $call): PermissionDecision
