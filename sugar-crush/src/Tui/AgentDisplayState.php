@@ -12,7 +12,7 @@ namespace SugarCraft\Crush\Tui;
  * time, and accumulated token usage without the renderer needing to
  * know about internal agent state.
  */
-final readonly class AgentDisplayState
+class AgentDisplayState
 {
     public function __construct(
         /** Agent name or role label, e.g. "coder-1", "reviewer-2". */
