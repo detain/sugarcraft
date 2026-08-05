@@ -11,6 +11,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Pane;
 
 /**
@@ -32,6 +33,8 @@ final class App
         public readonly array $enabledSkills,
         public readonly SkillRegistry $availableSkills,
         public readonly array $activeHooks,
+        public readonly int $selectedAgentIndex,
+        public readonly AgentViewMode $agentViewMode,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -49,6 +52,8 @@ final class App
             enabledSkills: [],
             availableSkills: new SkillRegistry(),
             activeHooks: [],
+            selectedAgentIndex: -1,
+            agentViewMode: AgentViewMode::List,
         );
     }
 
@@ -111,6 +116,16 @@ final class App
     public function withActiveHooks(array $v): self
     {
         return $this->mutate(activeHooks: $v);
+    }
+
+    public function withSelectedAgentIndex(int $v): self
+    {
+        return $this->mutate(selectedAgentIndex: $v);
+    }
+
+    public function withAgentViewMode(AgentViewMode $v): self
+    {
+        return $this->mutate(agentViewMode: $v);
     }
 
     /**
@@ -213,6 +228,8 @@ final class App
             enabledSkills: array_key_exists('enabledSkills', $changes) ? $changes['enabledSkills'] : $this->enabledSkills,
             availableSkills: array_key_exists('availableSkills', $changes) ? $changes['availableSkills'] : $this->availableSkills,
             activeHooks: array_key_exists('activeHooks', $changes) ? $changes['activeHooks'] : $this->activeHooks,
+            selectedAgentIndex: array_key_exists('selectedAgentIndex', $changes) ? $changes['selectedAgentIndex'] : $this->selectedAgentIndex,
+            agentViewMode: array_key_exists('agentViewMode', $changes) ? $changes['agentViewMode'] : $this->agentViewMode,
         );
     }
 }

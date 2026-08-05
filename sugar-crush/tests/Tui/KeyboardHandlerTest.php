@@ -7,13 +7,18 @@ namespace SugarCraft\Crush\Tests\Tui;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Tui\AgentViewMode;
+use SugarCraft\Crush\Tui\Commands\CancelAgentCmd;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
 use SugarCraft\Crush\Tui\Commands\GroupInputCmd;
 use SugarCraft\Crush\Tui\Commands\KeyCmd;
 use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
 use SugarCraft\Crush\Tui\Commands\ProviderSelectCmd;
+use SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd;
+use SugarCraft\Crush\Tui\Commands\ResumeAgentCmd;
 use SugarCraft\Crush\Tui\Commands\SourceSkillCmd;
+use SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
@@ -28,6 +33,11 @@ use ReflectionClass;
  * @see CommandPaletteCmd
  * @see SourceSkillCmd
  * @see ProviderSelectCmd
+ * @see AgentViewMode
+ * @see CancelAgentCmd
+ * @see ResumeAgentCmd
+ * @see StopAllAgentsCmd
+ * @see QuitAgentViewCmd
  */
 final class KeyboardHandlerTest extends TestCase
 {
@@ -425,5 +435,385 @@ final class KeyboardHandlerTest extends TestCase
         [$nextApp] = $this->handler->handle('ctrl+n', $app);
 
         $this->assertSame($app, $nextApp);
+    }
+
+    // =========================================================================
+    // Agent View Keyboard Handling Tests
+    // =========================================================================
+
+    private function createAgentViewApp(
+        AgentViewMode $mode = AgentViewMode::List,
+        int $selectedIndex = -1,
+    ): App {
+        return App::new($this->provider, 'gpt-4')
+            ->withPane(Pane::Agents)
+            ->withAgentViewMode($mode)
+            ->withSelectedAgentIndex($selectedIndex);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testDownArrowSelectsFirstAgentInListMode(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, -1);
+
+        [$nextApp, $cmd] = $this->handler->handle('down', $app);
+
+        $this->assertSame(0, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testJKeySelectsFirstAgentInListMode(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, -1);
+
+        [$nextApp, $cmd] = $this->handler->handle('j', $app);
+
+        $this->assertSame(0, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testDownArrowNavigatesToNextAgent(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('down', $app);
+
+        $this->assertSame(1, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testJKeyNavigatesToNextAgent(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 1);
+
+        [$nextApp, $cmd] = $this->handler->handle('j', $app);
+
+        $this->assertSame(2, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testUpArrowNavigatesToPreviousAgent(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 2);
+
+        [$nextApp, $cmd] = $this->handler->handle('up', $app);
+
+        $this->assertSame(1, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testKKeyNavigatesToPreviousAgent(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 1);
+
+        [$nextApp, $cmd] = $this->handler->handle('k', $app);
+
+        $this->assertSame(0, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testUpArrowAtIndexZeroDoesNothing(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('up', $app);
+
+        $this->assertSame(0, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListNavigation()
+     */
+    public function testKKeyAtIndexZeroDoesNothing(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('k', $app);
+
+        $this->assertSame(0, $nextApp->selectedAgentIndex);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListKey()
+     */
+    public function testEnterInListModeWithSelectionTransitionsToPeek(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('enter', $app);
+
+        $this->assertSame(AgentViewMode::Peek, $nextApp->agentViewMode);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListKey()
+     */
+    public function testEnterInListModeWithoutSelectionDoesNothing(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, -1);
+
+        [$nextApp, $cmd] = $this->handler->handle('enter', $app);
+
+        $this->assertSame(AgentViewMode::List, $nextApp->agentViewMode);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentPeekKey()
+     */
+    public function testEnterInPeekModeTransitionsToAttach(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::Peek, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('enter', $app);
+
+        $this->assertSame(AgentViewMode::Attach, $nextApp->agentViewMode);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentAttachKey()
+     */
+    public function testEscapeInAttachModeReturnsToList(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::Attach, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('escape', $app);
+
+        $this->assertSame(AgentViewMode::List, $nextApp->agentViewMode);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentPeekKey()
+     */
+    public function testEscapeInPeekModeReturnsToList(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::Peek, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('escape', $app);
+
+        $this->assertSame(AgentViewMode::List, $nextApp->agentViewMode);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListKey()
+     */
+    public function testEscapeInListModeWithSelectionDeselects(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 2);
+
+        [$nextApp, $cmd] = $this->handler->handle('escape', $app);
+
+        $this->assertSame(-1, $nextApp->selectedAgentIndex);
+        $this->assertSame(Pane::Agents, $nextApp->pane);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentListKey()
+     */
+    public function testEscapeInListModeWithoutSelectionReturnsToChat(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, -1);
+
+        [$nextApp, $cmd] = $this->handler->handle('escape', $app);
+
+        $this->assertSame(Pane::Chat, $nextApp->pane);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentViewKey()
+     */
+    public function testCKeyWithSelectionEmitsCancelAgentCmd(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 3);
+
+        [$nextApp, $cmd] = $this->handler->handle('c', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertInstanceOf(CancelAgentCmd::class, $cmd);
+        $this->assertSame(3, $cmd->agentIndex);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentViewKey()
+     */
+    public function testCKeyWithoutSelectionDoesNothing(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, -1);
+
+        [$nextApp, $cmd] = $this->handler->handle('c', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentViewKey()
+     */
+    public function testRKeyWithSelectionEmitsResumeAgentCmd(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 2);
+
+        [$nextApp, $cmd] = $this->handler->handle('r', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertInstanceOf(ResumeAgentCmd::class, $cmd);
+        $this->assertSame(2, $cmd->agentIndex);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentViewKey()
+     */
+    public function testRKeyWithoutSelectionDoesNothing(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, -1);
+
+        [$nextApp, $cmd] = $this->handler->handle('r', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertNull($cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentViewKey()
+     */
+    public function testSKeyEmitsStopAllAgentsCmd(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('s', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertInstanceOf(StopAllAgentsCmd::class, $cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentViewKey()
+     */
+    public function testQKeyReturnsToChatPane(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::List, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('q', $app);
+
+        $this->assertSame(Pane::Chat, $nextApp->pane);
+        $this->assertInstanceOf(QuitAgentViewCmd::class, $cmd);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentViewKey()
+     */
+    public function testQKeyResetsAgentViewState(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::Attach, 5);
+
+        [$nextApp, $cmd] = $this->handler->handle('q', $app);
+
+        $this->assertSame(Pane::Chat, $nextApp->pane);
+        $this->assertSame(-1, $nextApp->selectedAgentIndex);
+        $this->assertSame(AgentViewMode::List, $nextApp->agentViewMode);
+    }
+
+    // =========================================================================
+    // Agent View Command Class Interface and Modifier Tests
+    // =========================================================================
+
+    /**
+     * @see KeyCmd
+     */
+    public function testCancelAgentCmdImplementsKeyCmd(): void
+    {
+        $this->assertInstanceOf(KeyCmd::class, new CancelAgentCmd(0));
+    }
+
+    /**
+     * @see KeyCmd
+     */
+    public function testResumeAgentCmdImplementsKeyCmd(): void
+    {
+        $this->assertInstanceOf(KeyCmd::class, new ResumeAgentCmd(0));
+    }
+
+    /**
+     * @see KeyCmd
+     */
+    public function testStopAllAgentsCmdImplementsKeyCmd(): void
+    {
+        $this->assertInstanceOf(KeyCmd::class, new StopAllAgentsCmd());
+    }
+
+    /**
+     * @see KeyCmd
+     */
+    public function testQuitAgentViewCmdImplementsKeyCmd(): void
+    {
+        $this->assertInstanceOf(KeyCmd::class, new QuitAgentViewCmd());
+    }
+
+    /**
+     * Verifies CancelAgentCmd is final and readonly.
+     */
+    public function testCancelAgentCmdIsFinalReadonly(): void
+    {
+        $reflection = new ReflectionClass(CancelAgentCmd::class);
+        $this->assertTrue($reflection->isFinal(), 'CancelAgentCmd must be final');
+        $this->assertTrue($reflection->isReadOnly(), 'CancelAgentCmd must be readonly');
+    }
+
+    /**
+     * Verifies ResumeAgentCmd is final and readonly.
+     */
+    public function testResumeAgentCmdIsFinalReadonly(): void
+    {
+        $reflection = new ReflectionClass(ResumeAgentCmd::class);
+        $this->assertTrue($reflection->isFinal(), 'ResumeAgentCmd must be final');
+        $this->assertTrue($reflection->isReadOnly(), 'ResumeAgentCmd must be readonly');
+    }
+
+    /**
+     * Verifies StopAllAgentsCmd is final and readonly.
+     */
+    public function testStopAllAgentsCmdIsFinalReadonly(): void
+    {
+        $reflection = new ReflectionClass(StopAllAgentsCmd::class);
+        $this->assertTrue($reflection->isFinal(), 'StopAllAgentsCmd must be final');
+        $this->assertTrue($reflection->isReadOnly(), 'StopAllAgentsCmd must be readonly');
+    }
+
+    /**
+     * Verifies QuitAgentViewCmd is final and readonly.
+     */
+    public function testQuitAgentViewCmdIsFinalReadonly(): void
+    {
+        $reflection = new ReflectionClass(QuitAgentViewCmd::class);
+        $this->assertTrue($reflection->isFinal(), 'QuitAgentViewCmd must be final');
+        $this->assertTrue($reflection->isReadOnly(), 'QuitAgentViewCmd must be readonly');
     }
 }
