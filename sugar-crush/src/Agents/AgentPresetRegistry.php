@@ -1,0 +1,205 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Agents;
+
+use Symfony\Component\Yaml\Yaml;
+use SugarCraft\Crush\Permissions\PermissionMode;
+
+/**
+ * Registry for loading and resolving agent presets from the filesystem.
+ * Presets are Markdown files with YAML frontmatter stored under search paths.
+ *
+ * Mirrors charmbracelet/crush preset discovery and description-matching logic.
+ */
+final class AgentPresetRegistry
+{
+    public function __construct(private readonly array $searchPaths) {}
+
+    /**
+     * Load a preset by name from the search paths.
+     * Searches for <name>.md in each search path in order.
+     */
+    public function load(string $name): AgentPreset
+    {
+        foreach ($this->searchPaths as $path) {
+            $filePath = $path . '/' . $name . '.md';
+            if (file_exists($filePath)) {
+                return $this->parsePresetFile($filePath);
+            }
+        }
+
+        throw new \RuntimeException("Preset '{$name}' not found in search paths.");
+    }
+
+    /**
+     * List all available presets from all search paths.
+     *
+     * @return array<string, AgentPreset> Map of preset name => AgentPreset
+     */
+    public function list(): array
+    {
+        $presets = [];
+
+        foreach ($this->searchPaths as $path) {
+            if (!is_dir($path)) {
+                continue;
+            }
+
+            $files = glob($path . '/*.md');
+            foreach ($files as $file) {
+                $name = basename($file, '.md');
+                // Later search paths take precedence on name conflicts
+                if (!isset($presets[$name])) {
+                    $presets[$name] = $this->parsePresetFile($file);
+                }
+            }
+        }
+
+        return $presets;
+    }
+
+    /**
+     * Resolve a preset by matching a task description against preset descriptions.
+     * Uses keyword overlap scoring — returns the preset whose description shares
+     * the most keywords with the task description, enabling auto-delegation.
+     */
+    public function resolve(string $taskDescription): ?AgentPreset
+    {
+        $taskWords = $this->extractKeywords($taskDescription);
+        if ($taskWords === []) {
+            return null;
+        }
+
+        $bestPreset = null;
+        $bestScore = 0;
+
+        foreach ($this->list() as $preset) {
+            $descWords = $this->extractKeywords($preset->description);
+            $overlap = array_intersect($taskWords, $descWords);
+            $score = count($overlap);
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $bestPreset = $preset;
+            }
+        }
+
+        // Require at least 2 overlapping words to avoid spurious matches
+        return $bestScore >= 2 ? $bestPreset : null;
+    }
+
+    /**
+     * Extract lowercase keywords from a string (filters short/common words).
+     *
+     * @return array<string> List of meaningful word tokens
+     */
+    private function extractKeywords(string $text): array
+    {
+        $stopWords = [
+            'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to',
+            'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are',
+            'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+            'will', 'would', 'could', 'should', 'may', 'might', 'can',
+            'this', 'that', 'these', 'those', 'it', 'its',
+        ];
+
+        $words = preg_split('/\s+/', strtolower($text));
+        $keywords = array_filter($words, fn($w) => strlen($w) > 2 && !in_array($w, $stopWords, true));
+
+        return array_values($keywords);
+    }
+
+    /**
+     * Parse a preset Markdown file with YAML frontmatter into an AgentPreset.
+     */
+    private function parsePresetFile(string $filePath): AgentPreset
+    {
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            throw new \RuntimeException("Could not read preset file: {$filePath}");
+        }
+
+        // Extract YAML frontmatter block
+        if (!preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
+            throw new \RuntimeException("No YAML frontmatter found in: {$filePath}");
+        }
+
+        $data = Yaml::parse($matches[1]);
+        if (!is_array($data)) {
+            throw new \RuntimeException("Invalid YAML frontmatter in: {$filePath}");
+        }
+
+        return $this->arrayToPreset($data);
+    }
+
+    /**
+     * Build an AgentPreset from a parsed YAML array.
+     */
+    private function arrayToPreset(array $data): AgentPreset
+    {
+        return new AgentPreset(
+            name: $data['name'] ?? basename($data['_file'] ?? 'unknown'),
+            description: $data['description'] ?? '',
+            tools: $data['tools'] ?? [],
+            disallowedTools: $data['disallowedTools'] ?? [],
+            model: $data['model'] ?? 'inherit',
+            permissionMode: $this->parsePermissionMode($data['permissionMode'] ?? 'default'),
+            maxTurns: isset($data['maxTurns']) ? (int) $data['maxTurns'] : null,
+            skills: $data['skills'] ?? [],
+            mcpServers: $data['mcpServers'] ?? [],
+            memory: $this->parseMemoryScope($data['memory'] ?? 'user'),
+            background: (bool) ($data['background'] ?? false),
+            effort: $this->parseEffort($data['effort'] ?? 'medium'),
+            isolation: $this->parseIsolation($data['isolation'] ?? null),
+            color: $data['color'] ?? null,
+            initialPrompt: $data['initialPrompt'] ?? null,
+        );
+    }
+
+    private function parsePermissionMode(string $value): PermissionMode
+    {
+        return match (strtolower($value)) {
+            'accept-edits' => PermissionMode::AcceptEdits,
+            'plan' => PermissionMode::Plan,
+            'auto' => PermissionMode::Auto,
+            'dont-ask' => PermissionMode::DontAsk,
+            'bypass-permissions' => PermissionMode::BypassPermissions,
+            default => PermissionMode::Default,
+        };
+    }
+
+    private function parseMemoryScope(string $value): MemoryScope
+    {
+        return match (strtolower($value)) {
+            'project' => MemoryScope::Project,
+            'local' => MemoryScope::Local,
+            default => MemoryScope::User,
+        };
+    }
+
+    private function parseEffort(string $value): Effort
+    {
+        return match (strtolower($value)) {
+            'low' => Effort::Low,
+            'high' => Effort::High,
+            'xhigh' => Effort::XHigh,
+            'max' => Effort::Max,
+            default => Effort::Medium,
+        };
+    }
+
+    private function parseIsolation(?string $value): ?Isolation
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return match (strtolower($value)) {
+            'worktree' => Isolation::Worktree,
+            'none' => Isolation::None,
+            default => null,
+        };
+    }
+}
