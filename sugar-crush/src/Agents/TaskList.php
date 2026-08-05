@@ -4,12 +4,22 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookDispatcher;
+use SugarCraft\Crush\Hooks\HookDispatchResult;
+
 /**
  * SQLite-backed task list for team coordination.
  *
  * Uses file-based locking (flock) to ensure safe concurrent access when
  * multiple teammate agents access the same database from different processes.
  * The table is auto-created on first construction (migration).
+ *
+ * Hooks wired:
+ * - TaskCreated: dispatched before inserting a new task; block aborts the insert
+ * - TaskCompleted: dispatched after a task completes; block with continueOnBlock
+ *                  marks the completion as contested
+ * - TeammateIdle: dispatched when a teammate has no more tasks to work on
  */
 final class TaskList
 {
@@ -18,8 +28,13 @@ final class TaskList
 
     private readonly \SQLite3 $db;
 
+    /**
+     * @param string $dbPath Path to the SQLite database file
+     * @param HookDispatcher|null $hookDispatcher Optional hook dispatcher for lifecycle events
+     */
     public function __construct(
         private readonly string $dbPath,
+        private readonly ?HookDispatcher $hookDispatcher = null,
     ) {
         $this->db = $this->getConnection($dbPath);
         $this->migrate();
@@ -46,7 +61,8 @@ final class TaskList
                 created_at      TEXT    NOT NULL,
                 claimed_at      TEXT,
                 completed_at    TEXT,
-                depends_on      TEXT    NOT NULL DEFAULT '[]'
+                depends_on      TEXT    NOT NULL DEFAULT '[]',
+                contested       INTEGER NOT NULL DEFAULT 0
             );
             SQL
         );
@@ -59,10 +75,23 @@ final class TaskList
     /**
      * Add a new task to the list.
      *
+     * Before inserting, dispatches the TaskCreated hook. If a hook blocks
+     * (exit 2), the task is not inserted and a TaskBlockedException is thrown.
+     *
      * @return string The task ID (same as $task->id)
+     * @throws TaskBlockedException When a TaskCreated hook blocks the insertion
      */
     public function addTask(Task $task): string
     {
+        // Dispatch TaskCreated hook — block aborts the insert
+        if ($this->hookDispatcher !== null) {
+            $context = $this->makeHookContext($task->teamId, $task->id, $task->title);
+            $result = $this->hookDispatcher->dispatchTaskCreated($context);
+            if ($result->isBlock()) {
+                throw new TaskBlockedException($task->id, $result->message);
+            }
+        }
+
         $handle = $this->openForWrite();
 
         $stmt = $this->db->prepare(
@@ -120,9 +149,16 @@ final class TaskList
 
     /**
      * Mark a task as completed and store its result.
+     *
+     * After completing, dispatches the TaskCompleted hook. If a hook returns
+     * a block with continueOnBlock (exit 2), the completion is marked as contested.
      */
     public function completeTask(string $taskId, string $result): void
     {
+        // Fetch task first to get teamId for the hook context
+        $task = $this->getTask($taskId);
+        $teamId = $task?->teamId ?? '';
+
         $handle = $this->openForWrite();
 
         $stmt = $this->db->prepare(
@@ -140,6 +176,15 @@ final class TaskList
         $stmt->close();
 
         $this->closeForWrite($handle);
+
+        // Dispatch TaskCompleted hook — block with continueOnBlock marks contested
+        if ($this->hookDispatcher !== null && $teamId !== '') {
+            $context = $this->makeHookContext($teamId, $taskId, '');
+            $hookResult = $this->hookDispatcher->dispatchTaskCompleted($context);
+            if ($hookResult->isBlock() && $hookResult->shouldContinueOnBlock()) {
+                $this->markContested($taskId);
+            }
+        }
     }
 
     /**
@@ -164,6 +209,54 @@ final class TaskList
         $stmt->close();
 
         $this->closeForWrite($handle);
+    }
+
+    /**
+     * Mark a task's completion as contested.
+     *
+     * Called when a TaskCompleted hook returns a block with continueOnBlock,
+     * indicating the completion is disputed but already happened.
+     */
+    private function markContested(string $taskId): void
+    {
+        $handle = $this->openForWrite();
+
+        $stmt = $this->db->prepare('UPDATE tasks SET contested = 1 WHERE id = :id');
+        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $stmt->execute();
+        $stmt->close();
+
+        $this->closeForWrite($handle);
+    }
+
+    // -------------------------------------------------------------------------
+    // Hook dispatch (called by TeamManager / Teammate when a teammate goes idle)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Dispatch the TeammateIdle hook for a given teammate.
+     *
+     * This is called by TeamManager or Teammate when a teammate has exhausted
+     * all available tasks. The hook system can respond by assigning new work,
+     * alerting the human, or other escalation.
+     *
+     * @param string $teamId   The team the teammate belongs to
+     * @param string $teammateId The teammate who went idle
+     * @return HookDispatchResult The result of the hook dispatch
+     */
+    public function dispatchTeammateIdle(string $teamId, string $teammateId): HookDispatchResult
+    {
+        if ($this->hookDispatcher === null) {
+            return HookDispatchResult::allow(
+                \SugarCraft\Crush\Hooks\HookEvent::TeammateIdle,
+                $this->makeHookContext($teamId, $teammateId, ''),
+                'no dispatcher',
+            );
+        }
+
+        $context = $this->makeHookContext($teamId, $teammateId, '');
+
+        return $this->hookDispatcher->dispatchTeammateIdle($context);
     }
 
     // -------------------------------------------------------------------------
@@ -393,6 +486,7 @@ final class TaskList
             claimedAt: $row['claimed_at'] !== null ? new \DateTimeImmutable($row['claimed_at']) : null,
             completedAt: $row['completed_at'] !== null ? new \DateTimeImmutable($row['completed_at']) : null,
             dependsOn: json_decode($row['depends_on'] ?? '[]', true, 512, JSON_THROW_ON_ERROR),
+            isContested: (bool)($row['contested'] ?? false),
         );
     }
 
@@ -502,5 +596,42 @@ final class TaskList
         if (\file_exists($lockPath)) {
             \unlink($lockPath);
         }
+    }
+
+    /**
+     * Build a HookContext for task-scoped hook events.
+     *
+     * Uses the teamId as sessionId since TaskList operates at the team level.
+     * The toolName is always 'TaskList' for task-scoped events.
+     *
+     * @param string $teamId   Used as sessionId in the context
+     * @param string $taskId   Used as toolInput in the context
+     * @param string $taskTitle Used as toolArgs['title'] in the context
+     */
+    private function makeHookContext(string $teamId, string $taskId, string $taskTitle): HookContext
+    {
+        return new HookContext(
+            sessionId: $teamId,
+            toolName: 'TaskList',
+            toolArgs: ['title' => $taskTitle],
+            toolInput: $taskId,
+            toolOutput: '',
+            model: '',
+            provider: '',
+            projectRoot: '',
+        );
+    }
+}
+
+/**
+ * Thrown when a TaskCreated hook blocks the insertion of a new task.
+ */
+final class TaskBlockedException extends \RuntimeException
+{
+    public function __construct(
+        public readonly string $taskId,
+        string $message = '',
+    ) {
+        parent::__construct($message !== '' ? $message : "Task creation blocked: {$taskId}");
     }
 }
