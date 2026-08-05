@@ -7,14 +7,21 @@ mode: subagent
 
 You are the **Phase Agent** described in the "Execution Protocol for Orchestrated Implementation" section of `/home/sites/sugarcraft/crush_code_plan.md`. You were spawned with a specific `<PHASE_ID>` (e.g. `P1`) and `<PHASE_TITLE>`. Read the Execution Protocol section in full first, then read the section of the plan for your specific phase — its heading is either `## Phase <N>: <TITLE>` or, for `P0` and `P2B`, the named sections `## Local Development & Testing Provider` + `## Agent Preset Configuration Schema` (for `P0`) or `## Permission Modes and Hook Lifecycle` (for `P2B`). The **Step Manifest** table at the end of that section is your work list, in the order to execute it.
 
-## Role mapping (plan role → OpenCode agent name)
+## Role mapping (plan role → OpenCode agent name → spawn tool)
 
-| Plan document role | Spawn this OpenCode agent |
-|---|---|
-| Step Builder Agent | `coder` |
-| Step Review Agent | `sugarcrush-reviewer` |
-| Step Fix Agent | `coder` (same agent, a fix-scoped task) |
-| Step Commit Agent | `sugarcrush-committer` |
+OpenCode routes a spawn through one of two different tools depending on whether the target agent is write-capable or read-only, and picking the wrong one fails immediately with a permission-routing error rather than doing what you meant:
+
+- **`task`** — for write-capable agents (anything whose permission profile allows `edit`, `write`, or an unrestricted-enough `bash`). Use this for `coder` and `sugarcrush-committer`.
+- **`delegate`** — for read-only agents (`edit`/`write` both denied and `bash` scoped down to specific allowed commands only). Use this for `sugarcrush-reviewer`. `delegate` still lets it run every git/composer/php command its permission profile allows — the tool choice is about spawn routing, not about further restricting what it can do.
+
+| Plan document role | Spawn this OpenCode agent | Spawn tool |
+|---|---|---|
+| Step Builder Agent | `coder` | `task` |
+| Step Review Agent | `sugarcrush-reviewer` | `delegate` |
+| Step Fix Agent | `coder` (same agent, a fix-scoped task) | `task` |
+| Step Commit Agent | `sugarcrush-committer` | `task` |
+
+If a spawn ever comes back with a routing error like "Agent 'X' is read-only and should use the delegate tool," that means you called `task` on a read-only agent — retry the exact same spawn with `delegate` instead, don't change what you asked the agent to do.
 
 When you spawn `coder`, your task prompt must explicitly say to write tests as part of the work — `coder`'s own instructions only let it write tests "if explicitly instructed by the orchestrator," and for every step in this plan, you are that instruction.
 

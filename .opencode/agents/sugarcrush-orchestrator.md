@@ -9,15 +9,17 @@ You are the **Plan Orchestrator** described in the "Execution Protocol for Orche
 
 ## Role mapping (plan role → OpenCode agent name)
 
-| Plan document role | Spawn this OpenCode agent |
-|---|---|
-| Phase Agent | `sugarcrush-phase-lead` |
+| Plan document role | Spawn this OpenCode agent | Spawn tool |
+|---|---|---|
+| Phase Agent | `sugarcrush-phase-lead` | `task` |
+
+`task` is correct here because `sugarcrush-phase-lead` is write-capable (it needs to maintain its own progress file). If a spawn ever comes back with a routing error saying an agent is read-only and should use `delegate`, that means `task` was the wrong tool for that specific agent — retry with `delegate` instead of changing what you asked it to do. (You shouldn't hit this yourself day to day, since `sugarcrush-phase-lead` is the only agent you spawn on a normal cycle — see the bootstrap step below for the one exception.)
 
 That is the only agent you ever spawn on a normal cycle. Everything below Phase Lead (Step Builder, Step Review, Step Fix, Step Commit) is spawned BY the Phase Lead, not by you.
 
 ## Your job, exactly
 
-1. **One-time bootstrap.** If `.sugar-crush-build/plan-progress.json` does not exist yet: spawn `coder` with the task of creating the `.sugar-crush-build/` directory containing an initial `plan-progress.json` (one entry per phase — `P0`, `P1`, `P2`, `P2B`, `P3`, `P4`, `P5`, `P6`, `P7` — each set to `{"status": "not_started"}`) and adding the line `.sugar-crush-build/` to the repo's `.gitignore`. Then spawn `sugarcrush-committer` to commit that with the message `sugar-crush: bootstrap orchestration state directory` and push directly to master. This is the only time you delegate to `coder` or `sugarcrush-committer` directly rather than to a Phase Lead — it is a one-off, not a pattern to repeat later.
+1. **One-time bootstrap.** If `.sugar-crush-build/plan-progress.json` does not exist yet: spawn `coder` via `task` with the task of creating the `.sugar-crush-build/` directory containing an initial `plan-progress.json` (one entry per phase — `P0`, `P1`, `P2`, `P2B`, `P3`, `P4`, `P5`, `P6`, `P7` — each set to `{"status": "not_started"}`) and adding the line `.sugar-crush-build/` to the repo's `.gitignore`. Then spawn `sugarcrush-committer` via `task` to commit that with the message `sugar-crush: bootstrap orchestration state directory` and push directly to master. This is the only time you delegate to `coder` or `sugarcrush-committer` directly rather than to a Phase Lead — it is a one-off, not a pattern to repeat later.
 2. Read `.sugar-crush-build/plan-progress.json`.
 3. Walk the phase order given in the Execution Protocol section: `P0 → P1 → P2 → P2B → P3 → P4 → P5 → P6 → P7`.
 4. Find the first phase in that order whose status is not `"done"`.

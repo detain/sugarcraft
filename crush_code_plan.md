@@ -101,14 +101,16 @@ This is the mechanism that lets the Plan Orchestrator and Phase Agent stay tiny:
 
 The six roles above map onto real, already-configured OpenCode agents in this repo rather than needing to be invented from scratch at run time:
 
-| Plan role | OpenCode agent | Defined in |
-|---|---|---|
-| Plan Orchestrator | `sugarcrush-orchestrator` | `.opencode/agents/sugarcrush-orchestrator.md` |
-| Phase Agent | `sugarcrush-phase-lead` | `.opencode/agents/sugarcrush-phase-lead.md` |
-| Step Builder Agent | `coder` (existing agent, reused as-is) | `.opencode/agents/coder.md` |
-| Step Review Agent | `sugarcrush-reviewer` | `.opencode/agents/sugarcrush-reviewer.md` |
-| Step Fix Agent | `coder` (same existing agent, a fix-scoped task) | `.opencode/agents/coder.md` |
-| Step Commit Agent | `sugarcrush-committer` | `.opencode/agents/sugarcrush-committer.md` |
+| Plan role | OpenCode agent | Spawn tool | Defined in |
+|---|---|---|---|
+| Plan Orchestrator | `sugarcrush-orchestrator` | n/a — this is `mode: primary`, the user switches to it directly rather than anyone spawning it | `.opencode/agents/sugarcrush-orchestrator.md` |
+| Phase Agent | `sugarcrush-phase-lead` | `task` | `.opencode/agents/sugarcrush-phase-lead.md` |
+| Step Builder Agent | `coder` (existing agent, reused as-is) | `task` | `.opencode/agents/coder.md` |
+| Step Review Agent | `sugarcrush-reviewer` | `delegate` | `.opencode/agents/sugarcrush-reviewer.md` |
+| Step Fix Agent | `coder` (same existing agent, a fix-scoped task) | `task` | `.opencode/agents/coder.md` |
+| Step Commit Agent | `sugarcrush-committer` | `task` | `.opencode/agents/sugarcrush-committer.md` |
+
+OpenCode routes a spawn through one of two different tools depending on whether the target agent is write-capable or read-only, and this is not optional or interchangeable — calling the wrong one fails immediately with a routing error instead of doing what was intended. **`task`** is for anything whose permission profile allows `edit`, `write`, or a broad-enough `bash` (`coder`, `sugarcrush-phase-lead`, `sugarcrush-committer`). **`delegate`** is for agents with `edit`/`write` both denied and `bash` scoped down to an explicit allowlist (`sugarcrush-reviewer`) — `delegate` still runs every command that agent's permission profile allows, it's purely about spawn routing, not a further restriction. `sugarcrush-committer` looks narrowly scoped in the same way `sugarcrush-reviewer` does, but it is deliberately configured with `bash: {"*": "allow", ...specific dangerous commands denied...}` rather than `bash: {"*": "deny", ...specific commands allowed...}`, specifically so it gets classified write-capable and routed through `task` — the dangerous operations (`git push --force`, `git reset`, `git checkout --`, `git clean`, `git add -A`/`.`, `git commit --amend`) are still hard-denied individually, just via the opposite default. If a Phase Lead ever gets a routing error naming one of these agents, the fix is to retry the identical spawn with the other tool, never to change what was asked of the agent.
 
 Their permission profiles (what each is allowed to `read`/`write`/`edit`/`bash`, and which specific `git`/`composer`/`php` command prefixes each is allowed to run) are registered under `"agent"` in `.opencode/opencode.jsonc`, following the exact same permission-block style already used there for the repo's existing `coder`/`reviewer`/`researcher`/`scribe`/`explore`/`build`/`plan` agents. `coder` needed no changes at all — its existing profile (`read`/`write`/`edit`/`glob`/`grep`/`bash` all `allow`, forbidden from ever running `git commit` per its own prompt) already matches exactly what a Step Builder or Step Fix Agent needs, which is why this plan reuses it rather than defining a new one. `sugarcrush-orchestrator` and `sugarcrush-phase-lead` are `mode: subagent`-adjacent delegation-only agents mirroring the repo's existing `build`/`plan` agents (`edit`/`bash` denied, `task` allowed), with one narrow addition: `write` allowed so each can maintain its own `.sugar-crush-build/*.json` progress file — a rule enforced by their prompts rather than by permission scoping, the same way `coder` is technically allowed to run `git commit` but is instructed never to. `sugarcrush-reviewer` mirrors the existing `reviewer` agent's shape (read-only, no `edit`/`write`, `git diff`/`log`/`show`/`blame` allowed) with an expanded `bash` allowlist covering `composer *` and `php *` so it can actually run this repo's test suite, plus `git status*` which the generic `reviewer` doesn't need but this one does. `sugarcrush-committer` is the one genuinely new capability — nothing in the existing agent set is allowed to `git commit`/`git push`, since day-to-day work in this repo goes through PRs — so it exists solely to perform the direct-to-master commits this orchestrated run calls for, with `git add`/`git commit`/`git push origin master` allowed and nothing else.
 
@@ -205,6 +207,8 @@ working directory does not persist between separate Bash tool calls.
 ### Spawning a Step Review Agent — the full checklist
 
 This is the most important prompt in the whole protocol. The Review Agent is a completely fresh agent every single time it's spawned — even on the second, third, fourth, or fifth cycle for the same step, it has no memory of what an earlier Review Agent found or what a Fix Agent claimed to have fixed. It re-derives everything from the current state of the files on disk. This is deliberate: a reviewer that "remembers" being told something was fixed is a reviewer that can be talked out of catching a fix that didn't actually work.
+
+On OpenCode, `sugarcrush-reviewer` is read-only and must be spawned via the **`delegate`** tool, not `task` — see "Concrete OpenCode wiring" above.
 
 Prompt template:
 
@@ -364,6 +368,8 @@ After the Fix Agent reports back, the Phase Agent immediately spawns a **brand n
 ### Spawning a Step Commit Agent
 
 Only spawn this once a Review Agent has returned `STEP_REVIEW_RESULT: PASS`. This repository's normal workflow uses branches and pull requests, but **for this automated build run specifically, commits go directly to the `master` branch — no branches, no pull requests.** This is an explicit, intentional exception for this orchestrated run, not a change to how humans should work in this repo day to day.
+
+On OpenCode, `sugarcrush-committer` is write-capable (deliberately, so it can actually run `git commit`/`git push`) and must be spawned via the **`task`** tool, not `delegate` — see "Concrete OpenCode wiring" above.
 
 Prompt template:
 

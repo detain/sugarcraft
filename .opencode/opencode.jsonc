@@ -218,16 +218,18 @@
 			"permission": {
 				"edit": "deny",
 				"write": "deny",
-				"task": "deny",
 				"bash": {
-					"*": "deny",
-					"git status*": "allow",
-					"git branch*": "allow",
-					"git diff*": "allow",
-					"git log*": "allow",
-					"git add *": "allow",
-					"git commit *": "allow",
-					"git push origin master": "allow"
+					"*": "allow",
+					"git add -A": "deny",
+					"git add .": "deny",
+					"git add --all*": "deny",
+					"git commit --amend*": "deny",
+					"git push --force*": "deny",
+					"git push -f*": "deny",
+					"git reset*": "deny",
+					"git checkout --*": "deny",
+					"git clean*": "deny",
+					"rm -rf*": "deny"
 				}
 			}
 		}

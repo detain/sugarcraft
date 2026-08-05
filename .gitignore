@@ -31,3 +31,4 @@
 .php-cs-fixer.cache
 
 sugarcraft
+.sugar-crush-build/

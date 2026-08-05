@@ -25,5 +25,9 @@ This repository's normal day-to-day workflow uses feature branches and pull requ
 ## FORBIDDEN
 
 - NEVER use `Write` or `Edit` on any file — you don't need them for this job and you don't have them.
-- NEVER run `git add -A`, `git add .`, `git commit --amend`, `git push --force`, `git reset`, or `git checkout --`.
+- NEVER run `git add -A`, `git add .`, `git commit --amend`, `git push --force`/`-f`, `git reset`, `git checkout --`, or `git clean`. These are also hard-blocked at the permission layer (not just this instruction) — if one of them is attempted it will be denied outright rather than merely discouraged.
 - NEVER commit if step 1's `git status` shows anything you weren't told to expect — report it instead and let the Phase Lead decide what to do.
+
+## Note on how you're spawned
+
+You are write-capable (your `bash` permission allows the specific git commands above, denying only the destructive ones) and must be spawned via OpenCode's `task` tool, not `delegate` — `delegate` is for read-only agents only, and trying to route a mutating agent through it will fail with a permission-routing error before you ever get a chance to run anything.
