@@ -20,9 +20,26 @@ final class ProcessExecutor implements ExecutorInterface
     /** @var array<string, resource> PID -> process descriptor */
     private array $processes = [];
 
+    /** @var array<string, int> agentId -> last heartbeat timestamp (Unix time) */
+    private array $lastHeartbeat = [];
+
+    /** Heartbeat interval the worker sends messages at (seconds). */
+    private const HEARTBEAT_INTERVAL_SECS = 5;
+
+    /** How long the parent waits for a heartbeat before declaring worker dead (seconds). */
+    private const HEARTBEAT_TIMEOUT_SECS = 15;
+
+    /** Grace period between SIGTERM and SIGKILL (seconds). */
+    private const SIGTERM_GRACE_SECS = 5;
+
+    /** Default fraction of available memory above which we pause scheduling (0.0–1.0). */
+    private const DEFAULT_MEMORY_THRESHOLD = 0.8;
+
     public function __construct(
         private readonly string $binaryPath = 'php',
         private readonly ?int $timeoutSeconds = 300,
+        /** Memory usage fraction above which new task scheduling is paused (0.0–1.0). */
+        private readonly float $memoryPressureThreshold = self::DEFAULT_MEMORY_THRESHOLD,
     ) {}
 
     /**
@@ -34,48 +51,145 @@ final class ProcessExecutor implements ExecutorInterface
      */
     public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
     {
+        $this->checkBackpressure();
+
         $process = $this->spawnWorker($agent, $request);
 
         $buffer = '';
         $startTime = new \DateTimeImmutable();
+        $this->lastHeartbeat[$agent->id] = time();
 
-        // Use blocking mode for stdout reading so fgets() waits for data
-        stream_set_blocking($process['stdout'], true);
+        // Use non-blocking reads so we can enforce timeouts and heartbeats
+        stream_set_blocking($process['stdout'], false);
+
+        $timeoutDeadline = $this->timeoutSeconds !== null
+            ? time() + $this->timeoutSeconds
+            : null;
 
         // Read until we get a complete or error message
         while (!feof($process['stdout'])) {
-            $line = fgets($process['stdout']);
-            if ($line === false) {
-                break;
-            }
+            $heartbeatDeadline = $this->lastHeartbeat[$agent->id] + self::HEARTBEAT_TIMEOUT_SECS;
+            $checkDeadline = $timeoutDeadline !== null
+                ? min($heartbeatDeadline, $timeoutDeadline)
+                : $heartbeatDeadline;
 
-            $buffer .= $line;
-            $message = json_decode(trim($line), true);
+            $timeoutUsec = max(100_000, ($checkDeadline - time()) * 1_000_000);
 
-            if ($message === null) {
-                continue;
-            }
+            $read = [$process['stdout']];
+            $write = null;
+            $except = null;
+            $changed = @stream_select($read, $write, $except, 0, $timeoutUsec);
 
-            if (($message['type'] ?? '') === 'complete') {
+            if ($changed === false) {
                 $this->closeProcess($process);
-                return $this->buildResult($message, $agent->id, $startTime);
-            }
-
-            if (($message['type'] ?? '') === 'error') {
-                $this->closeProcess($process);
+                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
                 return new AgentResult(
                     agentId: $agent->id,
                     status: AgentStatus::Failed,
-                    error: new \RuntimeException($message['message'] ?? 'Unknown error'),
+                    output: $buffer ?: null,
+                    error: new \RuntimeException('stream_select interrupted'),
                     startedAt: $startTime,
                     completedAt: new \DateTimeImmutable(),
                 );
             }
+
+            if ($changed === 0) {
+                $now = time();
+                if ($timeoutDeadline !== null && $now >= $timeoutDeadline) {
+                    $this->escalateAndKill($process['process'], $agent->id);
+                    $this->closeProcess($process);
+                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    return new AgentResult(
+                        agentId: $agent->id,
+                        status: AgentStatus::Failed,
+                        output: $buffer ?: null,
+                        error: new \RuntimeException('Worker timed out'),
+                        startedAt: $startTime,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
+
+                if ($now >= $heartbeatDeadline) {
+                    $this->escalateAndKill($process['process'], $agent->id);
+                    $this->closeProcess($process);
+                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    return new AgentResult(
+                        agentId: $agent->id,
+                        status: AgentStatus::Failed,
+                        output: $buffer ?: null,
+                        error: new \RuntimeException('Worker heartbeat timeout — process unresponsive'),
+                        startedAt: $startTime,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
+
+                // No data and no deadline expired — loop again with fresh select
+                continue;
+            }
+
+            // Data is ready — read it
+            $line = fgets($process['stdout']);
+            if ($line !== false && $line !== '') {
+                $buffer .= $line;
+                $message = json_decode(trim($line), true);
+
+                if ($message !== null) {
+                    if (($message['type'] ?? '') === 'heartbeat') {
+                        $this->lastHeartbeat[$agent->id] = time();
+                        // After a heartbeat, re-check if overall timeout has already passed
+                        if ($timeoutDeadline !== null && time() >= $timeoutDeadline) {
+                            $this->escalateAndKill($process['process'], $agent->id);
+                            $this->closeProcess($process);
+                            unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                            return new AgentResult(
+                                agentId: $agent->id,
+                                status: AgentStatus::Failed,
+                                output: $buffer ?: null,
+                                error: new \RuntimeException('Worker timed out'),
+                                startedAt: $startTime,
+                                completedAt: new \DateTimeImmutable(),
+                            );
+                        }
+                        continue;
+                    }
+
+                    if (($message['type'] ?? '') === 'complete') {
+                        $this->closeProcess($process);
+                        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                        return $this->buildResult($message, $agent->id, $startTime);
+                    }
+
+                    if (($message['type'] ?? '') === 'error') {
+                        $this->closeProcess($process);
+                        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                        return new AgentResult(
+                            agentId: $agent->id,
+                            status: AgentStatus::Failed,
+                            error: new \RuntimeException($message['message'] ?? 'Unknown error'),
+                            startedAt: $startTime,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    }
+                }
+            }
         }
 
+        // Worker exited without complete/error — check for crash exit code
+        $exitCode = $this->getExitCode($process['process']);
         $this->closeProcess($process);
+        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
 
-        // If we exit the loop without complete/error, treat as failure
+        if ($exitCode !== 0) {
+            return new AgentResult(
+                agentId: $agent->id,
+                status: AgentStatus::Failed,
+                output: $buffer ?: null,
+                error: new \RuntimeException("Worker process exited with code {$exitCode}"),
+                startedAt: $startTime,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+
         return new AgentResult(
             agentId: $agent->id,
             status: AgentStatus::Failed,
@@ -94,17 +208,83 @@ final class ProcessExecutor implements ExecutorInterface
      */
     public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
     {
+        $this->checkBackpressure();
+
         $process = $this->spawnWorker($agent, $request);
         $startTime = new \DateTimeImmutable();
+        $this->lastHeartbeat[$agent->id] = time();
 
-        // Use blocking mode for stdout reading so fgets() waits for data
-        stream_set_blocking($process['stdout'], true);
+        // Use non-blocking reads for timeout and heartbeat enforcement
+        stream_set_blocking($process['stdout'], false);
 
-        // Read streaming messages and yield them
+        $timeoutDeadline = $this->timeoutSeconds !== null
+            ? time() + $this->timeoutSeconds
+            : null;
+
         while (!feof($process['stdout'])) {
+            $heartbeatDeadline = $this->lastHeartbeat[$agent->id] + self::HEARTBEAT_TIMEOUT_SECS;
+            $checkDeadline = $timeoutDeadline !== null
+                ? min($heartbeatDeadline, $timeoutDeadline)
+                : $heartbeatDeadline;
+
+            $timeoutUsec = max(100_000, ($checkDeadline - time()) * 1_000_000);
+
+            $read = [$process['stdout']];
+            $write = null;
+            $except = null;
+            $changed = @stream_select($read, $write, $except, 0, $timeoutUsec);
+
+            if ($changed === false || $changed === 0) {
+                $now = time();
+                if ($timeoutDeadline !== null && $now >= $timeoutDeadline) {
+                    $this->escalateAndKill($process['process'], $agent->id);
+                    $this->closeProcess($process);
+                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    yield new AgentResult(
+                        agentId: $agent->id,
+                        status: AgentStatus::Failed,
+                        error: new \RuntimeException('Worker timed out'),
+                        startedAt: $startTime,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                    return;
+                }
+
+                if ($now >= $heartbeatDeadline) {
+                    $this->escalateAndKill($process['process'], $agent->id);
+                    $this->closeProcess($process);
+                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    yield new AgentResult(
+                        agentId: $agent->id,
+                        status: AgentStatus::Failed,
+                        error: new \RuntimeException('Worker heartbeat timeout — process unresponsive'),
+                        startedAt: $startTime,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                    return;
+                }
+
+                if ($changed === 0) {
+                    // No data, not a timeout — loop again
+                    continue;
+                }
+
+                // stream_select returned false (error)
+                $this->closeProcess($process);
+                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                yield new AgentResult(
+                    agentId: $agent->id,
+                    status: AgentStatus::Failed,
+                    error: new \RuntimeException('stream_select failed'),
+                    startedAt: $startTime,
+                    completedAt: new \DateTimeImmutable(),
+                );
+                return;
+            }
+
             $line = fgets($process['stdout']);
-            if ($line === false) {
-                break;
+            if ($line === false || $line === '') {
+                continue;
             }
 
             $message = json_decode(trim($line), true);
@@ -113,6 +293,25 @@ final class ProcessExecutor implements ExecutorInterface
             }
 
             $type = $message['type'] ?? '';
+
+            if ($type === 'heartbeat') {
+                $this->lastHeartbeat[$agent->id] = time();
+                // After a heartbeat, re-check if overall timeout has already passed
+                if ($timeoutDeadline !== null && time() >= $timeoutDeadline) {
+                    $this->escalateAndKill($process['process'], $agent->id);
+                    $this->closeProcess($process);
+                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    yield new AgentResult(
+                        agentId: $agent->id,
+                        status: AgentStatus::Failed,
+                        error: new \RuntimeException('Worker timed out'),
+                        startedAt: $startTime,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                    return;
+                }
+                continue;
+            }
 
             if ($type === 'streaming') {
                 yield new AgentResult(
@@ -126,12 +325,14 @@ final class ProcessExecutor implements ExecutorInterface
 
             if ($type === 'complete') {
                 $this->closeProcess($process);
+                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
                 yield $this->buildResult($message, $agent->id, $startTime);
                 return;
             }
 
             if ($type === 'error') {
                 $this->closeProcess($process);
+                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
                 yield new AgentResult(
                     agentId: $agent->id,
                     status: AgentStatus::Failed,
@@ -141,14 +342,23 @@ final class ProcessExecutor implements ExecutorInterface
                 );
                 return;
             }
-
-            // Handle other message types silently for now
-            // (tool_call, progress, etc. will be handled in P1.S6)
         }
 
+        $exitCode = $this->getExitCode($process['process']);
         $this->closeProcess($process);
+        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
 
-        // Exit without complete - yield failure
+        if ($exitCode !== 0) {
+            yield new AgentResult(
+                agentId: $agent->id,
+                status: AgentStatus::Failed,
+                error: new \RuntimeException("Worker process exited with code {$exitCode}"),
+                startedAt: $startTime,
+                completedAt: new \DateTimeImmutable(),
+            );
+            return;
+        }
+
         yield new AgentResult(
             agentId: $agent->id,
             status: AgentStatus::Failed,
@@ -213,7 +423,7 @@ final class ProcessExecutor implements ExecutorInterface
             2 => ['pipe', 'w'],  // stderr
         ];
 
-        $process = proc_open(
+        $process = @proc_open(
             [$this->binaryPath, '-r', $workerScript],
             $descriptors,
             $pipes,
@@ -222,7 +432,15 @@ final class ProcessExecutor implements ExecutorInterface
             ['bypass_shell' => true]
         );
 
-        if (!is_resource($process)) {
+        if ($process === false || !is_resource($process)) {
+            // Clean up any pipes that were opened before the failure
+            if (isset($pipes) && is_array($pipes)) {
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
             throw new \RuntimeException('Failed to spawn worker process');
         }
 
@@ -358,11 +576,16 @@ if (!$executeReceived) {
     exit(1);
 }
 
+// ---- Send heartbeat every 500ms while working ----
+$heartbeatIntervalUsec = 500_000; // 500ms
+$lastHeartbeat = time();
+
 // ---- Simulate agent work and stream results ----
 // For P1.S5: simple simulation that echoes the task after a brief delay.
 // Real LLM integration comes in later phases.
 
-usleep(50000); // 50ms delay to simulate work
+// Phase 1: Initial work burst
+usleep(20000); // 20ms delay to simulate work
 
 // Send streaming message
 $streamingMsg = json_encode([
@@ -372,13 +595,38 @@ $streamingMsg = json_encode([
 fwrite(STDOUT, $streamingMsg);
 fflush(STDOUT);
 
+// Send heartbeat
+$heartbeatMsg = json_encode(['type' => 'heartbeat']) . "\n";
+fwrite(STDOUT, $heartbeatMsg);
+fflush(STDOUT);
+$lastHeartbeat = time();
+
+// Continue working
+usleep(20000);
+
 // Send another streaming message with simulated response
-usleep(50000);
 $streamingMsg2 = json_encode([
     'type' => 'streaming',
     'content' => "[{$agentConfig['name']}] Completed task successfully.",
 ]) . "\n";
 fwrite(STDOUT, $streamingMsg2);
+fflush(STDOUT);
+
+// Send heartbeat
+$heartbeatMsg = json_encode(['type' => 'heartbeat']) . "\n";
+fwrite(STDOUT, $heartbeatMsg);
+fflush(STDOUT);
+
+// Long-running task simulation: keep sending heartbeats until done
+// Simulate a slightly longer-running task with periodic heartbeats
+usleep($heartbeatIntervalUsec);
+$heartbeatMsg = json_encode(['type' => 'heartbeat']) . "\n";
+fwrite(STDOUT, $heartbeatMsg);
+fflush(STDOUT);
+
+usleep($heartbeatIntervalUsec);
+$heartbeatMsg = json_encode(['type' => 'heartbeat']) . "\n";
+fwrite(STDOUT, $heartbeatMsg);
 fflush(STDOUT);
 
 // Send complete message
@@ -434,5 +682,123 @@ PHP;
         if (isset($processDescriptor['process']) && is_resource($processDescriptor['process'])) {
             proc_close($processDescriptor['process']);
         }
+    }
+
+    /**
+     * Send SIGTERM and escalate to SIGKILL if the process does not exit within
+     * the configured grace period.
+     *
+     * This two-phase approach allows agents to flush checkpoint data before
+     * being forcefully killed.
+     */
+    private function escalateAndKill($process, string $agentId): void
+    {
+        // Guard: process may already be dead
+        if (!is_resource($process)) {
+            return;
+        }
+
+        proc_terminate($process, SIGTERM);
+
+        $deadline = time() + self::SIGTERM_GRACE_SECS;
+        while (time() < $deadline) {
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                return; // Exited gracefully within grace period
+            }
+            usleep(100_000); // 100ms
+        }
+
+        // Still running — SIGKILL
+        if (is_resource($process)) {
+            proc_terminate($process, SIGKILL);
+        }
+    }
+
+    /**
+     * Returns true when system memory pressure exceeds the configured threshold,
+     * indicating the pool should pause new task scheduling.
+     *
+     * Uses PHP's memory usage and an approximation of total available memory.
+     * On Linux, reads /proc/meminfo for accurate total memory; falls back to
+     * a conservative estimate on other platforms.
+     */
+    private function isMemoryPressure(): bool
+    {
+        $used = memory_get_usage(false);
+        $total = $this->getTotalMemoryBytes();
+
+        if ($total <= 0) {
+            return false; // Cannot determine — allow scheduling
+        }
+
+        return ($used / $total) >= $this->memoryPressureThreshold;
+    }
+
+    /**
+     * Throws if memory pressure or queue overflow would make scheduling unsafe.
+     *
+     * @throws \RuntimeException if backpressure conditions are met
+     */
+    private function checkBackpressure(): void
+    {
+        if ($this->isMemoryPressure()) {
+            throw new \RuntimeException(
+                'Memory pressure threshold exceeded — pausing task scheduling'
+            );
+        }
+    }
+
+    /**
+     * Get the total physical memory in bytes.
+     *
+     * On Linux reads /proc/meminfo; returns 0 on unknown platforms.
+     */
+    private function getTotalMemoryBytes(): int
+    {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        if (PHP_OS !== 'Linux' || !file_exists('/proc/meminfo')) {
+            $cached = 0;
+            return $cached;
+        }
+
+        $content = @file_get_contents('/proc/meminfo');
+        if ($content === false) {
+            $cached = 0;
+            return $cached;
+        }
+
+        // "MemTotal:       16384084 kB"
+        if (preg_match('/^MemTotal:\s+(\d+)\s+kB/m', $content, $matches)) {
+            $cached = (int) $matches[1] * 1024;
+        } else {
+            $cached = 0;
+        }
+
+        return $cached;
+    }
+
+    /**
+     * Get the exit code of a process that has already terminated.
+     *
+     * proc_get_status() reports 'running' => false after the process exits,
+     * and the exit code is in the 'exitcode' field. Returns 0 if unavailable.
+     */
+    private function getExitCode($process): int
+    {
+        if (!is_resource($process)) {
+            return -1;
+        }
+
+        $status = proc_get_status($process);
+        if (!$status['running']) {
+            return $status['exitcode'] ?? -1;
+        }
+
+        return 0;
     }
 }
