@@ -285,6 +285,186 @@ final class AgentManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // executeAll()
+    // -------------------------------------------------------------------------
+
+    public function testExecuteAllWithEmptyArray(): void
+    {
+        $agents = [];
+        $request = new CompleteRequest(
+            model: 'test-model',
+            messages: [new \SugarCraft\Crush\Messages\UserMessage('test')],
+        );
+
+        $results = [];
+        foreach ($this->agentManager->executeAll($agents, $request) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertSame([], $results);
+    }
+
+    public function testExecuteAllWithMultipleAgents(): void
+    {
+        // Create a custom executor that returns predictable results
+        $blockingExecutor = $this->createMock(\SugarCraft\Crush\Agents\ExecutorInterface::class);
+        $blockingExecutor->method('execute')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                return new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Output from ' . $agent->agent->name,
+                );
+            });
+        $blockingExecutor->method('executeStream')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                yield new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Output from ' . $agent->agent->name,
+                );
+            });
+        $blockingExecutor->method('cancel')->willReturnCallback(function (string $id) {});
+        $blockingExecutor->method('cancelAll')->willReturnCallback(function () {});
+
+        $workerPool = new \SugarCraft\Crush\Agents\AgentWorkerPool(
+            maxConcurrent: 5,
+            executor: $blockingExecutor,
+        );
+
+        $agentManager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: $workerPool,
+        );
+
+        $agent1 = $this->createAgent(name: 'parallel-agent-1', prompt: 'Agent 1');
+        $agent2 = $this->createAgent(name: 'parallel-agent-2', prompt: 'Agent 2');
+        $agent3 = $this->createAgent(name: 'parallel-agent-3', prompt: 'Agent 3');
+
+        $request = new CompleteRequest(
+            model: 'test-model',
+            messages: [new \SugarCraft\Crush\Messages\UserMessage('Execute all tasks')],
+        );
+
+        $results = [];
+        foreach ($agentManager->executeAll([$agent1, $agent2, $agent3], $request) as $result) {
+            $results[$result->agentId] = $result;
+        }
+
+        $this->assertCount(3, $results);
+        foreach ($results as $result) {
+            $this->assertNotEmpty($result->agentId);
+            $this->assertIsString($result->agentId);
+            $this->assertContains($result->status, [
+                \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                \SugarCraft\Crush\Agents\AgentStatus::Failed,
+                \SugarCraft\Crush\Agents\AgentStatus::TimedOut,
+                \SugarCraft\Crush\Agents\AgentStatus::Stopped,
+            ]);
+        }
+    }
+
+    public function testExecuteAllCreatesSubAgentsFromAgents(): void
+    {
+        $blockingExecutor = $this->createMock(\SugarCraft\Crush\Agents\ExecutorInterface::class);
+        $blockingExecutor->method('execute')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                return new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Task: ' . $agent->task . ' Agent: ' . $agent->agent->name,
+                );
+            });
+        $blockingExecutor->method('executeStream')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                yield new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Task: ' . $agent->task . ' Agent: ' . $agent->agent->name,
+                );
+            });
+        $blockingExecutor->method('cancel')->willReturnCallback(function (string $id) {});
+        $blockingExecutor->method('cancelAll')->willReturnCallback(function () {});
+
+        $workerPool = new \SugarCraft\Crush\Agents\AgentWorkerPool(
+            maxConcurrent: 5,
+            executor: $blockingExecutor,
+        );
+
+        $agentManager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: $workerPool,
+        );
+
+        $agent = $this->createAgent(name: 'exec-agent', prompt: 'Execute prompt');
+
+        $request = new CompleteRequest(
+            model: 'test-model',
+            messages: [new \SugarCraft\Crush\Messages\UserMessage('Shared task message')],
+        );
+
+        $results = [];
+        foreach ($agentManager->executeAll([$agent], $request) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertCount(1, $results);
+        $this->assertStringContainsString('Shared task message', $results[0]->output ?? '');
+        $this->assertStringContainsString('exec-agent', $results[0]->output ?? '');
+    }
+
+    public function testExecuteAllUsesProvidedWorkerPool(): void
+    {
+        $customExecutor = $this->createMock(\SugarCraft\Crush\Agents\ExecutorInterface::class);
+        $customExecutor->method('execute')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                return new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Custom pool result',
+                );
+            });
+        $customExecutor->method('executeStream')
+            ->willReturnCallback(function (\SugarCraft\Crush\Agents\SubAgent $agent) {
+                yield new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'Custom pool result',
+                );
+            });
+        $customExecutor->method('cancel')->willReturnCallback(function (string $id) {});
+        $customExecutor->method('cancelAll')->willReturnCallback(function () {});
+
+        $customPool = new \SugarCraft\Crush\Agents\AgentWorkerPool(
+            maxConcurrent: 2,
+            executor: $customExecutor,
+        );
+
+        $agentManager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: $customPool,
+        );
+
+        $agent = $this->createAgent(name: 'pooled-agent', prompt: 'Pooled agent prompt');
+
+        $request = new CompleteRequest(
+            model: 'test-model',
+            messages: [new \SugarCraft\Crush\Messages\UserMessage('Pooled task')],
+        );
+
+        $results = [];
+        foreach ($agentManager->executeAll([$agent], $request) as $result) {
+            $results[] = $result;
+        }
+
+        $this->assertCount(1, $results);
+        $this->assertSame('Custom pool result', $results[0]->output);
+    }
+
+    // -------------------------------------------------------------------------
     // Helper methods
     // -------------------------------------------------------------------------
 

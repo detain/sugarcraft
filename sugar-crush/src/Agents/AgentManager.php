@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
 
@@ -18,6 +19,7 @@ final class AgentManager
     public function __construct(
         private ProviderInterface $provider,
         private SkillRegistry $skillRegistry,
+        private ?AgentWorkerPool $workerPool = null,
     ) {}
 
     /**
@@ -141,6 +143,42 @@ final class AgentManager
             $subAgent->status = SubAgent::STATUS_FAILED;
             $subAgent->error = $e->getMessage();
             throw $e;
+        }
+    }
+
+    /**
+     * Execute multiple agents in parallel using AgentWorkerPool.
+     *
+     * @param Agent[] $agents
+     * @return \Generator<AgentResult>
+     */
+    public function executeAll(array $agents, CompleteRequest $request): \Generator
+    {
+        $pool = $this->workerPool ?? new AgentWorkerPool();
+
+        // Build SubAgent objects from the given agents, using the task from
+        // the request messages (assumes first UserMessage is the task).
+        $messages = $request->messages;
+        $task = '';
+        if (isset($messages[0]) && $messages[0] instanceof \SugarCraft\Crush\Messages\UserMessage) {
+            $task = $messages[0]->content();
+        } else {
+            throw new \InvalidArgumentException('First message in request must be a UserMessage');
+        }
+
+        $subAgents = [];
+        foreach ($agents as $agent) {
+            $subAgent = new SubAgent(
+                id: uniqid('pool_'),
+                agent: $agent,
+                task: $task,
+            );
+            $subAgents[] = $subAgent;
+            $this->subAgents[$subAgent->id] = $subAgent;
+        }
+
+        foreach ($pool->executeAll($subAgents, $request) as $result) {
+            yield $result;
         }
     }
 
