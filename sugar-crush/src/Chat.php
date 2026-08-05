@@ -70,6 +70,8 @@ final class Chat implements Model
         private readonly ?\Closure $onToken = null,
         private readonly array $tools = [],
         private readonly ?\Closure $onToolCall = null,
+        private readonly ?\SugarCraft\Crush\Agents\AgentPoolConfig $agentPoolConfig = null,
+        private readonly ?\SugarCraft\Crush\Agents\AgentWorkerPool $effectivePool = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
     }
@@ -98,6 +100,8 @@ final class Chat implements Model
                 onToken: $this->onToken,
                 tools: $this->tools,
                 onToolCall: $this->onToolCall,
+                agentPoolConfig: $this->agentPoolConfig,
+                effectivePool: $this->effectivePool,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -136,6 +140,10 @@ final class Chat implements Model
      */
     private function handleToolCalls(Message $message): array
     {
+        // P1.S10: When running multiple independent tools in parallel, migrate to:
+        //   $subAgents = array_map(fn($tc) => $agentManager->createSubAgent('tool-agent', $tc->name), $message->toolCalls);
+        //   $results = $agentManager->executeAll($subAgents, $request);
+        // This delegates to AgentWorkerPool for concurrent execution via AgentManager::executeAll().
         $toolResults = [];
         foreach ($message->toolCalls as $toolCall) {
             $result = $this->executeTool($toolCall);
@@ -159,6 +167,8 @@ final class Chat implements Model
             onToken: $this->onToken,
             tools: $this->tools,
             onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
         );
 
         $backend = $this->backend;
@@ -238,6 +248,95 @@ final class Chat implements Model
         return $this->backend;
     }
 
+    /**
+     * Get the agent pool config, if set.
+     */
+    public function agentPoolConfig(): ?\SugarCraft\Crush\Agents\AgentPoolConfig
+    {
+        return $this->agentPoolConfig;
+    }
+
+    /**
+     * Get the effective worker pool, if set.
+     */
+    public function workerPool(): ?\SugarCraft\Crush\Agents\AgentWorkerPool
+    {
+        return $this->effectivePool;
+    }
+
+    /**
+     * Execute multiple agents in parallel via the worker pool.
+     *
+     * If an explicit $effectivePool was set via withWorkerPool(), it is used directly.
+     * Otherwise, if $agentPoolConfig was set via withAgentPoolConfig(), a pool is
+     * built from that config. If neither is set, throws \RuntimeException.
+     *
+     * @param \SugarCraft\Crush\Agents\SubAgent[] $agents
+     * @return \Generator<AgentResult>
+     * @throws \RuntimeException When no pool or config is available
+     */
+    public function executeAgents(array $agents, \SugarCraft\Crush\Providers\CompleteRequest $request): \Generator
+    {
+        $pool = $this->effectivePool;
+        if ($pool === null) {
+            if ($this->agentPoolConfig === null) {
+                throw new \RuntimeException(
+                    'Cannot execute agents: no AgentWorkerPool or AgentPoolConfig available. '
+                    . 'Call withWorkerPool() or withAgentPoolConfig() first.'
+                );
+            }
+            $pool = new \SugarCraft\Crush\Agents\AgentWorkerPool(
+                maxConcurrent: $this->agentPoolConfig->maxConcurrent,
+            );
+        }
+
+        return $pool->executeAll($agents, $request);
+    }
+
+    /**
+     * Create a new Chat with an explicit worker pool.
+     */
+    public function withWorkerPool(\SugarCraft\Crush\Agents\AgentWorkerPool $pool): self
+    {
+        return $this->mutate(['effectivePool' => $pool]);
+    }
+
+    /**
+     * Create a new Chat with an agent pool config (used to build the worker pool on demand).
+     */
+    public function withAgentPoolConfig(\SugarCraft\Crush\Agents\AgentPoolConfig $config): self
+    {
+        return $this->mutate(['agentPoolConfig' => $config]);
+    }
+
+    /**
+     * Merge changes into a new Chat instance.
+     *
+     * Only constructor-promoted properties are passed through to avoid
+     * leaking private fields like $previousFrame, $prevHeight, etc.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): static
+    {
+        // Only include constructor-promoted properties (excludes backend,
+        // previousFrame, prevHeight, prevWidth, width)
+        $constructorProps = [
+            'history' => $this->history,
+            'inputBuf' => $this->inputBuf,
+            'inFlight' => $this->inFlight,
+            'streaming' => $this->streaming,
+            'onToken' => $this->onToken,
+            'tools' => $this->tools,
+            'onToolCall' => $this->onToolCall,
+            'agentPoolConfig' => $this->agentPoolConfig,
+            'effectivePool' => $this->effectivePool,
+            'backend' => $this->backend,
+        ];
+
+        return new self(...array_merge($constructorProps, $changes));
+    }
+
     public function withStreaming(bool $enable): self
     {
         return new self(
@@ -249,6 +348,8 @@ final class Chat implements Model
             onToken: $this->onToken,
             tools: $this->tools,
             onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
         );
     }
 
@@ -263,6 +364,8 @@ final class Chat implements Model
             onToken: $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
             tools: $this->tools,
             onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
         );
     }
 
@@ -286,6 +389,8 @@ final class Chat implements Model
             onToken: $this->onToken,
             tools: $tools,
             onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
         );
     }
 
@@ -306,6 +411,8 @@ final class Chat implements Model
             onToken: $this->onToken,
             tools: $this->tools,
             onToolCall: $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
         );
     }
 
@@ -340,6 +447,8 @@ final class Chat implements Model
             onToken: $this->onToken,
             tools: $this->tools,
             onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
         );
         $backend = $this->backend;
         $history = $next->history;
@@ -364,6 +473,8 @@ final class Chat implements Model
             onToken: $this->onToken,
             tools: $this->tools,
             onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
         );
     }
 

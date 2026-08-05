@@ -9,10 +9,15 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Agents\AgentPoolConfig;
+use SugarCraft\Crush\Agents\AgentWorkerPool;
+use SugarCraft\Crush\Agents\ExecutorInterface;
+use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Role;
 use PHPUnit\Framework\TestCase;
 
@@ -446,5 +451,116 @@ final class ChatTest extends TestCase
         $fullRepaintBytes = 1920;
         $this->assertLessThan($fullRepaintBytes, $bytes2, 'Frame 2 delta should be smaller than full 80x24 re-emit');
         $this->assertLessThan($fullRepaintBytes, $bytes3, 'Frame 3 delta should be smaller than full 80x24 re-emit');
+    }
+
+    // ─── AgentWorkerPool wiring tests (P1.S10) ─────────────────────────────────
+
+    public function testWithWorkerPoolReturnsNewInstance(): void
+    {
+        $chat = new Chat();
+        $pool = new AgentWorkerPool(maxConcurrent: 3);
+        $chat2 = $chat->withWorkerPool($pool);
+        $this->assertNotSame($chat, $chat2);
+        $this->assertSame($pool, $chat2->workerPool());
+    }
+
+    public function testWithAgentPoolConfigReturnsNewInstance(): void
+    {
+        $chat = new Chat();
+        $config = new AgentPoolConfig(maxConcurrent: 3);
+        $chat2 = $chat->withAgentPoolConfig($config);
+        $this->assertNotSame($chat, $chat2);
+        $this->assertSame($config, $chat2->agentPoolConfig());
+    }
+
+    public function testWorkerPoolPreservedOnInput(): void
+    {
+        $pool = new AgentWorkerPool(maxConcurrent: 3);
+        $chat = (new Chat())->withWorkerPool($pool);
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame($pool, $next->workerPool());
+    }
+
+    public function testAgentPoolConfigPreservedOnInput(): void
+    {
+        $config = new AgentPoolConfig(maxConcurrent: 3);
+        $chat = (new Chat())->withAgentPoolConfig($config);
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame($config, $next->agentPoolConfig());
+    }
+
+    public function testWorkerPoolPreservedOnStreamingToggle(): void
+    {
+        $pool = new AgentWorkerPool(maxConcurrent: 3);
+        $chat = (new Chat())->withWorkerPool($pool);
+        $chat2 = $chat->withStreaming(true);
+        $this->assertSame($pool, $chat2->workerPool());
+    }
+
+    public function testAgentPoolConfigPreservedOnToolRegistration(): void
+    {
+        $config = new AgentPoolConfig(maxConcurrent: 3);
+        $chat = (new Chat())->withAgentPoolConfig($config);
+        $chat2 = $chat->registerTool('echo', static fn(array $args) => 'result');
+        $this->assertSame($config, $chat2->agentPoolConfig());
+    }
+
+    public function testExecuteAgentsThrowsWithoutPoolOrConfig(): void
+    {
+        $chat = new Chat();
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('no AgentWorkerPool or AgentPoolConfig available');
+        // Suppress iterator consumption warning
+        @$chat->executeAgents([], new CompleteRequest(
+            model: 'test',
+            messages: [],
+        ));
+    }
+
+    public function testExecuteAgentsUsesExplicitPool(): void
+    {
+        // Use a custom executor that immediately returns a result
+        $executor = new class implements ExecutorInterface {
+            public function execute(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                return AgentResult::ok($agent->id, 'done');
+            }
+
+            public function executeStream(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield AgentResult::ok($agent->id, 'done');
+            }
+
+            public function cancel(string $agentId): void {}
+            public function cancelAll(): void {}
+        };
+
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $executor);
+        $chat = (new Chat())->withWorkerPool($pool);
+
+        // No agents — should return empty generator
+        $results = @$chat->executeAgents([], new CompleteRequest(
+            model: 'test',
+            messages: [],
+        ));
+        $this->assertInstanceOf(\Generator::class, $results);
+        $this->assertCount(0, iterator_to_array($results));
+    }
+
+    public function testExecuteAgentsBuildsPoolFromConfig(): void
+    {
+        $config = new AgentPoolConfig(maxConcurrent: 2);
+        $chat = (new Chat())->withAgentPoolConfig($config);
+
+        // Accessor confirms config is set
+        $this->assertSame($config, $chat->agentPoolConfig());
+
+        // Pool is built from config when executeAgents is called with no pool set
+        // We can verify this doesn't throw (empty agents list is valid)
+        $results = @$chat->executeAgents([], new CompleteRequest(
+            model: 'test',
+            messages: [],
+        ));
+        $this->assertInstanceOf(\Generator::class, $results);
     }
 }
