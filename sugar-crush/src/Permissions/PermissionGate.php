@@ -65,9 +65,9 @@ final class PermissionGate
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call),
             PermissionMode::Plan => $this->evaluatePlan($call),
             PermissionMode::Auto => $this->evaluateAuto($call),
-            // P2B.S4 handles DontAsk and BypassPermissions
-            PermissionMode::DontAsk,
-            PermissionMode::BypassPermissions => PermissionDecision::Ask,
+            // P2B.S4: DontAsk and BypassPermissions have dedicated evaluators
+            PermissionMode::DontAsk => $this->evaluateDontAsk($call),
+            PermissionMode::BypassPermissions => $this->evaluateBypassPermissions($call),
         };
     }
 
@@ -213,6 +213,69 @@ final class PermissionGate
 
         // Default: ask
         return PermissionDecision::Ask;
+    }
+
+    /**
+     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/Find)
+     * are implicitly allowed without an explicit rule. Hook-approved calls would also be allowed
+     * via the hook system, but in practice: no explicit Allow rule + non-read-only tool → Deny.
+     *
+     * Explicit rules always take priority — if a rule matches, its action wins.
+     * (The rules check happens before this method is called in evaluate().)
+     */
+    private function evaluateDontAsk(ToolCall $call): PermissionDecision
+    {
+        // Read-only tools are implicitly allowed in DontAsk mode
+        if ($this->isReadOnlyTool($call)) {
+            return PermissionDecision::Allow;
+        }
+
+        // Everything else (not read-only and no explicit rule) is denied
+        return PermissionDecision::Deny;
+    }
+
+    /**
+     * BypassPermissions: allows everything EXCEPT explicit Deny rules and the hardcoded
+     * circuit breaker for `rm -rf /` or `rm -rf ~` (case-insensitive, handles prefixes
+     * like `sudo`).
+     *
+     * Explicit rules always take priority — if a rule matches, its action wins.
+     * (The rules check happens before this method is called in evaluate().)
+     */
+    private function evaluateBypassPermissions(ToolCall $call): PermissionDecision
+    {
+        // Circuit breaker: refuse `rm -rf /` or `rm -rf ~` regardless of anything else
+        if ($this->isRmRfRootOrHome($call)) {
+            return PermissionDecision::Deny;
+        }
+
+        // Everything else is allowed in BypassPermissions mode
+        return PermissionDecision::Allow;
+    }
+
+    /**
+     * Detect the `rm -rf /` or `rm -rf ~` circuit breaker pattern.
+     * Case-insensitive; handles prefixes like `sudo`.
+     *
+     * Matches: rm -rf /, rm -rf ~, sudo rm -rf /, SUDO RM -RF ~
+     */
+    private function isRmRfRootOrHome(ToolCall $call): bool
+    {
+        // Only applies to Bash tool calls
+        if ($call->name !== 'Bash') {
+            return false;
+        }
+
+        $args = $call->arguments;
+        if (!isset($args['command']) || !is_string($args['command'])) {
+            return false;
+        }
+
+        $cmd = $args['command'];
+
+        // Pattern: any prefix(es) then "rm -rf" then whitespace then "/" or "~"
+        // Case-insensitive to catch sudo, SUDO, RM, etc.
+        return (bool) preg_match('#(?:\S+\s+)*rm\s+-rf\s+[/~]#i', $cmd);
     }
 
     // -------------------------------------------------------------------------
