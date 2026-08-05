@@ -38,7 +38,7 @@
         "guzzlehttp/guzzle": "^7.12.1",
         "aws/aws-sdk-php": "^3.300",
         "google/cloud-ai-platform": "^1.0",
-        "symfony/yaml": "^7.0",
+        "symfony/yaml": "^7.4",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
