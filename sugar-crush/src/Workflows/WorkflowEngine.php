@@ -144,9 +144,21 @@ final class WorkflowEngine
                         completedAt: new \DateTimeImmutable(),
                     );
                 }
+            } elseif ($stageType === 'verification') {
+                try {
+                    $stageResult = $this->executeVerificationStage($stage, $context);
+                } catch (\Throwable $e) {
+                    $stageResult = new StageResult(
+                        stageName: $stage['name'] ?? 'unknown',
+                        status: WorkflowStatus::Failed,
+                        error: $e->getMessage(),
+                        startedAt: $stageStartedAt,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
             } else {
                 throw new UnsupportedStageTypeException(
-                    "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', and 'pipeline' are implemented."
+                    "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented."
                 );
             }
 
@@ -370,6 +382,129 @@ final class WorkflowEngine
             agents: $allAgents,
             startedAt: $firstStartedAt ?? $stageStartedAt,
             completedAt: $lastCompletedAt ?? new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * Execute a 'verification' type stage and return its StageResult.
+     *
+     * Runs the task first, then runs the verifier with the task's output
+     * available as {{prevResult}}. If the verifier returns failure (or
+     * the task itself fails), the entire stage is marked failed.
+     *
+     * @param array $stage   Stage array from Workflow::$stages.
+     * @param array $context Current workflow context for interpolation.
+     * @return StageResult
+     */
+    private function executeVerificationStage(array $stage, array $context): StageResult
+    {
+        $stageName = $stage['name'] ?? 'unknown';
+        $stageStartedAt = new \DateTimeImmutable();
+
+        $task = $stage['task'] ?? null;
+        $verifier = $stage['verifier'] ?? null;
+
+        if (!$task instanceof WorkflowTask || !$verifier instanceof WorkflowTask) {
+            return new StageResult(
+                stageName: $stageName,
+                status: WorkflowStatus::Failed,
+                error: "Verification stage '{$stageName}' must have both a 'task' and a 'verifier' WorkflowTask",
+                startedAt: $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+
+        // --- Run the task ---
+        $taskPrompt = $this->interpolateContext($task->prompt, $context);
+
+        $taskAgent = new Agent(
+            name: $task->name ?? $task->agentType,
+            description: $taskPrompt,
+            prompt: '',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $task->tools,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+
+        $taskSubAgent = new SubAgent(
+            id: $stageName . '-task-' . uniqid(),
+            agent: $taskAgent,
+            task: $taskPrompt,
+            timeout: $task->timeout ?? 300,
+            maxRetries: $task->retries ?? 0,
+            isolation: $task->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+        );
+
+        $taskRequest = new CompleteRequest(
+            model: $taskAgent->model,
+            messages: [['role' => 'user', 'content' => $taskPrompt]],
+            tools: $task->tools,
+            systemPrompt: $taskAgent->systemPrompt(),
+        );
+
+        $taskResult = $this->pool->executeOne($taskSubAgent, $taskRequest);
+
+        // If task itself fails, the whole stage fails immediately
+        if ($taskResult->status === AgentStatus::Failed || $taskResult->status === AgentStatus::TimedOut) {
+            return $this->buildStageResult($stageName, $taskResult, $stageStartedAt);
+        }
+
+        // --- Run the verifier, injecting task output as {{prevResult}} ---
+        $verifierContext = $context;
+        $verifierContext['prevResult'] = $taskResult->output ?? '';
+
+        $verifierPrompt = $this->interpolateContext($verifier->prompt, $verifierContext);
+
+        $verifierAgent = new Agent(
+            name: $verifier->name ?? $verifier->agentType,
+            description: $verifierPrompt,
+            prompt: '',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $verifier->tools,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+
+        $verifierSubAgent = new SubAgent(
+            id: $stageName . '-verifier-' . uniqid(),
+            agent: $verifierAgent,
+            task: $verifierPrompt,
+            timeout: $verifier->timeout ?? 300,
+            maxRetries: $verifier->retries ?? 0,
+            isolation: $verifier->isolation ?? \SugarCraft\Crush\Agents\Isolation::None,
+        );
+
+        $verifierRequest = new CompleteRequest(
+            model: $verifierAgent->model,
+            messages: [['role' => 'user', 'content' => $verifierPrompt]],
+            tools: $verifier->tools,
+            systemPrompt: $verifierAgent->systemPrompt(),
+        );
+
+        $verifierResult = $this->pool->executeOne($verifierSubAgent, $verifierRequest);
+
+        // Verifier failure marks the whole stage as failed
+        if ($verifierResult->status === AgentStatus::Failed || $verifierResult->status === AgentStatus::TimedOut) {
+            return $this->buildStageResult($stageName, $verifierResult, $stageStartedAt);
+        }
+
+        // Both succeeded — return combined output
+        $combinedOutput = ($taskResult->output ?? '') . "\n" . ($verifierResult->output ?? '');
+        $allAgents = [$taskResult, $verifierResult];
+
+        return new StageResult(
+            stageName: $stageName,
+            status: WorkflowStatus::Completed,
+            output: trim($combinedOutput),
+            error: null,
+            agents: $allAgents,
+            startedAt: $taskResult->startedAt ?? $stageStartedAt,
+            completedAt: $verifierResult->completedAt ?? new \DateTimeImmutable(),
         );
     }
 

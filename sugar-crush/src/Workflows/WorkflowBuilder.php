@@ -82,16 +82,32 @@ final class WorkflowBuilder
     }
 
     /**
-     * Add a pipeline stage containing nested stages.
+     * Add a pipeline stage containing nested stages that chain output to input.
      *
-     * @param array<int, array{name: string, type: string, tasks?: array<int, mixed>}> $stages
+     * Each nested stage receives `{{prevResult}}` interpolated with the previous
+     * stage's output string, enabling sequential transformation pipelines.
+     *
+     * @param TaskBuilder[] $stages
      */
     public function pipeline(string $name, array $stages): self
     {
+        $nestedStageArrays = [];
+        foreach ($stages as $index => $taskBuilder) {
+            /** @var TaskBuilder $taskBuilder */
+            $workflowTask = $taskBuilder->build();
+            // Use explicit task name, agentType, or generated index as the sub-stage name
+            $subName = $workflowTask->name ?? $workflowTask->agentType ?? "step-{$index}";
+            $nestedStageArrays[] = [
+                'name' => $subName,
+                'type' => 'stage',
+                'tasks' => [$workflowTask],
+            ];
+        }
+
         $this->stages[] = [
             'name' => $name,
             'type' => 'pipeline',
-            'stages' => $stages,
+            'stages' => $nestedStageArrays,
         ];
 
         return $this;
@@ -103,6 +119,28 @@ final class WorkflowBuilder
     public function maxConcurrent(int $n): self
     {
         $this->maxConcurrent = $n;
+        return $this;
+    }
+
+    /**
+     * Add a verification stage that runs a task then a verifier.
+     *
+     * The task executes first; if it succeeds the verifier runs to validate
+     * the result. If the verifier returns failure, the entire stage fails.
+     *
+     * @param string      $name     Human-readable name for this stage.
+     * @param TaskBuilder $task     The task to run and then verify.
+     * @param TaskBuilder $verifier The verifier that checks the task output.
+     */
+    public function withVerification(string $name, TaskBuilder $task, TaskBuilder $verifier): self
+    {
+        $this->stages[] = [
+            'name' => $name,
+            'type' => 'verification',
+            'task' => $task->build(),
+            'verifier' => $verifier->build(),
+        ];
+
         return $this;
     }
 

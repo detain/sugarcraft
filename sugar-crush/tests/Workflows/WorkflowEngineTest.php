@@ -511,4 +511,109 @@ final class WorkflowEngineTest extends TestCase
         $this->assertStringContainsString('From fetch: fetched-data', $capturedPrompts[1]);
         $this->assertStringContainsString('From input: user-query', $capturedPrompts[1]);
     }
+
+    public function testVerificationStageRunsTaskThenVerifier(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('verification-order-test')
+            ->description('Test verification stage runs task first, then verifier')
+            ->withVerification(
+                'verify-build',
+                Tasks::agent('coder')->prompt('Build the feature'),
+                Tasks::agent('reviewer')->prompt('Review: {{prevResult}}'),
+            )
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $capturedPrompts = [];
+        $this->mockExecutor
+            ->expects($this->exactly(2))
+            ->method('execute')
+            ->willReturnCallback(function (SubAgent $agent, CompleteRequest $request) use (&$capturedPrompts) {
+                $capturedPrompts[] = $request->messages[0]['content'];
+                return $this->successfulAgentResult('task-output');
+            });
+
+        $result = $this->engine->run('verification-order-test', []);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(WorkflowStatus::Completed, $result->status);
+        $this->assertCount(1, $result->stageResults);
+        $this->assertSame('verify-build', $result->stageResults[0]->stageName);
+        $this->assertCount(2, $result->stageResults[0]->agents);
+        // First call should be the task prompt
+        $this->assertStringContainsString('Build the feature', $capturedPrompts[0]);
+        // Second call should be the verifier prompt with prevResult
+        $this->assertStringContainsString('Review: task-output', $capturedPrompts[1]);
+    }
+
+    public function testVerificationStageFailsWhenVerifierReturnsFailure(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('verification-fail-test')
+            ->description('Test verification stage fails when verifier returns failure')
+            ->withVerification(
+                'check-quality',
+                Tasks::agent('coder')->prompt('Implement feature'),
+                Tasks::agent('reviewer')->prompt('Find bugs'),
+            )
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $this->mockExecutor
+            ->expects($this->exactly(2))
+            ->method('execute')
+            ->willReturnCallback(function () {
+                static $call = 0;
+                $call++;
+                if ($call === 1) {
+                    return $this->successfulAgentResult('implementation complete');
+                }
+                return $this->failedAgentResult('Verifier found critical bugs');
+            });
+
+        $result = $this->engine->run('verification-fail-test', []);
+
+        $this->assertTrue($result->isFailure());
+        $this->assertSame(WorkflowStatus::Failed, $result->status);
+        $this->assertCount(1, $result->stageResults);
+        $this->assertSame('check-quality', $result->stageResults[0]->stageName);
+        $this->assertNotNull($result->stageResults[0]->error);
+        $this->assertStringContainsString('Verifier found critical bugs', $result->stageResults[0]->error);
+    }
+
+    public function testVerificationStagePassesWhenVerifierPasses(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('verification-pass-test')
+            ->description('Test verification stage passes when both task and verifier succeed')
+            ->withVerification(
+                'validate-output',
+                Tasks::agent('coder')->prompt('Generate report'),
+                Tasks::agent('reviewer')->prompt('Approve: {{prevResult}}'),
+            )
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $this->mockExecutor
+            ->expects($this->exactly(2))
+            ->method('execute')
+            ->willReturnCallback(function () {
+                static $call = 0;
+                $call++;
+                return $this->successfulAgentResult("step-{$call}-output");
+            });
+
+        $result = $this->engine->run('verification-pass-test', []);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(WorkflowStatus::Completed, $result->status);
+        $this->assertCount(1, $result->stageResults);
+        $this->assertNull($result->stageResults[0]->error);
+        $this->assertStringContainsString('step-1-output', $result->stageResults[0]->output);
+        $this->assertStringContainsString('step-2-output', $result->stageResults[0]->output);
+    }
 }
