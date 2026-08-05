@@ -166,6 +166,70 @@
 					"realpath *": "allow"
 				}
 			}
+		},
+		"sugarcrush-orchestrator": {
+			"permission": {
+				"edit": "deny",
+				"write": "allow",
+				"bash": {
+					"*": "deny"
+				},
+				"task": "allow",
+				"plan_read": "allow",
+				"todoread": "deny"
+			}
+		},
+		"sugarcrush-phase-lead": {
+			"permission": {
+				"edit": "deny",
+				"write": "allow",
+				"bash": {
+					"*": "deny"
+				},
+				"task": "allow",
+				"plan_read": "allow",
+				"todoread": "deny"
+			}
+		},
+		"sugarcrush-reviewer": {
+			"temperature": 0.1,
+			"permission": {
+				"edit": "deny",
+				"write": "deny",
+				"task": "deny",
+				"bash": {
+					"*": "deny",
+					"git status*": "allow",
+					"git diff*": "allow",
+					"git log*": "allow",
+					"git show*": "allow",
+					"git blame*": "allow",
+					"grep *": "allow",
+					"rg *": "allow",
+					"composer *": "allow",
+					"php *": "allow"
+				},
+				"plan_read": "allow",
+				"delegation_read": "allow",
+				"delegation_list": "allow"
+			}
+		},
+		"sugarcrush-committer": {
+			"permission": {
+				"edit": "deny",
+				"write": "deny",
+				"task": "deny",
+				"bash": {
+					"*": "deny",
+					"git status*": "allow",
+					"git branch*": "allow",
+					"git diff*": "allow",
+					"git log*": "allow",
+					"git add *": "allow",
+					"git commit *": "allow",
+					"git push origin master": "allow"
+				}
+			}
 		}
 	},
 	"mcp": {
