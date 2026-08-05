@@ -1,0 +1,5 @@
+{
+    "name": "sugar-crush",
+    "worktreeCleanupPeriodDays": 30,
+    "worktreeIncludeFile": ".worktreeinclude"
+}
