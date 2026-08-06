@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\MCP;
 
-use RuntimeException;
-
 /**
  * Git command handlers for the Git MCP server.
  *
@@ -29,7 +27,7 @@ final readonly class GitCommandHandlers
      *
      * @see GitOperationResult
      */
-    public function gitStatus(string $path = '.'): GitOperationResult
+    public function gitStatus(?string $path = null): GitOperationResult
     {
         return $this->execGit(
             command: ['git', 'status', '--porcelain'],
@@ -44,7 +42,7 @@ final readonly class GitCommandHandlers
      *
      * @see GitOperationResult
      */
-    public function gitSnapshot(string $path = '.'): GitOperationResult
+    public function gitSnapshot(?string $path = null): GitOperationResult
     {
         $start = microtime(true);
 
@@ -69,11 +67,11 @@ final readonly class GitCommandHandlers
     }
 
     /**
-     * List git config entries.
+     * Get git config entries.
      *
      * @see GitOperationResult
      */
-    public function gitConfigList(string $path = '.'): GitOperationResult
+    public function gitConfigList(?string $path = null): GitOperationResult
     {
         return $this->execGit(
             command: ['git', 'config', '--list'],
@@ -88,7 +86,7 @@ final readonly class GitCommandHandlers
      *
      * @see GitOperationResult
      */
-    public function gitConfigGet(string $key, string $path = '.'): GitOperationResult
+    public function gitConfigGet(string $key, ?string $path = null): GitOperationResult
     {
         if ($key === '') {
             return GitOperationResult::failure(
@@ -111,10 +109,10 @@ final readonly class GitCommandHandlers
      *
      * @see GitOperationResult
      */
-    public function gitAliasList(string $path = '.'): GitOperationResult
+    public function gitAliasList(?string $path = null): GitOperationResult
     {
         return $this->execGit(
-            command: ['git', 'config', '--get-regexp', '^alias\\.'],
+            command: ['git', 'config', '--get-regexp', '^alias\.'],
             operation: 'git_alias_list',
             group: 'git_context',
             cwd: $path,
@@ -129,10 +127,10 @@ final readonly class GitCommandHandlers
      * Get git log entries.
      *
      * @param int $limit Maximum number of entries (default 50)
-     * @param string $path Repository path
+     * @param string|null $path Repository path
      * @see GitOperationResult
      */
-    public function gitLog(int $limit = 50, string $path = '.'): GitOperationResult
+    public function gitLog(int $limit = 50, ?string $path = null): GitOperationResult
     {
         if ($limit < 1) {
             $limit = 1;
@@ -152,11 +150,23 @@ final readonly class GitCommandHandlers
             cwd: $path,
         );
 
+        // Empty-repo: `git log` exits with code 1 and empty output on a zero-commit repo.
+        // But exclude "Not a git repository" which means it's a non-git directory (should fail).
+        if ($result->isFailure() && !is_string($result->output) && !str_contains($result->error ?? '', 'Not a git repository')) {
+            return GitOperationResult::success(
+                output: [],
+                operation: 'git_log',
+                group: 'git_history',
+                metadata: ['count' => 0],
+                executionTimeMs: $result->executionTimeMs,
+            );
+        }
+
         if ($result->isFailure()) {
             return $result;
         }
 
-        $lines = is_string($result->output) ? ($result->output !== '' ? explode("\n", $result->output) : []) : [];
+        $lines = is_string($result->output) && $result->output !== '' ? array_filter(explode("\n", $result->output)) : [];
         $commits = array_map(function (string $line): array {
             $parts = explode('|', $line, 5);
             return [
@@ -181,10 +191,10 @@ final readonly class GitCommandHandlers
      * Show commit details.
      *
      * @param string $ref Commit hash, branch, or tag reference
-     * @param string $path Repository path
+     * @param string|null $path Repository path
      * @see GitOperationResult
      */
-    public function gitShow(string $ref, string $path = '.'): GitOperationResult
+    public function gitShow(string $ref, ?string $path = null): GitOperationResult
     {
         if ($ref === '') {
             return GitOperationResult::failure(
@@ -206,7 +216,7 @@ final readonly class GitCommandHandlers
             return $result;
         }
 
-        $parts = explode('|', $result->output, 7);
+        $parts = is_string($result->output) ? explode('|', $result->output, 7) : [''];
         $output = [
             'hash' => $parts[0] ?? '',
             'authorEmail' => $parts[1] ?? '',
@@ -230,10 +240,10 @@ final readonly class GitCommandHandlers
      * Get git blame information for a file.
      *
      * @param string $filePath Relative path within the repository
-     * @param string $path Repository path
+     * @param string|null $path Repository path
      * @see GitOperationResult
      */
-    public function gitBlame(string $filePath, string $path = '.'): GitOperationResult
+    public function gitBlame(string $filePath, ?string $path = null): GitOperationResult
     {
         if ($filePath === '') {
             return GitOperationResult::failure(
@@ -261,7 +271,7 @@ final readonly class GitCommandHandlers
         $currentLine = null;
 
         foreach ($lines as $line) {
-            if (str_starts_with($line, $currentCommit ?? '')) {
+            if ($currentCommit !== null && str_starts_with($line, $currentCommit)) {
                 // Continuation of previous blame entry
                 if ($currentLine !== null) {
                     $currentLine['content'] = substr($line, 1);
@@ -313,10 +323,10 @@ final readonly class GitCommandHandlers
      * Get git reflog entries.
      *
      * @param int $limit Maximum number of entries (default 50)
-     * @param string $path Repository path
+     * @param string|null $path Repository path
      * @see GitOperationResult
      */
-    public function gitReflog(int $limit = 50, string $path = '.'): GitOperationResult
+    public function gitReflog(int $limit = 50, ?string $path = null): GitOperationResult
     {
         if ($limit < 1) {
             $limit = 1;
@@ -330,11 +340,23 @@ final readonly class GitCommandHandlers
             cwd: $path,
         );
 
+        // Empty-repo: `git reflog` exits with code 1 and empty output on a zero-commit repo.
+        // But exclude "Not a git repository" which means it's a non-git directory (should fail).
+        if ($result->isFailure() && !is_string($result->output) && !str_contains($result->error ?? '', 'Not a git repository')) {
+            return GitOperationResult::success(
+                output: [],
+                operation: 'git_reflog',
+                group: 'git_history',
+                metadata: ['count' => 0],
+                executionTimeMs: $result->executionTimeMs,
+            );
+        }
+
         if ($result->isFailure()) {
             return $result;
         }
 
-        $lines = is_string($result->output) ? ($result->output !== '' ? explode("\n", $result->output) : []) : [];
+        $lines = is_string($result->output) && $result->output !== '' ? array_filter(explode("\n", $result->output)) : [];
         $reflog = array_map(function (string $line) use ($path): array {
             $parts = explode('|', $line, 4);
             return [
@@ -385,12 +407,17 @@ final readonly class GitCommandHandlers
             );
         }
 
-        $escapedCommand = array_map(
-            fn(string $arg): string => escapeshellarg($arg),
-            $command,
-        );
-        // Command array already contains 'git' as first element, so join directly
-        $commandLine = implode(' ', $escapedCommand);
+        // Guard: verify this is actually a git repository by checking for .git directory
+        // git walks up parent directories by default, which would give false positives
+        $gitDirPath = $workDir . '/.git';
+        if (!is_dir($gitDirPath) && !is_file($gitDirPath)) {
+            return GitOperationResult::failure(
+                error: "Not a git repository: {$workDir}",
+                operation: $operation,
+                group: $group,
+                executionTimeMs: $this->elapsed($start),
+            );
+        }
 
         $descriptorSpec = [
             0 => ['pipe', 'r'],
@@ -398,11 +425,17 @@ final readonly class GitCommandHandlers
             2 => ['pipe', 'w'],
         ];
 
-        // Explicitly set PATH so git can be found in proc_open context
-        $env = ['PATH' => '/usr/bin:' . getenv('PATH')];
+        // Explicitly set PATH so git can be found in proc_open context.
+        // Also set HOME so git can locate ~/.gitconfig for config operations.
+        $env = [
+            'PATH' => '/usr/bin:' . getenv('PATH'),
+            'HOME' => getenv('HOME') ?: '/tmp',
+        ];
 
+        // Pass command as array to bypass shell interpretation.
+        // Using a string would invoke sh -c which misinterprets % in git format strings.
         $process = @proc_open(
-            $commandLine,
+            $command,
             $descriptorSpec,
             $pipes,
             $workDir,
@@ -449,7 +482,7 @@ final readonly class GitCommandHandlers
     /**
      * Get current branch name.
      */
-    private function gitBranchCurrent(string $path): GitOperationResult
+    private function gitBranchCurrent(?string $path): GitOperationResult
     {
         return $this->execGit(
             command: ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
@@ -462,7 +495,7 @@ final readonly class GitCommandHandlers
     /**
      * Get git remote information.
      */
-    private function gitRemote(string $path): GitOperationResult
+    private function gitRemote(?string $path): GitOperationResult
     {
         return $this->execGit(
             command: ['git', 'remote', '-v'],
@@ -475,7 +508,7 @@ final readonly class GitCommandHandlers
     /**
      * List git tags.
      */
-    private function gitTagList(string $path): GitOperationResult
+    private function gitTagList(?string $path): GitOperationResult
     {
         return $this->execGit(
             command: ['git', 'tag', '--list'],
@@ -488,7 +521,7 @@ final readonly class GitCommandHandlers
     /**
      * Get staged changes summary.
      */
-    private function gitStaged(string $path): GitOperationResult
+    private function gitStaged(?string $path): GitOperationResult
     {
         return $this->execGit(
             command: ['git', 'diff', '--cached', '--name-only'],

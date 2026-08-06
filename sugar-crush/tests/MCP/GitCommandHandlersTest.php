@@ -19,14 +19,14 @@ final class GitCommandHandlersTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/git_command_handlers_test_' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/git_command_handlers_test_' . uniqid('', true);
         mkdir($this->tempDir, 0777, true);
         $this->repoPath = $this->tempDir . '/repo';
 
         mkdir($this->repoPath, 0777, true);
         exec('git init --quiet ' . escapeshellarg($this->repoPath) . ' 2>&1');
-        exec('git config user.email "test@example.com" 2>&1');
-        exec('git config user.name "Test User" 2>&1');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' config user.email "test@example.com" 2>&1');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' config user.name "Test User" 2>&1');
     }
 
     protected function tearDown(): void
@@ -47,8 +47,9 @@ final class GitCommandHandlersTest extends TestCase
     {
         $file = $this->repoPath . '/file_' . uniqid() . '.txt';
         file_put_contents($file, "content for {$message}");
-        exec('git add . 2>&1',);
-        exec('git commit --quiet -m ' . escapeshellarg($message) . ' 2>&1');
+        $git = '/usr/bin/git';
+        exec($git . ' -C ' . escapeshellarg($this->repoPath) . ' add . 2>&1');
+        exec($git . ' -C ' . escapeshellarg($this->repoPath) . ' commit --quiet -m ' . escapeshellarg($message) . ' 2>&1');
     }
 
     // =========================================================================
@@ -101,7 +102,7 @@ final class GitCommandHandlersTest extends TestCase
         $this->makeCommit('initial');
 
         file_put_contents($this->repoPath . '/new_file.txt', 'staged content');
-        exec('git add new_file.txt 2>&1');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' add new_file.txt 2>&1');
 
         $result = $handlers->gitSnapshot();
 
@@ -222,7 +223,7 @@ final class GitCommandHandlersTest extends TestCase
         $this->makeCommit('test commit');
 
         // Get the latest commit hash
-        exec('git rev-parse HEAD 2>&1', $hashLines);
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' rev-parse HEAD 2>&1', $hashLines);
         $hash = trim($hashLines[0] ?? '');
 
         $result = $handlers->gitShow($hash);
@@ -265,8 +266,8 @@ final class GitCommandHandlersTest extends TestCase
         $handlers = new GitCommandHandlers($this->repoPath);
         $file = $this->repoPath . '/blamed.txt';
         file_put_contents($file, "line one\nline two\nline three\n");
-        exec('git add blamed.txt 2>&1');
-        exec('git commit --quiet -m "add file" 2>&1');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' add blamed.txt 2>&1');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' commit --quiet -m "add file" 2>&1');
 
         $result = $handlers->gitBlame('blamed.txt');
 
@@ -397,8 +398,8 @@ final class GitCommandHandlersTest extends TestCase
         $handlers = new GitCommandHandlers($this->repoPath);
         $file = $this->repoPath . '/meta.txt';
         file_put_contents($file, "content\n");
-        exec('git add meta.txt 2>&1');
-        exec('git commit --quiet -m "meta file" 2>&1');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' add meta.txt 2>&1');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' commit --quiet -m "meta file" 2>&1');
 
         $result = $handlers->gitBlame('meta.txt');
 
@@ -437,7 +438,7 @@ final class GitCommandHandlersTest extends TestCase
         $handlers = new GitCommandHandlers($this->repoPath);
         $this->makeCommit('ref meta commit');
 
-        exec('git rev-parse HEAD 2>&1', $hashLines);
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' rev-parse HEAD 2>&1', $hashLines);
         $hash = trim($hashLines[0] ?? '');
 
         $result = $handlers->gitShow($hash);
