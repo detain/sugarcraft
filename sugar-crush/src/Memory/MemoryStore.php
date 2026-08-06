@@ -42,6 +42,7 @@ final class MemoryStore
         );
 
         $this->writeEntry($id, $entry);
+        $this->generateIndex($scope);
 
         return $id;
     }
@@ -126,9 +127,18 @@ final class MemoryStore
         }
 
         $file = $this->memoryPath . '/' . $id . '.md';
+        $scope = null;
 
         if (file_exists($file)) {
+            $entry = $this->readEntry($file);
+            if ($entry !== null) {
+                $scope = $entry->scope();
+            }
             unlink($file);
+        }
+
+        if ($scope !== null) {
+            $this->generateIndex($scope);
         }
     }
 
@@ -151,6 +161,8 @@ final class MemoryStore
                 unlink($file);
             }
         }
+
+        $this->generateIndex($scope);
     }
 
     /**
@@ -232,6 +244,97 @@ final class MemoryStore
         if ($written === false) {
             throw new \RuntimeException("Failed to write memory file: {$file}");
         }
+    }
+
+    private const MAX_INDEX_LINES = 200;
+    private const MAX_INDEX_BYTES = 25 * 1024;
+    private const INDEX_SUBDIR = 'indexes';
+
+    /**
+     * Generate a MEMORY.md index file for the given scope.
+     *
+     * The index summarizes all entries in that scope, capped at roughly
+     * the first 200 lines or 25KB — whichever is reached first.
+     * The index file is written to {memoryPath}/{scope}.md.
+     *
+     * @param string $scope The scope: 'user', 'project', or 'agent'.
+     */
+    public function generateIndex(string $scope): void
+    {
+        $entries = $this->list($scope);
+        $lines = [];
+        $bytesWritten = 0;
+
+        $lines[] = "# Memory Index — {$scope}";
+        $lines[] = "";
+        $lines[] = "This index is auto-generated and capped at " . self::MAX_INDEX_LINES . " lines / " . (self::MAX_INDEX_BYTES / 1024) . "KB.";
+        $lines[] = "";
+        $lines[] = "## Entries";
+        $lines[] = "";
+
+        foreach ($entries as $entry) {
+            $summaryLines = $this->summarizeEntry($entry);
+            foreach ($summaryLines as $line) {
+                $lineBytes = strlen($line) + 1;
+                if (count($lines) >= self::MAX_INDEX_LINES || $bytesWritten + $lineBytes > self::MAX_INDEX_BYTES) {
+                    break 2;
+                }
+                $lines[] = $line;
+                $bytesWritten += $lineBytes;
+            }
+        }
+
+        $lines[] = "";
+        $lines[] = "*Index generated at: " . (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM) . "*";
+
+        $indexDir = $this->memoryPath . '/' . self::INDEX_SUBDIR;
+        if (!is_dir($indexDir)) {
+            mkdir($indexDir, 0755, true);
+        }
+        $indexFile = $indexDir . '/' . $scope . '.md';
+        $content = implode("\n", $lines);
+        $written = file_put_contents($indexFile, $content);
+        if ($written === false) {
+            throw new \RuntimeException("Failed to write index file: {$indexFile}");
+        }
+    }
+
+    /**
+     * Load the MEMORY.md index for the given scope.
+     *
+     * Returns the raw index content, or null if the index file does not exist.
+     *
+     * @param string $scope The scope: 'user', 'project', or 'agent'.
+     * @return string|null The index file content, or null if not found.
+     */
+    public function loadIndex(string $scope): ?string
+    {
+        $indexFile = $this->memoryPath . '/' . self::INDEX_SUBDIR . '/' . $scope . '.md';
+
+        if (!file_exists($indexFile)) {
+            return null;
+        }
+
+        $content = file_get_contents($indexFile);
+        return $content !== false ? $content : null;
+    }
+
+    /**
+     * Build a short summary for a single memory entry suitable for an index.
+     *
+     * @return array<string> One or more lines summarizing the entry.
+     */
+    private function summarizeEntry(MemoryEntry $entry): array
+    {
+        $lines = [];
+        $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
+        $preview = mb_strlen($entry->content()) > 120
+            ? mb_substr($entry->content(), 0, 120) . '…'
+            : $entry->content();
+        $lines[] = '- **[' . $entry->type() . ']** `' . $entry->id() . '`' . $tags;
+        $lines[] = '  ' . $preview;
+        $lines[] = '';
+        return $lines;
     }
 
     /**

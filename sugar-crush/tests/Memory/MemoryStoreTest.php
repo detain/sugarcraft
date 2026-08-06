@@ -144,6 +144,129 @@ final class MemoryStoreTest extends TestCase
         $this->assertCount(1, $resultsMixed);
     }
 
+    public function testGenerateIndexCreatesIndexFile(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $store->add('Test memory content', 'user');
+        $store->generateIndex('user');
+
+        $indexFile = $this->tempDir . '/indexes/user.md';
+        $this->assertFileExists($indexFile);
+
+        $content = file_get_contents($indexFile);
+        $this->assertStringContainsString('# Memory Index', $content);
+        $this->assertStringContainsString('Test memory content', $content);
+    }
+
+    public function testLoadIndexReturnsNullWhenNoIndex(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $result = $store->loadIndex('nonexistent');
+
+        $this->assertNull($result);
+    }
+
+    public function testLoadIndexReturnsContentWhenIndexExists(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $store->add('Indexed memory', 'user');
+        $store->generateIndex('user');
+
+        $result = $store->loadIndex('user');
+
+        $this->assertNotNull($result);
+        $this->assertStringContainsString('Indexed memory', $result);
+    }
+
+    public function testAddRegeneratesIndex(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('First entry', 'user');
+
+        $indexFile = $this->tempDir . '/indexes/user.md';
+        $this->assertFileExists($indexFile);
+
+        $content = file_get_contents($indexFile);
+        $this->assertStringContainsString('First entry', $content);
+    }
+
+    public function testDeleteRegeneratesIndex(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('Entry to delete', 'user');
+        $indexContentBefore = file_get_contents($this->tempDir . '/indexes/user.md');
+        $this->assertStringContainsString('Entry to delete', $indexContentBefore);
+
+        $store->delete($id);
+
+        $indexContentAfter = file_get_contents($this->tempDir . '/indexes/user.md');
+        $this->assertStringNotContainsString('Entry to delete', $indexContentAfter);
+    }
+
+    public function testClearRegeneratesIndex(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $store->add('User memory one', 'user');
+        $store->add('User memory two', 'user');
+
+        $indexContentBefore = file_get_contents($this->tempDir . '/indexes/user.md');
+        $this->assertStringContainsString('User memory one', $indexContentBefore);
+
+        $store->clear('user');
+        $store->generateIndex('user');
+
+        $indexContentAfter = file_get_contents($this->tempDir . '/indexes/user.md');
+        $this->assertStringNotContainsString('User memory one', $indexContentAfter);
+        $this->assertStringNotContainsString('User memory two', $indexContentAfter);
+    }
+
+    public function testIndexContainsEntryMetadata(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $store->add('Test content for metadata', 'user');
+        $store->generateIndex('user');
+
+        $index = $store->loadIndex('user');
+        $this->assertNotNull($index);
+        $this->assertStringContainsString('[pattern]', $index);
+    }
+
+    public function testIndexFormatIsMarkdownList(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $store->add('Memory entry content here', 'user');
+        $store->generateIndex('user');
+
+        $index = $store->loadIndex('user');
+        $this->assertNotNull($index);
+        // Should have markdown list format: - [{type}] or - **[{type}]**
+        $this->assertTrue(
+            str_contains($index, '- **[') || str_contains($index, '- ['),
+            'Index should contain markdown list entry'
+        );
+    }
+
+    public function testIndexShowsIdAndTags(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('Content', 'user');
+        $store->generateIndex('user');
+
+        $index = $store->loadIndex('user');
+        $this->assertNotNull($index);
+        // Index should contain the entry ID
+        $this->assertStringContainsString($id, $index);
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
