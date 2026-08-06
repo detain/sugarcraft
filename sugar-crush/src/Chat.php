@@ -643,6 +643,11 @@ final class Chat implements Model
             return $this->handleRenameCommand($text);
         }
 
+        // Handle /rewind command (restore from checkpoint)
+        if (str_starts_with($text, '/rewind')) {
+            return $this->handleRewindCommand($text);
+        }
+
         $next = new self(
             history: [...$this->history, Message::user($text)],
             inputBuf: '',
@@ -660,6 +665,23 @@ final class Chat implements Model
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
         );
+
+        // Auto-save checkpoint before processing prompt
+        if ($this->sessionStore !== null && $this->currentSessionId !== null && method_exists($this->sessionStore, 'saveCheckpoint')) {
+            $chatState = [
+                'messages' => $next->history,
+                'inputBuf' => $next->inputBuf,
+                'agentContext' => [
+                    'currentSessionId' => $this->currentSessionId,
+                ],
+            ];
+            try {
+                $this->sessionStore->saveCheckpoint($this->currentSessionId, $chatState);
+            } catch (\Throwable) {
+                // Ignore checkpoint save errors - don't block the prompt
+            }
+        }
+
         $backend = $this->backend;
         $history = $next->history;
         $onToken = $this->streaming ? $this->onToken : null;
@@ -1180,6 +1202,87 @@ final class Chat implements Model
     }
 
     /**
+     * Handle /rewind command — restore chat state from a checkpoint.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleRewindCommand(string $inputText): array
+    {
+        if ($this->sessionStore === null || !method_exists($this->sessionStore, 'restoreCheckpoint')) {
+            return $this->sessionResponse($inputText, 'Session store does not support checkpoints. Use an EnhancedSessionStore.');
+        }
+
+        if ($this->currentSessionId === null) {
+            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
+        }
+
+        // Parse optional step count: /rewind or /rewind <n>
+        $afterRewind = ltrim(substr($inputText, 7)); // after "/rewind"
+        $stepsBack = 1;
+
+        if ($afterRewind !== '') {
+            $stepsBack = (int) trim($afterRewind);
+            if ($stepsBack < 1) {
+                $stepsBack = 1;
+            }
+        }
+
+        try {
+            // Get list of checkpoints to find the target
+            $checkpoints = $this->sessionStore->listCheckpoints($this->currentSessionId, $stepsBack);
+
+            if (empty($checkpoints)) {
+                return $this->sessionResponse($inputText, 'No checkpoints available to rewind to.');
+            }
+
+            // Find the checkpoint N steps back (where N is stepsBack)
+            $targetIndex = $checkpoints[min($stepsBack - 1, count($checkpoints) - 1)]['index'] ?? null;
+
+            if ($targetIndex === null) {
+                return $this->sessionResponse($inputText, 'Could not determine checkpoint index.');
+            }
+
+            // Restore the checkpoint
+            $state = $this->sessionStore->restoreCheckpoint($this->currentSessionId, $targetIndex);
+
+            if ($state === null) {
+                return $this->sessionResponse($inputText, "Checkpoint {$targetIndex} not found.");
+            }
+
+            // Extract state data
+            $messages = $state['state_data']['messages'] ?? $state['messages'] ?? [];
+            $inputBuf = $state['state_data']['inputBuf'] ?? $state['inputBuf'] ?? '';
+
+            // Build response
+            $rewoundCount = count($this->history) - count($messages);
+            $response = "Rewound {$rewoundCount} messages to checkpoint {$targetIndex}. Use /branch to save this state before continuing.";
+
+            // Return Chat with restored state
+            $next = new self(
+                history: $messages,
+                inputBuf: $inputBuf,
+                inFlight: false,
+                backend: $this->backend,
+                streaming: $this->streaming,
+                onToken: $this->onToken,
+                tools: $this->tools,
+                onToolCall: $this->onToolCall,
+                agentPoolConfig: $this->agentPoolConfig,
+                effectivePool: $this->effectivePool,
+                workflowEngine: $this->workflowEngine,
+                agentManager: $this->agentManager,
+                memoryStore: $this->memoryStore,
+                sessionStore: $this->sessionStore,
+                currentSessionId: $this->currentSessionId,
+            );
+
+            return [$next, null];
+        } catch (\Throwable $e) {
+            return $this->sessionResponse($inputText, "Error during rewind: {$e->getMessage()}");
+        }
+    }
+
+    /**
      * Handle /memory commands locally.
      *
      * @return array{0:Chat,1:?\Closure}
@@ -1485,6 +1588,7 @@ final class Chat implements Model
         $lines[] = '';
         $lines[] = '`/rename <name>` — Name the current session for easy resume';
         $lines[] = '`/branch` — Fork the current session into a new copy';
+        $lines[] = '`/rewind [n]` — Rewind n steps (default: 1) to a previous checkpoint';
         $lines[] = '`/session` — Show this help text';
 
         return $this->sessionResponse($inputText, implode("\n", $lines));

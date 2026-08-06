@@ -104,6 +104,24 @@ final class EnhancedSessionStore
             CREATE INDEX IF NOT EXISTS idx_session_meta_last_activity
             ON session_meta(last_activity DESC)
         ');
+
+        // Checkpoints table for /rewind functionality
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                "index" INTEGER NOT NULL,
+                state_data TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
+        ');
+
+        // Index for efficient checkpoint lookup by session and index
+        $this->pdo->exec('
+            CREATE INDEX IF NOT EXISTS idx_checkpoints_session_index
+            ON checkpoints(session_id, "index" DESC)
+        ');
     }
 
     /**
@@ -174,6 +192,146 @@ final class EnhancedSessionStore
             $row['agent_states'] = $row['agent_states'] ? json_decode($row['agent_states'], true) : [];
             return $row;
         }, $rows);
+    }
+
+    // =======================================================================
+    // Checkpoint management (for /rewind functionality)
+    // =======================================================================
+
+    private const MAX_CHECKPOINTS_PER_SESSION = 100;
+
+    /**
+     * Save a checkpoint snapshot for the session.
+     *
+     * @param string $sessionId The session ID
+     * @param array $chatState The chat state to snapshot (messages, input buffer, agent context)
+     * @return int The checkpoint index that was assigned
+     */
+    public function saveCheckpoint(string $sessionId, array $chatState): int
+    {
+        // Get the next index for this session
+        $stmt = $this->pdo->prepare('
+            SELECT COALESCE(MAX("index"), -1) + 1 FROM checkpoints WHERE session_id = ?
+        ');
+        $stmt->execute([$sessionId]);
+        $nextIndex = (int) $stmt->fetchColumn();
+
+        // Insert the new checkpoint
+        $insertStmt = $this->pdo->prepare('
+            INSERT INTO checkpoints (session_id, "index", state_data, created_at)
+            VALUES (?, ?, ?, ?)
+        ');
+        $insertStmt->execute([
+            $sessionId,
+            $nextIndex,
+            json_encode($chatState),
+            (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+        ]);
+
+        // Enforce the 100 checkpoint limit: delete oldest checkpoints if over limit
+        $this->pruneOldCheckpoints($sessionId, self::MAX_CHECKPOINTS_PER_SESSION);
+
+        return $nextIndex;
+    }
+
+    /**
+     * Retrieve a specific checkpoint by index.
+     *
+     * @param string $sessionId The session ID
+     * @param int $index The checkpoint index
+     * @return array|null The checkpoint state data, or null if not found
+     */
+    public function getCheckpoint(string $sessionId, int $index): ?array
+    {
+        $stmt = $this->pdo->prepare('
+            SELECT state_data FROM checkpoints WHERE session_id = ? AND "index" = ?
+        ');
+        $stmt->execute([$sessionId, $index]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            return null;
+        }
+
+        return json_decode($row['state_data'], true);
+    }
+
+    /**
+     * List recent checkpoints for a session.
+     *
+     * @param string $sessionId The session ID
+     * @param int $limit Maximum number of checkpoints to return (default 100)
+     * @return array<int, array{index: int, created_at: string, state_data: array}> Checkpoint summaries
+     */
+    public function listCheckpoints(string $sessionId, int $limit = 100): array
+    {
+        $stmt = $this->pdo->prepare('
+            SELECT "index", created_at, state_data
+            FROM checkpoints
+            WHERE session_id = ?
+            ORDER BY "index" DESC
+            LIMIT ?
+        ');
+        $stmt->execute([$sessionId, $limit]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(function ($row) {
+            return [
+                'index' => (int) $row['index'],
+                'created_at' => $row['created_at'],
+                'state_data' => json_decode($row['state_data'], true),
+            ];
+        }, $rows);
+    }
+
+    /**
+     * Restore a checkpoint and return its state data.
+     *
+     * @param string $sessionId The session ID
+     * @param int $index The checkpoint index to restore
+     * @return array|null The restored state data, or null if not found
+     */
+    public function restoreCheckpoint(string $sessionId, int $index): ?array
+    {
+        // First verify the checkpoint exists
+        $state = $this->getCheckpoint($sessionId, $index);
+        if ($state === null) {
+            return null;
+        }
+
+        // Delete all checkpoints with index >= the restored index (they are now invalid)
+        $deleteStmt = $this->pdo->prepare('
+            DELETE FROM checkpoints WHERE session_id = ? AND "index" >= ?
+        ');
+        $deleteStmt->execute([$sessionId, $index]);
+
+        return $state;
+    }
+
+    /**
+     * Prune old checkpoints to keep the count under the limit.
+     */
+    private function pruneOldCheckpoints(string $sessionId, int $maxCheckpoints): void
+    {
+        $countStmt = $this->pdo->prepare('SELECT COUNT(*) FROM checkpoints WHERE session_id = ?');
+        $countStmt->execute([$sessionId]);
+        $count = (int) $countStmt->fetchColumn();
+
+        if ($count <= $maxCheckpoints) {
+            return;
+        }
+
+        // Delete oldest checkpoints to bring count down to maxCheckpoints
+        $deleteCount = $count - $maxCheckpoints;
+        $deleteStmt = $this->pdo->prepare('
+            DELETE FROM checkpoints
+            WHERE session_id = ? AND id IN (
+                SELECT id FROM checkpoints WHERE session_id = ?
+                ORDER BY "index" ASC
+                LIMIT ?
+            )
+        ');
+        $deleteStmt->execute([$sessionId, $sessionId, $deleteCount]);
     }
 
     // =======================================================================
