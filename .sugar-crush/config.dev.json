@@ -1,0 +1,11 @@
+{
+  "providers": {
+    "dev-sglang": {
+      "type": "sglang",
+      "baseUrl": "https://skynet2.interserver.net/v1",
+      "model": "MiniMax-M2.7",
+      "apiKey": null
+    }
+  },
+  "defaultProvider": "dev-sglang"
+}
