@@ -52,9 +52,19 @@ final class SessionStore
                 provider TEXT NOT NULL,
                 model TEXT NOT NULL,
                 system_prompt TEXT,
+                name TEXT,
                 metadata TEXT
             )
         ');
+
+        // Migrate existing tables that lack the name column (added in P6.S11).
+        // Only add the column if it doesn't already exist, since new databases
+        // already have it in the CREATE TABLE above.
+        $existingColumns = $this->pdo->query("PRAGMA table_info(sessions)")->fetchAll(\PDO::FETCH_ASSOC);
+        $columnNames = array_column($existingColumns, 'name');
+        if (!in_array('name', $columnNames, true)) {
+            $this->pdo->exec('ALTER TABLE sessions ADD COLUMN name TEXT');
+        }
 
         $this->pdo->exec('
             CREATE TABLE IF NOT EXISTS messages (
@@ -88,13 +98,13 @@ final class SessionStore
         ');
     }
 
-    public function createSession(string $id, string $provider, string $model, ?string $systemPrompt = null): void
+    public function createSession(string $id, string $provider, string $model, ?string $systemPrompt = null, ?string $name = null): void
     {
         $stmt = $this->pdo->prepare('
-            INSERT INTO sessions (id, provider, model, system_prompt)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO sessions (id, provider, model, system_prompt, name)
+            VALUES (?, ?, ?, ?, ?)
         ');
-        $stmt->execute([$id, $provider, $model, $systemPrompt]);
+        $stmt->execute([$id, $provider, $model, $systemPrompt, $name]);
     }
 
     public function getSession(string $id): ?array
@@ -102,6 +112,63 @@ final class SessionStore
         $stmt = $this->pdo->prepare('SELECT * FROM sessions WHERE id = ?');
         $stmt->execute([$id]);
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    public function getSessionByName(string $name): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM sessions WHERE name = ?');
+        $stmt->execute([$name]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    public function renameSession(string $id, string $name): void
+    {
+        $stmt = $this->pdo->prepare('UPDATE sessions SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+        $stmt->execute([$name, $id]);
+    }
+
+    /**
+     * Fork a session by copying it with a new ID.
+     * The new session gets a fresh timestamp but preserves all other data.
+     *
+     * @return string The new session ID
+     */
+    public function forkSession(string $id): string
+    {
+        $session = $this->getSession($id);
+        if ($session === null) {
+            throw new \InvalidArgumentException("Session not found: {$id}");
+        }
+
+        $newId = bin2hex(random_bytes(16));
+
+        // Insert new session with forked data (but new id and fresh timestamps)
+        $stmt = $this->pdo->prepare('
+            INSERT INTO sessions (id, provider, model, system_prompt, name)
+            VALUES (?, ?, ?, ?, ?)
+        ');
+        $stmt->execute([
+            $newId,
+            $session['provider'],
+            $session['model'],
+            $session['system_prompt'],
+            $session['name'],
+        ]);
+
+        // Copy all messages from original session to new session
+        $messages = $this->getMessages($id);
+        foreach ($messages as $msg) {
+            $this->addMessage($newId, [
+                'role' => $msg['role'],
+                'content' => $msg['content'],
+                'tool_calls' => $msg['tool_calls'],
+                'tool_results' => $msg['tool_results'],
+                'model' => $msg['model'],
+                'tokens_used' => $msg['tokens_used'],
+            ]);
+        }
+
+        return $newId;
     }
 
     public function updateSession(string $id): void

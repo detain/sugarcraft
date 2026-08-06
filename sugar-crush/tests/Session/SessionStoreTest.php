@@ -577,4 +577,191 @@ final class SessionStoreTest extends TestCase
         $this->assertCount(1, $store->getMessages('s1'));
         $this->assertCount(1, $store->getMessages('s3'));
     }
+
+    // =========================================================================
+    // Session Naming Tests (P6.S11)
+    // =========================================================================
+
+    public function testCreateSessionWithName(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('session-named', 'openai', 'gpt-4', 'You are helpful', 'My Session');
+
+        $session = $store->getSession('session-named');
+
+        $this->assertNotNull($session);
+        $this->assertSame('session-named', $session['id']);
+        $this->assertSame('My Session', $session['name']);
+    }
+
+    public function testCreateSessionWithNullName(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('session-unnamed', 'openai', 'gpt-4', null, null);
+
+        $session = $store->getSession('session-unnamed');
+
+        $this->assertNotNull($session);
+        $this->assertNull($session['name']);
+    }
+
+    public function testGetSessionByName(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('session-1', 'provider', 'model', null, 'Alpha');
+        $store->createSession('session-2', 'provider', 'model', null, 'Beta');
+
+        $found = $store->getSessionByName('Alpha');
+
+        $this->assertNotNull($found);
+        $this->assertSame('session-1', $found['id']);
+        $this->assertSame('Alpha', $found['name']);
+    }
+
+    public function testGetSessionByNameReturnsNullForNonexistent(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $found = $store->getSessionByName('Nonexistent');
+
+        $this->assertNull($found);
+    }
+
+    public function testRenameSession(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('session-1', 'provider', 'model', null, 'Original');
+        $original = $store->getSession('session-1');
+        $this->assertSame('Original', $original['name']);
+
+        $store->renameSession('session-1', 'Renamed');
+
+        $renamed = $store->getSession('session-1');
+        $this->assertSame('Renamed', $renamed['name']);
+    }
+
+    public function testRenameSessionUpdatesTimestamp(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('session-1', 'provider', 'model');
+        sleep(1);
+        $beforeUpdate = $store->getSession('session-1')['updated_at'];
+
+        $store->renameSession('session-1', 'New Name');
+
+        $afterUpdate = $store->getSession('session-1')['updated_at'];
+        $this->assertNotSame($beforeUpdate, $afterUpdate);
+    }
+
+    // =========================================================================
+    // Session Forking Tests (P6.S11)
+    // =========================================================================
+
+    public function testForkSessionCreatesCopy(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('original', 'provider', 'model', 'system prompt', 'Original Name');
+        $store->addMessage('original', ['role' => 'user', 'content' => 'Hello']);
+        $store->addMessage('original', ['role' => 'assistant', 'content' => 'Hi there']);
+
+        $newId = $store->forkSession('original');
+
+        // New ID should be different
+        $this->assertNotSame('original', $newId);
+        $this->assertSame(32, strlen($newId)); // 16 bytes = 32 hex chars
+
+        // Original should still exist unchanged
+        $original = $store->getSession('original');
+        $this->assertNotNull($original);
+        $this->assertSame('Original Name', $original['name']);
+
+        // New session should be a copy with same metadata
+        $forked = $store->getSession($newId);
+        $this->assertNotNull($forked);
+        $this->assertSame('provider', $forked['provider']);
+        $this->assertSame('model', $forked['model']);
+        $this->assertSame('system prompt', $forked['system_prompt']);
+        $this->assertSame('Original Name', $forked['name']);
+    }
+
+    public function testForkSessionCopiesMessages(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('original', 'provider', 'model');
+        $store->addMessage('original', ['role' => 'user', 'content' => 'First message']);
+        $store->addMessage('original', ['role' => 'assistant', 'content' => 'Second message']);
+
+        $originalMessages = $store->getMessages('original');
+        $this->assertCount(2, $originalMessages);
+
+        $newId = $store->forkSession('original');
+
+        $forkedMessages = $store->getMessages($newId);
+        $this->assertCount(2, $forkedMessages);
+        $this->assertSame('First message', $forkedMessages[0]['content']);
+        $this->assertSame('Second message', $forkedMessages[1]['content']);
+    }
+
+    public function testForkSessionCopiesToolCalls(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('original', 'provider', 'model');
+        $msgId = $store->addMessage('original', [
+            'role' => 'assistant',
+            'content' => 'Using tool',
+            'tool_calls' => [['id' => 'call_1', 'name' => 'bash', 'arguments' => ['cmd' => 'ls']]],
+        ]);
+        $store->addToolCall('original', $msgId, [
+            'name' => 'bash',
+            'arguments' => ['cmd' => 'ls'],
+            'result' => 'file1 file2',
+        ]);
+
+        $newId = $store->forkSession('original');
+
+        // Verify original messages have tool calls
+        $originalMessages = $store->getMessages('original');
+        $this->assertNotNull($originalMessages[0]['tool_calls']);
+
+        // Forked messages should also have tool calls
+        $forkedMessages = $store->getMessages($newId);
+        $this->assertNotNull($forkedMessages[0]['tool_calls']);
+    }
+
+    public function testForkSessionThrowsForNonexistentSession(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Session not found: nonexistent');
+
+        $store->forkSession('nonexistent');
+    }
+
+    public function testForkSessionHasFreshTimestamps(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        $store->createSession('original', 'provider', 'model');
+
+        sleep(1);
+        $originalSession = $store->getSession('original');
+        $originalCreatedAt = $originalSession['created_at'];
+        $originalUpdatedAt = $originalSession['updated_at'];
+
+        $newId = $store->forkSession('original');
+        $forkedSession = $store->getSession($newId);
+
+        // Forked session should have fresh timestamps (different from original)
+        $this->assertNotSame($originalCreatedAt, $forkedSession['created_at']);
+        $this->assertNotSame($originalUpdatedAt, $forkedSession['updated_at']);
+    }
 }

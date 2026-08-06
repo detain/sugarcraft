@@ -26,6 +26,7 @@ use SugarCraft\Crush\Workflows\WorkflowStatus;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Memory\MemoryStore;
+use SugarCraft\Crush\Session\SessionStore;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -68,6 +69,12 @@ final class Chat implements Model
     /** @var MemoryStore|null Memory store for /memory command */
     private ?MemoryStore $memoryStore = null;
 
+    /** @var SessionStore|null Session store for /branch and /rename commands */
+    private ?SessionStore $sessionStore = null;
+
+    /** @var string|null ID of the currently active session */
+    private ?string $currentSessionId = null;
+
     /** @var Buffer|null Previous rendered frame for diff-based emission */
     private ?Buffer $previousFrame = null;
 
@@ -100,12 +107,16 @@ final class Chat implements Model
         ?AgentManager $agentManager = null,
         ?CompactorConfig $compactorConfig = null,
         ?MemoryStore $memoryStore = null,
+        ?\SugarCraft\Crush\Session\SessionStore $sessionStore = null,
+        ?string $currentSessionId = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
         $this->agentManager = $agentManager;
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $this->memoryStore = $memoryStore;
+        $this->sessionStore = $sessionStore;
+        $this->currentSessionId = $currentSessionId;
     }
 
     public function init(): ?\Closure
@@ -136,6 +147,9 @@ final class Chat implements Model
                 effectivePool: $this->effectivePool,
                 workflowEngine: $this->workflowEngine,
                 agentManager: $this->agentManager,
+                memoryStore: $this->memoryStore,
+                sessionStore: $this->sessionStore,
+                currentSessionId: $this->currentSessionId,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -208,6 +222,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
 
         $backend = $this->backend;
@@ -317,6 +333,38 @@ final class Chat implements Model
     public function memoryStore(): ?MemoryStore
     {
         return $this->memoryStore;
+    }
+
+    /**
+     * Get the session store, if set.
+     */
+    public function sessionStore(): ?\SugarCraft\Crush\Session\SessionStore
+    {
+        return $this->sessionStore;
+    }
+
+    /**
+     * Create a new Chat with an explicit session store.
+     */
+    public function withSessionStore(\SugarCraft\Crush\Session\SessionStore $sessionStore): self
+    {
+        return $this->mutate(['sessionStore' => $sessionStore]);
+    }
+
+    /**
+     * Get the current session ID, if any.
+     */
+    public function currentSessionId(): ?string
+    {
+        return $this->currentSessionId;
+    }
+
+    /**
+     * Create a new Chat with an explicit current session ID.
+     */
+    public function withCurrentSessionId(string $currentSessionId): self
+    {
+        return $this->mutate(['currentSessionId' => $currentSessionId]);
     }
 
     /**
@@ -431,6 +479,8 @@ final class Chat implements Model
             'agentManager' => $this->agentManager,
             'compactorConfig' => null, // compactor is reconstructed from null config (uses default)
             'memoryStore' => $this->memoryStore,
+            'sessionStore' => $this->sessionStore,
+            'currentSessionId' => $this->currentSessionId,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -452,6 +502,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
     }
 
@@ -471,6 +523,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
     }
 
@@ -499,6 +553,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
     }
 
@@ -524,6 +580,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
     }
 
@@ -575,6 +633,16 @@ final class Chat implements Model
             return $this->handleMemoryCommand($text);
         }
 
+        // Handle /branch command (fork current session)
+        if (str_starts_with($text, '/branch')) {
+            return $this->handleBranchCommand($text);
+        }
+
+        // Handle /rename command (name current session)
+        if (str_starts_with($text, '/rename')) {
+            return $this->handleRenameCommand($text);
+        }
+
         $next = new self(
             history: [...$this->history, Message::user($text)],
             inputBuf: '',
@@ -589,6 +657,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
         $backend = $this->backend;
         $history = $next->history;
@@ -655,6 +725,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
         return [$next, null];
     }
@@ -872,6 +944,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
         return [$next, null];
     }
@@ -919,6 +993,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
         return [$next, null];
     }
@@ -977,9 +1053,130 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
 
         return [$next, null];
+    }
+
+    /**
+     * Return a session command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function sessionResponse(string $inputText, string $response): array
+    {
+        $next = new self(
+            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
+        );
+        return [$next, null];
+    }
+
+    /**
+     * Handle /branch command — fork the current session.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleBranchCommand(string $inputText): array
+    {
+        if ($this->sessionStore === null) {
+            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /branch and /rename commands.');
+        }
+
+        // /branch takes no arguments
+        $afterBranch = ltrim(substr($inputText, 7)); // after "/branch"
+
+        if ($this->currentSessionId === null) {
+            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
+        }
+
+        if ($afterBranch !== '') {
+            return $this->sessionResponse($inputText, 'Usage: /branch (takes no arguments)');
+        }
+
+        try {
+            $newSessionId = $this->sessionStore->forkSession($this->currentSessionId);
+            $response = "Branch created: {$newSessionId}";
+        } catch (\InvalidArgumentException $e) {
+            $response = "Error: {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "Error: {$e->getMessage()}";
+        }
+
+        // Return Chat with same state but currentSessionId updated to the new branch
+        $next = new self(
+            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $newSessionId ?? $this->currentSessionId,
+        );
+
+        return [$next, null];
+    }
+
+    /**
+     * Handle /rename command — rename the current session.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleRenameCommand(string $inputText): array
+    {
+        if ($this->sessionStore === null) {
+            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /branch and /rename commands.');
+        }
+
+        // /rename requires exactly one argument: the new name
+        $afterRename = ltrim(substr($inputText, 7)); // after "/rename"
+
+        if ($afterRename === '') {
+            return $this->sessionResponse($inputText, 'Usage: /rename <newName>');
+        }
+
+        if ($this->currentSessionId === null) {
+            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
+        }
+
+        $newName = trim($afterRename);
+        if ($newName === '') {
+            return $this->sessionResponse($inputText, 'Usage: /rename <newName>');
+        }
+
+        try {
+            $this->sessionStore->renameSession($this->currentSessionId, $newName);
+            $response = "Session renamed to '{$newName}'";
+        } catch (\InvalidArgumentException $e) {
+            $response = "Error: {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "Error: {$e->getMessage()}";
+        }
+
+        return $this->sessionResponse($inputText, $response);
     }
 
     /**
@@ -1034,6 +1231,8 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
             memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
         );
         return [$next, null];
     }
@@ -1268,6 +1467,27 @@ final class Chat implements Model
         }
 
         return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * Show help text for /session commands.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function sessionHelpResponse(string $inputText, ?string $error = null): array
+    {
+        $lines = [];
+        if ($error !== null) {
+            $lines[] = "**Error:** {$error}";
+            $lines[] = '';
+        }
+        $lines[] = '**Available /session commands:**';
+        $lines[] = '';
+        $lines[] = '`/rename <name>` — Name the current session for easy resume';
+        $lines[] = '`/branch` — Fork the current session into a new copy';
+        $lines[] = '`/session` — Show this help text';
+
+        return $this->sessionResponse($inputText, implode("\n", $lines));
     }
 
     /**

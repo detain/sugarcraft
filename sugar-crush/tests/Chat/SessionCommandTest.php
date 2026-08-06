@@ -1,0 +1,218 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tests\Chat;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Backend\EchoBackend;
+use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Role;
+use SugarCraft\Crush\Session\SessionStore;
+
+final class SessionCommandTest extends TestCase
+{
+    private string $tempDir;
+    private SessionStore $sessionStore;
+
+    protected function setUp(): void
+    {
+        $this->tempDir = sys_get_temp_dir() . '/session_cmd_test_' . uniqid('', true);
+        mkdir($this->tempDir, 0755, true);
+        $this->sessionStore = new SessionStore($this->tempDir . '/sessions.db');
+    }
+
+    protected function tearDown(): void
+    {
+        $files = glob($this->tempDir . '/*');
+        if ($files !== false) {
+            foreach ($files as $file) {
+                unlink($file);
+            }
+        }
+        if (is_dir($this->tempDir)) {
+            rmdir($this->tempDir);
+        }
+    }
+
+    public function testBranchCreatesForkedSession(): void
+    {
+        // Arrange: create a session and set it as current
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4', null, 'Original');
+        $initialSessions = $this->sessionStore->listSessions(10);
+        $this->assertCount(1, $initialSessions);
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/branch',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+
+        // Act
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // Assert: command completed without error
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringStartsWith('Branch created:', $lastMsg->content);
+
+        // Assert: new session was actually created
+        $sessions = $this->sessionStore->listSessions(10);
+        $this->assertCount(2, $sessions);
+
+        // Assert: new Chat carries the new currentSessionId
+        $this->assertNotNull($next->currentSessionId());
+        $this->assertNotSame('test-session', $next->currentSessionId());
+    }
+
+    public function testBranchRequiresNoArgs(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/branch extra-arg',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Usage:', $lastMsg->content);
+        $this->assertStringContainsString('/branch', $lastMsg->content);
+
+        // Session count should be unchanged (no fork happened)
+        $sessions = $this->sessionStore->listSessions(10);
+        $this->assertCount(1, $sessions);
+    }
+
+    public function testRenameRenamesSession(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4', null, 'Original');
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/rename TestSession',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString("Session renamed to 'TestSession'", $lastMsg->content);
+
+        // Verify the name was actually changed in the store
+        $session = $this->sessionStore->getSession('test-session');
+        $this->assertNotNull($session);
+        $this->assertSame('TestSession', $session['name']);
+    }
+
+    public function testRenameRequiresArgs(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/rename',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Usage:', $lastMsg->content);
+        $this->assertStringContainsString('/rename', $lastMsg->content);
+
+        // Session name should be unchanged
+        $session = $this->sessionStore->getSession('test-session');
+        $this->assertNotNull($session);
+        $this->assertNull($session['name']);
+    }
+
+    public function testSessionCommandNotConfigured(): void
+    {
+        // No sessionStore set
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/branch',
+            backend: new EchoBackend(),
+            sessionStore: null,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('not configured', $lastMsg->content);
+
+        // Also test /rename
+        $chat2 = new Chat(
+            history: [],
+            inputBuf: '/rename SomeName',
+            backend: new EchoBackend(),
+            sessionStore: null,
+        );
+
+        [$next2, ] = $chat2->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next2->inFlight);
+        $lastMsg2 = $next2->history[count($next2->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg2->role);
+        $this->assertStringContainsString('not configured', $lastMsg2->content);
+    }
+
+    public function testSessionCommandNoActiveSession(): void
+    {
+        // sessionStore is set but currentSessionId is null
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/branch',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: null, // no active session
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('No active session', $lastMsg->content);
+
+        // /rename should behave the same
+        $chat2 = new Chat(
+            history: [],
+            inputBuf: '/rename SomeName',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: null,
+        );
+
+        [$next2, ] = $chat2->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next2->inFlight);
+        $lastMsg2 = $next2->history[count($next2->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg2->role);
+        $this->assertStringContainsString('No active session', $lastMsg2->content);
+    }
+}
