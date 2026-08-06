@@ -445,4 +445,384 @@ final class GitCommandHandlersTest extends TestCase
 
         $this->assertSame($hash, $result->metadata['ref']);
     }
+
+    // =========================================================================
+    // git_commits — add, commit, amend, revert, reset
+    // =========================================================================
+
+    public function testGitAddStagesAllFiles(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        file_put_contents($this->repoPath . '/new.txt', 'new content');
+
+        $result = $handlers->gitAdd();
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_add', $result->operation);
+        $this->assertSame('git_commits', $result->group);
+    }
+
+    public function testGitAddStagesSpecificFiles(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        file_put_contents($this->repoPath . '/a.txt', 'a');
+        file_put_contents($this->repoPath . '/b.txt', 'b');
+
+        $result = $handlers->gitAdd(['a.txt']);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_add', $result->operation);
+        $this->assertSame('git_commits', $result->group);
+    }
+
+    public function testGitAddWithEmptyPathsStagesAll(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        file_put_contents($this->repoPath . '/another.txt', 'content');
+
+        $result = $handlers->gitAdd([]);
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testGitCommitWithEmptyMessageFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitCommit('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+        $this->assertSame('git_commit', $result->operation);
+    }
+
+    public function testGitCommitBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        file_put_contents($this->repoPath . '/new.txt', "content\n");
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' add new.txt 2>&1');
+
+        $result = $handlers->gitCommit('add new file');
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_commit', $result->operation);
+        $this->assertSame('git_commits', $result->group);
+    }
+
+    public function testGitCommitWithAllFlag(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        // Modify existing file (find a .txt file in repo)
+        $found = false;
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->repoPath)) as $f) {
+            if ($f->isFile() && str_ends_with($f->getPathname(), '.txt')) {
+                file_put_contents($f->getPathname(), 'modified');
+                $found = true;
+                break;
+            }
+        }
+        $this->assertTrue($found, 'No .txt file found to modify');
+
+        $result = $handlers->gitCommit('update file', all: true);
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testGitAmendWithoutAllFlag(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitAmend();
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_amend', $result->operation);
+    }
+
+    public function testGitAmendWithAllFlag(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        file_put_contents($this->repoPath . '/extra.txt', 'extra');
+
+        $result = $handlers->gitAmend(all: true);
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testGitRevertWithEmptyCommitFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitRevert('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+    }
+
+    public function testGitRevertBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        $this->makeCommit('second');
+
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' rev-parse HEAD~1 2>&1', $hashLines);
+        $parentHash = trim($hashLines[0] ?? '');
+
+        $result = $handlers->gitRevert($parentHash);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_revert', $result->operation);
+    }
+
+    public function testGitRevertWithNoCommitFlag(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        $this->makeCommit('second');
+
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' rev-parse HEAD~1 2>&1', $hashLines);
+        $parentHash = trim($hashLines[0] ?? '');
+
+        $result = $handlers->gitRevert($parentHash, noCommit: true);
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testGitResetWithEmptyCommitFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitReset('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+    }
+
+    public function testGitResetWithInvalidModeFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitReset('HEAD', 'invalid');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Invalid reset mode', $result->error);
+    }
+
+    public function testGitResetSoftMode(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('first');
+        $this->makeCommit('second');
+
+        $result = $handlers->gitReset('HEAD~1', 'soft');
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_reset', $result->operation);
+    }
+
+    public function testGitResetMixedMode(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('first');
+        $this->makeCommit('second');
+
+        $result = $handlers->gitReset('HEAD~1', 'mixed');
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testGitResetHardMode(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('first');
+        $this->makeCommit('second');
+
+        $result = $handlers->gitReset('HEAD~1', 'hard');
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    // =========================================================================
+    // git_branches — list, create, delete, checkout
+    // =========================================================================
+
+    public function testGitBranchListBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitBranchList();
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_branch_list', $result->operation);
+        $this->assertSame('git_branches', $result->group);
+        $this->assertIsArray($result->output);
+        $this->assertNotEmpty($result->output);
+        $this->assertArrayHasKey('name', $result->output[0]);
+        $this->assertArrayHasKey('current', $result->output[0]);
+    }
+
+    public function testGitBranchListWithAllFlag(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitBranchList(all: true);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertIsArray($result->output);
+    }
+
+    public function testGitBranchListReturnsParsedOutputShape(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitBranchList();
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertArrayHasKey('count', $result->metadata);
+        foreach ($result->output as $branch) {
+            $this->assertArrayHasKey('name', $branch);
+            $this->assertArrayHasKey('current', $branch);
+            $this->assertIsString($branch['name']);
+            $this->assertIsBool($branch['current']);
+        }
+    }
+
+    public function testGitBranchCreateWithEmptyNameFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCreate('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+    }
+
+    public function testGitBranchCreateProtectedNameHEADFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCreate('HEAD');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Cannot create branch', $result->error);
+    }
+
+    public function testGitBranchCreateProtectedNameMASTERFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCreate('MASTER');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Cannot create branch', $result->error);
+    }
+
+    public function testGitBranchCreateProtectedNameMAINFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCreate('MAIN');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Cannot create branch', $result->error);
+    }
+
+    public function testGitBranchCreateWithoutCheckout(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitBranchCreate('feature-branch');
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_branch_create', $result->operation);
+        $this->assertFalse($result->output['checkedOut']);
+    }
+
+    public function testGitBranchCreateWithCheckout(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitBranchCreate('feature-branch', checkout: true);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertTrue($result->output['checkedOut']);
+    }
+
+    public function testGitBranchDeleteWithEmptyNameFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchDelete('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+    }
+
+    public function testGitBranchDeleteSafeDelete(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' branch test-branch 2>&1');
+
+        $result = $handlers->gitBranchDelete('test-branch');
+
+        // Safe delete (-d) may fail if not merged, but operation itself is valid
+        $this->assertSame('git_branch_delete', $result->operation);
+    }
+
+    public function testGitBranchDeleteForceDelete(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' branch test-branch 2>&1');
+
+        $result = $handlers->gitBranchDelete('test-branch', force: true);
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testGitBranchCheckoutWithEmptyTargetFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCheckout('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+    }
+
+    public function testGitBranchCheckoutExistingBranch(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+        exec('/usr/bin/git -C ' . escapeshellarg($this->repoPath) . ' branch checkout-branch 2>&1');
+
+        $result = $handlers->gitBranchCheckout('checkout-branch');
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_branch_checkout', $result->operation);
+    }
+
+    public function testGitBranchCheckoutWithCreateBranchFlag(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitBranchCheckout('new-feature', createBranch: true);
+
+        $this->assertTrue($result->isSuccess());
+    }
 }

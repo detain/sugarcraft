@@ -7,8 +7,9 @@ namespace SugarCraft\Crush\MCP;
 /**
  * Git command handlers for the Git MCP server.
  *
- * Handles git_context (repository snapshot, config, aliases) and
- * git_history (log, show, blame, reflog) operation groups.
+ * Handles git_context (repository snapshot, config, aliases),
+ * git_history (log, show, blame, reflog), git_commits (add, commit, amend,
+ * revert, reset), and git_branches (list, create, delete, checkout).
  *
  * @see GitOperationResult
  */
@@ -373,6 +374,336 @@ final readonly class GitCommandHandlers
             group: 'git_history',
             metadata: ['count' => count($reflog)],
             executionTimeMs: $result->executionTimeMs,
+        );
+    }
+
+    // =========================================================================
+    // git_commits — Add, commit, amend, revert, reset
+    // =========================================================================
+
+    /**
+     * Stage files for commit.
+     *
+     * @param array<string> $paths Files to stage (empty array stages all)
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitAdd(array $paths = [], ?string $path = null): GitOperationResult
+    {
+        if ($paths === []) {
+            // Stage all files: git add .
+            return $this->execGit(
+                command: ['git', 'add', '.'],
+                operation: 'git_add',
+                group: 'git_commits',
+                cwd: $path,
+            );
+        }
+
+        // Stage specific files
+        $command = array_merge(['git', 'add'], $paths);
+        return $this->execGit(
+            command: $command,
+            operation: 'git_add',
+            group: 'git_commits',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Create a commit with a message.
+     *
+     * @param string $message Commit message
+     * @param bool $all Stage all modified files before committing
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitCommit(string $message, bool $all = false, ?string $path = null): GitOperationResult
+    {
+        if ($message === '') {
+            return GitOperationResult::failure(
+                error: 'Commit message cannot be empty',
+                operation: 'git_commit',
+                group: 'git_commits',
+            );
+        }
+
+        $command = ['git', 'commit'];
+        if ($all) {
+            $command[] = '--all';
+        }
+        $command[] = '-m';
+        $command[] = $message;
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_commit',
+            group: 'git_commits',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Amend the last commit with staged changes (no message change).
+     *
+     * @param bool $all Stage all modified files before amending
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitAmend(bool $all = false, ?string $path = null): GitOperationResult
+    {
+        $command = ['git', 'commit', '--amend', '--no-edit'];
+        if ($all) {
+            $command[] = '--all';
+        }
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_amend',
+            group: 'git_commits',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Create a revert commit for a given commit.
+     *
+     * @param string $commit Commit hash or ref to revert
+     * @param bool $noCommit Create the revert but do not commit
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitRevert(string $commit, bool $noCommit = false, ?string $path = null): GitOperationResult
+    {
+        if ($commit === '') {
+            return GitOperationResult::failure(
+                error: 'Commit cannot be empty',
+                operation: 'git_revert',
+                group: 'git_commits',
+            );
+        }
+
+        $command = ['git', 'revert', $commit];
+        if ($noCommit) {
+            $command[] = '--no-commit';
+        }
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_revert',
+            group: 'git_commits',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Reset the repository to a given commit.
+     *
+     * @param string $commit Commit hash or ref to reset to
+     * @param string $mode Reset mode: 'soft', 'mixed', or 'hard'
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitReset(string $commit, string $mode = 'mixed', ?string $path = null): GitOperationResult
+    {
+        if ($commit === '') {
+            return GitOperationResult::failure(
+                error: 'Commit cannot be empty',
+                operation: 'git_reset',
+                group: 'git_commits',
+            );
+        }
+
+        $validModes = ['soft', 'mixed', 'hard'];
+        if (!in_array($mode, $validModes, true)) {
+            return GitOperationResult::failure(
+                error: "Invalid reset mode '{$mode}'. Must be one of: soft, mixed, hard",
+                operation: 'git_reset',
+                group: 'git_commits',
+            );
+        }
+
+        return $this->execGit(
+            command: ['git', 'reset', "--{$mode}", $commit],
+            operation: 'git_reset',
+            group: 'git_commits',
+            cwd: $path,
+        );
+    }
+
+    // =========================================================================
+    // git_branches — List, create, delete, checkout
+    // =========================================================================
+
+    /**
+     * List branches.
+     *
+     * @param bool $all Show remote-tracking and local branches
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitBranchList(bool $all = false, ?string $path = null): GitOperationResult
+    {
+        $command = ['git', 'branch'];
+        if ($all) {
+            $command[] = '-a';
+        }
+
+        $result = $this->execGit(
+            command: $command,
+            operation: 'git_branch_list',
+            group: 'git_branches',
+            cwd: $path,
+        );
+
+        if ($result->isFailure()) {
+            return $result;
+        }
+
+        $lines = is_string($result->output) && $result->output !== '' ? explode("\n", $result->output) : [];
+        $branches = [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            // Remote branches are prefixed with "remotes/", local with "* " for current
+            $isCurrent = str_starts_with($line, '* ');
+            $name = $isCurrent ? substr($line, 2) : $line;
+            $branches[] = [
+                'name' => $name,
+                'current' => $isCurrent,
+            ];
+        }
+
+        return GitOperationResult::success(
+            output: $branches,
+            operation: 'git_branch_list',
+            group: 'git_branches',
+            metadata: ['count' => count($branches)],
+            executionTimeMs: $result->executionTimeMs,
+        );
+    }
+
+    /**
+     * Create a new branch.
+     *
+     * @param string $name Branch name
+     * @param bool $checkout Switch to the new branch after creation
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitBranchCreate(string $name, bool $checkout = false, ?string $path = null): GitOperationResult
+    {
+        if ($name === '') {
+            return GitOperationResult::failure(
+                error: 'Branch name cannot be empty',
+                operation: 'git_branch_create',
+                group: 'git_branches',
+            );
+        }
+
+        // Refuse dangerously named branches
+        if ($name === 'HEAD' || $name === 'MASTER' || $name === 'MAIN') {
+            return GitOperationResult::failure(
+                error: "Cannot create branch named '{$name}'",
+                operation: 'git_branch_create',
+                group: 'git_branches',
+            );
+        }
+
+        if ($checkout) {
+            $result = $this->execGit(
+                command: ['git', 'checkout', '-b', $name],
+                operation: 'git_branch_create',
+                group: 'git_branches',
+                cwd: $path,
+            );
+        } else {
+            $result = $this->execGit(
+                command: ['git', 'branch', $name],
+                operation: 'git_branch_create',
+                group: 'git_branches',
+                cwd: $path,
+            );
+        }
+
+        if ($result->isFailure()) {
+            return $result;
+        }
+
+        return GitOperationResult::success(
+            output: ['name' => $name, 'checkedOut' => $checkout],
+            operation: 'git_branch_create',
+            group: 'git_branches',
+            metadata: ['name' => $name, 'checkedOut' => $checkout],
+            executionTimeMs: $result->executionTimeMs,
+        );
+    }
+
+    /**
+     * Delete a branch.
+     *
+     * @param string $name Branch name
+     * @param bool $force Force delete even if branch has unmerged changes
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitBranchDelete(string $name, bool $force = false, ?string $path = null): GitOperationResult
+    {
+        if ($name === '') {
+            return GitOperationResult::failure(
+                error: 'Branch name cannot be empty',
+                operation: 'git_branch_delete',
+                group: 'git_branches',
+            );
+        }
+
+        $command = ['git', 'branch'];
+        if ($force) {
+            $command[] = '-D';
+        } else {
+            $command[] = '-d';
+        }
+        $command[] = $name;
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_branch_delete',
+            group: 'git_branches',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Checkout a branch or file.
+     *
+     * @param string $target Branch name, commit hash, or file path
+     * @param bool $createBranch Create and checkout a new branch if true
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitBranchCheckout(string $target, bool $createBranch = false, ?string $path = null): GitOperationResult
+    {
+        if ($target === '') {
+            return GitOperationResult::failure(
+                error: 'Target cannot be empty',
+                operation: 'git_branch_checkout',
+                group: 'git_branches',
+            );
+        }
+
+        $command = ['git', 'checkout'];
+        if ($createBranch) {
+            $command[] = '-b';
+        }
+        $command[] = $target;
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_branch_checkout',
+            group: 'git_branches',
+            cwd: $path,
         );
     }
 
