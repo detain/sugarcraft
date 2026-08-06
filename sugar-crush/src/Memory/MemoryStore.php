@@ -116,6 +116,54 @@ final class MemoryStore
     }
 
     /**
+     * Retrieve a single memory entry by its ID.
+     *
+     * @param string $id The UUID of the entry.
+     * @return MemoryEntry|null The entry, or null if not found.
+     */
+    public function get(string $id): ?MemoryEntry
+    {
+        // UUIDs are generated as 32-char lowercase hex strings (v4).
+        // Rejecting non-matching input at the boundary prevents unnecessary
+        // filesystem I/O and makes invalid IDs fail fast rather than silently
+        // returning null after a failed file_exists() check.
+        if (!preg_match('/^[0-9a-f]{32}$/', $id)) {
+            return null;
+        }
+
+        $file = $this->memoryPath . '/' . $id . '.md';
+        if (!file_exists($file)) {
+            return null;
+        }
+
+        return $this->readEntry($file);
+    }
+
+    /**
+     * Update an existing memory entry, or insert it if it does not exist.
+     *
+     * This is an upsert: writeEntry() will create the file if missing.
+     * UUID validation is enforced here rather than inside writeEntry() so
+     * that callers get a clear InvalidArgumentException immediately, rather
+     * than a generic RuntimeException from a failed file_put_contents().
+     *
+     * @param string      $id    The UUID of the entry to update.
+     * @param MemoryEntry $entry The updated entry data.
+     */
+    public function update(string $id, MemoryEntry $entry): void
+    {
+        // UUIDs are generated as 32-char lowercase hex strings (v4).
+        // Enforcing strict format here fails fast on programmer error rather
+        // than allowing malformed filenames to reach the filesystem.
+        if (!preg_match('/^[0-9a-f]{32}$/', $id)) {
+            throw new \InvalidArgumentException('Invalid memory entry id format');
+        }
+
+        $this->writeEntry($id, $entry);
+        $this->generateIndex($entry->scope());
+    }
+
+    /**
      * Delete a memory entry by ID.
      *
      * @param string $id The UUID of the entry to delete.
@@ -255,7 +303,7 @@ final class MemoryStore
      *
      * The index summarizes all entries in that scope, capped at roughly
      * the first 200 lines or 25KB — whichever is reached first.
-     * The index file is written to {memoryPath}/{scope}.md.
+     * The index file is written to {memoryPath}/indexes/{scope}.md.
      *
      * @param string $scope The scope: 'user', 'project', or 'agent'.
      */
@@ -275,8 +323,14 @@ final class MemoryStore
         foreach ($entries as $entry) {
             $summaryLines = $this->summarizeEntry($entry);
             foreach ($summaryLines as $line) {
+                // +1 for the newline. Each line is counted individually, then newline added.
+                // The header (~200 bytes) is not tracked in bytesWritten, so the true total
+                // may overcount by at most 200 bytes. This is well within spec tolerance.
                 $lineBytes = strlen($line) + 1;
-                if (count($lines) >= self::MAX_INDEX_LINES || $bytesWritten + $lineBytes > self::MAX_INDEX_BYTES) {
+                // Reserve 2 lines for the footer so total (header + entries + footer)
+                // does not exceed MAX_INDEX_LINES. Break when count would exceed 198 so that
+                // after adding the 2-line footer the final count is exactly MAX_INDEX_LINES.
+                if (count($lines) > self::MAX_INDEX_LINES - 3 || $bytesWritten + $lineBytes > self::MAX_INDEX_BYTES) {
                     break 2;
                 }
                 $lines[] = $line;

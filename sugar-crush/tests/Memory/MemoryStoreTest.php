@@ -267,6 +267,33 @@ final class MemoryStoreTest extends TestCase
         $this->assertStringContainsString($id, $index);
     }
 
+    public function testIndexEnforcesSizeAndLineCaps(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // Add enough entries to exceed 25KB. Each entry produces a ~3-line summary
+        // (~150 bytes). The 25KB cap triggers well before the 200-line entry cap,
+        // so this test verifies the byte cap is enforced.
+        $targetBytes = 25 * 1024; // 25KB
+        for ($i = 0; $i < 175; $i++) {
+            $store->add('This is a moderately long memory content entry to push the index size over 25KB limit ' . $i, 'user');
+        }
+
+        $store->generateIndex('user');
+
+        $index = $store->loadIndex('user');
+        $this->assertNotNull($index);
+
+        // Byte cap: index must not exceed 25KB
+        $byteCount = strlen($index);
+        $this->assertLessThanOrEqual($targetBytes, $byteCount, 'Index should not exceed 25KB');
+
+        // Line cap: header (~6 lines) + entry lines + footer (~2 lines). With the byte
+        // cap triggering first, entry lines are capped; total should be well under 210.
+        $lineCount = substr_count($index, "\n") + 1;
+        $this->assertLessThanOrEqual(200, $lineCount, 'Index should not exceed 200 entry lines plus header/footer');
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
