@@ -24,6 +24,7 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
+use DateTimeImmutable;
 
 /**
  * @see Runtime
@@ -580,6 +581,94 @@ final class RuntimeTest extends TestCase
         $this->assertCount(1, $results);
         $this->assertInstanceOf(AssistantMessage::class, $results[0]);
         $this->assertSame('Simple response', $results[0]->content());
+    }
+
+    // =========================================================================
+    // shouldPromptIdleCompaction() Tests
+    // =========================================================================
+
+    public function testShouldPromptIdleCompactionReturnsFalseWhenTokensBelowThreshold(): void
+    {
+        // App with recent activity but token count below 100K
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        $app = App::new($provider, 'test-model')
+            ->withLastActivity(new DateTimeImmutable('1 hour ago'));
+
+        $result = $this->runtime->shouldPromptIdleCompaction($app, 50000);
+
+        $this->assertFalse($result);
+    }
+
+    public function testShouldPromptIdleCompactionReturnsFalseWhenRecentlyActive(): void
+    {
+        // App with recent activity and high token count
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        $app = App::new($provider, 'test-model')
+            ->withLastActivity(new DateTimeImmutable('30 minutes ago'));
+
+        $result = $this->runtime->shouldPromptIdleCompaction($app, 150000);
+
+        $this->assertFalse($result);
+    }
+
+    public function testShouldPromptIdleCompactionReturnsTrueWhenIdleAndLarge(): void
+    {
+        // App with idle time > 1 hour and token count > 100K
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        $app = App::new($provider, 'test-model')
+            ->withLastActivity(new DateTimeImmutable('2 hours ago'));
+
+        $result = $this->runtime->shouldPromptIdleCompaction($app, 150000);
+
+        $this->assertTrue($result);
+    }
+
+    public function testShouldPromptIdleCompactionReturnsFalseWhenNoLastActivity(): void
+    {
+        // App with no lastActivityAt set
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        $app = App::new($provider, 'test-model');
+
+        // Even with high token count, should return false if we don't know idle time
+        $result = $this->runtime->shouldPromptIdleCompaction($app, 150000);
+
+        $this->assertFalse($result);
+    }
+
+    public function testShouldPromptIdleCompactionBoundaryAtExactlyOneHour(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        // Exactly 3600 seconds ago (1 hour) - should be false (not MORE than 3600)
+        $app = App::new($provider, 'test-model')
+            ->withLastActivity(new DateTimeImmutable('3600 seconds ago'));
+
+        $result = $this->runtime->shouldPromptIdleCompaction($app, 150000);
+
+        $this->assertFalse($result);
+    }
+
+    public function testShouldPromptIdleCompactionBoundaryAtExactly100KTokens(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        // Exactly 100000 tokens - should be false (not MORE than 100000)
+        $app = App::new($provider, 'test-model')
+            ->withLastActivity(new DateTimeImmutable('2 hours ago'));
+
+        $result = $this->runtime->shouldPromptIdleCompaction($app, 100000);
+
+        $this->assertFalse($result);
     }
 
     // =========================================================================

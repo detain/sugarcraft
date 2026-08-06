@@ -465,6 +465,10 @@ final class ContextCompactor
      * are truncated. If the combined budget (skillBudgetCombined tokens) is exceeded,
      * the least-recently-invoked skills are dropped first.
      *
+     * Note: the while-loop guard `count($skills) > 1` prevents dropping the last
+     * remaining skill even if that single skill alone exceeds the combined budget.
+     * This is intentional—dropping the only skill would leave nothing to invoke.
+     *
      * Mirrors charmbracelet/bubbletea ContextCompactor.filterSkills.
      *
      * @param array<array{name:string,content:string,lastInvokedAt:int}> $skills
@@ -483,7 +487,7 @@ final class ContextCompactor
         $skills = array_map(function (array $skill) use ($maxCharsPerSkill): array {
             $content = $skill['content'] ?? '';
             if (mb_strlen($content) > $maxCharsPerSkill) {
-                $skill['content'] = mb_substr($content, 0, $maxCharsPerSkill - 3) . '...';
+                $skill['content'] = $this->truncateWithEllipsis($content, $maxCharsPerSkill);
             }
             return $skill;
         }, $skills);
@@ -571,7 +575,7 @@ final class ContextCompactor
                 $role = $pair['role'] ?? 'assistant';
                 // Truncate long standalone messages
                 $summary = mb_strlen($content) > 120
-                    ? mb_substr($content, 0, 117) . '...'
+                    ? $this->truncateWithEllipsis($content, 120)
                     : $content;
                 $summaries[] = [
                     'role' => $role,
@@ -600,7 +604,7 @@ final class ContextCompactor
         // Extract the essence: what was asked and what was done
         $userMax = $this->config->summaryUserMaxChars;
         $userTruncated = mb_strlen($userMsg) > $userMax
-            ? mb_substr($userMsg, 0, $userMax - 3) . '...'
+            ? $this->truncateWithEllipsis($userMsg, $userMax)
             : $userMsg;
 
         // If assistant is short, include it directly
@@ -610,6 +614,14 @@ final class ContextCompactor
 
         // Otherwise just describe what happened
         return $userTruncated . ' → [exchanged information]';
+    }
+
+    /**
+     * Truncate string to maxChars and append ellipsis if truncated.
+     */
+    private function truncateWithEllipsis(string $content, int $maxChars): string
+    {
+        return mb_substr($content, 0, $maxChars - 3) . '...';
     }
 
     /**

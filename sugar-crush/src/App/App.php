@@ -13,6 +13,7 @@ use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Pane;
+use DateTimeImmutable;
 
 /**
  * Main application state - immutable with*() builders.
@@ -35,6 +36,7 @@ final class App
         public readonly array $activeHooks,
         public readonly int $selectedAgentIndex,
         public readonly AgentViewMode $agentViewMode,
+        public readonly ?DateTimeImmutable $lastActivityAt = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -54,6 +56,7 @@ final class App
             activeHooks: [],
             selectedAgentIndex: -1,
             agentViewMode: AgentViewMode::List,
+            lastActivityAt: null,
         );
     }
 
@@ -126,6 +129,11 @@ final class App
     public function withAgentViewMode(AgentViewMode $v): self
     {
         return $this->mutate(agentViewMode: $v);
+    }
+
+    public function withLastActivity(DateTimeImmutable $lastActivityAt): self
+    {
+        return $this->mutate(lastActivityAt: $lastActivityAt);
     }
 
     /**
@@ -230,6 +238,7 @@ final class App
             activeHooks: array_key_exists('activeHooks', $changes) ? $changes['activeHooks'] : $this->activeHooks,
             selectedAgentIndex: array_key_exists('selectedAgentIndex', $changes) ? $changes['selectedAgentIndex'] : $this->selectedAgentIndex,
             agentViewMode: array_key_exists('agentViewMode', $changes) ? $changes['agentViewMode'] : $this->agentViewMode,
+            lastActivityAt: array_key_exists('lastActivityAt', $changes) ? $changes['lastActivityAt'] : $this->lastActivityAt,
         );
     }
 }

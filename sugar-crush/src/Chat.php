@@ -23,6 +23,8 @@ use SugarCraft\Crush\Workflows\WorkflowNotFoundException;
 use SugarCraft\Crush\Workflows\WorkflowNotRunningException;
 use SugarCraft\Crush\Workflows\WorkflowResult;
 use SugarCraft\Crush\Workflows\WorkflowStatus;
+use SugarCraft\Crush\Context\ContextCompactor;
+use SugarCraft\Crush\Context\CompactorConfig;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -55,6 +57,9 @@ final class Chat implements Model
 
     /** @var WorkflowEngine|null Optional workflow engine for /workflow command */
     private readonly ?WorkflowEngine $workflowEngine;
+
+    /** @var ContextCompactor Context compactor for /compact command and automatic compaction */
+    private readonly ContextCompactor $compactor;
 
     /** @var AgentManager|null Agent manager for /agents command */
     private ?AgentManager $agentManager = null;
@@ -89,10 +94,12 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Crush\Agents\AgentWorkerPool $effectivePool = null,
         ?WorkflowEngine $workflowEngine = null,
         ?AgentManager $agentManager = null,
+        ?CompactorConfig $compactorConfig = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
         $this->agentManager = $agentManager;
+        $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
     }
 
     public function init(): ?\Closure
@@ -391,6 +398,7 @@ final class Chat implements Model
             'backend' => $this->backend,
             'workflowEngine' => $this->workflowEngine,
             'agentManager' => $this->agentManager,
+            'compactorConfig' => null, // compactor is reconstructed from null config (uses default)
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -504,6 +512,11 @@ final class Chat implements Model
         $text = trim($this->inputBuf);
         if ($text === '') {
             return [$this, null];
+        }
+
+        // Handle /compact command to manually compact chat history
+        if (str_starts_with($text, '/compact')) {
+            return $this->handleCompactCommand($text);
         }
 
         // Handle /workflow commands locally without calling the backend
@@ -862,6 +875,64 @@ final class Chat implements Model
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
         );
+        return [$next, null];
+    }
+
+    /**
+     * Handle /compact command to manually compact chat history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleCompactCommand(string $inputText): array
+    {
+        $originalCount = count($this->history);
+
+        // Convert history to wire format for the compactor
+        $wireHistory = array_map(
+            static fn(Message $msg): array => $msg->toWire(),
+            $this->history
+        );
+
+        // Compact the history using all 5 stages
+        $compactedWire = $this->compactor->compact($wireHistory);
+        $savingsPercentage = $this->compactor->savingsPercentage();
+
+        // Convert back to Message objects
+        $compactedHistory = [];
+        foreach ($compactedWire as $wire) {
+            $role = \SugarCraft\Crush\Role::from($wire['role'] ?? 'assistant');
+            $content = $wire['content'] ?? '';
+            $compactedHistory[] = match ($role) {
+                Role::User => Message::user($content),
+                Role::Assistant => Message::assistant($content),
+                default => new Message($role, $content, time()),
+            };
+        }
+
+        $newCount = count($compactedHistory);
+
+        // Build response message
+        if ($originalCount === 0) {
+            $response = "Nothing to compact: chat history is empty.";
+        } else {
+            $response = "Context compacted: was {$originalCount} messages, now {$newCount} messages (saved {$savingsPercentage}% tokens)";
+        }
+
+        $next = new self(
+            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
+        );
+
         return [$next, null];
     }
 

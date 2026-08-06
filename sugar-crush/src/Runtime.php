@@ -200,4 +200,32 @@ final class Runtime
 
         return $base;
     }
+
+    /**
+     * Determine whether to prompt the user about idle-session compaction.
+     *
+     * Returns true when:
+     *   - The session has been idle for more than 3600 seconds (1 hour), AND
+     *   - The token count exceeds 100,000
+     *
+     * This is a pure check — the actual offer to compact is handled in
+     * Chat.php based on this check.
+     *
+     * @param App $app The application state (provides lastActivityAt for idle check)
+     * @param int $tokenCount Current estimated token count in the conversation
+     */
+    public function shouldPromptIdleCompaction(App $app, int $tokenCount): bool
+    {
+        if ($tokenCount <= 100000) {
+            return false;
+        }
+
+        if ($app->lastActivityAt === null) {
+            return false;
+        }
+
+        $idleSeconds = time() - $app->lastActivityAt->getTimestamp();
+
+        return $idleSeconds > 3600;
+    }
 }
