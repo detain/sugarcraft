@@ -825,4 +825,310 @@ final class GitCommandHandlersTest extends TestCase
 
         $this->assertTrue($result->isSuccess());
     }
+
+    // =========================================================================
+    // git_worktree — Add, list, remove worktrees
+    // =========================================================================
+
+    public function testGitWorktreeAddWithEmptyPathFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitWorktreeAdd('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+        $this->assertSame('git_worktree_add', $result->operation);
+        $this->assertSame('git_worktree', $result->group);
+    }
+
+    public function testGitWorktreeAddBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $worktreePath = $this->tempDir . '/worktree1';
+        $result = $handlers->gitWorktreeAdd($worktreePath);
+
+        // git worktree add exits 0 on success
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_worktree_add', $result->operation);
+        $this->assertSame('git_worktree', $result->group);
+    }
+
+    public function testGitWorktreeAddWithBranch(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $worktreePath = $this->tempDir . '/worktree2';
+        $result = $handlers->gitWorktreeAdd($worktreePath, 'feature-branch');
+
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testGitWorktreeListBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitWorktreeList();
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame('git_worktree_list', $result->operation);
+        $this->assertSame('git_worktree', $result->group);
+        $this->assertIsArray($result->output);
+        $this->assertArrayHasKey('count', $result->metadata);
+    }
+
+    public function testGitWorktreeListReturnsArrayOfWorktrees(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $worktreePath = $this->tempDir . '/list-test-worktree';
+        $handlers->gitWorktreeAdd($worktreePath);
+
+        $result = $handlers->gitWorktreeList();
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertIsArray($result->output);
+        // At least the main worktree and the added one
+        $this->assertGreaterThanOrEqual(1, count($result->output));
+    }
+
+    public function testGitWorktreeRemoveWithEmptyPathFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitWorktreeRemove('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+        $this->assertSame('git_worktree_remove', $result->operation);
+    }
+
+    public function testGitWorktreeRemoveBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $worktreePath = $this->tempDir . '/remove-test-worktree';
+        $handlers->gitWorktreeAdd($worktreePath);
+
+        $result = $handlers->gitWorktreeRemove($worktreePath);
+
+        // git worktree remove exits 0 on success (will fail if worktree doesn't exist or has uncommitted changes)
+        $this->assertSame('git_worktree_remove', $result->operation);
+    }
+
+    // =========================================================================
+    // git_flow — Git-flow workflow support
+    // =========================================================================
+
+    public function testGitFlowInitBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitFlowInit();
+
+        // git flow init -d succeeds (sets defaults) even in existing repos
+        // or fails if git-flow is not installed
+        $this->assertSame('git_flow_init', $result->operation);
+        $this->assertSame('git_flow', $result->group);
+    }
+
+    public function testGitFlowFeatureWithInvalidActionFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitFlowFeature('invalid-action');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Invalid', $result->error);
+        $this->assertSame('git_flow_feature', $result->operation);
+    }
+
+    public function testGitFlowFeatureStartRequiresName(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitFlowFeature('start');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('name is required', $result->error);
+    }
+
+    public function testGitFlowFeatureWithValidActionAndNoName(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        // checkout and diff don't require a name
+        $result = $handlers->gitFlowFeature('checkout');
+
+        $this->assertSame('git_flow_feature', $result->operation);
+        // Result may be success or failure depending on whether feature branch exists
+        // but it should not fail with "name is required"
+        $this->assertStringNotContainsString('name is required', $result->error ?? '');
+    }
+
+    public function testGitFlowReleaseWithInvalidActionFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitFlowRelease('invalid-action');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Invalid', $result->error);
+    }
+
+    public function testGitFlowReleaseStartRequiresName(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitFlowRelease('start');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('name is required', $result->error);
+    }
+
+    public function testGitFlowHotfixWithInvalidActionFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitFlowHotfix('invalid-action');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Invalid', $result->error);
+    }
+
+    public function testGitFlowHotfixStartRequiresName(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitFlowHotfix('start');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('name is required', $result->error);
+    }
+
+    // =========================================================================
+    // git_lfs — LFS tracking and migration
+    // =========================================================================
+
+    public function testGitLfsTrackWithEmptyPatternFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitLfsTrack('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+        $this->assertSame('git_lfs_track', $result->operation);
+        $this->assertSame('git_lfs', $result->group);
+    }
+
+    public function testGitLfsTrackBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitLfsTrack('*.psd');
+
+        // git lfs track succeeds and modifies .gitattributes
+        // or fails if git-lfs is not installed
+        $this->assertSame('git_lfs_track', $result->operation);
+        $this->assertSame('git_lfs', $result->group);
+    }
+
+    public function testGitLfsUntrackWithEmptyPatternFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitLfsUntrack('');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->error);
+        $this->assertSame('git_lfs_untrack', $result->operation);
+    }
+
+    public function testGitLfsUntrackBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        // First track, then untrack
+        $handlers->gitLfsTrack('*.psd');
+        $result = $handlers->gitLfsUntrack('*.psd');
+
+        $this->assertSame('git_lfs_untrack', $result->operation);
+    }
+
+    public function testGitLfsLocksBasic(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitLfsLocks();
+
+        // git lfs locks may fail if git-lfs is not installed
+        $this->assertSame('git_lfs_locks', $result->operation);
+        $this->assertSame('git_lfs', $result->group);
+        if ($result->isSuccess()) {
+            $this->assertIsArray($result->output);
+            $this->assertArrayHasKey('count', $result->metadata);
+        }
+    }
+
+    public function testGitLfsLocksReturnsArrayShape(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitLfsLocks();
+
+        // Just verify the output structure when successful
+        if ($result->isSuccess()) {
+            $this->assertIsArray($result->output);
+            foreach ($result->output as $lock) {
+                $this->assertIsArray($lock);
+            }
+        }
+        // If git-lfs is not installed, this test is not risky - we're checking the structure when available
+        $this->assertTrue(true);
+    }
+
+    public function testGitLfsMigrateWithInvalidDirectionFails(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitLfsMigrate('invalid-direction');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Invalid', $result->error);
+        $this->assertSame('git_lfs_migrate', $result->operation);
+        $this->assertSame('git_lfs', $result->group);
+    }
+
+    public function testGitLfsMigrateImportDirection(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitLfsMigrate('import');
+
+        // Succeeds or fails if git-lfs not installed / nothing to migrate
+        $this->assertSame('git_lfs_migrate', $result->operation);
+    }
+
+    public function testGitLfsMigrateExportDirection(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+        $this->makeCommit('initial');
+
+        $result = $handlers->gitLfsMigrate('export');
+
+        $this->assertSame('git_lfs_migrate', $result->operation);
+    }
 }

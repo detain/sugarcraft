@@ -708,6 +708,394 @@ final readonly class GitCommandHandlers
     }
 
     // =========================================================================
+    // git_worktree — Add, list, remove worktrees
+    // =========================================================================
+
+    /**
+     * Add a worktree.
+     *
+     * @param string $worktreePath Path where the worktree will be created
+     * @param string|null $branch Branch to check out in the worktree (default: current branch)
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitWorktreeAdd(string $worktreePath, ?string $branch = null, ?string $path = null): GitOperationResult
+    {
+        if ($worktreePath === '') {
+            return GitOperationResult::failure(
+                error: 'Worktree path cannot be empty',
+                operation: 'git_worktree_add',
+                group: 'git_worktree',
+            );
+        }
+
+        $command = ['git', 'worktree', 'add'];
+        if ($branch !== null) {
+            $command[] = '-b';
+            $command[] = $branch;
+        }
+        $command[] = $worktreePath;
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_worktree_add',
+            group: 'git_worktree',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * List worktrees.
+     *
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitWorktreeList(?string $path = null): GitOperationResult
+    {
+        $result = $this->execGit(
+            command: ['git', 'worktree', 'list', '--porcelain'],
+            operation: 'git_worktree_list',
+            group: 'git_worktree',
+            cwd: $path,
+        );
+
+        if ($result->isFailure()) {
+            return $result;
+        }
+
+        $output = is_string($result->output) ? $result->output : '';
+        $worktrees = [];
+        $entries = explode("\n", trim($output));
+        $current = null;
+
+        foreach ($entries as $line) {
+            if (str_starts_with($line, 'worktree ')) {
+                $current = ['path' => substr($line, 9), 'branch' => null, 'HEAD' => null];
+            } elseif ($current !== null && str_starts_with($line, 'branch ')) {
+                $current['branch'] = substr($line, 8);
+            } elseif ($current !== null && str_starts_with($line, 'HEAD ')) {
+                $current['HEAD'] = substr($line, 5);
+            } elseif ($current !== null && $line === '' && $current['path'] !== null) {
+                $worktrees[] = $current;
+                $current = null;
+            }
+        }
+        if ($current !== null && $current['path'] !== null) {
+            $worktrees[] = $current;
+        }
+
+        return GitOperationResult::success(
+            output: $worktrees,
+            operation: 'git_worktree_list',
+            group: 'git_worktree',
+            metadata: ['count' => count($worktrees)],
+            executionTimeMs: $result->executionTimeMs,
+        );
+    }
+
+    /**
+     * Remove a worktree.
+     *
+     * @param string $worktreePath Path to the worktree to remove
+     * @param bool $force Force removal (default false)
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitWorktreeRemove(string $worktreePath, bool $force = false, ?string $path = null): GitOperationResult
+    {
+        if ($worktreePath === '') {
+            return GitOperationResult::failure(
+                error: 'Worktree path cannot be empty',
+                operation: 'git_worktree_remove',
+                group: 'git_worktree',
+            );
+        }
+
+        $command = ['git', 'worktree', 'remove'];
+        if ($force) {
+            $command[] = '--force';
+        }
+        $command[] = $worktreePath;
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_worktree_remove',
+            group: 'git_worktree',
+            cwd: $path,
+        );
+    }
+
+    // =========================================================================
+    // git_flow — Git-flow workflow support
+    // =========================================================================
+
+    /**
+     * Initialize git-flow.
+     *
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitFlowInit(?string $path = null): GitOperationResult
+    {
+        return $this->execGit(
+            command: ['git', 'flow', 'init', '-d'],
+            operation: 'git_flow_init',
+            group: 'git_flow',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Perform a git-flow action on a feature branch.
+     *
+     * @param string $action Action to perform: start, finish, publish, track, pull, rebase, checkout, diff, log, resurrect, squash
+     * @param string|null $name Feature name (required for start/finish/publish/track/pull/rebase/squash)
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitFlowFeature(string $action, ?string $name = null, ?string $path = null): GitOperationResult
+    {
+        $validActions = ['start', 'finish', 'publish', 'track', 'pull', 'rebase', 'checkout', 'diff', 'log', 'resurrect', 'squash'];
+        if (!in_array($action, $validActions, true)) {
+            return GitOperationResult::failure(
+                error: "Invalid git-flow feature action '{$action}'. Must be one of: " . implode(', ', $validActions),
+                operation: 'git_flow_feature',
+                group: 'git_flow',
+            );
+        }
+
+        $needsName = in_array($action, ['start', 'finish', 'publish', 'track', 'pull', 'rebase', 'squash'], true);
+        if ($needsName && ($name === null || $name === '')) {
+            return GitOperationResult::failure(
+                error: 'Feature name is required for this action',
+                operation: 'git_flow_feature',
+                group: 'git_flow',
+            );
+        }
+
+        $command = ['git', 'flow', 'feature', $action];
+        if ($name !== null && $name !== '') {
+            $command[] = $name;
+        }
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_flow_feature',
+            group: 'git_flow',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Perform a git-flow action on a release branch.
+     *
+     * @param string $action Action to perform: start, finish, publish, track, pull, rebase
+     * @param string|null $name Release name or version (required for start/finish/publish/track/pull/rebase)
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitFlowRelease(string $action, ?string $name = null, ?string $path = null): GitOperationResult
+    {
+        $validActions = ['start', 'finish', 'publish', 'track', 'pull', 'rebase'];
+        if (!in_array($action, $validActions, true)) {
+            return GitOperationResult::failure(
+                error: "Invalid git-flow release action '{$action}'. Must be one of: " . implode(', ', $validActions),
+                operation: 'git_flow_release',
+                group: 'git_flow',
+            );
+        }
+
+        $needsName = in_array($action, ['start', 'finish', 'publish', 'track', 'pull', 'rebase'], true);
+        if ($needsName && ($name === null || $name === '')) {
+            return GitOperationResult::failure(
+                error: 'Release name is required for this action',
+                operation: 'git_flow_release',
+                group: 'git_flow',
+            );
+        }
+
+        $command = ['git', 'flow', 'release', $action];
+        if ($name !== null && $name !== '') {
+            $command[] = $name;
+        }
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_flow_release',
+            group: 'git_flow',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Perform a git-flow action on a hotfix branch.
+     *
+     * @param string $action Action to perform: start, finish, publish, track, pull, rebase
+     * @param string|null $name Hotfix name (required for start/finish/publish/track/pull/rebase)
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitFlowHotfix(string $action, ?string $name = null, ?string $path = null): GitOperationResult
+    {
+        $validActions = ['start', 'finish', 'publish', 'track', 'pull', 'rebase'];
+        if (!in_array($action, $validActions, true)) {
+            return GitOperationResult::failure(
+                error: "Invalid git-flow hotfix action '{$action}'. Must be one of: " . implode(', ', $validActions),
+                operation: 'git_flow_hotfix',
+                group: 'git_flow',
+            );
+        }
+
+        $needsName = in_array($action, ['start', 'finish', 'publish', 'track', 'pull', 'rebase'], true);
+        if ($needsName && ($name === null || $name === '')) {
+            return GitOperationResult::failure(
+                error: 'Hotfix name is required for this action',
+                operation: 'git_flow_hotfix',
+                group: 'git_flow',
+            );
+        }
+
+        $command = ['git', 'flow', 'hotfix', $action];
+        if ($name !== null && $name !== '') {
+            $command[] = $name;
+        }
+
+        return $this->execGit(
+            command: $command,
+            operation: 'git_flow_hotfix',
+            group: 'git_flow',
+            cwd: $path,
+        );
+    }
+
+    // =========================================================================
+    // git_lfs — LFS tracking and migration
+    // =========================================================================
+
+    /**
+     * Track files with Git LFS.
+     *
+     * @param string $pattern File pattern to track (e.g., "*.psd", "images/*")
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitLfsTrack(string $pattern, ?string $path = null): GitOperationResult
+    {
+        if ($pattern === '') {
+            return GitOperationResult::failure(
+                error: 'Pattern cannot be empty',
+                operation: 'git_lfs_track',
+                group: 'git_lfs',
+            );
+        }
+
+        return $this->execGit(
+            command: ['git', 'lfs', 'track', $pattern],
+            operation: 'git_lfs_track',
+            group: 'git_lfs',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * Untrack files from Git LFS.
+     *
+     * @param string $pattern File pattern to untrack
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitLfsUntrack(string $pattern, ?string $path = null): GitOperationResult
+    {
+        if ($pattern === '') {
+            return GitOperationResult::failure(
+                error: 'Pattern cannot be empty',
+                operation: 'git_lfs_untrack',
+                group: 'git_lfs',
+            );
+        }
+
+        return $this->execGit(
+            command: ['git', 'lfs', 'untrack', $pattern],
+            operation: 'git_lfs_untrack',
+            group: 'git_lfs',
+            cwd: $path,
+        );
+    }
+
+    /**
+     * List current LFS locks.
+     *
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitLfsLocks(?string $path = null): GitOperationResult
+    {
+        $result = $this->execGit(
+            command: ['git', 'lfs', 'locks'],
+            operation: 'git_lfs_locks',
+            group: 'git_lfs',
+            cwd: $path,
+        );
+
+        if ($result->isFailure()) {
+            return $result;
+        }
+
+        $output = is_string($result->output) ? $result->output : '';
+        $lines = $output !== '' ? explode("\n", trim($output)) : [];
+        $locks = [];
+
+        foreach ($lines as $line) {
+            if ($line === '') {
+                continue;
+            }
+            // Format: "ID  Owner  Path  [lock info]"
+            $parts = preg_split('/\s+/', $line, 4);
+            if (count($parts) >= 3) {
+                $locks[] = [
+                    'id' => $parts[0] ?? '',
+                    'owner' => $parts[1] ?? '',
+                    'path' => $parts[2] ?? '',
+                ];
+            }
+        }
+
+        return GitOperationResult::success(
+            output: $locks,
+            operation: 'git_lfs_locks',
+            group: 'git_lfs',
+            metadata: ['count' => count($locks)],
+            executionTimeMs: $result->executionTimeMs,
+        );
+    }
+
+    /**
+     * Migrate LFS objects (import from git or export to git).
+     *
+     * @param string $direction Migration direction: "import" or "export"
+     * @param string|null $path Repository path
+     * @see GitOperationResult
+     */
+    public function gitLfsMigrate(string $direction, ?string $path = null): GitOperationResult
+    {
+        $validDirections = ['import', 'export'];
+        if (!in_array($direction, $validDirections, true)) {
+            return GitOperationResult::failure(
+                error: "Invalid LFS migration direction '{$direction}'. Must be one of: import, export",
+                operation: 'git_lfs_migrate',
+                group: 'git_lfs',
+            );
+        }
+
+        return $this->execGit(
+            command: ['git', 'lfs', 'migrate', $direction],
+            operation: 'git_lfs_migrate',
+            group: 'git_lfs',
+            cwd: $path,
+        );
+    }
+
+    // =========================================================================
     // Helper methods (private, for internal use)
     // =========================================================================
 
