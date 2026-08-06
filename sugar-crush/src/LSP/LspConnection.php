@@ -17,7 +17,7 @@ namespace SugarCraft\Crush\LSP;
  * @note When transport is 'tcp', connects via stream_socket_client() to host:port
  *       instead of spawning a subprocess via proc_open().
  */
-final class LspConnection
+class LspConnection
 {
     /** @var resource|null */
     private $process = null;
@@ -191,6 +191,33 @@ final class LspConnection
         }
 
         return $response;
+    }
+
+    /**
+     * textDocument/codeAction — get code actions (quick fixes, refactorings, etc.).
+     *
+     * @param string $uri     File URI
+     * @param int    $line    Cursor line (0-indexed)
+     * @param int    $col     Cursor column (0-indexed)
+     * @param array  $context Context containing diagnostics; empty array uses server defaults
+     * @return array<mixed> CodeAction[] — never null, may be empty
+     */
+    public function codeActions(string $uri, int $line = 0, int $col = 0, array $context = []): array
+    {
+        $response = $this->request('textDocument/codeAction', [
+            'textDocument' => ['uri' => $uri],
+            'range' => [
+                'start' => ['line' => $line, 'character' => $col],
+                'end'   => ['line' => $line, 'character' => $col],
+            ],
+            'context' => $context,
+        ]);
+
+        if ($response === null) {
+            return [];
+        }
+
+        return is_array($response) ? $response : [];
     }
 
     /**

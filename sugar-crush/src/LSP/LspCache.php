@@ -14,7 +14,7 @@ namespace SugarCraft\Crush\LSP;
  *
  * Mirrors the LSP spec: https://microsoft.github.io/language-server-protocol/
  */
-final class LspCache
+class LspCache
 {
     /**
      * @var array<string, array{value: mixed, expiresAt: float}>
