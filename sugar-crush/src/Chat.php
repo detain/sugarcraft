@@ -14,6 +14,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
 use SugarCraft\Crush\Workflows\WorkflowNotFoundException;
@@ -496,6 +497,11 @@ final class Chat implements Model
             return $this->handleWorkflowCommand($text);
         }
 
+        // Handle /share commands locally
+        if (str_starts_with($text, '/share')) {
+            return $this->handleShareCommand($text);
+        }
+
         $next = new self(
             history: [...$this->history, Message::user($text)],
             inputBuf: '',
@@ -744,6 +750,51 @@ final class Chat implements Model
         }
 
         return $this->workflowResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /share command locally.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleShareCommand(string $inputBuf): array
+    {
+        // Parse args from the command (after "/share")
+        $afterShare = ltrim(substr($inputBuf, 6));
+        $args = $afterShare !== '' ? preg_split('/\s+/', $afterShare) : [];
+
+        // Execute the ShareCommand - it outputs directly to stdout, capture via output buffering
+        ob_start();
+        $shareCommand = new ShareCommand();
+        $exitCode = $shareCommand->execute($this, $args);
+        $output = ob_get_clean();
+
+        // ShareCommand returns 0 for success, non-zero for errors
+        // The output already contains the formatted response
+        return $this->shareResponse($inputBuf, $output);
+    }
+
+    /**
+     * Return a share command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function shareResponse(string $inputBuf, string $response): array
+    {
+        $next = new self(
+            history: [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+        );
+        return [$next, null];
     }
 
     private function withInputBuf(string $buf): self
