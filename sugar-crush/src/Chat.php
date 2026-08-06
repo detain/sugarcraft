@@ -16,6 +16,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\AgentsCommand;
+use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
@@ -647,6 +648,11 @@ final class Chat implements Model
         // Handle /rewind command (restore from checkpoint)
         if (str_starts_with($text, '/rewind')) {
             return $this->handleRewindCommand($text);
+        }
+
+        // Handle mcp auth commands
+        if (str_starts_with($text, 'mcp auth')) {
+            return $this->handleMcpAuthCommand($text);
         }
 
         $next = new self(
@@ -1687,5 +1693,52 @@ final class Chat implements Model
     public function resetPreviousFrame(): void
     {
         $this->previousFrame = null;
+    }
+
+    /**
+     * Handle `mcp auth` command for managing MCP server OAuth credentials.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleMcpAuthCommand(string $inputBuf): array
+    {
+        // Parse sub-command and args after "mcp auth"
+        $afterMcpAuth = ltrim(substr($inputBuf, 8)); // after "mcp auth"
+        $args = $afterMcpAuth !== '' ? preg_split('/\s+/', $afterMcpAuth) : [];
+
+        ob_start();
+        $authStore = \SugarCraft\Crush\MCP\McpAuthStore::create();
+        $command = new McpAuthCommand($authStore);
+        $exitCode = $command->execute($this, $args);
+        $output = ob_get_clean();
+
+        return $this->mcpAuthResponse($inputBuf, $output);
+    }
+
+    /**
+     * Return an mcp auth command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function mcpAuthResponse(string $inputBuf, string $response): array
+    {
+        $next = new self(
+            history: [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
+        );
+        return [$next, null];
     }
 }
