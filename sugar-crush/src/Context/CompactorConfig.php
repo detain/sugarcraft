@@ -34,6 +34,13 @@ final readonly class CompactorConfig
      * @param int $skillBudgetCombined     Combined budget cap across all skills
      *                                      still in context after compaction.
      *                                      Default: 25000.
+     * @param int $summaryUserMaxChars     Max characters to retain from user messages
+     *                                      when generating exchange summaries (stage 2).
+     *                                      Default: 80.
+     * @param int $summaryAssistantMaxChars Assistant content longer than this is
+     *                                      replaced with "[exchanged information]"
+     *                                      in exchange summaries (stage 2).
+     *                                      Default: 100.
      */
     public function __construct(
         public int $reminderThreshold = 70,
@@ -42,6 +49,8 @@ final readonly class CompactorConfig
         public int $recentPreserveCount = 10,
         public int $skillBudgetPerSkill = 5000,
         public int $skillBudgetCombined = 25000,
+        public int $summaryUserMaxChars = 80,
+        public int $summaryAssistantMaxChars = 100,
     ) {}
 
     /**
@@ -64,6 +73,8 @@ final readonly class CompactorConfig
             recentPreserveCount: $this->recentPreserveCount,
             skillBudgetPerSkill: $this->skillBudgetPerSkill,
             skillBudgetCombined: $this->skillBudgetCombined,
+            summaryUserMaxChars: $this->summaryUserMaxChars,
+            summaryAssistantMaxChars: $this->summaryAssistantMaxChars,
         );
     }
 
@@ -79,6 +90,8 @@ final readonly class CompactorConfig
             recentPreserveCount: $this->recentPreserveCount,
             skillBudgetPerSkill: $this->skillBudgetPerSkill,
             skillBudgetCombined: $this->skillBudgetCombined,
+            summaryUserMaxChars: $this->summaryUserMaxChars,
+            summaryAssistantMaxChars: $this->summaryAssistantMaxChars,
         );
     }
 
@@ -94,6 +107,8 @@ final readonly class CompactorConfig
             recentPreserveCount: $this->recentPreserveCount,
             skillBudgetPerSkill: $this->skillBudgetPerSkill,
             skillBudgetCombined: $this->skillBudgetCombined,
+            summaryUserMaxChars: $this->summaryUserMaxChars,
+            summaryAssistantMaxChars: $this->summaryAssistantMaxChars,
         );
     }
 
@@ -109,6 +124,8 @@ final readonly class CompactorConfig
             recentPreserveCount: $recentPreserveCount,
             skillBudgetPerSkill: $this->skillBudgetPerSkill,
             skillBudgetCombined: $this->skillBudgetCombined,
+            summaryUserMaxChars: $this->summaryUserMaxChars,
+            summaryAssistantMaxChars: $this->summaryAssistantMaxChars,
         );
     }
 
@@ -124,6 +141,8 @@ final readonly class CompactorConfig
             recentPreserveCount: $this->recentPreserveCount,
             skillBudgetPerSkill: $skillBudgetPerSkill,
             skillBudgetCombined: $this->skillBudgetCombined,
+            summaryUserMaxChars: $this->summaryUserMaxChars,
+            summaryAssistantMaxChars: $this->summaryAssistantMaxChars,
         );
     }
 
@@ -139,6 +158,36 @@ final readonly class CompactorConfig
             recentPreserveCount: $this->recentPreserveCount,
             skillBudgetPerSkill: $this->skillBudgetPerSkill,
             skillBudgetCombined: $skillBudgetCombined,
+            summaryUserMaxChars: $this->summaryUserMaxChars,
+            summaryAssistantMaxChars: $this->summaryAssistantMaxChars,
+        );
+    }
+
+    public function withSummaryUserMaxChars(int $summaryUserMaxChars): self
+    {
+        return new self(
+            reminderThreshold: $this->reminderThreshold,
+            backgroundCompactionThreshold: $this->backgroundCompactionThreshold,
+            foregroundBlockingThreshold: $this->foregroundBlockingThreshold,
+            recentPreserveCount: $this->recentPreserveCount,
+            skillBudgetPerSkill: $this->skillBudgetPerSkill,
+            skillBudgetCombined: $this->skillBudgetCombined,
+            summaryUserMaxChars: $summaryUserMaxChars,
+            summaryAssistantMaxChars: $this->summaryAssistantMaxChars,
+        );
+    }
+
+    public function withSummaryAssistantMaxChars(int $summaryAssistantMaxChars): self
+    {
+        return new self(
+            reminderThreshold: $this->reminderThreshold,
+            backgroundCompactionThreshold: $this->backgroundCompactionThreshold,
+            foregroundBlockingThreshold: $this->foregroundBlockingThreshold,
+            recentPreserveCount: $this->recentPreserveCount,
+            skillBudgetPerSkill: $this->skillBudgetPerSkill,
+            skillBudgetCombined: $this->skillBudgetCombined,
+            summaryUserMaxChars: $this->summaryUserMaxChars,
+            summaryAssistantMaxChars: $summaryAssistantMaxChars,
         );
     }
 }
