@@ -199,6 +199,44 @@ final readonly class MemoryEntry
     }
 
     /**
+     * Return all fields as an array.
+     *
+     * @return array{id: string, type: string, tags: array<string>, scope: string, content: string, createdAt: \DateTimeImmutable, modifiedAt: \DateTimeImmutable}
+     */
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'type' => $this->type,
+            'tags' => $this->tags,
+            'scope' => $this->scope,
+            'content' => $this->content,
+            'createdAt' => $this->createdAt,
+            'modifiedAt' => $this->modifiedAt,
+        ];
+    }
+
+    /**
+     * Create a new entry with a different value for the given field.
+     *
+     * @param string $key   Field name: 'type', 'tags', 'scope', 'content', 'createdAt', or 'modifiedAt'.
+     * @param mixed  $value New value for the field.
+     * @throws \InvalidArgumentException if $key is not a writable field.
+     */
+    public function with(string $key, mixed $value): self
+    {
+        return match ($key) {
+            'type' => $this->withType($value),
+            'tags' => $this->withTags($value),
+            'scope' => $this->withScope($value),
+            'content' => $this->withContent($value),
+            'createdAt' => $this->withCreatedAt($value),
+            'modifiedAt' => $this->withModifiedAt($value),
+            default => throw new \InvalidArgumentException("Unknown field: {$key}"),
+        };
+    }
+
+    /**
      * Generate a UUID v4 string.
      */
     private static function generateUuid(): string

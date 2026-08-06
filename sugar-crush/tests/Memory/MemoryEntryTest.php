@@ -182,4 +182,91 @@ final class MemoryEntryTest extends TestCase
             'Auto-generated ID should be a valid UUID v4 format',
         );
     }
+
+    public function testToArrayReturnsAllFields(): void
+    {
+        $now = new \DateTimeImmutable('2024-03-15T10:00:00Z');
+        $entry = new MemoryEntry(
+            id: 'test-array-id',
+            type: 'convention',
+            tags: ['psr-12', 'strict-types'],
+            scope: 'project',
+            content: 'Always enable strict types.',
+            createdAt: $now,
+            modifiedAt: $now,
+        );
+
+        $arr = $entry->toArray();
+
+        $this->assertIsArray($arr);
+        $this->assertSame('test-array-id', $arr['id']);
+        $this->assertSame('convention', $arr['type']);
+        $this->assertSame(['psr-12', 'strict-types'], $arr['tags']);
+        $this->assertSame('project', $arr['scope']);
+        $this->assertSame('Always enable strict types.', $arr['content']);
+        $this->assertSame($now, $arr['createdAt']);
+        $this->assertSame($now, $arr['modifiedAt']);
+    }
+
+    public function testWithGenericUpdatesCorrectField(): void
+    {
+        $original = MemoryEntry::new(
+            type: 'pattern',
+            content: 'Original content',
+            scope: 'user',
+            tags: ['original'],
+        );
+
+        $byType = $original->with('type', 'decision');
+        $byTags = $original->with('tags', ['new', 'tag']);
+        $byScope = $original->with('scope', 'project');
+        $byContent = $original->with('content', 'Updated content');
+        $byCreatedAt = $original->with('createdAt', new \DateTimeImmutable('2023-01-01'));
+        $byModifiedAt = $original->with('modifiedAt', new \DateTimeImmutable('2025-12-31'));
+
+        $this->assertSame('decision', $byType->type());
+        $this->assertSame('user', $byType->scope());
+        $this->assertNotSame($original, $byType);
+
+        $this->assertSame(['new', 'tag'], $byTags->tags());
+        $this->assertSame('pattern', $byTags->type());
+
+        $this->assertSame('project', $byScope->scope());
+
+        $this->assertSame('Updated content', $byContent->content());
+
+        $this->assertSame('2023-01-01', $byCreatedAt->createdAt()->format('Y-m-d'));
+
+        $this->assertSame('2025-12-31', $byModifiedAt->modifiedAt()->format('Y-m-d'));
+    }
+
+    public function testWithGenericThrowsOnUnknownField(): void
+    {
+        $entry = MemoryEntry::new(
+            type: 'pattern',
+            content: 'Test',
+            scope: 'user',
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown field: nonexistent');
+
+        $entry->with('nonexistent', 'value');
+    }
+
+    public function testWithGenericIdIsIdempotent(): void
+    {
+        // 'id' is not a writable field via with() since there is no withId()
+        // Trying 'id' should throw
+        $entry = MemoryEntry::new(
+            type: 'pattern',
+            content: 'Test',
+            scope: 'user',
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown field: id');
+
+        $entry->with('id', 'new-id');
+    }
 }
