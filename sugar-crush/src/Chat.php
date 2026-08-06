@@ -26,6 +26,7 @@ use SugarCraft\Crush\Workflows\WorkflowStatus;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Memory\MemoryStore;
+use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
 
 /**
@@ -69,8 +70,8 @@ final class Chat implements Model
     /** @var MemoryStore|null Memory store for /memory command */
     private ?MemoryStore $memoryStore = null;
 
-    /** @var SessionStore|null Session store for /branch and /rename commands */
-    private ?SessionStore $sessionStore = null;
+    /** @var SessionStore|EnhancedSessionStore|null Session store for /branch and /rename commands */
+    private SessionStore|EnhancedSessionStore|null $sessionStore = null;
 
     /** @var string|null ID of the currently active session */
     private ?string $currentSessionId = null;
@@ -107,7 +108,7 @@ final class Chat implements Model
         ?AgentManager $agentManager = null,
         ?CompactorConfig $compactorConfig = null,
         ?MemoryStore $memoryStore = null,
-        ?\SugarCraft\Crush\Session\SessionStore $sessionStore = null,
+        \SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null $sessionStore = null,
         ?string $currentSessionId = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
@@ -671,6 +672,7 @@ final class Chat implements Model
             $chatState = [
                 'messages' => $next->history,
                 'inputBuf' => $next->inputBuf,
+                'inFlight' => false,
                 'agentContext' => [
                     'currentSessionId' => $this->currentSessionId,
                 ],
@@ -1208,7 +1210,11 @@ final class Chat implements Model
      */
     private function handleRewindCommand(string $inputText): array
     {
-        if ($this->sessionStore === null || !method_exists($this->sessionStore, 'restoreCheckpoint')) {
+        if ($this->sessionStore === null) {
+            return $this->sessionResponse($inputText, 'Session store not configured.');
+        }
+
+        if (!method_exists($this->sessionStore, 'restoreCheckpoint')) {
             return $this->sessionResponse($inputText, 'Session store does not support checkpoints. Use an EnhancedSessionStore.');
         }
 
@@ -1251,6 +1257,12 @@ final class Chat implements Model
 
             // Extract state data
             $messages = $state['state_data']['messages'] ?? $state['messages'] ?? [];
+            // Convert raw arrays to Message objects before passing to Chat constructor
+            $messages = array_map(fn(array $msg): Message => match($msg['role'] ?? '') {
+                'user' => Message::user($msg['content'] ?? ''),
+                'assistant' => Message::assistant($msg['content'] ?? ''),
+                default => Message::user($msg['content'] ?? ''),
+            }, $messages);
             $inputBuf = $state['state_data']['inputBuf'] ?? $state['inputBuf'] ?? '';
 
             // Build response

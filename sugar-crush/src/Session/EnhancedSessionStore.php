@@ -7,82 +7,113 @@ namespace SugarCraft\Crush\Session;
 use PDO;
 
 /**
- * SQLite session persistence with enhanced metadata tracking.
+ * SQLite session persistence with enhanced metadata tracking and checkpointing.
  *
- * Wraps SessionStore to add columns for session summary, tasks,
- * modified files, and agent states to enable meaningful session
- * resumption and context replay.
+ * This class uses composition (wrapping) rather than inheritance to extend
+ * SessionStore with columns for session summary, tasks, modified files,
+ * agent states, and checkpoint snapshots to enable meaningful session
+ * resumption, context replay, and /rewind functionality.
+ *
+ * Mirrors charmbracelet/charmbracelet enhanced session storage.
  */
 final class EnhancedSessionStore
 {
     private PDO $pdo;
-    private SessionStore $inner;
+
+    /** Wrapped session store for base session operations. */
+    private SessionStore $sessionStore;
 
     public function __construct(string $dbPath)
     {
+        // Use umask 0077 before touching filesystem to ensure database files
+        // are created with restrictive permissions (same as SessionStore).
         $previousUmask = umask(0077);
         try {
-            $this->pdo = new PDO("sqlite:$dbPath");
-            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $this->pdo->exec('PRAGMA journal_mode=WAL');
-            $this->pdo->exec('PRAGMA foreign_keys=ON');
-            $this->initSchema();
+            // Create the base session store for fundamental session operations.
+            // This initializes the base schema (sessions, messages, tool_calls).
+            $this->sessionStore = new SessionStore($dbPath);
+
+            // Share the same PDO connection for enhanced tables.
+            // Both stores use the same SQLite database file.
+            $reflection = new \ReflectionClass(SessionStore::class);
+            $pdoProp = $reflection->getProperty('pdo');
+            $pdoProp->setAccessible(true);
+            $this->pdo = $pdoProp->getValue($this->sessionStore);
+
             $this->initEnhancedSchema();
         } finally {
             umask($previousUmask);
         }
-
-        if (is_file($dbPath)) {
-            @chmod($dbPath, 0600);
-        }
-
-        $this->inner = new SessionStore($dbPath);
     }
 
-    private function initSchema(): void
+    // =======================================================================
+    // Delegation to SessionStore (base session operations)
+    // =======================================================================
+
+    public function createSession(string $id, string $provider, string $model, ?string $systemPrompt = null, ?string $name = null): void
     {
-        $this->pdo->exec('
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                provider TEXT NOT NULL,
-                model TEXT NOT NULL,
-                system_prompt TEXT,
-                metadata TEXT
-            )
-        ');
+        $this->sessionStore->createSession($id, $provider, $model, $systemPrompt, $name);
+    }
 
-        $this->pdo->exec('
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                tool_calls TEXT,
-                tool_results TEXT,
-                model TEXT,
-                tokens_used INTEGER,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-            )
-        ');
+    public function getSession(string $id): ?array
+    {
+        return $this->sessionStore->getSession($id);
+    }
 
-        $this->pdo->exec('
-            CREATE TABLE IF NOT EXISTS tool_calls (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                message_id INTEGER NOT NULL,
-                tool_name TEXT NOT NULL,
-                tool_args TEXT NOT NULL,
-                tool_result TEXT,
-                duration_ms INTEGER,
-                success INTEGER DEFAULT 1,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
-                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
-            )
-        ');
+    public function getSessionByName(string $name): ?array
+    {
+        return $this->sessionStore->getSessionByName($name);
+    }
+
+    public function renameSession(string $id, string $name): void
+    {
+        $this->sessionStore->renameSession($id, $name);
+    }
+
+    public function forkSession(string $id): string
+    {
+        return $this->sessionStore->forkSession($id);
+    }
+
+    public function updateSession(string $id): void
+    {
+        $this->sessionStore->updateSession($id);
+    }
+
+    public function deleteSession(string $id): void
+    {
+        $this->sessionStore->deleteSession($id);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listSessions(int $limit = 20): array
+    {
+        return $this->sessionStore->listSessions($limit);
+    }
+
+    public function addMessage(string $sessionId, array $message): int
+    {
+        return $this->sessionStore->addMessage($sessionId, $message);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getMessages(string $sessionId): array
+    {
+        return $this->sessionStore->getMessages($sessionId);
+    }
+
+    public function addToolCall(string $sessionId, int $messageId, array $toolCall): void
+    {
+        $this->sessionStore->addToolCall($sessionId, $messageId, $toolCall);
+    }
+
+    public function pruneSessions(int $daysOld = 30): int
+    {
+        return $this->sessionStore->pruneSessions($daysOld);
     }
 
     private function initEnhancedSchema(): void
@@ -332,60 +363,5 @@ final class EnhancedSessionStore
             )
         ');
         $deleteStmt->execute([$sessionId, $sessionId, $deleteCount]);
-    }
-
-    // =======================================================================
-    // Delegated methods from SessionStore
-    // =======================================================================
-
-    public function createSession(string $id, string $provider, string $model, ?string $systemPrompt = null): void
-    {
-        $this->inner->createSession($id, $provider, $model, $systemPrompt);
-    }
-
-    public function getSession(string $id): ?array
-    {
-        return $this->inner->getSession($id);
-    }
-
-    public function updateSession(string $id): void
-    {
-        $this->inner->updateSession($id);
-    }
-
-    public function deleteSession(string $id): void
-    {
-        $this->inner->deleteSession($id);
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    public function listSessions(int $limit = 20): array
-    {
-        return $this->inner->listSessions($limit);
-    }
-
-    public function addMessage(string $sessionId, array $message): int
-    {
-        return $this->inner->addMessage($sessionId, $message);
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    public function getMessages(string $sessionId): array
-    {
-        return $this->inner->getMessages($sessionId);
-    }
-
-    public function addToolCall(string $sessionId, int $messageId, array $toolCall): void
-    {
-        $this->inner->addToolCall($sessionId, $messageId, $toolCall);
-    }
-
-    public function pruneSessions(int $daysOld = 30): int
-    {
-        return $this->inner->pruneSessions($daysOld);
     }
 }
