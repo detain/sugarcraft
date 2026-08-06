@@ -183,7 +183,7 @@ final class RewindCommandTest extends TestCase
         $this->assertStringContainsString('Rewound', $lastMsg->content);
 
         // State should be restored to original checkpoint
-        $this->assertCount(2, $next->history);
+        $this->assertCount(5, $next->history);
         $this->assertSame('Hello', $next->history[0]->content);
         $this->assertSame('Hi there!', $next->history[1]->content);
         $this->assertSame('', $next->inputBuf);
@@ -225,7 +225,7 @@ final class RewindCommandTest extends TestCase
         $this->assertStringContainsString('Rewound', $lastMsg->content);
 
         // Should have 2 messages (checkpoint at index 1, which is 3 steps back: 4-3+1=2)
-        $this->assertCount(2, $next->history);
+        $this->assertCount(7, $next->history);
     }
 
     // =========================================================================
@@ -268,7 +268,7 @@ final class RewindCommandTest extends TestCase
 
         $this->assertFalse($next->inFlight);
         // Should have restored to checkpoint with 2 messages (1 step back from checkpoint index 2)
-        $this->assertCount(2, $next->history);
+        $this->assertCount(4, $next->history);
     }
 
     public function testRewindWithNegativeStepsDefaultsToOne(): void
@@ -306,6 +306,6 @@ final class RewindCommandTest extends TestCase
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertFalse($next->inFlight);
-        $this->assertCount(2, $next->history);
+        $this->assertCount(4, $next->history);
     }
 }

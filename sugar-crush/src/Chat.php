@@ -1271,8 +1271,8 @@ final class Chat implements Model
 
             // Return Chat with restored state
             $next = new self(
-                history: $messages,
-                inputBuf: $inputBuf,
+                history: [...$messages, Message::user($inputText), Message::assistant($response)],
+                inputBuf: '',
                 inFlight: false,
                 backend: $this->backend,
                 streaming: $this->streaming,
