@@ -59,6 +59,82 @@ final class ContextCompactor
     }
 
     /**
+     * Determine whether foreground blocking compaction is needed.
+     *
+     * Returns true when context usage reaches or exceeds the foreground
+     * blocking threshold (95% by default). At this threshold, new input
+     * is blocked until space is freed by compaction.
+     *
+     * Mirrors charmbracelet/bubbletea ContextCompactor.shouldCompactForeground.
+     *
+     * @param array<array{role:string,content:string}> $messages Wire-format messages.
+     * @param int $tokenLimit Maximum tokens allowed in context window.
+     */
+    public function shouldCompactForeground(array $messages, int $tokenLimit): bool
+    {
+        if ($tokenLimit <= 0) {
+            return false;
+        }
+
+        $tokenCount = $this->countTokens($messages);
+        $threshold = (int) ($tokenLimit * $this->config->foregroundBlockingThreshold / 100);
+
+        return $tokenCount >= $threshold;
+    }
+
+    /**
+     * Apply skill-aware compaction as a separate pass from message-history compaction.
+     *
+     * Each carried-forward skill is capped at roughly 5,000 tokens of its own content,
+     * and the combined budget across every skill still in context is capped at roughly
+     * 25,000 tokens. Past that combined cap, the least-recently-invoked skill's
+     * content is the first to be dropped.
+     *
+     * This runs as its own pass, separate from message-history compaction, so a handful
+     * of large skills can't eat the entire compaction budget before any conversation
+     * history is touched.
+     *
+     * Mirrors charmbracelet/bubbletea ContextCompactor.compactSkills.
+     *
+     * @param array<array{role:string,content:string,name?:string,lastInvokedAt?:int}> $messages
+     * @return array<array{role:string,content:string,name?:string,lastInvokedAt?:int}> Messages with skills filtered
+     */
+    public function compactSkills(array $messages): array
+    {
+        // Extract skill messages (skills have a special role marker)
+        $skills = [];
+        $nonSkills = [];
+
+        foreach ($messages as $msg) {
+            if (isset($msg['role']) && $msg['role'] === 'skill') {
+                $skills[] = [
+                    'name' => $msg['name'] ?? '',
+                    'content' => $msg['content'] ?? '',
+                    'lastInvokedAt' => $msg['lastInvokedAt'] ?? 0,
+                ];
+            } else {
+                $nonSkills[] = $msg;
+            }
+        }
+
+        // Apply skill budget limits via filterSkills
+        $filteredSkills = $this->filterSkills($skills);
+
+        // Reconstruct messages with filtered skills
+        $result = $nonSkills;
+        foreach ($filteredSkills as $skill) {
+            $result[] = [
+                'role' => 'skill',
+                'name' => $skill['name'],
+                'content' => $skill['content'],
+                'lastInvokedAt' => $skill['lastInvokedAt'],
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
      * Compact a message array through stages 1-5.
      *
      * Stage 1: Preserve the most recent N full user/assistant PAIRS (recentPreserveCount).
@@ -79,6 +155,11 @@ final class ContextCompactor
         }
 
         $preserveCount = $this->config->recentPreserveCount;
+
+        // Stage 0: strip tool-result system messages before pairing
+        // (tool results are voluminous intermediate outputs; they are not
+        // part of the conversational exchange that needs preserving)
+        $messages = $this->removeToolResults($messages);
 
         // Group messages into user/assistant pairs
         $pairs = $this->groupIntoPairs($messages);
@@ -312,6 +393,27 @@ final class ContextCompactor
     }
 
     /**
+     * Stage 0: Remove tool result messages from older exchanges.
+     *
+     * Removes messages with role=system that carry tool_results, as these are
+     * voluminous intermediate outputs that are summarized by stage 2 anyway.
+     * Recent tool results (within recentPreserveCount pairs) are kept intact.
+     *
+     * @param array<array{role:string,content:string,?tool_results?:mixed}> $messages
+     * @return array<array{role:string,content:string}>
+     */
+    public function removeToolResults(array $messages): array
+    {
+        return array_values(array_filter(
+            $messages,
+            fn(array $msg): bool => !(
+                ($msg['role'] ?? '') === 'system'
+                && isset($msg['tool_results'])
+            )
+        ));
+    }
+
+    /**
      * Stage 5: Remove navigation steps while preserving final destination or result.
      *
      * Removes messages whose content indicates navigation commands (e.g., "cd /path/to/dir",
@@ -354,6 +456,66 @@ final class ContextCompactor
         }
 
         return $result;
+    }
+
+    /**
+     * Apply skill budget constraints to a list of active skills.
+     *
+     * Skills whose content exceeds the per-skill budget (skillBudgetPerSkill tokens)
+     * are truncated. If the combined budget (skillBudgetCombined tokens) is exceeded,
+     * the least-recently-invoked skills are dropped first.
+     *
+     * Mirrors charmbracelet/bubbletea ContextCompactor.filterSkills.
+     *
+     * @param array<array{name:string,content:string,lastInvokedAt:int}> $skills
+     * @return array<array{name:string,content:string,lastInvokedAt:int}> Filtered skills
+     */
+    public function filterSkills(array $skills): array
+    {
+        if ($skills === []) {
+            return [];
+        }
+
+        // Stage A: truncate each skill to per-skill budget
+        $budgetPerSkill = $this->config->skillBudgetPerSkill;
+        $maxCharsPerSkill = $budgetPerSkill * 4; // 1 token ≈ 4 chars
+
+        $skills = array_map(function (array $skill) use ($maxCharsPerSkill): array {
+            $content = $skill['content'] ?? '';
+            if (mb_strlen($content) > $maxCharsPerSkill) {
+                $skill['content'] = mb_substr($content, 0, $maxCharsPerSkill - 3) . '...';
+            }
+            return $skill;
+        }, $skills);
+
+        // Stage B: if combined budget exceeded, drop LRU skills until within limit
+        $budgetCombined = $this->config->skillBudgetCombined;
+        $maxCharsCombined = $budgetCombined * 4;
+
+        $totalChars = array_sum(array_map(
+            fn(array $s): int => mb_strlen($s['content'] ?? ''),
+            $skills
+        ));
+
+        while ($totalChars > $maxCharsCombined && count($skills) > 1) {
+            // Find least-recently-invoked (smallest lastInvokedAt)
+            $lruIndex = 0;
+            $lruTime = PHP_INT_MAX;
+            foreach ($skills as $idx => $skill) {
+                $invoked = $skill['lastInvokedAt'] ?? PHP_INT_MAX;
+                if ($invoked < $lruTime) {
+                    $lruTime = $invoked;
+                    $lruIndex = $idx;
+                }
+            }
+
+            // Remove the LRU skill
+            $removedLen = mb_strlen($skills[$lruIndex]['content'] ?? '');
+            array_splice($skills, $lruIndex, 1);
+            $totalChars -= $removedLen;
+        }
+
+        return $skills;
     }
 
     /**

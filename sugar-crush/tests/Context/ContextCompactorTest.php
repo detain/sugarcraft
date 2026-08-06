@@ -404,4 +404,248 @@ final class ContextCompactorTest extends TestCase
         $this->assertSame('Created the directory', $result[2]['content']);
     }
 
+    // ─── shouldCompactForeground() ───────────────────────────────
+
+    public function testShouldCompactAt95Percent(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(foregroundBlockingThreshold: 95));
+        // Each ~460-char message ≈ 125 tokens (10 + 460/4). 20 msgs ≈ 2500 tokens.
+        // 95% of 2600 = 2470 → 2500 >= 2470 → should compact foreground
+        $messages = array_fill(0, 20, $this->msg('user', str_repeat('x', 460)));
+        $this->assertTrue($compactor->shouldCompactForeground($messages, 2600));
+    }
+
+    public function testShouldCompactForegroundReturnsFalseBelow95Percent(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(foregroundBlockingThreshold: 95));
+        // 15 msgs × ~110 tokens = 1650. 95% of 2000 = 1900. 1650 < 1900 → false
+        $messages = array_fill(0, 15, $this->msg('user', str_repeat('x', 400)));
+        $this->assertFalse($compactor->shouldCompactForeground($messages, 2000));
+    }
+
+    public function testShouldCompactForegroundReturnsFalseWhenEmpty(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(foregroundBlockingThreshold: 95));
+        $this->assertFalse($compactor->shouldCompactForeground([], 2000));
+    }
+
+    // ─── filterSkills() ─────────────────────────────────────────
+
+    public function testFilterSkillsTruncatesLargeSkill(): void
+    {
+        // skillBudgetPerSkill = 5000 tokens → 5000 * 4 = 20000 chars max per skill
+        // Content longer than 20000 chars should be truncated with "..."
+        $compactor = new ContextCompactor($this->cfg());
+        $largeContent = str_repeat('x', 25000); // 25000 chars > 20000 limit
+        $skills = [
+            ['name' => 'large_skill', 'content' => $largeContent, 'lastInvokedAt' => 1000],
+        ];
+        $result = $compactor->filterSkills($skills);
+        $this->assertCount(1, $result);
+        $this->assertSame(20000, mb_strlen($result[0]['content']));
+        $this->assertStringEndsWith('...', $result[0]['content']);
+    }
+
+    public function testFilterSkillsDropsLruWhenOverCombinedBudget(): void
+    {
+        // skillBudgetCombined = 25000 tokens = 100000 chars combined max
+        // 11 skills at 12000 chars each = 132000 chars > 100000 limit
+        // After truncation (12000 each, under 20000 limit): combined = 132000 > 100000
+        // The LRU skill (lowest lastInvokedAt) is dropped first until under budget
+        $compactor = new ContextCompactor($this->cfg());
+        $skills = [
+            ['name' => 'skill_lru',     'content' => str_repeat('A', 12000), 'lastInvokedAt' => 1000],
+            ['name' => 'skill_2',       'content' => str_repeat('B', 12000), 'lastInvokedAt' => 2000],
+            ['name' => 'skill_3',       'content' => str_repeat('C', 12000), 'lastInvokedAt' => 3000],
+            ['name' => 'skill_4',       'content' => str_repeat('D', 12000), 'lastInvokedAt' => 4000],
+            ['name' => 'skill_5',       'content' => str_repeat('E', 12000), 'lastInvokedAt' => 5000],
+            ['name' => 'skill_6',       'content' => str_repeat('F', 12000), 'lastInvokedAt' => 6000],
+            ['name' => 'skill_7',       'content' => str_repeat('G', 12000), 'lastInvokedAt' => 7000],
+            ['name' => 'skill_8',       'content' => str_repeat('H', 12000), 'lastInvokedAt' => 8000],
+            ['name' => 'skill_9',       'content' => str_repeat('I', 12000), 'lastInvokedAt' => 9000],
+            ['name' => 'skill_10',      'content' => str_repeat('J', 12000), 'lastInvokedAt' => 10000],
+            ['name' => 'skill_mru',     'content' => str_repeat('K', 12000), 'lastInvokedAt' => 11000],
+        ];
+        $result = $compactor->filterSkills($skills);
+        // 11 skills at 12000 = 132000 > 100000, LRU removed → 10 at 120000 > 100000, LRU removed → 9 at 108000 > 100000, LRU removed → 8 at 96000 < 100000
+        $this->assertCount(8, $result);
+        $names = array_column($result, 'name');
+        $this->assertNotContains('skill_lru', $names);
+        $this->assertContains('skill_mru', $names);
+    }
+
+    public function testFilterSkillsUnchangedWhenUnderBudget(): void
+    {
+        // 2 skills each under 20000 chars, combined under 100000 → both unchanged
+        $compactor = new ContextCompactor($this->cfg());
+        $skills = [
+            ['name' => 'skill_one', 'content' => str_repeat('x', 15000), 'lastInvokedAt' => 1000],
+            ['name' => 'skill_two', 'content' => str_repeat('y', 15000), 'lastInvokedAt' => 2000],
+        ];
+        $result = $compactor->filterSkills($skills);
+        $this->assertCount(2, $result);
+        $this->assertSame('skill_one', $result[0]['name']);
+        $this->assertSame('skill_two', $result[1]['name']);
+        $this->assertStringEndsNotWith('...', $result[0]['content']);
+        $this->assertStringEndsNotWith('...', $result[1]['content']);
+    }
+
+    // ─── removeToolResults() ────────────────────────────────────
+
+    public function testRemoveToolResultsFiltersSystemToolMessages(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', 'Show me the file'),
+            ['role' => 'system', 'content' => 'tool output', 'tool_results' => ['foo' => 'bar']],
+            $this->msg('assistant', 'Here is the content'),
+        ];
+        $result = $compactor->removeToolResults($messages);
+        $this->assertCount(2, $result);
+        $this->assertSame('Show me the file', $result[0]['content']);
+        $this->assertSame('Here is the content', $result[1]['content']);
+    }
+
+    public function testRemoveToolResultsPreservesNonSystemMessages(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            ['role' => 'system', 'content' => 'regular system message'],
+            $this->msg('user', 'Hello'),
+            $this->msg('assistant', 'Hi there'),
+        ];
+        $result = $compactor->removeToolResults($messages);
+        // System message without tool_results is preserved
+        $this->assertCount(3, $result);
+    }
+
+    public function testRemoveToolResultsReturnsEmptyWhenEmpty(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $result = $compactor->removeToolResults([]);
+        $this->assertSame([], $result);
+    }
+
+    public function testRemoveToolResultsStripsSystemToolResults(): void
+    {
+        // A message with role=system and tool_results content should be stripped,
+        // while non-tool messages are preserved
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            ['role' => 'system', 'content' => 'file output', 'tool_results' => ['name' => 'Read', 'output' => '<?php\nclass Foo {}\n']],
+            $this->msg('user', 'Show me the file'),
+            $this->msg('assistant', 'Here is the content'),
+        ];
+        $result = $compactor->removeToolResults($messages);
+        $this->assertCount(2, $result);
+        $this->assertSame('Show me the file', $result[0]['content']);
+        $this->assertSame('Here is the content', $result[1]['content']);
+    }
+
+    // ─── compactSkills() ────────────────────────────────────────
+
+    public function testCompactSkillsPreservesNonSkillMessages(): void
+    {
+        // compactSkills should pass non-skill messages through unchanged
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', 'Show me the file'),
+            $this->msg('assistant', '<?php\ndeclare(strict_types=1);\nclass Foo {}\n'),
+        ];
+        $result = $compactor->compactSkills($messages);
+        // Non-skill messages should pass through unchanged
+        $this->assertCount(2, $result);
+        $this->assertSame('Show me the file', $result[0]['content']);
+        $this->assertSame('<?php\ndeclare(strict_types=1);\nclass Foo {}\n', $result[1]['content']);
+    }
+
+    public function testCompactSkillsEvictsLruSkillWhenOverCombinedBudget(): void
+    {
+        // skillBudgetPerSkill = 5000 tokens = 20000 chars per skill after truncation
+        // skillBudgetCombined = 8000 tokens = 32000 chars combined budget
+        // 4 skills × 20000 chars = 80000 chars > 32000 budget
+        // Loop removes LRU until combined fits budget and count > 1
+        // After removing 2 LRU skills: 2 × 20000 = 40000 chars > 32000 → remove another
+        // After removing 3 LRU skills: 1 × 20000 = 20000 chars ≤ 32000 → exit
+        // Result: most recent skill (skill_mru) survives
+        $cfg = new CompactorConfig(
+            skillBudgetPerSkill: 5000,
+            skillBudgetCombined: 8000, // 8000 tokens = 32000 chars budget
+        );
+        $compactor = new ContextCompactor($cfg);
+
+        // Each skill content > 20000 chars, so truncated to 20000 chars each
+        // lastInvokedAt: skill_lru=1000 (oldest), skill_middle2=2000, skill_middle1=3000, skill_mru=4000 (newest)
+        $messages = [
+            ['role' => 'skill', 'name' => 'skill_lru',     'content' => str_repeat('A', 25000), 'lastInvokedAt' => 1000],
+            ['role' => 'skill', 'name' => 'skill_middle2', 'content' => str_repeat('B', 25000), 'lastInvokedAt' => 2000],
+            ['role' => 'skill', 'name' => 'skill_middle1', 'content' => str_repeat('C', 25000), 'lastInvokedAt' => 3000],
+            ['role' => 'skill', 'name' => 'skill_mru',     'content' => str_repeat('D', 25000), 'lastInvokedAt' => 4000],
+            $this->msg('user', 'regular message'),
+        ];
+
+        $result = $compactor->compactSkills($messages);
+
+        // Only the most recent skill (skill_mru) should survive
+        $skillNames = array_column(array_filter($result, fn($m) => ($m['role'] ?? '') === 'skill'), 'name');
+        $this->assertCount(1, $skillNames);
+        $this->assertContains('skill_mru', $skillNames);
+    }
+
+    public function testStage5PreservesDecisions(): void
+    {
+        // Stage 5 removes navigation steps but preserves final destinations/results
+        // Test that decision messages (non-nav) are preserved through compact()
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 1));
+        $messages = [
+            $this->msg('user', 'first question'),
+            $this->msg('assistant', 'first answer'),
+            $this->msg('user', 'What architecture should we use?'),
+            $this->msg('assistant', 'We will use MVC architecture with a service layer.'),
+        ];
+        $result = $compactor->compact($messages);
+        // Last pair is preserved, first pair summarized but architectural decision in last pair kept
+        $this->assertGreaterThan(0, count($result));
+        // Check that the preserved messages contain the architectural decision
+        $lastMessages = array_slice($result, -2);
+        $foundDecision = false;
+        foreach ($lastMessages as $msg) {
+            if (strpos($msg['content'], 'MVC architecture') !== false) {
+                $foundDecision = true;
+            }
+        }
+        $this->assertTrue($foundDecision, 'Architectural decision should be preserved in recent messages');
+    }
+
+    public function testCompactionReducesTokens(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 2));
+        // Create messages where many older pairs will be summarized
+        $messages = [];
+        for ($i = 0; $i < 20; $i++) {
+            $messages[] = $this->msg('user', str_repeat("question number {$i} with some extra content ", 5));
+            $messages[] = $this->msg('assistant', str_repeat("answer number {$i} with additional detail ", 5));
+        }
+
+        $originalTokens = $this->countTokens($messages);
+        $result = $compactor->compact($messages);
+        $compactedTokens = $this->countTokens($result);
+
+        $this->assertLessThan($originalTokens, $compactedTokens, 'Compacted messages should have fewer tokens');
+    }
+
+    /**
+     * Helper to count tokens using same approximation as ContextCompactor.
+     */
+    private function countTokens(array $messages): int
+    {
+        $total = 0;
+        foreach ($messages as $msg) {
+            $content = is_array($msg) ? ($msg['content'] ?? '') : (string) $msg;
+            $total += (int) ceil(mb_strlen($content) / 4);
+            $total += 10; // role overhead
+        }
+        return $total;
+    }
+
 }
