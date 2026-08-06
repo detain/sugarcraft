@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Glob implements Tool
 {
+    /** @var array<string, bool> */
+    private array $sessionCache;
+
     public function __construct(
         private ?string $root = null,
-    ) {}
+        private ?InstructionFileLoader $instructionLoader = null,
+    ) {
+        $this->sessionCache = [];
+    }
 
     public function name(): string
     {
@@ -68,9 +75,18 @@ final readonly class Glob implements Tool
         $fullPattern = rtrim($path, '/') . '/' . $pattern;
         $files = glob($fullPattern);
 
+        // Inject nested instruction file if this glob operated in a lib directory
+        $injectedContent = '';
+        if ($this->instructionLoader !== null && !empty($files)) {
+            $nested = $this->instructionLoader->loadForPath($path, $this->sessionCache);
+            if ($nested !== null) {
+                $injectedContent = $nested . "\n\n";
+            }
+        }
+
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: implode("\n", $files ?: []),
+            content: $injectedContent . implode("\n", $files ?: []),
             isError: false,
         );
     }

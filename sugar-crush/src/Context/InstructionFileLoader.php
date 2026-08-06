@@ -5,87 +5,146 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Context;
 
 /**
- * Loads instruction files (CLAUDE.md, AGENTS.md) from the repo root and
- * resolves forced-instruction glob patterns from config.
+ * Loads instruction files (CLAUDE.md, AGENTS.md) for session context.
  *
- * This class handles the nested instruction file discovery mechanism:
- * - Root-level files (CLAUDE.md, AGENTS.md) are always loaded at session start
- * - Forced instruction patterns from config are glob-resolved and loaded every session
+ * Supports three loading strategies:
+ * - loadRoot(): always-loaded root-level files
+ * - loadForPath(): on-demand nested injection when tools touch files in libs
+ * - loadForced(): glob-resolved paths from config, loaded every session
  *
- * Nested per-path loading (P6.S15) is handled separately via loadForPath().
+ * Mirrors charmbracelet/treebomb or similar nested-dotfile discovery.
  */
-final class InstructionFileLoader
+final readonly class InstructionFileLoader
 {
-    /**
-     * @param string $repoRoot Absolute path to the repository root
-     * @param string[] $forcedInstructions Glob patterns from config, force-loaded every session
-     */
+    /** @var array<string, string> */
+    private array $forcedInstructions;
+
     public function __construct(
-        private readonly string $repoRoot,
-        private readonly array $forcedInstructions = [],
-    ) {}
+        private string $repoRoot,
+        array $forcedInstructions = [],
+    ) {
+        $this->forcedInstructions = $forcedInstructions;
+    }
 
     /**
-     * Load CLAUDE.md and AGENTS.md from the repo root.
+     * Root-level CLAUDE.md and AGENTS.md — always loaded at session start.
      *
-     * These root-level instruction files are always loaded at session start,
-     * providing cross-cutting conventions that apply everywhere.
-     *
-     * @return string[] Array of file contents (empty strings for missing files)
+     * @return string[] Array of file contents
      */
     public function loadRoot(): array
     {
-        $rootFiles = [
-            $this->repoRoot . '/CLAUDE.md',
-            $this->repoRoot . '/AGENTS.md',
-        ];
-
         $contents = [];
-        foreach ($rootFiles as $path) {
-            if (is_file($path)) {
-                $contents[] = file_get_contents($path);
+        foreach (['CLAUDE.md', 'AGENTS.md'] as $basename) {
+            $path = rtrim($this->repoRoot, '/') . '/' . $basename;
+            if (file_exists($path)) {
+                $content = file_get_contents($path);
+                if ($content !== false) {
+                    $contents[] = $content;
+                }
             }
         }
-
         return $contents;
     }
 
     /**
-     * Resolve glob patterns from config and load matching file contents.
+     * On-demand nested instruction file injection.
      *
-     * These patterns (e.g. "candy-shine/CALIBER_LEARNINGS.md") force-load
-     * regardless of what the agent has touched, providing cross-cutting
-     * guidance that shouldn't depend on an agent opening the right file.
+     * When a tool (Read/Edit/Glob) successfully touches a file inside a lib
+     * directory (e.g. sugar-crush/, candy-shine/), this method discovers
+     * that lib's own CLAUDE.md or AGENTS.md and returns its content.
+     * The file is returned exactly once per session — subsequent calls for
+     * the same lib return null even if the file content changed mid-session.
      *
-     * @return string[] Array of file contents (skips patterns with no matches)
+     * The search walks from the touched file's directory up toward the repo
+     * root, checking each intermediate directory for CLAUDE.md or AGENTS.md.
+     * The repo root itself is not checked (it is handled by loadRoot()).
+     *
+     * @param string $touchedPath Path to the file that was touched
+     * @param array<string, bool> &$sessionCache Session-scoped cache of already-loaded
+     *                            nested files, keyed by absolute file path
+     * @return string|null File content if found and not yet loaded this session, null otherwise
+     */
+    public function loadForPath(string $touchedPath, array &$sessionCache): ?string
+    {
+        $dir = dirname($touchedPath);
+
+        // Walk upward from the touched file's directory toward repo root
+        // Stop before the repo root itself (which loadRoot() handles)
+        $repoRoot = rtrim($this->repoRoot, '/');
+        $current = $dir;
+
+        while ($current !== '' && $current !== '/' && str_starts_with($current, $repoRoot)) {
+            // Check cache first
+            $claudePath = $current . '/CLAUDE.md';
+            $agentsPath = $current . '/AGENTS.md';
+
+            if (!isset($sessionCache[$claudePath]) && !isset($sessionCache[$agentsPath])) {
+                // Neither file in this directory has been checked yet
+                $foundPath = null;
+
+                if (file_exists($claudePath)) {
+                    $foundPath = $claudePath;
+                } elseif (file_exists($agentsPath)) {
+                    $foundPath = $agentsPath;
+                }
+
+                if ($foundPath !== null) {
+                    $sessionCache[$foundPath] = true;
+                    $content = file_get_contents($foundPath);
+                    return $content !== false ? $content : null;
+                }
+            }
+
+            // Move to parent directory
+            $parent = dirname($current);
+            if ($parent === $current) {
+                break;
+            }
+            // Don't search inside repo root itself (loadRoot handles that)
+            if ($parent === $repoRoot) {
+                break;
+            }
+            $current = $parent;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolves glob patterns from config and returns matching file contents.
+     *
+     * These files are force-loaded every session regardless of what was touched.
+     *
+     * @return string[] Array of file contents
      */
     public function loadForced(): array
     {
-        if ($this->forcedInstructions === []) {
-            return [];
-        }
-
         $contents = [];
+        $seenPaths = [];
         foreach ($this->forcedInstructions as $pattern) {
-            // Reject absolute paths — they bypass repoRoot and are a security risk.
-            if (str_starts_with($pattern, '/')) {
+            // glob patterns may be relative to repo root or absolute
+            if (!str_starts_with($pattern, '/')) {
+                $pattern = rtrim($this->repoRoot, '/') . '/' . $pattern;
+            }
+            $files = glob($pattern);
+            if ($files === false) {
                 continue;
             }
-
-            $fullPattern = $this->repoRoot . '/' . $pattern;
-            $matches = glob($fullPattern);
-
-            if ($matches === false || $matches === []) {
-                continue;
-            }
-
-            foreach ($matches as $path) {
-                if (is_file($path)) {
-                    $contents[] = file_get_contents($path);
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    $realPath = realpath($file);
+                    // Skip if already seen (deduplicate by resolved path)
+                    if (isset($seenPaths[$realPath])) {
+                        continue;
+                    }
+                    $seenPaths[$realPath] = true;
+                    $content = file_get_contents($file);
+                    if ($content !== false) {
+                        $contents[] = $content;
+                    }
                 }
             }
         }
-
         return $contents;
     }
 }
