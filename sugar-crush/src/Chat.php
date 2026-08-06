@@ -25,6 +25,7 @@ use SugarCraft\Crush\Workflows\WorkflowResult;
 use SugarCraft\Crush\Workflows\WorkflowStatus;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Memory\MemoryStore;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -64,6 +65,9 @@ final class Chat implements Model
     /** @var AgentManager|null Agent manager for /agents command */
     private ?AgentManager $agentManager = null;
 
+    /** @var MemoryStore|null Memory store for /memory command */
+    private ?MemoryStore $memoryStore = null;
+
     /** @var Buffer|null Previous rendered frame for diff-based emission */
     private ?Buffer $previousFrame = null;
 
@@ -95,11 +99,13 @@ final class Chat implements Model
         ?WorkflowEngine $workflowEngine = null,
         ?AgentManager $agentManager = null,
         ?CompactorConfig $compactorConfig = null,
+        ?MemoryStore $memoryStore = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
         $this->agentManager = $agentManager;
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
+        $this->memoryStore = $memoryStore;
     }
 
     public function init(): ?\Closure
@@ -201,6 +207,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
 
         $backend = $this->backend;
@@ -297,6 +304,22 @@ final class Chat implements Model
     }
 
     /**
+     * Get the agent manager, if set.
+     */
+    public function agentManager(): ?\SugarCraft\Crush\Agents\AgentManager
+    {
+        return $this->agentManager;
+    }
+
+    /**
+     * Get the memory store, if set.
+     */
+    public function memoryStore(): ?MemoryStore
+    {
+        return $this->memoryStore;
+    }
+
+    /**
      * Backward-compatible alias for pool().
      *
      * @deprecated Use pool() instead. This alias exists to ease migration.
@@ -358,6 +381,14 @@ final class Chat implements Model
     }
 
     /**
+     * Create a new Chat with an explicit memory store.
+     */
+    public function withMemoryStore(MemoryStore $memoryStore): self
+    {
+        return $this->mutate(['memoryStore' => $memoryStore]);
+    }
+
+    /**
      * Create a new Chat with an explicit workflow engine.
      */
     public function withWorkflowEngine(WorkflowEngine $engine): self
@@ -399,6 +430,7 @@ final class Chat implements Model
             'workflowEngine' => $this->workflowEngine,
             'agentManager' => $this->agentManager,
             'compactorConfig' => null, // compactor is reconstructed from null config (uses default)
+            'memoryStore' => $this->memoryStore,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -419,6 +451,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
     }
 
@@ -437,6 +470,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
     }
 
@@ -464,6 +498,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
     }
 
@@ -488,6 +523,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
     }
 
@@ -534,6 +570,11 @@ final class Chat implements Model
             return $this->handleAgentsCommand($text);
         }
 
+        // Handle /memory commands locally
+        if (str_starts_with($text, '/memory')) {
+            return $this->handleMemoryCommand($text);
+        }
+
         $next = new self(
             history: [...$this->history, Message::user($text)],
             inputBuf: '',
@@ -547,6 +588,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
         $backend = $this->backend;
         $history = $next->history;
@@ -612,6 +654,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
         return [$next, null];
     }
@@ -828,6 +871,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
         return [$next, null];
     }
@@ -874,6 +918,7 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
         return [$next, null];
     }
@@ -931,9 +976,313 @@ final class Chat implements Model
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
             agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
         );
 
         return [$next, null];
+    }
+
+    /**
+     * Handle /memory commands locally.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleMemoryCommand(string $inputText): array
+    {
+        if ($this->memoryStore === null) {
+            return $this->memoryResponse($inputText, 'Memory store not configured. Set a MemoryStore to use /memory commands.');
+        }
+
+        $afterMemory = ltrim(substr($inputText, 7)); // after "/memory"
+        if ($afterMemory === '') {
+            return $this->memoryHelpResponse($inputText);
+        }
+
+        $parts = preg_split('/\s+/', $afterMemory, 2);
+        $command = $parts[0];
+        $args = $parts[1] ?? '';
+
+        return match ($command) {
+            'list' => $this->memoryList($inputText, $args),
+            'add' => $this->memoryAdd($inputText, $args),
+            'search' => $this->memorySearch($inputText, $args),
+            'delete' => $this->memoryDelete($inputText, $args),
+            'clear' => $this->memoryClear($inputText, $args),
+            'edit' => $this->memoryEdit($inputText, $args),
+            default => $this->memoryHelpResponse($inputText, "Unknown command '{$command}'."),
+        };
+    }
+
+    /**
+     * Return a memory command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memoryResponse(string $inputText, string $response): array
+    {
+        $next = new self(
+            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
+        );
+        return [$next, null];
+    }
+
+    /**
+     * Show help text for /memory command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memoryHelpResponse(string $inputText, ?string $error = null): array
+    {
+        $lines = [];
+        if ($error !== null) {
+            $lines[] = "**Error:** {$error}";
+            $lines[] = '';
+        }
+        $lines[] = '**Available /memory commands:**';
+        $lines[] = '';
+        $lines[] = '`/memory list [scope]` — List all memories for a scope (default: user)';
+        $lines[] = '`/memory add <content>` — Add a new memory entry';
+        $lines[] = '`/memory search <query>` — Search memories by content';
+        $lines[] = '`/memory delete <id>` — Delete a memory by ID';
+        $lines[] = '`/memory edit <id> <new_content>` — Edit an existing memory';
+        $lines[] = '`/memory clear --scope <scope> --confirm` — Clear all memories for a scope';
+        $lines[] = '`/memory` — Show this help text';
+        $lines[] = '';
+        $lines[] = 'Scopes: `user` (default), `project`, `agent`';
+
+        return $this->memoryResponse($inputText, implode("\n", $lines));
+    }
+
+    /**
+     * Handle /memory add <content> [--scope <scope>].
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memoryAdd(string $inputText, string $args): array
+    {
+        if ($args === '') {
+            return $this->memoryHelpResponse($inputText, 'Usage: /memory add <content> [--scope <scope>]');
+        }
+
+        // Parse --scope flag if present (can be before or after content)
+        $scope = 'user';
+        $content = $args;
+
+        if (preg_match('/^--scope\s+(user|project|agent)\s+(.*)$/s', $args, $m)) {
+            $scope = $m[1];
+            $content = trim($m[2]);
+        } elseif (preg_match('/^(.*?)\s+--scope\s+(user|project|agent)\s*$/s', $args, $m)) {
+            $content = trim($m[1]);
+            $scope = $m[2];
+        }
+
+        if ($content === '') {
+            return $this->memoryHelpResponse($inputText, 'Usage: /memory add <content> [--scope <scope>]');
+        }
+
+        try {
+            $id = $this->memoryStore->add($content, $scope);
+            $response = "Memory created with ID: `{$id}` (scope: {$scope})";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /memory list [scope].
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memoryList(string $inputText, string $args): array
+    {
+        $scope = 'user';
+        if ($args !== '') {
+            $trimmed = trim($args);
+            // Handle --scope <scope> syntax
+            if (str_starts_with($trimmed, '--scope ')) {
+                $scopeCandidate = trim(substr($trimmed, 8));
+                if (in_array($scopeCandidate, ['user', 'project', 'agent'], true)) {
+                    $scope = $scopeCandidate;
+                }
+            } elseif (in_array($trimmed, ['user', 'project', 'agent'], true)) {
+                $scope = $trimmed;
+            }
+        }
+
+        try {
+            $entries = $this->memoryStore->list($scope);
+            if ($entries === []) {
+                $response = "No memories found for scope `{$scope}`.";
+            } else {
+                $lines = ["**Memories ({$scope}):**", ''];
+                foreach ($entries as $entry) {
+                    $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
+                    $preview = mb_strlen($entry->content()) > 80
+                        ? mb_substr($entry->content(), 0, 80) . '…'
+                        : $entry->content();
+                    $lines[] = '- **[' . $entry->type() . ']** `' . $entry->id() . '`' . $tags;
+                    $lines[] = '  ' . $preview;
+                }
+                $response = implode("\n", $lines);
+            }
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /memory search <query>.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memorySearch(string $inputText, string $query): array
+    {
+        if ($query === '') {
+            return $this->memoryHelpResponse($inputText, 'Usage: /memory search <query>');
+        }
+
+        try {
+            $entries = $this->memoryStore->search($query);
+            if ($entries === []) {
+                $response = "No memories found matching `{$query}`.";
+            } else {
+                $lines = ["**Search results for `{$query}` ({$this->pluralize(count($entries), 'match')}):**", ''];
+                foreach ($entries as $entry) {
+                    $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
+                    $preview = mb_strlen($entry->content()) > 80
+                        ? mb_substr($entry->content(), 0, 80) . '…'
+                        : $entry->content();
+                    $lines[] = '- **[' . $entry->type() . ']** `' . $entry->id() . '` (scope: ' . $entry->scope() . ')' . $tags;
+                    $lines[] = '  ' . $preview;
+                }
+                $response = implode("\n", $lines);
+            }
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /memory delete <id>.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memoryDelete(string $inputText, string $args): array
+    {
+        $id = trim($args);
+        if ($id === '') {
+            return $this->memoryHelpResponse($inputText, 'Usage: /memory delete <id>');
+        }
+
+        try {
+            $entry = $this->memoryStore->get($id);
+            if ($entry === null) {
+                $response = "Memory `{$id}` not found.";
+            } else {
+                $this->memoryStore->delete($id);
+                $response = "Memory `{$id}` deleted.";
+            }
+        } catch (\InvalidArgumentException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /memory clear --scope <scope> --confirm.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memoryClear(string $inputText, string $args): array
+    {
+        // Parse --scope and --confirm flags
+        if (!preg_match('/--scope\s+(user|project|agent)\s+--confirm/s', $args, $m)) {
+            return $this->memoryHelpResponse($inputText, 'Usage: /memory clear --scope <scope> --confirm');
+        }
+
+        $scope = $m[1];
+
+        try {
+            $this->memoryStore->clear($scope);
+            $response = "All memories cleared for scope `{$scope}`.";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * Handle /memory edit <id> <new_content>.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function memoryEdit(string $inputText, string $args): array
+    {
+        // Parse: <id> <new_content> — split on first whitespace, id is first token, rest is content
+        $firstSpace = strpos($args, ' ');
+        if ($firstSpace === false) {
+            return $this->memoryHelpResponse($inputText, 'Usage: /memory edit <id> <new_content>');
+        }
+
+        $id = trim(substr($args, 0, $firstSpace));
+        $newContent = trim(substr($args, $firstSpace + 1));
+
+        if ($id === '' || $newContent === '') {
+            return $this->memoryHelpResponse($inputText, 'Usage: /memory edit <id> <new_content>');
+        }
+
+        try {
+            $entry = $this->memoryStore->get($id);
+            if ($entry === null) {
+                $response = "Memory `{$id}` not found.";
+            } else {
+                $this->memoryStore->update($id, $entry->withContent($newContent));
+                $response = "Memory `{$id}` updated.";
+            }
+        } catch (\InvalidArgumentException $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        } catch (\Throwable $e) {
+            $response = "**Error:** {$e->getMessage()}";
+        }
+
+        return $this->memoryResponse($inputText, $response);
+    }
+
+    /**
+     * Helper to pluralize a word based on count.
+     */
+    private function pluralize(int $count, string $word): string
+    {
+        if ($count === 1) {
+            return "1 {$word}";
+        }
+        // Handle words ending in ch, x, s, o → add 'es'
+        if (preg_match('/[chxso]$/', $word)) {
+            return "{$count} {$word}es";
+        }
+        return "{$count} {$word}s";
     }
 
     private function withInputBuf(string $buf): self
