@@ -506,15 +506,14 @@ final class AgentWorkerPoolTest extends TestCase
 
     public function testWithStopOnFirstFailureFalse(): void
     {
-        $pool = (new AgentWorkerPool(maxConcurrent: 3))
+        $executor = $this->makeBlockingExecutor();
+        $pool = (new AgentWorkerPool(maxConcurrent: 3, executor: $executor))
             ->withStopOnFirstFailure(false);
 
         $agents = [
             $this->makeAgent('success-1'),
             $this->makeAgent('success-2'),
         ];
-
-        $executor = $this->makeBlockingExecutor();
         $results = [];
         foreach ($pool->executeAll($agents, $this->request) as $result) {
             $results[$result->agentId] = $result;
