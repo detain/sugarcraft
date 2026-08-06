@@ -397,11 +397,15 @@ final readonly class GitCommandHandlers
             2 => ['pipe', 'w'],
         ];
 
+        // Explicitly set PATH so git can be found in proc_open context
+        $env = ['PATH' => '/usr/bin:' . getenv('PATH')];
+
         $process = @proc_open(
             $commandLine,
             $descriptorSpec,
             $pipes,
             $workDir,
+            $env,
         );
 
         if (!is_resource($process)) {
