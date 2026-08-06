@@ -389,7 +389,8 @@ final readonly class GitCommandHandlers
             fn(string $arg): string => escapeshellarg($arg),
             $command,
         );
-        $commandLine = 'git ' . implode(' ', $escapedCommand);
+        // Command array already contains 'git' as first element, so join directly
+        $commandLine = implode(' ', $escapedCommand);
 
         $descriptorSpec = [
             0 => ['pipe', 'r'],
