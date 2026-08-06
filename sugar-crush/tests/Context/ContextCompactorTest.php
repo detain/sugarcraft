@@ -217,4 +217,191 @@ final class ContextCompactorTest extends TestCase
         $this->assertLessThanOrEqual(100, $savings);
     }
 
+    // ─── groupSimilarExchanges() ─────────────────────────────────
+
+    public function testGroupSimilarExchangesReturnsEmptyWhenEmpty(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $result = $compactor->groupSimilarExchanges([]);
+        $this->assertSame([], $result);
+    }
+
+    public function testGroupSimilarExchangesReturnsUnchangedWhenNoDuplicates(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', 'first'),
+            $this->msg('assistant', 'second'),
+            $this->msg('user', 'third'),
+        ];
+        $result = $compactor->groupSimilarExchanges($messages);
+        $this->assertCount(3, $result);
+        $this->assertSame($messages, $result);
+    }
+
+    public function testGroupSimilarExchangesGroupsConsecutiveIdentical(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('assistant', 'file not found'),
+            $this->msg('assistant', 'file not found'),
+            $this->msg('assistant', 'file not found'),
+        ];
+        $result = $compactor->groupSimilarExchanges($messages);
+        $this->assertCount(1, $result);
+        $this->assertSame('[3x] file not found', $result[0]['content']);
+        $this->assertSame('assistant', $result[0]['role']);
+    }
+
+    public function testGroupSimilarExchangesHandlesMixedDuplicates(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('assistant', 'error'),
+            $this->msg('assistant', 'error'),
+            $this->msg('user', 'different'),
+            $this->msg('assistant', 'error'),
+        ];
+        $result = $compactor->groupSimilarExchanges($messages);
+        $this->assertCount(3, $result);
+        $this->assertSame('[2x] error', $result[0]['content']);
+        $this->assertSame('different', $result[1]['content']);
+        $this->assertSame('error', $result[2]['content']); // single, not grouped
+    }
+
+    public function testGroupSimilarExchangesPreservesRoleSeparation(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', 'same content'),
+            $this->msg('assistant', 'same content'),
+            $this->msg('user', 'same content'),
+        ];
+        $result = $compactor->groupSimilarExchanges($messages);
+        // user and assistant with same content are NOT grouped (different roles)
+        $this->assertCount(3, $result);
+    }
+
+    // ─── compactFileReferences() ─────────────────────────────────
+
+    public function testCompactFileReferencesReturnsEmptyWhenEmpty(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $result = $compactor->compactFileReferences([]);
+        $this->assertSame([], $result);
+    }
+
+    public function testCompactFileReferencesReturnsUnchangedWhenNoFileContent(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('assistant', 'Hello, how can I help you?'),
+            $this->msg('user', 'What is the weather?'),
+        ];
+        $result = $compactor->compactFileReferences($messages);
+        $this->assertCount(2, $result);
+        $this->assertSame('Hello, how can I help you?', $result[0]['content']);
+        $this->assertSame('What is the weather?', $result[1]['content']);
+    }
+
+    public function testCompactFileReferencesDetectsPhpFileContent(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $phpContent = "<?php\n\ndeclare(strict_types=1);\n\nnamespace Test;\n\nclass Foo {}\n";
+        $messages = [
+            $this->msg('assistant', $phpContent),
+        ];
+        $result = $compactor->compactFileReferences($messages);
+        $this->assertCount(1, $result);
+        $this->assertStringStartsWith('[file:', $result[0]['content']);
+        $this->assertStringContainsString('lines]', $result[0]['content']);
+    }
+
+    public function testCompactFileReferencesDetectsFileWithExtension(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $content = "src/Context/Compactor.php\n<?php\ndeclare(strict_types=1);\nclass Foo {}\n";
+        $messages = [
+            $this->msg('assistant', $content),
+        ];
+        $result = $compactor->compactFileReferences($messages);
+        $this->assertCount(1, $result);
+        $this->assertStringStartsWith('[file: src/Context/Compactor.php', $result[0]['content']);
+    }
+
+    // ─── removeNavigationSteps() ──────────────────────────────────
+
+    public function testRemoveNavigationStepsReturnsEmptyWhenEmpty(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $result = $compactor->removeNavigationSteps([]);
+        $this->assertSame([], $result);
+    }
+
+    public function testRemoveNavigationStepsReturnsUnchangedWhenNoNavCommands(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', 'Hello there'),
+            $this->msg('assistant', 'Hi! How can I help?'),
+        ];
+        $result = $compactor->removeNavigationSteps($messages);
+        $this->assertCount(2, $result);
+        $this->assertSame($messages, $result);
+    }
+
+    public function testRemoveNavigationStepsRemovesCdCommand(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('assistant', 'cd /home/sites/sugarcraft'),
+            $this->msg('assistant', 'Working in the right directory now'),
+        ];
+        $result = $compactor->removeNavigationSteps($messages);
+        $this->assertCount(1, $result);
+        $this->assertSame('Working in the right directory now', $result[0]['content']);
+    }
+
+    public function testRemoveNavigationStepsRemovesLsCommand(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('assistant', 'ls -la'),
+            $this->msg('assistant', 'Here are the files...'),
+        ];
+        $result = $compactor->removeNavigationSteps($messages);
+        $this->assertCount(1, $result);
+        $this->assertStringNotContainsString('ls', $result[0]['content']);
+    }
+
+    public function testRemoveNavigationStepsRemovesPwdCommand(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('assistant', 'pwd'),
+            $this->msg('assistant', '/home/sites/sugarcraft'),
+        ];
+        $result = $compactor->removeNavigationSteps($messages);
+        $this->assertCount(1, $result);
+        $this->assertSame('/home/sites/sugarcraft', $result[0]['content']);
+    }
+
+    public function testRemoveNavigationStepsPreservesNonNavMessages(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('assistant', 'cd /tmp'),
+            $this->msg('user', 'Tell me about files'),
+            $this->msg('assistant', 'I can help you with that'),
+            $this->msg('assistant', 'mkdir newproject'),
+            $this->msg('assistant', 'Created the directory'),
+        ];
+        $result = $compactor->removeNavigationSteps($messages);
+        // cd and mkdir removed, but user message and assistant responses preserved
+        $this->assertCount(3, $result);
+        $this->assertSame('Tell me about files', $result[0]['content']);
+        $this->assertSame('I can help you with that', $result[1]['content']);
+        $this->assertSame('Created the directory', $result[2]['content']);
+    }
+
 }

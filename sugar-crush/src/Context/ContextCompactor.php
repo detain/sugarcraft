@@ -59,11 +59,14 @@ final class ContextCompactor
     }
 
     /**
-     * Compact a message array through stages 1 and 2.
+     * Compact a message array through stages 1-5.
      *
      * Stage 1: Preserve the most recent N full user/assistant PAIRS (recentPreserveCount).
      * Stage 2: Condense older exchanges into single-line summaries capturing
      *          "what happened and any key decisions made."
+     * Stage 3: Group consecutive identical exchanges (e.g., repeated grep searches).
+     * Stage 4: Replace file contents with metadata summaries.
+     * Stage 5: Remove navigation steps while preserving final destination.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @return array<array{role:string,content:string}> Compacted messages.
@@ -92,6 +95,15 @@ final class ContextCompactor
 
         // Stage 2: condense older pairs into summaries (one summary per pair)
         $summarized = $this->summarizeExchanges($toSummarizePairs);
+
+        // Stage 3: group similar consecutive exchanges
+        $summarized = $this->groupSimilarExchanges($summarized);
+
+        // Stage 4: compact file references into metadata
+        $summarized = $this->compactFileReferences($summarized);
+
+        // Stage 5: remove navigation steps
+        $summarized = $this->removeNavigationSteps($summarized);
 
         // Flatten preserved pairs back into individual messages
         $preserved = [];
@@ -148,6 +160,200 @@ final class ContextCompactor
         }
 
         return $pairs;
+    }
+
+    /**
+     * Stage 3: Group consecutive identical exchanges into a single entry with count prefix.
+     *
+     * Groups consecutive messages with identical content (e.g., repeated "file not found"
+     * errors, repeated grep searches) into a single entry prefixed with a count like "[3x]".
+     *
+     * @param array<array{role:string,content:string}> $messages
+     * @return array<array{role:string,content:string}>
+     */
+    public function groupSimilarExchanges(array $messages): array
+    {
+        if ($messages === []) {
+            return [];
+        }
+
+        $result = [];
+        $currentContent = null;
+        $currentRole = null;
+        $count = 0;
+
+        foreach ($messages as $msg) {
+            $role = $msg['role'] ?? '';
+            $content = $msg['content'] ?? '';
+
+            if ($content === $currentContent && $role === $currentRole) {
+                $count++;
+            } else {
+                if ($currentContent !== null) {
+                    if ($count > 1) {
+                        $result[] = [
+                            'role' => $currentRole,
+                            'content' => "[{$count}x] {$currentContent}",
+                        ];
+                    } else {
+                        $result[] = [
+                            'role' => $currentRole,
+                            'content' => $currentContent,
+                        ];
+                    }
+                }
+                $currentContent = $content;
+                $currentRole = $role;
+                $count = 1;
+            }
+        }
+
+        // Don't lose the last group
+        if ($currentContent !== null) {
+            if ($count > 1) {
+                $result[] = [
+                    'role' => $currentRole,
+                    'content' => "[{$count}x] {$currentContent}",
+                ];
+            } else {
+                $result[] = [
+                    'role' => $currentRole,
+                    'content' => $currentContent,
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Stage 4: Replace file read message content with metadata summary.
+     *
+     * Detects "file read" type messages by looking for common file extension
+     * patterns in message content, then replaces the full content with a
+     * metadata summary like "[file: path/to/file.php, N lines]".
+     *
+     * @param array<array{role:string,content:string}> $messages
+     * @return array<array{role:string,content:string}>
+     */
+    public function compactFileReferences(array $messages): array
+    {
+        return array_map(function (array $msg): array {
+            $content = $msg['content'] ?? '';
+
+            if (!$this->isFileReadMessage($content)) {
+                return $msg;
+            }
+
+            $lines = substr_count($content, "\n") + 1;
+            $metadata = $this->extractFileMetadata($content);
+
+            return [
+                'role' => $msg['role'] ?? 'assistant',
+                'content' => "[file: {$metadata}, {$lines} lines]",
+            ];
+        }, $messages);
+    }
+
+    /**
+     * Detect if message content represents a file read operation.
+     */
+    private function isFileReadMessage(string $content): bool
+    {
+        // Match common file extension patterns that indicate file content
+        // e.g., "<?php\n...class Foo..." or "<?php\ndeclare(strict_types=1);..."
+        $phpPattern = '/<\?php\s*\n/s';
+        if (preg_match($phpPattern, $content)) {
+            return true;
+        }
+
+        // Match patterns like "path/to/file.php" or "file.php" appearing as a header
+        // followed by substantial content (file content display)
+        if (preg_match('/^[\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml)\s*\n/s', $content)) {
+            return true;
+        }
+
+        // Match content that starts with common file path patterns
+        if (preg_match('/^\/[\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml)/m', $content)) {
+            return true;
+        }
+
+        // Match content with multiple lines containing typical code patterns
+        // (indentation, brackets, semicolons)
+        if (preg_match('/^\s{2,}[\$\w]\S*\s*[;\{\}]/m', $content) && substr_count($content, "\n") > 3) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Extract file path metadata from file read content.
+     */
+    private function extractFileMetadata(string $content): string
+    {
+        // Try to extract file path from the first line
+        if (preg_match('/^([\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml))/', $content, $matches)) {
+            return $matches[1];
+        }
+
+        // Try to find a path-like pattern anywhere in content
+        if (preg_match('/([\w\-\.\/]+\.(php|ts|js|tsx|jsx|json|html|txt|md|css|yaml|yml))/', $content, $matches)) {
+            return $matches[1];
+        }
+
+        // Fallback: return a generic indicator based on content characteristics
+        $firstLine = explode("\n", $content)[0] ?? 'unknown';
+        if (mb_strlen($firstLine) > 50) {
+            return 'file';
+        }
+
+        return $firstLine;
+    }
+
+    /**
+     * Stage 5: Remove navigation steps while preserving final destination or result.
+     *
+     * Removes messages whose content indicates navigation commands (e.g., "cd /path/to/dir",
+     * "ls", "pwd") while preserving the final destination or result that follows.
+     *
+     * @param array<array{role:string,content:string}> $messages
+     * @return array<array{role:string,content:string}>
+     */
+    public function removeNavigationSteps(array $messages): array
+    {
+        if ($messages === []) {
+            return [];
+        }
+
+        $result = [];
+        $navPatterns = [
+            '/^cd\s+/m',
+            '/^ls\s*/m',
+            '/^pwd$/m',
+            '/^mkdir\s+/m',
+            '/^rm\s+/m',
+            '/^mv\s+/m',
+            '/^cp\s+/m',
+        ];
+
+        foreach ($messages as $msg) {
+            $content = $msg['content'] ?? '';
+            $isNavigation = false;
+
+            foreach ($navPatterns as $pattern) {
+                if (preg_match($pattern, $content)) {
+                    $isNavigation = true;
+                    break;
+                }
+            }
+
+            if (!$isNavigation) {
+                $result[] = $msg;
+            }
+        }
+
+        return $result;
     }
 
     /**
