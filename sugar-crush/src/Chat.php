@@ -14,6 +14,8 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
@@ -54,6 +56,9 @@ final class Chat implements Model
     /** @var WorkflowEngine|null Optional workflow engine for /workflow command */
     private readonly ?WorkflowEngine $workflowEngine;
 
+    /** @var AgentManager|null Agent manager for /agents command */
+    private ?AgentManager $agentManager = null;
+
     /** @var Buffer|null Previous rendered frame for diff-based emission */
     private ?Buffer $previousFrame = null;
 
@@ -83,9 +88,11 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Crush\Agents\AgentPoolConfig $agentPoolConfig = null,
         private readonly ?\SugarCraft\Crush\Agents\AgentWorkerPool $effectivePool = null,
         ?WorkflowEngine $workflowEngine = null,
+        ?AgentManager $agentManager = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
+        $this->agentManager = $agentManager;
     }
 
     public function init(): ?\Closure
@@ -115,6 +122,7 @@ final class Chat implements Model
                 agentPoolConfig: $this->agentPoolConfig,
                 effectivePool: $this->effectivePool,
                 workflowEngine: $this->workflowEngine,
+                agentManager: $this->agentManager,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -185,6 +193,7 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
 
         $backend = $this->backend;
@@ -381,6 +390,7 @@ final class Chat implements Model
             'effectivePool' => $this->effectivePool,
             'backend' => $this->backend,
             'workflowEngine' => $this->workflowEngine,
+            'agentManager' => $this->agentManager,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -400,6 +410,7 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
     }
 
@@ -417,6 +428,7 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
     }
 
@@ -443,6 +455,7 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
     }
 
@@ -466,6 +479,7 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
     }
 
@@ -502,6 +516,11 @@ final class Chat implements Model
             return $this->handleShareCommand($text);
         }
 
+        // Handle /agent (and /agents) commands locally
+        if (str_starts_with($text, '/agent')) {
+            return $this->handleAgentsCommand($text);
+        }
+
         $next = new self(
             history: [...$this->history, Message::user($text)],
             inputBuf: '',
@@ -514,6 +533,7 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
         $backend = $this->backend;
         $history = $next->history;
@@ -578,6 +598,7 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
         return [$next, null];
     }
@@ -793,6 +814,53 @@ final class Chat implements Model
             agentPoolConfig: $this->agentPoolConfig,
             effectivePool: $this->effectivePool,
             workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
+        );
+        return [$next, null];
+    }
+
+    private function handleAgentsCommand(string $inputBuf): array
+    {
+        // Parse args from the command (after "/agent" or "/agents")
+        // /agents is 7 chars, /agent is 6 chars - we detect which was used
+        $afterCommand = ltrim(substr($inputBuf, 7)); // starts after "/agents "
+        if (str_starts_with($inputBuf, '/agents ')) {
+            $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
+        } else {
+            // /agent followed by something (not space) — single token
+            $afterAgent = ltrim(substr($inputBuf, 6));
+            $args = $afterAgent !== '' ? preg_split('/\s+/', $afterAgent) : [];
+        }
+
+        // Execute the AgentsCommand - it outputs directly to stdout, capture via output buffering
+        ob_start();
+        $agentsCommand = new AgentsCommand($this->agentManager ?? throw new \RuntimeException('AgentManager not set'));
+        $exitCode = $agentsCommand->execute($this, $args);
+        $output = ob_get_clean();
+
+        return $this->agentsResponse($inputBuf, $output);
+    }
+
+    /**
+     * Return an agents command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function agentsResponse(string $inputBuf, string $response): array
+    {
+        $next = new self(
+            history: [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
         );
         return [$next, null];
     }
