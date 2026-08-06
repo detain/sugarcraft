@@ -2,12 +2,12 @@
 name: matchups-sync
 description: Keeps docs/MATCHUPS.md and PROJECT_NAMES.md in sync whenever a new port lands. Automatically run at the end of any workflow stage that adds a library. Triggers on "sync matchups", "new port landed", or when a lib is added to the monorepo.
 license: MIT
+user-invocable: false
 metadata:
   author: sugar-crush-team
   version: "1.0.0"
   phase: P7
   step: P7.S17
-  user-invocable: false
 ---
 
 # Matchups Sync
