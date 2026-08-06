@@ -87,21 +87,26 @@ final class WorkflowBuilder
      * Each nested stage receives `{{prevResult}}` interpolated with the previous
      * stage's output string, enabling sequential transformation pipelines.
      *
-     * @param TaskBuilder[] $stages
+     * @param TaskBuilder[]|array[] $stages Each element is a TaskBuilder instance or a plain array
+     *                                     with 'name', 'type', 'tasks' keys.
      */
     public function pipeline(string $name, array $stages): self
     {
         $nestedStageArrays = [];
-        foreach ($stages as $index => $taskBuilder) {
-            /** @var TaskBuilder $taskBuilder */
-            $workflowTask = $taskBuilder->build();
-            // Use explicit task name, agentType, or generated index as the sub-stage name
-            $subName = $workflowTask->name ?? $workflowTask->agentType ?? "step-{$index}";
-            $nestedStageArrays[] = [
-                'name' => $subName,
-                'type' => 'stage',
-                'tasks' => [$workflowTask],
-            ];
+        foreach ($stages as $index => $stage) {
+            if ($stage instanceof TaskBuilder) {
+                $workflowTask = $stage->build();
+                // Use explicit task name, agentType, or generated index as the sub-stage name
+                $subName = $workflowTask->name ?? $workflowTask->agentType ?? "step-{$index}";
+                $nestedStageArrays[] = [
+                    'name' => $subName,
+                    'type' => 'stage',
+                    'tasks' => [$workflowTask],
+                ];
+            } else {
+                // Plain array (pre-built stage definition) — pass through as-is
+                $nestedStageArrays[] = $stage;
+            }
         }
 
         $this->stages[] = [
