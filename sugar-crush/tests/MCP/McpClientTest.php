@@ -299,6 +299,59 @@ final class McpClientTest extends TestCase
         $this->assertTrue(true);
     }
 
+    public function testStartServersWithGitServerConfig(): void
+    {
+        $config = [
+            'mcpServers' => [
+                'test-git' => [
+                    'type' => 'git',
+                    'path' => null,
+                ],
+            ],
+        ];
+        file_put_contents($this->configPath, json_encode($config));
+
+        $client = new McpClient($this->configPath);
+        $client->startServers();
+
+        // Verify we can list tools - GitMcpServer provides 29 tools
+        $tools = $client->listTools();
+        $this->assertIsArray($tools);
+        $this->assertNotEmpty($tools);
+
+        // Verify git-specific tools are present
+        $toolNames = array_map(fn(McpTool $t) => $t->name, $tools);
+        $this->assertContains('gitStatus', $toolNames);
+        $this->assertContains('gitCommit', $toolNames);
+        $this->assertContains('gitBranchList', $toolNames);
+        $this->assertContains('gitLog', $toolNames);
+
+        $client->stopServers();
+    }
+
+    public function testStartServersWithGitServerConfigAndPath(): void
+    {
+        // Use the repo root as a valid git repo path
+        $config = [
+            'mcpServers' => [
+                'test-git' => [
+                    'type' => 'git',
+                    'path' => __DIR__ . '/../../',
+                ],
+            ],
+        ];
+        file_put_contents($this->configPath, json_encode($config));
+
+        $client = new McpClient($this->configPath);
+        $client->startServers();
+
+        $tools = $client->listTools();
+        $this->assertIsArray($tools);
+        $this->assertNotEmpty($tools);
+
+        $client->stopServers();
+    }
+
     public function testStartServersThrowsOnUnknownType(): void
     {
         $config = [

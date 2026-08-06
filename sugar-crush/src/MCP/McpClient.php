@@ -66,6 +66,12 @@ final class McpClient
                 headers: $this->resolveEnv($config['headers'] ?? []),
                 httpClient: $this->httpClient,
             ),
+            'git' => new GitMcpServer(
+                name: $name,
+                handlers: new GitCommandHandlers(
+                    cwd: $config['path'] ?? null,
+                ),
+            ),
             default => throw new \RuntimeException("Unknown MCP server type: $type"),
         };
 
