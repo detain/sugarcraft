@@ -11,15 +11,11 @@ use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Glob implements Tool
 {
-    /** @var array<string, bool> */
-    private array $sessionCache;
-
     public function __construct(
         private ?string $root = null,
         private ?InstructionFileLoader $instructionLoader = null,
-    ) {
-        $this->sessionCache = [];
-    }
+        private array $sessionCache = [],
+    ) {}
 
     public function name(): string
     {
@@ -75,18 +71,19 @@ final readonly class Glob implements Tool
         $fullPattern = rtrim($path, '/') . '/' . $pattern;
         $files = glob($fullPattern);
 
-        // Inject nested instruction file if this glob operated in a lib directory
-        $injectedContent = '';
-        if ($this->instructionLoader !== null && !empty($files)) {
-            $nested = $this->instructionLoader->loadForPath($path, $this->sessionCache);
-            if ($nested !== null) {
-                $injectedContent = $nested . "\n\n";
+        // Prepend nested instruction file content for each matched file
+        $output = '';
+        foreach ($files ?: [] as $file) {
+            $nestedContent = $this->instructionLoader?->loadForPath($file);
+            if ($nestedContent !== null) {
+                $output .= $nestedContent . "\n";
             }
+            $output .= $file . "\n";
         }
 
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: $injectedContent . implode("\n", $files ?: []),
+            content: $output,
             isError: false,
         );
     }

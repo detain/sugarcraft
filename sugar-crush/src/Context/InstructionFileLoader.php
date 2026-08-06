@@ -11,11 +11,16 @@ namespace SugarCraft\Crush\Context;
  * This class handles the nested instruction file discovery mechanism:
  * - Root-level files (CLAUDE.md, AGENTS.md) are always loaded at session start
  * - Forced instruction patterns from config are glob-resolved and loaded every session
- *
- * Nested per-path loading (P6.S15) is handled separately via loadForPath().
+ * - Per-path nested instruction files (CLAUDE.md, AGENTS.md in subdirectories)
+ *   are loaded via loadForPath() and tracked internally to inject each file at most once
  */
 final class InstructionFileLoader
 {
+    /**
+     * @var array<string, true> Tracks which nested instruction files have been injected this session
+     */
+    private array $injectedPaths = [];
+
     /**
      * @param string $repoRoot Absolute path to the repository root
      * @param string[] $forcedInstructions Glob patterns from config, force-loaded every session
@@ -87,5 +92,51 @@ final class InstructionFileLoader
         }
 
         return $contents;
+    }
+
+    /**
+     * Load nested instruction file for a touched path.
+     *
+     * Walks up from the touched file's directory toward repoRoot, checking
+     * each level for CLAUDE.md or AGENTS.md. CLAUDE.md is preferred over
+     * AGENTS.md at the same level. Each nested file is injected at most once
+     * per session — subsequent calls for the same path return null if already
+     * injected.
+     *
+     * @param string $touchedPath Absolute path to the file that was touched
+     * @return string|null The nested instruction file content, or null if none found
+     */
+    public function loadForPath(string $touchedPath): ?string
+    {
+        // Get the directory containing the touched file
+        $dir = dirname($touchedPath);
+
+        // Normalize repoRoot to avoid infinite loops on edge cases
+        $repoRoot = realpath($this->repoRoot) ?: $this->repoRoot;
+        if ($repoRoot === '') {
+            return null;
+        }
+
+        // Walk up the directory tree toward repoRoot
+        while ($dir !== $repoRoot && $dir !== '.' && $dir !== false) {
+            // Check for CLAUDE.md first (preferred), then AGENTS.md
+            foreach (['CLAUDE.md', 'AGENTS.md'] as $filename) {
+                $fullPath = $dir . '/' . $filename;
+
+                if (is_file($fullPath) && !isset($this->injectedPaths[$fullPath])) {
+                    $this->injectedPaths[$fullPath] = true;
+                    return file_get_contents($fullPath);
+                }
+            }
+
+            // Move to parent directory
+            $parent = dirname($dir);
+            if ($parent === $dir) {
+                break;
+            }
+            $dir = $parent;
+        }
+
+        return null;
     }
 }

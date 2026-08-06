@@ -14,17 +14,13 @@ final readonly class Read implements Tool
 {
     private const DEFAULT_MAX_BYTES = 1024 * 1024;
 
-    /** @var array<string, bool> */
-    private array $sessionCache;
-
     public function __construct(
         private ?string $root = null,
         private int $maxBytes = self::DEFAULT_MAX_BYTES,
         private ?AgentPathJail $worktreeJail = null,
         private ?InstructionFileLoader $instructionLoader = null,
-    ) {
-        $this->sessionCache = [];
-    }
+        private array $sessionCache = [],
+    ) {}
 
     public function name(): string
     {
@@ -92,18 +88,15 @@ final readonly class Read implements Tool
             }
             restore_error_handler();
 
-            // Inject nested instruction file if this read touched a lib directory
-            $injectedContent = '';
-            if ($this->instructionLoader !== null) {
-                $nested = $this->instructionLoader->loadForPath($path, $this->sessionCache);
-                if ($nested !== null) {
-                    $injectedContent = $nested . "\n\n";
-                }
+            // Prepend nested instruction file content if found for this path
+            $nestedContent = $this->instructionLoader?->loadForPath($path);
+            if ($nestedContent !== null) {
+                $content = $nestedContent . "\n" . $content;
             }
 
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
-                content: $injectedContent . $content,
+                content: $content,
                 isError: false,
             );
         } catch (\Throwable $e) {
