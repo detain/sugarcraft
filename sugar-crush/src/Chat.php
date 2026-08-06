@@ -919,7 +919,7 @@ final class Chat implements Model
         }
 
         $next = new self(
-            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
+            history: [...$compactedHistory, Message::user($inputText), Message::assistant($response)],
             inputBuf: '',
             inFlight: false,
             backend: $this->backend,

@@ -4,23 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Chat;
 
-use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
-use SugarCraft\Crush\Context\CompactorConfig;
-use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
-use SugarCraft\Crush\Runtime;
-use SugarCraft\Crush\App\App;
-use SugarCraft\Crush\Providers\ProviderInterface;
-use SugarCraft\Crush\Providers\CompleteRequest;
-use SugarCraft\Crush\Providers\CompleteResponse;
-use SugarCraft\Crush\Hooks\HookManager;
 
 final class CompactCommandTest extends TestCase
 {
