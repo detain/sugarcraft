@@ -340,4 +340,205 @@ SKILL;
         // Assert
         $this->assertIsArray($result);
     }
+
+    // -------------------------------------------------------------------------
+    // Staged Loading Methods (P7.S12)
+    // -------------------------------------------------------------------------
+
+    public function testLoadSkillManifestReturnsCorrectStructure(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillDir = $this->tempDir . '/my-test-skill';
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', <<<SKILL
+---
+description: Test skill description
+disable-model-invocation: true
+user-invocable: false
+context: fork
+---
+
+Some skill body content here.
+SKILL
+        );
+
+        // Act
+        $manifest = $loader->loadSkillManifest($skillDir);
+
+        // Assert
+        $this->assertIsArray($manifest);
+        $this->assertSame('my-test-skill', $manifest['name']);
+        $this->assertSame('Test skill description', $manifest['description']);
+        $this->assertTrue($manifest['disableModelInvocation']);
+        $this->assertFalse($manifest['userInvocable']);
+        $this->assertSame('fork', $manifest['context']);
+        $this->assertStringEndsWith('my-test-skill/SKILL.md', $manifest['sourcePath']);
+    }
+
+    public function testLoadSkillManifestDefaultsWhenFieldsMissing(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillDir = $this->tempDir . '/minimal-skill';
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', "---\n---\n\nBody only, no frontmatter fields.");
+
+        // Act
+        $manifest = $loader->loadSkillManifest($skillDir);
+
+        // Assert
+        $this->assertSame('minimal-skill', $manifest['name']);
+        $this->assertSame('Skill: minimal-skill', $manifest['description']);
+        $this->assertFalse($manifest['disableModelInvocation']);
+        $this->assertTrue($manifest['userInvocable']);
+        $this->assertSame('thread', $manifest['context']);
+    }
+
+    public function testLoadSkillManifestThrowsWhenMissingSkillMd(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillDir = $this->tempDir . '/no-skilLmd';
+        mkdir($skillDir, 0777, true);
+
+        // Assert
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('SKILL.md not found');
+
+        // Act
+        $loader->loadSkillManifest($skillDir);
+    }
+
+    public function testLoadSkillBodyReturnsContentWithoutFrontmatter(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/test-skill/SKILL.md';
+        mkdir($this->tempDir . '/test-skill', 0777, true);
+        file_put_contents($skillPath, <<<SKILL
+---
+description: A test skill
+---
+
+This is the body content.
+It has multiple lines.
+SKILL
+        );
+
+        // Act
+        $body = $loader->loadSkillBody($skillPath);
+
+        // Assert
+        $this->assertSame("This is the body content.\nIt has multiple lines.", $body);
+    }
+
+    public function testLoadSkillBodyReturnsFullContentWithoutFrontmatter(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/no-fm-skill/SKILL.md';
+        mkdir($this->tempDir . '/no-fm-skill', 0777, true);
+        file_put_contents($skillPath, "Just plain content without frontmatter.");
+
+        // Act
+        $body = $loader->loadSkillBody($skillPath);
+
+        // Assert
+        $this->assertSame('Just plain content without frontmatter.', $body);
+    }
+
+    public function testLoadSkillBodyThrowsWhenFileNotFound(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+
+        // Assert
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Skill file not found');
+
+        // Act
+        $loader->loadSkillBody('/non/existent/path/SKILL.md');
+    }
+
+    public function testLoadSkillAssetLoadsFromScriptsSubdirectory(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/my-skill/SKILL.md';
+        mkdir($this->tempDir . '/my-skill/scripts', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Test\n---\nBody");
+        file_put_contents($this->tempDir . '/my-skill/scripts/run.sh', "#!/bin/bash\necho \"Hello\"");
+
+        // Act
+        $content = $loader->loadSkillAsset($skillPath, 'scripts/run.sh');
+
+        // Assert
+        $this->assertSame("#!/bin/bash\necho \"Hello\"", $content);
+    }
+
+    public function testLoadSkillAssetLoadsFromReferencesSubdirectory(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/ref-skill/SKILL.md';
+        mkdir($this->tempDir . '/ref-skill/references', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Ref test\n---\nBody");
+        file_put_contents($this->tempDir . '/ref-skill/references/docs.md', '# Documentation');
+
+        // Act
+        $content = $loader->loadSkillAsset($skillPath, 'references/docs.md');
+
+        // Assert
+        $this->assertSame('# Documentation', $content);
+    }
+
+    public function testLoadSkillAssetLoadsFromAssetsSubdirectory(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/asset-skill/SKILL.md';
+        mkdir($this->tempDir . '/asset-skill/assets', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Asset test\n---\nBody");
+        file_put_contents($this->tempDir . '/asset-skill/assets/image.png', 'fake-binary-data');
+
+        // Act
+        $content = $loader->loadSkillAsset($skillPath, 'assets/image.png');
+
+        // Assert
+        $this->assertSame('fake-binary-data', $content);
+    }
+
+    public function testLoadSkillAssetRejectsPathTraversal(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/safe-skill/SKILL.md';
+        mkdir($this->tempDir . '/safe-skill/scripts', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Safe test\n---\nBody");
+
+        // Assert - path starting with / is rejected as invalid relative path
+        // (this would be an absolute path which is not allowed)
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('must be within');
+
+        // Act
+        $loader->loadSkillAsset($skillPath, '/etc/passwd');
+    }
+
+    public function testLoadSkillAssetRejectsInvalidSubdirectory(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillPath = $this->tempDir . '/invalid-skill/SKILL.md';
+        mkdir($this->tempDir . '/invalid-skill/scripts', 0777, true);
+        file_put_contents($skillPath, "---\ndescription: Invalid test\n---\nBody");
+
+        // Assert
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('must be within');
+
+        // Act
+        $loader->loadSkillAsset($skillPath, 'otherdir/file.txt');
+    }
 }
