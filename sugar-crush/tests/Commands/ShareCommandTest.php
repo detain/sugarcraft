@@ -25,8 +25,13 @@ final class ShareCommandTest extends TestCase
         $chat = $this->createChatWithMessages();
         $command = new ShareCommand();
 
-        // Default format should be markdown
-        $this->assertSame(ShareSession::FORMAT_MARKDOWN, 'markdown');
+        // Default format should be markdown - call execute with no format arg
+        ob_start();
+        $exitCode = $command->execute($chat, []);
+        $output = ob_get_clean();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Format: markdown', $output);
     }
 
     public function testExecuteWithJsonFormat(): void
