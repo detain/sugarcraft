@@ -55,16 +55,20 @@ final class SessionTabs
     }
 
     /**
-     * Private constructor for building new instances from existing state.
+     * Private method for building new instances from existing state.
+     * Follows the standard mutate() pattern.
      *
      * @param array<string, SessionTab> $tabsById
      * @param list<string>               $tabIds
      */
-    private static function fromState(
-        array $tabsById,
-        array $tabIds,
-    ): self {
-        return new self($tabsById, $tabIds);
+    private function mutate(array $changes): static
+    {
+        $state = [
+            'tabsById' => $this->tabsById,
+            'tabIds' => $this->tabIds,
+        ];
+
+        return new self(...array_merge($state, $changes));
     }
 
     /**
@@ -122,7 +126,7 @@ final class SessionTabs
 
         $updatedTabs[$sessionId] = $newTab;
 
-        return self::fromState($updatedTabs, [...$this->tabIds, $sessionId]);
+        return $this->mutate(['tabsById' => $updatedTabs, 'tabIds' => [...$this->tabIds, $sessionId]]);
     }
 
     /**
@@ -167,7 +171,7 @@ final class SessionTabs
             $newTabsById[$nextActiveId] = $newTabsById[$nextActiveId]->withActive(true);
         }
 
-        return self::fromState($newTabsById, $newTabIds);
+        return $this->mutate(['tabsById' => $newTabsById, 'tabIds' => $newTabIds]);
     }
 
     /**
@@ -184,7 +188,7 @@ final class SessionTabs
             $updatedTabs[$tabId] = $tab->withActive($tabId === $id);
         }
 
-        return self::fromState($updatedTabs, $this->tabIds);
+        return $this->mutate(['tabsById' => $updatedTabs, 'tabIds' => $this->tabIds]);
     }
 
     /**
@@ -198,10 +202,7 @@ final class SessionTabs
 
         $tab = $this->tabsById[$id];
 
-        return self::fromState(
-            [...$this->tabsById, $id => $tab->withDetached(true)],
-            $this->tabIds,
-        );
+        return $this->mutate(['tabsById' => [...$this->tabsById, $id => $tab->withDetached(true)], 'tabIds' => $this->tabIds]);
     }
 
     /**
@@ -215,10 +216,7 @@ final class SessionTabs
 
         $tab = $this->tabsById[$id];
 
-        return self::fromState(
-            [...$this->tabsById, $id => $tab->withDetached(false)],
-            $this->tabIds,
-        );
+        return $this->mutate(['tabsById' => [...$this->tabsById, $id => $tab->withDetached(false)], 'tabIds' => $this->tabIds]);
     }
 
     /**
@@ -232,10 +230,7 @@ final class SessionTabs
 
         $tab = $this->tabsById[$id];
 
-        return self::fromState(
-            [...$this->tabsById, $id => $tab->withSummary($summary)],
-            $this->tabIds,
-        );
+        return $this->mutate(['tabsById' => [...$this->tabsById, $id => $tab->withSummary($summary)], 'tabIds' => $this->tabIds]);
     }
 
     /**

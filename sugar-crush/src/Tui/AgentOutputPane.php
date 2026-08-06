@@ -8,32 +8,32 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 
-    /**
-     * Colour-coded left border mirrors AgentStatusBar / AgentViewPane:
-     *   Green  (#9ece6a): actively producing output
-     *   Yellow (#e0af68): waiting for tool results OR stalled
-     *   Red    (#f7768e): error condition
-     *   Gray   (#7d6e98): completed / stopped
-     *
-     * When a stall warning is active the border switches to amber (#e0af68)
-     * and a "⚠ stalled" indicator appears in the header line.
-     *
-     * Mirrors charmbracelet/crush per-agent streaming display design.
-     */
-    final class AgentOutputPane
-    {
-        /** Hex values matched to AgentStatusBar::STATUS_HEX. */
-        private const STATUS_HEX = [
-            'working'   => '#9ece6a',
-            'waiting'   => '#e0af68',
-            'streaming' => '#7aa2f7',
-            'failed'    => '#f7768e',
-            'completed' => '#7d6e98',
-            'stopped'   => '#7d6e98',
-        ];
+/**
+ * Colour-coded left border mirrors AgentStatusBar / AgentViewPane:
+ *   Green  (#9ece6a): actively producing output
+ *   Yellow (#e0af68): waiting for tool results OR stalled
+ *   Red    (#f7768e): error condition
+ *   Gray   (#7d6e98): completed / stopped
+ *
+ * When a stall warning is active the border switches to amber (#e0af68)
+ * and a "⚠ stalled" indicator appears in the header line.
+ *
+ * Mirrors charmbracelet/crush per-agent streaming display design.
+ */
+final class AgentOutputPane
+{
+    /** Hex values matched to AgentStatusBar::STATUS_HEX. */
+    private const STATUS_HEX = [
+        'working'   => '#9ece6a',
+        'waiting'   => '#e0af68',
+        'streaming' => '#7aa2f7',
+        'failed'    => '#f7768e',
+        'completed' => '#7d6e98',
+        'stopped'   => '#7d6e98',
+    ];
 
-        /** Amber used for stall warning — same as waiting but semantically distinct. */
-        private const STALL_HEX = '#e0af68';
+    /** Amber used for stall warning — same as waiting but semantically distinct. */
+    private const STALL_HEX = '#e0af68';
 
     /** Maximum output lines shown in peek mode. */
     public const PEEK_LINES = 4;

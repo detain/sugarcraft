@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Tui\AgentOutputPane;
 use SugarCraft\Crush\Tui\AgentOutputState;
 use SugarCraft\Crush\Tui\Mode;
+use SugarCraft\Crush\Tui\StallWarning;
 
 final class AgentOutputPaneTest extends TestCase
 {
@@ -211,5 +212,139 @@ final class AgentOutputPaneTest extends TestCase
         $color = AgentOutputPane::statusColor('unknown-status');
         // Default is 'completed' which maps to #7d6e98.
         $this->assertSame('#7d6e98', $color->toHex());
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // render() — stall warning display
+    // ─────────────────────────────────────────────────────────────────
+
+    public function testRenderPeekWithStallWarningUsesAmberBorderColor(): void
+    {
+        $stallWarning = new StallWarning(
+            agentId: 'coder-1',
+            detectedAt: new \DateTimeImmutable(),
+            tokenRate: 0.1,
+            durationSeconds: 35,
+        );
+
+        $state = new AgentOutputState(
+            name: 'coder-1',
+            status: 'working',
+            operation: 'Reading files',
+            elapsedSeconds: 45,
+            tokensUsed: 500,
+            costUsd: 0.0012,
+            model: 'claude-sonnet-4-6',
+            outputBuffer: ['some output line'],
+            stallWarning: $stallWarning,
+        );
+
+        $output = AgentOutputPane::render($state, 60, 10, Mode::Peek);
+
+        // STALL_HEX is '#e0af68' (amber/yellow) with RGB (224,175,104).
+        // The border color ANSI code [38;2;224;175;104m must appear when stalled.
+        $this->assertStringContainsString('224;175;104', $output);
+        // Agent name and status still visible.
+        $this->assertStringContainsString('coder-1', $output);
+        $this->assertStringContainsString('[working]', $output);
+    }
+
+    public function testRenderAttachWithStallWarningUsesAmberBorderColor(): void
+    {
+        $stallWarning = new StallWarning(
+            agentId: 'coder-1',
+            detectedAt: new \DateTimeImmutable(),
+            tokenRate: 0.0,
+            durationSeconds: 45,
+        );
+
+        $state = new AgentOutputState(
+            name: 'coder-1',
+            status: 'waiting',
+            operation: 'Waiting for tool results',
+            elapsedSeconds: 60,
+            tokensUsed: 300,
+            costUsd: 0.0009,
+            model: 'claude-sonnet-4-6',
+            outputBuffer: ['first output', 'second output'],
+            stallWarning: $stallWarning,
+        );
+
+        $output = AgentOutputPane::render($state, 60, 20, Mode::Attach);
+
+        // Amber border color must appear in stall state.
+        $this->assertStringContainsString('224;175;104', $output);
+        // Buffer content still visible.
+        $this->assertStringContainsString('first output', $output);
+        $this->assertStringContainsString('second output', $output);
+    }
+
+    public function testRenderWithoutStallWarningDoesNotUseAmberColor(): void
+    {
+        $state = new AgentOutputState(
+            name: 'coder-1',
+            status: 'working',
+            operation: 'Reading files',
+            elapsedSeconds: 45,
+            tokensUsed: 500,
+            costUsd: 0.0012,
+            model: 'claude-sonnet-4-6',
+            outputBuffer: ['some output'],
+            stallWarning: null,
+        );
+
+        $output = AgentOutputPane::render($state, 60, 10, Mode::Peek);
+
+        // When not stalled, border uses STATUS_HEX not STALL_HEX.
+        // STALL_HEX is #e0af68 (224;175;104) - should NOT appear.
+        // The working status color is #9ece6a (158;206;106).
+        $this->assertStringContainsString('158;206;106', $output);
+        // Normal status still visible.
+        $this->assertStringContainsString('coder-1', $output);
+    }
+
+    public function testRenderStallWarningUsesAmberColorNotStatusColor(): void
+    {
+        // Create two identical states - one with stall warning, one without.
+        $normalState = new AgentOutputState(
+            name: 'coder-1',
+            status: 'working',
+            operation: 'Reading files',
+            elapsedSeconds: 45,
+            tokensUsed: 500,
+            costUsd: 0.0012,
+            model: 'claude-sonnet-4-6',
+            outputBuffer: ['output'],
+            stallWarning: null,
+        );
+
+        $stallWarning = new StallWarning(
+            agentId: 'coder-1',
+            detectedAt: new \DateTimeImmutable(),
+            tokenRate: 0.0,
+            durationSeconds: 45,
+        );
+
+        $stalledState = new AgentOutputState(
+            name: 'coder-1',
+            status: 'working',
+            operation: 'Reading files',
+            elapsedSeconds: 45,
+            tokensUsed: 500,
+            costUsd: 0.0012,
+            model: 'claude-sonnet-4-6',
+            outputBuffer: ['output'],
+            stallWarning: $stallWarning,
+        );
+
+        $normalOutput = AgentOutputPane::render($normalState, 60, 10, Mode::Peek);
+        $stalledOutput = AgentOutputPane::render($stalledState, 60, 10, Mode::Peek);
+
+        // Normal state uses working color (#9ece6a = 158;206;106).
+        $this->assertStringContainsString('158;206;106', $normalOutput);
+        // Stalled state uses amber color (#e0af68 = 224;175;104), not working color.
+        $this->assertStringContainsString('224;175;104', $stalledOutput);
+        // Stalled state should NOT use the working color.
+        $this->assertStringNotContainsString('158;206;106', $stalledOutput);
     }
 }

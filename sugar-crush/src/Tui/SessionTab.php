@@ -125,4 +125,12 @@ final class SessionTab
     {
         return $this->sessionName;
     }
+
+    /**
+     * Return whether the tab is active.
+     */
+    public function isActive(): bool
+    {
+        return $this->isActive;
+    }
 }
