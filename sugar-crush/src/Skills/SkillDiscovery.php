@@ -131,7 +131,13 @@ final class SkillDiscovery
     private function discoverSkillsAt(string $path): array
     {
         $realPath = realpath($path);
-        if ($realPath === false || !is_dir($realPath)) {
+        if ($realPath === false) {
+            // Broken symlink or otherwise unreadable path — diagnostics help
+            // operators identify stale entries in a skills directory.
+            error_log("SkillDiscovery: realpath() failed for: {$path}");
+            return [];
+        }
+        if (!is_dir($realPath)) {
             return [];
         }
 

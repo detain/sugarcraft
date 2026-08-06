@@ -89,6 +89,73 @@ final class SkillRegistry
     }
 
     /**
+     * Check if a skill is auto-invocable (not disabled for model invocation).
+     */
+    public function isAutoInvocable(string $skillName): bool
+    {
+        $skill = $this->skills[$skillName] ?? null;
+
+        if ($skill === null) {
+            return false;
+        }
+
+        return !$skill->disableModelInvocation;
+    }
+
+    /**
+     * Check if a skill is user-invokable.
+     */
+    public function isUserInvocable(string $skillName): bool
+    {
+        $skill = $this->skills[$skillName] ?? null;
+
+        if ($skill === null) {
+            return false;
+        }
+
+        return $skill->userInvocable;
+    }
+
+    /**
+     * Check if a skill runs in fork context (spawned sub-agent).
+     */
+    public function isContextFork(string $skillName): bool
+    {
+        $skill = $this->skills[$skillName] ?? null;
+
+        if ($skill === null) {
+            return false;
+        }
+
+        return $skill->context === 'fork';
+    }
+
+    /**
+     * Register a skill from a manifest array (e.g., from SkillLoader::loadSkillManifest).
+     *
+     * @param array{name:string,description:string,disableModelInvocation:bool,userInvocable:bool,context:string,sourcePath:string} $manifest
+     */
+    public function registerFromManifest(array $manifest): void
+    {
+        $skill = new Skill(
+            name: $manifest['name'],
+            description: $manifest['description'],
+            userInvocable: $manifest['userInvocable'],
+            disableModelInvocation: $manifest['disableModelInvocation'],
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: $manifest['context'],
+            paths: [],
+            content: '',
+            sourcePath: $manifest['sourcePath'],
+        );
+
+        $this->skills[$manifest['name']] = $skill;
+    }
+
+    /**
      * Get skills that match file paths.
      *
      * @param array<string> $paths

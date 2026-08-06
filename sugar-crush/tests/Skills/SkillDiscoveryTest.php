@@ -6,12 +6,15 @@ namespace SugarCraft\Crush\Tests\Skills;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\SkillDiscovery;
+use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
  * Tests for SkillDiscovery - discovers skill directories across search paths.
  */
 final class SkillDiscoveryTest extends TestCase
 {
+    use TemporaryDirectoryTrait;
+
     private string $tempDir;
 
     protected function setUp(): void
@@ -25,25 +28,6 @@ final class SkillDiscoveryTest extends TestCase
     {
         $this->removeDirectory($this->tempDir);
         parent::tearDown();
-    }
-
-    private function removeDirectory(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($items as $item) {
-            if ($item->isDir()) {
-                rmdir($item->getPathname());
-            } else {
-                unlink($item->getPathname());
-            }
-        }
-        rmdir($dir);
     }
 
     private function createSkillDir(string $path): void

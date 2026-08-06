@@ -7,12 +7,15 @@ namespace SugarCraft\Crush\Tests\Skills;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
  * Tests for SkillLoader - loads skills from directories.
  */
 final class SkillLoaderTest extends TestCase
 {
+    use TemporaryDirectoryTrait;
+
     private string $tempDir;
     private array $errorLogCalls = [];
 
@@ -25,33 +28,10 @@ final class SkillLoaderTest extends TestCase
 
     protected function tearDown(): void
     {
-        // Clean up temp directory - use recursive deletion
         if (is_dir($this->tempDir)) {
             $this->removeDirectory($this->tempDir);
         }
         parent::tearDown();
-    }
-
-    /**
-     * Recursively remove a directory and all its contents.
-     */
-    private function removeDirectory(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($items as $item) {
-            if ($item->isDir()) {
-                rmdir($item->getPathname());
-            } else {
-                unlink($item->getPathname());
-            }
-        }
-        rmdir($dir);
     }
 
     /**
@@ -408,6 +388,154 @@ SKILL
 
         // Act
         $loader->loadSkillManifest($skillDir);
+    }
+
+    // -------------------------------------------------------------------------
+    // Flag wiring acceptance criteria (P7.S13 → P7.S14)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Validates that startup loading (loadSkillManifest) only materialises
+     * name, description, and the three flag fields — no body content is
+     * loaded at this stage.  This is the contract that P7.S14 consumers
+     * (auto-trigger logic, command-surface filtering, context-fork dispatch)
+     * depend on.
+     *
+     * Mirrors charmbracelet/<repo>.loadSkillManifest
+     */
+    public function testOnlyNameAndDescriptionLoadedAtStartup(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillDir = $this->tempDir . '/startup-skill';
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', <<<SKILL
+---
+description: Full skill with many fields
+disable-model-invocation: true
+user-invocable: false
+context: fork
+allowed-tools: ["tool-a"]
+disallowed-tools: ["tool-b"]
+model: gpt-4
+effort: high
+paths:
+  - extra/path
+---
+
+This is the body content that must NOT be in the manifest.
+SKILL
+        );
+
+        // Act
+        $manifest = $loader->loadSkillManifest($skillDir);
+
+        // Assert – name, description and three flag fields are present
+        $this->assertSame('startup-skill', $manifest['name']);
+        $this->assertSame('Full skill with many fields', $manifest['description']);
+        $this->assertTrue($manifest['disableModelInvocation']);
+        $this->assertFalse($manifest['userInvocable']);
+        $this->assertSame('fork', $manifest['context']);
+
+        // Assert – sourcePath is populated
+        $this->assertStringEndsWith('startup-skill/SKILL.md', $manifest['sourcePath']);
+
+        // Assert – body content is NOT part of the manifest (staged loading contract)
+        $this->assertArrayNotHasKey('content', $manifest);
+        $this->assertArrayNotHasKey('paths', $manifest);
+        $this->assertArrayNotHasKey('allowedTools', $manifest);
+        $this->assertArrayNotHasKey('disallowedTools', $manifest);
+        $this->assertArrayNotHasKey('model', $manifest);
+        $this->assertArrayNotHasKey('effort', $manifest);
+    }
+
+    /**
+     * When disable-model-invocation is true the manifest carries
+     * disableModelInvocation:true so that P7.S14 auto-trigger logic can
+     * skip firing this skill without an explicit user invocation.
+     *
+     * Mirrors charmbracelet/<repo>.loadSkillManifest
+     */
+    public function testDisableModelInvocationSkipsAutoTrigger(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillDir = $this->tempDir . '/noauto-skill';
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', <<<SKILL
+---
+description: Do not auto-trigger me
+disable-model-invocation: true
+---
+
+Body content.
+SKILL
+        );
+
+        // Act
+        $manifest = $loader->loadSkillManifest($skillDir);
+
+        // Assert – flag is correctly propagated so downstream can honour it
+        $this->assertTrue($manifest['disableModelInvocation']);
+    }
+
+    /**
+     * When user-invocable is false the manifest carries userInvocable:false so
+     * that P7.S14 command-surface filtering can hide the skill from users.
+     *
+     * Mirrors charmbracelet/<repo>.loadSkillManifest
+     */
+    public function testUserInvocableFalseHidesFromCommandSurface(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillDir = $this->tempDir . '/hidden-skill';
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', <<<SKILL
+---
+description: Internal skill, not for direct user invocation
+user-invocable: false
+---
+
+Body content.
+SKILL
+        );
+
+        // Act
+        $manifest = $loader->loadSkillManifest($skillDir);
+
+        // Assert – flag is correctly propagated so downstream can honour it
+        $this->assertFalse($manifest['userInvocable']);
+    }
+
+    /**
+     * When context is set to 'fork' the manifest carries context:fork so that
+     * P7.S14 context-fork dispatch can spawn an isolated sub-agent with no
+     * access to the calling conversation.
+     *
+     * Mirrors charmbracelet/<repo>.loadSkillManifest
+     */
+    public function testContextForkRunsInIsolatedSubAgent(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $skillDir = $this->tempDir . '/fork-skill';
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', <<<SKILL
+---
+description: Runs in isolated context
+context: fork
+---
+
+Body content.
+SKILL
+        );
+
+        // Act
+        $manifest = $loader->loadSkillManifest($skillDir);
+
+        // Assert – flag is correctly propagated so downstream can honour it
+        $this->assertSame('fork', $manifest['context']);
     }
 
     public function testLoadSkillBodyReturnsContentWithoutFrontmatter(): void

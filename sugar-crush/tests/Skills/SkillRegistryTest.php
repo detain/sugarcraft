@@ -606,4 +606,195 @@ SKILL,
         $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
+
+    // -------------------------------------------------------------------------
+    // isAutoInvocable()
+    // -------------------------------------------------------------------------
+
+    public function testIsAutoInvocableReturnsFalseWhenDisabled(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $skill = Skill::parse(
+            <<<SKILL
+---
+description: Auto-invocable disabled skill
+disable-model-invocation: true
+user-invocable: true
+---
+Content
+SKILL,
+            'auto-disabled'
+        );
+        $registry->register(['auto-disabled' => $skill]);
+
+        // Act
+        $result = $registry->isAutoInvocable('auto-disabled');
+
+        // Assert
+        $this->assertFalse($result);
+    }
+
+    public function testIsAutoInvocableReturnsTrueByDefault(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $skill = Skill::parse(
+            <<<SKILL
+---
+description: Default skill
+user-invocable: true
+---
+Content
+SKILL,
+            'auto-default'
+        );
+        $registry->register(['auto-default' => $skill]);
+
+        // Act
+        $result = $registry->isAutoInvocable('auto-default');
+
+        // Assert
+        $this->assertTrue($result);
+    }
+
+    public function testIsAutoInvocableReturnsFalseForUnknownSkill(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+
+        // Act
+        $result = $registry->isAutoInvocable('unknown-skill');
+
+        // Assert
+        $this->assertFalse($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // isUserInvocable()
+    // -------------------------------------------------------------------------
+
+    public function testIsUserInvocableReturnsFalseWhenUserInvocableFalse(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $skill = Skill::parse(
+            <<<SKILL
+---
+description: System only skill
+user-invocable: false
+---
+Content
+SKILL,
+            'system-only'
+        );
+        $registry->register(['system-only' => $skill]);
+
+        // Act
+        $result = $registry->isUserInvocable('system-only');
+
+        // Assert
+        $this->assertFalse($result);
+    }
+
+    public function testIsUserInvocableReturnsTrueByDefault(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $skill = Skill::parse(
+            <<<SKILL
+---
+description: Default user skill
+---
+Content
+SKILL,
+            'user-default'
+        );
+        $registry->register(['user-default' => $skill]);
+
+        // Act
+        $result = $registry->isUserInvocable('user-default');
+
+        // Assert
+        $this->assertTrue($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // isContextFork()
+    // -------------------------------------------------------------------------
+
+    public function testIsContextForkReturnsTrueWhenContextFork(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $skill = Skill::parse(
+            <<<SKILL
+---
+description: Fork context skill
+context: fork
+---
+Content
+SKILL,
+            'fork-skill'
+        );
+        $registry->register(['fork-skill' => $skill]);
+
+        // Act
+        $result = $registry->isContextFork('fork-skill');
+
+        // Assert
+        $this->assertTrue($result);
+    }
+
+    public function testIsContextForkReturnsFalseForThread(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $skill = Skill::parse(
+            <<<SKILL
+---
+description: Thread context skill
+context: thread
+---
+Content
+SKILL,
+            'thread-skill'
+        );
+        $registry->register(['thread-skill' => $skill]);
+
+        // Act
+        $result = $registry->isContextFork('thread-skill');
+
+        // Assert
+        $this->assertFalse($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // registerFromManifest()
+    // -------------------------------------------------------------------------
+
+    public function testRegisterFromManifestCreatesSkillWithFlags(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $manifest = [
+            'name' => 'manifest-skill',
+            'description' => 'Skill from manifest',
+            'disableModelInvocation' => true,
+            'userInvocable' => false,
+            'context' => 'fork',
+            'sourcePath' => '/path/to/manifest-skill/SKILL.md',
+        ];
+
+        // Act
+        $registry->registerFromManifest($manifest);
+
+        // Assert - skill is registered
+        $this->assertNotNull($registry->get('manifest-skill'));
+
+        // Assert - flags are set correctly
+        $this->assertFalse($registry->isAutoInvocable('manifest-skill'));
+        $this->assertFalse($registry->isUserInvocable('manifest-skill'));
+        $this->assertTrue($registry->isContextFork('manifest-skill'));
+    }
 }
