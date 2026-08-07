@@ -649,6 +649,8 @@ jobs:
     # always the right move.
     needs: [build-matrix, coverage]
     if: always() && needs.build-matrix.outputs.coverage_count != '0'
+    env:
+      CODACY_DIR: $RUNNER_TEMP/codacy-coverage
     steps:
       - name: Download codacy coverage reporter
         run: |
