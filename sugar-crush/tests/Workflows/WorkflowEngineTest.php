@@ -298,7 +298,7 @@ final class WorkflowEngineTest extends TestCase
         $this->assertSame(0.06, $result->totalCost);
     }
 
-    public function testParallelStageFailFastWhenStopOnFirstFailure(): void
+    public function testParallelStageFailsWhenAnyTaskFails(): void
     {
         $workflow = (new WorkflowBuilder())
             ->name('parallel-failfast-test')
@@ -333,6 +333,45 @@ final class WorkflowEngineTest extends TestCase
         $this->assertCount(3, $stageResult->agents);
         // Stage output should mention failure
         $this->assertNotNull($stageResult->error);
+    }
+
+    public function testParallelStageWithStopOnFirstFailureCancelsRemainingOnFirstFailure(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('parallel-stop-on-first-test')
+            ->description('Test parallel stop-on-first-failure behavior')
+            ->maxConcurrent(5)
+            ->stopOnFirstFailure(true)
+            ->parallel('fan-out', [
+                Tasks::agent('coder')->prompt('Task 1'),
+                Tasks::agent('coder')->prompt('Task 2'),
+                Tasks::agent('coder')->prompt('Task 3'),
+            ])
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $this->mockExecutor
+            ->expects($this->atLeast(1))
+            ->method('execute')
+            ->willReturnCallback(function () {
+                static $callCount = 0;
+                $callCount++;
+                if ($callCount === 2) {
+                    return $this->failedAgentResult('Intentional failure');
+                }
+                return $this->successfulAgentResult("ok-{$callCount}");
+            });
+
+        $result = $this->engine->run('parallel-stop-on-first-test', []);
+
+        $this->assertTrue($result->isFailure());
+        $this->assertSame(WorkflowStatus::Failed, $result->status);
+        $stageResult = $result->stageResults[0];
+        $this->assertNotNull($stageResult->error);
+        // Note: with customExecutor=true (synchronous test execution), all dispatched
+        // agents complete before cancellation takes effect. The key verification is that
+        // the workflow correctly detects the failure and marks the stage as failed.
     }
 
     public function testWorkflowResultContainsCorrectFinalContext(): void

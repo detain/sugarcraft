@@ -16,12 +16,13 @@ namespace SugarCraft\Crush\Workflows;
 final readonly class Workflow
 {
     /**
-     * @param string                $name           Human-readable workflow name.
-     * @param string                $description    Brief description of what the workflow does.
-     * @param array                 $stages         Ordered list of raw stage-task arrays built by WorkflowBuilder.
-     * @param int                   $maxConcurrent  Maximum number of stages that may run concurrently (default 5).
-     * @param int                   $timeout        Per-stage timeout in seconds (default 3600 = 1 hour).
-     * @param WorkflowStatus        $workflowStatus Current lifecycle status (default Draft).
+     * @param string                $name                Human-readable workflow name.
+     * @param string                $description         Brief description of what the workflow does.
+     * @param array                 $stages              Ordered list of raw stage-task arrays built by WorkflowBuilder.
+     * @param int                   $maxConcurrent       Maximum number of stages that may run concurrently (default 5).
+     * @param int                   $timeout             Per-stage timeout in seconds (default 3600 = 1 hour).
+     * @param WorkflowStatus        $workflowStatus      Current lifecycle status (default Draft).
+     * @param bool                  $stopOnFirstFailure When true, a parallel stage stops on first agent failure.
      */
     public function __construct(
         public string         $name,
@@ -30,6 +31,7 @@ final readonly class Workflow
         public int            $maxConcurrent = 5,
         public int            $timeout = 3600,
         public WorkflowStatus $workflowStatus = WorkflowStatus::Draft,
+        public bool           $stopOnFirstFailure = false,
     ) {}
 
     /**
@@ -47,15 +49,18 @@ final readonly class Workflow
      *
      * Mirrors charmbracelet/whalershark.Crunchy/mutate.
      */
-    private function mutate(WorkflowStatus $workflowStatus): self
-    {
+    private function mutate(
+        WorkflowStatus $workflowStatus = null,
+        bool $stopOnFirstFailure = null,
+    ): self {
         return new self(
             name: $this->name,
             description: $this->description,
             stages: $this->stages,
             maxConcurrent: $this->maxConcurrent,
             timeout: $this->timeout,
-            workflowStatus: $workflowStatus,
+            workflowStatus: $workflowStatus ?? $this->workflowStatus,
+            stopOnFirstFailure: $stopOnFirstFailure ?? $this->stopOnFirstFailure,
         );
     }
 }

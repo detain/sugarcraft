@@ -27,6 +27,7 @@ final class WorkflowBuilder
     private array $stages = [];
     private int $maxConcurrent = 5;
     private int $timeout = 3600;
+    private bool $stopOnFirstFailure = false;
 
     /**
      * Set the human-readable name of the workflow.
@@ -159,6 +160,19 @@ final class WorkflowBuilder
     }
 
     /**
+     * Configure whether a parallel stage stops immediately on the first agent failure.
+     *
+     * When true (fail-fast), all queued agents are cancelled as soon as any agent
+     * fails. When false (wait-for-all), all agents complete before the stage is
+     * marked failed.
+     */
+    public function stopOnFirstFailure(bool $stop): self
+    {
+        $this->stopOnFirstFailure = $stop;
+        return $this;
+    }
+
+    /**
      * Assemble and return the immutable Workflow value object.
      */
     public function build(): Workflow
@@ -169,6 +183,7 @@ final class WorkflowBuilder
             stages: $this->stages,
             maxConcurrent: $this->maxConcurrent,
             timeout: $this->timeout,
+            stopOnFirstFailure: $this->stopOnFirstFailure,
         );
     }
 }

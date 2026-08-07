@@ -254,8 +254,7 @@ final class WorkflowEngine
      *   3. Collect the result into stageResults[].
      *   4. On failure: mark workflow Failed and stop processing further stages.
      *
-     * Parallel and pipeline stages are not yet implemented (P4.S11-13).
-     * They currently throw an UnsupportedStageTypeException.
+     * Parallel stages (P4.S11) and pipeline stages (P4.S12) are implemented.
      *
      * @param Workflow         $workflow           The workflow definition to execute.
      * @param array            $context            Key-value pairs for {{variable}} interpolation.
@@ -285,7 +284,7 @@ final class WorkflowEngine
 
             if ($stageType === 'parallel') {
                 try {
-                    $stageResult = $this->executeParallelStage($stage, $context, $workflow->maxConcurrent);
+                    $stageResult = $this->executeParallelStage($stage, $context, $workflow);
                 } catch (\Throwable $e) {
                     $stageResult = new StageResult(
                         stageName: $stage['name'] ?? 'unknown',
@@ -690,12 +689,12 @@ final class WorkflowEngine
      * via AgentWorkerPool::executeAll(). Respects the workflow's maxConcurrent
      * setting to control how many agents run at once.
      *
-     * @param array $stage          Stage array from Workflow::$stages.
-     * @param array $context        Current workflow context for interpolation.
-     * @param int   $maxConcurrent Maximum agents that may run concurrently.
+     * @param array    $stage   Stage array from Workflow::$stages.
+     * @param array    $context Current workflow context for interpolation.
+     * @param Workflow $workflow The workflow definition (provides maxConcurrent, stopOnFirstFailure).
      * @return StageResult
      */
-    private function executeParallelStage(array $stage, array $context, int $maxConcurrent): StageResult
+    private function executeParallelStage(array $stage, array $context, Workflow $workflow): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -768,10 +767,17 @@ final class WorkflowEngine
             );
         }
 
-        // Use the injected pool for parallel execution; its maxConcurrent (default 5)
-        // handles the concurrency limit for the parallel tasks.
-        // TODO: Wire workflow->maxConcurrent to pool.maxConcurrent when pool exposes a setter
-        $pool = $this->pool;
+        // Create a fresh pool scoped to this parallel stage so that workflow-level
+        // settings (maxConcurrent, stopOnFirstFailure) do not mutate the shared
+        // $this->pool instance. The pool's executor is preserved from $this->pool
+        // via getExecutor() so that custom executors (e.g., test mocks) are honoured.
+        $pool = new AgentWorkerPool(
+            maxConcurrent: $workflow->maxConcurrent,
+            executor: $this->pool->getExecutor(),
+        );
+        if ($workflow->stopOnFirstFailure) {
+            $pool = $pool->withStopOnFirstFailure(true);
+        }
 
         // Collect all results from the generator
         $agentResults = [];

@@ -29,6 +29,9 @@ final class AgentWorkerPool
     /** @var bool When true, stop executing remaining agents on first failure */
     private bool $stopOnFirstFailure = false;
 
+    /** @var ExecutorInterface|null The executor used for agent invocations */
+    private ?ExecutorInterface $executor = null;
+
     /** True when a custom executor was injected (not the default ProcessExecutor). */
     private readonly bool $customExecutor;
 
@@ -190,6 +193,22 @@ final class AgentWorkerPool
         $clone = clone $this;
         $clone->stopOnFirstFailure = $stop;
         return $clone;
+    }
+
+    /**
+     * Returns the configured concurrency limit.
+     */
+    public function getMaxConcurrent(): int
+    {
+        return $this->maxConcurrent;
+    }
+
+    /**
+     * Returns the executor instance used by this pool.
+     */
+    public function getExecutor(): ?ExecutorInterface
+    {
+        return $this->executor;
     }
 
     // -------------------------------------------------------------------------
