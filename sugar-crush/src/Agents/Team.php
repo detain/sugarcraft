@@ -39,6 +39,14 @@ final class Team
     }
 
     /**
+     * Get a teammate by their ID.
+     */
+    public function getTeammate(string $id): ?Teammate
+    {
+        return $this->teammates[$id] ?? null;
+    }
+
+    /**
      * Add a teammate to this team.
      *
      * @throws \InvalidArgumentException When the teammate's teamId does not match this team's id.
@@ -64,6 +72,47 @@ final class Team
     public function removeTeammate(string $teammateId): void
     {
         unset($this->teammates[$teammateId]);
+    }
+
+    /**
+     * Atomically claim a task for a teammate and create their worktree.
+     *
+     * This satisfies the "atomic task claiming also claims the worktree"
+     * plan requirement. Uses per-task flock locking from TaskList to ensure
+     * no two teammates can claim the same task simultaneously.
+     *
+     * Steps:
+     *  1. Claims the task via TaskList::claimTask()
+     *  2. Creates the worktree via WorktreeManager::createWorktree()
+     *  3. Updates the Teammate's worktreePath via withWorktreePath()
+     *
+     * If the task claim succeeds but worktree creation fails, the task claim
+     * is NOT rolled back (the task will be in 'in-progress' state).
+     *
+     * @return bool true if both the task claim and worktree creation succeeded,
+     *              false if the task was not claimable or the teammate was not found
+     * @throws \RuntimeException When the worktree already exists for this teammate
+     */
+    public function claimTask(string $taskId, string $teammateId, object $wm): bool
+    {
+        $teammate = $this->teammates[$teammateId] ?? null;
+        if ($teammate === null) {
+            return false;
+        }
+
+        // Step 1: Atomically claim the task (per-task flock)
+        if (!$this->taskList->claimTask($taskId, $teammateId)) {
+            return false;
+        }
+
+        // Step 2: Create the worktree
+        $worktreePath = $wm->createWorktree($teammateId);
+
+        // Step 3: Wire the teammate to the worktree (immutable replacement)
+        $updatedTeammate = $teammate->withWorktreePath($worktreePath);
+        $this->teammates[$teammateId] = $updatedTeammate;
+
+        return true;
     }
 
     public function getTaskList(): TaskList

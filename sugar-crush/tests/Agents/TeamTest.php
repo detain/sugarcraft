@@ -10,6 +10,29 @@ use SugarCraft\Crush\Agents\Mailbox;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Agents\Teammate;
 use SugarCraft\Crush\Agents\Team;
+use SugarCraft\Crush\Agents\WorktreeManager;
+
+/**
+ * Minimal test double for WorktreeManager — avoids mocking a final class.
+ * Only implements the method needed by Team::claimTask().
+ */
+final class StubWorktreeManager
+{
+    /** @var array<string, string> */
+    private array $paths = [];
+
+    public function createWorktree(string $agentId, ?string $branch = null): string
+    {
+        $path = '/tmp/wt-' . $agentId;
+        $this->paths[$agentId] = $path;
+        return $path;
+    }
+
+    public function getPath(string $agentId): ?string
+    {
+        return $this->paths[$agentId] ?? null;
+    }
+}
 
 /**
  * Tests for Team - aggregate root for lead + teammates coordination.
@@ -278,6 +301,90 @@ final class TeamTest extends TestCase
             leadAgentId: 'lead-evil',
             createdAt: new \DateTimeImmutable(),
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // claimTask()
+    // -------------------------------------------------------------------------
+
+    public function testClaimTaskReturnsFalseWhenTeammateNotFound(): void
+    {
+        $team = $this->createTeam('team-claim-no-tm-' . uniqid());
+
+        // No teammates added — claimTask must return false.
+        $wm = new StubWorktreeManager();
+
+        $this->assertFalse($team->claimTask('task-1', 'nonexistent', $wm));
+    }
+
+    public function testClaimTaskReturnsFalseWhenTaskAlreadyClaimed(): void
+    {
+        $team = $this->createTeam('team-claim-taken-' . uniqid());
+
+        $teammate = $this->createTeammate('tm-1', $team->id, 'Alice', AgentType::Coder);
+        $team->addTeammate($teammate);
+
+        // Pre-add a task that is already in-progress (simulating already-claimed)
+        $task = new \SugarCraft\Crush\Agents\Task(
+            id: 'task-taken-' . uniqid(),
+            teamId: $team->id,
+            title: 'Already Claimed',
+            description: '',
+            prompt: '',
+            assignedTo: 'tm-other',
+            status: \SugarCraft\Crush\Agents\TaskStatus::InProgress,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+            claimedAt: new \DateTimeImmutable(),
+            completedAt: null,
+            dependsOn: [],
+            isContested: false,
+        );
+        $team->getTaskList()->addTask($task);
+
+        $wm = new StubWorktreeManager();
+
+        // The task is already claimed by someone else — must return false
+        $this->assertFalse($team->claimTask($task->id, 'tm-1', $wm));
+    }
+
+    public function testClaimTaskReturnsTrueAndWiresWorktreePathOnSuccess(): void
+    {
+        $team = $this->createTeam('team-claim-ok-' . uniqid());
+
+        $teammate = $this->createTeammate('tm-claim', $team->id, 'Bob', AgentType::Coder);
+        $team->addTeammate($teammate);
+
+        $taskId = 'task-ok-' . uniqid();
+        $task = new \SugarCraft\Crush\Agents\Task(
+            id: $taskId,
+            teamId: $team->id,
+            title: 'Good Task',
+            description: '',
+            prompt: '',
+            assignedTo: null,
+            status: \SugarCraft\Crush\Agents\TaskStatus::Pending,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+            claimedAt: null,
+            completedAt: null,
+            dependsOn: [],
+            isContested: false,
+        );
+        $team->getTaskList()->addTask($task);
+
+        $wm = new StubWorktreeManager();
+
+        $result = $team->claimTask($taskId, 'tm-claim', $wm);
+
+        $this->assertTrue($result);
+
+        // Teammate's worktreePath must be updated to what createWorktree returned
+        $updatedTeammate = $team->getTeammate('tm-claim');
+        $this->assertNotNull($updatedTeammate);
+        $this->assertSame('/tmp/wt-tm-claim', $updatedTeammate->worktreePath);
     }
 
     // -------------------------------------------------------------------------
