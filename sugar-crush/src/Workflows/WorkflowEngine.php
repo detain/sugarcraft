@@ -389,7 +389,7 @@ final class WorkflowEngine
      * @param array $context Current workflow context for interpolation.
      * @return StageResult
      */
-    private function executeStage(array $stage, array $context): StageResult
+    private function executeStage(array $stage, array &$context): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -446,6 +446,10 @@ final class WorkflowEngine
 
         // Execute via pool
         $agentResult = $this->pool->executeOne($subAgent, $request);
+
+        // Store agent result in context for {{agentName.results}} interpolation
+        $agentName = $task->name ?? $task->agentType;
+        $context[$agentName]['results'] = $agentResult->output ?? '';
 
         return $this->buildStageResult($stageName, $agentResult, $stageStartedAt);
     }
@@ -829,10 +833,11 @@ final class WorkflowEngine
     }
 
     /**
-     * Interpolate {{variable}} and {{stageName.output}} tokens in a string.
+     * Interpolate {{variable}}, {{stageName.output}}, and {{agentName.results}} tokens in a string.
      *
      * - `{{variable}}` is replaced with $context['variable'] if set, otherwise left as-is.
      * - `{{stageName.output}}` is replaced with the output of a prior stage result.
+     * - `{{agentName.results}}` is replaced with the results of a named agent from the context.
      *
      * @param string $text    The text containing interpolation tokens.
      * @param array  $context Current workflow context.
@@ -840,6 +845,16 @@ final class WorkflowEngine
      */
     private function interpolateContext(string $text, array $context): string
     {
+        // Replace {{agentName.results}} references (they contain .results)
+        $text = preg_replace_callback(
+            '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.results\}\}/',
+            static function (array $matches) use ($context): string {
+                $agentName = $matches[1];
+                return $context[$agentName]['results'] ?? $matches[0];
+            },
+            $text
+        );
+
         // Replace {{stageName.output}} references first (they contain dots)
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.output\}\}/',
