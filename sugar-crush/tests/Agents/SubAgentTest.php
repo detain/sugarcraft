@@ -101,6 +101,41 @@ final class SubAgentTest extends TestCase
         $this->assertSame(Isolation::Worktree, $subAgent->isolation);
     }
 
+    public function testConstructorWithTeamAndTeammateIds(): void
+    {
+        $agent = $this->createAgent();
+        $createdAt = new \DateTimeImmutable('2024-01-15T10:00:00Z');
+
+        $subAgent = new SubAgent(
+            id: 'team_subagent_test',
+            agent: $agent,
+            task: 'Task with team association',
+            createdAt: $createdAt,
+            teamId: 'team_abc123',
+            teammateId: 'teammate_xyz789',
+        );
+
+        $this->assertSame('team_abc123', $subAgent->teamId);
+        $this->assertSame('teammate_xyz789', $subAgent->teammateId);
+        $this->assertSame('team_subagent_test', $subAgent->id);
+        $this->assertSame($agent, $subAgent->agent);
+        $this->assertSame('Task with team association', $subAgent->task);
+    }
+
+    public function testConstructorWithNullTeamAndTeammateIdsByDefault(): void
+    {
+        $agent = $this->createAgent();
+
+        $subAgent = new SubAgent(
+            id: 'no_team_test',
+            agent: $agent,
+            task: 'Task without team',
+        );
+
+        $this->assertNull($subAgent->teamId);
+        $this->assertNull($subAgent->teammateId);
+    }
+
     // -------------------------------------------------------------------------
     // isRunning()
     // -------------------------------------------------------------------------
@@ -289,6 +324,30 @@ final class SubAgentTest extends TestCase
         $array = $subAgent->toArray();
 
         $this->assertNull($array['completed_at']);
+    }
+
+    public function testToArrayWithTeamAndTeammateIds(): void
+    {
+        $agent = $this->createAgent('team-agent');
+        $createdAt = new \DateTimeImmutable('2024-01-15T10:00:00Z');
+
+        $subAgent = new SubAgent(
+            id: 'toarray_team_test',
+            agent: $agent,
+            task: 'Team task',
+            createdAt: $createdAt,
+            teamId: 'team_abc',
+            teammateId: 'teammate_xyz',
+        );
+
+        $array = $subAgent->toArray();
+
+        $this->assertIsArray($array);
+        $this->assertSame('toarray_team_test', $array['id']);
+        $this->assertSame('team-agent', $array['agent']);
+        $this->assertSame('Team task', $array['task']);
+        $this->assertSame('team_abc', $array['team_id']);
+        $this->assertSame('teammate_xyz', $array['teammate_id']);
     }
 
     // -------------------------------------------------------------------------
