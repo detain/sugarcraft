@@ -1018,7 +1018,7 @@ final class Chat implements Model
      */
     private function workflowList(string $inputText): array
     {
-        $workflows = $this->workflowEngine->registry->list();
+        $workflows = $this->workflowEngine->listWorkflows();
 
         if ($workflows === []) {
             $response = "No workflows found in `~/.sugar-crush/workflows/`.";

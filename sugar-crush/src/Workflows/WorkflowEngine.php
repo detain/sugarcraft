@@ -168,6 +168,16 @@ final class WorkflowEngine
     }
 
     /**
+     * List all available workflows from the registry.
+     *
+     * @return array<string> List of workflow names.
+     */
+    public function listWorkflows(): array
+    {
+        return $this->registry->list();
+    }
+
+    /**
      * Return the current status of a workflow from its persisted pause file.
      *
      * @param string $workflowId The unique workflow identifier.
