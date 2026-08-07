@@ -100,6 +100,16 @@ final class ImageLayer
         return $this->placementById;
     }
 
+    /**
+     * Remove a placement by its image id.
+     *
+     * Allows the id space to be reclaimed when an image scrolls out of view.
+     */
+    public function removeById(int $imageId): void
+    {
+        unset($this->placementById[$imageId]);
+    }
+
     public function isEmpty(): bool
     {
         return $this->placementById === [];
