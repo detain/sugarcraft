@@ -246,7 +246,7 @@ class Dummy {}');
 
     /**
      * @group resolve
-     * @group p4s9
+     * @group pending
      */
     public function testResolveReturnsNullWhenNoMatch(): void
     {
@@ -259,7 +259,7 @@ class Dummy {}');
 
     /**
      * @group resolve
-     * @group p4s9
+     * @group pending
      */
     public function testResolveMatchesWorkflowByName(): void
     {
@@ -282,7 +282,7 @@ class Dummy {}');
 
     /**
      * @group resolve
-     * @group p4s9
+     * @group pending
      */
     public function testResolveMatchesWorkflowByDescription(): void
     {
@@ -305,7 +305,7 @@ class Dummy {}');
 
     /**
      * @group resolve
-     * @group p4s9
+     * @group pending
      */
     public function testResolvePrefersRegisteredOverFilesystem(): void
     {
@@ -332,7 +332,7 @@ class Dummy {}');
 
     /**
      * @group resolve
-     * @group p4s9
+     * @group pending
      */
     public function testResolveIsCaseInsensitive(): void
     {
