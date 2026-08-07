@@ -1364,36 +1364,30 @@ The verification primitive runs a second agent to check the first agent's work. 
 // workflows/RefactorService.php
 
 use SugarCraft\Crush\Workflows\Workflow;
+use SugarCraft\Crush\Workflows\WorkflowBuilder;
 use SugarCraft\Crush\Workflows\Tasks;
 
-return new Workflow(
-    name: 'refactor-service',
-    description: 'Refactor a microservice with tests and docs',
-    
-    build: fn(WorkflowBuilder $b) => $b
-        ->stage('analyze', Tasks::agent('architect')
-            ->prompt('Analyze {{service}} for refactoring opportunities')
-            ->tools([Read, Grep, Glob]))
-        
-        ->parallel('implement', [
-            Tasks::agent('coder', 'implement-api')
-                ->prompt('Implement API changes for {{service}}'),
-            Tasks::agent('coder', 'implement-tests')
-                ->prompt('Write tests for {{service}}'),
-        ])
-        
-        ->stage('verify', Tasks::agent('reviewer')
-            ->prompt('Review implementation, find bugs'))
-        
-        ->stage('fix', Tasks::agent('coder')
-            ->prompt('Fix bugs found: {{verify.bugs}}'))
-        
-        ->stage('docs', Tasks::agent('scribe')
-            ->prompt('Update docs for {{service}}'))
-        
-        ->maxConcurrent(5)
-        ->timeout(3600),
-);
+return (new WorkflowBuilder())
+    ->name('refactor-service')
+    ->description('Refactor a microservice with tests and docs')
+    ->stage('analyze', Tasks::agent('architect')
+        ->prompt('Analyze {{service}} for refactoring opportunities')
+        ->tools([Read, Grep, Glob]))
+    ->parallel('implement', [
+        Tasks::agent('coder', 'implement-api')
+            ->prompt('Implement API changes for {{service}}'),
+        Tasks::agent('coder', 'implement-tests')
+            ->prompt('Write tests for {{service}}'),
+    ])
+    ->stage('verify', Tasks::agent('reviewer')
+        ->prompt('Review implementation, find bugs'))
+    ->stage('fix', Tasks::agent('coder')
+        ->prompt('Fix bugs found: {{verify.bugs}}'))
+    ->stage('docs', Tasks::agent('scribe')
+        ->prompt('Update docs for {{service}}'))
+    ->maxConcurrent(5)
+    ->timeout(3600)
+    ->build();
 ```
 
 #### Option B: YAML (More accessible)
