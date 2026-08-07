@@ -28,6 +28,5 @@ final class Task
         public readonly ?\DateTimeImmutable $completedAt = null,
         /** @var string[] */
         public readonly array $dependsOn = [],
-        public readonly bool $isContested = false,
     ) {}
 }
