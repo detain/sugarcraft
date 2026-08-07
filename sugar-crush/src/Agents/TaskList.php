@@ -144,7 +144,7 @@ final class TaskList
         $stmt->execute();
         $stmt->close();
 
-        $this->closeForWrite($handle);
+        $this->assertTaskFound($taskId, $handle);
     }
 
     /**
@@ -175,7 +175,7 @@ final class TaskList
         $stmt->execute();
         $stmt->close();
 
-        $this->closeForWrite($handle);
+        $this->assertTaskFound($taskId, $handle);
 
         // Dispatch TaskCompleted hook — block with continueOnBlock marks contested
         if ($this->hookDispatcher !== null && $teamId !== '') {
@@ -208,7 +208,7 @@ final class TaskList
         $stmt->execute();
         $stmt->close();
 
-        $this->closeForWrite($handle);
+        $this->assertTaskFound($taskId, $handle);
     }
 
     /**
@@ -486,6 +486,20 @@ final class TaskList
     }
 
     /**
+     * Verify that a task was found (rows affected > 0), releasing the write
+     * lock and throwing if not.
+     *
+     * @throws \SQLite3Exception When no rows were updated (task not found)
+     */
+    private function assertTaskFound(string $taskId, mixed $fp): void
+    {
+        if ($this->db->changes() === 0) {
+            $this->closeForWrite($fp);
+            throw new \SQLite3Exception("Task not found: {$taskId}");
+        }
+    }
+
+    /**
      * Convert SQLite result rows into Task objects.
      *
      * @param \SQLite3Result $result
@@ -592,8 +606,8 @@ final class TaskList
      */
     private function lockPathFor(string $taskId): string
     {
-        $safeTaskId = \preg_replace('/[^a-zA-Z0-9_-]/', '', $taskId);
-        return \dirname($this->dbPath) . '/task_locks/' . $safeTaskId . '.lock';
+        $hash = \hash('sha256', $taskId);
+        return \dirname($this->dbPath) . '/task_locks/' . $hash . '.lock';
     }
 
     /**
