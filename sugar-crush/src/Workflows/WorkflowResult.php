@@ -51,8 +51,8 @@ final readonly class WorkflowResult
     }
 
     /**
-     * Elapsed time in milliseconds for this stage within the workflow.
-     * Returns 0 if completedAt is null (stage is still running).
+     * Elapsed time in milliseconds for this workflow.
+     * Returns 0 if completedAt is null (workflow is still running).
      */
     public function durationMs(): int
     {
