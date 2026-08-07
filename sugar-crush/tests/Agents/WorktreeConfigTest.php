@@ -59,6 +59,64 @@ final class WorktreeConfigTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // ::new() factory — config file loading
+    // -------------------------------------------------------------------------
+
+    public function testNewLoadsConfigFromFile(): void
+    {
+        // The ::new() factory resolves config.json relative to the repo root
+        // using __DIR__ . '/../../../.sugar-crush/config.json' from src/Agents/.
+        // This test writes a temp config to that exact path, calls ::new(),
+        // then restores the original so other tests are unaffected.
+        $configPath = __DIR__ . '/../../../.sugar-crush/config.json';
+        $backup = file_exists($configPath) ? file_get_contents($configPath) : null;
+
+        try {
+            file_put_contents(
+                $configPath,
+                json_encode([
+                    'worktreeCleanupPeriodDays' => 21,
+                    'worktreeIncludeFile' => '.test-worktreeinclude',
+                ]),
+            );
+
+            $config = WorktreeConfig::new();
+
+            $this->assertSame(21, $config->worktreeCleanupPeriodDays);
+            $this->assertSame('.test-worktreeinclude', $config->worktreeIncludeFile);
+        } finally {
+            if ($backup !== null) {
+                file_put_contents($configPath, $backup);
+            } else {
+                unlink($configPath);
+            }
+        }
+    }
+
+    public function testConstructorWorktreeCleanupPeriodDays(): void
+    {
+        $config = new WorktreeConfig(worktreeCleanupPeriodDays: 14);
+        $this->assertSame(14, $config->worktreeCleanupPeriodDays);
+    }
+
+    public function testConstructorWorktreeIncludeFile(): void
+    {
+        $config = new WorktreeConfig(worktreeIncludeFile: '.custom-worktreeinclude');
+        $this->assertSame('.custom-worktreeinclude', $config->worktreeIncludeFile);
+    }
+
+    public function testConstructorBothCleanupPeriodAndIncludeFile(): void
+    {
+        $config = new WorktreeConfig(
+            worktreeCleanupPeriodDays: 30,
+            worktreeIncludeFile: '.my-worktreeinclude',
+        );
+
+        $this->assertSame(30, $config->worktreeCleanupPeriodDays);
+        $this->assertSame('.my-worktreeinclude', $config->worktreeIncludeFile);
+    }
+
+    // -------------------------------------------------------------------------
     // withBasePath()
     // -------------------------------------------------------------------------
 

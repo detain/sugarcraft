@@ -68,7 +68,7 @@ final class WorktreeConfig
         int $worktreeCleanupPeriodDays = 7,
         string $worktreeIncludeFile = '.worktreeinclude',
     ): self {
-        $configPath = '.sugar-crush/config.json';
+        $configPath = __DIR__ . '/../../../.sugar-crush/config.json';
         if (file_exists($configPath)) {
             $json = json_decode(file_get_contents($configPath), true);
             if (is_array($json)) {
