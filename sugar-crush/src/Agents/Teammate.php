@@ -30,10 +30,11 @@ final readonly class Teammate
     /**
      * Returns the filesystem path to this teammate's inbox directory.
      *
+     * Mirrors charmbracelet/charmbracelet.<Teammate>.GetInboxPath.
      * Inboxes are stored at ~/.sugar-crush/teams/{teamId}/inboxes/{teammateId}/
      * following the append-only JSON-lines format described in the mailbox spec.
      */
-    public function inboxPath(): string
+    public function getInboxPath(): string
     {
         $base = $_SERVER['HOME'] ?? '/tmp';
 
@@ -52,11 +53,12 @@ final readonly class Teammate
     /**
      * Returns the current operational status of this teammate.
      *
+     * Mirrors charmbracelet/charmbracelet.<Teammate>.GetStatus.
      * Since status tracking is managed at the aggregate level (TeamManager),
      * this returns a default Idle status. Runtime status is tracked by the
      * team's aggregate, not on the teammate entity itself.
      */
-    public function status(): TeammateStatus
+    public function getStatus(): TeammateStatus
     {
         return TeammateStatus::Idle;
     }

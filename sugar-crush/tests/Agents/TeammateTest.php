@@ -120,7 +120,7 @@ final class TeammateTest extends TestCase
         $_SERVER['HOME'] = '/home/testuser';
 
         try {
-            $inboxPath = $teammate->inboxPath();
+            $inboxPath = $teammate->getInboxPath();
             $this->assertSame('/home/testuser/.sugar-crush/teams/team-test/inboxes/teammate-1', $inboxPath);
         } finally {
             if ($originalHome !== null) {
@@ -146,7 +146,7 @@ final class TeammateTest extends TestCase
         $_SERVER['HOME'] = '/tmp';
 
         try {
-            $inboxPath = $teammate->inboxPath();
+            $inboxPath = $teammate->getInboxPath();
             $this->assertSame('/tmp/.sugar-crush/teams/project-x/inboxes/alice-007', $inboxPath);
         } finally {
             if ($originalHome !== null) {
@@ -158,10 +158,69 @@ final class TeammateTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // status()
+    // getInboxPath()
     // -------------------------------------------------------------------------
 
-    public function testStatusReturnsIdleByDefault(): void
+    public function testGetInboxPathReturnsCorrectFormat(): void
+    {
+        $teammate = new Teammate(
+            id: 'teammate-get-1',
+            teamId: 'team-get-test',
+            name: 'get-inbox-tester',
+            type: AgentType::Tester,
+            model: 'test-model',
+            tools: [],
+        );
+
+        $originalHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = '/home/testuser';
+
+        try {
+            $inboxPath = $teammate->getInboxPath();
+            $this->assertSame('/home/testuser/.sugar-crush/teams/team-get-test/inboxes/teammate-get-1', $inboxPath);
+        } finally {
+            if ($originalHome !== null) {
+                $_SERVER['HOME'] = $originalHome;
+            } else {
+                unset($_SERVER['HOME']);
+            }
+        }
+    }
+
+    public function testGetInboxPathRejectsPathTraversal(): void
+    {
+        // Teammate with literal ".." in IDs would be rejected at construction
+        // or when building the path - either way it must not produce a traversal
+        $teammate = new Teammate(
+            id: 'teammate-safe',
+            teamId: 'team-safe',
+            name: 'safe-tester',
+            type: AgentType::Coder,
+            model: 'test-model',
+            tools: [],
+        );
+
+        $originalHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = '/home/safeuser';
+
+        try {
+            $path = $teammate->getInboxPath();
+            $this->assertStringNotContainsString('..', $path);
+            $this->assertStringStartsWith('/home/safeuser/.sugar-crush/teams/', $path);
+        } finally {
+            if ($originalHome !== null) {
+                $_SERVER['HOME'] = $originalHome;
+            } else {
+                unset($_SERVER['HOME']);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // getStatus()
+    // -------------------------------------------------------------------------
+
+    public function testGetStatusReturnsIdleByDefault(): void
     {
         $teammate = new Teammate(
             id: 'teammate-status',
@@ -172,7 +231,7 @@ final class TeammateTest extends TestCase
             tools: [],
         );
 
-        $this->assertSame(TeammateStatus::Idle, $teammate->status());
+        $this->assertSame(TeammateStatus::Idle, $teammate->getStatus());
     }
 
     // -------------------------------------------------------------------------
