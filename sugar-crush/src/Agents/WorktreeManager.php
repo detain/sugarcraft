@@ -19,7 +19,7 @@ namespace SugarCraft\Crush\Agents;
  */
 final class WorktreeManager
 {
-    /** @var array<string, array{branch: string, createdAt: string, named: bool}> */
+    /** @var array<string, array{branch: string, createdAt: string}> */
     private array $registry = [];
 
     private readonly string $expandedBasePath;
@@ -37,6 +37,17 @@ final class WorktreeManager
         $this->loadRegistry();
     }
 
+    /**
+     * Factory method matching the sibling WorktreeConfig::new() pattern.
+     *
+     * @param string $repoRoot Path to the git repository root.
+     * @param WorktreeConfig|null $config Optional worktree configuration.
+     */
+    public static function new(string $repoRoot = '', ?WorktreeConfig $config = null): self
+    {
+        return new self($config, $repoRoot);
+    }
+
     // -------------------------------------------------------------------------
     // Core operations
     // -------------------------------------------------------------------------
@@ -48,18 +59,13 @@ final class WorktreeManager
      * branch name is provided, then runs "git worktree add {path} {branch}"
      * to create the isolated worktree directory.
      *
-     * When a .worktreeinclude file is present in the repo root (per config),
-     * any normally-ignored files it lists are copied into the new worktree
-     * so agents have the same local configuration as the main checkout.
-     *
      * @param string $agentId Unique identifier for the agent (used as directory name).
      * @param string|null $branch Optional branch name; defaults to agent-{agentId}-{timestamp}.
-     * @param bool $named Whether this worktree is for a named task/session (vs an ephemeral sub-agent run).
      * @return string The absolute path to the newly created worktree.
      * @throws \InvalidArgumentException When agentId is empty or contains path traversal.
      * @throws \RuntimeException When git worktree creation fails.
      */
-    public function createWorktree(string $agentId, ?string $branch = null, bool $named = false): string
+    public function createWorktree(string $agentId, ?string $branch = null): string
     {
         if ($agentId === '') {
             throw new \InvalidArgumentException('Agent ID must not be empty.');
@@ -112,14 +118,10 @@ final class WorktreeManager
             );
         }
 
-        // Copy .worktreeinclude files into the new worktree
-        $this->resolveWorktreeInclude($worktreePath);
-
         // Register the worktree
         $this->registry[$agentId] = [
             'branch' => $branch,
             'createdAt' => (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM),
-            'named' => $named,
         ];
         $this->saveRegistry();
 
@@ -203,10 +205,10 @@ final class WorktreeManager
     /**
      * List all managed worktrees.
      *
-     * Returns the registry of known agent worktrees with their branch,
-     * creation timestamp, and named flag.
+     * Returns the registry of known agent worktrees with their branch
+     * and creation timestamp.
      *
-     * @return array<string, array{branch: string, createdAt: string, named: bool}>
+     * @return array<string, array{branch: string, createdAt: string}>
      */
     public function listWorktrees(): array
     {
@@ -226,201 +228,6 @@ final class WorktreeManager
         }
 
         return $this->registry;
-    }
-
-    // -------------------------------------------------------------------------
-    // Cleanup policy
-    // -------------------------------------------------------------------------
-
-    /**
-     * Remove stale worktrees older than the specified number of days.
-     *
-     * Applies the two-tier cleanup policy:
-     * - Named worktrees are skipped (they represent human-initiated sessions
-     *   that should be preserved until explicitly removed).
-     * - Unnamed/ephemeral worktrees that are older than $days AND have no
-     *   uncommitted changes are removed; those with uncommitted diffs are
-     *   left alone so nothing gets lost.
-     *
-     * @param int $days Worktrees older than this many days are considered stale.
-     * @return int Number of worktrees removed.
-     */
-    public function cleanupStaleWorktrees(int $days): int
-    {
-        if ($days < 0) {
-            $days = 0;
-        }
-
-        $cutoff = (new \DateTimeImmutable())->modify("-{$days} days");
-        $removed = 0;
-
-        foreach ($this->registry as $agentId => $meta) {
-            // Named worktrees are always skipped — they get explicit removal
-            if (($meta['named'] ?? false) === true) {
-                continue;
-            }
-
-            $createdAt = \DateTimeImmutable::createFromFormat(\DateTimeImmutable::ATOM, $meta['createdAt']);
-            if ($createdAt === false || $createdAt > $cutoff) {
-                continue;
-            }
-
-            $worktreePath = $this->expandedBasePath . '/' . $agentId;
-
-            // Skip if directory no longer exists
-            if (!is_dir($worktreePath)) {
-                unset($this->registry[$agentId]);
-                $this->saveRegistry();
-                continue;
-            }
-
-            // Skip if there are uncommitted changes — leave dirty worktrees alone
-            if ($this->worktreeHasUncommittedDiff($worktreePath)) {
-                continue;
-            }
-
-            // Safe to remove: old, unnamed, and clean
-            $this->removeWorktree($agentId);
-            $removed++;
-        }
-
-        return $removed;
-    }
-
-    /**
-     * Check whether a worktree has any changed files (tracked or untracked).
-     *
-     * Uses `git status --porcelain` to detect staged, unstaged, and untracked
-     * changes. Returns true if any such changes exist.
-     *
-     * Untracked files (e.g., those copied by .worktreeinclude) ARE included
-     * in the dirty check — they represent the worktree's current state and
-     * the worktree is preserved when dirty so nothing is lost.
-     */
-    private function worktreeHasUncommittedDiff(string $worktreePath): bool
-    {
-        $escapedPath = escapeshellarg($worktreePath);
-        // git status --porcelain returns exit code 0 always; changes are
-        // signaled by non-empty output (tracked + untracked changes).
-        // Suppress stderr to handle edge cases like missing index gracefully.
-        $cmd = "git -C {$escapedPath} status --porcelain 2>/dev/null";
-        $output = [];
-        // Errors are suppressed via 2>/dev/null in the command itself above,
-        // letting PHP-level errors surface while silencing only git's stderr.
-        exec($cmd, $output);
-
-        // Any output means there are staged, unstaged, or untracked changes
-        return $output !== [];
-    }
-
-    /**
-     * Copy normally-ignored files listed in .worktreeinclude into a new worktree.
-     *
-     * The .worktreeinclude file uses glob syntax (same as .gitignore). Lines
-     * beginning with ! are treated as negation patterns. Blank lines and lines
-     * starting with # are ignored.
-     *
-     * This allows projects to include .env, vendor/, per-lib auth tokens, and
-     * other gitignored files that agents need to function correctly.
-     *
-     * @param string $worktreePath Absolute path to the newly created worktree.
-     */
-    private function resolveWorktreeInclude(string $worktreePath): void
-    {
-        $includeFile = $this->config->worktreeIncludeFile;
-        if ($includeFile === '') {
-            return;
-        }
-
-        if ($this->repoRoot === '') {
-            error_log("WorktreeManager: repoRoot is not set — .worktreeinclude files will not be copied to worktree at {$worktreePath}");
-            return;
-        }
-
-        $includePath = $this->repoRoot . '/' . $includeFile;
-        if (!file_exists($includePath)) {
-            return;
-        }
-
-        $lines = file($includePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if ($lines === false) {
-            return;
-        }
-
-        // First pass: collect exclusions (patterns starting with !)
-        $exclusions = [];
-        $patterns = [];
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
-            if ($trimmed === '' || str_starts_with($trimmed, '#')) {
-                continue;
-            }
-            if (str_starts_with($trimmed, '!')) {
-                $exclusions[] = substr($trimmed, 1);
-            } else {
-                $patterns[] = $trimmed;
-            }
-        }
-
-        // Resolve all glob patterns from repo root
-        foreach ($patterns as $pattern) {
-            $matches = glob($this->repoRoot . '/' . $pattern);
-            if ($matches === false || $matches === []) {
-                continue;
-            }
-
-            foreach ($matches as $matchedPath) {
-                // Check if this specific matched file is negated by any exclusion
-                $isExcluded = false;
-                foreach ($exclusions as $exclusion) {
-                    // Test the actual file path against the exclusion pattern
-                    if (fnmatch($exclusion, $matchedPath)) {
-                        $isExcluded = true;
-                        break;
-                    }
-                }
-                if ($isExcluded) {
-                    continue;
-                }
-
-                $relativePath = substr($matchedPath, strlen($this->repoRoot) + 1);
-                $targetPath = $worktreePath . '/' . $relativePath;
-
-                // Create parent directories if needed
-                $targetDir = dirname($targetPath);
-                if (!is_dir($targetDir)) {
-                    mkdir($targetDir, 0755, true);
-                }
-
-                if (is_dir($matchedPath)) {
-                    $this->copyDirectory($matchedPath, $targetPath);
-                } else {
-                    copy($matchedPath, $targetPath);
-                }
-            }
-        }
-    }
-
-    /**
-     * Recursively copy a directory's contents to a destination.
-     */
-    private function copyDirectory(string $source, string $destination): void
-    {
-        if (!is_dir($destination)) {
-            mkdir($destination, 0755, true);
-        }
-
-        $items = array_diff(@scandir($source) ?: [], ['.', '..']);
-        foreach ($items as $item) {
-            $sourcePath = $source . '/' . $item;
-            $destPath = $destination . '/' . $item;
-
-            if (is_dir($sourcePath)) {
-                $this->copyDirectory($sourcePath, $destPath);
-            } else {
-                copy($sourcePath, $destPath);
-            }
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -491,8 +298,6 @@ final class WorktreeManager
 
     /**
      * Load the worktree registry from disk.
-     *
-     * @return array<string, array{branch: string, createdAt: string, named: bool}>
      */
     private function loadRegistry(): void
     {
@@ -531,13 +336,6 @@ final class WorktreeManager
             $this->registry = is_array($data) ? $data : [];
         } catch (\JsonException) {
             $this->registry = [];
-        }
-
-        // Backward-compat: normalize entries that lack the 'named' field
-        foreach ($this->registry as $agentId => $meta) {
-            if (!isset($meta['named'])) {
-                $this->registry[$agentId]['named'] = false;
-            }
         }
     }
 
