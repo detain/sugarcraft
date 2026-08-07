@@ -244,6 +244,10 @@ class Dummy {}');
         $this->assertSame('Overridden in memory', $loaded->description);
     }
 
+    /**
+     * @group resolve
+     * @group p4s9
+     */
     public function testResolveReturnsNullWhenNoMatch(): void
     {
         $registry = new WorkflowRegistry($this->tempDir . '/workflows');
@@ -253,6 +257,10 @@ class Dummy {}');
         $this->assertNull($result);
     }
 
+    /**
+     * @group resolve
+     * @group p4s9
+     */
     public function testResolveMatchesWorkflowByName(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -272,6 +280,10 @@ class Dummy {}');
         $this->assertSame('refactor-service', $result->name);
     }
 
+    /**
+     * @group resolve
+     * @group p4s9
+     */
     public function testResolveMatchesWorkflowByDescription(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -291,6 +303,10 @@ class Dummy {}');
         $this->assertSame('code-audit', $result->name);
     }
 
+    /**
+     * @group resolve
+     * @group p4s9
+     */
     public function testResolvePrefersRegisteredOverFilesystem(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -314,6 +330,10 @@ class Dummy {}');
         $this->assertSame('From registry', $result->description);
     }
 
+    /**
+     * @group resolve
+     * @group p4s9
+     */
     public function testResolveIsCaseInsensitive(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -343,8 +363,12 @@ class Dummy {}');
         $this->assertIsArray($names);
     }
 
-    // ===== YAML loading tests =====
+    // ===== YAML loading tests (P4.S9 scope) =====
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testLoadYamlLoadsSimpleWorkflowFromYaml(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -377,6 +401,10 @@ YAML;
         $this->assertSame(1800, $workflow->timeout);
     }
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testLoadYamlThrowsNotFoundForNonexistentYaml(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -390,6 +418,10 @@ YAML;
         $registry->loadYaml('nonexistent');
     }
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testLoadYamlThrowsLoadExceptionForInvalidYaml(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -406,6 +438,10 @@ YAML;
         $registry->loadYaml('no-name');
     }
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testLoadYamlHandlesParallelStage(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -437,6 +473,10 @@ YAML;
         $this->assertSame('parallel', $workflow->stages[0]['type']);
     }
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testLoadTriesPhpBeforeYaml(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -466,6 +506,10 @@ YAML;
         $this->assertSame('From PHP file', $workflow->description);
     }
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testLoadFallsBackToYamlWhenPhpNotFound(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -488,6 +532,10 @@ YAML;
         $this->assertSame('Only exists in YAML', $workflow->description);
     }
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testListIncludesYamlFiles(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
@@ -506,6 +554,10 @@ YAML;
         $this->assertContains('another', $names);
     }
 
+    /**
+     * @group yaml
+     * @group p4s9
+     */
     public function testListIgnoresHiddenYamlFiles(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
