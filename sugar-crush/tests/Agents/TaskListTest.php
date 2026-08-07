@@ -161,6 +161,113 @@ final class TaskListTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // getTasksByStatus
+    // -------------------------------------------------------------------------
+
+    public function testGetTasksByStatusReturnsTasksWithMatchingStatus(): void
+    {
+        $list = new TaskList($this->dbPath);
+
+        $list->addTask($this->makeTask('task-pending-1', 'team-st', 'Pending 1'));
+        $list->addTask($this->makeTask('task-pending-2', 'team-st', 'Pending 2'));
+        $list->addTask($this->makeTask('task-inprogress', 'team-st', 'InProgress', status: TaskStatus::InProgress));
+        $list->addTask($this->makeTask('task-completed', 'team-st', 'Completed', status: TaskStatus::Completed));
+
+        $pending = $list->getTasksByStatus(TaskStatus::Pending);
+        $inProgress = $list->getTasksByStatus(TaskStatus::InProgress);
+        $completed = $list->getTasksByStatus(TaskStatus::Completed);
+        $failed = $list->getTasksByStatus(TaskStatus::Failed);
+
+        $this->assertCount(2, $pending);
+        $this->assertCount(1, $inProgress);
+        $this->assertCount(1, $completed);
+        $this->assertCount(0, $failed);
+
+        $pendingIds = array_map(fn(Task $t) => $t->id, $pending);
+        $this->assertContains('task-pending-1', $pendingIds);
+        $this->assertContains('task-pending-2', $pendingIds);
+    }
+
+    public function testGetTasksByStatusReturnsEmptyArrayWhenNoneMatch(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('some-task', 'team-st', 'Some task'));
+
+        $result = $list->getTasksByStatus(TaskStatus::Failed);
+
+        $this->assertIsArray($result);
+        $this->assertCount(0, $result);
+    }
+
+    public function testGetTasksByStatusFiltersCorrectlyAcrossStatuses(): void
+    {
+        $list = new TaskList($this->dbPath);
+
+        $list->addTask($this->makeTask('p1', 'team-multi', 'Pending 1'));
+        $list->addTask($this->makeTask('p2', 'team-multi', 'Pending 2', status: TaskStatus::Pending));
+        $list->addTask($this->makeTask('c1', 'team-multi', 'Completed 1', status: TaskStatus::Completed));
+
+        $pending = $list->getTasksByStatus(TaskStatus::Pending);
+        $this->assertCount(2, $pending);
+
+        $completed = $list->getTasksByStatus(TaskStatus::Completed);
+        $this->assertCount(1, $completed);
+        $this->assertSame('c1', $completed[0]->id);
+    }
+
+    // -------------------------------------------------------------------------
+    // getTasksForTeammate
+    // -------------------------------------------------------------------------
+
+    public function testGetTasksForTeammateReturnsTasksAssignedToTeammate(): void
+    {
+        $list = new TaskList($this->dbPath);
+
+        $list->addTask($this->makeTask('task-a', 'team-tm', 'Task A', [], TaskStatus::Pending, 'teammate-x'));
+        $list->addTask($this->makeTask('task-b', 'team-tm', 'Task B', [], TaskStatus::Pending, 'teammate-x'));
+        $list->addTask($this->makeTask('task-c', 'team-tm', 'Task C', [], TaskStatus::Pending, 'teammate-y'));
+        $list->addTask($this->makeTask('task-unassigned', 'team-tm', 'Unassigned'));
+
+        $tasksForX = $list->getTasksForTeammate('teammate-x');
+        $tasksForY = $list->getTasksForTeammate('teammate-y');
+        $tasksForZ = $list->getTasksForTeammate('teammate-z');
+
+        $this->assertCount(2, $tasksForX);
+        $this->assertCount(1, $tasksForY);
+        $this->assertCount(0, $tasksForZ);
+
+        $idsForX = array_map(fn(Task $t) => $t->id, $tasksForX);
+        $this->assertContains('task-a', $idsForX);
+        $this->assertContains('task-b', $idsForX);
+    }
+
+    public function testGetTasksForTeammateReturnsEmptyArrayWhenNoMatches(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('some-task', 'team-empty', 'Some task'));
+
+        $result = $list->getTasksForTeammate('nonexistent-teammate');
+
+        $this->assertIsArray($result);
+        $this->assertCount(0, $result);
+    }
+
+    public function testGetTasksForTeammateExcludesCompletedTasks(): void
+    {
+        $list = new TaskList($this->dbPath);
+
+        $list->addTask($this->makeTask('active-task', 'team-tm', 'Active', [], TaskStatus::InProgress, 'teammate-m'));
+        $list->addTask($this->makeTask('done-task', 'team-tm', 'Done', [], TaskStatus::Completed, 'teammate-m'));
+
+        $tasks = $list->getTasksForTeammate('teammate-m');
+
+        $this->assertCount(2, $tasks);
+        $ids = array_map(fn(Task $t) => $t->id, $tasks);
+        $this->assertContains('active-task', $ids);
+        $this->assertContains('done-task', $ids);
+    }
+
+    // -------------------------------------------------------------------------
     // updateTaskStatus
     // -------------------------------------------------------------------------
 

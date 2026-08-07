@@ -292,6 +292,40 @@ final class TaskList
         return $tasks[0] ?? null;
     }
 
+    /**
+     * Fetch all tasks with a given status.
+     *
+     * @return Task[]
+     */
+    public function getTasksByStatus(TaskStatus $status): array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM tasks WHERE status = :status ORDER BY created_at ASC');
+        $stmt->bindValue(':status', $status->value, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+
+        $tasks = $this->rowsToTasks($result);
+        $stmt->close();
+
+        return $tasks;
+    }
+
+    /**
+     * Fetch all tasks assigned to a specific teammate.
+     *
+     * @return Task[]
+     */
+    public function getTasksForTeammate(string $teammateId): array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM tasks WHERE assigned_to = :assigned_to ORDER BY created_at ASC');
+        $stmt->bindValue(':assigned_to', $teammateId, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+
+        $tasks = $this->rowsToTasks($result);
+        $stmt->close();
+
+        return $tasks;
+    }
+
     // -------------------------------------------------------------------------
     // Claiming — atomic via per-task flock
     // -------------------------------------------------------------------------
@@ -486,7 +520,6 @@ final class TaskList
             claimedAt: $row['claimed_at'] !== null ? new \DateTimeImmutable($row['claimed_at']) : null,
             completedAt: $row['completed_at'] !== null ? new \DateTimeImmutable($row['completed_at']) : null,
             dependsOn: json_decode($row['depends_on'] ?? '[]', true, 512, JSON_THROW_ON_ERROR),
-            isContested: (bool)($row['contested'] ?? false),
         );
     }
 
@@ -559,7 +592,8 @@ final class TaskList
      */
     private function lockPathFor(string $taskId): string
     {
-        return \dirname($this->dbPath) . '/task_locks/' . $taskId . '.lock';
+        $safeTaskId = \preg_replace('/[^a-zA-Z0-9_-]/', '', $taskId);
+        return \dirname($this->dbPath) . '/task_locks/' . $safeTaskId . '.lock';
     }
 
     /**
