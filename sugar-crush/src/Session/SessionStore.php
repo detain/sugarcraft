@@ -280,4 +280,16 @@ final class SessionStore
 
         return $stmt->rowCount();
     }
+
+    /**
+     * Expose the PDO connection for use by EnhancedSessionStore.
+     *
+     * This avoids fragile ReflectionClass access to the private $pdo property.
+     * Any internal refactor of SessionStore that changes PDO access will now
+     * be explicitly visible through this interface.
+     */
+    public function getPdo(): PDO
+    {
+        return $this->pdo;
+    }
 }

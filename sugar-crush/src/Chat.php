@@ -186,20 +186,26 @@ final class Chat implements Model
      * Handle tool calls in an assistant message.
      * Executes each tool and schedules a follow-up backend call with results.
      *
+     * When multiple independent tools are called, they are dispatched through the
+     * AgentWorkerPool in parallel for better performance. Single tools execute
+     * sequentially via the fallback path.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleToolCalls(Message $message): array
     {
-        // P1.S10 TODO: When running multiple independent tools in parallel, delegate to
-        //   AgentWorkerPool via a future AgentManager instance instead of executing them
-        //   sequentially here. The migration path will be:
-        //     1. Create SubAgent instances from each tool call
-        //     2. Call AgentManager::executeAll($subAgents, $request) which uses the pool
-        //   For now, tools execute sequentially in the current process.
         $toolResults = [];
-        foreach ($message->toolCalls as $toolCall) {
-            $result = $this->executeTool($toolCall);
-            $toolResults[] = $result;
+
+        // P1.S10: Parallel dispatch via AgentWorkerPool when multiple tools are called.
+        // Single tools use the sequential fallback for simplicity.
+        if (count($message->toolCalls) > 1 && $this->effectivePool !== null) {
+            $toolResults = $this->executeToolsParallel($message->toolCalls);
+        } else {
+            // Sequential fallback: single tool or no pool available
+            foreach ($message->toolCalls as $toolCall) {
+                $result = $this->executeTool($toolCall);
+                $toolResults[] = $result;
+            }
         }
 
         // Add assistant message and tool results to history
@@ -266,6 +272,102 @@ final class Chat implements Model
         } catch (\Throwable $e) {
             return ToolResult::error($name, $e->getMessage(), $toolCall->id);
         }
+    }
+
+    /**
+     * Execute multiple tool calls in parallel via the AgentWorkerPool.
+     *
+     * Each tool call is wrapped in a SubAgent and dispatched through the pool's
+     * executeAll() method, which forks child processes for true parallelism.
+     * Results are converted back to ToolResult format for consistency.
+     *
+     * @param ToolCall[] $toolCalls
+     * @return ToolResult[]
+     */
+    private function executeToolsParallel(array $toolCalls): array
+    {
+        // Build a minimal Agent to satisfy SubAgent's requirement.
+        // This agent won't actually make LLM calls - the pool forks and we
+        // capture results directly from each forked process.
+        $agent = new \SugarCraft\Crush\Agents\Agent(
+            name: 'tool-executor',
+            description: 'Executes tool callbacks in parallel',
+            prompt: '',
+            model: 'echo', // Won't be used - tools run in forked processes
+            provider: 'echo',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+
+        // Build SubAgents from tool calls.
+        // The task encodes the tool name and arguments as JSON; the pool forks
+        // child processes that run executeTool and store AgentResult to a temp
+        // file, which we read back in the parent.
+        $subAgents = [];
+        foreach ($toolCalls as $index => $toolCall) {
+            $subAgentId = 'tool-' . ($toolCall->id ?? (string) $index);
+
+            // Encode tool name + args as the task for the SubAgent.
+            // Each forked process will decode this and call executeTool.
+            $task = json_encode([
+                'tool_name' => $toolCall->name,
+                'tool_args' => $toolCall->arguments,
+            ]);
+
+            $subAgents[] = new \SugarCraft\Crush\Agents\SubAgent(
+                id: $subAgentId,
+                agent: $agent,
+                task: $task,
+                timeout: 300,
+            );
+        }
+
+        // Build a minimal CompleteRequest - tools are not LLM calls,
+        // but the pool/executor interface requires this parameter.
+        $request = new \SugarCraft\Crush\Providers\CompleteRequest(
+            model: 'echo',
+            messages: [],
+        );
+
+        // Dispatch all tool SubAgents through the pool.
+        // The pool handles parallelism via pcntl_fork when available.
+        try {
+            $agentResults = [];
+            foreach ($this->executeAgents($subAgents, $request) as $agentResult) {
+                $agentResults[$agentResult->agentId] = $agentResult;
+            }
+        } catch (\Throwable) {
+            // Pool dispatch failed - fall back to sequential
+            $toolResults = [];
+            foreach ($toolCalls as $toolCall) {
+                $toolResults[] = $this->executeTool($toolCall);
+            }
+            return $toolResults;
+        }
+
+        // Convert AgentResult[] back to ToolResult[], preserving tool call order.
+        // agentResults is keyed by subAgentId ('tool-' . index), same scheme used when building subAgents.
+        $toolResults = [];
+        foreach ($toolCalls as $index => $toolCall) {
+            $subAgentId = 'tool-' . ($toolCall->id ?? (string) $index);
+            if (isset($agentResults[$subAgentId])) {
+                $ar = $agentResults[$subAgentId];
+                // Map AgentResult fields to ToolResult.
+                // output contains the executeTool result string on success.
+                if ($ar->error !== null) {
+                    $toolResults[] = ToolResult::error($toolCall->name, $ar->error->getMessage(), $toolCall->id);
+                } else {
+                    $toolResults[] = ToolResult::ok($toolCall->name, $ar->output ?? '', $toolCall->id);
+                }
+            } else {
+                // Result not found - treat as error
+                $toolResults[] = ToolResult::error($toolCall->name, 'Tool execution failed', $toolCall->id);
+            }
+        }
+
+        return $toolResults;
     }
 
     public function view(): string
@@ -949,7 +1051,10 @@ final class Chat implements Model
         $output = ob_get_clean();
 
         // ShareCommand returns 0 for success, non-zero for errors
-        // The output already contains the formatted response
+        if ($exitCode !== 0) {
+            return [$this, static fn() => print $output];
+        }
+
         return $this->shareResponse($inputBuf, $output);
     }
 
@@ -998,6 +1103,11 @@ final class Chat implements Model
         $agentsCommand = new AgentsCommand($this->agentManager ?? throw new \RuntimeException('AgentManager not set'));
         $exitCode = $agentsCommand->execute($this, $args);
         $output = ob_get_clean();
+
+        // If command failed (non-zero exit code), output error but don't add to history
+        if ($exitCode !== 0) {
+            return [$this, static fn() => print $output];
+        }
 
         return $this->agentsResponse($inputBuf, $output);
     }
@@ -1652,6 +1762,33 @@ final class Chat implements Model
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
         return null;
+    }
+
+    /**
+     * Check if idle compaction should be prompted based on token count and idle time.
+     *
+     * This replicates the logic from Runtime::shouldPromptIdleCompaction() for use
+     * in the TUI event loop, where Runtime instance is not directly available.
+     *
+     * Returns true when session has been idle for more than 3600 seconds (1 hour)
+     * AND token count exceeds 100,000.
+     *
+     * @param int $tokenCount Estimated token count for the conversation
+     * @param \DateTimeImmutable|null $lastActivityAt When the user was last active
+     */
+    public function shouldPromptIdleCompaction(int $tokenCount, ?\DateTimeImmutable $lastActivityAt = null): bool
+    {
+        if ($tokenCount <= 100000) {
+            return false;
+        }
+
+        if ($lastActivityAt === null) {
+            return false;
+        }
+
+        $idleSeconds = time() - $lastActivityAt->getTimestamp();
+
+        return $idleSeconds > 3600;
     }
 
     /**

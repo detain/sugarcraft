@@ -35,10 +35,7 @@ final class EnhancedSessionStore
 
             // Share the same PDO connection for enhanced tables.
             // Both stores use the same SQLite database file.
-            $reflection = new \ReflectionClass(SessionStore::class);
-            $pdoProp = $reflection->getProperty('pdo');
-            $pdoProp->setAccessible(true);
-            $this->pdo = $pdoProp->getValue($this->sessionStore);
+            $this->pdo = $this->sessionStore->getPdo();
 
             $this->initEnhancedSchema();
         } finally {

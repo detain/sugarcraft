@@ -32,8 +32,6 @@ final class SubAgent
         public readonly int $timeout = 300,
         public readonly int $maxRetries = 0,
         public readonly Isolation $isolation = Isolation::None,
-        public readonly ?string $teamId = null,
-        public readonly ?string $teamAgentId = null,
         public readonly ?PermissionGate $permissionGate = null,
     ) {
         $this->status = self::STATUS_PENDING;
@@ -80,8 +78,6 @@ final class SubAgent
             'timeout' => $this->timeout,
             'max_retries' => $this->maxRetries,
             'isolation' => $this->isolation->value,
-            'team_id' => $this->teamId,
-            'team_agent_id' => $this->teamAgentId,
             'has_permission_gate' => $this->permissionGate !== null,
         ];
     }

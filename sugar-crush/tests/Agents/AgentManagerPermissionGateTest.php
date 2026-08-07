@@ -74,14 +74,11 @@ final class AgentManagerPermissionGateTest extends TestCase
     }
 
     /**
-     * Test 4: AgentManager::createSubAgent() with custom factory → factory is called with the correct mode.
+     * Test 4a: Mode is locked after first createSubAgent() call.
      */
-    public function testCreateSubAgentWithCustomFactoryIsCalledWithCorrectMode(): void
+    public function testCreateSubAgentLocksModeAfterFirstCall(): void
     {
-        $capturedModes = [];
-
-        $factory = function (PermissionMode $mode) use (&$capturedModes): PermissionGate {
-            $capturedModes[] = $mode;
+        $factory = function (PermissionMode $mode): PermissionGate {
             return new PermissionGate($mode);
         };
 
@@ -91,16 +88,63 @@ final class AgentManagerPermissionGateTest extends TestCase
             permissionGateFactory: $factory,
         );
 
-        $agent = $this->createAgent($agentManager, 'factory-test-agent', 'Factory test');
+        $agent = $this->createAgent($agentManager, 'lock-test-agent', 'Lock test');
 
-        // Call with Default mode (no explicit mode)
-        $agentManager->createSubAgent('factory-test-agent', 'Task 1');
+        // First call with Default mode succeeds
+        $agentManager->createSubAgent('lock-test-agent', 'Task 1');
 
-        // Call with Plan mode
-        $agentManager->createSubAgent('factory-test-agent', 'Task 2', PermissionMode::Plan);
+        // Second call with a DIFFERENT mode on the SAME instance throws LogicException
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Permission mode cannot be changed mid-session');
+        $agentManager->createSubAgent('lock-test-agent', 'Task 2', PermissionMode::Plan);
+    }
 
-        // Call with BypassPermissions mode
-        $agentManager->createSubAgent('factory-test-agent', 'Task 3', PermissionMode::BypassPermissions);
+    /**
+     * Test 4b: A new AgentManager instance CAN use a different mode.
+     */
+    public function testCreateSubAgentWithCustomFactoryIsCalledWithCorrectMode(): void
+    {
+        // Three separate factory calls, each capturing its mode
+        $capturedModes = [];
+
+        // Instance 1: Default mode
+        $factory1 = function (PermissionMode $mode) use (&$capturedModes): PermissionGate {
+            $capturedModes[] = $mode;
+            return new PermissionGate($mode);
+        };
+        $agentManager1 = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: $factory1,
+        );
+        $agent1 = $this->createAgent($agentManager1, 'factory-test-agent-1', 'Factory test 1');
+        $agentManager1->createSubAgent('factory-test-agent-1', 'Task 1');
+
+        // Instance 2: Plan mode
+        $factory2 = function (PermissionMode $mode) use (&$capturedModes): PermissionGate {
+            $capturedModes[] = $mode;
+            return new PermissionGate($mode);
+        };
+        $agentManager2 = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: $factory2,
+        );
+        $agent2 = $this->createAgent($agentManager2, 'factory-test-agent-2', 'Factory test 2');
+        $agentManager2->createSubAgent('factory-test-agent-2', 'Task 2', PermissionMode::Plan);
+
+        // Instance 3: BypassPermissions mode
+        $factory3 = function (PermissionMode $mode) use (&$capturedModes): PermissionGate {
+            $capturedModes[] = $mode;
+            return new PermissionGate($mode);
+        };
+        $agentManager3 = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: $factory3,
+        );
+        $agent3 = $this->createAgent($agentManager3, 'factory-test-agent-3', 'Factory test 3');
+        $agentManager3->createSubAgent('factory-test-agent-3', 'Task 3', PermissionMode::BypassPermissions);
 
         $this->assertCount(3, $capturedModes);
         $this->assertSame(PermissionMode::Default, $capturedModes[0]);

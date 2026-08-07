@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Backend;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
@@ -89,6 +90,30 @@ final class EngineBackend implements Backend
     public function withMaxSteps(int $maxSteps): self
     {
         return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled);
+    }
+
+    /**
+     * Register BashEscapeDenyHook with the given worktree root to prevent Bash
+     * commands from referencing paths outside the worktree.
+     *
+     * This wires the heuristic PreToolUse hook so that Bash commands are
+     * checked before execution. Without this, Bash is confined only by the
+     * `cd $worktreeRoot` prefix which does NOT prevent escape via `cd /` or
+     * `..` traversal within the command string itself.
+     *
+     * @see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook
+     */
+    public function withWorktreeRoot(string $worktreeRoot): self
+    {
+        if ($this->hooksDisabled) {
+            return $this;
+        }
+
+        $manager = $this->hookManager ?? new HookManager(new HookRegistry());
+        $manager->registerBuiltIns();
+        $manager->register(new BashEscapeDenyHook($worktreeRoot));
+
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false);
     }
 
     public function complete(array $history, ?callable $onToken = null): Message

@@ -91,12 +91,24 @@ final class WorktreeManager
         $repoRootArg = $this->repoRoot !== '' ? '-C ' . escapeshellarg($this->repoRoot) . ' ' : '';
 
         $cmd = "git {$repoRootArg} worktree add -b {$escapedBranch} {$escapedPath} 2>&1";
-        $output = trim(shell_exec($cmd) ?? '');
+        $output = [];
+        $exitCode = 0;
+        exec($cmd, $output, $exitCode);
+        $outputStr = trim(implode("\n", $output));
 
-        // Check if git worktree command succeeded by verifying the directory exists
+        // Git writes worktree path to stdout on success; exit code 0 + dir exists = success.
+        // Any exit code != 0 or output containing "fatal" indicates failure.
+        if ($exitCode !== 0 || str_contains($outputStr, 'fatal')) {
+            error_log("WorktreeManager: git worktree add failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
+            throw new \RuntimeException(
+                sprintf('Failed to create worktree for agent "%s": %s', $agentId, $outputStr ?: 'unknown error'),
+            );
+        }
+
+        // Double-check the directory was actually created
         if (!is_dir($worktreePath)) {
             throw new \RuntimeException(
-                sprintf('Failed to create worktree for agent "%s": %s', $agentId, $output),
+                sprintf('Failed to create worktree for agent "%s": directory not found after git command', $agentId),
             );
         }
 
@@ -150,8 +162,16 @@ final class WorktreeManager
             $cmd = "git worktree remove {$escapedPath} 2>&1";
         }
 
-        // Suppress output - git worktree remove prints to stderr on success in some cases
-        @shell_exec($cmd);
+        $output = [];
+        $exitCode = 0;
+        exec($cmd, $output, $exitCode);
+        $outputStr = trim(implode("\n", $output));
+
+        // Git worktree remove returns exit code 0 on success, but may print to stderr.
+        // Any exit code != 0 or output containing "fatal" indicates failure.
+        if ($exitCode !== 0 || str_contains($outputStr, 'fatal')) {
+            error_log("WorktreeManager: git worktree remove failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
+        }
 
         // Remove the directory in case git didn't (e.g., dirty worktree was force-removed)
         if (is_dir($worktreePath)) {
@@ -313,6 +333,7 @@ final class WorktreeManager
         }
 
         if ($this->repoRoot === '') {
+            error_log("WorktreeManager: repoRoot is not set — .worktreeinclude files will not be copied to worktree at {$worktreePath}");
             return;
         }
 

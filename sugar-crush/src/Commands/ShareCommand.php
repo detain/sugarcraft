@@ -139,7 +139,11 @@ final class ShareCommand
      */
     private function getUploadBaseUrl(): string
     {
-        // TODO: Wire through config system when available
+        $envUrl = getenv('SUGAR_CRUSH_SHARE_UPLOAD_URL');
+        if ($envUrl !== false && $envUrl !== '') {
+            return $envUrl;
+        }
+
         return self::DEFAULT_UPLOAD_BASE_URL;
     }
 

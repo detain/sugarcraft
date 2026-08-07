@@ -37,6 +37,14 @@ final class HookManager
     }
 
     /**
+     * Register a custom hook.
+     */
+    public function register(HookInterface $hook): void
+    {
+        $this->registry->register($hook);
+    }
+
+    /**
      * Pre-tool-use hook execution.
      */
     public function preToolUse(HookContext $context): HookResult

@@ -204,8 +204,8 @@ final class MemoryEntryTest extends TestCase
         $this->assertSame(['psr-12', 'strict-types'], $arr['tags']);
         $this->assertSame('project', $arr['scope']);
         $this->assertSame('Always enable strict types.', $arr['content']);
-        $this->assertSame($now, $arr['createdAt']);
-        $this->assertSame($now, $arr['modifiedAt']);
+        $this->assertSame('2024-03-15T10:00:00+00:00', $arr['createdAt']);
+        $this->assertSame('2024-03-15T10:00:00+00:00', $arr['modifiedAt']);
     }
 
     public function testWithGenericUpdatesCorrectField(): void

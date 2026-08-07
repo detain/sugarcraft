@@ -22,6 +22,14 @@ final class AgentManager
     private ?TeamManager $teamManager = null;
 
     /**
+     * Tracks the permission mode locked for this session.
+     * Once the first sub-agent is created, the session mode is sealed.
+     *
+     * @see createSubAgent() enforcement
+     */
+    private ?PermissionMode $sessionPermissionMode = null;
+
+    /**
      * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
      */
     public function __construct(
@@ -84,6 +92,16 @@ final class AgentManager
         }
 
         $mode = $permissionMode ?? PermissionMode::Default;
+
+        // Enforce permission mode cannot be changed mid-session.
+        // Plan spec says BypassPermissions can only be set at launch — once any
+        // sub-agent is created the session's permission mode is sealed to what
+        // was used first. Throwing LogicException makes the contract explicit.
+        if ($this->sessionPermissionMode !== null && $this->sessionPermissionMode !== $mode) {
+            throw new \LogicException('Permission mode cannot be changed mid-session');
+        }
+        $this->sessionPermissionMode ??= $mode;
+
         $gate = $this->createPermissionGate($mode);
 
         $subAgent = new SubAgent(

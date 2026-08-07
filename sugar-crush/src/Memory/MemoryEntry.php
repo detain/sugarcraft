@@ -201,7 +201,7 @@ final readonly class MemoryEntry
     /**
      * Return all fields as an array.
      *
-     * @return array{id: string, type: string, tags: array<string>, scope: string, content: string, createdAt: \DateTimeImmutable, modifiedAt: \DateTimeImmutable}
+     * @return array{id: string, type: string, tags: array<string>, scope: string, content: string, createdAt: string, modifiedAt: string}
      */
     public function toArray(): array
     {
@@ -211,8 +211,8 @@ final readonly class MemoryEntry
             'tags' => $this->tags,
             'scope' => $this->scope,
             'content' => $this->content,
-            'createdAt' => $this->createdAt,
-            'modifiedAt' => $this->modifiedAt,
+            'createdAt' => $this->createdAt->format(\DateTimeInterface::ATOM),
+            'modifiedAt' => $this->modifiedAt->format(\DateTimeInterface::ATOM),
         ];
     }
 
