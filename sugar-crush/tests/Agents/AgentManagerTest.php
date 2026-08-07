@@ -645,6 +645,61 @@ final class AgentManagerTest extends TestCase
         $this->agentManager->createTeam('duplicate-team', 'Second Team', 'lead-agent-7');
     }
 
+    public function testGetTeamsDelegates(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $this->agentManager->setTeamManager($teamManager);
+
+        // Initially empty
+        $this->assertSame([], $this->agentManager->getTeams());
+
+        // Create some teams
+        $team1 = $this->agentManager->createTeam('team-1', 'Team One', 'lead-1');
+        $team2 = $this->agentManager->createTeam('team-2', 'Team Two', 'lead-2');
+
+        $teams = $this->agentManager->getTeams();
+
+        $this->assertCount(2, $teams);
+        $this->assertSame($team1, $teams[0]);
+        $this->assertSame($team2, $teams[1]);
+    }
+
+    public function testGetTeamsThrowsWhenNoTeamManager(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
+
+        $this->agentManager->getTeams();
+    }
+
+    public function testTeamCountDelegates(): void
+    {
+        $teamManager = new TeamManager(sys_get_temp_dir() . '/agentmgr_test_' . uniqid());
+        $this->agentManager->setTeamManager($teamManager);
+
+        // Initially zero
+        $this->assertSame(0, $this->agentManager->teamCount());
+
+        // Add teams
+        $this->agentManager->createTeam('count-team-1', 'Count Team 1', 'lead-count-1');
+        $this->assertSame(1, $this->agentManager->teamCount());
+
+        $this->agentManager->createTeam('count-team-2', 'Count Team 2', 'lead-count-2');
+        $this->assertSame(2, $this->agentManager->teamCount());
+
+        // Remove a team
+        $this->agentManager->removeTeam('count-team-1');
+        $this->assertSame(1, $this->agentManager->teamCount());
+    }
+
+    public function testTeamCountThrowsWhenNoTeamManager(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('TeamManager has not been set on AgentManager');
+
+        $this->agentManager->teamCount();
+    }
+
     // -------------------------------------------------------------------------
     // Helper methods
     // -------------------------------------------------------------------------

@@ -368,4 +368,33 @@ final class AgentManager
 
         return $this->teamManager->removeTeam($teamId);
     }
+
+    /**
+     * Return all registered teams.
+     *
+     * @return Team[]
+     * @throws \RuntimeException When no team manager is set
+     */
+    public function getTeams(): array
+    {
+        if ($this->teamManager === null) {
+            throw new \RuntimeException('TeamManager has not been set on AgentManager');
+        }
+
+        return $this->teamManager->getTeams();
+    }
+
+    /**
+     * Return the number of currently registered teams.
+     *
+     * @throws \RuntimeException When no team manager is set
+     */
+    public function teamCount(): int
+    {
+        if ($this->teamManager === null) {
+            throw new \RuntimeException('TeamManager has not been set on AgentManager');
+        }
+
+        return $this->teamManager->teamCount();
+    }
 }
