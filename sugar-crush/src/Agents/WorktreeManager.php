@@ -61,11 +61,12 @@ final class WorktreeManager
      *
      * @param string $agentId Unique identifier for the agent (used as directory name).
      * @param string|null $branch Optional branch name; defaults to agent-{agentId}-{timestamp}.
+     * @param bool $named Whether this worktree was created for a named task/session (affects cleanup policy).
      * @return string The absolute path to the newly created worktree.
      * @throws \InvalidArgumentException When agentId is empty or contains path traversal.
      * @throws \RuntimeException When git worktree creation fails.
      */
-    public function createWorktree(string $agentId, ?string $branch = null): string
+    public function createWorktree(string $agentId, ?string $branch = null, bool $named = false): string
     {
         if ($agentId === '') {
             throw new \InvalidArgumentException('Agent ID must not be empty.');
@@ -122,8 +123,14 @@ final class WorktreeManager
         $this->registry[$agentId] = [
             'branch' => $branch,
             'createdAt' => (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM),
+            'named' => $named,
         ];
         $this->saveRegistry();
+
+        // Copy .worktreeinclude files into the new worktree if configured
+        if ($this->config->worktreeIncludeFile !== '') {
+            $this->resolveWorktreeInclude($worktreePath);
+        }
 
         return $worktreePath;
     }
@@ -228,6 +235,342 @@ final class WorktreeManager
         }
 
         return $this->registry;
+    }
+
+    // -------------------------------------------------------------------------
+    // .worktreeinclude resolution
+    // -------------------------------------------------------------------------
+
+    /**
+     * Copy files matching patterns in .worktreeinclude into the new worktree.
+     *
+     * Reads .worktreeinclude (or the configured alternative) from the repo root,
+     * interprets each line as a glob pattern (empty lines / # comments / !negs ignored),
+     * and copies matching files into the newly-created worktree directory so that
+     * normally-ignored files (e.g. .env, composer auth) are available to the agent.
+     *
+     * Mirrors: same approach as git's exclude file mechanism.
+     *
+     * @param string $worktreePath Absolute path to the newly created worktree.
+     */
+    public function resolveWorktreeInclude(string $worktreePath): void
+    {
+        if ($this->config->worktreeIncludeFile === '') {
+            return;
+        }
+
+        $includeFile = $this->repoRoot !== ''
+            ? $this->repoRoot . '/' . $this->config->worktreeIncludeFile
+            : $this->config->worktreeIncludeFile;
+
+        if (!file_exists($includeFile)) {
+            return;
+        }
+
+        $lines = file($includeFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines === false || $lines === []) {
+            return;
+        }
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+
+            // Skip comments and negation patterns
+            if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, '!')) {
+                continue;
+            }
+
+            $patterns = $this->resolveNegations($line, $includeFile);
+
+            foreach ($patterns as $pattern) {
+                $this->copyGlob($this->repoRoot, $worktreePath, $pattern);
+            }
+        }
+    }
+
+    /**
+     * Resolve a pattern that may contain negations into a list of positive-only patterns.
+     *
+     * Negation patterns (lines starting with !) remove files from the result set.
+     * This method expands a line containing ! patterns into individual positive patterns
+     * after applying the negations.
+     */
+    private function resolveNegations(string $line, string $includeFile): array
+    {
+        $dir = dirname($includeFile);
+        $positivePatterns = [];
+        $negations = [];
+        $parts = preg_split('/\s+/', $line);
+
+        foreach ($parts as $part) {
+            if ($part === '') {
+                continue;
+            }
+            if (str_starts_with($part, '!')) {
+                $negations[] = substr($part, 1);
+            } else {
+                $positivePatterns[] = $part;
+            }
+        }
+
+        $result = [];
+        foreach ($positivePatterns as $pattern) {
+            $matched = $this->globAll($dir, $pattern);
+            foreach ($matched as $file) {
+                $isNegated = false;
+                foreach ($negations as $neg) {
+                    if ($this->matchesGlob($file, $neg, $dir)) {
+                        $isNegated = true;
+                        break;
+                    }
+                }
+                if (!$isNegated) {
+                    $result[] = $file;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Copy a single file or directory matching a glob pattern from src to dest.
+     */
+    private function copyGlob(string $srcRoot, string $destRoot, string $pattern): void
+    {
+        $srcPath = $srcRoot . '/' . $pattern;
+
+        if (is_dir($srcPath)) {
+            $destPath = $destRoot . '/' . $pattern;
+            if (!is_dir($destPath)) {
+                mkdir($destPath, 0755, true);
+            }
+            $this->copyDirectory($srcPath, $destPath);
+            return;
+        }
+
+        if (is_file($srcPath)) {
+            $destPath = $destRoot . '/' . $pattern;
+            $destDir = dirname($destPath);
+            if (!is_dir($destDir)) {
+                mkdir($destDir, 0755, true);
+            }
+            copy($srcPath, $destPath);
+        }
+    }
+
+    /**
+     * Recursively copy a directory's contents.
+     */
+    private function copyDirectory(string $src, string $dest): void
+    {
+        if (!is_dir($src)) {
+            return;
+        }
+
+        if (!is_dir($dest)) {
+            mkdir($dest, 0755, true);
+        }
+
+        $entries = @scandir($src);
+        if ($entries === false) {
+            return;
+        }
+
+        foreach (array_diff($entries, ['.', '..']) as $entry) {
+            $srcPath = $src . '/' . $entry;
+            $destPath = $dest . '/' . $entry;
+
+            if (is_dir($srcPath)) {
+                $this->copyDirectory($srcPath, $destPath);
+            } else {
+                copy($srcPath, $destPath);
+            }
+        }
+    }
+
+    /**
+     * Get all files matching a glob pattern relative to a base directory.
+     *
+     * @return array<string> List of relative file paths.
+     */
+    private function globAll(string $baseDir, string $pattern): array
+    {
+        if (str_contains($pattern, '**')) {
+            return $this->globRecursive($baseDir, $pattern);
+        }
+
+        $escaped = addcslashes($pattern, './');
+        $escaped = str_replace(['\\?', '\\*'], ['?', '*'], $escaped);
+
+        $fullPattern = $baseDir . '/' . $escaped;
+        $matches = glob($fullPattern);
+
+        return $matches === false ? [] : array_map(
+            fn(string $m): string => ltrim(substr($m, strlen($baseDir) + 1), '/'),
+            $matches,
+        );
+    }
+
+    /**
+     * Recursive glob for ** patterns.
+     *
+     * @return array<string> List of relative file paths.
+     */
+    private function globRecursive(string $baseDir, string $pattern): array
+    {
+        $results = [];
+        $prefix = rtrim(substr($pattern, 0, strpos($pattern, '**')), '/');
+        $suffix = ltrim(substr($pattern, strpos($pattern, '**') + 2), '/');
+
+        $searchDir = $prefix === '' ? $baseDir : $baseDir . '/' . $prefix;
+        if (!is_dir($searchDir)) {
+            return [];
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($searchDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+
+        foreach ($iterator as $file) {
+            /** @var \SplFileInfo $file */
+            if ($file->isDir()) {
+                continue;
+            }
+
+            $relativePath = $file->getPathname();
+            if ($prefix !== '') {
+                $relativePath = substr($relativePath, strlen($baseDir) + 1);
+            }
+
+            if ($suffix !== '' && !$this->matchesGlob($relativePath, $suffix, $baseDir)) {
+                continue;
+            }
+
+            if (str_starts_with($relativePath, './')) {
+                $relativePath = substr($relativePath, 2);
+            }
+
+            $results[] = $relativePath;
+        }
+
+        return $results;
+    }
+
+    /**
+     * Match a path against a glob pattern.
+     */
+    private function matchesGlob(string $path, string $pattern, string $baseDir): bool
+    {
+        if ($pattern === '*') {
+            return !str_contains($path, '/');
+        }
+
+        if (str_ends_with($pattern, '/*')) {
+            $dir = substr($pattern, 0, -2);
+            return str_starts_with($path, $dir . '/') && !str_contains(substr($path, strlen($dir) + 1), '/');
+        }
+
+        if (str_ends_with($pattern, '/**')) {
+            $prefix = substr($pattern, 0, -3);
+            return str_starts_with($path, $prefix . '/');
+        }
+
+        return fnmatch($pattern, $path, FNM_PATHNAME);
+    }
+
+    // -------------------------------------------------------------------------
+    // Cleanup policy
+    // -------------------------------------------------------------------------
+
+    /**
+     * Determine whether a worktree has uncommitted changes.
+     *
+     * Uses `git status --porcelain` to detect any uncommitted modifications,
+     * untracked files, or staged changes in the worktree.
+     *
+     * @param string $worktreePath Absolute path to the worktree.
+     * @return bool True if the worktree has uncommitted changes, false otherwise.
+     */
+    public function worktreeHasUncommittedDiff(string $worktreePath): bool
+    {
+        if (!is_dir($worktreePath)) {
+            return false;
+        }
+
+        $escapedPath = escapeshellarg($worktreePath);
+        $cmd = "git -C {$escapedPath} status --porcelain 2>&1";
+
+        $output = [];
+        $exitCode = 0;
+        exec($cmd, $output, $exitCode);
+
+        $outputStr = trim(implode("\n", $output));
+
+        return $outputStr !== '';
+    }
+
+    /**
+     * Remove stale worktrees older than the configured cleanup period.
+     *
+     * Implements the two-tier cleanup policy:
+     *
+     * 1. **Named worktrees** (created for explicit human sessions) are NEVER
+     *    removed automatically — they are always preserved regardless of age.
+     *
+     * 2. **Unnamed (ephemeral) worktrees** follow a conditional auto-cleanup:
+     *    - If the worktree is clean (no uncommitted diff), it is automatically removed.
+     *    - If the worktree is dirty (has uncommitted changes), it is left alone
+     *      so no work is lost.
+     *
+     * This method performs a periodic sweep and is typically called at startup
+     * or by a background timer. It does not affect worktrees that are still active.
+     *
+     * @param int $days Worktrees older than this many days are considered stale. Defaults to config value.
+     * @return int The number of worktrees actually removed.
+     */
+    public function cleanupStaleWorktrees(int $days = 0): int
+    {
+        if ($days <= 0) {
+            $days = $this->config->worktreeCleanupPeriodDays;
+        }
+
+        $cutoff = (new \DateTimeImmutable())->modify("-{$days} days");
+        $removed = 0;
+
+        foreach ($this->registry as $agentId => $meta) {
+            $worktreePath = $this->expandedBasePath . '/' . $agentId;
+
+            if (!is_dir($worktreePath)) {
+                continue;
+            }
+
+            // Named worktrees are always preserved regardless of age
+            if (($meta['named'] ?? false) === true) {
+                continue;
+            }
+
+            $createdAt = \DateTimeImmutable::createFromFormat(\DateTimeImmutable::ATOM, $meta['createdAt']);
+            if ($createdAt === false || $createdAt > $cutoff) {
+                continue;
+            }
+
+            // Unnamed + old + dirty = leave alone so work is not lost
+            if ($this->worktreeHasUncommittedDiff($worktreePath)) {
+                continue;
+            }
+
+            // Unnamed + old + clean = safe to remove
+            try {
+                $this->removeWorktree($agentId);
+                $removed++;
+            } catch (\Throwable) {
+                // Skip worktrees that fail to remove (e.g., locked files)
+            }
+        }
+
+        return $removed;
     }
 
     // -------------------------------------------------------------------------

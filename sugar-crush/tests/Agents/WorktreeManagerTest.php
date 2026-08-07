@@ -371,6 +371,227 @@ final class WorktreeManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // cleanupStaleWorktrees()
+    // -------------------------------------------------------------------------
+
+    public function testCleanupStaleWorktreesReturnsZeroWhenNothingToClean(): void
+    {
+        $manager = new WorktreeManager(new WorktreeConfig(
+            basePath: $this->tmpRoot . '/empty-cleanup/',
+            autoCleanup: true,
+        ), $this->repoRoot);
+
+        $removed = $manager->cleanupStaleWorktrees(7);
+
+        $this->assertSame(0, $removed);
+    }
+
+    public function testCleanupStaleWorktreesPreservesNamedWorktrees(): void
+    {
+        $agentId = 'named-stale-agent';
+
+        $this->manager->createWorktree($agentId, null, true);
+
+        $path = $this->manager->getWorktreePath($agentId);
+        $this->assertTrue(is_dir($path));
+
+        // Backdate the worktree's createdAt to make it stale
+        $cutoff = (new \DateTimeImmutable())->modify('-8 days')->format(\DateTimeImmutable::ATOM);
+        $this->manager = new WorktreeManager(new WorktreeConfig(
+            basePath: $this->tmpRoot . '/worktrees/',
+            autoCleanup: true,
+        ), $this->repoRoot);
+
+        $reflection = new \ReflectionClass($this->manager);
+        $registryProp = $reflection->getProperty('registry');
+        $registryProp->setAccessible(true);
+        $registry = $registryProp->getValue($this->manager);
+        $registry[$agentId]['createdAt'] = $cutoff;
+        $registry[$agentId]['named'] = true;
+        $registryProp->setValue($this->manager, $registry);
+
+        // Cleanup should not remove named worktree
+        $removed = $this->manager->cleanupStaleWorktrees(7);
+
+        $this->assertSame(0, $removed, 'Named worktree should not be removed');
+        $this->assertTrue(is_dir($path), 'Named worktree directory should still exist');
+        $this->assertArrayHasKey($agentId, $this->manager->listWorktrees());
+    }
+
+    public function testCleanupStaleWorktreesRemovesOldUnnamedCleanWorktree(): void
+    {
+        $agentId = 'unnamed-clean-stale-agent';
+
+        $this->manager->createWorktree($agentId, null, false);
+
+        $path = $this->manager->getWorktreePath($agentId);
+        $this->assertTrue(is_dir($path));
+
+        // Backdate the worktree's createdAt to make it stale (but leave it clean)
+        $cutoff = (new \DateTimeImmutable())->modify('-8 days')->format(\DateTimeImmutable::ATOM);
+
+        $reflection = new \ReflectionClass($this->manager);
+        $registryProp = $reflection->getProperty('registry');
+        $registryProp->setAccessible(true);
+        $registry = $registryProp->getValue($this->manager);
+        $registry[$agentId]['createdAt'] = $cutoff;
+        $registry[$agentId]['named'] = false;
+        $registryProp->setValue($this->manager, $registry);
+
+        $removed = $this->manager->cleanupStaleWorktrees(7);
+
+        $this->assertSame(1, $removed, 'Old unnamed clean worktree should be removed');
+        $this->assertFalse(is_dir($path), 'Worktree directory should be gone');
+        $this->assertArrayNotHasKey($agentId, $this->manager->listWorktrees());
+    }
+
+    public function testCleanupStaleWorktreesPreservesOldUnnamedDirtyWorktree(): void
+    {
+        $agentId = 'unnamed-dirty-stale-agent';
+
+        $path = $this->manager->createWorktree($agentId, null, false);
+
+        // Make the worktree dirty by adding an uncommitted file
+        file_put_contents($path . '/DIRTY_MARKER.txt', 'uncommitted content');
+
+        // Also backdate so it's stale
+        $cutoff = (new \DateTimeImmutable())->modify('-8 days')->format(\DateTimeImmutable::ATOM);
+
+        $reflection = new \ReflectionClass($this->manager);
+        $registryProp = $reflection->getProperty('registry');
+        $registryProp->setAccessible(true);
+        $registry = $registryProp->getValue($this->manager);
+        $registry[$agentId]['createdAt'] = $cutoff;
+        $registry[$agentId]['named'] = false;
+        $registryProp->setValue($this->manager, $registry);
+
+        $removed = $this->manager->cleanupStaleWorktrees(7);
+
+        // Dirty worktree must not be removed
+        $this->assertSame(0, $removed, 'Dirty worktree should be preserved');
+        $this->assertTrue(is_dir($path), 'Worktree directory should still exist');
+        $this->assertFileExists($path . '/DIRTY_MARKER.txt');
+        $this->assertArrayHasKey($agentId, $this->manager->listWorktrees());
+    }
+
+    // -------------------------------------------------------------------------
+    // worktreeHasUncommittedDiff()
+    // -------------------------------------------------------------------------
+
+    public function testWorktreeHasUncommittedDiffReturnsFalseForCleanWorktree(): void
+    {
+        $agentId = 'clean-diff-agent';
+        $path = $this->manager->createWorktree($agentId);
+
+        $reflection = new \ReflectionClass($this->manager);
+        $method = $reflection->getMethod('worktreeHasUncommittedDiff');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($this->manager, $path));
+    }
+
+    public function testWorktreeHasUncommittedDiffReturnsTrueForDirtyWorktree(): void
+    {
+        $agentId = 'dirty-diff-agent';
+        $path = $this->manager->createWorktree($agentId);
+
+        file_put_contents($path . '/NEW_FILE.txt', 'new content');
+
+        $reflection = new \ReflectionClass($this->manager);
+        $method = $reflection->getMethod('worktreeHasUncommittedDiff');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($this->manager, $path));
+    }
+
+    // -------------------------------------------------------------------------
+    // resolveWorktreeInclude()
+    // -------------------------------------------------------------------------
+
+    public function testResolveWorktreeIncludeCopiesMatchingFiles(): void
+    {
+        // Set up .worktreeinclude and source files BEFORE creating the worktree
+        $includeFile = $this->repoRoot . '/.worktreeinclude';
+        file_put_contents($includeFile, ".env.example\nsubdir/\n");
+        file_put_contents($this->repoRoot . '/.env.example', 'TEST=value');
+
+        // Create a subdir with a file to test recursive copy
+        mkdir($this->repoRoot . '/subdir', 0755);
+        file_put_contents($this->repoRoot . '/subdir/nested.txt', 'nested content');
+
+        // Create a worktree — resolveWorktreeInclude is called automatically
+        $agentId = 'include-test-agent';
+        $config = new WorktreeConfig(
+            basePath: $this->tmpRoot . '/worktrees/',
+            autoCleanup: true,
+            worktreeIncludeFile: '.worktreeinclude',
+        );
+        $manager = new WorktreeManager($config, $this->repoRoot);
+        $path = $manager->createWorktree($agentId);
+
+        // .env.example should have been auto-copied into the worktree
+        $this->assertFileExists($path . '/.env.example');
+        $this->assertSame('TEST=value', file_get_contents($path . '/.env.example'));
+
+        // subdir should have been copied recursively
+        $this->assertFileExists($path . '/subdir/nested.txt');
+        $this->assertSame('nested content', file_get_contents($path . '/subdir/nested.txt'));
+    }
+
+    public function testResolveWorktreeIncludeHandlesNonexistentIncludeFile(): void
+    {
+        $agentId = 'no-include-agent';
+        $config = new WorktreeConfig(
+            basePath: $this->tmpRoot . '/worktrees/',
+            autoCleanup: true,
+            worktreeIncludeFile: '.nonexistent-include-file',
+        );
+        $manager = new WorktreeManager($config, $this->repoRoot);
+        $path = $manager->createWorktree($agentId);
+
+        $reflection = new \ReflectionClass($manager);
+        $method = $reflection->getMethod('resolveWorktreeInclude');
+        $method->setAccessible(true);
+
+        // Should not throw even if file doesn't exist
+        $method->invoke($manager, $path);
+
+        $this->assertTrue(is_dir($path));
+    }
+
+    // -------------------------------------------------------------------------
+    // createWorktree with $named parameter
+    // -------------------------------------------------------------------------
+
+    public function testCreateWorktreeWithNamedFlagStoresNamedState(): void
+    {
+        $agentId = 'named-state-agent';
+
+        $path = $this->manager->createWorktree($agentId, null, true);
+
+        $this->assertNotEmpty($path);
+        $this->assertTrue(is_dir($path));
+
+        $worktrees = $this->manager->listWorktrees();
+        $this->assertArrayHasKey($agentId, $worktrees);
+        $this->assertTrue($worktrees[$agentId]['named'] ?? false);
+    }
+
+    public function testCreateWorktreeWithoutNamedFlagStoresUnnamedState(): void
+    {
+        $agentId = 'unnamed-state-agent';
+
+        $path = $this->manager->createWorktree($agentId, null, false);
+
+        $this->assertNotEmpty($path);
+        $this->assertTrue(is_dir($path));
+
+        $worktrees = $this->manager->listWorktrees();
+        $this->assertArrayHasKey($agentId, $worktrees);
+        $this->assertFalse($worktrees[$agentId]['named'] ?? true);
+    }
+
+    // -------------------------------------------------------------------------
     // Helper
     // -------------------------------------------------------------------------
 
