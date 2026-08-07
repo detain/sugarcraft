@@ -11,6 +11,7 @@ use SugarCraft\Crush\Agents\Task;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Agents\TaskStatus;
 use SugarCraft\Crush\Agents\Team;
+use SugarCraft\Crush\Agents\TeamMessage;
 use SugarCraft\Crush\Agents\TeamConfig;
 use SugarCraft\Crush\Agents\TeamManager;
 use SugarCraft\Crush\Agents\Teammate;
@@ -433,6 +434,99 @@ final class TeamLifecycleTest extends TestCase
 
         $manager->removeTeam('team-indep-2');
         self::assertSame(0, $manager->teamCount());
+    }
+
+    /**
+     * testMailboxSendAndReceiveRoundTrip: verify Mailbox::send() from one
+     * teammate to another and Mailbox::receive() returns the identical message.
+     *
+     * This exercises the full team lifecycle requirement of send/receive
+     * mailbox messages using real Team/Mailbox instances with a temp directory.
+     */
+    public function testMailboxSendAndReceiveRoundTrip(): void
+    {
+        // Team stores its mailbox under $_SERVER['HOME']/.sugar-crush/teams/{teamId}/mailbox
+        // Override HOME so the mailbox is created under our temp directory.
+        $originalHome = $_SERVER['HOME'] ?? null;
+        $_SERVER['HOME'] = $this->tempDir;
+
+        try {
+            $manager = new TeamManager($this->teamManagerBasePath);
+
+            $team = $manager->createTeam(
+                teamId: 'team-mailbox',
+                name: 'Mailbox Test Team',
+                leadAgentId: 'lead-mb',
+            );
+
+            $tm1 = new Teammate(
+                id: 'tm-mb-1',
+                teamId: 'team-mailbox',
+                name: 'Alice',
+                type: AgentType::Coder,
+                model: 'claude-sonnet-4-6',
+                tools: ['read', 'write'],
+            );
+
+            $tm2 = new Teammate(
+                id: 'tm-mb-2',
+                teamId: 'team-mailbox',
+                name: 'Bob',
+                type: AgentType::Reviewer,
+                model: 'claude-sonnet-4-6',
+                tools: ['read', 'grep'],
+            );
+
+            $team->addTeammate($tm1);
+            $team->addTeammate($tm2);
+
+            $mailbox = $team->getMailbox();
+            self::assertInstanceOf(Mailbox::class, $mailbox);
+
+            $sentAt = new \DateTimeImmutable();
+            $message = new TeamMessage(
+                id: 'msg-001',
+                fromTeammateId: 'tm-mb-1',
+                toTeammateId: 'tm-mb-2',
+                type: 'task_assigned',
+                payload: ['taskId' => 'task-42', 'priority' => 'high'],
+                sentAt: $sentAt,
+            );
+
+            // Send message from Alice (tm-mb-1) to Bob (tm-mb-2)
+            $mailbox->send($message->fromTeammateId, $message->toTeammateId, $message);
+
+            // Bob receives the message
+            $received = iterator_to_array($mailbox->receive('tm-mb-2'));
+            self::assertCount(1, $received);
+
+            $receivedMsg = $received[0];
+            self::assertSame('msg-001', $receivedMsg->id);
+            self::assertSame('tm-mb-1', $receivedMsg->fromTeammateId);
+            self::assertSame('tm-mb-2', $receivedMsg->toTeammateId);
+            self::assertSame('task_assigned', $receivedMsg->type);
+            self::assertSame(['taskId' => 'task-42', 'priority' => 'high'], $receivedMsg->payload);
+            self::assertFalse($receivedMsg->read);
+
+            // peek() also returns the message (without marking it read)
+            $peeked = $mailbox->peek('tm-mb-2');
+            self::assertCount(1, $peeked);
+            self::assertSame('msg-001', $peeked[0]->id);
+
+            // Mark as read and verify getUnreadCount drops to 0
+            $mailbox->markRead('tm-mb-2', 'msg-001');
+            self::assertSame(0, $mailbox->getUnreadCount('tm-mb-2'));
+
+            // Alice's inbox should still be empty
+            self::assertCount(0, $mailbox->peek('tm-mb-1'));
+            self::assertSame(0, $mailbox->getUnreadCount('tm-mb-1'));
+        } finally {
+            if ($originalHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $originalHome;
+            }
+        }
     }
 
     /**
