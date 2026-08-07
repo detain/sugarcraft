@@ -55,7 +55,7 @@ final class Mailbox
      * Read status is determined by the inline `read` field OR by the presence
      * of the messageId in the append-only read-markers companion file.
      *
-     * @return \Generator<TeamMessage>
+     * @return \Generator<int, TeamMessage, mixed, mixed>
      */
     public function receive(string $teammateId): \Generator
     {
@@ -121,12 +121,6 @@ final class Mailbox
      */
     public function markRead(string $teammateId, string $messageId): void
     {
-        $inboxPath = $this->inboxPath($teammateId);
-
-        if (!file_exists($inboxPath)) {
-            return;
-        }
-
         // Append the messageId to the read-markers file (oneId per line).
         // receive() checks this file to determine read status without ever
         // needing to modify the inbox itself.
@@ -167,8 +161,8 @@ final class Mailbox
     private function ensureInboxDirectory(string $teammateId): void
     {
         $dir = dirname($this->inboxPath($teammateId));
-        if (!is_dir($dir)) {
-            mkdir($dir, 0750, true);
+        if (!is_dir($dir) && !mkdir($dir, 0750, true)) {
+            throw new \RuntimeException("Failed to create inbox directory: {$dir}");
         }
     }
 
