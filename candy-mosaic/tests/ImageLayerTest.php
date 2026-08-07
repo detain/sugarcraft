@@ -141,4 +141,58 @@ final class ImageLayerTest extends TestCase
         // place() degrades the same way it always did — a blank block, no throw.
         self::assertSame($overflow->marker, $layer->place(pack('N', ImageOverlay::MAX_IMAGES), 6, 3));
     }
+
+    public function testRemoveById(): void
+    {
+        $layer = new ImageLayer();
+
+        // Place an image
+        $placed = $layer->placeTracked('image bytes', 100, 50);
+        self::assertCount(1, $layer->placements());
+        self::assertArrayHasKey($placed->imageId, $layer->placements());
+
+        // Remove it
+        $layer->removeById($placed->imageId);
+        self::assertCount(0, $layer->placements());
+        self::assertArrayNotHasKey($placed->imageId, $layer->placements());
+    }
+
+    public function testRemoveByIdIsIdempotent(): void
+    {
+        $layer = new ImageLayer();
+        $placed = $layer->placeTracked('image bytes', 100, 50);
+
+        // Removing twice should not error
+        $layer->removeById($placed->imageId);
+        $layer->removeById($placed->imageId); // Should be safe
+
+        self::assertCount(0, $layer->placements());
+    }
+
+    public function testRemoveByIdOnNonExistentIdIsSafe(): void
+    {
+        $layer = new ImageLayer();
+
+        // Removing an id that was never placed should not error
+        $layer->removeById(999);
+
+        self::assertTrue($layer->isEmpty());
+    }
+
+    public function testRemoveByIdAndPlaceAgain(): void
+    {
+        $layer = new ImageLayer();
+
+        $first = $layer->placeTracked('A', 2, 1);
+        self::assertSame(0, $first->imageId);
+        self::assertCount(1, $layer->placements());
+
+        $layer->removeById($first->imageId);
+        self::assertCount(0, $layer->placements());
+
+        // New placement gets a fresh id (dedup is based on bytes, not id reuse)
+        $second = $layer->placeTracked('B', 2, 1);
+        self::assertSame(1, $second->imageId);
+        self::assertCount(1, $layer->placements());
+    }
 }
