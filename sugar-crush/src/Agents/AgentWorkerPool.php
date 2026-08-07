@@ -50,6 +50,16 @@ final class AgentWorkerPool
      * Execute all agents, yielding results as they complete.
      *
      * @param SubAgent[] $agents
+     *
+     * For each agent, this method builds a per-agent CompleteRequest using the
+     * agent's ->task field as the user message.  This ensures that parallel
+     * stages where each agent has a distinct prompt work correctly — a future
+     * executor that reads $request->messages directly (rather than using the
+     * agent's task field) would still receive the correct per-agent prompt.
+     *
+     * The $request parameter supplies shared fields (model, tools, systemPrompt,
+     * temperature, maxTokens) that are common across all agents in the pool.
+     *
      * @return \Generator<AgentResult>
      */
     public function executeAll(array $agents, CompleteRequest $request): \Generator
@@ -90,8 +100,25 @@ final class AgentWorkerPool
 
                 $this->active[$agent->id] = $agent;
 
+                // Build a per-agent request from the agent's task field so that
+                // each agent's executor receives its own prompt. This ensures
+                // parallel stages with non-identical prompts work correctly —
+                // a future executor that uses $request->messages directly (rather
+                // than the agent's task field) would otherwise receive only the
+                // first task's prompt for all agents.
+                $agentRequest = new CompleteRequest(
+                    model: $request->model,
+                    messages: [
+                        ['role' => 'user', 'content' => $agent->task],
+                    ],
+                    tools: $request->tools,
+                    systemPrompt: $request->systemPrompt,
+                    temperature: $request->temperature,
+                    maxTokens: $request->maxTokens,
+                );
+
                 // Start agent — try forking if available, fall back to sync
-                $this->startAgent($agent, $request, $executor);
+                $this->startAgent($agent, $agentRequest, $executor);
             }
 
             if ($this->active === []) {
@@ -183,7 +210,15 @@ final class AgentWorkerPool
     }
 
     /**
-     * Configure stopOnFirstFailure behavior.
+     * Configure stopOnFirstFailure behavior for this pool instance.
+     *
+     * Called by WorkflowEngine::executeParallelStage() when the workflow has
+     * $stopOnFirstFailure=true.  The flag is checked inside executeAll() after
+     * each agent result is collected to cancel remaining queued agents on failure.
+     *
+     * Implementation chain: WorkflowBuilder::stopOnFirstFailure() -> WorkflowEngine
+     * reads Workflow::$stopOnFirstFailure -> calls withStopOnFirstFailure() here ->
+     * executeAll() checks $this->stopOnFirstFailure when yielding results.
      *
      * NOTE: This is an extension beyond the base 6-method spec — not in the
      * charmbracelet/charmcrush AgentWorkerPool contract.

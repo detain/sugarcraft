@@ -699,6 +699,14 @@ final class WorkflowEngine
      * via AgentWorkerPool::executeAll(). Respects the workflow's maxConcurrent
      * setting to control how many agents run at once.
      *
+     * This method is part of the parallel() primitive implementation which spans
+     * five files:
+     *   - WorkflowEngine.php: executeParallelStage() orchestrates the parallel run
+     *   - WorkflowBuilder.php: parallel() registers the stage; stopOnFirstFailure() configures it
+     *   - Workflow.php: $stopOnFirstFailure property gates fail-fast behavior
+     *   - WorkflowRegistry.php: parseStages() recognizes 'parallel' type stages
+     *   - AgentWorkerPool.php: executeAll() runs agents concurrently; withStopOnFirstFailure() enables early termination
+     *
      * @param array    $stage   Stage array from Workflow::$stages.
      * @param array    $context Current workflow context for interpolation.
      * @param Workflow $workflow The workflow definition (provides maxConcurrent, stopOnFirstFailure).
@@ -720,9 +728,10 @@ final class WorkflowEngine
             );
         }
 
-        // Build a SubAgent for each task, all sharing the same CompleteRequest
-        // (the request is task-specific for messages/content, but tools/systemPrompt
-        // come from the first task's agent config to match sequential stage behavior).
+        // Build a SubAgent for each task.  A $defaultRequest is created from the first
+        // task to supply tools/systemPrompt for the pool, but AgentWorkerPool::executeAll()
+        // builds a per-agent CompleteRequest using each agent's own task field, so
+        // parallel stages with non-identical prompts work correctly.
         /** @var WorkflowTask $firstTask */
         $firstTask = $tasks[0];
         $firstInterpolated = $this->interpolateContext($firstTask->prompt, $context);

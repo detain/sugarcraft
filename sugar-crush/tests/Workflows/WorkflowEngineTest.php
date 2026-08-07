@@ -276,10 +276,12 @@ final class WorkflowEngineTest extends TestCase
         $this->registry->register($workflow);
 
         $callCount = 0;
+        $capturedRequests = [];
         $this->mockExecutor
             ->expects($this->exactly(3))
             ->method('execute')
-            ->willReturnCallback(function () use (&$callCount) {
+            ->willReturnCallback(function ($agent, CompleteRequest $request) use (&$callCount, &$capturedRequests) {
+                $capturedRequests[] = $request;
                 $callCount++;
                 return $this->successfulAgentResult("result-{$callCount}", 100 * $callCount, 0.01 * $callCount);
             });
@@ -296,6 +298,18 @@ final class WorkflowEngineTest extends TestCase
         // Token and cost sums
         $this->assertSame(600, $result->totalTokens);
         $this->assertSame(0.06, $result->totalCost);
+
+        // Verify each agent received its own distinct prompt, not a shared default
+        $this->assertCount(3, $capturedRequests);
+        $prompts = array_map(
+            fn(CompleteRequest $r) => $r->messages[0]['content'] ?? '',
+            $capturedRequests
+        );
+        $this->assertContains('Research auth', $prompts);
+        $this->assertContains('Research API', $prompts);
+        $this->assertContains('Research DB', $prompts);
+        // Ensure all three prompts are distinct (no silent sharing of first task's prompt)
+        $this->assertCount(3, array_unique($prompts));
     }
 
     public function testParallelStageFailsWhenAnyTaskFails(): void

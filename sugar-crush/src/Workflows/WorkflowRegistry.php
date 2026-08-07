@@ -171,6 +171,10 @@ final class WorkflowRegistry
 
                 if (isset($stage['parallel']) && $stage['parallel'] === true) {
                     // $parsed is an array of TaskBuilders for parallel stages
+                    // This delegates to WorkflowBuilder::parallel(), which feeds
+                    // executeParallelStage() in WorkflowEngine.php.  The full
+                    // parallel() primitive chain spans: WorkflowEngine,
+                    // WorkflowBuilder, Workflow, WorkflowRegistry, AgentWorkerPool.
                     $builder = $builder->parallel($stage['name'], $parsed);
                 } else {
                     // $parsed is a single TaskBuilder for regular stages

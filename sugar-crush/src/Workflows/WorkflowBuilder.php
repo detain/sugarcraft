@@ -64,6 +64,13 @@ final class WorkflowBuilder
     /**
      * Add a parallel stage containing multiple tasks that run concurrently.
      *
+     * Part of the parallel() primitive implementation (P4.S11) which spans:
+     *   - WorkflowEngine.php: executeParallelStage() orchestrates concurrent execution
+     *   - WorkflowBuilder.php: parallel() registers the stage definition
+     *   - Workflow.php: $stopOnFirstFailure property controls fail-fast
+     *   - WorkflowRegistry.php: parseStages() recognizes parallel type stages
+     *   - AgentWorkerPool.php: executeAll() runs agents concurrently
+     *
      * @param TaskBuilder[] $tasks
      */
     public function parallel(string $name, array $tasks): self
@@ -165,6 +172,10 @@ final class WorkflowBuilder
      * When true (fail-fast), all queued agents are cancelled as soon as any agent
      * fails. When false (wait-for-all), all agents complete before the stage is
      * marked failed.
+     *
+     * Implementation chain: WorkflowBuilder stores this in $stopOnFirstFailure,
+     * which WorkflowEngine reads to call AgentWorkerPool::withStopOnFirstFailure(),
+     * which sets an internal flag checked by executeAll() to cancel remaining agents.
      */
     public function stopOnFirstFailure(bool $stop): self
     {
