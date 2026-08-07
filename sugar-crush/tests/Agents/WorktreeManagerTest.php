@@ -386,11 +386,15 @@ final class WorktreeManagerTest extends TestCase
         $this->assertSame(0, $removed);
     }
 
+    /**
+     * @group P3.S3
+     */
     public function testCleanupStaleWorktreesPreservesNamedWorktrees(): void
     {
         $agentId = 'named-stale-agent';
 
-        $this->manager->createWorktree($agentId, null, true);
+        $this->manager->createWorktree($agentId);
+        $this->manager->markWorktreeNamed($agentId);
 
         $path = $this->manager->getWorktreePath($agentId);
         $this->assertTrue(is_dir($path));
@@ -418,11 +422,14 @@ final class WorktreeManagerTest extends TestCase
         $this->assertArrayHasKey($agentId, $this->manager->listWorktrees());
     }
 
+    /**
+     * @group P3.S3
+     */
     public function testCleanupStaleWorktreesRemovesOldUnnamedCleanWorktree(): void
     {
         $agentId = 'unnamed-clean-stale-agent';
 
-        $this->manager->createWorktree($agentId, null, false);
+        $this->manager->createWorktree($agentId);
 
         $path = $this->manager->getWorktreePath($agentId);
         $this->assertTrue(is_dir($path));
@@ -445,11 +452,14 @@ final class WorktreeManagerTest extends TestCase
         $this->assertArrayNotHasKey($agentId, $this->manager->listWorktrees());
     }
 
+    /**
+     * @group P3.S3
+     */
     public function testCleanupStaleWorktreesPreservesOldUnnamedDirtyWorktree(): void
     {
         $agentId = 'unnamed-dirty-stale-agent';
 
-        $path = $this->manager->createWorktree($agentId, null, false);
+        $path = $this->manager->createWorktree($agentId);
 
         // Make the worktree dirty by adding an uncommitted file
         file_put_contents($path . '/DIRTY_MARKER.txt', 'uncommitted content');
@@ -478,6 +488,9 @@ final class WorktreeManagerTest extends TestCase
     // worktreeHasUncommittedDiff()
     // -------------------------------------------------------------------------
 
+    /**
+     * @group P3.S3
+     */
     public function testWorktreeHasUncommittedDiffReturnsFalseForCleanWorktree(): void
     {
         $agentId = 'clean-diff-agent';
@@ -490,6 +503,9 @@ final class WorktreeManagerTest extends TestCase
         $this->assertFalse($method->invoke($this->manager, $path));
     }
 
+    /**
+     * @group P3.S3
+     */
     public function testWorktreeHasUncommittedDiffReturnsTrueForDirtyWorktree(): void
     {
         $agentId = 'dirty-diff-agent';
@@ -508,6 +524,9 @@ final class WorktreeManagerTest extends TestCase
     // resolveWorktreeInclude()
     // -------------------------------------------------------------------------
 
+    /**
+     * @group P3.S3
+     */
     public function testResolveWorktreeIncludeCopiesMatchingFiles(): void
     {
         // Set up .worktreeinclude and source files BEFORE creating the worktree
@@ -519,7 +538,7 @@ final class WorktreeManagerTest extends TestCase
         mkdir($this->repoRoot . '/subdir', 0755);
         file_put_contents($this->repoRoot . '/subdir/nested.txt', 'nested content');
 
-        // Create a worktree — resolveWorktreeInclude is called automatically
+        // Create a worktree — resolveWorktreeInclude is called separately after creation (P3.S3 pattern)
         $agentId = 'include-test-agent';
         $config = new WorktreeConfig(
             basePath: $this->tmpRoot . '/worktrees/',
@@ -529,7 +548,13 @@ final class WorktreeManagerTest extends TestCase
         $manager = new WorktreeManager($config, $this->repoRoot);
         $path = $manager->createWorktree($agentId);
 
-        // .env.example should have been auto-copied into the worktree
+        // Manually resolve .worktreeinclude files after worktree creation (P3.S3 scope)
+        $reflection = new \ReflectionClass($manager);
+        $method = $reflection->getMethod('resolveWorktreeInclude');
+        $method->setAccessible(true);
+        $method->invoke($manager, $path);
+
+        // .env.example should have been copied into the worktree
         $this->assertFileExists($path . '/.env.example');
         $this->assertSame('TEST=value', file_get_contents($path . '/.env.example'));
 
@@ -538,6 +563,9 @@ final class WorktreeManagerTest extends TestCase
         $this->assertSame('nested content', file_get_contents($path . '/subdir/nested.txt'));
     }
 
+    /**
+     * @group P3.S3
+     */
     public function testResolveWorktreeIncludeHandlesNonexistentIncludeFile(): void
     {
         $agentId = 'no-include-agent';
@@ -560,14 +588,18 @@ final class WorktreeManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // createWorktree with $named parameter
+    // markWorktreeNamed() - P3.S3
     // -------------------------------------------------------------------------
 
+    /**
+     * @group P3.S3
+     */
     public function testCreateWorktreeWithNamedFlagStoresNamedState(): void
     {
         $agentId = 'named-state-agent';
 
-        $path = $this->manager->createWorktree($agentId, null, true);
+        $path = $this->manager->createWorktree($agentId);
+        $this->manager->markWorktreeNamed($agentId);
 
         $this->assertNotEmpty($path);
         $this->assertTrue(is_dir($path));
@@ -577,11 +609,14 @@ final class WorktreeManagerTest extends TestCase
         $this->assertTrue($worktrees[$agentId]['named'] ?? false);
     }
 
+    /**
+     * @group P3.S3
+     */
     public function testCreateWorktreeWithoutNamedFlagStoresUnnamedState(): void
     {
         $agentId = 'unnamed-state-agent';
 
-        $path = $this->manager->createWorktree($agentId, null, false);
+        $path = $this->manager->createWorktree($agentId);
 
         $this->assertNotEmpty($path);
         $this->assertTrue(is_dir($path));

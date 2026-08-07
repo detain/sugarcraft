@@ -61,12 +61,11 @@ final class WorktreeManager
      *
      * @param string $agentId Unique identifier for the agent (used as directory name).
      * @param string|null $branch Optional branch name; defaults to agent-{agentId}-{timestamp}.
-     * @param bool $named Whether this worktree was created for a named task/session (affects cleanup policy).
      * @return string The absolute path to the newly created worktree.
      * @throws \InvalidArgumentException When agentId is empty or contains path traversal.
      * @throws \RuntimeException When git worktree creation fails.
      */
-    public function createWorktree(string $agentId, ?string $branch = null, bool $named = false): string
+    public function createWorktree(string $agentId, ?string $branch = null): string
     {
         if ($agentId === '') {
             throw new \InvalidArgumentException('Agent ID must not be empty.');
@@ -123,14 +122,9 @@ final class WorktreeManager
         $this->registry[$agentId] = [
             'branch' => $branch,
             'createdAt' => (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM),
-            'named' => $named,
+            'named' => false,
         ];
         $this->saveRegistry();
-
-        // Copy .worktreeinclude files into the new worktree if configured
-        if ($this->config->worktreeIncludeFile !== '') {
-            $this->resolveWorktreeInclude($worktreePath);
-        }
 
         return $worktreePath;
     }
@@ -571,6 +565,38 @@ final class WorktreeManager
         }
 
         return $removed;
+    }
+
+    /**
+     * Mark a worktree as "named" (created for an explicit human session).
+     *
+     * Named worktrees are never removed automatically by cleanupStaleWorktrees().
+     * This is called by P3.S3 after createWorktree() returns to set the named flag.
+     *
+     * @param string $agentId The agent whose worktree should be marked.
+     * @throws \InvalidArgumentException When agentId is empty or contains path traversal.
+     * @throws \RuntimeException When the worktree does not exist.
+     */
+    public function markWorktreeNamed(string $agentId): void
+    {
+        if ($agentId === '') {
+            throw new \InvalidArgumentException('Agent ID must not be empty.');
+        }
+
+        if (str_contains($agentId, '..') || str_contains($agentId, '/') || str_contains($agentId, '\\')) {
+            throw new \InvalidArgumentException(
+                'Agent ID must not contain path traversal sequences, slashes, or backslashes.',
+            );
+        }
+
+        if (!$this->worktreeExists($agentId)) {
+            throw new \RuntimeException(
+                sprintf('Worktree for agent "%s" does not exist.', $agentId),
+            );
+        }
+
+        $this->registry[$agentId]['named'] = true;
+        $this->saveRegistry();
     }
 
     // -------------------------------------------------------------------------
