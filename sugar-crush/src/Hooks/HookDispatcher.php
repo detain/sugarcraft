@@ -12,10 +12,31 @@ namespace SugarCraft\Crush\Hooks;
  * - 1: non-blocking deny — stderr shown to user, execution continues
  * - 2: hard block — effect depends on event type (see HookEvent for details)
  *
+ * The four event-type distinctions on HookEvent (blocksOnPreAction(),
+ * usesContinueOnBlockOnBlock(), discardsOnBlock(), stderrToUserOnly()) are
+ * all read by dispatch()/resolveBlockMessage() below and each produce a
+ * genuinely different HookDispatchResult, not just metadata:
+ * - usesContinueOnBlockOnBlock(): continueOnBlock=true (see dispatch()).
+ * - discardsOnBlock(): message is wiped to ''.
+ * - stderrToUserOnly(): message is tagged with self::STDERR_ONLY_PREFIX so
+ *   a caller can tell this text may only reach the user, never the agent —
+ *   see resolveBlockMessage().
+ * - blocksOnPreAction() (and any event matching none of the above): message
+ *   is preserved verbatim, untagged, for feeding back to the agent.
+ *
  * @see HookEvent
  */
 final class HookDispatcher
 {
+    /**
+     * Marker prepended to a hard-block message when HookEvent::stderrToUserOnly()
+     * is true for the dispatched event. Signals to callers that this text may only
+     * ever reach the user (there is no agent turn at these lifecycle points), which
+     * is the one runtime-visible difference from the blocksOnPreAction() case since
+     * HookDispatchResult has no dedicated audience field.
+     */
+    public const STDERR_ONLY_PREFIX = '[stderr-only] ';
+
     public function __construct(
         private HookRegistry $registry,
     ) {}
@@ -186,19 +207,30 @@ final class HookDispatcher
      * - discardsOnBlock() (UserPromptSubmit): the prompt is discarded
      *   entirely — nothing, not even the hook's message, survives to reach
      *   the agent. The block still happens; the message is wiped.
-     * - blocksOnPreAction() (PreToolUse/Stop/TaskCreated): the action
-     *   hasn't happened yet, so the message is fed back to the agent so it
-     *   can adjust — preserved as-is.
      * - stderrToUserOnly() (PreCompact/SessionStart): there's no agent turn
      *   to hand the message to at these lifecycle points, so it can only
-     *   ever reach the user — preserved as-is so it has somewhere to go.
+     *   ever reach the user. Tagged with self::STDERR_ONLY_PREFIX — the one
+     *   runtime-visible signal (short of a dedicated HookDispatchResult
+     *   field) that this text must not be fed back into agent context,
+     *   which is exactly what makes it differ from blocksOnPreAction().
+     * - blocksOnPreAction() (PreToolUse/Stop/TaskCreated): the action
+     *   hasn't happened yet, so the message is fed back to the agent so it
+     *   can adjust — preserved as-is, untagged.
      * - Any event matching none of the above (e.g. SessionEnd,
-     *   TeammateIdle): preserved as-is, same as blocksOnPreAction().
+     *   TeammateIdle): preserved as-is, same effect as blocksOnPreAction().
      */
     private function resolveBlockMessage(HookEvent $event, string $blockMessage): string
     {
         if ($event->discardsOnBlock()) {
             return '';
+        }
+
+        if ($event->stderrToUserOnly()) {
+            return self::STDERR_ONLY_PREFIX . $blockMessage;
+        }
+
+        if ($event->blocksOnPreAction()) {
+            return $blockMessage;
         }
 
         return $blockMessage;

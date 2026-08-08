@@ -117,9 +117,9 @@ final class HookDispatcherTest extends TestCase
         $this->assertTrue($result->isBlock());
         $this->assertFalse($result->shouldContinueOnBlock());
         // Message should have [exit-2] prefix stripped, and is fed back
-        // (non-empty) since blocksOnPreAction() never discards it.
-        $this->assertStringContainsString('Hard block message', $result->message);
-        $this->assertNotSame('', $result->message);
+        // verbatim — untagged, unlike stderrToUserOnly() — since
+        // blocksOnPreAction() never discards it.
+        $this->assertSame('Hard block message', $result->message);
     }
 
     public function testExitCode2OnPostToolUseUsesContinueOnBlock(): void
@@ -222,24 +222,38 @@ final class HookDispatcherTest extends TestCase
         $this->assertNotSame($discardResult->message, $blockResult->message);
     }
 
-    public function testExitCode2OnPreCompactStderrReachesUserOnly(): void
+    public function testExitCode2OnPreCompactStderrReachesUserOnlyDistinctFromAgentBlock(): void
     {
         // stderrToUserOnly(): there's no agent turn at PreCompact, so the
-        // message is preserved (it has to reach the user somehow) but
-        // never discarded the way UserPromptSubmit's is.
+        // message is preserved (it has to reach the user somehow) but is
+        // tagged with HookDispatcher::STDERR_ONLY_PREFIX — that tag is the
+        // empirical proof this differs from blocksOnPreAction(), where the
+        // exact same hook message would be fed back untagged.
         $hook = $this->createHardBlockHook('BlockHook', HookEvent::PreCompact, 'PreCompact', '^PreCompact$');
         $this->registry->register($hook);
         $context = $this->createContext('PreCompact');
 
         $result = $this->dispatcher->dispatch(HookEvent::PreCompact, $context);
 
+        $preToolRegistry = new HookRegistry();
+        $preToolRegistry->register($this->createHardBlockHook('BlockHook', HookEvent::PreToolUse, 'Read', '^Read$'));
+        $preToolDispatcher = new HookDispatcher($preToolRegistry);
+        $preToolResult = $preToolDispatcher->dispatch(HookEvent::PreToolUse, $this->createContext('Read'));
+
         $this->assertTrue($result->isBlock());
         $this->assertFalse($result->shouldContinueOnBlock());
-        $this->assertStringContainsString('Hard block message', $result->message);
         $this->assertNotSame('', $result->message);
+        $this->assertStringStartsWith(HookDispatcher::STDERR_ONLY_PREFIX, $result->message);
+        $this->assertStringContainsString('Hard block message', $result->message);
+
+        // Same underlying hook message, different HookEvent — the tag must
+        // NOT appear on the blocksOnPreAction() side, proving the two
+        // categories genuinely differ in runtime effect, not just metadata.
+        $this->assertStringStartsNotWith(HookDispatcher::STDERR_ONLY_PREFIX, $preToolResult->message);
+        $this->assertNotSame($result->message, $preToolResult->message);
     }
 
-    public function testExitCode2OnSessionStartStderrReachesUserOnly(): void
+    public function testExitCode2OnSessionStartStderrReachesUserOnlyDistinctFromAgentBlock(): void
     {
         $hook = $this->createHardBlockHook('BlockHook', HookEvent::SessionStart, 'SessionStart', '^SessionStart$');
         $this->registry->register($hook);
@@ -249,8 +263,26 @@ final class HookDispatcherTest extends TestCase
 
         $this->assertTrue($result->isBlock());
         $this->assertFalse($result->shouldContinueOnBlock());
-        $this->assertStringContainsString('Hard block message', $result->message);
         $this->assertNotSame('', $result->message);
+        $this->assertStringStartsWith(HookDispatcher::STDERR_ONLY_PREFIX, $result->message);
+        $this->assertStringContainsString('Hard block message', $result->message);
+    }
+
+    public function testStderrToUserOnlyTagAbsentFromBlocksOnPreActionMessage(): void
+    {
+        // Names the 5th exit-code-semantics case explicitly: an event
+        // matching neither discardsOnBlock(), stderrToUserOnly(), nor
+        // usesContinueOnBlockOnBlock() (here, blocksOnPreAction() itself)
+        // must never carry the stderr-only tag.
+        $hook = $this->createHardBlockHook('BlockHook', HookEvent::Stop, 'Stop', '^Stop$');
+        $this->registry->register($hook);
+        $context = $this->createContext('Stop');
+
+        $result = $this->dispatcher->dispatch(HookEvent::Stop, $context);
+
+        $this->assertTrue($result->isBlock());
+        $this->assertFalse($result->shouldContinueOnBlock());
+        $this->assertSame('Hard block message', $result->message);
     }
 
     // =========================================================================
