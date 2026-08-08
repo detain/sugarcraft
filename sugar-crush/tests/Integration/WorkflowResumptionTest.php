@@ -9,6 +9,7 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
+use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Workflows\Tasks;
 use SugarCraft\Crush\Workflows\WorkflowBuilder;
@@ -392,6 +393,121 @@ final class WorkflowResumptionTest extends TestCase
         $status = $this->engine->getStatus('status-check-test');
 
         $this->assertSame(WorkflowStatus::Paused, $status);
+    }
+
+    /**
+     * testRealSigtermMidWorkflowCapturesInFlightState (R28): forks a child
+     * process that runs a REAL workflow through the real WorkflowEngine::run()
+     * (no engine-level mocking — only the LLM-calling ExecutorInterface at
+     * the very bottom is a stand-in, so no network calls happen in CI), then
+     * the parent sends the child a genuine SIGTERM while it is blocked mid
+     * second-stage execution. Asserts a real pause file materializes on disk
+     * reflecting exactly the one stage that had genuinely finished — proving
+     * the pcntl handlers registered around the stage-execution loop actually
+     * fire on a real signal and capture real in-flight state, not a fabricated
+     * one. Gated on pcntl availability; skips gracefully otherwise.
+     */
+    public function testRealSigtermMidWorkflowCapturesInFlightState(): void
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('pcntl/posix extensions are not available in this environment.');
+        }
+
+        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/real-sigterm-test.json';
+
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            $this->fail('pcntl_fork() failed.');
+        }
+
+        if ($pid === 0) {
+            // --- Child process ---
+            // Build a fresh registry/engine locally (not $this->engine, which
+            // uses the setUp() mock) and drive it through the REAL run()
+            // entry point end-to-end. Only the bottom-most ExecutorInterface
+            // is a stand-in for an actual LLM call, so this exercises the
+            // genuine stage-execution loop, context bookkeeping, and the
+            // real SIGTERM handler installed by WorkflowEngine itself.
+            $registry = new WorkflowRegistry();
+            $workflow = (new WorkflowBuilder())
+                ->name('real-sigterm-test')
+                ->description('Real interrupt test workflow')
+                ->stage('quick', Tasks::agent('worker')->prompt('Quick step'))
+                ->stage('slow', Tasks::agent('worker')->prompt('Slow step'))
+                ->stage('never-reached', Tasks::agent('worker')->prompt('Should not run'))
+                ->build();
+            $registry->register($workflow);
+
+            $executor = new class implements ExecutorInterface {
+                private int $calls = 0;
+
+                public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
+                {
+                    $this->calls++;
+                    // Stage 1 ("quick") returns immediately. Stage 2 ("slow")
+                    // sleeps long enough for the parent to deliver a real
+                    // SIGTERM while this call is genuinely blocked.
+                    if ($this->calls >= 2) {
+                        sleep(10);
+                    }
+
+                    return new AgentResult(
+                        agentId: $agent->id,
+                        status: AgentStatus::Completed,
+                        output: "output-{$this->calls}",
+                        startedAt: new \DateTimeImmutable(),
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
+
+                public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
+                {
+                    yield from [];
+                }
+
+                public function cancel(string $agentId): void
+                {
+                }
+
+                public function cancelAll(): void
+                {
+                }
+            };
+
+            $pool = new AgentWorkerPool(5, $executor);
+            $engine = new WorkflowEngine($registry, $pool);
+
+            $engine->run('real-sigterm-test', []);
+
+            // Should be unreachable: the real SIGTERM handler exits the
+            // process from inside sleep(10) above, well before run() can
+            // return. A distinct exit code here means the fix did NOT
+            // actually interrupt execution.
+            exit(99);
+        }
+
+        // --- Parent process ---
+        // Give the child time to genuinely finish stage 1 and enter stage 2's
+        // blocking sleep(10), then deliver a real SIGTERM.
+        usleep(800_000);
+        posix_kill($pid, SIGTERM);
+
+        $status = null;
+        pcntl_waitpid($pid, $status);
+
+        $this->assertTrue(pcntl_wifexited($status), 'Child process should have exited normally after the real SIGTERM.');
+        $this->assertNotSame(99, pcntl_wexitstatus($status), 'Child ran to completion instead of being genuinely interrupted mid-run.');
+        $this->assertSame(143, pcntl_wexitstatus($status), 'Child should exit with the SIGTERM-convention code from the real interrupt handler.');
+
+        $this->assertFileExists($pauseFile, 'A real SIGTERM mid-workflow should materialize a genuine pause file on disk.');
+
+        $data = json_decode(file_get_contents($pauseFile), true);
+        $this->assertSame('real-sigterm-test', $data['workflowId']);
+        $this->assertSame('paused', $data['status']);
+        $this->assertSame(1, $data['stagesCompleted'], 'Only the already-finished "quick" stage should be captured.');
+        $this->assertSame('quick', $data['stageResults'][0]['stageName']);
+        $this->assertSame('output-1', $data['context']['quick.output']);
+        $this->assertArrayNotHasKey('slow.output', $data['context'], 'The in-flight "slow" stage must not appear as if it completed.');
     }
 
     /**

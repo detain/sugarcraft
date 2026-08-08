@@ -19,6 +19,20 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  * so that `{{variable}}` tokens in prompts are replaced with context values
  * and `{{stageName.output}}` tokens reference prior stage outputs.
  *
+ * Real interrupts (R28): when the pcntl extension is available, run()/
+ * resume() install SIGINT/SIGTERM handlers for the duration of the
+ * stage-execution loop in runFromWorkflow(). A genuine Ctrl-C or
+ * `kill -TERM` during that loop calls pause() with whatever stages have
+ * actually completed so far, then exits — so a real interrupt captures
+ * genuine partial progress instead of losing the whole run silently.
+ *
+ * Remaining limitation: resume granularity is per-whole-stage only. If
+ * the interrupt lands while a 'parallel' stage is mid-flight (see
+ * executeParallelStage()), that stage's individual in-progress agent
+ * results are NOT captured — the stage as a whole is simply absent from
+ * the pause file, and resuming re-runs it from scratch. There is no
+ * partial-credit resume for a PARALLEL sub-stage.
+ *
  * Mirrors charmbracelet/charmcrush WorkflowEngine implementation.
  */
 final class WorkflowEngine implements WorkflowEngineInterface
@@ -45,7 +59,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public function run(string $workflowPath, array $context = []): WorkflowResult
     {
         $workflow = $this->registry->load($workflowPath);
-        $result = $this->runFromWorkflow($workflow, $context, 0, null);
+        $result = $this->runFromWorkflow($workflow, $context, 0, null, $workflowPath);
         $this->resultsByName[$workflowPath] = $result;
 
         return $result;
@@ -91,6 +105,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * Looks up the workflow result stored by run() (keyed by workflow name/path)
      * and writes a pause file to `~/.sugar-crush/workflows/.running/{$workflowId}.json`
      * containing: stages completed, context, stage results, token/cost totals, and timing.
+     *
+     * Called two ways: cooperatively (e.g. from the /workflow pause command,
+     * after a run has already finished or been externally tracked), and by
+     * installInterruptHandlers() (R28) when a real SIGINT/SIGTERM lands
+     * mid-run — in that second case $workflowId is whatever completed
+     * stages exist at the moment the signal arrived, not a finished run.
+     * Either way this only ever persists whole StageResult entries: a
+     * 'parallel' stage that was still in-flight when interrupted is not
+     * present in $result->stageResults at all, so it is not reflected here
+     * and will be re-run from scratch on resume() — there is no
+     * partial-credit capture for an in-progress parallel sub-stage.
      *
      * @param string $workflowId The workflow name/path used when calling run().
      * @throws WorkflowNotRunningException When no result is found for this workflowId.
@@ -163,6 +188,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $workflow,
             $data['context'] ?? [],
             $data['stagesCompleted'] ?? 0,
+            $workflowId,
             $workflowId,
         );
     }
@@ -266,14 +292,28 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * Parallel stages (P4.S11) and pipeline stages (P4.S12) are implemented.
      *
+     * R28: for the duration of the loop below, SIGINT/SIGTERM handlers are
+     * installed (when pcntl is available) so a real interrupt captures
+     * whatever stages have actually finished via pause() before the
+     * process exits — see installInterruptHandlers() and the class
+     * docblock for the PARALLEL-sub-stage limitation that remains.
+     *
      * @param Workflow         $workflow           The workflow definition to execute.
      * @param array            $context            Key-value pairs for {{variable}} interpolation.
      * @param int              $currentStageIndex  Index of the first stage to execute (0 = start fresh).
      * @param string|null      $workflowIdOverride Use this workflowId instead of generating a new one (for resume).
+     * @param string|null      $pauseId            Identifier to pause() under if a real interrupt lands mid-run
+     *                                              (the workflow name/path for run(), the workflowId for resume()).
+     *                                              Defaults to the resolved workflowId when not given.
      * @return WorkflowResult
      */
-    private function runFromWorkflow(Workflow $workflow, array $context, int $currentStageIndex, ?string $workflowIdOverride): WorkflowResult
-    {
+    private function runFromWorkflow(
+        Workflow $workflow,
+        array $context,
+        int $currentStageIndex,
+        ?string $workflowIdOverride,
+        ?string $pauseId = null,
+    ): WorkflowResult {
         $startedAt = new \DateTimeImmutable();
         $stageResults = [];
         $totalTokens = 0;
@@ -282,94 +322,113 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // Clone context so we don't mutate the caller's array
         $context = [...$context];
 
-        foreach ($workflow->stages as $stageIndex => $stage) {
-            // Skip stages that were already completed (resume support)
-            if ($stageIndex < $currentStageIndex) {
-                continue;
+        $resolvedWorkflowId = $workflowIdOverride ?? $this->generateWorkflowId($workflow);
+        $interruptId = $pauseId ?? $resolvedWorkflowId;
+
+        $interruptHandlersInstalled = $this->installInterruptHandlers(
+            $interruptId,
+            $resolvedWorkflowId,
+            $startedAt,
+            $context,
+            $stageResults,
+            $totalTokens,
+            $totalCost,
+        );
+
+        try {
+            foreach ($workflow->stages as $stageIndex => $stage) {
+                // Skip stages that were already completed (resume support)
+                if ($stageIndex < $currentStageIndex) {
+                    continue;
+                }
+
+                $stageStartedAt = new \DateTimeImmutable();
+
+                $stageType = $stage['type'] ?? '';
+
+                if ($stageType === 'parallel') {
+                    try {
+                        $stageResult = $this->executeParallelStage($stage, $context, $workflow);
+                    } catch (\Throwable $e) {
+                        $stageResult = new StageResult(
+                            stageName: $stage['name'] ?? 'unknown',
+                            status: WorkflowStatus::Failed,
+                            error: $e->getMessage(),
+                            startedAt: $stageStartedAt,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    }
+                } elseif ($stageType === 'stage') {
+                    try {
+                        $stageResult = $this->executeStage($stage, $context);
+                    } catch (\Throwable $e) {
+                        $stageResult = new StageResult(
+                            stageName: $stage['name'] ?? 'unknown',
+                            status: WorkflowStatus::Failed,
+                            error: $e->getMessage(),
+                            startedAt: $stageStartedAt,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    }
+                } elseif ($stageType === 'pipeline') {
+                    try {
+                        $stageResult = $this->executePipelineStage($stage, $context, $workflow->maxConcurrent);
+                    } catch (\Throwable $e) {
+                        $stageResult = new StageResult(
+                            stageName: $stage['name'] ?? 'unknown',
+                            status: WorkflowStatus::Failed,
+                            error: $e->getMessage(),
+                            startedAt: $stageStartedAt,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    }
+                } elseif ($stageType === 'verification') {
+                    try {
+                        $stageResult = $this->executeVerificationStage($stage, $context);
+                    } catch (\Throwable $e) {
+                        $stageResult = new StageResult(
+                            stageName: $stage['name'] ?? 'unknown',
+                            status: WorkflowStatus::Failed,
+                            error: $e->getMessage(),
+                            startedAt: $stageStartedAt,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    }
+                } else {
+                    throw new UnsupportedStageTypeException(
+                        "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented."
+                    );
+                }
+
+                // Update context with this stage's output for downstream interpolation
+                $context[$stageResult->stageName . '.output'] = $stageResult->output ?? '';
+
+                $stageResults[] = $stageResult;
+                $totalTokens += $this->sumTokens($stageResult);
+                $totalCost += $this->sumCost($stageResult);
+
+                // Fail fast: stop processing on first stage failure
+                if ($stageResult->isFailure()) {
+                    return new WorkflowResult(
+                        workflowId: $resolvedWorkflowId,
+                        status: WorkflowStatus::Failed,
+                        stageResults: $stageResults,
+                        context: $context,
+                        totalTokens: $totalTokens,
+                        totalCost: $totalCost,
+                        startedAt: $startedAt,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
             }
-
-            $stageStartedAt = new \DateTimeImmutable();
-
-            $stageType = $stage['type'] ?? '';
-
-            if ($stageType === 'parallel') {
-                try {
-                    $stageResult = $this->executeParallelStage($stage, $context, $workflow);
-                } catch (\Throwable $e) {
-                    $stageResult = new StageResult(
-                        stageName: $stage['name'] ?? 'unknown',
-                        status: WorkflowStatus::Failed,
-                        error: $e->getMessage(),
-                        startedAt: $stageStartedAt,
-                        completedAt: new \DateTimeImmutable(),
-                    );
-                }
-            } elseif ($stageType === 'stage') {
-                try {
-                    $stageResult = $this->executeStage($stage, $context);
-                } catch (\Throwable $e) {
-                    $stageResult = new StageResult(
-                        stageName: $stage['name'] ?? 'unknown',
-                        status: WorkflowStatus::Failed,
-                        error: $e->getMessage(),
-                        startedAt: $stageStartedAt,
-                        completedAt: new \DateTimeImmutable(),
-                    );
-                }
-            } elseif ($stageType === 'pipeline') {
-                try {
-                    $stageResult = $this->executePipelineStage($stage, $context, $workflow->maxConcurrent);
-                } catch (\Throwable $e) {
-                    $stageResult = new StageResult(
-                        stageName: $stage['name'] ?? 'unknown',
-                        status: WorkflowStatus::Failed,
-                        error: $e->getMessage(),
-                        startedAt: $stageStartedAt,
-                        completedAt: new \DateTimeImmutable(),
-                    );
-                }
-            } elseif ($stageType === 'verification') {
-                try {
-                    $stageResult = $this->executeVerificationStage($stage, $context);
-                } catch (\Throwable $e) {
-                    $stageResult = new StageResult(
-                        stageName: $stage['name'] ?? 'unknown',
-                        status: WorkflowStatus::Failed,
-                        error: $e->getMessage(),
-                        startedAt: $stageStartedAt,
-                        completedAt: new \DateTimeImmutable(),
-                    );
-                }
-            } else {
-                throw new UnsupportedStageTypeException(
-                    "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented."
-                );
-            }
-
-            // Update context with this stage's output for downstream interpolation
-            $context[$stageResult->stageName . '.output'] = $stageResult->output ?? '';
-
-            $stageResults[] = $stageResult;
-            $totalTokens += $this->sumTokens($stageResult);
-            $totalCost += $this->sumCost($stageResult);
-
-            // Fail fast: stop processing on first stage failure
-            if ($stageResult->isFailure()) {
-                return new WorkflowResult(
-                    workflowId: $workflowIdOverride ?? $this->generateWorkflowId($workflow),
-                    status: WorkflowStatus::Failed,
-                    stageResults: $stageResults,
-                    context: $context,
-                    totalTokens: $totalTokens,
-                    totalCost: $totalCost,
-                    startedAt: $startedAt,
-                    completedAt: new \DateTimeImmutable(),
-                );
+        } finally {
+            if ($interruptHandlersInstalled) {
+                $this->restoreInterruptHandlers();
             }
         }
 
         return new WorkflowResult(
-            workflowId: $workflowIdOverride ?? $this->generateWorkflowId($workflow),
+            workflowId: $resolvedWorkflowId,
             status: WorkflowStatus::Completed,
             stageResults: $stageResults,
             context: $context,
@@ -929,5 +988,111 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private function generateWorkflowId(Workflow $workflow): string
     {
         return $workflow->name . '-' . substr(md5((string) mt_rand()), 0, 8);
+    }
+
+    /**
+     * Install real SIGINT/SIGTERM handlers for the duration of the stage-
+     * execution loop in runFromWorkflow() (R28).
+     *
+     * A genuine Ctrl-C or `kill -TERM` on this process while it is blocked
+     * inside a stage (e.g. waiting on AgentWorkerPool::executeOne()) is
+     * otherwise fatal to the whole run: the default disposition kills the
+     * process and every completed stage's output is lost, even though it
+     * was already sitting in memory. Registering a handler here means the
+     * handler runs with the *live* $context/$stageResults/$totalTokens/
+     * $totalCost references from the calling loop, so it can snapshot
+     * exactly what has really finished, hand that snapshot to pause() the
+     * same way a cooperative pause would, and only then let the process
+     * exit.
+     *
+     * Limitation (see class docblock): this only observes whole-stage
+     * boundaries. A 'parallel' stage's individual agent results, if the
+     * interrupt lands mid-stage, are not captured — the stage is simply
+     * missing from the pause file and will be re-run in full on resume().
+     *
+     * No-op (returns false) when the pcntl extension is unavailable, so
+     * behaviour on platforms without pcntl (e.g. Windows) is unchanged
+     * from before this fix: a real interrupt still terminates the process
+     * with no pause file, same as always.
+     *
+     * @param array               $context      Reference to the live workflow context.
+     * @param StageResult[]       $stageResults Reference to the live list of completed stage results.
+     * @param int                 $totalTokens  Reference to the live running token total.
+     * @param float               $totalCost    Reference to the live running cost total.
+     * @return bool True when handlers were actually installed.
+     */
+    private function installInterruptHandlers(
+        string $interruptId,
+        string $resolvedWorkflowId,
+        \DateTimeImmutable $startedAt,
+        array &$context,
+        array &$stageResults,
+        int &$totalTokens,
+        float &$totalCost,
+    ): bool {
+        if (!function_exists('pcntl_signal') || !function_exists('pcntl_async_signals')) {
+            return false;
+        }
+
+        // Dispatch signal handlers without requiring an explicit
+        // pcntl_signal_dispatch() tick, so a blocking call inside a stage
+        // (e.g. a long HTTP request or sleep()) is interrupted promptly.
+        pcntl_async_signals(true);
+
+        $handler = function (int $signo) use (
+            $interruptId,
+            $resolvedWorkflowId,
+            $startedAt,
+            &$context,
+            &$stageResults,
+            &$totalTokens,
+            &$totalCost,
+        ): void {
+            $partialResult = new WorkflowResult(
+                workflowId: $resolvedWorkflowId,
+                status: WorkflowStatus::Running,
+                stageResults: $stageResults,
+                context: $context,
+                totalTokens: $totalTokens,
+                totalCost: $totalCost,
+                startedAt: $startedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+
+            // Reuse the exact same pause() path a cooperative pause would
+            // take, so the persisted file format never drifts between the
+            // two code paths.
+            $this->resultsByName[$interruptId] = $partialResult;
+
+            try {
+                $this->pause($interruptId);
+            } catch (\Throwable) {
+                // Best-effort: still exit below even if pause() itself
+                // couldn't write (e.g. unwritable pause dir) — resuming
+                // execution as though the signal never arrived would be
+                // worse than exiting with nothing captured.
+            }
+
+            exit($signo === \SIGINT ? 130 : 143);
+        };
+
+        pcntl_signal(\SIGINT, $handler);
+        pcntl_signal(\SIGTERM, $handler);
+
+        return true;
+    }
+
+    /**
+     * Restore default SIGINT/SIGTERM disposition after a stage-execution
+     * loop finishes, so interrupt handling doesn't leak past this run().
+     */
+    private function restoreInterruptHandlers(): void
+    {
+        if (!function_exists('pcntl_signal')) {
+            return;
+        }
+
+        pcntl_signal(\SIGINT, \SIG_DFL);
+        pcntl_signal(\SIGTERM, \SIG_DFL);
     }
 }
