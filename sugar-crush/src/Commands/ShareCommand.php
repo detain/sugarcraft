@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use DateTimeImmutable;
+use LogicException;
 use RuntimeException;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
@@ -45,7 +46,6 @@ final class ShareCommand
         // Parse expiry
         $expiry = $this->parseExpiry($args[1] ?? '');
         $expirySeconds = $expiry['seconds'];
-        $expiryDisplay = $expiry['display'];
 
         // Build ShareSession from chat history
         $session = new ShareSession($chat->history, $format, $expiry['days']);
@@ -54,15 +54,22 @@ final class ShareCommand
         $uploadBaseUrl = $this->getUploadBaseUrl();
 
         try {
-            $result = ShareResult::create($session, $format, $expirySeconds, $uploadBaseUrl);
+            ShareResult::create($session, $format, $expirySeconds, $uploadBaseUrl);
         } catch (RuntimeException $e) {
             $this->printNotImplemented($e->getMessage());
             return 1;
         }
 
-        $this->printResult($result, $expiryDisplay);
-
-        return 0;
+        // Unreachable while no real upload backend exists: ShareUploader::upload()
+        // is declared `never` and always throws, so ShareResult::create() can never
+        // return here. Deliberately fail loudly instead of falling through to a
+        // success message — there is no honest "shared successfully" output to
+        // print until a real backend is wired up and this branch is rebuilt (and
+        // re-audited) to match whatever that backend actually returns.
+        throw new LogicException(
+            'Unreachable: ShareResult::create() returned without throwing, but no '
+            . '/share upload backend is configured to produce a real result.',
+        );
     }
 
     /**
@@ -147,23 +154,6 @@ final class ShareCommand
         }
 
         return self::DEFAULT_UPLOAD_BASE_URL;
-    }
-
-    /**
-     * Print the share result.
-     */
-    private function printResult(ShareResult $result, string $expiryDisplay): void
-    {
-        echo "\n";
-        echo "  \033[32m✓\033[0m Session shared successfully\n";
-        echo "\n";
-        echo "  URL: {$result->url}\n";
-        echo "  Format: {$result->format}\n";
-        echo "  Messages: {$result->messageCount}\n";
-        echo "  Expires: {$expiryDisplay}\n";
-        echo "\n";
-        echo "  Share URL expires at: " . $result->expiresAt->format('Y-m-d H:i:s T') . "\n";
-        echo "\n";
     }
 
     /**
