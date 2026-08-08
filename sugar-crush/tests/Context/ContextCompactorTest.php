@@ -73,6 +73,50 @@ final class ContextCompactorTest extends TestCase
         $this->assertTrue($compactor->shouldCompact($messages, 1000));
     }
 
+    // ─── shouldSendReminder() ────────────────────────────────────
+
+    public function testShouldSendReminderReturnsFalseWhenEmpty(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $this->assertFalse($compactor->shouldSendReminder([], 1000));
+    }
+
+    public function testShouldSendReminderReturnsFalseWhenBelowThreshold(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(reminderThreshold: 70));
+        $messages = array_fill(0, 10, $this->msg('user', '01234567890123456789'));
+        $this->assertFalse($compactor->shouldSendReminder($messages, 1000));
+    }
+
+    public function testShouldSendReminderReturnsTrueAtOrAboveThreshold(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(reminderThreshold: 70));
+        // Each ~400-char message ≈ 110 tokens (10 + 400/4). 10 msgs ≈ 1100 tokens.
+        // 70% of 1500 = 1050 → 1100 >= 1050 → should send reminder.
+        $messages = array_fill(0, 10, $this->msg('user', str_repeat('x', 400)));
+        $this->assertTrue($compactor->shouldSendReminder($messages, 1500));
+    }
+
+    public function testShouldSendReminderReturnsFalseWhenTokenLimitIsZero(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $this->assertFalse($compactor->shouldSendReminder([$this->msg('user', 'hello')], 0));
+    }
+
+    public function testShouldSendReminderReturnsFalseWhenTokenLimitIsNegative(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $this->assertFalse($compactor->shouldSendReminder([$this->msg('user', 'hello')], -100));
+    }
+
+    public function testShouldSendReminderRespectsCustomThreshold(): void
+    {
+        $compactor = new ContextCompactor($this->cfg(reminderThreshold: 50));
+        // 10 msgs × ~60 tokens (10 + 200/4) = 600. 50% of 1000 = 500.
+        $messages = array_fill(0, 10, $this->msg('user', str_repeat('x', 200)));
+        $this->assertTrue($compactor->shouldSendReminder($messages, 1000));
+    }
+
     // ─── compact() ────────────────────────────────────────────────
 
     public function testCompactReturnsEmptyWhenGivenEmpty(): void
@@ -181,6 +225,49 @@ final class ContextCompactorTest extends TestCase
             }
         }
         $this->assertTrue($hasSummary, 'Expected at least one summary message with [summary] prefix');
+    }
+
+    public function testCompactRunsFileAndNavStagesBeforeSummarizationRegression(): void
+    {
+        // R21 regression: stages 4 (file-to-metadata) and 5 (remove-nav) must run
+        // against the RAW pre-summarization pairs. Under the original bug, stage 2
+        // ran first and (a) collapsed the file content into "[exchanged information]"
+        // before stage 4 ever saw it (so the "[file:" marker never appeared), and
+        // (b) folded the raw "cd ..." command into the summary text as
+        // "cd /var/www/project → Now working..." where stage 5's start-of-line nav
+        // pattern no longer matched (so the raw command survived verbatim).
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 2));
+
+        $fileContent = "config.php\n<?php\n\ndeclare(strict_types=1);\n\nnamespace App;\n\nclass Config\n{\n    public string \$host = 'localhost';\n}\n";
+
+        $messages = [
+            // Old nav exchange — beyond the preserve window.
+            $this->msg('user', 'cd /var/www/project'),
+            $this->msg('assistant', 'Now working in /var/www/project'),
+            // Old file-read exchange — beyond the preserve window.
+            $this->msg('user', 'Read the config file'),
+            $this->msg('assistant', $fileContent),
+            // Recent exchanges — within the preserve window (recentPreserveCount = 2).
+            $this->msg('user', 'third question'),
+            $this->msg('assistant', 'third answer'),
+            $this->msg('user', 'fourth question'),
+            $this->msg('assistant', 'fourth answer'),
+        ];
+
+        $result = $compactor->compact($messages);
+        $allContent = implode(' ', array_column($result, 'content'));
+
+        // Stage 4 must have converted the raw file content into a metadata marker.
+        $this->assertStringContainsString('[file:', $allContent);
+        $this->assertStringNotContainsString($fileContent, $allContent);
+
+        // Stage 5 must have stripped the raw nav command while keeping its outcome.
+        $this->assertStringNotContainsString('cd /var/www/project', $allContent);
+        $this->assertStringContainsString('Now working in /var/www/project', $allContent);
+
+        // Recent pairs remain preserved verbatim.
+        $this->assertStringContainsString('third question', $allContent);
+        $this->assertStringContainsString('fourth answer', $allContent);
     }
 
     // ─── savingsPercentage() ─────────────────────────────────────

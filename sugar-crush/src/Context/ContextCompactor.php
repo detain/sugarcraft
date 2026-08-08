@@ -83,6 +83,30 @@ final class ContextCompactor
     }
 
     /**
+     * Determine whether a soft reminder should be sent to the lead agent.
+     *
+     * Returns true when context usage reaches or exceeds the reminder
+     * threshold (70% by default). This is a soft warning surfaced to the
+     * lead agent before the harder 85%/95% compaction tiers kick in.
+     *
+     * Mirrors charmbracelet/bubbletea ContextCompactor.shouldSendReminder.
+     *
+     * @param array<array{role:string,content:string}> $messages Wire-format messages.
+     * @param int $tokenLimit Maximum tokens allowed in context window.
+     */
+    public function shouldSendReminder(array $messages, int $tokenLimit): bool
+    {
+        if ($tokenLimit <= 0) {
+            return false;
+        }
+
+        $tokenCount = $this->countTokens($messages);
+        $threshold = (int) ($tokenLimit * $this->config->reminderThreshold / 100);
+
+        return $tokenCount >= $threshold;
+    }
+
+    /**
      * Apply skill-aware compaction as a separate pass from message-history compaction.
      *
      * Each carried-forward skill is capped at roughly 5,000 tokens of its own content,
@@ -138,11 +162,16 @@ final class ContextCompactor
      * Compact a message array through stages 1-5.
      *
      * Stage 1: Preserve the most recent N full user/assistant PAIRS (recentPreserveCount).
+     * Stage 4: Replace file contents with metadata summaries.
+     * Stage 5: Remove navigation steps while preserving final destination.
      * Stage 2: Condense older exchanges into single-line summaries capturing
      *          "what happened and any key decisions made."
      * Stage 3: Group consecutive identical exchanges (e.g., repeated grep searches).
-     * Stage 4: Replace file contents with metadata summaries.
-     * Stage 5: Remove navigation steps while preserving final destination.
+     *
+     * Stages 4 and 5 run against the RAW pre-summarization content, before
+     * stage 2's summarization has a chance to truncate/collapse it away —
+     * summarizing first would destroy the very file-content and nav-command
+     * patterns stages 4/5 look for, so they must see the originals.
      *
      * @param array<array{role:string,content:string}> $messages Wire-format messages.
      * @return array<array{role:string,content:string}> Compacted messages.
@@ -174,30 +203,56 @@ final class ContextCompactor
         $preservePairs = array_slice($pairs, -$preserveCount);
         $toSummarizePairs = array_slice($pairs, 0, count($pairs) - $preserveCount);
 
+        // Stages 4 & 5 need the raw (un-summarized) message content to detect
+        // file reads and navigation commands, so flatten first and run them
+        // ahead of stage 2's summarization.
+        $rawToSummarize = $this->flattenPairs($toSummarizePairs);
+
+        // Stage 4: compact file references into metadata
+        $rawToSummarize = $this->compactFileReferences($rawToSummarize);
+
+        // Stage 5: remove navigation steps
+        $rawToSummarize = $this->removeNavigationSteps($rawToSummarize);
+
+        // Re-pair whatever survived stages 4/5 for summarization
+        $toSummarizePairs = $this->groupIntoPairs($rawToSummarize);
+
         // Stage 2: condense older pairs into summaries (one summary per pair)
         $summarized = $this->summarizeExchanges($toSummarizePairs);
 
         // Stage 3: group similar consecutive exchanges
         $summarized = $this->groupSimilarExchanges($summarized);
 
-        // Stage 4: compact file references into metadata
-        $summarized = $this->compactFileReferences($summarized);
-
-        // Stage 5: remove navigation steps
-        $summarized = $this->removeNavigationSteps($summarized);
-
         // Flatten preserved pairs back into individual messages
-        $preserved = [];
-        foreach ($preservePairs as $pair) {
-            $preserved[] = ['role' => 'user', 'content' => $pair['user']];
-            if ($pair['assistant'] !== null) {
-                $preserved[] = ['role' => 'assistant', 'content' => $pair['assistant']];
-            }
-        }
+        $preserved = $this->flattenPairs($preservePairs);
 
         $this->lastSavingsPercentage = $this->calculateSavingsPercentage($messages, [...$summarized, ...$preserved]);
 
         return [...$summarized, ...$preserved];
+    }
+
+    /**
+     * Flatten pairs produced by groupIntoPairs() back into a flat message array.
+     *
+     * @param array<array{user:string,assistant:?string,?standalone?:bool,?role?:string}> $pairs
+     * @return array<array{role:string,content:string}>
+     */
+    private function flattenPairs(array $pairs): array
+    {
+        $messages = [];
+        foreach ($pairs as $pair) {
+            if (isset($pair['standalone']) && $pair['standalone'] === true) {
+                $messages[] = ['role' => $pair['role'] ?? 'assistant', 'content' => $pair['assistant'] ?? ''];
+                continue;
+            }
+
+            $messages[] = ['role' => 'user', 'content' => $pair['user']];
+            if ($pair['assistant'] !== null) {
+                $messages[] = ['role' => 'assistant', 'content' => $pair['assistant']];
+            }
+        }
+
+        return $messages;
     }
 
     /**
