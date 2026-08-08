@@ -21,8 +21,21 @@ namespace SugarCraft\Crush\Hooks;
  * - stderrToUserOnly(): message is tagged with self::STDERR_ONLY_PREFIX so
  *   a caller can tell this text may only reach the user, never the agent —
  *   see resolveBlockMessage().
- * - blocksOnPreAction() (and any event matching none of the above): message
- *   is preserved verbatim, untagged, for feeding back to the agent.
+ * - blocksOnPreAction(): the action hasn't happened yet, so the message is
+ *   preserved verbatim, untagged, for feeding back to the agent.
+ * - Any event matching none of the above (currently SessionEnd,
+ *   TeammateIdle): tagged with self::UNSPECIFIED_BLOCK_PREFIX — there is no
+ *   pending pre-action for these to stop and no agent turn to feed a
+ *   verbatim message into, so this is deliberately NOT the same result as
+ *   blocksOnPreAction(); see resolveBlockMessage().
+ *
+ * Known gap (pre-existing, not specific to this dispatcher): the [exit-1]
+ * message prefix that determineExitCode()/stripExitPrefix() use to pick the
+ * non-blocking-deny path is not emitted by any shipped HookInterface
+ * implementation (ScriptHook, BuiltIn/*Hook) — they all call plain
+ * HookResult::deny()/allow(), which always resolves to exit code 2 via the
+ * isDenied() fallback below. The exit-1 path is only reachable today from a
+ * hook that manually embeds the "[exit-1]" prefix in its message.
  *
  * @see HookEvent
  */
@@ -36,6 +49,17 @@ final class HookDispatcher
      * HookDispatchResult has no dedicated audience field.
      */
     public const STDERR_ONLY_PREFIX = '[stderr-only] ';
+
+    /**
+     * Marker prepended to a hard-block message for an event that matches
+     * none of blocksOnPreAction(), usesContinueOnBlockOnBlock(),
+     * discardsOnBlock(), or stderrToUserOnly() (currently SessionEnd,
+     * TeammateIdle). These events have no pending pre-action for a block to
+     * stop and no agent turn to feed a verbatim message into, so they must
+     * not be silently treated as blocksOnPreAction() — see
+     * resolveBlockMessage().
+     */
+    public const UNSPECIFIED_BLOCK_PREFIX = '[unspecified-block] ';
 
     public function __construct(
         private HookRegistry $registry,
@@ -217,7 +241,10 @@ final class HookDispatcher
      *   hasn't happened yet, so the message is fed back to the agent so it
      *   can adjust — preserved as-is, untagged.
      * - Any event matching none of the above (e.g. SessionEnd,
-     *   TeammateIdle): preserved as-is, same effect as blocksOnPreAction().
+     *   TeammateIdle): there is no pending pre-action to stop and no agent
+     *   turn to feed a verbatim message into, so this must NOT collapse
+     *   into the same result as blocksOnPreAction() — tagged with
+     *   self::UNSPECIFIED_BLOCK_PREFIX so the two are byte-distinguishable.
      */
     private function resolveBlockMessage(HookEvent $event, string $blockMessage): string
     {
@@ -233,7 +260,7 @@ final class HookDispatcher
             return $blockMessage;
         }
 
-        return $blockMessage;
+        return self::UNSPECIFIED_BLOCK_PREFIX . $blockMessage;
     }
 
     // ========================================================================

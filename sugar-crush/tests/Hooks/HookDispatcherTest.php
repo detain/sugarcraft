@@ -285,6 +285,48 @@ final class HookDispatcherTest extends TestCase
         $this->assertSame('Hard block message', $result->message);
     }
 
+    public function testBlocksOnPreActionDiffersFromUncategorizedFallbackEvent(): void
+    {
+        // blocksOnPreAction() (Stop) and an event matching none of the four
+        // HookEvent metadata methods (SessionEnd) must produce genuinely
+        // different HookDispatchResult messages for byte-identical hook
+        // output. Without this, blocksOnPreAction() is read but never
+        // actually influences dispatch() output — dead metadata, exactly
+        // the gap it exists to close.
+        $stopRegistry = new HookRegistry();
+        $stopRegistry->register($this->createHardBlockHook('BlockHook', HookEvent::Stop, 'Stop', '^Stop$'));
+        $stopDispatcher = new HookDispatcher($stopRegistry);
+        $stopResult = $stopDispatcher->dispatch(HookEvent::Stop, $this->createContext('Stop'));
+
+        $sessionEndRegistry = new HookRegistry();
+        $sessionEndRegistry->register($this->createHardBlockHook('BlockHook', HookEvent::SessionEnd, 'SessionEnd', '^SessionEnd$'));
+        $sessionEndDispatcher = new HookDispatcher($sessionEndRegistry);
+        $sessionEndResult = $sessionEndDispatcher->dispatch(HookEvent::SessionEnd, $this->createContext('SessionEnd'));
+
+        $this->assertTrue($stopResult->isBlock());
+        $this->assertTrue($sessionEndResult->isBlock());
+        $this->assertSame('Hard block message', $stopResult->message);
+        $this->assertStringStartsWith(HookDispatcher::UNSPECIFIED_BLOCK_PREFIX, $sessionEndResult->message);
+        $this->assertStringContainsString('Hard block message', $sessionEndResult->message);
+        $this->assertNotSame($stopResult->message, $sessionEndResult->message);
+    }
+
+    public function testTeammateIdleFallbackAlsoGetsUnspecifiedBlockTag(): void
+    {
+        // TeammateIdle is the other event matching none of the four
+        // HookEvent metadata methods — confirm the fallback tagging isn't
+        // a one-off special case for SessionEnd alone.
+        $hook = $this->createHardBlockHook('BlockHook', HookEvent::TeammateIdle, 'Read', '^Read$');
+        $this->registry->register($hook);
+        $context = $this->createContext('Read');
+
+        $result = $this->dispatcher->dispatch(HookEvent::TeammateIdle, $context);
+
+        $this->assertTrue($result->isBlock());
+        $this->assertStringStartsWith(HookDispatcher::UNSPECIFIED_BLOCK_PREFIX, $result->message);
+        $this->assertStringContainsString('Hard block message', $result->message);
+    }
+
     // =========================================================================
     // dispatch() - Multiple Hooks Tests
     // =========================================================================
