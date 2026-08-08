@@ -565,9 +565,35 @@ final class ProviderFactoryTest extends TestCase
     // fromProjectConfig() - reads .sugar-crush/config.dev.json off disk
     // -------------------------------------------------------------------------
 
-    public function testDefaultConfigPathPointsAtConfigDevJson(): void
+    /**
+     * Reproduces the R24.fix off-by-one finding: defaultConfigPath() must
+     * resolve to THIS library's own .sugar-crush/config.dev.json (two `../`
+     * up from src/Providers/), never to a directory one level above the
+     * library root. The library root is computed independently here (from
+     * this test file's own location, tests/Providers/ -> tests -> root)
+     * rather than by delegating back to defaultConfigPath() itself, so the
+     * assertion can't degenerate into comparing the method against itself.
+     */
+    public function testDefaultConfigPathPointsInsideThisLibraryNotItsParent(): void
     {
-        $this->assertStringEndsWith('/.sugar-crush/config.dev.json', ProviderFactory::defaultConfigPath());
+        $libraryRoot = dirname(__DIR__, 2);
+        $expectedPath = $libraryRoot . '/.sugar-crush/config.dev.json';
+        $wrongParentPath = dirname($libraryRoot) . '/.sugar-crush/config.dev.json';
+
+        $resolved = ProviderFactory::defaultConfigPath();
+
+        $this->assertStringEndsWith('/.sugar-crush/config.dev.json', $resolved);
+        $this->assertFileExists($resolved);
+        $this->assertSame(
+            realpath($expectedPath),
+            realpath($resolved),
+            'defaultConfigPath() must resolve inside the sugar-crush library root, not one level above it'
+        );
+        $this->assertNotSame(
+            realpath($wrongParentPath),
+            realpath($resolved),
+            'defaultConfigPath() must not overshoot into the directory above the library root'
+        );
     }
 
     /**
@@ -575,17 +601,28 @@ final class ProviderFactoryTest extends TestCase
      * (not a fixture stand-in) via defaultConfigPath(), with no explicit
      * $name, and asserts the 'defaultProvider' key ('dev-sglang') resolves
      * to a real, working SglangProvider wired from that file's own
-     * baseUrl/model. Before this fix nothing in the runtime ever read this
-     * file, so dev-sglang was declared but unreachable.
+     * baseUrl/model.
+     *
+     * The "expected" values are read from an INDEPENDENTLY-computed
+     * in-library path (not from defaultConfigPath() itself) so this can't
+     * pass by tautologically comparing the method's result to itself - it
+     * only passes if fromProjectConfig() actually loaded the file that
+     * lives inside this library.
      */
     public function testFromProjectConfigLoadsRealConfigDevJsonDefaultProvider(): void
     {
-        $configPath = ProviderFactory::defaultConfigPath();
-        $this->assertFileExists($configPath, 'Expected the committed .sugar-crush/config.dev.json to exist on disk');
+        $libraryScopedConfigPath = dirname(__DIR__, 2) . '/.sugar-crush/config.dev.json';
+        $this->assertFileExists($libraryScopedConfigPath, 'Expected the committed .sugar-crush/config.dev.json to exist inside this library');
 
-        $raw = json_decode(file_get_contents($configPath), true);
+        $raw = json_decode(file_get_contents($libraryScopedConfigPath), true);
         $this->assertIsArray($raw);
         $this->assertSame('dev-sglang', $raw['defaultProvider']);
+
+        $this->assertSame(
+            realpath($libraryScopedConfigPath),
+            realpath(ProviderFactory::defaultConfigPath()),
+            'fromProjectConfig() default path must be this exact in-library file'
+        );
 
         $provider = $this->factory->fromProjectConfig();
 

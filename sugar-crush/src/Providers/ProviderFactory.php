@@ -86,14 +86,20 @@ final readonly class ProviderFactory
     }
 
     /**
-     * Filesystem location of the dev/test-fixture provider config, resolved
-     * relative to this file the same way Agents\WorktreeConfig::new()
-     * resolves .sugar-crush/config.json, so both stay in lockstep if the
-     * project root ever moves.
+     * Filesystem location of the dev/test-fixture provider config.
+     *
+     * This file (src/Providers/ProviderFactory.php) sits two directories
+     * below the sugar-crush library root (src/Providers -> src -> root), so
+     * only TWO `../` climbs land back on the library's own
+     * .sugar-crush/config.dev.json. A third climb overshoots into whatever
+     * happens to sit above this library on disk - fine by coincidence in the
+     * monorepo checkout (where a sibling .sugar-crush/ dir happens to exist
+     * one level up), but wrong in general and fatal once sugar-crush is
+     * split into its own standalone repo, where nothing exists above it.
      */
     public static function defaultConfigPath(): string
     {
-        return __DIR__ . '/../../../.sugar-crush/config.dev.json';
+        return __DIR__ . '/../../.sugar-crush/config.dev.json';
     }
 
     /**
