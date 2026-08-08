@@ -26,7 +26,15 @@ final class AgentPresetRegistry
         foreach ($this->searchPaths as $path) {
             $filePath = $path . '/' . $name . '.md';
             $realPath = realpath($filePath);
-            if ($realPath === false || !str_starts_with($realPath, realpath($path))) {
+            $realSearchPath = realpath($path);
+            if ($realPath === false || $realSearchPath === false) {
+                continue;
+            }
+            // Normalize with a trailing separator so a sibling directory whose
+            // name merely starts with the same string (e.g. "agents-secrets"
+            // vs "agents") cannot pass a raw string-prefix check.
+            $normalizedSearchPath = rtrim($realSearchPath, '/') . '/';
+            if (!str_starts_with($realPath, $normalizedSearchPath)) {
                 continue;
             }
             if (file_exists($filePath)) {
@@ -135,16 +143,19 @@ final class AgentPresetRegistry
             throw new \RuntimeException("Invalid YAML frontmatter in: {$filePath}");
         }
 
-        return $this->arrayToPreset($data);
+        return $this->arrayToPreset($data, $filePath);
     }
 
     /**
      * Build an AgentPreset from a parsed YAML array.
+     *
+     * @param string $filePath Path of the preset file the data was parsed from,
+     *                         used as the name fallback when no `name:` key is set.
      */
-    private function arrayToPreset(array $data): AgentPreset
+    private function arrayToPreset(array $data, string $filePath): AgentPreset
     {
         return new AgentPreset(
-            name: $data['name'] ?? basename($data['_file'] ?? 'unknown'),
+            name: $data['name'] ?? basename($filePath, '.md'),
             description: $data['description'] ?? '',
             tools: $data['tools'] ?? [],
             disallowedTools: $data['disallowedTools'] ?? [],

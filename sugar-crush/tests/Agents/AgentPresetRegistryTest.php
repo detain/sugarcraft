@@ -381,8 +381,131 @@ YAML;
     }
 
     // -------------------------------------------------------------------------
+    // load() - path-traversal / sibling-directory hardening (R23)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reproduces the original bug: a raw str_starts_with() prefix check treats
+     * "agents-secrets" as "inside" "agents" because the string "agents-secrets"
+     * literally starts with the string "agents". A "../<name>" traversal from
+     * within the legitimate "agents" search path must NOT be able to resolve
+     * into the sibling "agents-secrets" directory.
+     */
+    public function testLoadRejectsSiblingDirectoryThatSharesNamePrefix(): void
+    {
+        $agentsDir = $this->tempDir . '/agents';
+        $secretsDir = $this->tempDir . '/agents-secrets';
+        mkdir($agentsDir, 0777, true);
+        mkdir($secretsDir, 0777, true);
+
+        $this->writePreset($secretsDir . '/passwords.md', 'passwords', 'Should never be reachable from agents/');
+
+        $registry = new AgentPresetRegistry([$agentsDir]);
+
+        // "../agents-secrets/passwords" traverses out of "agents" and into the
+        // sibling "agents-secrets" dir, which merely SHARES a string prefix
+        // with the legitimate search path — it must be rejected, not loaded.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Preset '../agents-secrets/passwords' not found in search paths.");
+
+        $registry->load('../agents-secrets/passwords');
+    }
+
+    /**
+     * A file that genuinely lives inside the search path (not just sharing a
+     * string prefix with a sibling) must still load normally after the fix.
+     */
+    public function testLoadStillWorksForFileGenuinelyInsideSearchPath(): void
+    {
+        $agentsDir = $this->tempDir . '/agents';
+        mkdir($agentsDir, 0777, true);
+
+        $this->writePreset($agentsDir . '/legit.md', 'legit', 'A legitimate in-bounds preset');
+
+        $registry = new AgentPresetRegistry([$agentsDir]);
+        $preset = $registry->load('legit');
+
+        $this->assertSame('legit', $preset->name);
+        $this->assertSame('A legitimate in-bounds preset', $preset->description);
+    }
+
+    // -------------------------------------------------------------------------
+    // arrayToPreset() - filename fallback when no name: key is set (R23)
+    // -------------------------------------------------------------------------
+
+    public function testLoadFallsBackToFilenameWhenNameKeyIsMissing(): void
+    {
+        $filePath = $this->tempDir . '/unnamed-preset.md';
+        $content = <<<'YAML'
+---
+description: A preset with no explicit name field
+tools: []
+---
+# Unnamed
+YAML;
+        file_put_contents($filePath, $content);
+
+        $registry = new AgentPresetRegistry([$this->tempDir]);
+        $preset = $registry->load('unnamed-preset');
+
+        // Falls back to the real filename passed into the parser, not the
+        // dead '_file' key which is never actually populated in $data.
+        $this->assertSame('unnamed-preset', $preset->name);
+        $this->assertSame('A preset with no explicit name field', $preset->description);
+    }
+
+    // -------------------------------------------------------------------------
+    // Real shipped presets under .sugar-crush/agents/ (R23 coverage gap)
+    // -------------------------------------------------------------------------
+
+    public function testLoadsRealShippedCoderPreset(): void
+    {
+        $registry = new AgentPresetRegistry([$this->shippedAgentsDir()]);
+        $preset = $registry->load('coder');
+
+        $this->assertSame('coder', $preset->name);
+        $this->assertSame(
+            'Implements features and fixes bugs in PHP code; writes new files, edits existing code, and runs tests.',
+            $preset->description
+        );
+        $this->assertSame(['Read', 'Write', 'Edit', 'Bash', 'Grep'], $preset->tools);
+        $this->assertSame(PermissionMode::AcceptEdits, $preset->permissionMode);
+        $this->assertSame(Isolation::Worktree, $preset->isolation);
+    }
+
+    public function testLoadsRealShippedReviewerPreset(): void
+    {
+        $registry = new AgentPresetRegistry([$this->shippedAgentsDir()]);
+        $preset = $registry->load('reviewer');
+
+        $this->assertSame('reviewer', $preset->name);
+        $this->assertSame(PermissionMode::Plan, $preset->permissionMode);
+        $this->assertSame(['Write', 'Edit'], $preset->disallowedTools);
+        $this->assertSame(30, $preset->maxTurns);
+    }
+
+    public function testLoadsRealShippedSecurityAuditorPreset(): void
+    {
+        $registry = new AgentPresetRegistry([$this->shippedAgentsDir()]);
+        $preset = $registry->load('security-auditor');
+
+        $this->assertSame('security-auditor', $preset->name);
+        $this->assertSame('sonnet', $preset->model);
+        $this->assertSame(['git'], $preset->mcpServers);
+        $this->assertSame(Isolation::Worktree, $preset->isolation);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Absolute path to the repo's shipped .sugar-crush/agents/ preset directory.
+     */
+    private function shippedAgentsDir(): string
+    {
+        return dirname(__DIR__, 2) . '/.sugar-crush/agents';
+    }
 
     private function writePreset(string $filePath, string $name, string $description): void
     {
