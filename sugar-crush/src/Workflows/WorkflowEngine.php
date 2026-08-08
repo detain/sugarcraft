@@ -1015,6 +1015,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * from before this fix: a real interrupt still terminates the process
      * with no pause file, same as always.
      *
+     * @param string              $interruptId         Identifier used to correlate the pause file with this run.
+     * @param string              $resolvedWorkflowId  The workflow ID the in-flight run is executing under.
+     * @param \DateTimeImmutable  $startedAt            When this run originally started.
      * @param array               $context      Reference to the live workflow context.
      * @param StageResult[]       $stageResults Reference to the live list of completed stage results.
      * @param int                 $totalTokens  Reference to the live running token total.
