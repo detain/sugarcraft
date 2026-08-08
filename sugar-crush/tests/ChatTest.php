@@ -563,4 +563,205 @@ final class ChatTest extends TestCase
         ));
         $this->assertInstanceOf(\Generator::class, $results);
     }
+
+    // ─── /workflow command wiring tests (P4.S15) ─────────────────────────────────
+
+    /**
+     * Standalone fake WorkflowEngine for testing.
+     *
+     * Provides stub implementations of the 5 public methods that Chat's
+     * workflow handlers call: run, pause, resume, getStatus, listWorkflows.
+     * This is a simple test double — NOT extending WorkflowEngine — so that
+     * WorkflowEngine can remain final without scope creep into Chat.php's test.
+     */
+    private function createFakeWorkflowEngine(array $stubs = []): \SugarCraft\Crush\Workflows\WorkflowEngineInterface
+    {
+        return new class($stubs) implements \SugarCraft\Crush\Workflows\WorkflowEngineInterface {
+            private array $stubs;
+
+            public function __construct(array $stubs = []) {
+                $this->stubs = $stubs;
+            }
+
+            public function listWorkflows(): array
+            {
+                return $this->stubs['listWorkflows'] ?? [];
+            }
+
+            public function run(string $workflowPath, array $context = []): \SugarCraft\Crush\Workflows\WorkflowResult
+            {
+                if (isset($this->stubs['run'])) {
+                    return $this->stubs['run'];
+                }
+                throw new \SugarCraft\Crush\Workflows\WorkflowNotFoundException('Not found');
+            }
+
+            public function pause(string $workflowId): void
+            {
+                if (isset($this->stubs['pause'])) {
+                    call_user_func($this->stubs['pause'], $workflowId);
+                }
+            }
+
+            public function resume(string $workflowId): \SugarCraft\Crush\Workflows\WorkflowResult
+            {
+                if (isset($this->stubs['resume'])) {
+                    return $this->stubs['resume'];
+                }
+                throw new \SugarCraft\Crush\Workflows\WorkflowNotFoundException('Not found');
+            }
+
+            public function getStatus(string $workflowId): \SugarCraft\Crush\Workflows\WorkflowStatus
+            {
+                if (isset($this->stubs['getStatus'])) {
+                    return $this->stubs['getStatus'];
+                }
+                throw new \SugarCraft\Crush\Workflows\WorkflowNotRunningException('Not found');
+            }
+        };
+    }
+
+    public function testWorkflowWithNullEngineShowsError(): void
+    {
+        // Chat with no workflow engine set
+        $chat = new Chat(inputBuf: '/workflow');
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // Should have user command and error response in history
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::User, $next->history[0]->role);
+        $this->assertSame('/workflow', $next->history[0]->content);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $this->assertStringContainsString('not configured', $next->history[1]->content);
+    }
+
+    public function testWorkflowHelpShowsAllCommands(): void
+    {
+        $engine = $this->createFakeWorkflowEngine();
+        $chat = new Chat(inputBuf: '/workflow help', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('/workflow run', $response);
+        $this->assertStringContainsString('/workflow pause', $response);
+        $this->assertStringContainsString('/workflow resume', $response);
+        $this->assertStringContainsString('/workflow status', $response);
+        $this->assertStringContainsString('/workflow list', $response);
+    }
+
+    public function testWorkflowListWithNoWorkflowsShowsEmptyMessage(): void
+    {
+        $engine = $this->createFakeWorkflowEngine(['listWorkflows' => []]);
+        $chat = new Chat(inputBuf: '/workflow list', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $this->assertStringContainsString('No workflows found', $next->history[1]->content);
+    }
+
+    public function testWorkflowListWithWorkflowsShowsNumberedList(): void
+    {
+        $engine = $this->createFakeWorkflowEngine(['listWorkflows' => ['build', 'test', 'deploy']]);
+        $chat = new Chat(inputBuf: '/workflow list', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('build', $response);
+        $this->assertStringContainsString('test', $response);
+        $this->assertStringContainsString('deploy', $response);
+        $this->assertStringContainsString('1.', $response);
+        $this->assertStringContainsString('2.', $response);
+        $this->assertStringContainsString('3.', $response);
+    }
+
+    public function testWorkflowRunWithEmptyNameShowsUsageError(): void
+    {
+        $engine = $this->createFakeWorkflowEngine();
+        $chat = new Chat(inputBuf: '/workflow run', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('Error', $response);
+        $this->assertStringContainsString('Usage:', $response);
+    }
+
+    public function testWorkflowRunWithValidNameCallsEngine(): void
+    {
+        $result = new \SugarCraft\Crush\Workflows\WorkflowResult(
+            workflowId: 'test-wf-1234',
+            status: \SugarCraft\Crush\Workflows\WorkflowStatus::Completed,
+            stageResults: [],
+            totalTokens: 100,
+            totalCost: 0.01,
+        );
+
+        $engine = $this->createFakeWorkflowEngine(['run' => $result]);
+        $chat = new Chat(inputBuf: '/workflow run myworkflow', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $this->assertStringContainsString('myworkflow', $next->history[1]->content);
+        $this->assertStringContainsString('completed', $next->history[1]->content);
+    }
+
+    public function testWorkflowPauseWithEmptyIdShowsUsageError(): void
+    {
+        $engine = $this->createFakeWorkflowEngine();
+        $chat = new Chat(inputBuf: '/workflow pause', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('Error', $response);
+        $this->assertStringContainsString('Usage:', $response);
+    }
+
+    public function testWorkflowResumeWithEmptyIdShowsUsageError(): void
+    {
+        $engine = $this->createFakeWorkflowEngine();
+        $chat = new Chat(inputBuf: '/workflow resume', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('Error', $response);
+        $this->assertStringContainsString('Usage:', $response);
+    }
+
+    public function testWorkflowStatusWithEmptyIdShowsUsageError(): void
+    {
+        $engine = $this->createFakeWorkflowEngine();
+        $chat = new Chat(inputBuf: '/workflow status', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('Error', $response);
+        $this->assertStringContainsString('Usage:', $response);
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        \Mockery::close();
+    }
 }

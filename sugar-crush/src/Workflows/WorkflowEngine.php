@@ -21,7 +21,7 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  *
  * Mirrors charmbracelet/charmcrush WorkflowEngine implementation.
  */
-final class WorkflowEngine
+final class WorkflowEngine implements WorkflowEngineInterface
 {
     private const PAUSE_DIR = '.running';
 

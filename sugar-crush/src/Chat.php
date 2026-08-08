@@ -19,6 +19,7 @@ use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
+use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
 use SugarCraft\Crush\Workflows\WorkflowNotFoundException;
 use SugarCraft\Crush\Workflows\WorkflowNotRunningException;
@@ -59,8 +60,8 @@ final class Chat implements Model
 {
     private readonly Backend $backend;
 
-    /** @var WorkflowEngine|null Optional workflow engine for /workflow command */
-    private readonly ?WorkflowEngine $workflowEngine;
+    /** @var WorkflowEngineInterface|null Optional workflow engine for /workflow command */
+    private readonly ?WorkflowEngineInterface $workflowEngine;
 
     /** @var ContextCompactor Context compactor for /compact command and automatic compaction */
     private readonly ContextCompactor $compactor;
@@ -105,7 +106,7 @@ final class Chat implements Model
         private readonly ?\Closure $onToolCall = null,
         private readonly ?\SugarCraft\Crush\Agents\AgentPoolConfig $agentPoolConfig = null,
         private readonly ?\SugarCraft\Crush\Agents\AgentWorkerPool $effectivePool = null,
-        ?WorkflowEngine $workflowEngine = null,
+        ?WorkflowEngineInterface $workflowEngine = null,
         ?AgentManager $agentManager = null,
         ?CompactorConfig $compactorConfig = null,
         ?MemoryStore $memoryStore = null,
@@ -543,7 +544,7 @@ final class Chat implements Model
     /**
      * Create a new Chat with an explicit workflow engine.
      */
-    public function withWorkflowEngine(WorkflowEngine $engine): self
+    public function withWorkflowEngine(WorkflowEngineInterface $engine): self
     {
         return $this->mutate(['workflowEngine' => $engine]);
     }
@@ -551,7 +552,7 @@ final class Chat implements Model
     /**
      * Get the workflow engine, if set.
      */
-    public function workflowEngine(): ?WorkflowEngine
+    public function workflowEngine(): ?WorkflowEngineInterface
     {
         return $this->workflowEngine;
     }
