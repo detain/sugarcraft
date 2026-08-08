@@ -715,6 +715,19 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('/workflow list', $response);
     }
 
+    public function testWorkflowHelpHonestlyDescribesPauseResumeLimitation(): void
+    {
+        $engine = $this->createFakeWorkflowEngine();
+        $chat = new Chat(inputBuf: '/workflow help', workflowEngine: $engine);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('per-whole-stage only', $response);
+        $this->assertStringContainsString('parallel', $response);
+        $this->assertStringContainsString('partial-credit resume', $response);
+    }
+
     public function testWorkflowListWithNoWorkflowsShowsEmptyMessage(): void
     {
         $engine = $this->createFakeWorkflowEngine(['listWorkflows' => []]);

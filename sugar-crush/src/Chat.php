@@ -964,6 +964,12 @@ final class Chat implements Model
         $lines[] = '`/workflow status <workflowId>` — Check workflow status';
         $lines[] = '`/workflow list` — List available workflows';
         $lines[] = '`/workflow` — Show this help text';
+        $lines[] = '';
+        $lines[] = "Note: pause/resume granularity is per-whole-stage only. A real interrupt "
+            . "(Ctrl-C/SIGTERM) captures whatever stages have genuinely finished so far, but if it "
+            . "lands while a 'parallel' stage is mid-flight, that stage's individual in-progress "
+            . "agent results are NOT captured — the stage is simply re-run from scratch on resume. "
+            . "There is no partial-credit resume for a parallel sub-stage.";
 
         return $this->workflowResponse($inputText, implode("\n", $lines));
     }
@@ -1012,6 +1018,14 @@ final class Chat implements Model
 
     /**
      * Handle /workflow pause command.
+     *
+     * Pause (cooperative here, or via WorkflowEngine's real SIGINT/SIGTERM
+     * handling on a genuine interrupt) captures whatever whole stages have
+     * actually completed so far. Resume granularity stays per-whole-stage
+     * only: if a 'parallel' stage is mid-flight when the pause happens, its
+     * individual in-progress agent results are not captured and that stage
+     * is re-run from scratch on resume — there is no partial-credit resume
+     * for a parallel sub-stage. See WorkflowEngine's class docblock.
      *
      * @return array{0:Chat,1:?\Closure}
      */
