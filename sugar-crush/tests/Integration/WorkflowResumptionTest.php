@@ -511,6 +511,142 @@ final class WorkflowResumptionTest extends TestCase
     }
 
     /**
+     * testForkedChildDoesNotRacePauseFileOnRealSignal (R28.fix): regression
+     * test for a real fork/signal-inheritance race a reviewer found in the
+     * original R28 fix. pcntl_signal() dispositions are inherited across
+     * pcntl_fork() — if a real SIGTERM lands while a 'parallel' stage's
+     * AgentWorkerPool has live forked children (see
+     * AgentWorkerPool::startAgent()), every forked child independently
+     * re-enters the SAME handler closure installed by
+     * installInterruptHandlers() and, before this fix, would call pause()
+     * too — racing an unsynchronized file write against the true parent.
+     *
+     * This drives installInterruptHandlers() directly (it's private) to
+     * install the real signal handler in this test process, forks a real
+     * child exactly the way AgentWorkerPool::startAgent() does, and
+     * delivers a real SIGTERM to ONLY the forked child — never to this
+     * process. Asserts the child still exits under the signal convention
+     * (143), but critically never creates the pause file, proving the
+     * getmypid() guard stops a forked child from calling pause() at all.
+     */
+    public function testForkedChildDoesNotRacePauseFileOnRealSignal(): void
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('pcntl/posix extensions are not available in this environment.');
+        }
+
+        $workflowId = 'fork-guard-test';
+        $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/' . $workflowId . '.json';
+
+        $context = [];
+        $stageResults = [];
+        $totalTokens = 0;
+        $totalCost = 0.0;
+        $startedAt = new \DateTimeImmutable();
+
+        $installMethod = new \ReflectionMethod(WorkflowEngine::class, 'installInterruptHandlers');
+        $installMethod->setAccessible(true);
+        $previousAsyncSignals = $installMethod->invokeArgs($this->engine, [
+            $workflowId,
+            $workflowId,
+            $startedAt,
+            &$context,
+            &$stageResults,
+            &$totalTokens,
+            &$totalCost,
+        ]);
+
+        $this->assertNotNull($previousAsyncSignals, 'Handlers should install successfully when pcntl is available.');
+
+        try {
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                $this->fail('pcntl_fork() failed.');
+            }
+
+            if ($pid === 0) {
+                // --- Forked child ---
+                // Inherits the SIGTERM handler just installed above, exactly
+                // as a real AgentWorkerPool worker child would inherit it
+                // from mid-parallel-stage. Sleeps so the parent has time to
+                // deliver a real signal before the child would exit on its
+                // own.
+                sleep(5);
+                exit(98); // Unreachable if the signal is delivered as expected.
+            }
+
+            // --- Parent (this test process) ---
+            // This is the same process that called installInterruptHandlers()
+            // above, so getmypid() here matches the $installPid captured by
+            // the handler closure. Signal only the forked CHILD, never
+            // ourselves, so this process's own pause()/handler path is never
+            // exercised here.
+            usleep(200_000);
+            posix_kill($pid, SIGTERM);
+
+            $status = null;
+            pcntl_waitpid($pid, $status);
+
+            $this->assertTrue(pcntl_wifexited($status), 'Forked child should have exited normally after the real SIGTERM.');
+            $this->assertSame(143, pcntl_wexitstatus($status), 'Forked child should still exit under the SIGTERM convention.');
+            $this->assertFileDoesNotExist(
+                $pauseFile,
+                'A forked child must never call pause() itself — only the process that installed the handler may.'
+            );
+        } finally {
+            $restoreMethod = new \ReflectionMethod(WorkflowEngine::class, 'restoreInterruptHandlers');
+            $restoreMethod->setAccessible(true);
+            $restoreMethod->invoke($this->engine, $previousAsyncSignals ?? false);
+        }
+    }
+
+    /**
+     * testAsyncSignalsSettingRestoredAfterRun (R28.fix): regression test for
+     * a global-state leak a reviewer found in the original R28 fix.
+     * installInterruptHandlers() unconditionally called pcntl_async_signals(true)
+     * but restoreInterruptHandlers() never turned it back off, so every
+     * run()/resume() permanently flipped the whole calling process (including
+     * this very PHPUnit process) into async-signal-dispatch mode with no
+     * corresponding cleanup. Sets a known baseline before run(), then asserts
+     * run() restores exactly that baseline once it finishes normally.
+     */
+    public function testAsyncSignalsSettingRestoredAfterRun(): void
+    {
+        if (!function_exists('pcntl_async_signals')) {
+            $this->markTestSkipped('pcntl extension is not available in this environment.');
+        }
+
+        $workflow = (new WorkflowBuilder())
+            ->name('async-signals-restore-test')
+            ->description('Test pcntl_async_signals is restored after run()')
+            ->stage('only-stage', Tasks::agent('worker')->prompt('Do the only thing'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $this->mockExecutor
+            ->expects($this->once())
+            ->method('execute')
+            ->willReturn($this->successfulAgentResult('done'));
+
+        // Start from a known baseline so we prove run() puts it back to
+        // exactly this value, not just that it happens to already match.
+        $originalSetting = pcntl_async_signals(false);
+
+        try {
+            $result = $this->engine->run('async-signals-restore-test', []);
+            $this->assertTrue($result->isSuccess());
+
+            $this->assertFalse(
+                pcntl_async_signals(),
+                'run() must restore pcntl_async_signals() to what it was before the run, not leave async dispatch enabled process-wide.'
+            );
+        } finally {
+            pcntl_async_signals($originalSetting);
+        }
+    }
+
+    /**
      * testResumeMissingPauseFileThrows: verify resume() throws when no
      * pause file exists.
      */

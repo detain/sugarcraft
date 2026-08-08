@@ -33,6 +33,17 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  * the pause file, and resuming re-runs it from scratch. There is no
  * partial-credit resume for a PARALLEL sub-stage.
  *
+ * Fork-safety: pcntl_signal() handlers are inherited across pcntl_fork(),
+ * so if the signal arrives while a 'parallel' stage's AgentWorkerPool has
+ * live forked children, those children re-enter the handler too. See
+ * installInterruptHandlers() for how this is guarded (only the process
+ * that installed the handler ever calls pause(); forked children just
+ * exit under the signal convention, same as their pre-fix behaviour).
+ * installInterruptHandlers()/restoreInterruptHandlers() also restore
+ * pcntl_async_signals() to whatever it was before run()/resume() was
+ * called, rather than leaking async-dispatch mode into the rest of the
+ * calling process once the run finishes.
+ *
  * Mirrors charmbracelet/charmcrush WorkflowEngine implementation.
  */
 final class WorkflowEngine implements WorkflowEngineInterface
@@ -325,7 +336,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $resolvedWorkflowId = $workflowIdOverride ?? $this->generateWorkflowId($workflow);
         $interruptId = $pauseId ?? $resolvedWorkflowId;
 
-        $interruptHandlersInstalled = $this->installInterruptHandlers(
+        $previousAsyncSignals = $this->installInterruptHandlers(
             $interruptId,
             $resolvedWorkflowId,
             $startedAt,
@@ -422,8 +433,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 }
             }
         } finally {
-            if ($interruptHandlersInstalled) {
-                $this->restoreInterruptHandlers();
+            if ($previousAsyncSignals !== null) {
+                $this->restoreInterruptHandlers($previousAsyncSignals);
             }
         }
 
@@ -1010,10 +1021,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * interrupt lands mid-stage, are not captured — the stage is simply
      * missing from the pause file and will be re-run in full on resume().
      *
-     * No-op (returns false) when the pcntl extension is unavailable, so
+     * No-op (returns null) when the pcntl extension is unavailable, so
      * behaviour on platforms without pcntl (e.g. Windows) is unchanged
      * from before this fix: a real interrupt still terminates the process
      * with no pause file, same as always.
+     *
+     * Fork-safety: pcntl_signal() dispositions are inherited across
+     * pcntl_fork(). If the signal lands while a 'parallel' stage's
+     * AgentWorkerPool has live forked children (see
+     * AgentWorkerPool::startAgent()), every forked child independently
+     * re-enters this same closure too. Only the process that originally
+     * installed the handler (captured as $installPid below) owns
+     * $stageResults/pause() for this run — a forked child re-running
+     * pause() would race an unsynchronized file write against the true
+     * parent and short-circuit its own exit(0) reaping path. The handler
+     * below checks getmypid() against $installPid and, for any forked
+     * child, just exits with the signal-convention code without touching
+     * pause() at all — i.e. the child dies the same way it always did
+     * before this fix (silently, on the signal), and only the parent
+     * persists anything.
      *
      * @param string              $interruptId         Identifier used to correlate the pause file with this run.
      * @param string              $resolvedWorkflowId  The workflow ID the in-flight run is executing under.
@@ -1022,7 +1048,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param StageResult[]       $stageResults Reference to the live list of completed stage results.
      * @param int                 $totalTokens  Reference to the live running token total.
      * @param float               $totalCost    Reference to the live running cost total.
-     * @return bool True when handlers were actually installed.
+     * @return bool|null The previous pcntl_async_signals() setting to restore in
+     *                    restoreInterruptHandlers() once this run finishes, or null
+     *                    when handlers were not installed (pcntl unavailable).
      */
     private function installInterruptHandlers(
         string $interruptId,
@@ -1032,25 +1060,40 @@ final class WorkflowEngine implements WorkflowEngineInterface
         array &$stageResults,
         int &$totalTokens,
         float &$totalCost,
-    ): bool {
+    ): ?bool {
         if (!function_exists('pcntl_signal') || !function_exists('pcntl_async_signals')) {
-            return false;
+            return null;
         }
 
         // Dispatch signal handlers without requiring an explicit
         // pcntl_signal_dispatch() tick, so a blocking call inside a stage
         // (e.g. a long HTTP request or sleep()) is interrupted promptly.
-        pcntl_async_signals(true);
+        // pcntl_async_signals() returns the PREVIOUS setting, which
+        // restoreInterruptHandlers() uses to put the process back exactly
+        // how it found it rather than unconditionally leaving async
+        // dispatch on for the rest of the process's life.
+        $previousAsyncSignals = pcntl_async_signals(true);
+
+        $installPid = getmypid();
 
         $handler = function (int $signo) use (
             $interruptId,
             $resolvedWorkflowId,
             $startedAt,
+            $installPid,
             &$context,
             &$stageResults,
             &$totalTokens,
             &$totalCost,
         ): void {
+            // See the fork-safety note on installInterruptHandlers(): a
+            // forked 'parallel'-stage child inherits this same handler. It
+            // must not call pause() — that's the parent's job for this
+            // run — so it just exits under the signal convention.
+            if (getmypid() !== $installPid) {
+                exit($signo === \SIGINT ? 130 : 143);
+            }
+
             $partialResult = new WorkflowResult(
                 workflowId: $resolvedWorkflowId,
                 status: WorkflowStatus::Running,
@@ -1082,14 +1125,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
         pcntl_signal(\SIGINT, $handler);
         pcntl_signal(\SIGTERM, $handler);
 
-        return true;
+        return $previousAsyncSignals;
     }
 
     /**
-     * Restore default SIGINT/SIGTERM disposition after a stage-execution
-     * loop finishes, so interrupt handling doesn't leak past this run().
+     * Restore default SIGINT/SIGTERM disposition, and the pcntl_async_signals()
+     * setting that was in effect before installInterruptHandlers() ran, after a
+     * stage-execution loop finishes — so neither the signal handlers nor the
+     * async-dispatch mode leak past this run() into the rest of the calling
+     * process (e.g. the PHPUnit process running this very test suite).
+     *
+     * @param bool $previousAsyncSignals The pcntl_async_signals() setting to
+     *                                   restore, as returned by installInterruptHandlers().
      */
-    private function restoreInterruptHandlers(): void
+    private function restoreInterruptHandlers(bool $previousAsyncSignals): void
     {
         if (!function_exists('pcntl_signal')) {
             return;
@@ -1097,5 +1146,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         pcntl_signal(\SIGINT, \SIG_DFL);
         pcntl_signal(\SIGTERM, \SIG_DFL);
+        pcntl_async_signals($previousAsyncSignals);
     }
 }
