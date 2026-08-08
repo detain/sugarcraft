@@ -296,6 +296,40 @@ final class SessionCommandTest extends TestCase
         $this->assertSame($chat, $next);
     }
 
+    /**
+     * Regression test for the R20 review finding: reproduces the exact
+     * shape {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} constructs a
+     * live Chat with — a real sessionStore, but `currentSessionId` left at
+     * its null default (Bootstrap never passes one, and {@see Chat::init()}
+     * returns null so nothing selects one at startup either). Feeding a
+     * `KeyMsg(KeyType::Tab, ctrl: true)` here bypasses the disclosed
+     * InputReader `CSI 1;5I` decoder gap entirely (this is already a raw
+     * KeyMsg), yet the update is still a complete no-op — proving Ctrl+Tab
+     * session cycling doesn't work for a real `bin/sugarcrush` user today
+     * for a second, independent reason beyond the decoder gap. See
+     * {@see \SugarCraft\Crush\Chat::cycleSessionTab()}'s "Reachability
+     * note" docblock.
+     */
+    public function testCtrlTabIsNoopForBootstrapShapedChatWithNoInitialSession(): void
+    {
+        $this->sessionStore->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+        $this->sessionStore->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
+
+        // Mirrors Bootstrap::chat(): sessionStore wired, currentSessionId omitted.
+        $chat = new Chat(
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+        );
+        $this->assertNull($chat->init());
+        $this->assertNull($chat->currentSessionId());
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame($chat, $next);
+        $this->assertNull($next->currentSessionId());
+    }
+
     public function testSessionCommandNoActiveSession(): void
     {
         // sessionStore is set but currentSessionId is null

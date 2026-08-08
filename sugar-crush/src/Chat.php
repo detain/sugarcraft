@@ -231,11 +231,27 @@ final class Chat implements Model
      * sequence that candy-core's `InputReader` does not yet decode into a
      * `KeyMsg` (a separate, pre-existing gap in a file outside this item's
      * scope — Ctrl+Tab isn't in the generic modifier-key CSI table there).
-     * This handler is nonetheless real and reachable today via any
-     * `KeyMsg(KeyType::Tab, ctrl: true)` source (Kitty-protocol terminals,
-     * scripted input, tests) exactly the way the rest of this match block
-     * is driven and tested, and will gain full raw-terminal reachability
-     * automatically once that decoder gap is closed.
+     * That decoder gap is NOT the only thing standing between this handler
+     * and a real `bin/sugarcrush` user, though — even a `KeyMsg` source that
+     * bypasses it entirely (Kitty-protocol terminals, scripted input) hits
+     * the early-return above, because `Cli\Bootstrap::chat()` (the live
+     * construction path) never passes a `currentSessionId`, `init()` returns
+     * `null` (no startup Cmd selects or creates one either), and nothing
+     * else in the live path calls {@see withCurrentSessionId()} except this
+     * method and `handleBranchCommand()` — which itself requires an
+     * existing `currentSessionId` to fork from, a circular, pre-existing
+     * gap of its own. So a freshly-launched `bin/sugarcrush` session has
+     * `currentSessionId === null` for its entire lifetime unless the user
+     * first runs `/branch` against a session id it has no way to have
+     * started with. Concretely, this method is exercised and correct
+     * against any Chat that already carries a non-null `currentSessionId`
+     * (as every test below does), but is a guaranteed no-op for a Chat
+     * built the way `Bootstrap::chat()` actually builds it. Wiring an
+     * initial `currentSessionId` into `Bootstrap::chat()`/`init()` (e.g.
+     * selecting the most-recent row from `SessionStore::listSessions()`, or
+     * creating one) would close this, but touches `src/Cli/Bootstrap.php`,
+     * which is outside this item's declared file scope — left as an
+     * explicit follow-up rather than fixed here.
      *
      * @return array{0:Chat,1:?\Closure}
      */
