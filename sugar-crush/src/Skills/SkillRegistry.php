@@ -93,9 +93,13 @@ final class SkillRegistry
      */
     public function getUserInvocable(): array
     {
+        // Route through isUserInvocable() (rather than re-inlining the
+        // $skill->userInvocable check here) so this stays in lockstep with
+        // any future change to what "user-invocable" means — mirrors the
+        // same rationale findForPrompt() follows via isAutoInvocable().
         return array_values(array_filter(
             $this->all(),
-            fn($skill) => $skill->userInvocable
+            fn($skill) => $this->isUserInvocable($skill->name)
         ));
     }
 
