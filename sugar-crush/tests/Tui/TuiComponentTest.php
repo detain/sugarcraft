@@ -258,6 +258,46 @@ final class TuiComponentTest extends TestCase
         $this->assertStringContainsString("\x1b[38;2;255;102;170m", $outputUnfocused);
     }
 
+    /**
+     * @testdox SkillsPane::render() shows the picker list when OpenSkillPickerMsg populated skillPickerOptions
+     */
+    public function testSkillsPaneShowsPickerOptionsWhenOpen(): void
+    {
+        $registry = new \SugarCraft\Crush\Skills\SkillRegistry();
+        $palette = \SugarCraft\Crush\Skills\Skill::parse(
+            "---\ndescription: Palette skill\nuser-invocable: true\n---\n\nContent.",
+            'palette-skill'
+        );
+        $registry->register(['palette-skill' => $palette]);
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withPane(Pane::Skills);
+        [$app] = $app->update(new \SugarCraft\Crush\App\OpenSkillPickerMsg());
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('palette-skill', $output);
+        $this->assertStringContainsString('select a skill', $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() renders a Skill object in enabledSkills by name, not a fatal type error
+     */
+    public function testSkillsPaneRendersSkillObjectInEnabledSkills(): void
+    {
+        $skill = \SugarCraft\Crush\Skills\Skill::parse(
+            "---\ndescription: Object skill\n---\n\nContent.",
+            'object-skill'
+        );
+        $app = App::new($this->provider, 'test-model')->withEnabledSkills([$skill]);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('object-skill', $output);
+    }
+
     // =========================================================================
     // AgentsPane Tests
     // =========================================================================

@@ -42,6 +42,7 @@ final class App
         public readonly int $selectedAgentIndex,
         public readonly AgentViewMode $agentViewMode,
         public readonly ?DateTimeImmutable $lastActivityAt = null,
+        public readonly array $skillPickerOptions = [],
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -62,6 +63,7 @@ final class App
             selectedAgentIndex: -1,
             agentViewMode: AgentViewMode::List,
             lastActivityAt: null,
+            skillPickerOptions: [],
         );
     }
 
@@ -142,6 +144,14 @@ final class App
     }
 
     /**
+     * @param array<Skill> $v
+     */
+    public function withSkillPickerOptions(array $v): self
+    {
+        return $this->mutate(skillPickerOptions: $v);
+    }
+
+    /**
      * Apply enabled skills to the base system prompt.
      *
      * Skills declared `context: fork` are excluded — they run as isolated
@@ -182,13 +192,19 @@ final class App
      *
      * A skill authored with `user-invocable: false` is excluded from
      * whatever list is passed through this filter, and remains reachable
-     * only via auto-invocation or direct programmatic enable(). This is
-     * the filtering primitive a future /skills or command-palette listing
-     * should call — no such listing is wired up anywhere in the codebase
-     * yet (`src/Tui/KeyboardHandler.php` emits `CommandPaletteCmd` /
-     * `SourceSkillCmd`, but nothing currently consumes either), so calling
-     * this method today has no user-visible effect until a listing exists
-     * that calls it.
+     * only via auto-invocation or direct programmatic enable().
+     *
+     * This is consumed by the real command surface below: dispatching
+     * OpenSkillPickerMsg through update() populates $skillPickerOptions
+     * with exactly this filtered list, and SelectSkillMsg re-validates
+     * against it before enabling a skill. `SkillsPane` renders the picker
+     * whenever $skillPickerOptions is non-empty (Mirrors
+     * charmbracelet/crush SourceSkillCmd's skill list). Physical keypress
+     * reachability (wiring `KeyboardHandler`'s `SourceSkillCmd` into the
+     * running main loop so pressing the real key emits OpenSkillPickerMsg)
+     * is a separate, larger main-loop-wiring item and is not yet done —
+     * but the Model-layer command surface itself (this method, the two
+     * Msg handlers, and the picker render) is real and covered by tests.
      *
      * @return array<Skill>
      */
@@ -267,8 +283,71 @@ final class App
             $msg instanceof ToolResultMsg => $this->handleToolResult($msg),
             $msg instanceof ErrorMsg => [$this->withError($msg->message), null],
             $msg instanceof StatusMsg => [$this->withStatus($msg->message), null],
+            $msg instanceof OpenSkillPickerMsg => $this->handleOpenSkillPicker(),
+            $msg instanceof SelectSkillMsg => $this->handleSelectSkill($msg),
             default => [$this, null],
         };
+    }
+
+    /**
+     * Open the skill picker: switch to the Skills pane and populate
+     * $skillPickerOptions with the user-invocable skill list. Mirrors
+     * charmbracelet/crush SourceSkillCmd.
+     *
+     * @return array{0: self, 1: ?Cmd}
+     */
+    private function handleOpenSkillPicker(): array
+    {
+        $options = $this->userInvocableSkills();
+        $next = $this->withPane(Pane::Skills)->withSkillPickerOptions($options)->withError(null);
+
+        if ($options === []) {
+            $next = $next->withStatus('No user-invocable skills are registered.');
+        }
+
+        return [$next, null];
+    }
+
+    /**
+     * Select a skill from an open picker by name, enabling it for the
+     * conversation. Re-validates against the user-invocable filter rather
+     * than trusting the caller-supplied name, so a skill that opted out of
+     * user invocation can never be enabled through this path even if the
+     * picker's own options were bypassed.
+     *
+     * @return array{0: self, 1: ?Cmd}
+     */
+    private function handleSelectSkill(SelectSkillMsg $msg): array
+    {
+        $skill = null;
+        foreach ($this->userInvocableSkills() as $candidate) {
+            if ($candidate->name === $msg->skillName) {
+                $skill = $candidate;
+                break;
+            }
+        }
+
+        if ($skill === null) {
+            return [$this->withError("Skill '{$msg->skillName}' is not user-invocable or does not exist."), null];
+        }
+
+        $alreadyEnabled = false;
+        foreach ($this->enabledSkills as $enabled) {
+            if ($enabled instanceof Skill && $enabled->name === $skill->name) {
+                $alreadyEnabled = true;
+                break;
+            }
+        }
+        $enabledSkills = $alreadyEnabled ? $this->enabledSkills : [...$this->enabledSkills, $skill];
+
+        $next = $this->mutate(
+            enabledSkills: $enabledSkills,
+            skillPickerOptions: [],
+            status: "Enabled skill '{$skill->name}'.",
+            error: null,
+        );
+
+        return [$next, null];
     }
 
     /**
@@ -322,6 +401,7 @@ final class App
             selectedAgentIndex: array_key_exists('selectedAgentIndex', $changes) ? $changes['selectedAgentIndex'] : $this->selectedAgentIndex,
             agentViewMode: array_key_exists('agentViewMode', $changes) ? $changes['agentViewMode'] : $this->agentViewMode,
             lastActivityAt: array_key_exists('lastActivityAt', $changes) ? $changes['lastActivityAt'] : $this->lastActivityAt,
+            skillPickerOptions: array_key_exists('skillPickerOptions', $changes) ? $changes['skillPickerOptions'] : $this->skillPickerOptions,
         );
     }
 }
@@ -371,6 +451,22 @@ final readonly class ErrorMsg implements Msg
 final readonly class StatusMsg implements Msg
 {
     public function __construct(public string $message) {}
+}
+
+/**
+ * Open the user-invocable skill picker. Mirrors charmbracelet/crush
+ * SourceSkillCmd — emitted once the keyboard layer is wired to dispatch it.
+ */
+final readonly class OpenSkillPickerMsg implements Msg
+{
+}
+
+/**
+ * Select and enable a skill by name from an open picker.
+ */
+final readonly class SelectSkillMsg implements Msg
+{
+    public function __construct(public string $skillName) {}
 }
 
 // Cmd types (side-effects to execute)

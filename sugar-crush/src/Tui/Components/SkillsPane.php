@@ -8,28 +8,45 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Skills\Skill;
 
 final class SkillsPane
 {
     public static function render(App $a, int $width, int $rows): string
     {
-        $skills = $a->enabledSkills;
-
-        if ($skills === []) {
-            $body = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('(no skills enabled)');
-        } else {
+        if ($a->skillPickerOptions !== []) {
             $lines = [];
-            foreach ($skills as $skill) {
+            foreach ($a->skillPickerOptions as $skill) {
                 $lines[] = Style::new()
-                    ->foreground(Color::hex('#c5b6dd'))
-                    ->render('• ' . $skill);
+                    ->foreground(Color::hex('#00ffaa'))
+                    ->render('▸ ' . $skill->name . ' — ' . $skill->description);
             }
             $body = implode("\n", $lines);
+            $title = ' select a skill ';
+        } else {
+            $skills = $a->enabledSkills;
+
+            if ($skills === []) {
+                $body = Style::new()->foreground(Color::hex('#7d6e98'))
+                    ->render('(no skills enabled)');
+            } else {
+                $lines = [];
+                foreach ($skills as $skill) {
+                    // enabledSkills holds a mix of Skill objects (App::update()'s
+                    // SelectSkillMsg path) and bare name strings (SkillManager's
+                    // legacy path) depending on caller -- render either.
+                    $label = $skill instanceof Skill ? $skill->name : (string)$skill;
+                    $lines[] = Style::new()
+                        ->foreground(Color::hex('#c5b6dd'))
+                        ->render('• ' . $label);
+                }
+                $body = implode("\n", $lines);
+            }
+            $title = ' skills ';
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' skills '))
+            ->border(Border::rounded()->withTitle($title))
             ->padding(0, 1)
             ->width($width);
 
