@@ -97,11 +97,33 @@ final class WorktreeConfig
         int $worktreeCleanupPeriodDays = 7,
         string $worktreeIncludeFile = '.worktreeinclude',
     ) {
+        self::assertIsolationModeImplemented($isolationMode);
+
         $this->basePath = $basePath;
         $this->autoCleanup = $autoCleanup;
         $this->isolationMode = $isolationMode;
         $this->worktreeCleanupPeriodDays = $worktreeCleanupPeriodDays;
         $this->worktreeIncludeFile = $worktreeIncludeFile;
+    }
+
+    /**
+     * Guard against silently accepting an isolation mode WorktreeManager does
+     * not actually implement. Only WorktreeIsolationMode::Worktree has real
+     * behavior today (full git worktree per agent) — Branch and Path are
+     * defined on the enum but WorktreeManager::createWorktree() never
+     * branches on them, so setting either previously had no effect at all.
+     *
+     * @throws \InvalidArgumentException When $mode has no implementation in WorktreeManager.
+     */
+    private static function assertIsolationModeImplemented(WorktreeIsolationMode $mode): void
+    {
+        if ($mode !== WorktreeIsolationMode::Worktree) {
+            throw new \InvalidArgumentException(sprintf(
+                'WorktreeIsolationMode::%s is not implemented by WorktreeManager yet — only'
+                . ' WorktreeIsolationMode::Worktree is currently supported.',
+                $mode->name,
+            ));
+        }
     }
 
     /**

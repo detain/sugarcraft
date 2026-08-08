@@ -126,6 +126,10 @@ final class WorktreeManager
         ];
         $this->saveRegistry();
 
+        // Copy .worktreeinclude-listed files (e.g. .env, composer auth) into
+        // the fresh worktree — previously only reachable via manual reflection.
+        $this->resolveWorktreeInclude($worktreePath);
+
         return $worktreePath;
     }
 
@@ -565,6 +569,43 @@ final class WorktreeManager
         }
 
         return $removed;
+    }
+
+    /**
+     * Minimum time between two real cleanupStaleWorktrees() sweeps triggered
+     * via sweepIfDue(), in seconds.
+     */
+    private const SWEEP_INTERVAL_SECONDS = 3600;
+
+    /**
+     * Run a cleanup sweep, but only if the last one is more than
+     * SWEEP_INTERVAL_SECONDS old (or there has never been one).
+     *
+     * cleanupStaleWorktrees() previously had no real caller anywhere in the
+     * codebase — this gives it one cheap-to-call entry point (a single
+     * filemtime-style check on most calls) so Team::claimTask() can invoke it
+     * on every claim without doing a full sweep every time.
+     *
+     * @return int The number of worktrees removed, or 0 if the sweep was skipped.
+     */
+    public function sweepIfDue(): int
+    {
+        $marker = $this->expandedBasePath . '/.last-sweep';
+        $now = time();
+
+        if (file_exists($marker)) {
+            $lastSweep = (int) file_get_contents($marker);
+            if (($now - $lastSweep) < self::SWEEP_INTERVAL_SECONDS) {
+                return 0;
+            }
+        }
+
+        if (!is_dir($this->expandedBasePath)) {
+            mkdir($this->expandedBasePath, 0755, true);
+        }
+        file_put_contents($marker, (string) $now, LOCK_EX);
+
+        return $this->cleanupStaleWorktrees();
     }
 
     /**

@@ -485,6 +485,64 @@ final class WorktreeManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // sweepIfDue() — cleanupStaleWorktrees() previously had no real caller
+    // anywhere in the codebase; sweepIfDue() is the cheap entry point that
+    // gives it one (see Team::claimTask()).
+    // -------------------------------------------------------------------------
+
+    public function testSweepIfDueRunsCleanupWhenNeverSweptBefore(): void
+    {
+        $agentId = 'sweep-due-agent';
+        $this->manager->createWorktree($agentId);
+        $path = $this->manager->getWorktreePath($agentId);
+
+        // Backdate so the worktree is stale-and-clean, same setup as the
+        // cleanupStaleWorktrees() removal test above.
+        $cutoff = (new \DateTimeImmutable())->modify('-8 days')->format(\DateTimeImmutable::ATOM);
+        $reflection = new \ReflectionClass($this->manager);
+        $registryProp = $reflection->getProperty('registry');
+        $registryProp->setAccessible(true);
+        $registry = $registryProp->getValue($this->manager);
+        $registry[$agentId]['createdAt'] = $cutoff;
+        $registry[$agentId]['named'] = false;
+        $registryProp->setValue($this->manager, $registry);
+
+        // No .last-sweep marker exists yet, so this must trigger a real sweep.
+        $removed = $this->manager->sweepIfDue();
+
+        $this->assertSame(1, $removed, 'First-ever sweepIfDue() call must run a real cleanup');
+        $this->assertFalse(is_dir($path), 'Stale worktree should have been removed by the sweep');
+    }
+
+    public function testSweepIfDueSkipsCleanupWhenRecentlySwept(): void
+    {
+        $agentId = 'sweep-throttled-agent';
+        $this->manager->createWorktree($agentId);
+        $path = $this->manager->getWorktreePath($agentId);
+
+        $cutoff = (new \DateTimeImmutable())->modify('-8 days')->format(\DateTimeImmutable::ATOM);
+        $reflection = new \ReflectionClass($this->manager);
+        $registryProp = $reflection->getProperty('registry');
+        $registryProp->setAccessible(true);
+        $registry = $registryProp->getValue($this->manager);
+        $registry[$agentId]['createdAt'] = $cutoff;
+        $registry[$agentId]['named'] = false;
+        $registryProp->setValue($this->manager, $registry);
+
+        // Simulate a sweep that "just happened" by writing a fresh marker at
+        // the exact path sweepIfDue() itself uses.
+        $expandedBasePathProp = $reflection->getProperty('expandedBasePath');
+        $expandedBasePathProp->setAccessible(true);
+        $marker = $expandedBasePathProp->getValue($this->manager) . '/.last-sweep';
+        file_put_contents($marker, (string) time());
+
+        $removed = $this->manager->sweepIfDue();
+
+        $this->assertSame(0, $removed, 'sweepIfDue() must not run a real sweep before the interval elapses');
+        $this->assertTrue(is_dir($path), 'Worktree must survive because the sweep was throttled');
+    }
+
+    // -------------------------------------------------------------------------
     // worktreeHasUncommittedDiff()
     // -------------------------------------------------------------------------
 
@@ -521,13 +579,18 @@ final class WorktreeManagerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // resolveWorktreeInclude()
+    // resolveWorktreeInclude() — now auto-invoked by createWorktree()
     // -------------------------------------------------------------------------
 
     /**
      * @group P3.S3
+     *
+     * Reproduces the original bug: .worktreeinclude existed and worked when
+     * called manually via reflection, but createWorktree() itself never
+     * called it, so real callers never got the copied files. This test
+     * calls only createWorktree() — no manual resolveWorktreeInclude() call.
      */
-    public function testResolveWorktreeIncludeCopiesMatchingFiles(): void
+    public function testCreateWorktreeAutoAppliesWorktreeInclude(): void
     {
         // Set up .worktreeinclude and source files BEFORE creating the worktree
         $includeFile = $this->repoRoot . '/.worktreeinclude';
@@ -538,7 +601,6 @@ final class WorktreeManagerTest extends TestCase
         mkdir($this->repoRoot . '/subdir', 0755);
         file_put_contents($this->repoRoot . '/subdir/nested.txt', 'nested content');
 
-        // Create a worktree — resolveWorktreeInclude is called separately after creation (P3.S3 pattern)
         $agentId = 'include-test-agent';
         $config = new WorktreeConfig(
             basePath: $this->tmpRoot . '/worktrees/',
@@ -546,13 +608,9 @@ final class WorktreeManagerTest extends TestCase
             worktreeIncludeFile: '.worktreeinclude',
         );
         $manager = new WorktreeManager($config, $this->repoRoot);
-        $path = $manager->createWorktree($agentId);
 
-        // Manually resolve .worktreeinclude files after worktree creation (P3.S3 scope)
-        $reflection = new \ReflectionClass($manager);
-        $method = $reflection->getMethod('resolveWorktreeInclude');
-        $method->setAccessible(true);
-        $method->invoke($manager, $path);
+        // createWorktree() alone must apply .worktreeinclude — no manual call.
+        $path = $manager->createWorktree($agentId);
 
         // .env.example should have been copied into the worktree
         $this->assertFileExists($path . '/.env.example');

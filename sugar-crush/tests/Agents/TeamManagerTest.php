@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Agents\Task;
+use SugarCraft\Crush\Agents\TaskStatus;
 use SugarCraft\Crush\Agents\Team;
 use SugarCraft\Crush\Agents\TeamConfig;
 use SugarCraft\Crush\Agents\TeamManager;
@@ -91,6 +93,19 @@ final class TeamManagerTest extends TestCase
         );
     }
 
+    public function testCreateTeamPassesMaxTeammatesThroughToTeam(): void
+    {
+        $tm = $this->createTeamManager();
+        $team = $tm->createTeam(
+            teamId: 'capped-team',
+            name: 'Capped Team',
+            leadAgentId: 'lead-1',
+            config: new TeamConfig(maxTeammates: 2),
+        );
+
+        $this->assertSame(2, $team->maxTeammates);
+    }
+
     // -------------------------------------------------------------------------
     // Registry accessors
     // -------------------------------------------------------------------------
@@ -140,6 +155,99 @@ final class TeamManagerTest extends TestCase
 
         $this->assertTrue($tm->hasTeam('exists'));
         $this->assertFalse($tm->hasTeam('does-not-exist'));
+    }
+
+    // -------------------------------------------------------------------------
+    // handleTeammateIdle() — real consumer for TaskList::dispatchTeammateIdle()
+    // -------------------------------------------------------------------------
+
+    public function testHandleTeammateIdleClaimsNextUnblockedTask(): void
+    {
+        // Team::basePath() persists tasks.sqlite under the REAL $HOME
+        // (~/.sugar-crush/teams/{id}/), independent of the TeamManager's own
+        // temp registry dir — so the team id must be unique per test run to
+        // avoid state bleeding across repeated invocations of this suite.
+        $teamId = 'idle-team-' . uniqid('', true);
+        $tm = $this->createTeamManager();
+        $team = $tm->createTeam(teamId: $teamId, name: 'Idle Team', leadAgentId: 'lead-1');
+
+        $task = new Task(
+            id: 'idle-task-1',
+            teamId: $teamId,
+            title: 'Pending work',
+            description: '',
+            prompt: '',
+            assignedTo: null,
+            status: TaskStatus::Pending,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+            claimedAt: null,
+            completedAt: null,
+            dependsOn: [],
+            isContested: false,
+        );
+        $team->getTaskList()->addTask($task);
+
+        // Before the fix, TaskList::dispatchTeammateIdle() had no caller at all,
+        // so a teammate going idle never resulted in real reassignment.
+        $claimedTaskId = $tm->handleTeammateIdle($teamId, 'teammate-idle-1');
+
+        $this->assertSame('idle-task-1', $claimedTaskId);
+
+        $reloadedTask = $team->getTaskList()->getTask('idle-task-1');
+        $this->assertNotNull($reloadedTask);
+        $this->assertSame(TaskStatus::InProgress, $reloadedTask->status);
+        $this->assertSame('teammate-idle-1', $reloadedTask->assignedTo);
+    }
+
+    public function testHandleTeammateIdleReturnsNullWhenNoUnblockedTasks(): void
+    {
+        $teamId = 'idle-empty-team-' . uniqid('', true);
+        $tm = $this->createTeamManager();
+        $tm->createTeam(teamId: $teamId, name: 'Idle Empty Team', leadAgentId: 'lead-1');
+
+        $result = $tm->handleTeammateIdle($teamId, 'teammate-idle-2');
+
+        $this->assertNull($result);
+    }
+
+    public function testHandleTeammateIdleReturnsNullForNonexistentTeam(): void
+    {
+        $tm = $this->createTeamManager();
+
+        $result = $tm->handleTeammateIdle('nonexistent-team-' . uniqid('', true), 'teammate-idle-3');
+
+        $this->assertNull($result);
+    }
+
+    public function testHandleTeammateIdleSkipsTasksAssignedToOtherTeammates(): void
+    {
+        $teamId = 'idle-assigned-team-' . uniqid('', true);
+        $tm = $this->createTeamManager();
+        $team = $tm->createTeam(teamId: $teamId, name: 'Idle Assigned Team', leadAgentId: 'lead-1');
+
+        $task = new Task(
+            id: 'idle-task-assigned',
+            teamId: $teamId,
+            title: 'Someone else\'s work',
+            description: '',
+            prompt: '',
+            assignedTo: 'someone-else',
+            status: TaskStatus::Pending,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+            claimedAt: null,
+            completedAt: null,
+            dependsOn: [],
+            isContested: false,
+        );
+        $team->getTaskList()->addTask($task);
+
+        $result = $tm->handleTeammateIdle($teamId, 'teammate-idle-4');
+
+        $this->assertNull($result);
     }
 
     // -------------------------------------------------------------------------

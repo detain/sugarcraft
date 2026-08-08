@@ -25,6 +25,12 @@ final class Team
         public readonly string $name,
         public readonly string $leadAgentId,
         public readonly \DateTimeImmutable $createdAt,
+        /**
+         * Maximum number of teammates allowed in this team (excluding the lead).
+         * Mirrors TeamConfig::$maxTeammates — passed through by TeamManager at
+         * construction time so addTeammate() can enforce the cap directly.
+         */
+        public readonly int $maxTeammates = 5,
     ) {
         $this->taskList = new TaskList($this->basePath() . '/tasks.sqlite');
         $this->mailbox = new Mailbox($this->basePath() . '/mailbox');
@@ -49,7 +55,13 @@ final class Team
     /**
      * Add a teammate to this team.
      *
+     * Enforces the $maxTeammates cap for genuinely new teammates; re-adding a
+     * teammate that already occupies a slot (e.g. an immutable withXxx()
+     * replacement of the same id) is always allowed since it does not grow
+     * the team.
+     *
      * @throws \InvalidArgumentException When the teammate's teamId does not match this team's id.
+     * @throws \RuntimeException When the team is already at its maxTeammates capacity.
      */
     public function addTeammate(Teammate $teammate): void
     {
@@ -58,6 +70,15 @@ final class Team
                 'Teammate %s does not belong to team %s',
                 $teammate->id,
                 $this->id,
+            ));
+        }
+
+        $isNewSlot = !isset($this->teammates[$teammate->id]);
+        if ($isNewSlot && count($this->teammates) >= $this->maxTeammates) {
+            throw new \RuntimeException(sprintf(
+                'Team "%s" has reached its maximum of %d teammates.',
+                $this->id,
+                $this->maxTeammates,
             ));
         }
 
@@ -83,8 +104,10 @@ final class Team
      *
      * Steps:
      *  1. Claims the task via TaskList::claimTask()
-     *  2. Creates the worktree via WorktreeManager::createWorktree()
-     *  3. Updates the Teammate's worktreePath via withWorktreePath()
+     *  2. Runs WorktreeManager::sweepIfDue() so stale worktree cleanup gets a
+     *     real caller instead of sitting dormant
+     *  3. Creates the worktree via WorktreeManager::createWorktree()
+     *  4. Updates the Teammate's worktreePath via withWorktreePath()
      *
      * If the task claim succeeds but worktree creation fails, the task claim
      * is NOT rolled back (the task will be in 'in-progress' state).
@@ -93,7 +116,7 @@ final class Team
      *              false if the task was not claimable or the teammate was not found
      * @throws \RuntimeException When the worktree already exists for this teammate
      */
-    public function claimTask(string $taskId, string $teammateId, object $wm): bool
+    public function claimTask(string $taskId, string $teammateId, WorktreeManager $wm): bool
     {
         $teammate = $this->teammates[$teammateId] ?? null;
         if ($teammate === null) {
@@ -105,10 +128,13 @@ final class Team
             return false;
         }
 
-        // Step 2: Create the worktree
+        // Step 2: Cheap periodic sweep so stale worktrees actually get cleaned up
+        $wm->sweepIfDue();
+
+        // Step 3: Create the worktree
         $worktreePath = $wm->createWorktree($teammateId);
 
-        // Step 3: Wire the teammate to the worktree (immutable replacement)
+        // Step 4: Wire the teammate to the worktree (immutable replacement)
         $updatedTeammate = $teammate->withWorktreePath($worktreePath);
         $this->teammates[$teammateId] = $updatedTeammate;
 

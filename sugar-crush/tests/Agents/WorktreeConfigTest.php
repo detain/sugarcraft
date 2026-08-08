@@ -44,18 +44,49 @@ final class WorktreeConfigTest extends TestCase
         $config = new WorktreeConfig(
             basePath: '/tmp/worktrees/',
             autoCleanup: false,
-            isolationMode: WorktreeIsolationMode::Branch,
+            isolationMode: WorktreeIsolationMode::Worktree,
         );
 
         $this->assertSame('/tmp/worktrees/', $config->basePath);
         $this->assertFalse($config->autoCleanup);
-        $this->assertSame(WorktreeIsolationMode::Branch, $config->isolationMode);
+        $this->assertSame(WorktreeIsolationMode::Worktree, $config->isolationMode);
     }
 
-    public function testCustomIsolationModePath(): void
+    // -------------------------------------------------------------------------
+    // isolationMode guard — Branch/Path are defined on the enum but have no
+    // WorktreeManager implementation; setting either must fail loudly instead
+    // of being silently ignored (the original bug: any mode was accepted but
+    // WorktreeManager::createWorktree() only ever did full-worktree behavior).
+    // -------------------------------------------------------------------------
+
+    public function testConstructorThrowsForBranchIsolationMode(): void
     {
-        $config = new WorktreeConfig(isolationMode: WorktreeIsolationMode::Path);
-        $this->assertSame(WorktreeIsolationMode::Path, $config->isolationMode);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('WorktreeIsolationMode::Branch is not implemented');
+
+        new WorktreeConfig(isolationMode: WorktreeIsolationMode::Branch);
+    }
+
+    public function testConstructorThrowsForPathIsolationMode(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('WorktreeIsolationMode::Path is not implemented');
+
+        new WorktreeConfig(isolationMode: WorktreeIsolationMode::Path);
+    }
+
+    public function testConstructorAllowsWorktreeIsolationMode(): void
+    {
+        // Sanity check: the one implemented mode must never trigger the guard.
+        $config = new WorktreeConfig(isolationMode: WorktreeIsolationMode::Worktree);
+        $this->assertSame(WorktreeIsolationMode::Worktree, $config->isolationMode);
+    }
+
+    public function testNewFactoryThrowsForUnimplementedIsolationMode(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        WorktreeConfig::new(isolationMode: WorktreeIsolationMode::Branch);
     }
 
     // -------------------------------------------------------------------------
@@ -134,14 +165,14 @@ final class WorktreeConfigTest extends TestCase
         $original = new WorktreeConfig(
             basePath: '.sugar-crush/worktrees/',
             autoCleanup: false,
-            isolationMode: WorktreeIsolationMode::Branch,
+            isolationMode: WorktreeIsolationMode::Worktree,
         );
         $modified = $original->withBasePath('/new/path/');
 
         $this->assertSame('.sugar-crush/worktrees/', $original->basePath);
         $this->assertSame('/new/path/', $modified->basePath);
         $this->assertFalse($modified->autoCleanup);
-        $this->assertSame(WorktreeIsolationMode::Branch, $modified->isolationMode);
+        $this->assertSame(WorktreeIsolationMode::Worktree, $modified->isolationMode);
     }
 
     // -------------------------------------------------------------------------
@@ -171,45 +202,62 @@ final class WorktreeConfigTest extends TestCase
         $original = new WorktreeConfig(
             basePath: '/custom/',
             autoCleanup: true,
-            isolationMode: WorktreeIsolationMode::Path,
+            isolationMode: WorktreeIsolationMode::Worktree,
         );
         $modified = $original->withAutoCleanup(false);
 
         $this->assertTrue($original->autoCleanup);
         $this->assertFalse($modified->autoCleanup);
         $this->assertSame('/custom/', $modified->basePath);
-        $this->assertSame(WorktreeIsolationMode::Path, $modified->isolationMode);
+        $this->assertSame(WorktreeIsolationMode::Worktree, $modified->isolationMode);
     }
 
     // -------------------------------------------------------------------------
     // withIsolationMode()
     // -------------------------------------------------------------------------
 
-    public function testWithIsolationModeBranch(): void
+    public function testWithIsolationModeThrowsForBranch(): void
     {
         $original = new WorktreeConfig(isolationMode: WorktreeIsolationMode::Worktree);
-        $modified = $original->withIsolationMode(WorktreeIsolationMode::Branch);
 
-        $this->assertSame(WorktreeIsolationMode::Worktree, $original->isolationMode);
-        $this->assertSame(WorktreeIsolationMode::Branch, $modified->isolationMode);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('WorktreeIsolationMode::Branch is not implemented');
+
+        $original->withIsolationMode(WorktreeIsolationMode::Branch);
     }
 
-    public function testWithIsolationModePath(): void
+    public function testWithIsolationModeThrowsForPath(): void
     {
         $original = new WorktreeConfig(isolationMode: WorktreeIsolationMode::Worktree);
-        $modified = $original->withIsolationMode(WorktreeIsolationMode::Path);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('WorktreeIsolationMode::Path is not implemented');
+
+        $original->withIsolationMode(WorktreeIsolationMode::Path);
+    }
+
+    public function testWithIsolationModeThrowsLeavesOriginalUnchanged(): void
+    {
+        $original = new WorktreeConfig(isolationMode: WorktreeIsolationMode::Worktree);
+
+        try {
+            $original->withIsolationMode(WorktreeIsolationMode::Branch);
+            $this->fail('Expected withIsolationMode(Branch) to throw.');
+        } catch (\InvalidArgumentException) {
+            // expected — fall through to verify $original was untouched
+        }
 
         $this->assertSame(WorktreeIsolationMode::Worktree, $original->isolationMode);
-        $this->assertSame(WorktreeIsolationMode::Path, $modified->isolationMode);
     }
 
     public function testWithIsolationModeWorktree(): void
     {
-        $original = new WorktreeConfig(isolationMode: WorktreeIsolationMode::Branch);
+        $original = new WorktreeConfig(isolationMode: WorktreeIsolationMode::Worktree);
         $modified = $original->withIsolationMode(WorktreeIsolationMode::Worktree);
 
-        $this->assertSame(WorktreeIsolationMode::Branch, $original->isolationMode);
+        $this->assertSame(WorktreeIsolationMode::Worktree, $original->isolationMode);
         $this->assertSame(WorktreeIsolationMode::Worktree, $modified->isolationMode);
+        $this->assertNotSame($original, $modified, 'withIsolationMode() must still return a new instance');
     }
 
     public function testWithIsolationModePreservesOtherFields(): void
@@ -219,10 +267,9 @@ final class WorktreeConfigTest extends TestCase
             autoCleanup: false,
             isolationMode: WorktreeIsolationMode::Worktree,
         );
-        $modified = $original->withIsolationMode(WorktreeIsolationMode::Path);
+        $modified = $original->withIsolationMode(WorktreeIsolationMode::Worktree);
 
-        $this->assertSame(WorktreeIsolationMode::Worktree, $original->isolationMode);
-        $this->assertSame(WorktreeIsolationMode::Path, $modified->isolationMode);
+        $this->assertSame(WorktreeIsolationMode::Worktree, $modified->isolationMode);
         $this->assertSame('/worktrees/', $modified->basePath);
         $this->assertFalse($modified->autoCleanup);
     }
@@ -237,7 +284,7 @@ final class WorktreeConfigTest extends TestCase
 
         $this->assertNotSame($original, $original->withBasePath('/new/'));
         $this->assertNotSame($original, $original->withAutoCleanup(false));
-        $this->assertNotSame($original, $original->withIsolationMode(WorktreeIsolationMode::Branch));
+        $this->assertNotSame($original, $original->withIsolationMode(WorktreeIsolationMode::Worktree));
     }
 
     // -------------------------------------------------------------------------

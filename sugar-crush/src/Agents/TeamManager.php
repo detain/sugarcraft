@@ -71,6 +71,7 @@ final class TeamManager
             name: $name,
             leadAgentId: $leadAgentId,
             createdAt: new \DateTimeImmutable(),
+            maxTeammates: $config->maxTeammates,
         );
 
         $this->teams[$teamId] = $team;
@@ -116,6 +117,45 @@ final class TeamManager
     public function teamCount(): int
     {
         return count($this->teams);
+    }
+
+    // -------------------------------------------------------------------------
+    // Task assignment
+    // -------------------------------------------------------------------------
+
+    /**
+     * Real consumer for the TaskList::dispatchTeammateIdle() signal.
+     *
+     * TaskList::dispatchTeammateIdle() previously had no caller anywhere in
+     * the codebase — a teammate going idle produced a hook dispatch that
+     * nothing ever triggered. This gives it a listener: when a teammate goes
+     * idle, dispatch the TeammateIdle hook and, if it isn't blocked, hand the
+     * teammate the next unblocked task in its team's queue (if any).
+     *
+     * @return string|null The ID of the task just claimed, or null if the team/teammate
+     *                      was not found, the hook blocked, or no unblocked task exists.
+     */
+    public function handleTeammateIdle(string $teamId, string $teammateId): ?string
+    {
+        $team = $this->teams[$teamId] ?? null;
+        if ($team === null) {
+            return null;
+        }
+
+        $taskList = $team->getTaskList();
+
+        $hookResult = $taskList->dispatchTeammateIdle($teamId, $teammateId);
+        if ($hookResult->isBlock()) {
+            return null;
+        }
+
+        foreach ($taskList->getUnblockedTasks($teammateId) as $task) {
+            if ($taskList->claimTask($task->id, $teammateId)) {
+                return $task->id;
+            }
+        }
+
+        return null;
     }
 
     // -------------------------------------------------------------------------
@@ -167,12 +207,6 @@ final class TeamManager
         }
 
         $meta = $registry[$teamId];
-        $team = new Team(
-            id: $teamId,
-            name: $meta['name'],
-            leadAgentId: $meta['leadAgentId'],
-            createdAt: new \DateTimeImmutable($meta['createdAt']),
-        );
 
         $config = isset($meta['config'])
             ? new TeamConfig(
@@ -183,6 +217,14 @@ final class TeamManager
                 inboxPath: $meta['config']['inboxPath'] ?? '~/.sugar-crush/teams/',
             )
             : new TeamConfig();
+
+        $team = new Team(
+            id: $teamId,
+            name: $meta['name'],
+            leadAgentId: $meta['leadAgentId'],
+            createdAt: new \DateTimeImmutable($meta['createdAt']),
+            maxTeammates: $config->maxTeammates,
+        );
 
         $this->teams[$teamId] = $team;
         $this->teamConfigs[$teamId] = $config;
@@ -208,14 +250,6 @@ final class TeamManager
                 continue;
             }
 
-            // Re-hydrate without re-creating task/mailbox storage
-            $team = new Team(
-                id: $teamId,
-                name: $meta['name'],
-                leadAgentId: $meta['leadAgentId'],
-                createdAt: new \DateTimeImmutable($meta['createdAt']),
-            );
-
             $config = isset($meta['config'])
                 ? new TeamConfig(
                     maxTeammates: $meta['config']['maxTeammates'] ?? 5,
@@ -225,6 +259,15 @@ final class TeamManager
                     inboxPath: $meta['config']['inboxPath'] ?? '~/.sugar-crush/teams/',
                 )
                 : new TeamConfig();
+
+            // Re-hydrate without re-creating task/mailbox storage
+            $team = new Team(
+                id: $teamId,
+                name: $meta['name'],
+                leadAgentId: $meta['leadAgentId'],
+                createdAt: new \DateTimeImmutable($meta['createdAt']),
+                maxTeammates: $config->maxTeammates,
+            );
 
             $this->teams[$teamId] = $team;
             $this->teamConfigs[$teamId] = $config;

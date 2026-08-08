@@ -10,35 +10,27 @@ use SugarCraft\Crush\Agents\Mailbox;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Agents\Teammate;
 use SugarCraft\Crush\Agents\Team;
+use SugarCraft\Crush\Agents\WorktreeConfig;
 use SugarCraft\Crush\Agents\WorktreeManager;
-
-/**
- * Minimal test double for WorktreeManager — avoids mocking a final class.
- * Only implements the method needed by Team::claimTask().
- */
-final class StubWorktreeManager
-{
-    /** @var array<string, string> */
-    private array $paths = [];
-
-    public function createWorktree(string $agentId, ?string $branch = null): string
-    {
-        $path = '/tmp/wt-' . $agentId;
-        $this->paths[$agentId] = $path;
-        return $path;
-    }
-
-    public function getPath(string $agentId): ?string
-    {
-        return $this->paths[$agentId] ?? null;
-    }
-}
 
 /**
  * Tests for Team - aggregate root for lead + teammates coordination.
  */
 final class TeamTest extends TestCase
 {
+    /** @var list<string> temp dirs created by createRealWorktreeManager(), cleaned up in tearDown() */
+    private array $tmpDirsToClean = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tmpDirsToClean as $dir) {
+            if (is_dir($dir)) {
+                $this->removeDirectory($dir);
+            }
+        }
+        parent::tearDown();
+    }
+
     // -------------------------------------------------------------------------
     // Construction and property access
     // -------------------------------------------------------------------------
@@ -73,6 +65,18 @@ final class TeamTest extends TestCase
         $this->assertSame('Beta Team', $team->name);
         $this->assertSame('lead-002', $team->leadAgentId);
         $this->assertSame($createdAt, $team->createdAt);
+    }
+
+    public function testDefaultMaxTeammatesIsFive(): void
+    {
+        $team = new Team(
+            id: 'team-default-cap',
+            name: 'Default Cap Team',
+            leadAgentId: 'lead-default-cap',
+            createdAt: new \DateTimeImmutable(),
+        );
+
+        $this->assertSame(5, $team->maxTeammates);
     }
 
     // -------------------------------------------------------------------------
@@ -155,6 +159,76 @@ final class TeamTest extends TestCase
         $team->addTeammate($replacement);
         $this->assertCount(1, $team->getTeammates());
         $this->assertSame('Replacement', $team->getTeammates()[0]->name);
+    }
+
+    // -------------------------------------------------------------------------
+    // addTeammate() — maxTeammates cap (R6)
+    // -------------------------------------------------------------------------
+
+    public function testAddTeammateThrowsWhenAtMaxCapacity(): void
+    {
+        $team = $this->createTeam('team-capped', maxTeammates: 2);
+
+        $team->addTeammate($this->createTeammate('tm-cap-1', 'team-capped', 'One', AgentType::Coder));
+        $team->addTeammate($this->createTeammate('tm-cap-2', 'team-capped', 'Two', AgentType::Reviewer));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('team-capped');
+
+        // Third teammate must be rejected — this is the original bug: without
+        // enforcement, this call previously always succeeded regardless of maxTeammates.
+        $team->addTeammate($this->createTeammate('tm-cap-3', 'team-capped', 'Three', AgentType::Tester));
+    }
+
+    public function testAddTeammateStaysAtCapacityAfterRejectedAdd(): void
+    {
+        $team = $this->createTeam('team-capped-count', maxTeammates: 1);
+        $team->addTeammate($this->createTeammate('tm-only', 'team-capped-count', 'Only', AgentType::Coder));
+
+        try {
+            $team->addTeammate($this->createTeammate('tm-extra', 'team-capped-count', 'Extra', AgentType::Coder));
+            $this->fail('Expected addTeammate() to throw once at capacity.');
+        } catch (\RuntimeException) {
+            // expected
+        }
+
+        $this->assertCount(1, $team->getTeammates());
+        $this->assertSame('tm-only', $team->getTeammates()[0]->id);
+    }
+
+    public function testAddTeammateAllowsReplacementWhileAtCapacity(): void
+    {
+        $team = $this->createTeam('team-capped-replace', maxTeammates: 1);
+        $team->addTeammate($this->createTeammate('tm-slot', 'team-capped-replace', 'First', AgentType::Coder));
+
+        $replacement = new Teammate(
+            id: 'tm-slot',
+            teamId: 'team-capped-replace',
+            name: 'Second',
+            type: AgentType::Reviewer,
+            model: 'claude-sonnet-4-6',
+            tools: ['Read'],
+        );
+
+        // Re-adding the SAME id does not grow the team, so it must still be allowed.
+        $team->addTeammate($replacement);
+
+        $this->assertCount(1, $team->getTeammates());
+        $this->assertSame('Second', $team->getTeammates()[0]->name);
+    }
+
+    public function testAddTeammateUpToDefaultCapacitySucceeds(): void
+    {
+        $team = $this->createTeam('team-default-fill');
+
+        for ($i = 1; $i <= 5; $i++) {
+            $team->addTeammate($this->createTeammate("tm-{$i}", 'team-default-fill', "Member {$i}", AgentType::Coder));
+        }
+
+        $this->assertCount(5, $team->getTeammates());
+
+        $this->expectException(\RuntimeException::class);
+        $team->addTeammate($this->createTeammate('tm-6', 'team-default-fill', 'Member 6', AgentType::Coder));
     }
 
     // -------------------------------------------------------------------------
@@ -312,7 +386,7 @@ final class TeamTest extends TestCase
         $team = $this->createTeam('team-claim-no-tm-' . uniqid());
 
         // No teammates added — claimTask must return false.
-        $wm = new StubWorktreeManager();
+        $wm = $this->createRealWorktreeManager();
 
         $this->assertFalse($team->claimTask('task-1', 'nonexistent', $wm));
     }
@@ -343,7 +417,7 @@ final class TeamTest extends TestCase
         );
         $team->getTaskList()->addTask($task);
 
-        $wm = new StubWorktreeManager();
+        $wm = $this->createRealWorktreeManager();
 
         // The task is already claimed by someone else — must return false
         $this->assertFalse($team->claimTask($task->id, 'tm-1', $wm));
@@ -375,7 +449,7 @@ final class TeamTest extends TestCase
         );
         $team->getTaskList()->addTask($task);
 
-        $wm = new StubWorktreeManager();
+        $wm = $this->createRealWorktreeManager();
 
         $result = $team->claimTask($taskId, 'tm-claim', $wm);
 
@@ -384,20 +458,66 @@ final class TeamTest extends TestCase
         // Teammate's worktreePath must be updated to what createWorktree returned
         $updatedTeammate = $team->getTeammate('tm-claim');
         $this->assertNotNull($updatedTeammate);
-        $this->assertSame('/tmp/wt-tm-claim', $updatedTeammate->worktreePath);
+        $this->assertNotNull($updatedTeammate->worktreePath);
+        $this->assertStringEndsWith('/tm-claim', $updatedTeammate->worktreePath);
+        $this->assertTrue(is_dir($updatedTeammate->worktreePath));
+    }
+
+    public function testClaimTaskRunsWorktreeSweep(): void
+    {
+        // Proxy repro for "sweepIfDue() has a real caller": claimTask() must
+        // invoke WorktreeManager::sweepIfDue(), whose only observable side
+        // effect is writing the .last-sweep throttle marker file.
+        $team = $this->createTeam('team-claim-sweep-' . uniqid());
+
+        $teammate = $this->createTeammate('tm-sweep', $team->id, 'Sweeper', AgentType::Coder);
+        $team->addTeammate($teammate);
+
+        $taskId = 'task-sweep-' . uniqid();
+        $task = new \SugarCraft\Crush\Agents\Task(
+            id: $taskId,
+            teamId: $team->id,
+            title: 'Sweep Task',
+            description: '',
+            prompt: '',
+            assignedTo: null,
+            status: \SugarCraft\Crush\Agents\TaskStatus::Pending,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+            claimedAt: null,
+            completedAt: null,
+            dependsOn: [],
+            isContested: false,
+        );
+        $team->getTaskList()->addTask($task);
+
+        $wm = $this->createRealWorktreeManager();
+
+        $reflection = new \ReflectionClass($wm);
+        $expandedBasePathProp = $reflection->getProperty('expandedBasePath');
+        $expandedBasePathProp->setAccessible(true);
+        $marker = $expandedBasePathProp->getValue($wm) . '/.last-sweep';
+
+        $this->assertFileDoesNotExist($marker);
+
+        $team->claimTask($taskId, 'tm-sweep', $wm);
+
+        $this->assertFileExists($marker, 'claimTask() must call WorktreeManager::sweepIfDue()');
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
-    private function createTeam(string $id): Team
+    private function createTeam(string $id, int $maxTeammates = 5): Team
     {
         return new Team(
             id: $id,
             name: "Team {$id}",
             leadAgentId: "lead-{$id}",
             createdAt: new \DateTimeImmutable(),
+            maxTeammates: $maxTeammates,
         );
     }
 
@@ -415,5 +535,46 @@ final class TeamTest extends TestCase
             model: 'claude-sonnet-4-6',
             tools: ['Read', 'Edit', 'Bash'],
         );
+    }
+
+    /**
+     * Build a real WorktreeManager backed by a throwaway git repo, since
+     * Team::claimTask() now requires the concrete WorktreeManager type
+     * (previously an untyped `object`, which a hand-rolled test double could
+     * satisfy without exercising any real git/worktree behavior).
+     */
+    private function createRealWorktreeManager(): WorktreeManager
+    {
+        $tmpRoot = sys_get_temp_dir() . '/sugar-crush-team-test-' . uniqid('', true);
+        mkdir($tmpRoot, 0755, true);
+        $this->tmpDirsToClean[] = $tmpRoot;
+
+        $repoRoot = $tmpRoot . '/repo.git';
+        shell_exec('git init --bare ' . escapeshellarg($repoRoot) . ' 2>&1');
+
+        $repoRoot = $tmpRoot . '/repo';
+        shell_exec('git clone ' . escapeshellarg($repoRoot) . ' ' . escapeshellarg($repoRoot) . ' 2>&1');
+
+        $config = new WorktreeConfig(basePath: $tmpRoot . '/worktrees/');
+
+        return new WorktreeManager($config, $repoRoot);
+    }
+
+    private function removeDirectory(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        $items = array_diff(scandir($path) ?: [], ['.', '..']);
+        foreach ($items as $item) {
+            $itemPath = $path . '/' . $item;
+            if (is_dir($itemPath)) {
+                $this->removeDirectory($itemPath);
+            } else {
+                unlink($itemPath);
+            }
+        }
+        rmdir($path);
     }
 }
