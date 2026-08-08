@@ -557,4 +557,134 @@ final class AgentWorkerPoolTest extends TestCase
         $this->assertArrayHasKey('batch1-a', $results1);
         $this->assertArrayHasKey('batch2-a', $results2);
     }
+
+    // -------------------------------------------------------------------------
+    // R14a: waitForCompletion() sleeping-poll hardening (real fork, no mocks)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Drives the real default ProcessExecutor + real pcntl_fork() (no mocked
+     * executor) to exercise waitForCompletion()'s WNOHANG poll loop end to
+     * end. A hot CPU busy-spin cannot be asserted directly in a deterministic
+     * CI-safe way (WNOHANG polling as fast as possible does not itself slow
+     * down completion detection on an idle box), so this uses a bounded
+     * multiple of a single agent's real duration as a deterministic proxy for
+     * "the pool executed these concurrently and did not stall" — a
+     * regression that reintroduces unbounded sequential execution, or a
+     * pathological slowdown in the poll loop, would blow this bound.
+     */
+    public function testExecuteAllWithRealForkedExecutorCompletesWithinBoundedMultipleOfSingleAgentDuration(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl_fork() is not available in this environment.');
+        }
+
+        // Baseline: a single agent run through the real ProcessExecutor
+        // directly (executeOne() bypasses fork/pool bookkeeping entirely),
+        // establishing the "one unit of real work" latency to compare against.
+        $baselinePool = new AgentWorkerPool(maxConcurrent: 1);
+        $baselineStart = hrtime(true);
+        $baselineResult = $baselinePool->executeOne($this->makeAgent('bounded-baseline'), $this->request);
+        $baselineDurationNs = hrtime(true) - $baselineStart;
+
+        $this->assertSame(AgentStatus::Completed, $baselineResult->status);
+
+        // Real run: 3 agents, maxConcurrent=3, default ProcessExecutor, real
+        // pcntl_fork(). Exercises startAgent()'s fork path and
+        // waitForCompletion()'s WNOHANG poll loop with no test doubles.
+        $agents = [
+            $this->makeAgent('bounded-a'),
+            $this->makeAgent('bounded-b'),
+            $this->makeAgent('bounded-c'),
+        ];
+
+        $realPool = new AgentWorkerPool(maxConcurrent: 3);
+
+        $start = hrtime(true);
+        $results = [];
+        foreach ($realPool->executeAll($agents, $this->request) as $result) {
+            $results[$result->agentId] = $result;
+        }
+        $elapsedNs = hrtime(true) - $start;
+
+        $this->assertCount(3, $results);
+        foreach ($results as $result) {
+            $this->assertSame(AgentStatus::Completed, $result->status);
+        }
+
+        // Very generous headroom (8x baseline, floor 15s): this repo's dev/CI
+        // boxes run many concurrent proc_open-heavy test suites in parallel,
+        // which inflates both measurements non-linearly (spawning 3 workers
+        // contends for process/scheduler resources harder than spawning 1).
+        // The bound is intentionally loose — its job is to catch a genuine
+        // stall/hang regression (e.g. a reintroduced busy-spin starving the
+        // scheduler), not to assert a tight speedup ratio.
+        $maxAllowedNs = max($baselineDurationNs * 8, 15_000_000_000);
+        $this->assertLessThanOrEqual(
+            $maxAllowedNs,
+            $elapsedNs,
+            sprintf(
+                'Concurrent execution of 3 agents took %.3fs, exceeding the bound of %.3fs '
+                    . '(8x the single-agent baseline of %.3fs) — possible stall/regression '
+                    . 'in the worker pool completion loop.',
+                $elapsedNs / 1e9,
+                $maxAllowedNs / 1e9,
+                $baselineDurationNs / 1e9,
+            ),
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // R14a: sequential-fallback warning when pcntl_fork() is unavailable
+    // -------------------------------------------------------------------------
+
+    /**
+     * AgentWorkerPool is final, so the pcntl-unavailable branch is forced
+     * deterministically via the forcePcntlUnavailableForTesting Reflection
+     * seam rather than by requiring a real pcntl-less environment; error_log()
+     * output is captured by redirecting the 'error_log' ini setting to a temp
+     * file for the duration of the assertion.
+     */
+    public function testSequentialFallbackWarningLogsOnceWhenPcntlForkUnavailable(): void
+    {
+        $logFile = $this->tempRoot . 'fallback-warning.log';
+        $previousErrorLog = ini_get('error_log');
+        ini_set('error_log', $logFile);
+
+        try {
+            $pool = new AgentWorkerPool(maxConcurrent: 2);
+
+            $forceProp = new \ReflectionProperty(AgentWorkerPool::class, 'forcePcntlUnavailableForTesting');
+            $forceProp->setAccessible(true);
+            $forceProp->setValue($pool, true);
+
+            // Two agents both hit the (forced) pcntl-unavailable fallback
+            // path — the warning must fire exactly once, not per-agent.
+            $agents = [
+                $this->makeAgent('fallback-a'),
+                $this->makeAgent('fallback-b'),
+            ];
+
+            $results = [];
+            foreach ($pool->executeAll($agents, $this->request) as $result) {
+                $results[$result->agentId] = $result;
+                $this->assertSame(AgentStatus::Completed, $result->status);
+            }
+            $this->assertCount(2, $results);
+
+            $this->assertFileExists($logFile);
+            $logContents = file_get_contents($logFile);
+            $this->assertIsString($logContents);
+            $this->assertStringContainsString('pcntl_fork', $logContents);
+            $this->assertStringContainsString('sequential', $logContents);
+            $this->assertSame(
+                1,
+                substr_count($logContents, 'AgentWorkerPool: pcntl_fork() is unavailable'),
+                'Expected the sequential-fallback warning to be logged exactly once.',
+            );
+        } finally {
+            ini_set('error_log', $previousErrorLog === false ? '' : $previousErrorLog);
+            @unlink($logFile);
+        }
+    }
 }

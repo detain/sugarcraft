@@ -38,6 +38,19 @@ final class AgentWorkerPool
     /** True when cancelAll() was called; cleared at the start of each executeAll(). */
     private bool $wasCancelledByUser = false;
 
+    /** Poll backoff for waitForCompletion() when nothing has completed yet (microseconds). */
+    private const WAIT_POLL_INTERVAL_USEC = 5_000;
+
+    /** True once the sequential-fallback warning has been logged for this pool instance. */
+    private bool $sequentialFallbackWarned = false;
+
+    /**
+     * @internal Test-only seam. When non-null, overrides pcntlForkAvailable()
+     * so the sequential-fallback path can be exercised deterministically via
+     * Reflection, without requiring an environment that actually lacks pcntl.
+     */
+    private ?bool $forcePcntlUnavailableForTesting = null;
+
     public function __construct(
         private readonly int $maxConcurrent = 5,
         ?ExecutorInterface $executor = null,
@@ -206,6 +219,22 @@ final class AgentWorkerPool
         $this->queue = [];
 
         $this->executor?->cancelAll();
+
+        // Reap all forked children before clearing active — otherwise they become
+        // zombies and any results they wrote are orphaned (waitForCompletion won't
+        // find them once active is empty).
+        while ($this->active !== []) {
+            $completedId = $this->waitForCompletion();
+            // waitForCompletion removes from active when a child exits.
+            // If it returns null (no child exited this cycle), break to avoid
+            // an infinite loop — the executor cancelAll has already sent SIGTERM.
+            if ($completedId === null) {
+                break;
+            }
+            // Discard the result — cancelAll intentionally abandons in-flight work.
+            $this->extractResult($completedId);
+        }
+
         $this->active = [];
     }
 
@@ -233,7 +262,7 @@ final class AgentWorkerPool
     /**
      * Returns the configured concurrency limit.
      */
-    public function getMaxConcurrent(): int
+    public function maxConcurrent(): int
     {
         return $this->maxConcurrent;
     }
@@ -241,7 +270,7 @@ final class AgentWorkerPool
     /**
      * Returns the executor instance used by this pool.
      */
-    public function getExecutor(): ?ExecutorInterface
+    public function executor(): ?ExecutorInterface
     {
         return $this->executor;
     }
@@ -271,19 +300,25 @@ final class AgentWorkerPool
         }
 
         // Using the default ProcessExecutor — fork for true parallelism
-        if (!function_exists('pcntl_fork')) {
+        if (!$this->pcntlForkAvailable()) {
+            $this->warnSequentialFallback();
             $result = $executor->execute($agent, $request);
             $this->storeResult($agent->id, $result);
-            unset($this->active[$agent->id]);
+            // Do NOT unset from active here — waitForCompletion's sync-result
+            // check (hasResult()) handles removal, same as the customExecutor
+            // path above. Removing it here instead would drop the agent from
+            // $active before executeAll()'s outer loop ever calls
+            // waitForCompletion()/extractResult() for it, silently discarding
+            // the result it just stored.
             return;
         }
 
         $pid = pcntl_fork();
         if ($pid === -1) {
-            // Fork failed — execute synchronously
+            // Fork failed — execute synchronously. Same reasoning as above:
+            // leave the agent in $active for waitForCompletion() to reap.
             $result = $executor->execute($agent, $request);
             $this->storeResult($agent->id, $result);
-            unset($this->active[$agent->id]);
             return;
         }
 
@@ -314,6 +349,9 @@ final class AgentWorkerPool
                     return $agent->id;
                 }
             }
+            // Nothing completed yet — back off briefly instead of busy-spinning
+            // the CPU while waiting for a result file to appear.
+            usleep(self::WAIT_POLL_INTERVAL_USEC);
             return null;
         }
 
@@ -340,16 +378,30 @@ final class AgentWorkerPool
             }
         }
 
+        // No child exited and no sync result appeared this cycle — sleep
+        // briefly before the caller polls again. Without this, the WNOHANG
+        // wait above turns executeAll()'s outer loop into a hot CPU spin
+        // while forked children are still running.
+        usleep(self::WAIT_POLL_INTERVAL_USEC);
+
         return null;
     }
 
     /**
      * Store result to a temp file for inter-process communication.
+     *
+     * Uses JSON rather than serialize() — the result is a plain DTO (a status
+     * enum, scalars, and an optional error message), so there is no need for
+     * unserialize()'s arbitrary-class instantiation on the read side, which is
+     * a latent security smell even when the file is one we wrote ourselves.
      */
     protected function storeResult(string $agentId, AgentResult $result): void
     {
         $file = $this->resultFile($agentId);
-        file_put_contents($file, serialize($result));
+        $json = json_encode($this->resultToArray($result), JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json !== false) {
+            file_put_contents($file, $json);
+        }
     }
 
     /**
@@ -373,19 +425,16 @@ final class AgentWorkerPool
         $data = file_get_contents($file);
         @unlink($file);
 
-        if ($data === false) {
+        if ($data === false || $data === '') {
             return null;
         }
 
-        // NOTE: allowed_classes=true is safe here because $data came from a temp file
-        // we wrote ourselves via storeResult(); it cannot be attacker-controlled.
-        $result = unserialize($data, ['allowed_classes' => true]);
-        // If unserialize failed or returned something unexpected, treat as null
-        if ($result === false || !$result instanceof AgentResult) {
+        $decoded = json_decode($data, true);
+        if (!is_array($decoded)) {
             return null;
         }
 
-        return $result;
+        return $this->arrayToResult($decoded);
     }
 
     /**
@@ -394,6 +443,105 @@ final class AgentWorkerPool
     protected function resultFile(string $agentId): string
     {
         return sys_get_temp_dir() . '/sc_pool_' . basename($agentId) . '.result';
+    }
+
+    /**
+     * Whether pcntl_fork() is available in this process.
+     *
+     * Factored out (rather than calling function_exists('pcntl_fork') inline)
+     * so a test can force the sequential-fallback path deterministically via
+     * the forcePcntlUnavailableForTesting seam, without requiring a real
+     * environment that lacks the pcntl extension.
+     */
+    protected function pcntlForkAvailable(): bool
+    {
+        if ($this->forcePcntlUnavailableForTesting !== null) {
+            return !$this->forcePcntlUnavailableForTesting;
+        }
+
+        return function_exists('pcntl_fork');
+    }
+
+    /**
+     * Log a visible warning the first time this pool falls back to
+     * sequential (non-parallel) execution because pcntl_fork() is
+     * unavailable. Only fires once per pool instance — subsequent agents
+     * hitting the same fallback path would otherwise spam the log.
+     */
+    protected function warnSequentialFallback(): void
+    {
+        if ($this->sequentialFallbackWarned) {
+            return;
+        }
+
+        $this->sequentialFallbackWarned = true;
+        error_log(
+            'AgentWorkerPool: pcntl_fork() is unavailable — falling back to '
+            . 'sequential (non-parallel) agent execution. Install/enable the '
+            . 'pcntl extension to restore concurrent agent execution.'
+        );
+    }
+
+    /**
+     * Convert an AgentResult to a JSON-safe plain array for IPC.
+     *
+     * The ?Throwable $error field cannot round-trip through JSON as-is, so
+     * only its message survives — sufficient for isFailure() semantics and
+     * for surfacing the failure reason, without resurrecting an arbitrary
+     * exception class via unserialize().
+     */
+    private function resultToArray(AgentResult $result): array
+    {
+        return [
+            'agentId' => $result->agentId,
+            'status' => $result->status->value,
+            'output' => $result->output,
+            'errorMessage' => $result->error?->getMessage(),
+            'tokensUsed' => $result->tokensUsed,
+            'costUsd' => $result->costUsd,
+            'startedAt' => $result->startedAt?->format('U.u'),
+            'completedAt' => $result->completedAt?->format('U.u'),
+        ];
+    }
+
+    /**
+     * Reconstruct an AgentResult from the array produced by resultToArray().
+     *
+     * Returns null when the decoded payload is missing a recognizable status
+     * — treated the same as a corrupt/unreadable result file.
+     */
+    private function arrayToResult(array $decoded): ?AgentResult
+    {
+        $status = is_string($decoded['status'] ?? null) ? AgentStatus::tryFrom($decoded['status']) : null;
+        if ($status === null) {
+            return null;
+        }
+
+        $errorMessage = $decoded['errorMessage'] ?? null;
+
+        return new AgentResult(
+            agentId: (string) ($decoded['agentId'] ?? ''),
+            status: $status,
+            output: $decoded['output'] ?? null,
+            error: is_string($errorMessage) ? new \RuntimeException($errorMessage) : null,
+            tokensUsed: (int) ($decoded['tokensUsed'] ?? 0),
+            costUsd: (float) ($decoded['costUsd'] ?? 0.0),
+            startedAt: $this->parseTimestamp($decoded['startedAt'] ?? null),
+            completedAt: $this->parseTimestamp($decoded['completedAt'] ?? null),
+        );
+    }
+
+    /**
+     * Parse a 'U.u'-formatted timestamp string back into a DateTimeImmutable.
+     */
+    private function parseTimestamp(mixed $value): ?\DateTimeImmutable
+    {
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        $parsed = \DateTimeImmutable::createFromFormat('U.u', $value);
+        return $parsed !== false ? $parsed : null;
     }
 
     private function createDefaultExecutor(): ExecutorInterface
