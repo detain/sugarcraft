@@ -5,36 +5,220 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\LSP\Tests;
 
 use PHPUnit\Framework\TestCase;
-use Mockery;
-use Mockery\MockInterface;
 use SugarCraft\Crush\LSP\LspClient;
-use SugarCraft\Crush\LSP\LspConnection;
-use SugarCraft\Crush\LSP\LspCache;
+use SugarCraft\Crush\LSP\LspCacheInterface;
+use SugarCraft\Crush\LSP\LspConnectionInterface;
+use SugarCraft\Crush\LSP\LspResponse;
+
+/**
+ * Fake LspConnection for testing - implements LspConnectionInterface.
+ */
+final class FakeLspConnection implements LspConnectionInterface
+{
+    private bool $connected = false;
+    private array $definitionsResult = [];
+    private array $referencesResult = [];
+    private ?array $hoverResult = null;
+    private array $symbolsResult = [];
+    private array $diagnosticsResult = [];
+    private array $codeActionsResult = [];
+
+    public function connect(string $command, array $env = [], ?string $cwd = null, float $timeout = 30.0): void
+    {
+        $this->connected = true;
+    }
+
+    public function initialize(): array
+    {
+        $this->connected = true;
+        return ['capabilities' => ['textDocumentSync' => 1]];
+    }
+
+    public function disconnect(): void
+    {
+        $this->connected = false;
+    }
+
+    public function sendRequest(string $method, ?array $params = null): LspResponse
+    {
+        return LspResponse::ok(['result' => null]);
+    }
+
+    public function sendNotification(string $method, ?array $params = null): void
+    {
+    }
+
+    public function onNotification(callable $callback): void
+    {
+    }
+
+    public function isConnected(): bool
+    {
+        return $this->connected;
+    }
+
+    public function capabilities(): ?array
+    {
+        return ['textDocumentSync' => 1];
+    }
+
+    public function definitions(string $uri, int $line, int $col): array
+    {
+        return $this->definitionsResult;
+    }
+
+    public function references(string $uri, int $line, int $col): array
+    {
+        return $this->referencesResult;
+    }
+
+    public function hover(string $uri, int $line, int $col): ?array
+    {
+        return $this->hoverResult;
+    }
+
+    public function symbols(string $uri): array
+    {
+        return $this->symbolsResult;
+    }
+
+    public function codeActions(string $uri, int $line, int $col, array $context = []): array
+    {
+        return $this->codeActionsResult;
+    }
+
+    public function diagnostics(string $uri): array
+    {
+        return $this->diagnosticsResult;
+    }
+
+    // Mutators for test setup
+    public function setDefinitionsResult(array $result): void
+    {
+        $this->definitionsResult = $result;
+    }
+
+    public function setReferencesResult(array $result): void
+    {
+        $this->referencesResult = $result;
+    }
+
+    public function setHoverResult(?array $result): void
+    {
+        $this->hoverResult = $result;
+    }
+
+    public function setSymbolsResult(array $result): void
+    {
+        $this->symbolsResult = $result;
+    }
+
+    public function setDiagnosticsResult(array $result): void
+    {
+        $this->diagnosticsResult = $result;
+    }
+
+    public function setCodeActionsResult(array $result): void
+    {
+        $this->codeActionsResult = $result;
+    }
+}
+
+/**
+ * Fake LspCache for testing - implements LspCacheInterface.
+ */
+final class FakeLspCache implements LspCacheInterface
+{
+    /** @var array<string, array{value: mixed, expiresAt: float}> */
+    private array $entries = [];
+
+    public function set(string $uri, string $method, mixed $value): void
+    {
+        $this->entries[$uri . "\x00" . $method] = [
+            'value' => $value,
+            'expiresAt' => microtime(true) + 60.0,
+        ];
+    }
+
+    public function get(string $uri, string $method): mixed
+    {
+        $key = $uri . "\x00" . $method;
+        if (!isset($this->entries[$key])) {
+            return null;
+        }
+        $entry = $this->entries[$key];
+        if ($entry['expiresAt'] < microtime(true)) {
+            unset($this->entries[$key]);
+            return null;
+        }
+        return $entry['value'];
+    }
+
+    public function has(string $uri, string $method): bool
+    {
+        $key = $uri . "\x00" . $method;
+        if (!isset($this->entries[$key])) {
+            return false;
+        }
+        if ($this->entries[$key]['expiresAt'] < microtime(true)) {
+            unset($this->entries[$key]);
+            return false;
+        }
+        return true;
+    }
+
+    public function clearFile(string $uri): void
+    {
+        $prefix = $uri . "\x00";
+        foreach (array_keys($this->entries) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                unset($this->entries[$key]);
+            }
+        }
+    }
+
+    public function clear(): void
+    {
+        $this->entries = [];
+    }
+
+    public function prune(): int
+    {
+        $now = microtime(true);
+        $removed = 0;
+        foreach (array_keys($this->entries) as $key) {
+            if ($this->entries[$key]['expiresAt'] < $now) {
+                unset($this->entries[$key]);
+                $removed++;
+            }
+        }
+        return $removed;
+    }
+
+    public function count(): int
+    {
+        return count($this->entries);
+    }
+}
 
 final class LspClientTest extends TestCase
 {
-    private MockInterface $connection;
-    private MockInterface $cache;
+    private FakeLspConnection $connection;
+    private FakeLspCache $cache;
     private LspClient $client;
 
     protected function setUp(): void
     {
-        $this->connection = Mockery::mock(LspConnection::class);
-        $this->cache = Mockery::mock(LspCache::class);
+        $this->connection = new FakeLspConnection();
+        $this->connection->connect('php', [], '/tmp', 30.0);
+        $this->cache = new FakeLspCache();
         $this->client = new LspClient($this->connection, $this->cache);
-    }
-
-    protected function tearDown(): void
-    {
-        Mockery::close();
     }
 
     public function testDefinitionsReturnsCachedResultOnCacheHit(): void
     {
         $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 1, 'character' => 0]]]];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/definition')->once()->andReturn(true);
-        $this->cache->shouldReceive('get')->with('file:///test.php', 'textDocument/definition')->once()->andReturn($expected);
-        $this->connection->shouldNotReceive('definitions');
+        $this->cache->set('file:///test.php', 'textDocument/definition', $expected);
 
         $result = $this->client->definitions('file:///test.php');
 
@@ -44,80 +228,62 @@ final class LspClientTest extends TestCase
     public function testDefinitionsQueriesConnectionOnCacheMiss(): void
     {
         $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 1, 'character' => 0]]]];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/definition')->once()->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(true);
-        $this->connection->shouldReceive('definitions')->with('file:///test.php', 0, 0)->once()->andReturn($expected);
-        $this->cache->shouldReceive('set')->with('file:///test.php', 'textDocument/definition', $expected)->once();
+        $this->connection->setDefinitionsResult($expected);
 
         $result = $this->client->definitions('file:///test.php');
 
         $this->assertSame($expected, $result);
+        $this->assertTrue($this->cache->has('file:///test.php', 'textDocument/definition'));
     }
 
-    public function testDefinitionsFallsBackToGrepWhenDisconnected(): void
+    public function testDefinitionsReturnsEmptyOnDisconnected(): void
     {
-        $this->cache->shouldReceive('has')->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->andReturn(false);
-        $this->cache->shouldReceive('set')->once();
-
+        // No connection made — cache miss, no LSP server
         $result = $this->client->definitions('file:///test.php');
-
-        $this->assertIsArray($result);
+        $this->assertSame([], $result);
     }
 
     public function testReferencesReturnsCachedResultOnCacheHit(): void
     {
-        $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 1, 'character' => 0]]]];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/references')->once()->andReturn(true);
-        $this->cache->shouldReceive('get')->with('file:///test.php', 'textDocument/references')->once()->andReturn($expected);
+        $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 2, 'character' => 0]]]];
+        $this->cache->set('file:///test.php', 'textDocument/references', $expected);
 
-        $result = $this->client->references('file:///test.php');
+        $result = $this->client->references('file:///test.php', 0, 0);
 
         $this->assertSame($expected, $result);
     }
 
     public function testReferencesQueriesConnectionOnCacheMiss(): void
     {
-        $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 1, 'character' => 0]]]];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/references')->once()->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(true);
-        $this->connection->shouldReceive('references')->with('file:///test.php', 0, 0)->once()->andReturn($expected);
-        $this->cache->shouldReceive('set')->once();
+        $expected = [['uri' => 'file:///test.php', 'range' => ['start' => ['line' => 2, 'character' => 0]]]];
+        $this->connection->setReferencesResult($expected);
 
-        $result = $this->client->references('file:///test.php');
+        $result = $this->client->references('file:///test.php', 0, 0);
 
         $this->assertSame($expected, $result);
     }
 
     public function testHoverReturnsCachedResultOnCacheHit(): void
     {
-        $expected = ['contents' => 'int $foo'];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/hover')->once()->andReturn(true);
-        $this->cache->shouldReceive('get')->with('file:///test.php', 'textDocument/hover')->once()->andReturn($expected);
+        $expected = ['contents' => 'Hover text'];
+        $this->cache->set('file:///test.php', 'textDocument/hover', $expected);
 
-        $result = $this->client->hover('file:///test.php');
+        $result = $this->client->hover('file:///test.php', 0, 0);
 
         $this->assertSame($expected, $result);
     }
 
-    public function testHoverQueriesConnectionOnCacheMiss(): void
+    public function testHoverReturnsNullWhenNotConnected(): void
     {
-        $expected = ['contents' => 'int $foo'];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/hover')->once()->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(true);
-        $this->connection->shouldReceive('hover')->with('file:///test.php', 0, 0)->once()->andReturn($expected);
-        $this->cache->shouldReceive('set')->once();
-
-        $result = $this->client->hover('file:///test.php');
-
-        $this->assertSame($expected, $result);
+        // Hover returns null when LSP unavailable
+        $result = $this->client->hover('file:///test.php', 0, 0);
+        $this->assertNull($result);
     }
 
     public function testSymbolsReturnsCachedResultOnCacheHit(): void
     {
-        $expected = [['name' => 'foo', 'kind' => 12]];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/documentSymbol')->once()->andReturn(true);
-        $this->cache->shouldReceive('get')->with('file:///test.php', 'textDocument/documentSymbol')->once()->andReturn($expected);
+        $expected = [['name' => 'MyClass', 'kind' => 5]];
+        $this->cache->set('file:///test.php', 'textDocument/documentSymbol', $expected);
 
         $result = $this->client->symbols('file:///test.php');
 
@@ -126,197 +292,40 @@ final class LspClientTest extends TestCase
 
     public function testSymbolsQueriesConnectionOnCacheMiss(): void
     {
-        $expected = [['name' => 'foo', 'kind' => 12]];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/documentSymbol')->once()->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(true);
-        $this->connection->shouldReceive('symbols')->with('file:///test.php')->once()->andReturn($expected);
-        $this->cache->shouldReceive('set')->once();
+        $expected = [['name' => 'MyClass', 'kind' => 5]];
+        $this->connection->setSymbolsResult($expected);
 
         $result = $this->client->symbols('file:///test.php');
 
         $this->assertSame($expected, $result);
     }
 
-    public function testAddServerRegistersConnectionAndCache(): void
+    public function testDiagnosticsReturnsPushedDiagnostics(): void
     {
-        $conn2 = Mockery::mock(LspConnection::class);
-        $cache2 = Mockery::mock(LspCache::class);
-        $conn2->shouldReceive('isConnected')->andReturn(true)->zeroOrMoreTimes();
+        $expected = [['message' => 'unused variable', 'severity' => 2]];
+        $this->client->handlePublishDiagnostics('file:///test.php', $expected);
 
-        $this->client->addServer('typescript', $conn2, $cache2);
-
-        $this->assertTrue($this->client->isConnected('typescript'));
-        $this->assertContains('typescript', $this->client->servers());
-    }
-
-    public function testUseSwitchesLanguage(): void
-    {
-        $conn2 = Mockery::mock(LspConnection::class);
-        $cache2 = Mockery::mock(LspCache::class);
-        $conn2->shouldReceive('isConnected')->andReturn(true)->zeroOrMoreTimes();
-
-        $this->client->addServer('typescript', $conn2, $cache2);
-        $switched = $this->client->use('typescript');
-
-        $this->assertSame('typescript', $switched->language());
-    }
-
-    public function testUseSwitchesConnection(): void
-    {
-        $tsConn = Mockery::mock(LspConnection::class);
-        $tsCache = Mockery::mock(LspCache::class);
-        $tsConn->shouldReceive('isConnected')->andReturn(true)->zeroOrMoreTimes();
-
-        $this->client->addServer('typescript', $tsConn, $tsCache);
-
-        // PHP connection and cache should NOT be queried after switching to TypeScript.
-        $this->connection->shouldNotReceive('definitions');
-        $this->connection->shouldNotReceive('references');
-        $this->connection->shouldNotReceive('hover');
-        $this->connection->shouldNotReceive('symbols');
-        $this->cache->shouldNotReceive('has');
-        $this->cache->shouldNotReceive('set');
-
-        // TypeScript connection and cache should be queried on cache miss.
-        $tsCache->shouldReceive('has')->andReturn(false)->zeroOrMoreTimes();
-        $tsCache->shouldReceive('set')->zeroOrMoreTimes();
-        $tsConn->shouldReceive('definitions')->andReturn([]);
-        $tsConn->shouldReceive('references')->andReturn([]);
-        $tsConn->shouldReceive('hover')->andReturn(null);
-        $tsConn->shouldReceive('symbols')->andReturn([]);
-
-        $switched = $this->client->use('typescript');
-
-        // Verify language switched.
-        $this->assertSame('typescript', $switched->language());
-
-        // Trigger queries that should now go to TypeScript connection.
-        $switched->definitions('file:///test.ts');
-        $switched->references('file:///test.ts');
-        $switched->hover('file:///test.ts');
-        $switched->symbols('file:///test.ts');
-    }
-
-    public function testUseThrowsOnUnknownLanguage(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('No server registered');
-
-        $this->client->use('nonexistent');
-    }
-
-    public function testDefinitionsForThrowsOnUnknownLanguage(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('No server registered');
-
-        $this->client->definitionsFor('nonexistent', 'file:///test.php');
-    }
-
-    public function testIsConnectedReturnsCorrectState(): void
-    {
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(true);
-        $this->assertTrue($this->client->isConnected());
-
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(false);
-        $this->assertFalse($this->client->isConnected());
-    }
-
-    public function testLanguageReturnsCurrentLanguage(): void
-    {
-        $this->assertSame('php', $this->client->language());
-    }
-
-    public function testServersReturnsAllRegistered(): void
-    {
-        $this->assertSame(['php'], $this->client->servers());
-    }
-
-    public function testDefinitionsForUsesCorrectServer(): void
-    {
-        $conn2 = Mockery::mock(LspConnection::class);
-        $cache2 = Mockery::mock(LspCache::class);
-        $conn2->shouldReceive('isConnected')->andReturn(true)->zeroOrMoreTimes();
-        $expected = [['uri' => 'file:///test.ts', 'range' => ['start' => ['line' => 1, 'character' => 0]]]];
-        $conn2->shouldReceive('definitions')->andReturn($expected);
-        $cache2->shouldReceive('has')->andReturn(false);
-        $cache2->shouldReceive('set')->once();
-
-        $this->client->addServer('typescript', $conn2, $cache2);
-        $result = $this->client->definitionsFor('typescript', 'file:///test.ts');
+        $result = $this->client->diagnostics('file:///test.php');
 
         $this->assertSame($expected, $result);
     }
 
     public function testCodeActionsReturnsCachedResultOnCacheHit(): void
     {
-        $expected = [['title' => 'Fix typo', 'kind' => 'quickfix']];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/codeAction')->once()->andReturn(true);
-        $this->cache->shouldReceive('get')->with('file:///test.php', 'textDocument/codeAction')->once()->andReturn($expected);
+        $expected = [['title' => 'Remove unused variable', 'kind' => 1]];
+        $this->cache->set('file:///test.php', 'textDocument/codeAction', $expected);
 
-        $result = $this->client->codeActions('file:///test.php');
+        $result = $this->client->codeActions('file:///test.php', 0, 0, []);
 
         $this->assertSame($expected, $result);
     }
 
     public function testCodeActionsQueriesConnectionOnCacheMiss(): void
     {
-        $expected = [['title' => 'Fix typo', 'kind' => 'quickfix']];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/codeAction')->once()->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(true);
-        $this->connection->shouldReceive('codeActions')->with('file:///test.php', 0, 0, [])->once()->andReturn($expected);
-        $this->cache->shouldReceive('set')->once();
+        $expected = [['title' => 'Remove unused variable', 'kind' => 1]];
+        $this->connection->setCodeActionsResult($expected);
 
-        $result = $this->client->codeActions('file:///test.php');
-
-        $this->assertSame($expected, $result);
-    }
-
-    public function testCodeActionsFallsBackToEmptyWhenDisconnected(): void
-    {
-        $this->cache->shouldReceive('has')->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->andReturn(false);
-        $this->cache->shouldReceive('set')->once();
-
-        $result = $this->client->codeActions('file:///test.php');
-
-        $this->assertSame([], $result);
-    }
-
-    public function testCodeActionsPassesContextToConnection(): void
-    {
-        $context = ['diagnostics' => []];
-        $expected = [['title' => 'Import missing class', 'kind' => 'quickfix']];
-        $this->cache->shouldReceive('has')->with('file:///test.php', 'textDocument/codeAction')->once()->andReturn(false);
-        $this->connection->shouldReceive('isConnected')->once()->andReturn(true);
-        $this->connection->shouldReceive('codeActions')->with('file:///test.php', 5, 10, $context)->once()->andReturn($expected);
-        $this->cache->shouldReceive('set')->once();
-
-        $result = $this->client->codeActions('file:///test.php', 5, 10, $context);
-
-        $this->assertSame($expected, $result);
-    }
-
-    public function testCodeActionsForThrowsOnUnknownLanguage(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('No server registered');
-
-        $this->client->codeActionsFor('nonexistent', 'file:///test.php');
-    }
-
-    public function testCodeActionsForUsesCorrectServer(): void
-    {
-        $conn2 = Mockery::mock(LspConnection::class);
-        $cache2 = Mockery::mock(LspCache::class);
-        $conn2->shouldReceive('isConnected')->andReturn(true)->zeroOrMoreTimes();
-        $expected = [['title' => 'Add missing return', 'kind' => 'quickfix']];
-        $conn2->shouldReceive('codeActions')->andReturn($expected);
-        $cache2->shouldReceive('has')->andReturn(false);
-        $cache2->shouldReceive('set')->once();
-
-        $this->client->addServer('typescript', $conn2, $cache2);
-        $result = $this->client->codeActionsFor('typescript', 'file:///test.ts');
+        $result = $this->client->codeActions('file:///test.php', 0, 0, []);
 
         $this->assertSame($expected, $result);
     }

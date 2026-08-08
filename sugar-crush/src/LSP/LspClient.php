@@ -14,12 +14,12 @@ namespace SugarCraft\Crush\LSP;
 final class LspClient
 {
     /**
-     * @var array<string, LspConnection>
+     * @var array<string, LspConnectionInterface>
      */
     private array $connections = [];
 
     /**
-     * @var array<string, LspCache>
+     * @var array<string, LspCacheInterface>
      */
     private array $caches = [];
 
@@ -32,8 +32,8 @@ final class LspClient
     private ?string $language = null;
 
     public function __construct(
-        private readonly LspConnection $connection,
-        private readonly LspCache $cache,
+        private readonly LspConnectionInterface $connection,
+        private readonly LspCacheInterface $cache,
     ) {
         // Default server is the injected one.
         $this->language = 'php';
@@ -48,11 +48,11 @@ final class LspClient
     /**
      * Register an additional language server.
      *
-     * @param string           $language   Language identifier (e.g. "php", "typescript")
-     * @param LspConnection    $connection Connection for this language
-     * @param LspCache         $cache      Cache for this language
+     * @param string                 $language   Language identifier (e.g. "php", "typescript")
+     * @param LspConnectionInterface $connection Connection for this language
+     * @param LspCacheInterface      $cache      Cache for this language
      */
-    public function addServer(string $language, LspConnection $connection, LspCache $cache): void
+    public function addServer(string $language, LspConnectionInterface $connection, LspCacheInterface $cache): void
     {
         $this->connections[$language] = $connection;
         $this->caches[$language] = $cache;
