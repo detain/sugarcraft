@@ -709,21 +709,33 @@ final class TaskListTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Concurrent claim simulation
+    // Sequential double-claim rejection (business logic only — NOT a
+    // concurrency/TOCTOU regression test; see testConcurrentForkedClaimAllowsExactlyOneWinner
+    // below for the real multi-process race coverage).
     // -------------------------------------------------------------------------
 
-    public function testConcurrentClaimPreventsDoubleClaim(): void
+    /**
+     * Two sequential claimTask() calls, one after another in a single
+     * process, against separate TaskList instances sharing the same
+     * database. This only proves that claimTask() correctly rejects a
+     * claim on a task that has already transitioned out of Pending by the
+     * time it runs — it never has two claims in flight at once, so it
+     * cannot observe (and must not be read as coverage for) the
+     * flock()-based mutual-exclusion / TOCTOU behaviour that
+     * testConcurrentForkedClaimAllowsExactlyOneWinner exercises with real
+     * forked OS processes below.
+     */
+    public function testSecondSequentialClaimIsRejectedAfterFirstSucceeds(): void
     {
         $list = new TaskList($this->dbPath);
         $list->addTask($this->makeTask('race-task', 'team-race', 'Race condition'));
 
-        // Simulate two teammates trying to claim simultaneously by using
-        // separate TaskList instances pointing to the same database.
-        // The second claim should fail because the task is no longer pending.
         $first = $list->claimTask('race-task', 'teammate-a');
         $this->assertTrue($first);
 
-        // Create a new instance (simulating a different process)
+        // A second, independent TaskList instance against the same database
+        // — still called strictly after the first call returns, so this is
+        // sequential, not concurrent.
         $list2 = new TaskList($this->dbPath);
         $second = $list2->claimTask('race-task', 'teammate-b');
 
@@ -735,13 +747,18 @@ final class TaskListTest extends TestCase
         $this->assertSame(TaskStatus::InProgress, $task->status);
     }
 
+    // -------------------------------------------------------------------------
+    // Real concurrent claim regression (R1: releaseTaskLock() TOCTOU)
+    // -------------------------------------------------------------------------
+
     /**
      * Real multi-process race: fork N children that all race to claim the
      * SAME task, in true OS processes with independent SQLite3 connections
      * and independent file descriptors — the only way to actually exercise
      * flock()-based mutual exclusion. A single-process, sequential test
-     * (like testConcurrentClaimPreventsDoubleClaim above) can never observe
-     * a TOCTOU race because nothing genuinely runs at the same time.
+     * (like testSecondSequentialClaimIsRejectedAfterFirstSucceeds above)
+     * can never observe a TOCTOU race because nothing genuinely runs at
+     * the same time.
      *
      * Regression coverage for R1: the old releaseTaskLock() called
      * flock(LOCK_UN) and then unlinked the per-task lock file. Every claim
