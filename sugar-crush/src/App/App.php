@@ -200,11 +200,13 @@ final class App
      * against it before enabling a skill. `SkillsPane` renders the picker
      * whenever $skillPickerOptions is non-empty (Mirrors
      * charmbracelet/crush SourceSkillCmd's skill list). Physical keypress
-     * reachability (wiring `KeyboardHandler`'s `SourceSkillCmd` into the
+     * reachability (wiring `KeyboardHandler`'s `SourceSkillCmd` into a
      * running main loop so pressing the real key emits OpenSkillPickerMsg)
-     * is a separate, larger main-loop-wiring item and is not yet done —
-     * but the Model-layer command surface itself (this method, the two
-     * Msg handlers, and the picker render) is real and covered by tests.
+     * is a pre-existing, repo-wide gap that predates this item — no `Cmd`
+     * type is consumed by any main loop anywhere in `src/` yet, not
+     * something this item introduced or narrowed the scope of. The
+     * Model-layer command surface itself (this method, the two Msg
+     * handlers, and the picker render) is real and covered by tests.
      *
      * @return array<Skill>
      */

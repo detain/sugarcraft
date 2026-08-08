@@ -63,8 +63,11 @@ final class SkillRegistry
             // A skill with disable-model-invocation: true is only reachable via
             // explicit user invocation (getUserInvocable()) — it must never be
             // surfaced for auto-triggering off a free-text prompt, even if its
-            // description keywords match.
-            if ($skill->disableModelInvocation) {
+            // description keywords match. Route through isAutoInvocable() itself
+            // (rather than re-inlining the disableModelInvocation check here) so
+            // this stays in lockstep with any future change to what "auto-invocable"
+            // means.
+            if (!$this->isAutoInvocable($skill->name)) {
                 continue;
             }
 
