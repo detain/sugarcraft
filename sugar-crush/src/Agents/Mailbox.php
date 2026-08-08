@@ -177,13 +177,20 @@ final class Mailbox
      */
     public function waitForMessage(string $teammateId, float $timeoutSeconds = 5.0): ?TeamMessage
     {
+        // Capture the wake token BEFORE the initial inbox check (mirroring the
+        // loop body's read-token-then-check-inbox order below). If the token
+        // were captured after firstUnread(), a send() landing in that window
+        // would bump the marker first, so the "baseline" we record would
+        // already reflect it — the poll loop's token comparison would then
+        // see no further change and skip re-scanning the inbox, silently
+        // missing a message that is genuinely sitting there unread.
+        $lastWakeToken = $this->wakeMarkerToken($teammateId);
         $message = $this->firstUnread($teammateId);
         if ($message !== null) {
             return $message;
         }
 
         $deadline = microtime(true) + $timeoutSeconds;
-        $lastWakeToken = $this->wakeMarkerToken($teammateId);
         $pollIntervalSeconds = 0.005;
         $maxPollIntervalSeconds = 0.1;
 

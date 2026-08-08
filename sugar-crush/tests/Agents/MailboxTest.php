@@ -416,6 +416,55 @@ final class MailboxTest extends TestCase
         $this->assertLessThan(2.0, $elapsed);
     }
 
+    /**
+     * Regression guard for the missed-wakeup race: waitForMessage() must
+     * capture the baseline wake token BEFORE its initial firstUnread()
+     * check, not after. If the token were captured after (the original
+     * bug), a send() landing in that window would already be baked into
+     * the "baseline" token, so the poll loop's later comparison would see
+     * no change and `continue` without ever re-scanning the inbox —
+     * silently missing a message that is genuinely sitting there unread.
+     *
+     * The vulnerable window is a couple of statements wide (nanoseconds),
+     * far too narrow to land reliably even via pcntl_fork — see
+     * testWaitForMessageReturnsPromptlyWhenSentFromForkedProcess above,
+     * whose 150ms child delay is orders of magnitude too coarse to ever
+     * probe it. So this asserts the statement order directly from source,
+     * which fails deterministically pre-fix and passes deterministically
+     * post-fix, rather than depending on timing that can't reproduce the
+     * bug at all.
+     */
+    public function testWaitForMessageCapturesWakeTokenBeforeInitialInboxCheck(): void
+    {
+        $reflection = new \ReflectionMethod(Mailbox::class, 'waitForMessage');
+        $filename = $reflection->getFileName();
+        $this->assertNotFalse($filename);
+
+        $lines = file($filename);
+        $this->assertNotFalse($lines);
+        $body = implode('', array_slice(
+            $lines,
+            $reflection->getStartLine() - 1,
+            $reflection->getEndLine() - $reflection->getStartLine() + 1,
+        ));
+
+        // Match the actual call sites ("$this->…(") rather than a bare
+        // method-name substring, so a comment mentioning either method by
+        // name in prose (e.g. explaining the fix) can't shift the match
+        // position and produce a false pass or fail.
+        $wakeTokenPos = strpos($body, '$this->wakeMarkerToken(');
+        $firstUnreadPos = strpos($body, '$this->firstUnread(');
+
+        $this->assertNotFalse($wakeTokenPos, 'waitForMessage() must call wakeMarkerToken()');
+        $this->assertNotFalse($firstUnreadPos, 'waitForMessage() must call firstUnread()');
+        $this->assertLessThan(
+            $firstUnreadPos,
+            $wakeTokenPos,
+            'wakeMarkerToken() must be captured before the initial firstUnread() check '
+                . '(see R9 review: capturing it after risks a missed-wakeup race).',
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
