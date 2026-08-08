@@ -582,16 +582,19 @@ final class ChatTest extends TestCase
 
     public function testExecuteAgentsUsesExplicitPool(): void
     {
-        // Use a custom executor that immediately returns a result
+        // Use a custom executor that immediately returns a result. AgentResult
+        // has no ok() factory — use the real constructor with an explicit
+        // AgentStatus, mirroring the pattern in
+        // testMultipleToolCallsWithPoolConfiguredExecuteRealToolsSequentially().
         $executor = new class implements ExecutorInterface {
             public function execute(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): AgentResult
             {
-                return AgentResult::ok($agent->id, 'done');
+                return new AgentResult($agent->id, \SugarCraft\Crush\Agents\AgentStatus::Completed, 'done');
             }
 
             public function executeStream(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): \Generator
             {
-                yield AgentResult::ok($agent->id, 'done');
+                yield new AgentResult($agent->id, \SugarCraft\Crush\Agents\AgentStatus::Completed, 'done');
             }
 
             public function cancel(string $agentId): void {}
@@ -601,13 +604,36 @@ final class ChatTest extends TestCase
         $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $executor);
         $chat = (new Chat())->withWorkerPool($pool);
 
-        // No agents — should return empty generator
-        $results = @$chat->executeAgents([], new CompleteRequest(
+        // Non-empty agents array so this actually dispatches through the pool's
+        // happy path rather than short-circuiting on executeAll()'s `$agents === []`
+        // early return.
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'explicit-pool-agent',
+            agent: new Agent(
+                name: 'ExplicitPoolAgent',
+                description: 'Agent for explicit-pool dispatch test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'do the thing',
+        );
+
+        $results = $chat->executeAgents([$subAgent], new CompleteRequest(
             model: 'test',
             messages: [],
         ));
         $this->assertInstanceOf(\Generator::class, $results);
-        $this->assertCount(0, iterator_to_array($results));
+
+        $collected = iterator_to_array($results, false);
+        $this->assertCount(1, $collected);
+        $this->assertSame('explicit-pool-agent', $collected[0]->agentId);
+        $this->assertTrue($collected[0]->isSuccess());
+        $this->assertSame('done', $collected[0]->output);
     }
 
     public function testExecuteAgentsBuildsPoolFromConfig(): void
@@ -618,13 +644,41 @@ final class ChatTest extends TestCase
         // Accessor confirms config is set
         $this->assertSame($config, $chat->agentPoolConfig());
 
-        // Pool is built from config when executeAgents is called with no pool set
-        // We can verify this doesn't throw (empty agents list is valid)
-        $results = @$chat->executeAgents([], new CompleteRequest(
-            model: 'test',
+        // Pool is built from config when executeAgents is called with no pool set.
+        // Use a non-empty agents array so this actually exercises the built pool's
+        // default ProcessExecutor happy path (a self-contained inline worker
+        // simulation with no real network calls — see ProcessExecutorTest) rather
+        // than short-circuiting on an empty array.
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'config-built-pool-agent',
+            agent: new Agent(
+                name: 'ConfigBuiltPoolAgent',
+                description: 'Agent for config-built-pool dispatch test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'Say hello',
+        );
+
+        $results = $chat->executeAgents([$subAgent], new CompleteRequest(
+            model: 'test-model',
             messages: [],
         ));
         $this->assertInstanceOf(\Generator::class, $results);
+
+        $collected = iterator_to_array($results, false);
+        $this->assertCount(1, $collected);
+        $this->assertSame('config-built-pool-agent', $collected[0]->agentId);
+        $this->assertTrue($collected[0]->isSuccess());
+        $this->assertSame(
+            '[ConfigBuiltPoolAgent] Task finished: Say hello',
+            $collected[0]->output,
+        );
     }
 
     // ─── /workflow command wiring tests (P4.S15) ─────────────────────────────────
