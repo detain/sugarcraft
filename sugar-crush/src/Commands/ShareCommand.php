@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use DateTimeImmutable;
+use RuntimeException;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Share\ShareResult;
@@ -17,6 +18,9 @@ use SugarCraft\Crush\Share\ShareUploader;
  * Accepts formats: markdown, json, plain text
  * Uses configurable upload base URL + sign with expiry
  * Returns a ShareResult with the URL, format, expiry.
+ *
+ * No real upload backend exists yet, so ShareUploader always fails —
+ * this reports that honestly rather than fabricating a success URL.
  *
  * @mirrors charmbracelet/<repo>.ShareCommand
  */
@@ -48,7 +52,13 @@ final class ShareCommand
 
         // Upload and get share result
         $uploadBaseUrl = $this->getUploadBaseUrl();
-        $result = ShareResult::create($session, $format, $expirySeconds, $uploadBaseUrl);
+
+        try {
+            $result = ShareResult::create($session, $format, $expirySeconds, $uploadBaseUrl);
+        } catch (RuntimeException $e) {
+            $this->printNotImplemented($e->getMessage());
+            return 1;
+        }
 
         $this->printResult($result, $expiryDisplay);
 
@@ -153,6 +163,20 @@ final class ShareCommand
         echo "  Expires: {$expiryDisplay}\n";
         echo "\n";
         echo "  Share URL expires at: " . $result->expiresAt->format('Y-m-d H:i:s T') . "\n";
+        echo "\n";
+    }
+
+    /**
+     * Print the honest "no upload happened" failure.
+     *
+     * No real storage backend is configured for /share yet, so we report
+     * that plainly instead of ever showing a fabricated URL or hash.
+     */
+    private function printNotImplemented(string $reason): void
+    {
+        echo "\n";
+        echo "  \033[33m!\033[0m /share is not yet implemented. No data was uploaded.\n";
+        echo "  ({$reason})\n";
         echo "\n";
     }
 

@@ -8,72 +8,114 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Message;
-use SugarCraft\Crush\Share\ShareResult;
-use SugarCraft\Crush\Share\ShareSession;
 
 /**
  * @see ShareCommand
+ *
+ * No real /share upload backend exists yet. ShareUploader::upload() always
+ * throws, so ShareCommand must report that honestly and must never print a
+ * fabricated success URL or hash.
  */
 final class ShareCommandTest extends TestCase
 {
     // =========================================================================
-    // Format Parsing Tests
+    // Honest failure path
     // =========================================================================
 
-    public function testExecuteWithDefaultFormat(): void
+    public function testExecuteReportsNotImplemented(): void
     {
         $chat = $this->createChatWithMessages();
         $command = new ShareCommand();
 
-        // Default format should be markdown - call execute with no format arg
         ob_start();
         $exitCode = $command->execute($chat, []);
         $output = ob_get_clean();
 
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Format: markdown', $output);
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('not yet implemented', $output);
+        $this->assertStringContainsString('No data was uploaded', $output);
     }
 
-    public function testExecuteWithJsonFormat(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        // Capture output
-        ob_start();
-        $exitCode = $command->execute($chat, ['json']);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Session shared', $output);
-        $this->assertStringContainsString('Format: json', $output);
-    }
-
-    public function testExecuteWithTextFormat(): void
+    public function testExecuteNeverFabricatesUrlOrHash(): void
     {
         $chat = $this->createChatWithMessages();
         $command = new ShareCommand();
 
         ob_start();
-        $exitCode = $command->execute($chat, ['text']);
+        $command->execute($chat, ['markdown', '1h']);
         $output = ob_get_clean();
 
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Format: text', $output);
+        // The old behaviour claimed success and printed a signed-looking
+        // URL even though nothing was ever uploaded. None of that may
+        // appear anywhere in the output now.
+        $this->assertStringNotContainsString('Session shared successfully', $output);
+        $this->assertStringNotContainsString('URL:', $output);
+        $this->assertStringNotContainsString('share.sugarcraft.dev', $output);
+        $this->assertStringNotContainsString('https://', $output);
+        $this->assertStringNotContainsString('Expires:', $output);
     }
 
-    public function testExecuteWithMarkdownFormat(): void
+    /**
+     * @dataProvider formatProvider
+     */
+    public function testExecuteReportsNotImplementedForEveryFormat(string $formatArg): void
     {
         $chat = $this->createChatWithMessages();
+        $command = new ShareCommand();
+
+        ob_start();
+        $exitCode = $command->execute($chat, [$formatArg]);
+        $output = ob_get_clean();
+
+        // The fabrication bug was independent of format; the honest
+        // failure path must be too.
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('not yet implemented', $output);
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public static function formatProvider(): array
+    {
+        return [
+            'markdown' => ['markdown'],
+            'md alias' => ['md'],
+            'json' => ['json'],
+            'text' => ['text'],
+            'plain alias' => ['plain'],
+        ];
+    }
+
+    public function testExecuteWithEmptyChatAlsoReportsNotImplemented(): void
+    {
+        $chat = new Chat([]);
         $command = new ShareCommand();
 
         ob_start();
         $exitCode = $command->execute($chat, ['markdown']);
         $output = ob_get_clean();
 
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Format: markdown', $output);
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('not yet implemented', $output);
     }
+
+    public function testExecuteWithCustomExpiryStillReportsNotImplemented(): void
+    {
+        $chat = $this->createChatWithMessages();
+        $command = new ShareCommand();
+
+        ob_start();
+        $exitCode = $command->execute($chat, ['markdown', '30m']);
+        $output = ob_get_clean();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('not yet implemented', $output);
+    }
+
+    // =========================================================================
+    // Format Parsing Tests (unaffected by the upload path)
+    // =========================================================================
 
     public function testExecuteWithInvalidFormat(): void
     {
@@ -86,143 +128,12 @@ final class ShareCommandTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Invalid format', $output);
+        // A format error is a different failure than "not implemented" —
+        // must not be conflated with the upload failure message.
+        $this->assertStringNotContainsString('not yet implemented', $output);
     }
 
-    // =========================================================================
-    // Expiry Handling Tests
-    // =========================================================================
-
-    public function testExecuteWithOneHourExpiry(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['markdown', '1h']);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Expires:', $output);
-        $this->assertStringContainsString('1 hour', $output);
-    }
-
-    public function testExecuteWithSevenDayExpiry(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['markdown', '7d']);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('7 days', $output);
-    }
-
-    public function testExecuteWithCustomExpiryMinutes(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['markdown', '30m']);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('30 minutes', $output);
-    }
-
-    public function testExecuteWithDefaultExpiryWhenNoArg(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, []);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Session shared', $output);
-    }
-
-    // =========================================================================
-    // URL Format Validation Tests
-    // =========================================================================
-
-    public function testShareResultUrlIsValidFormat(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $command->execute($chat, ['markdown', '1h']);
-        $output = ob_get_clean();
-
-        // URL should be present in output
-        $this->assertStringContainsString('URL:', $output);
-        // URL should contain the base domain or share.sugarcraft.dev
-        $this->assertTrue(
-            str_contains($output, 'share.sugarcraft.dev') || str_contains($output, 'https://'),
-            'Share URL should be a valid URL'
-        );
-    }
-
-    public function testShareResultContainsMessageCount(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $command->execute($chat, ['markdown']);
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('Messages:', $output);
-    }
-
-    // =========================================================================
-    // Edge Cases
-    // =========================================================================
-
-    public function testExecuteWithEmptyChat(): void
-    {
-        $chat = new Chat([]);
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['markdown']);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Messages: 0', $output);
-    }
-
-    public function testExecuteWithMdAlias(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['md']);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Format: markdown', $output);
-    }
-
-    public function testExecuteWithPlainAlias(): void
-    {
-        $chat = $this->createChatWithMessages();
-        $command = new ShareCommand();
-
-        ob_start();
-        $exitCode = $command->execute($chat, ['plain']);
-        $output = ob_get_clean();
-
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Format: text', $output);
-    }
-
-    public function testExecuteWithMultipleArgs(): void
+    public function testExecuteWithMultipleArgsStillParsesButReportsNotImplemented(): void
     {
         $chat = $this->createChatWithMessages();
         $command = new ShareCommand();
@@ -231,10 +142,10 @@ final class ShareCommandTest extends TestCase
         $exitCode = $command->execute($chat, ['json', '24h', 'extra_arg']);
         $output = ob_get_clean();
 
-        // Should still succeed and only use first two args
-        $this->assertSame(0, $exitCode);
-        $this->assertStringContainsString('Format: json', $output);
-        $this->assertStringContainsString('24 hours', $output);
+        // Should still parse args correctly and only use the first two,
+        // but the honest failure path still applies.
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('not yet implemented', $output);
     }
 
     // =========================================================================
@@ -243,8 +154,6 @@ final class ShareCommandTest extends TestCase
 
     /**
      * Create a Chat instance with some test messages.
-     *
-     * @return Chat
      */
     private function createChatWithMessages(): Chat
     {
