@@ -1017,6 +1017,47 @@ final class ChatTest extends TestCase
         $this->assertCount(0, $next->history);
     }
 
+    /**
+     * R20.fix regression: `Bootstrap::chat()` (the construction path
+     * `bin/sugarcrush` actually runs) never passes an `agentManager:`, so a
+     * typed "/agents" with no `agentManager` configured used to throw an
+     * uncaught `RuntimeException('AgentManager not set')` straight out of
+     * `Chat::update()` — candy-core's `Program` has no try/catch around its
+     * synchronous update() dispatch, so this crashed the whole live CLI
+     * instead of degrading like every other optional collaborator here
+     * (workflow engine / session store / memory store).
+     */
+    public function testAgentsCommandDegradesGracefullyWithoutAgentManagerInsteadOfThrowing(): void
+    {
+        $chat = new Chat(inputBuf: '/agents');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::User, $next->history[0]->role);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $this->assertStringContainsString('Agent manager not configured', $next->history[1]->content);
+    }
+
+    /**
+     * Same regression as above, but via the new Ctrl+A shortcut this item
+     * added — a single accidental keystroke used to trigger the crash
+     * rather than requiring a user to type out "/agents" by hand.
+     */
+    public function testCtrlAKeyDegradesGracefullyWithoutAgentManagerInsteadOfThrowing(): void
+    {
+        $chat = new Chat(inputBuf: 'unsubmitted draft');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Char, rune: 'a', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame('', $next->inputBuf);
+        $this->assertCount(2, $next->history);
+        $this->assertSame('/agents', $next->history[0]->content);
+        $this->assertStringContainsString('Agent manager not configured', $next->history[1]->content);
+    }
+
     // =========================================================================
     // Idle-compaction wiring (R-idle-compaction): shouldPromptIdleCompaction()
     // must be exercised through the real submit() dispatch path, not only

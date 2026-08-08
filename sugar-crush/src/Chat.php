@@ -1255,6 +1255,24 @@ final class Chat implements Model
 
     private function handleAgentsCommand(string $inputBuf): array
     {
+        // R20.fix: Bootstrap::chat() (the real construction path
+        // `bin/sugarcrush` uses) never passes an `agentManager:` -- so this
+        // was reachable with zero configuration via a typed "/agents" *and*,
+        // since R20 added the Ctrl+A shortcut below in update(), via a
+        // single accidental keystroke. The former "?? throw" here escaped
+        // uncaught out of Chat::update(): candy-core's Program has no
+        // try/catch around its synchronous update() dispatch, so the
+        // exception propagated out of the event loop entirely, skipping
+        // teardownTerminal() and leaving the real terminal in whatever
+        // raw/alt-screen state it was in. Degrade gracefully instead, the
+        // same "<thing> not configured" pattern every other optional
+        // collaborator on this class already follows (see
+        // handleWorkflowCommand()/handleSessionsCommand()/
+        // handleMemoryCommand() above).
+        if ($this->agentManager === null) {
+            return $this->agentsResponse($inputBuf, 'Agent manager not configured. Set an AgentManager to use /agents commands.');
+        }
+
         // Parse args from the command (after "/agent" or "/agents").
         // /agents is 7 chars, /agent is 6 chars - detect which alias was used
         // by full-prefix match (not just presence of a trailing space) so a
@@ -1266,7 +1284,7 @@ final class Chat implements Model
 
         // Execute the AgentsCommand - it outputs directly to stdout, capture via output buffering
         ob_start();
-        $agentsCommand = new AgentsCommand($this->agentManager ?? throw new \RuntimeException('AgentManager not set'));
+        $agentsCommand = new AgentsCommand($this->agentManager);
         $exitCode = $agentsCommand->execute($this, $args);
         $output = ob_get_clean();
 

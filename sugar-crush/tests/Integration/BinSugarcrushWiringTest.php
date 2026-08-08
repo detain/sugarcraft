@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Memory\MemoryStore;
@@ -114,6 +116,41 @@ final class BinSugarcrushWiringTest extends TestCase
 
         $this->assertSame($readLoader, $editLoader);
         $this->assertSame($editLoader, $globLoader);
+    }
+
+    /**
+     * R20.fix regression (reviewer-reported): `Bootstrap::chat()` never
+     * constructs/passes an `agentManager:` -- confirming that here in the
+     * same test file that already exercises `Bootstrap::chat()` directly
+     * documents the gap where a future reader will actually see it, rather
+     * than only in a docblock. See `Renderer.php`'s "R20.fix" note.
+     */
+    public function testChatHasNoAgentManagerSinceBootstrapDoesNotConstructOne(): void
+    {
+        $chat = Bootstrap::chat($this->tempDir . '/repo');
+
+        $this->assertNull($chat->agentManager());
+    }
+
+    /**
+     * R20.fix regression: with the gap above in place, typing "/agents" (or
+     * pressing Ctrl+A) against a real `Bootstrap::chat()`-constructed Chat
+     * used to throw an uncaught `RuntimeException('AgentManager not set')`
+     * straight out of `Chat::update()` -- candy-core's `Program` has no
+     * try/catch around its synchronous update() dispatch, so this crashed
+     * the live CLI outright (and skipped `teardownTerminal()`). It must now
+     * degrade to a plain "not configured" response instead.
+     */
+    public function testAgentsCommandDoesNotCrashARealBootstrapConstructedChat(): void
+    {
+        $chat = Bootstrap::chat($this->tempDir . '/repo');
+        $ref = new \ReflectionMethod($chat, 'withInputBuf');
+        $ref->setAccessible(true);
+        $chat = $ref->invoke($chat, '/agents');
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('Agent manager not configured', $next->history[array_key_last($next->history)]->content);
     }
 
     /**

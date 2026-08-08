@@ -68,6 +68,24 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
  * builds `AgentDisplayState` values directly from
  * `Chat::agentManager()->active()` (real `Agent` registrations) instead.
  *
+ * ### R20.fix: `agentManager` is not yet populated in production
+ *
+ * The rendering below is only reachable when `Chat::agentManager()` is
+ * non-null. Today, `SugarCraft\Crush\Cli\Bootstrap::chat()` — the
+ * construction path `bin/sugarcrush` actually runs — never passes an
+ * `agentManager:` argument (constructing a real one needs a
+ * `ProviderInterface` + `SkillRegistry`, which `Bootstrap::backend()`
+ * builds internally but does not currently expose for this purpose), so
+ * `renderAgentView()` always returns `''` for a real `bin/sugarcrush` user
+ * regardless of config. This is honestly a currently-unreachable code path
+ * pending that follow-up wiring in `Bootstrap.php` (not in this item's file
+ * scope) — it is exercised today only by tests that construct
+ * `new Chat(agentManager: ...)` directly. `Chat::handleAgentsCommand()`
+ * (and the Ctrl+A shortcut that dispatches through it) degrades to a
+ * "not configured" message rather than throwing when `agentManager` is
+ * null, so this gap is inert rather than crashing — see that method's
+ * docblock.
+ *
  * Only `Agent::isActive`/`name`/`description` are real, live data from that
  * path — `AgentWorkerPool`/`AgentManager`'s public API (deliberately not
  * touched by this item; both are out of its file scope) exposes only
