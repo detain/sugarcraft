@@ -1088,16 +1088,14 @@ final class Chat implements Model
 
     private function handleAgentsCommand(string $inputBuf): array
     {
-        // Parse args from the command (after "/agent" or "/agents")
-        // /agents is 7 chars, /agent is 6 chars - we detect which was used
-        $afterCommand = ltrim(substr($inputBuf, 7)); // starts after "/agents "
-        if (str_starts_with($inputBuf, '/agents ')) {
-            $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
-        } else {
-            // /agent followed by something (not space) — single token
-            $afterAgent = ltrim(substr($inputBuf, 6));
-            $args = $afterAgent !== '' ? preg_split('/\s+/', $afterAgent) : [];
-        }
+        // Parse args from the command (after "/agent" or "/agents").
+        // /agents is 7 chars, /agent is 6 chars - detect which alias was used
+        // by full-prefix match (not just presence of a trailing space) so a
+        // bare "/agents" with no arguments slices off all 7 chars and yields
+        // an empty $afterCommand instead of the trailing "s" of "/agents".
+        $prefixLength = str_starts_with($inputBuf, '/agents') ? 7 : 6;
+        $afterCommand = ltrim(substr($inputBuf, $prefixLength));
+        $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
 
         // Execute the AgentsCommand - it outputs directly to stdout, capture via output buffering
         ob_start();

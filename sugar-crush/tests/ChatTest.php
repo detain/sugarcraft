@@ -9,6 +9,8 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentPoolConfig;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
@@ -757,6 +759,105 @@ final class ChatTest extends TestCase
         $response = $next->history[1]->content;
         $this->assertStringContainsString('Error', $response);
         $this->assertStringContainsString('Usage:', $response);
+    }
+
+    // ─── /agents command parsing tests (R13) ─────────────────────────────────
+
+    public function testBareAgentsCommandListsAgentsWhenNoneActive(): void
+    {
+        // Regression: "/agents" (no trailing space, no args) used to be
+        // sliced at a fixed offset of 7, which for the 7-char string
+        // "/agents" itself lands one character past its own end and
+        // mis-parses into a single-char agent-name lookup for "s" instead
+        // of routing to listAgents().
+        $agentManager = $this->createAgentManagerWithAgents([]);
+        $chat = new Chat(inputBuf: '/agents', agentManager: $agentManager);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::User, $next->history[0]->role);
+        $this->assertSame('/agents', $next->history[0]->content);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('No active agents configured', $response);
+        $this->assertStringNotContainsString('Unknown agent', $response);
+    }
+
+    public function testBareAgentsCommandListsActiveAgents(): void
+    {
+        $agents = [
+            new Agent(
+                name: 'reviewer',
+                description: 'Reviews code for bugs',
+                prompt: 'You are a reviewer.',
+                model: 'claude-sonnet-4-6',
+                provider: 'anthropic',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+        ];
+        $agentManager = $this->createAgentManagerWithAgents($agents);
+        $chat = new Chat(inputBuf: '/agents', agentManager: $agentManager);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $response = $next->history[1]->content;
+        $this->assertStringContainsString('Active Agents', $response);
+        $this->assertStringContainsString('reviewer', $response);
+        $this->assertStringNotContainsString('Unknown agent', $response);
+    }
+
+    public function testAgentCommandWithNameStillLooksUpThatAgent(): void
+    {
+        // Guard against the fix over-correcting: "/agent <name>" (singular,
+        // with a real argument) must still resolve to that specific agent.
+        $agent = new Agent(
+            name: 'coder',
+            description: 'Writes and reviews code',
+            prompt: 'You are a coder agent.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+        $agentManager = $this->createAgentManagerWithAgents([$agent]);
+        $chat = new Chat(inputBuf: '/agent coder', agentManager: $agentManager);
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $this->assertStringContainsString('Agent: coder', $next->history[1]->content);
+    }
+
+    /**
+     * Create an AgentManager stub with predefined agents (mirrors the helper
+     * in AgentsCommandTest — AgentManager's real constructor needs a
+     * ProviderInterface + SkillRegistry that aren't relevant here).
+     *
+     * @param Agent[] $agents
+     */
+    private function createAgentManagerWithAgents(array $agents): AgentManager
+    {
+        $reflection = new \ReflectionClass(AgentManager::class);
+        $agentManager = $reflection->newInstanceWithoutConstructor();
+
+        $agentsProperty = $reflection->getProperty('agents');
+        $agentsProperty->setAccessible(true);
+        $indexedAgents = [];
+        foreach ($agents as $agent) {
+            $indexedAgents[$agent->name] = $agent;
+        }
+        $agentsProperty->setValue($agentManager, $indexedAgents);
+
+        return $agentManager;
     }
 
     protected function tearDown(): void
