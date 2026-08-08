@@ -898,6 +898,93 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('Agent: coder', $next->history[1]->content);
     }
 
+    // =========================================================================
+    // Idle-compaction wiring (R-idle-compaction): shouldPromptIdleCompaction()
+    // must be exercised through the real submit() dispatch path, not only
+    // called directly as a standalone predicate.
+    // =========================================================================
+
+    public function testSubmitPromptsIdleCompactionInsteadOfCallingBackendWhenIdleAndOversized(): void
+    {
+        // ~500,000 chars ≈ 125,010 estimated tokens (1 token ≈ 4 chars + 10
+        // overhead), comfortably over the 100,000-token threshold.
+        $bigMessage = Message::user(str_repeat('x', 500_000));
+        $chat = (new Chat(history: [$bigMessage], inputBuf: 'hello again'))
+            ->withLastActivity(new \DateTimeImmutable('2 hours ago'));
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // Short-circuited locally, same shape as a slash command: no Cmd
+        // dispatched to the backend for this turn.
+        $this->assertNull($cmd);
+        $this->assertFalse($next->inFlight);
+        $this->assertSame('', $next->inputBuf);
+
+        $this->assertCount(3, $next->history);
+        $this->assertSame(Role::User, $next->history[1]->role);
+        $this->assertSame('hello again', $next->history[1]->content);
+        $this->assertSame(Role::Assistant, $next->history[2]->role);
+        $this->assertStringContainsString('/compact', $next->history[2]->content);
+
+        // The nudge itself counts as fresh activity, resetting the idle
+        // clock so it doesn't repeat on the very next message.
+        $this->assertNotNull($next->lastActivityAt());
+        $this->assertGreaterThan(
+            (new \DateTimeImmutable('5 seconds ago'))->getTimestamp(),
+            $next->lastActivityAt()->getTimestamp(),
+        );
+    }
+
+    public function testSubmitDispatchesToBackendNormallyWhenRecentlyActiveDespiteOversizedHistory(): void
+    {
+        $bigMessage = Message::user(str_repeat('x', 500_000));
+        $chat = (new Chat(history: [$bigMessage], inputBuf: 'hello'))
+            ->withLastActivity(new \DateTimeImmutable('5 minutes ago'));
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertTrue($next->inFlight);
+        $this->assertCount(2, $next->history);
+        $this->assertSame('hello', $next->history[1]->content);
+    }
+
+    public function testSubmitDispatchesToBackendNormallyWhenIdleButHistorySmall(): void
+    {
+        $chat = (new Chat(history: [Message::user('hi')], inputBuf: 'hello'))
+            ->withLastActivity(new \DateTimeImmutable('2 hours ago'));
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertTrue($next->inFlight);
+        $this->assertCount(2, $next->history);
+    }
+
+    public function testFreshChatHasNoLastActivityAndSubmitRecordsOneOnRealPrompt(): void
+    {
+        $chat = new Chat(inputBuf: 'hello');
+        $this->assertNull($chat->lastActivityAt());
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // No lastActivityAt yet means shouldPromptIdleCompaction() can never
+        // fire regardless of token count, so this still dispatches normally.
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertNotNull($next->lastActivityAt());
+    }
+
+    public function testWithLastActivityIsFluentAndImmutable(): void
+    {
+        $chat = new Chat();
+        $t = new \DateTimeImmutable('1 hour ago');
+        $next = $chat->withLastActivity($t);
+
+        $this->assertNull($chat->lastActivityAt());
+        $this->assertSame($t, $next->lastActivityAt());
+        $this->assertNotSame($chat, $next);
+    }
+
     /**
      * Create an AgentManager stub with predefined agents (mirrors the helper
      * in AgentsCommandTest — AgentManager's real constructor needs a

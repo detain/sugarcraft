@@ -360,7 +360,10 @@ final class App
     private function handleUserInput(UserInputMsg $msg): array
     {
         $userMsg = new UserMessage($msg->content);
-        $newApp = $this->withMessage($userMsg);
+        // A real user prompt is the activity signal Runtime::shouldPromptIdleCompaction()
+        // measures idle time against - without this, lastActivityAt only ever got set
+        // from test code and every session looked idle forever.
+        $newApp = $this->withMessage($userMsg)->withLastActivity(new DateTimeImmutable());
         // The actual AI call happens in the runtime loop
         return [$newApp, new RunCompletionCmd($userMsg)];
     }

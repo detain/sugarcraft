@@ -112,6 +112,7 @@ final class Chat implements Model
         ?MemoryStore $memoryStore = null,
         \SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null $sessionStore = null,
         ?string $currentSessionId = null,
+        private readonly ?\DateTimeImmutable $lastActivityAt = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -153,6 +154,7 @@ final class Chat implements Model
                 memoryStore: $this->memoryStore,
                 sessionStore: $this->sessionStore,
                 currentSessionId: $this->currentSessionId,
+                lastActivityAt: $this->lastActivityAt,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -233,6 +235,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
 
         $backend = $this->backend;
@@ -573,6 +576,24 @@ final class Chat implements Model
     }
 
     /**
+     * Timestamp of the last real user prompt submitted through submit(),
+     * or null if none has been recorded yet on this instance.
+     */
+    public function lastActivityAt(): ?\DateTimeImmutable
+    {
+        return $this->lastActivityAt;
+    }
+
+    /**
+     * Create a new Chat with an explicit last-activity timestamp. Mainly
+     * useful for tests that need to simulate an idle session.
+     */
+    public function withLastActivity(\DateTimeImmutable $lastActivityAt): self
+    {
+        return $this->mutate(['lastActivityAt' => $lastActivityAt]);
+    }
+
+    /**
      * Merge changes into a new Chat instance.
      *
      * Only constructor-promoted properties are passed through to avoid
@@ -601,6 +622,7 @@ final class Chat implements Model
             'memoryStore' => $this->memoryStore,
             'sessionStore' => $this->sessionStore,
             'currentSessionId' => $this->currentSessionId,
+            'lastActivityAt' => $this->lastActivityAt,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -624,6 +646,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
     }
 
@@ -645,6 +668,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
     }
 
@@ -675,6 +699,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
     }
 
@@ -702,6 +727,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
     }
 
@@ -773,6 +799,16 @@ final class Chat implements Model
             return $this->handleMcpAuthCommand($text);
         }
 
+        // Idle-compaction check, once per turn, before dispatching a real
+        // prompt to the backend. shouldPromptIdleCompaction() previously had
+        // no live call site anywhere in the codebase — only tests invoked it
+        // directly — so an idle, oversized session never actually got
+        // nudged toward /compact.
+        $tokenCount = $this->estimateTokenCount($this->history);
+        if ($this->shouldPromptIdleCompaction($tokenCount, $this->lastActivityAt)) {
+            return $this->idleCompactionPromptResponse($text, $tokenCount);
+        }
+
         $next = new self(
             history: [...$this->history, Message::user($text)],
             inputBuf: '',
@@ -789,6 +825,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: new \DateTimeImmutable(),
         );
 
         // Auto-save checkpoint before processing prompt
@@ -875,6 +912,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
         return [$next, null];
     }
@@ -1097,6 +1135,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
         return [$next, null];
     }
@@ -1149,6 +1188,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
         return [$next, null];
     }
@@ -1209,6 +1249,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
 
         return [$next, null];
@@ -1237,6 +1278,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
         return [$next, null];
     }
@@ -1289,6 +1331,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $newSessionId ?? $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
 
         return [$next, null];
@@ -1416,6 +1459,7 @@ final class Chat implements Model
                 memoryStore: $this->memoryStore,
                 sessionStore: $this->sessionStore,
                 currentSessionId: $this->currentSessionId,
+                lastActivityAt: $this->lastActivityAt,
             );
 
             return [$next, null];
@@ -1478,6 +1522,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
         return [$next, null];
     }
@@ -1787,6 +1832,9 @@ final class Chat implements Model
      * Returns true when session has been idle for more than 3600 seconds (1 hour)
      * AND token count exceeds 100,000.
      *
+     * Called once per turn from submit() (see {@see idleCompactionPromptResponse()})
+     * right before a real prompt would be dispatched to the backend.
+     *
      * @param int $tokenCount Estimated token count for the conversation
      * @param \DateTimeImmutable|null $lastActivityAt When the user was last active
      */
@@ -1803,6 +1851,61 @@ final class Chat implements Model
         $idleSeconds = time() - $lastActivityAt->getTimestamp();
 
         return $idleSeconds > 3600;
+    }
+
+    /**
+     * Estimate token count for a message history using the same
+     * 1-token≈4-chars heuristic as {@see ContextCompactor}'s internal
+     * countTokens(), so the idle-compaction threshold agrees with what
+     * /compact itself would report.
+     *
+     * @param list<Message> $history
+     */
+    private function estimateTokenCount(array $history): int
+    {
+        $total = 0;
+        foreach ($history as $msg) {
+            $total += (int) ceil(mb_strlen($msg->content) / 4);
+            $total += 10; // role overhead
+        }
+        return $total;
+    }
+
+    /**
+     * Short-circuit a real prompt submission with an idle-compaction
+     * advisory instead of calling the backend, mirroring how /compact
+     * responds locally (see handleCompactCommand()). Also records this
+     * submission as fresh activity, so the nudge does not repeat on the
+     * very next message.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function idleCompactionPromptResponse(string $inputText, int $tokenCount): array
+    {
+        $response = "This session has been idle for over an hour and has grown to "
+            . "~{$tokenCount} estimated tokens. Run /compact to shrink the context "
+            . "before continuing, or send another message to proceed anyway.";
+
+        $next = new self(
+            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
+            inputBuf: '',
+            inFlight: false,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+            tools: $this->tools,
+            onToolCall: $this->onToolCall,
+            agentPoolConfig: $this->agentPoolConfig,
+            effectivePool: $this->effectivePool,
+            workflowEngine: $this->workflowEngine,
+            agentManager: $this->agentManager,
+            memoryStore: $this->memoryStore,
+            sessionStore: $this->sessionStore,
+            currentSessionId: $this->currentSessionId,
+            lastActivityAt: new \DateTimeImmutable(),
+        );
+
+        return [$next, null];
     }
 
     /**
@@ -1889,6 +1992,7 @@ final class Chat implements Model
             memoryStore: $this->memoryStore,
             sessionStore: $this->sessionStore,
             currentSessionId: $this->currentSessionId,
+            lastActivityAt: $this->lastActivityAt,
         );
         return [$next, null];
     }

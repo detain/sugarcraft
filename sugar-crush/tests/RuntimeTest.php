@@ -24,6 +24,7 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\App\UserInputMsg;
 use DateTimeImmutable;
 
 /**
@@ -669,6 +670,47 @@ final class RuntimeTest extends TestCase
         $result = $this->runtime->shouldPromptIdleCompaction($app, 100000);
 
         $this->assertFalse($result);
+    }
+
+    /**
+     * App::$lastActivityAt was previously only ever set via withLastActivity()
+     * from test code (see the tests above) - no real code path updated it on
+     * an actual user prompt, so shouldPromptIdleCompaction() would see
+     * lastActivityAt === null forever in production and never fire. A real
+     * UserInputMsg dispatch through App::update() must now record activity.
+     */
+    public function testRealUserInputMsgUpdatesLastActivityAt(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        $app = App::new($provider, 'test-model');
+        $this->assertNull($app->lastActivityAt, 'fresh App has no recorded activity');
+
+        [$next, ] = $app->update(new UserInputMsg('hello'));
+
+        $this->assertNotNull($next->lastActivityAt);
+        $this->assertGreaterThan(
+            (new DateTimeImmutable('5 seconds ago'))->getTimestamp(),
+            $next->lastActivityAt->getTimestamp(),
+        );
+    }
+
+    public function testRealUserInputMsgResetsIdleClockSoOldSessionsStopLookingIdle(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+
+        // Simulate a session that had gone idle for 2 hours.
+        $app = App::new($provider, 'test-model')
+            ->withLastActivity(new DateTimeImmutable('2 hours ago'));
+
+        [$next, ] = $app->update(new UserInputMsg('still here'));
+
+        // A fresh prompt is real activity - the idle clock resets even
+        // though the session had crossed the idle threshold before.
+        $idleSeconds = time() - $next->lastActivityAt->getTimestamp();
+        $this->assertLessThan(5, $idleSeconds);
     }
 
     // =========================================================================
