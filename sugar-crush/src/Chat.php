@@ -91,6 +91,15 @@ final class Chat implements Model
     private int $width = 80;
 
     /**
+     * Token budget used as the {@see ContextCompactor::shouldSendReminder()}
+     * denominator. Mirrors the fixed 100,000-token proxy limit already used
+     * by {@see shouldPromptIdleCompaction()} — so the 70% reminder tier
+     * fires at ~70,000 estimated tokens, comfortably ahead of the 100,000
+     * hard idle-compaction threshold.
+     */
+    private const REMINDER_TOKEN_LIMIT = 100000;
+
+    /**
      * @param list<Message> $history
      * @param array<string, callable> $tools Map of tool name => callable(array $arguments): mixed
      * @param callable|null $onToolCall Optional callback called when tools are invoked
@@ -809,8 +818,26 @@ final class Chat implements Model
             return $this->idleCompactionPromptResponse($text, $tokenCount);
         }
 
+        // Reminder-tier check (R21's ContextCompactor::shouldSendReminder(),
+        // 70% of the token budget by default). Unlike the idle-compaction
+        // prompt above — which short-circuits the turn entirely and never
+        // calls the backend — this is a soft, non-blocking notice: the real
+        // prompt still goes out, but a system-role warning is appended
+        // alongside it so the user sees context is filling up well before
+        // the hard 85%/95% compaction tiers would kick in.
+        $wireHistory = array_map(
+            static fn(Message $msg): array => $msg->toWire(),
+            $this->history
+        );
+        $sendReminder = $this->compactor->shouldSendReminder($wireHistory, self::REMINDER_TOKEN_LIMIT);
+
+        $newTurnMessages = [Message::user($text)];
+        if ($sendReminder) {
+            $newTurnMessages[] = $this->contextReminderMessage($tokenCount);
+        }
+
         $next = new self(
-            history: [...$this->history, Message::user($text)],
+            history: [...$this->history, ...$newTurnMessages],
             inputBuf: '',
             inFlight: true,
             backend: $this->backend,
@@ -1869,6 +1896,24 @@ final class Chat implements Model
             $total += 10; // role overhead
         }
         return $total;
+    }
+
+    /**
+     * Build the soft, non-blocking reminder message surfaced once
+     * {@see ContextCompactor::shouldSendReminder()} reports the conversation
+     * has crossed its 70%-of-budget tier. Rendered with a distinct
+     * `Role::System` (a faint "system: …" line, see {@see Renderer}) rather
+     * than the `Role::Assistant` bubble used for the hard idle-compaction
+     * prompt, so the two are visually distinguishable and this one never
+     * blocks the turn it rides along with.
+     */
+    private function contextReminderMessage(int $tokenCount): Message
+    {
+        return Message::system(
+            "Heads up: this conversation has grown to ~{$tokenCount} estimated "
+            . "tokens, past the 70% context-usage reminder threshold. Consider "
+            . "running /compact soon to keep the session responsive."
+        );
     }
 
     /**

@@ -945,8 +945,13 @@ final class ChatTest extends TestCase
 
         $this->assertInstanceOf(\Closure::class, $cmd);
         $this->assertTrue($next->inFlight);
-        $this->assertCount(2, $next->history);
+        // History is also well over the 70% reminder tier here (see
+        // R-reminder-consumer tests below), so a Role::System notice rides
+        // along after the user turn — a soft, non-blocking addition, unlike
+        // the hard idle-compaction short-circuit this test is guarding.
+        $this->assertCount(3, $next->history);
         $this->assertSame('hello', $next->history[1]->content);
+        $this->assertSame(Role::System, $next->history[2]->role);
     }
 
     public function testSubmitDispatchesToBackendNormallyWhenIdleButHistorySmall(): void
@@ -983,6 +988,80 @@ final class ChatTest extends TestCase
         $this->assertNull($chat->lastActivityAt());
         $this->assertSame($t, $next->lastActivityAt());
         $this->assertNotSame($chat, $next);
+    }
+
+    // =========================================================================
+    // Reminder-tier wiring (R-reminder-consumer): ContextCompactor's 70%
+    // shouldSendReminder() (added by R21) must be exercised through the real
+    // submit() dispatch path, not only called directly as a standalone
+    // predicate — and it must surface as a soft, non-blocking notice distinct
+    // from the hard idle-compaction prompt above (which short-circuits the
+    // turn instead of calling the backend).
+    // =========================================================================
+
+    public function testSubmitSurfacesReminderMessageAlongsideRealPromptWhenOverReminderThreshold(): void
+    {
+        // ~280,000 chars ≈ 70,010 estimated tokens (1 token≈4 chars + 10
+        // overhead) — over ContextCompactor's default 70% reminder tier of
+        // Chat's 100,000-token proxy limit (70,000), but comfortably under
+        // the 100,000-token hard idle-compaction threshold.
+        $bigMessage = Message::user(str_repeat('x', 280_000));
+        $chat = new Chat(history: [$bigMessage], inputBuf: 'hello');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // Unlike the hard idle-compaction prompt, this does NOT short-circuit
+        // the turn: a real backend Cmd is still scheduled.
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertTrue($next->inFlight);
+        $this->assertSame('', $next->inputBuf);
+
+        $this->assertCount(3, $next->history);
+        $this->assertSame(Role::User, $next->history[1]->role);
+        $this->assertSame('hello', $next->history[1]->content);
+
+        // Distinct from the hard prompt's Role::Assistant bubble: the
+        // reminder rides along as a Role::System notice.
+        $this->assertSame(Role::System, $next->history[2]->role);
+        $this->assertStringContainsString('/compact', $next->history[2]->content);
+        $this->assertStringContainsString('70010', $next->history[2]->content);
+    }
+
+    public function testSubmitOmitsReminderMessageWhenUnderReminderThreshold(): void
+    {
+        $chat = new Chat(history: [Message::user('hi')], inputBuf: 'hello');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::User, $next->history[1]->role);
+        $this->assertSame('hello', $next->history[1]->content);
+    }
+
+    public function testReminderMessageResolvesThroughEchoBackendWithoutBreakingTheTurn(): void
+    {
+        $bigMessage = Message::user(str_repeat('x', 280_000));
+        $chat = new Chat(history: [$bigMessage], inputBuf: 'hello', backend: new EchoBackend());
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        // Drive the scheduled Cmd exactly like testEchoBackendRoundTrip: the
+        // AsyncCmd wraps a promise that resolves synchronously for EchoBackend.
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+        $resolvedMsg = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolvedMsg): void {
+            $resolvedMsg = $msg;
+        });
+        $this->assertInstanceOf(AssistantMsg::class, $resolvedMsg);
+
+        [$final] = $next->update($resolvedMsg);
+        $this->assertCount(4, $final->history);
+        $this->assertSame(Role::System, $final->history[2]->role);
+        $this->assertSame(Role::Assistant, $final->history[3]->role);
+        $this->assertFalse($final->inFlight);
     }
 
     /**
