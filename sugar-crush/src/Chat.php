@@ -14,6 +14,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\McpAuthCommand;
@@ -182,6 +183,21 @@ final class Chat implements Model
         return match (true) {
             $msg->type === KeyType::Enter
                 => $this->submit(),
+            // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
+            // already uses for typed input (handleAgentsCommand()), giving
+            // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
+            // disconnected App/Tui system) a real, reachable equivalent on
+            // this, the live, Chat path. Must be checked before the generic
+            // Char arm below, or the literal "a" would be typed into the
+            // input buffer instead.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
+                => $this->withInputBuf('/agents')->submit(),
+            // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
+            // through the real SessionStore listing — see
+            // cycleSessionTab()'s docblock for reachability caveats and how
+            // this relates to Tui\SessionTabs.
+            $msg->type === KeyType::Tab && $msg->ctrl
+                => $this->cycleSessionTab($msg->shift ? -1 : 1),
             $msg->type === KeyType::Char
                 => [$this->withInputBuf($this->inputBuf . $msg->rune), null],
             $msg->type === KeyType::Space
@@ -192,6 +208,57 @@ final class Chat implements Model
                 => [$this, Cmd::quit()],
             default => [$this, null],
         };
+    }
+
+    /**
+     * Cycle the active session forward ($direction=1) or backward
+     * ($direction=-1) through {@see SessionStore::listSessions()}'s real,
+     * persisted row order — the same order {@see Renderer}'s session tab
+     * strip displays, so switching here and switching via the rendered
+     * strip stay in sync. A no-op when there is no session store, no
+     * current session, or fewer than 2 sessions to switch between.
+     *
+     * Mirrors {@see \SugarCraft\Crush\Tui\SessionTabs}'s
+     * `cycleForward()`/`cycleBackward()` wraparound semantics and its
+     * `CTRL_TAB`/`CTRL_SHIFT_TAB` key bindings, without persisting a
+     * `SessionTabs` instance on `Chat` itself — adding one would widen
+     * Chat's already-large immutable constructor/`mutate()` surface well
+     * beyond this item's "KeyMsg dispatch site only" scope for this file.
+     * `currentSessionId` is already a real, mutate()-able field
+     * ({@see withCurrentSessionId()}), so no constructor change was needed.
+     *
+     * Reachability note: most terminals send Ctrl+Tab as a `CSI 1;5I`
+     * sequence that candy-core's `InputReader` does not yet decode into a
+     * `KeyMsg` (a separate, pre-existing gap in a file outside this item's
+     * scope — Ctrl+Tab isn't in the generic modifier-key CSI table there).
+     * This handler is nonetheless real and reachable today via any
+     * `KeyMsg(KeyType::Tab, ctrl: true)` source (Kitty-protocol terminals,
+     * scripted input, tests) exactly the way the rest of this match block
+     * is driven and tested, and will gain full raw-terminal reachability
+     * automatically once that decoder gap is closed.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function cycleSessionTab(int $direction): array
+    {
+        if ($this->sessionStore === null || $this->currentSessionId === null) {
+            return [$this, null];
+        }
+
+        $ids = array_column($this->sessionStore->listSessions(), 'id');
+        $count = count($ids);
+        if ($count < 2) {
+            return [$this, null];
+        }
+
+        $currentIndex = array_search($this->currentSessionId, $ids, true);
+        if ($currentIndex === false) {
+            return [$this, null];
+        }
+
+        $nextIndex = ($currentIndex + $direction + $count) % $count;
+
+        return [$this->withCurrentSessionId($ids[$nextIndex]), null];
     }
 
     /**
@@ -803,6 +870,11 @@ final class Chat implements Model
             return $this->handleRewindCommand($text);
         }
 
+        // Handle /sessions command (R20: list + render the real SessionPicker)
+        if (str_starts_with($text, '/sessions')) {
+            return $this->handleSessionsCommand($text);
+        }
+
         // Handle mcp auth commands
         if (str_starts_with($text, 'mcp auth')) {
             return $this->handleMcpAuthCommand($text);
@@ -1294,6 +1366,55 @@ final class Chat implements Model
         );
 
         return [$next, null];
+    }
+
+    /**
+     * Handle /sessions command — list all sessions via the real
+     * {@see SessionPicker}.
+     *
+     * Unlike /branch, /rename, and /rewind (which each act on the *current*
+     * session), /sessions builds SessionPicker from every row
+     * {@see SessionStore::listSessions()} actually returns and renders it
+     * exactly as the interactive picker would — this is the concrete,
+     * testable proof that R19's real `SessionStore` wiring is reachable for
+     * more than checkpoint/branch bookkeeping. The rendered picker text is
+     * folded into an assistant turn (same shape every other local command in
+     * this file uses via `sessionResponse()`/`*Response()`), rather than
+     * SessionPicker's own keyboard navigation being wired live — that would
+     * need Chat to persist a `SessionPicker` instance across turns, widening
+     * this file's constructor/`mutate()` surface well beyond this item's
+     * "KeyMsg dispatch site / new /sessions command site" scope.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleSessionsCommand(string $inputText): array
+    {
+        if ($this->sessionStore === null) {
+            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /sessions.');
+        }
+
+        $rows = $this->sessionStore->listSessions();
+        $sessions = array_map(
+            static function (array $row): array {
+                $id = (string) ($row['id'] ?? '');
+                $name = (string) ($row['name'] ?? '');
+
+                return [
+                    'sessionId' => $id,
+                    'sessionName' => $name !== '' ? $name : $id,
+                    'summary' => (string) ($row['system_prompt'] ?? ''),
+                    'gitBranch' => null,
+                    'lastActivity' => (string) ($row['updated_at'] ?? ''),
+                ];
+            },
+            $rows,
+        );
+
+        $picker = SessionPicker::new($sessions);
+        $size = TuiRenderer::getTerminalSize();
+        $response = $picker->render($size['cols'], $size['rows']);
+
+        return $this->sessionResponse($inputText, $response);
     }
 
     /**

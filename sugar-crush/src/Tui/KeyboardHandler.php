@@ -76,11 +76,24 @@ final class KeyboardHandler
     /**
      * Handle keyboard input when in the Agent View pane.
      *
+     * P5.S4 fix: mode dispatch for {@see AgentViewMode::Attach} runs BEFORE
+     * the quick-action keys below. {@see AgentViewMode}'s own docblock says
+     * "all keyboard input goes to the selected agent" in Attach mode, but the
+     * previous ordering checked c/r/s/q as global shortcuts first — so a key
+     * meant for the attached agent's own input (e.g. the letter "s") was
+     * hijacked into StopAllAgentsCmd before Attach mode ever saw it. List and
+     * Peek mode are unaffected: neither claims c/r/s/q for itself, so those
+     * keys are still meant to reach the quick actions below in those modes.
+     *
      * @return array{0: App, 1: ?KeyCmd}|null [newApp, command] or null if key not handled
      */
     private function handleAgentViewKey(string $key, App $app): ?array
     {
-        // Quick action keys (c, r, s, q) work in any agent view mode
+        if ($app->agentViewMode === AgentViewMode::Attach) {
+            return $this->handleAgentAttachKey($key, $app);
+        }
+
+        // Quick action keys (c, r, s, q) work in List/Peek agent view modes.
         if ($key === 'c' && $app->selectedAgentIndex >= 0) {
             return [$app, new CancelAgentCmd($app->selectedAgentIndex)];
         }
@@ -103,7 +116,7 @@ final class KeyboardHandler
             ];
         }
 
-        // Mode-specific handling
+        // Mode-specific handling (Attach already returned above).
         return match ($app->agentViewMode) {
             AgentViewMode::List => $this->handleAgentListKey($key, $app),
             AgentViewMode::Peek => $this->handleAgentPeekKey($key, $app),
@@ -161,19 +174,28 @@ final class KeyboardHandler
     /**
      * Handle keys in agent attach view mode.
      *
-     * @return array{0: App, 1: ?KeyCmd}|null
+     * Escape is the only key intercepted here for detaching. Every other
+     * key is claimed with a no-op `[App, null]` (not `null`) so it can never
+     * fall through to the quick-action shortcuts in {@see handleAgentViewKey()}
+     * — that fallthrough was the P5.S4 bug. There is no live "forward this
+     * keystroke to the attached agent process" Cmd anywhere in src/ yet (the
+     * same pre-existing, repo-wide "no Cmd type is consumed by a main loop"
+     * gap documented on {@see App::userInvocableSkills()}); wiring one is a
+     * distinct, larger integration than this ordering fix and stays out of
+     * scope here. What this method guarantees today: a key typed while
+     * attached is never reinterpreted as CancelAgentCmd/ResumeAgentCmd/
+     * StopAllAgentsCmd/QuitAgentViewCmd.
+     *
+     * @return array{0: App, 1: ?KeyCmd}
      */
-    private function handleAgentAttachKey(string $key, App $app): ?array
+    private function handleAgentAttachKey(string $key, App $app): array
     {
         // Escape - detach and return to list view
         if ($key === 'escape') {
             return [$app->withAgentViewMode(AgentViewMode::List), null];
         }
 
-        // In attach mode, most keys are passed directly to the agent.
-        // The runtime handles routing them to the attached agent.
-        // Only escape is intercepted here for detaching.
-        return null;
+        return [$app, null];
     }
 
     /**

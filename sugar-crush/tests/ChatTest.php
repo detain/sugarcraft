@@ -965,6 +965,58 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('Agent: coder', $next->history[1]->content);
     }
 
+    // ─── Ctrl+A keyboard shortcut (R20) ──────────────────────────────────────
+
+    /**
+     * R20: Ctrl+A re-runs the exact real /agents dispatch (handleAgentsCommand())
+     * that a typed "/agents" already uses, rather than a separate/duplicated
+     * implementation — see Chat::update()'s KeyMsg match arm docblock.
+     */
+    public function testCtrlAKeyRunsRealAgentsCommandDispatch(): void
+    {
+        $agents = [
+            new Agent(
+                name: 'reviewer',
+                description: 'Reviews code for bugs',
+                prompt: 'You are a reviewer.',
+                model: 'claude-sonnet-4-6',
+                provider: 'anthropic',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+        ];
+        $agentManager = $this->createAgentManagerWithAgents($agents);
+        $chat = new Chat(inputBuf: 'unsubmitted draft', agentManager: $agentManager);
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Char, rune: 'a', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame('', $next->inputBuf);
+        $this->assertCount(2, $next->history);
+        $this->assertSame(Role::User, $next->history[0]->role);
+        $this->assertSame('/agents', $next->history[0]->content);
+        $this->assertSame(Role::Assistant, $next->history[1]->role);
+        $this->assertStringContainsString('Active Agents', $next->history[1]->content);
+        $this->assertStringContainsString('reviewer', $next->history[1]->content);
+    }
+
+    /**
+     * Guard against the fix over-reaching: plain "a" (no ctrl) must still be
+     * typed into the input buffer like any other character.
+     */
+    public function testPlainAKeyIsTypedNotDispatched(): void
+    {
+        $chat = new Chat(inputBuf: 'h');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Char, rune: 'a', ctrl: false));
+
+        $this->assertNull($cmd);
+        $this->assertSame('ha', $next->inputBuf);
+        $this->assertCount(0, $next->history);
+    }
+
     // =========================================================================
     // Idle-compaction wiring (R-idle-compaction): shouldPromptIdleCompaction()
     // must be exercised through the real submit() dispatch path, not only

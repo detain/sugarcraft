@@ -730,15 +730,101 @@ final class KeyboardHandlerTest extends TestCase
     /**
      * @see KeyboardHandler::handleAgentViewKey()
      */
-    public function testQKeyResetsAgentViewState(): void
+    public function testQKeyResetsAgentViewStateInListMode(): void
     {
-        $app = $this->createAgentViewApp(AgentViewMode::Attach, 5);
+        // "q" is a global quick action only outside Attach mode.
+        $app = $this->createAgentViewApp(AgentViewMode::List, 5);
 
         [$nextApp, $cmd] = $this->handler->handle('q', $app);
 
         $this->assertSame(Pane::Chat, $nextApp->pane);
         $this->assertSame(-1, $nextApp->selectedAgentIndex);
         $this->assertSame(AgentViewMode::List, $nextApp->agentViewMode);
+        $this->assertInstanceOf(QuitAgentViewCmd::class, $cmd);
+    }
+
+    // =========================================================================
+    // P5.S4 regression: Attach-mode key-leak fix. AgentViewMode::Attach's own
+    // docblock says "all keyboard input goes to the selected agent" — these
+    // prove c/r/s/q are no longer hijacked by the global quick actions when
+    // the view is in Attach mode, unlike before this fix (see
+    // KeyboardHandler::handleAgentViewKey()).
+    // =========================================================================
+
+    /**
+     * @see KeyboardHandler::handleAgentAttachKey()
+     */
+    public function testCKeyInAttachModeIsNotHijackedByCancelAgentCmd(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::Attach, 3);
+
+        [$nextApp, $cmd] = $this->handler->handle('c', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertNull($cmd);
+        $this->assertSame(AgentViewMode::Attach, $nextApp->agentViewMode);
+        $this->assertSame(3, $nextApp->selectedAgentIndex);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentAttachKey()
+     */
+    public function testRKeyInAttachModeIsNotHijackedByResumeAgentCmd(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::Attach, 2);
+
+        [$nextApp, $cmd] = $this->handler->handle('r', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertNull($cmd);
+        $this->assertSame(AgentViewMode::Attach, $nextApp->agentViewMode);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentAttachKey()
+     */
+    public function testSKeyInAttachModeIsNotHijackedByStopAllAgentsCmd(): void
+    {
+        $app = $this->createAgentViewApp(AgentViewMode::Attach, 0);
+
+        [$nextApp, $cmd] = $this->handler->handle('s', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertNull($cmd);
+        $this->assertSame(AgentViewMode::Attach, $nextApp->agentViewMode);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentAttachKey()
+     */
+    public function testQKeyInAttachModeIsNotHijackedByQuitAgentViewCmd(): void
+    {
+        // Before the P5.S4 fix, "q" pressed while attached would quit the
+        // agent view entirely (Pane::Chat, selection cleared) instead of
+        // being treated as input meant for the attached agent.
+        $app = $this->createAgentViewApp(AgentViewMode::Attach, 5);
+
+        [$nextApp, $cmd] = $this->handler->handle('q', $app);
+
+        $this->assertSame($app, $nextApp);
+        $this->assertNull($cmd);
+        $this->assertSame(Pane::Agents, $nextApp->pane);
+        $this->assertSame(AgentViewMode::Attach, $nextApp->agentViewMode);
+        $this->assertSame(5, $nextApp->selectedAgentIndex);
+    }
+
+    /**
+     * @see KeyboardHandler::handleAgentAttachKey()
+     */
+    public function testEscapeStillDetachesInAttachModeAfterFix(): void
+    {
+        // Escape remains the one key Attach mode intercepts for itself.
+        $app = $this->createAgentViewApp(AgentViewMode::Attach, 1);
+
+        [$nextApp, $cmd] = $this->handler->handle('escape', $app);
+
+        $this->assertSame(AgentViewMode::List, $nextApp->agentViewMode);
+        $this->assertNull($cmd);
     }
 
     // =========================================================================

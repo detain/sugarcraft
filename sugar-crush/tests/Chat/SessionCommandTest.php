@@ -179,6 +179,123 @@ final class SessionCommandTest extends TestCase
         $this->assertStringContainsString('not configured', $lastMsg2->content);
     }
 
+    // =========================================================================
+    // /sessions command (R20): constructs + renders the real SessionPicker
+    // against SessionStore::listSessions().
+    // =========================================================================
+
+    public function testSessionsCommandRendersRealSessionPicker(): void
+    {
+        $this->sessionStore->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+        $this->sessionStore->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/sessions',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'session-a',
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+
+        // Distinctive SessionPicker markup (its own title/controls text),
+        // not a hand-rolled list — proves SessionPicker::new()->render()
+        // actually ran against the real SessionStore rows.
+        $this->assertStringContainsString('session picker', $lastMsg->content);
+        $this->assertStringContainsString('Alpha', $lastMsg->content);
+        $this->assertStringContainsString('Beta', $lastMsg->content);
+        $this->assertStringContainsString('resume', $lastMsg->content);
+    }
+
+    public function testSessionsCommandNotConfigured(): void
+    {
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/sessions',
+            backend: new EchoBackend(),
+            sessionStore: null,
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $lastMsg = $next->history[count($next->history) - 1];
+        $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('not configured', $lastMsg->content);
+    }
+
+    // =========================================================================
+    // Ctrl+Tab / Ctrl+Shift+Tab session cycling (R20)
+    // =========================================================================
+
+    public function testCtrlTabCyclesToNextSessionForward(): void
+    {
+        $this->sessionStore->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+        $this->sessionStore->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
+        $ids = array_column($this->sessionStore->listSessions(), 'id');
+
+        $chat = new Chat(
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: $ids[0],
+        );
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame($ids[1], $next->currentSessionId());
+    }
+
+    public function testCtrlShiftTabCyclesToPreviousSessionBackward(): void
+    {
+        $this->sessionStore->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+        $this->sessionStore->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
+        $ids = array_column($this->sessionStore->listSessions(), 'id');
+
+        $chat = new Chat(
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: $ids[0],
+        );
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true, shift: true));
+
+        $this->assertNull($cmd);
+        // Wraps backward from the first session to the last.
+        $this->assertSame($ids[count($ids) - 1], $next->currentSessionId());
+    }
+
+    public function testCtrlTabIsNoopWithFewerThanTwoSessions(): void
+    {
+        $this->sessionStore->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+
+        $chat = new Chat(
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'session-a',
+        );
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame('session-a', $next->currentSessionId());
+    }
+
+    public function testCtrlTabIsNoopWithoutSessionStore(): void
+    {
+        $chat = new Chat(backend: new EchoBackend());
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame($chat, $next);
+    }
+
     public function testSessionCommandNoActiveSession(): void
     {
         // sessionStore is set but currentSessionId is null

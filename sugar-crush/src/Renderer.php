@@ -9,14 +9,28 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Tui\AgentDisplayState;
+use SugarCraft\Crush\Tui\AgentStatusBar;
+use SugarCraft\Crush\Tui\AgentViewPane;
+use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 
 /**
- * Pure view function for {@see Chat}. Lays out the conversation
- * scrollback (with each turn rendered through CandyShine) above
- * a fixed input area at the bottom.
+ * Pure view function for {@see Chat} — the renderer actually reached by a
+ * real user running `bin/sugarcrush` (`Chat::view()` calls
+ * {@see self::render()}). `src/Tui/Renderer.php` + its `App`-keyed
+ * Pane/Component system is a second, parallel renderer that nothing in the
+ * live path ever constructs; this class is deliberately kept independent of
+ * it (see the "R20 wiring decision" note below).
+ *
+ * Lays out the conversation scrollback (with each turn rendered through
+ * CandyShine) above a fixed input area at the bottom, plus — when the
+ * matching {@see Chat} state is present — a session tab strip and an agent
+ * status/view section.
  *
  * Rendered shape:
  *
+ *   session-a | [session-b] | session-c        ← only when ≥2 sessions exist
  *   ┌─ SugarCrush ───────────────────────┐
  *   │ user> hello                        │
  *   │ assistant: ## Hi there!             │
@@ -26,15 +40,73 @@ use SugarCraft\Sprinkles\Style;
  *   ├─────────────────────────────────────┤
  *   │ > █                                 │   ← input area
  *   └─────────────────────────────────────┘
+ *   Enter to send · Esc / ^C to quit
+ *   ● reviewer [working] Reviews code…  0s  0 tok | $0.0000   ← only when
+ *   ┌─ agents ────────────────────────────┐                     Chat has an
+ *   │ ● reviewer [working]  Reviews code… │                     AgentManager
+ *   └──────────────────────────────────────┘                    with active agents
  *
  * The CandyShine renderer is constructed once per call (cheap;
  * just holds a theme reference). Only the assistant's Markdown gets
  * rendered through CandyShine; the raw user/system turns and the
  * in-progress input are run through {@see Sanitize::untrusted()}
  * first (see the render methods for why).
+ *
+ * ## R20 wiring decision (agent status/view + session tabs)
+ *
+ * {@see \SugarCraft\Crush\Tui\AgentStatusBar} and
+ * {@see \SugarCraft\Crush\Tui\AgentViewPane} already accept plain
+ * `list<AgentDisplayState>` + primitives as their render() arguments, NOT
+ * an `App` — so option (a) from the R20 brief ("adapt the components to
+ * accept the specific Chat-derived data they actually need") was already
+ * true for them with zero changes to those two classes. That made it the
+ * smaller move versus option (b) (building a throwaway `App::new(...)`
+ * adapter here): `App::new()` requires a real `ProviderInterface`, which
+ * `Chat` does not hold (it holds the unrelated `Backend` interface), so
+ * satisfying that constructor here would mean fabricating a fake provider
+ * purely to appease a type signature we don't otherwise need. This class
+ * builds `AgentDisplayState` values directly from
+ * `Chat::agentManager()->active()` (real `Agent` registrations) instead.
+ *
+ * Only `Agent::isActive`/`name`/`description` are real, live data from that
+ * path — `AgentWorkerPool`/`AgentManager`'s public API (deliberately not
+ * touched by this item; both are out of its file scope) exposes only
+ * aggregate counts (`getActiveCount()`/`getQueueSize()`), not a per-agent
+ * live output buffer, elapsed time, or token/cost accounting. So
+ * `elapsedSeconds`/`tokensUsed`/`costUsd` are honestly reported as `0`
+ * rather than fabricated, and {@see \SugarCraft\Crush\Tui\AgentOutputPane}
+ * (which needs a real streaming output buffer) and the P5.S7/S8 split-pane
+ * renderer (`self::renderWithSplit()`/`renderForCurrentEnvironment()` on
+ * `Tui\Renderer`, meant for laying out *multiple* agents' live output side
+ * by side) are explicitly NOT wired into `render()` here — with no real
+ * per-agent output text to show, a split view would only ever display empty
+ * tiles, which is worse than the honest single-column status line this
+ * renders instead. Wiring either one for real needs a public
+ * "current live output buffer" accessor on `AgentManager`/`AgentWorkerPool`
+ * first, which is out of scope for this pass (those files are not in R20's
+ * file list). `src/Tui/Components/AgentsPane.php` — also in R20's file list
+ * — was left unmodified for the same reason `Tui\Renderer.php` itself is
+ * untouched: it belongs entirely to the disconnected `App`-keyed system, so
+ * fixing its stub body would not make anything reachable from this, the
+ * live, path.
+ *
+ * `Tui\SessionTabs` is not instantiated here either: its constructor always
+ * seeds one synthetic "main" tab when started empty, a shape built for a
+ * fresh single-session boot rather than for hydrating N pre-existing rows
+ * from a `SessionStore`. Retrofitting that would mean changing
+ * `SessionTabs.php` itself (not in this item's file scope) or fabricating
+ * and discarding a placeholder tab. Its real, tested key surface
+ * (`CTRL_TAB`/`CTRL_SHIFT_TAB`, `cycleForward()`/`cycleBackward()`'s
+ * wraparound semantics) is instead the design this renderer's tab strip and
+ * {@see Chat}'s Ctrl+Tab handling both follow directly against
+ * `SessionStore::listSessions()`'s real, persisted row order — see
+ * `Chat::cycleSessionTab()`'s docblock for the matching switching half.
  */
 final class Renderer
 {
+    /** Maximum rows AgentViewPane renders before clipping (see AgentViewPane::render()). */
+    private const AGENT_VIEW_MAX_ROWS = 10;
+
     public static function render(Chat $chat): string
     {
         $body = self::renderHistory($chat->history);
@@ -46,7 +118,99 @@ final class Renderer
             ->padding(1, 2)
             ->render($body);
 
-        return $shell . "\n" . $input . "\n" . $status;
+        $frame = $shell . "\n" . $input . "\n" . $status;
+
+        $tabStrip = self::renderSessionTabStrip($chat);
+        if ($tabStrip !== '') {
+            $frame = $tabStrip . "\n" . $frame;
+        }
+
+        $agentView = self::renderAgentView($chat);
+        if ($agentView !== '') {
+            $frame .= "\n" . $agentView;
+        }
+
+        return $frame;
+    }
+
+    /**
+     * Render the agent status line + agent list pane, or '' when Chat has
+     * no AgentManager or the manager has no active agents. See the "R20
+     * wiring decision" note on this class's docblock for why the fields
+     * beyond name/status/operation are 0 rather than fabricated, and why
+     * AgentOutputPane / the split-pane renderer are not called here.
+     */
+    private static function renderAgentView(Chat $chat): string
+    {
+        $manager = $chat->agentManager();
+        if ($manager === null) {
+            return '';
+        }
+
+        $agents = $manager->active();
+        if ($agents === []) {
+            return '';
+        }
+
+        $states = array_map(self::agentDisplayState(...), $agents);
+
+        $cols = TuiRenderer::getTerminalSize()['cols'];
+        $width = max(40, $cols - 4);
+
+        return AgentStatusBar::render($states)
+            . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS);
+    }
+
+    /**
+     * Map a real registered {@see Agent} to the display-state shape
+     * AgentStatusBar/AgentViewPane render. elapsedSeconds/tokensUsed/costUsd
+     * are 0 — Chat's AgentManager/AgentWorkerPool accessors expose no
+     * per-agent live telemetry to source real values from (see class
+     * docblock); reporting 0 is honest, not fabricated.
+     */
+    private static function agentDisplayState(Agent $agent): AgentDisplayState
+    {
+        return AgentDisplayState::new(
+            name: $agent->name,
+            status: $agent->isActive ? 'working' : 'stopped',
+            operation: $agent->description,
+            elapsedSeconds: 0,
+            tokensUsed: 0,
+            costUsd: 0.0,
+        );
+    }
+
+    /**
+     * Render a one-line session tab strip from real {@see Chat::sessionStore()}
+     * rows, with the current session bracketed. Returns '' when there is no
+     * session store or fewer than 2 sessions exist — a single session isn't
+     * worth a tab strip, and {@see Chat}'s Ctrl+Tab handler is itself a no-op
+     * below 2 sessions (see `Chat::cycleSessionTab()`). See the "R20 wiring
+     * decision" note on this class's docblock for why `Tui\SessionTabs`
+     * itself is not instantiated to build this strip.
+     */
+    private static function renderSessionTabStrip(Chat $chat): string
+    {
+        $store = $chat->sessionStore();
+        if ($store === null) {
+            return '';
+        }
+
+        $rows = $store->listSessions();
+        if (count($rows) < 2) {
+            return '';
+        }
+
+        $current = $chat->currentSessionId();
+        $labels = [];
+        foreach ($rows as $row) {
+            $id = (string) ($row['id'] ?? '');
+            $rawName = (string) ($row['name'] ?? '');
+            $name = $rawName !== '' ? $rawName : $id;
+            $labels[] = ($id !== '' && $id === $current) ? "[{$name}]" : " {$name} ";
+        }
+
+        return implode('|', $labels);
     }
 
     /**

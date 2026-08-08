@@ -4,11 +4,21 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests;
 
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
+use SugarCraft\Crush\Session\SessionStore;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * @see Renderer
+ */
 final class RendererTest extends TestCase
 {
     private function chat(array $history = [], string $buf = '', bool $inFlight = false): Chat
@@ -18,6 +28,170 @@ final class RendererTest extends TestCase
             inputBuf: $buf,
             inFlight: $inFlight,
         );
+    }
+
+    private function agentManagerWith(array $agents): AgentManager
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $manager = new AgentManager($provider, new SkillRegistry());
+        foreach ($agents as $agent) {
+            $manager->register($agent);
+        }
+
+        return $manager;
+    }
+
+    private function reviewerAgent(bool $isActive = true): Agent
+    {
+        return new Agent(
+            name: 'reviewer',
+            description: 'Reviews code for bugs',
+            prompt: 'You are a reviewer.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: $isActive,
+        );
+    }
+
+    // =========================================================================
+    // R20: agent status/view wiring
+    // =========================================================================
+
+    /**
+     * @see Renderer::render()
+     */
+    public function testRendersAgentStatusAndViewWhenAgentManagerHasActiveAgents(): void
+    {
+        $chat = new Chat(agentManager: $this->agentManagerWith([$this->reviewerAgent()]));
+
+        $out = Renderer::render($chat);
+
+        // AgentStatusBar's status-bullet line.
+        $this->assertStringContainsString('reviewer', $out);
+        // AgentViewPane's bracketed status format ("[working]") is distinctive
+        // from AgentsCommand's plain "/agents" text output (which emits
+        // "● active" / "○ inactive", never a bracketed status word) — this
+        // is the proof the real component rendered, not just echoed text.
+        $this->assertStringContainsString('[working]', $out);
+        // AgentViewPane's bordered "agents" panel title.
+        $this->assertStringContainsString('agents', $out);
+    }
+
+    /**
+     * @see Renderer::render()
+     */
+    public function testOmitsAgentViewWhenNoAgentManagerSet(): void
+    {
+        $out = Renderer::render($this->chat());
+
+        $this->assertStringNotContainsString('[working]', $out);
+        $this->assertStringNotContainsString('[stopped]', $out);
+    }
+
+    /**
+     * @see Renderer::render()
+     */
+    public function testOmitsAgentViewWhenAgentManagerHasNoActiveAgents(): void
+    {
+        $chat = new Chat(agentManager: $this->agentManagerWith([$this->reviewerAgent(isActive: false)]));
+
+        $out = Renderer::render($chat);
+
+        // active() filters to isActive===true agents only — an inactive-only
+        // roster yields an empty list, so the agent view section is omitted
+        // entirely rather than showing a "[stopped]" agent that was never
+        // "active" in the AgentManager sense.
+        $this->assertStringNotContainsString('[stopped]', $out);
+        $this->assertStringNotContainsString('[working]', $out);
+    }
+
+    /**
+     * Proves '/agents' renders real AgentViewPane/AgentStatusBar content
+     * through the live Chat -> Renderer path (not plain echoed command
+     * text): submits '/agents' through the real Chat::update() dispatch,
+     * then feeds the *resulting* Chat through Renderer::render() and checks
+     * for the same distinctive component markup asserted above, alongside
+     * the plain AgentsCommand text that landed in history.
+     *
+     * @see Renderer::render()
+     * @see \SugarCraft\Crush\Commands\AgentsCommand
+     */
+    public function testAgentsCommandOutputRendersThroughRealAgentViewPane(): void
+    {
+        $chat = new Chat(inputBuf: '/agents', agentManager: $this->agentManagerWith([$this->reviewerAgent()]));
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // The plain-text /agents command output is still in history, as before.
+        $this->assertStringContainsString('Active Agents', $next->history[1]->content);
+
+        $out = Renderer::render($next);
+
+        // AND the live renderer now also shows the real, non-textual
+        // AgentViewPane/AgentStatusBar rendering of the same agent data.
+        $this->assertStringContainsString('reviewer', $out);
+        $this->assertStringContainsString('[working]', $out);
+        $this->assertStringContainsString('agents', $out);
+    }
+
+    // =========================================================================
+    // R20: session tab strip wiring
+    // =========================================================================
+
+    public function testRendersSessionTabStripWithMultipleSessionsAndBracketsCurrent(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/renderer_test_' . uniqid('', true);
+        mkdir($tempDir, 0755, true);
+        $store = new SessionStore($tempDir . '/sessions.db');
+        $store->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+        $store->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
+
+        try {
+            $chat = new Chat(sessionStore: $store, currentSessionId: 'session-b');
+
+            $out = Renderer::render($chat);
+
+            $this->assertStringContainsString('Alpha', $out);
+            $this->assertStringContainsString('[Beta]', $out);
+        } finally {
+            foreach (glob($tempDir . '/*') ?: [] as $file) {
+                unlink($file);
+            }
+            rmdir($tempDir);
+        }
+    }
+
+    public function testOmitsSessionTabStripWithFewerThanTwoSessions(): void
+    {
+        $tempDir = sys_get_temp_dir() . '/renderer_test_' . uniqid('', true);
+        mkdir($tempDir, 0755, true);
+        $store = new SessionStore($tempDir . '/sessions.db');
+        $store->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
+
+        try {
+            $chat = new Chat(sessionStore: $store, currentSessionId: 'session-a');
+
+            $out = Renderer::render($chat);
+
+            $this->assertStringNotContainsString('[Alpha]', $out);
+        } finally {
+            foreach (glob($tempDir . '/*') ?: [] as $file) {
+                unlink($file);
+            }
+            rmdir($tempDir);
+        }
+    }
+
+    public function testOmitsSessionTabStripWhenNoSessionStore(): void
+    {
+        $out = Renderer::render($this->chat());
+
+        // No SessionStore configured — the tab strip's "|"-joined labels
+        // never appear (the status line's "·" separator is unrelated).
+        $this->assertStringNotContainsString('|', $out);
     }
 
     public function testRendersEmptyConversationHint(): void
