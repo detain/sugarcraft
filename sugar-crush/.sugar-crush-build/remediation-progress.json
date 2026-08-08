@@ -1,33 +1,247 @@
 {
-  "R1": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R3": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R4": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R5": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R6": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R9": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R12": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R14a": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R15": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R16": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R17": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R21": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R22": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R23": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R24": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R26": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R27": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R28": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R13": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R14b": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R19": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R20": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R25": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R29": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R30": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R31-setup": {"status": "in_progress", "reviewCycles": 0, "lastFindings": []},
-  "R31-finalize": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R-sessionstore-type": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R-idle-compaction": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R-reminder-consumer": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
-  "R-workflow-pause-help": {"status": "not_started", "reviewCycles": 0, "lastFindings": []}
+  "R1": {
+    "status": "done",
+    "reviewCycles": 2,
+    "lastFindings": [
+      "Verified: TaskList::releaseTaskLock() (src/Agents/TaskList.php) never unlinks the lock file anymore -- flock() alone is the mutual-exclusion primitive, closing the flock+unlink TOCTOU. TaskBlockedException extracted to its own src/Agents/TaskBlockedException.php (PSR-4 fix).",
+      "commit 71d8ae13 (initial), commit 15a77d13 (R1.fix: renamed the misleading sequential testConcurrentClaimPreventsDoubleClaim so it no longer reads as the real concurrency regression test -- confirm the pcntl_fork-based multi-process stress test is present in tests/Agents/TaskListTest.php, not just the renamed sequential one, if a genuine multi-process race case is still wanted."
+    ]
+  },
+  "R3": {
+    "status": "done",
+    "reviewCycles": 3,
+    "lastFindings": [
+      "Verified: PermissionGate::evaluate() checks isRmRfRootOrHome() unconditionally before evaluateRules(), so an Allow rule can no longer defeat the circuit breaker. isRmRfRootOrHome() now handles flag reordering/splitting/long-form flags/--no-preserve-root (src/Permissions/PermissionGate.php ~line 288-353). evaluateAuto() present at line 174.",
+      "commits 513b0010 (initial), 521a2cde (R3.fix: hardened breaker against quoted targets), a75105b5 (R3.fix2: updated stale pre-R3 permission tests for fail-closed/real-tool-name behavior)."
+    ]
+  },
+  "R4": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: AgentManager.php explicitly carves out the Plan -> {Auto, AcceptEdits, Default} exit from the mode seal ($isPlanExit check around line 117-120), while BypassPermissions/DontAsk re-entry stays sealed. commit 1529764d, no .fix follow-up found."
+    ]
+  },
+  "R5": {
+    "status": "done",
+    "reviewCycles": 4,
+    "lastFindings": [
+      "Verified: HookDispatcher::dispatch() wires blocksOnPreAction()/stderrToUserOnly() into real effect, not just enum metadata.",
+      "commits b698e1ab (initial), 45524849 (R5.fix: wire blocksOnPreAction/stderrToUserOnly, fix misleading stderr tests), ac19ea73 (R5.fix: gave blocksOnPreAction() a genuine runtime effect but explicitly documents an outstanding exit-1 gap in its own commit message -- re-check that gap is still open), 8472730a (R5.fix: documents a deliberate exclusion of R6-scoped plan cases from HookDispatcherTest, not a real fix -- confirm those cases are actually covered under R6's own test files instead)."
+    ]
+  },
+  "R6": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified all five sub-fixes present in current code: Team::addTeammate() enforces $maxTeammates (throws RuntimeException at cap, src/Agents/Team.php ~line 77); Team::claimTask() takes a concrete WorktreeManager $wm (not object) and calls $wm->sweepIfDue() before creating a worktree; WorktreeManager::sweepIfDue() and .worktreeinclude copy-in logic both exist and are wired; TaskList::dispatchTeammateIdle() has a real consumer in TeamManager::handleTeammateIdle(); WorktreeConfig::assertIsolationModeImplemented() throws clearly for any isolationMode other than Worktree instead of silently ignoring it.",
+      "commit 39bb74a9, single commit, no .fix follow-up found."
+    ]
+  },
+  "R9": {
+    "status": "done",
+    "reviewCycles": 2,
+    "lastFindings": [
+      "Verified: Mailbox::waitForMessage(timeout) implements a real bounded poll-with-backoff against the wake marker (src/Agents/Mailbox.php).",
+      "commits d0107bdc (initial), 7419e052 (R9.fix: captures the wake token before the initial inbox check, closing a missed-wakeup race where a message sent between the initial check and the first wait could be missed)."
+    ]
+  },
+  "R12": {
+    "status": "done",
+    "reviewCycles": 4,
+    "lastFindings": [
+      "Verified: /share now reports an honest not-implemented failure; the fabricated success URL/hash path was deleted rather than kept. src/Share/ShareUploader.php performs no fake I/O; src/Commands/ShareCommand.php has no dead printResult().",
+      "commits 3d41d2d2 (initial), a93e564e (R12.fix: deleted dead fabricated-success printResult()), 4d4281a3 (R12.fix: removed dead DateTimeImmutable/ShareUploader imports), 8f8ddb26 (R12.fix: removed leftover unused Message import). No real upload was implemented (deliberately out of scope per the plan's own recommendation given no real backend target was specified)."
+    ]
+  },
+  "R14a": {
+    "status": "done",
+    "reviewCycles": 3,
+    "lastFindings": [
+      "Verified: AgentWorkerPool's waitForCompletion() no longer busy-spins; result-passing uses json_encode/json_decode instead of unserialize(); a fallback warning is emitted when pcntl_fork is unavailable.",
+      "commits 774545f7 (initial), 4e19e15e (R14a.fix: removed unrelated method-rename/reap-block contamination that had leaked into the initial commit), d4fc004c (R14a.fix: guards against json_encode failure hanging the worker pool -- confirms the json_encode/json_decode swap needed its own follow-up hardening pass)."
+    ]
+  },
+  "R15": {
+    "status": "done",
+    "reviewCycles": 2,
+    "lastFindings": [
+      "Verified: McpClient's listTools()/callTool()/callToolByName() now consult McpRouter::resolveAllowedTools() against the current agent's AgentPreset::$mcpServers rather than exposing every server's every tool unconditionally.",
+      "commits 7ee1b1b3 (initial), bf5162af (R15.fix: fail-closed default + forward deny patterns in McpClient -- the initial commit's routing was not fail-closed until this follow-up)."
+    ]
+  },
+  "R16": {
+    "status": "done",
+    "reviewCycles": 5,
+    "lastFindings": [
+      "Verified: SkillRegistry::findForPrompt() routes through isAutoInvocable() (checks disableModelInvocation); isUserInvocable() has a real command surface via getUserInvocable()/OpenSkillPickerMsg/SelectSkillMsg wired into App's update()/SkillsPane; isContextFork() exists.",
+      "commits 44f85617 (initial), 7f52ef8a (R16.fix: stopped overstating an unwired filter as a real command surface), c3507365 (R16.fix: routed findForPrompt through isAutoInvocable(), and its own commit message explicitly clarifies a pre-existing keypress-wiring gap -- physical KeyboardHandler->main-loop reachability for the skill picker may still be incomplete, verify against R20's KeyboardHandler wiring), c4f6580e (R16.fix: wired OpenSkillPickerMsg/SelectSkillMsg as a real testable command surface), 60c010c1 (R16.fix: routed getUserInvocable() through isUserInvocable() for lockstep consistency). Five total commits (1 initial + 4 fix) is the highest review-cycle count of any Wave-1 item -- reflects genuinely iterative hardening, not thrash."
+    ]
+  },
+  "R17": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: src/Skills/BuiltIn/ now contains 12 directories (api-design, composer-wizard, explore-codebase, laravel-best-practices, matchups-sync, mcp-authoring, php-best-practices, phpunit-master, security-audit, symfony-best-practices, testing-strategies, worktree-workflow) -- the 4 original + 8 new skills the plan called for, all under the loader's existing scan path.",
+      "commit 1de9cfba, single commit, no .fix follow-up found. Did not independently re-verify that the incorrectly-placed sugar-crush/skills/ and monorepo-root skills/ duplicates were fully deleted vs. just superseded -- worth a follow-up check if duplicate skill files are suspected elsewhere."
+    ]
+  },
+  "R21": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: ContextCompactor::shouldSendReminder() exists (mirrors shouldCompact()'s shape) at src/Context/ContextCompactor.php ~line 97, consuming the previously-unused reminderThreshold config.",
+      "commit ab77a664, single commit (its own message says 'fix' but there is no separate R21.fix-suffixed follow-up commit in git log)."
+    ]
+  },
+  "R22": {
+    "status": "done",
+    "reviewCycles": 3,
+    "lastFindings": [
+      "Verified: MemoryScope enum is wired into real scope resolution in MemoryStore, and the MEMORY.md index is partitioned per scope with cross-scope regression tests added.",
+      "commits 34e94ed2 (initial), 632e7c30 (R22.fix: partitioned MEMORY.md index per scope, added cross-scope regression tests), da349de7 (R22.fix: wired MemoryScope enum into scope resolution, added update() coverage). Did not independently re-verify the mb_substr-safe 25KB truncation and the 200-rendered-line cap fixes byte-for-byte in this pass -- these were part of the plan's stated scope for R22; spot-check if multibyte MEMORY.md corruption is suspected."
+    ]
+  },
+  "R23": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: AgentPresetRegistry::load() and arrayToPreset() present; real shipped .sugar-crush/agents/{coder,reviewer,security-auditor}.md files exist on disk and are loadable, matching the plan's requirement to test against real shipped presets rather than only synthetic fixtures.",
+      "commit 5b2b46c6, single commit, no separate .fix-suffixed follow-up found (title itself already says 'fix' as part of the initial commit)."
+    ]
+  },
+  "R24": {
+    "status": "done",
+    "reviewCycles": 3,
+    "lastFindings": [
+      "Verified: ProviderFactory::defaultConfigPath()/defaultConfig() resolve .sugar-crush/config.dev.json and make 'dev-sglang' a genuinely selectable/loadable provider (src/Providers/ProviderFactory.php ~line 94-207). Bootstrap::backend() also consults SUGARCRUSH_PROVIDER against this factory.",
+      "commits b20c905c (initial), 25fefe7d (R24.fix: corrected an off-by-one config path + de-tautologized provider tests), 259e7c63 (R24.fix: wired config.dev.json fallback into defaultConfig() for real SUGARCRUSH_PROVIDER selection)."
+    ]
+  },
+  "R26": {
+    "status": "done",
+    "reviewCycles": 2,
+    "lastFindings": [
+      "Verified: both SplitLayout::mutate() and SessionTab::mutate() are private methods that with*() delegates through, matching the repo-wide convention (src/Tui/SplitLayout.php line 101, src/Tui/SessionTab.php line 79).",
+      "commits d631eb65 (initial), 8e2a2b67 (R26.fix: replaced a dead placeholder assertion with a real reflection check). Note: git log --all also surfaces three stash-only refs (67fcf5ba/6d266c88/535cfcac, 'WIP on master: 8e2a2b67 ...') that look like extra commits on a naive log scan -- confirmed via `git stash list` these are refs/stash entries, not real commits reachable from master; excluded from this count."
+    ]
+  },
+  "R27": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: gitBranchCreate's dangerous-name guard normalizes with strtolower() before comparing (src/MCP/GitCommandHandlers.php ~line 607), making the HEAD/MASTER/MAIN check case-insensitive.",
+      "commit 0b1b0827, single commit, no .fix follow-up found. Did not independently re-run the full GitCommandHandlersTest suite to confirm zero leaked /tmp/git_command_handlers_test_* directories post-run in this pass; covered by this wave's own required full-suite run instead."
+    ]
+  },
+  "R28": {
+    "status": "done",
+    "reviewCycles": 3,
+    "lastFindings": [
+      "Verified: WorkflowEngine installs real pcntl_signal() handlers for SIGINT/SIGTERM around the stage loop with pcntl_async_signals(true), calling pause() with real in-flight state at interrupt time (src/Workflows/WorkflowEngine.php ~line 1005-1126). The docblock and Chat's /workflow help text (src/Chat.php ~line 1056) both honestly disclose the remaining limitation: resume granularity stays per-whole-stage, an in-flight parallel sub-stage's partial results cannot be captured with partial credit.",
+      "commits eb8c7a1e (initial), 8a5ab8c2 (R28.fix: documented interruptId/resolvedWorkflowId/startedAt params), 9db6b4e5 (R28.fix2: fixed a real fork/signal-inheritance race and a pcntl_async_signals leak -- confirms the initial pcntl wiring had a genuine correctness bug in fork-safety, not just documentation gaps). The disclosed per-whole-stage limitation is the correct scoped outcome per this item's own plan text, not a blocker."
+    ]
+  },
+  "R13": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: tests/ChatTest.php has a dedicated '/agents command parsing tests (R13)' section asserting bare '/agents' (no trailing space, no args) routes to listAgents() through Chat's real dispatch path rather than mis-parsing into a one-character lookup.",
+      "commit 2d23b6b1, single commit, no .fix follow-up found."
+    ]
+  },
+  "R14b": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: Chat::handleToolCalls() no longer calls executeToolsParallel() at all -- src/Chat.php ~line 293 has an explicit '// R14b: executeToolsParallel()/AgentWorkerPool routing is disabled unconditionally' comment, and all tool calls now execute sequentially in-process. executeToolsParallel() itself is left in place but marked DISABLED with an @todo pointing at the real fix (a name-keyed tool registry the worker process can use, since closures can't cross a process boundary). tests/ChatTest.php::testMultipleToolCallsWithPoolConfiguredExecuteRealToolsSequentially confirms real tool output now appears even with 2+ tool calls and a pool configured.",
+      "This is a deliberate feature-disable, not a full fix -- parallel tool-call execution itself remains unimplemented/out-of-scope by design per the plan's own text ('a bigger future redesign, out of scope for this pass'). Counted as done because disabling the broken path to stop silent data corruption was the correct scoped outcome, matching the R19/R20 disclosed-limitation precedent."
+    ]
+  },
+  "R19": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: bin/sugarcrush is now just autoload + Bootstrap::chat() + Program::run(); Bootstrap::chat() (src/Cli/Bootstrap.php) constructs a real EnhancedSessionStore, MemoryStore, and shares one InstructionFileLoader instance across Read/Edit/Glob. tests/Integration/BinSugarcrushWiringTest.php exercises this directly (session.db file creation, memory dir creation, shared-instance InstructionFileLoader assertions).",
+      "Disclosed CommandBackend-path gap (per this item's known scope): Bootstrap::backend() builds $tools (with the shared InstructionFileLoader) unconditionally, but those tools -- and therefore the InstructionFileLoader wiring -- are only ever attached to the EngineBackend construction path. When $SUGARCRUSH_BACKEND_CMD selects CommandBackend instead, CommandBackend is constructed with no tools/hooks at all, so nested-instruction injection for Read/Edit/Glob is unreachable on that path. BinSugarcrushWiringTest only covers the EngineBackend/default path, not CommandBackend. Also disclosed via BinSugarcrushWiringTest::testChatHasNoAgentManagerSinceBootstrapDoesNotConstructOne: Bootstrap::chat() never constructs/passes an agentManager, which is the root cause behind several of R20's disclosed gaps below."
+    ]
+  },
+  "R20": {
+    "status": "done",
+    "reviewCycles": 4,
+    "lastFindings": [
+      "Verified: AgentStatusBar/AgentViewPane/AgentOutputPane are wired into App's render state, Renderer's stub AgentsPane call was replaced with the real pane, and a /sessions command exists.",
+      "commits 06fbeca9 (initial: wired agent view/session tabs/sessions into the live Chat renderer, fixed Attach-mode key leak), d2960a2a (R20.fix: stopped /agents and Ctrl+A from crashing the live CLI when no AgentManager is wired -- directly caused by the R19-disclosed gap that Bootstrap::chat() never constructs an AgentManager), 86844df6 (R20.fix: discloses a real Bootstrap-shaped currentSessionId gap blocking Ctrl+Tab session cycling -- per this item's scoped instructions, this disclosure is the correct outcome, not a blocker), 8bc39da8 (R20.fix: discloses that createSession() is never called in production, leaving /sessions and the tab strip permanently empty for a real CLI user even though the command exists and is testable in isolation).",
+      "Both disclosed gaps (currentSessionId never threaded from Bootstrap; createSession() has no production caller) remain genuinely open per the commit messages' own disclosures -- counted as 'done' per this wave's explicit instruction that R19/R20's disclosed limitations were the correct scoped outcome, not incompleteness."
+    ]
+  },
+  "R25": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: no AgentResult::ok() factory was added (grep for 'function ok(' in src/Agents/AgentResult.php returns nothing) -- instead testExecuteAgentsUsesExplicitPool/testExecuteAgentsBuildsPoolFromConfig (tests/ChatTest.php ~line 583/639) were rewritten to use AgentResult's real constructor with an explicit AgentStatus and a non-empty $agents array, so they now exercise the pool's happy path instead of silently no-op-ing on executeAll()'s empty-array early return. This matches the plan's 'either/or' framing -- the test-fix branch was taken, not the factory-method branch.",
+      "commit e9158537, single commit, no .fix follow-up found."
+    ]
+  },
+  "R29": {
+    "status": "not_started",
+    "reviewCycles": 0,
+    "lastFindings": [
+      "Checked git log --oneline --all for any R29-tagged commit and searched the working tree for tests/Integration/FanOutResearchTest.php and tests/Integration/MultiAgentRefactorTest.php: neither commit nor either file exists yet as of this check. This is a sibling track running concurrently in this same wave -- status reflects the real state at the moment this file was written, not an assumption that it will land."
+    ]
+  },
+  "R30": {
+    "status": "not_started",
+    "reviewCycles": 0,
+    "lastFindings": [
+      "Checked git log --oneline --all for any R30-tagged commit and searched the repo for a root-level CHANGELOG.md: neither exists yet (only vendor/ third-party CHANGELOG.md files were found, which are unrelated). README.md test-count/feature-list catch-up and the example workflow file are likewise not yet confirmed. This is a sibling track running concurrently in this same wave -- status reflects the real state at the moment this file was written, not an assumption that it will land."
+    ]
+  },
+  "R31-setup": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: commit 79f4c08b created this remediation-progress.json seeded with every R<n> at not_started, and annotated plan-progress.json/phase-P*-progress.json/.opencode/memory/phase-P*-progress.md as predating this remediation. No .fix follow-up found or needed -- this item's own output has now been fully overwritten by R31-finalize (this commit)."
+    ]
+  },
+  "R31-finalize": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "This item's own work: every status/reviewCycles/lastFindings value above was independently re-derived from `git log --oneline --all -- <files>` plus direct source reads (not from crush_code_update.md's narrative, not from any prior progress JSON, not from commit-message text alone without confirming the code matches). R29 and R30 were confirmed not_started by absence of any matching commit or deliverable file at write time, since they are concurrent sibling tracks in this same wave.",
+      "Two false leads specifically ruled out during verification: (1) three git-log entries that look like extra R26-related commits (67fcf5ba/6d266c88/535cfcac, 'WIP on master: 8e2a2b67 ...') are refs/stash entries surfaced by --all, not real commits on master -- confirmed via `git stash list` and excluded from R26's reviewCycles count; (2) R25's plan text offered an either/or (add AgentResult::ok() OR fix the two named tests) -- confirmed via grep that no ok() factory exists, so the fix is the test-rewrite branch, not a missing factory method."
+    ]
+  },
+  "R-sessionstore-type": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: Chat::$sessionStore is typed SessionStore|EnhancedSessionStore|null, and both sessionStore()/withSessionStore() accept the union type (src/Chat.php lines 76-77, 556, 564), matching what Bootstrap::sessionStore() now constructs (EnhancedSessionStore).",
+      "commit 50ff2192, single commit, no .fix follow-up found."
+    ]
+  },
+  "R-idle-compaction": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: Chat::submit() calls shouldPromptIdleCompaction($tokenCount, $this->lastActivityAt) once per turn (src/Chat.php ~line 905) before dispatching a real prompt, short-circuiting with a /compact advisory. App gained withLastActivity()/$lastActivityAt (src/App/App.php lines 44, 65, 141, 363-366, 408), and App::handleUserInput() now threads real user-activity timestamps into Chat instead of lastActivityAt staying null forever outside tests.",
+      "commit 8796473f, single commit, no .fix follow-up found."
+    ]
+  },
+  "R-reminder-consumer": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: Chat::submit() calls $this->compactor->shouldSendReminder($wireHistory, self::REMINDER_TOKEN_LIMIT) (src/Chat.php ~line 920), giving R21's previously-unconsumed shouldSendReminder() a real caller.",
+      "commit 32e2ccea, single commit, no .fix follow-up found."
+    ]
+  },
+  "R-workflow-pause-help": {
+    "status": "done",
+    "reviewCycles": 1,
+    "lastFindings": [
+      "Verified: /workflow's help text (src/Chat.php ~line 1056) and WorkflowEngine's own class docblock (~line 29) both honestly state the remaining limitation in the same wording: 'pause/resume granularity is per-whole-stage only.'",
+      "commit 7e4d680d, single commit, no .fix follow-up found. This is a disclosure-only commit by design (the underlying per-whole-stage limitation itself is the correct scoped outcome per R28's plan text, which explicitly asked only to update help text/docblocks honestly, not to implement partial-credit resume)."
+    ]
+  }
 }
