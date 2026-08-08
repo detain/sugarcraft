@@ -1,0 +1,67 @@
+# lint-then-fix — review a change, fan out fixers by finding category, then verify.
+#
+# Loadable directly via SugarCraft\Crush\Workflows\WorkflowRegistry:
+#
+#   $registry = new WorkflowRegistry(__DIR__ . '/examples/workflows');
+#   $workflow = $registry->loadYaml('lint-then-fix');
+#   (new WorkflowEngine($registry, $pool))->run('lint-then-fix', ['scope' => 'src/Chat.php']);
+#
+# Or drop a copy in ~/.sugar-crush/workflows/lint-then-fix.yaml (the default
+# WorkflowRegistry lookup path) and run it via the /workflow command inside
+# the chat TUI: `/workflow run lint-then-fix`.
+#
+# Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
+#   - top-level "name" is required; "description" and "config" are optional.
+#   - each item in "stages" is either a regular stage (agent/prompt/tools)
+#     or a parallel stage (parallel: true + a list of "agents").
+#   - {{var}} interpolates initial run() context; {{stageName.output}}
+#     interpolates a prior stage's collected output.
+#   - config.maxConcurrent bounds how many parallel-stage agents run at
+#     once; config.timeout is the per-stage timeout in seconds.
+
+name: lint-then-fix
+description: >
+  Review the current change for style/correctness/simplification issues,
+  fan out a fixer per finding category in parallel, then run the test
+  suite to confirm nothing regressed.
+
+stages:
+  - name: lint
+    agent: reviewer
+    prompt: >
+      Review the diff at {{scope}} for style, correctness, and
+      simplification issues. List each finding with its file, line
+      number, and category (style, correctness, or simplification), one
+      finding per line.
+    tools: [Read, Grep, Glob, Bash]
+
+  - name: fix
+    parallel: true
+    agents:
+      - name: style-fixer
+        type: coder
+        prompt: >
+          Apply only the "style" findings from {{lint.output}} to their
+          listed files. Leave correctness/simplification findings alone —
+          another agent is handling those.
+        tools: [Read, Edit, Grep]
+
+      - name: correctness-fixer
+        type: coder
+        prompt: >
+          Apply only the "correctness" findings from {{lint.output}} to
+          their listed files. Leave style/simplification findings alone —
+          another agent is handling those.
+        tools: [Read, Edit, Grep, Bash]
+
+  - name: verify
+    agent: tester
+    prompt: >
+      Run the project's test suite and report pass/fail. If the fixes
+      from {{fix.output}} introduced any new failures relative to
+      {{lint.output}}'s baseline, list them explicitly.
+    tools: [Bash, Read]
+
+config:
+  maxConcurrent: 3
+  timeout: 1800
