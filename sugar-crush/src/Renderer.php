@@ -119,6 +119,28 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
  * {@see Chat}'s Ctrl+Tab handling both follow directly against
  * `SessionStore::listSessions()`'s real, persisted row order — see
  * `Chat::cycleSessionTab()`'s docblock for the matching switching half.
+ *
+ * ### R20.fix: no production code path ever calls `createSession()`
+ *
+ * `renderSessionTabStrip()` reads real rows from
+ * {@see \SugarCraft\Crush\Session\SessionStore::listSessions()}, but nothing
+ * in `src/` or `bin/sugarcrush` ever calls
+ * `SessionStore::createSession()`/`EnhancedSessionStore::createSession()` —
+ * `Chat::init()` returns no startup `Cmd` that would create one either. So
+ * `listSessions()` returns `[]` for the entire lifetime of a real
+ * `bin/sugarcrush` process today, independent of the `currentSessionId`
+ * gap documented above: even a hypothetical fix that seeded a
+ * `currentSessionId` into `Bootstrap::chat()` would still show a tab strip
+ * with zero rows, because no session row would exist on disk for it to
+ * point at. `count($rows) < 2` already degrades this to `''` rather than
+ * rendering an empty/malformed strip, so this is inert, not broken — but it
+ * is a real gap, and the tests exercising this method
+ * (`RendererTest::testRendersSessionTabStripWithMultipleSessionsAndBracketsCurrent`)
+ * only do so by constructing a `SessionStore` and calling `createSession()`
+ * directly, a path no production code takes. Wiring an actual session-create
+ * call into `Bootstrap::chat()`/`Chat::init()` is out of this item's file
+ * scope (`Bootstrap.php` is not in R20's file list) and is left as follow-up
+ * work alongside the `currentSessionId` seeding noted above.
  */
 final class Renderer
 {

@@ -1419,6 +1419,17 @@ final class Chat implements Model
      * this file's constructor/`mutate()` surface well beyond this item's
      * "KeyMsg dispatch site / new /sessions command site" scope.
      *
+     * R20.fix disclosure: in a real `bin/sugarcrush` run this will render
+     * `SessionPicker::new([])` (an empty picker), not a populated list —
+     * no production path (`Bootstrap::chat()`, `Chat::init()`, or any other
+     * `src/`/`bin/` call site) ever calls
+     * `SessionStore::createSession()`/`EnhancedSessionStore::createSession()`,
+     * so `listSessions()` has no rows to return until that separate,
+     * out-of-scope wiring lands. `SessionCommandTest` covers this method by
+     * calling `createSession()` on the store directly, which is why the test
+     * passes today despite this being unreachable with real data. See the
+     * matching note on `Renderer::renderSessionTabStrip()`'s class docblock.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleSessionsCommand(string $inputText): array
