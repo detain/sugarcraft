@@ -458,7 +458,7 @@ final class Chat implements Model
     /**
      * Get the session store, if set.
      */
-    public function sessionStore(): ?\SugarCraft\Crush\Session\SessionStore
+    public function sessionStore(): \SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null
     {
         return $this->sessionStore;
     }
@@ -466,7 +466,7 @@ final class Chat implements Model
     /**
      * Create a new Chat with an explicit session store.
      */
-    public function withSessionStore(\SugarCraft\Crush\Session\SessionStore $sessionStore): self
+    public function withSessionStore(\SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null $sessionStore): self
     {
         return $this->mutate(['sessionStore' => $sessionStore]);
     }

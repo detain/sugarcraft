@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
 
 final class BranchCommandTest extends TestCase
@@ -248,5 +249,21 @@ final class BranchCommandTest extends TestCase
         );
 
         $this->assertNull($chat->sessionStore());
+    }
+
+    public function testWithSessionStoreAcceptsEnhancedSessionStoreWithoutTypeError(): void
+    {
+        $enhancedStore = new EnhancedSessionStore($this->tempDir . '/enhanced.db');
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '',
+            backend: new EchoBackend(),
+        );
+
+        $chatWithSession = $chat->withSessionStore($enhancedStore);
+
+        $this->assertNotSame($chat, $chatWithSession);
+        $this->assertSame($enhancedStore, $chatWithSession->sessionStore());
     }
 }
