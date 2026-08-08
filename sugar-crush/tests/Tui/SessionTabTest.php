@@ -102,19 +102,23 @@ final class SessionTabTest extends TestCase
         $this->assertSame('Some summary', $tab->agentSummary()); // Original unchanged
     }
 
-    public function testWithSummaryCanSetNull(): void
+    public function testWithSummaryParameterIsNonNullableString(): void
     {
-        $tab = new SessionTab(
-            id: 'tab-1',
-            sessionName: 'Test Session',
-            agentSummary: 'Some summary',
-        );
+        // withSummary() intentionally does not accept null (unlike the
+        // nullable readonly $agentSummary field it writes to) - clearing
+        // the summary is expressed via withSummary('') instead, exercised
+        // by testWithSummaryCanSetEmptyString() above. Pin the non-nullable
+        // `string $summary` signature via reflection so that invariant is
+        // asserted rather than merely described in a comment.
+        $method = new \ReflectionMethod(SessionTab::class, 'withSummary');
+        $parameters = $method->getParameters();
 
-        // Use withSummary passing null - but looking at the method signature,
-        // it accepts string, not ?string. Let's verify the actual behavior.
-        // Actually looking at the code: public function withSummary(string $summary): self
-        // It only accepts string, not null. So we test empty string case above.
-        $this->assertTrue(true); // Placeholder - empty string case covered above
+        $this->assertCount(1, $parameters, 'withSummary() must take exactly one parameter');
+
+        $type = $parameters[0]->getType();
+        $this->assertInstanceOf(\ReflectionNamedType::class, $type);
+        $this->assertSame('string', $type->getName());
+        $this->assertFalse($type->allowsNull(), 'withSummary() parameter must not be nullable');
     }
 
     public function testWithSummaryPreservesOtherFields(): void
