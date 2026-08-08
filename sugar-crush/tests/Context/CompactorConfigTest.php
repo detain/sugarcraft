@@ -118,6 +118,26 @@ final class CompactorConfigTest extends TestCase
         $this->assertSame(25000, $original->skillBudgetCombined);
     }
 
+    public function testWithSummaryUserMaxCharsReturnsNewInstance(): void
+    {
+        $original = CompactorConfig::new();
+        $modified = $original->withSummaryUserMaxChars(120);
+
+        $this->assertNotSame($original, $modified);
+        $this->assertSame(120, $modified->summaryUserMaxChars);
+        $this->assertSame(80, $original->summaryUserMaxChars);
+    }
+
+    public function testWithSummaryAssistantMaxCharsReturnsNewInstance(): void
+    {
+        $original = CompactorConfig::new();
+        $modified = $original->withSummaryAssistantMaxChars(150);
+
+        $this->assertNotSame($original, $modified);
+        $this->assertSame(150, $modified->summaryAssistantMaxChars);
+        $this->assertSame(100, $original->summaryAssistantMaxChars);
+    }
+
     public function testChainingWithMethods(): void
     {
         $original = CompactorConfig::new();
@@ -163,10 +183,10 @@ final class CompactorConfigTest extends TestCase
             $config->reminderThreshold,
             'Reminder threshold should be less than background compaction threshold',
         );
-        $this->assertLessThan(
-            $config->foregroundBlockingThreshold,
+        $this->assertGreaterThan(
             $config->backgroundCompactionThreshold,
-            'Foreground blocking threshold should be less than background compaction threshold',
+            $config->foregroundBlockingThreshold,
+            'Foreground blocking threshold should exceed background compaction threshold',
         );
     }
 }
