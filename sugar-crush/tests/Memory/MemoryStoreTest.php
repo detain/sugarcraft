@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Memory;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Agents\MemoryScope;
+use SugarCraft\Crush\Memory\MemoryEntry;
 use SugarCraft\Crush\Memory\MemoryStore;
 
 final class MemoryStoreTest extends TestCase
@@ -84,6 +86,112 @@ final class MemoryStoreTest extends TestCase
         $results = $store->search('nonexistent query');
 
         $this->assertCount(0, $results);
+    }
+
+    public function testUpdateModifiesContentInPlaceWithinSameScope(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('Original content', 'user');
+        $original = $store->get($id);
+        $this->assertNotNull($original);
+
+        $store->update($id, $original->withContent('Updated content'));
+
+        $entry = $store->get($id);
+        $this->assertNotNull($entry);
+        $this->assertEquals('Updated content', $entry->content());
+        $this->assertEquals('user', $entry->scope());
+        $this->assertFileExists($this->tempDir . '/user/' . $id . '.md');
+
+        $index = $store->loadIndex('user');
+        $this->assertStringContainsString('Updated content', $index);
+    }
+
+    public function testUpdateMovingScopeRelocatesFileAndRegeneratesBothIndexes(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('Movable content', 'user');
+        $this->assertFileExists($this->tempDir . '/user/' . $id . '.md');
+
+        $original = $store->get($id);
+        $this->assertNotNull($original);
+
+        $store->update($id, $original->withScope('project'));
+
+        // The stale copy in the old scope directory must be gone, and the
+        // same id must now live under the new scope's directory instead --
+        // never in both places at once.
+        $this->assertFileDoesNotExist($this->tempDir . '/user/' . $id . '.md');
+        $this->assertFileExists($this->tempDir . '/project/' . $id . '.md');
+
+        $entry = $store->get($id);
+        $this->assertNotNull($entry);
+        $this->assertEquals('project', $entry->scope());
+
+        // Both the old scope's index (now empty -> removed) and the new
+        // scope's index (now containing the moved entry) must be
+        // regenerated as part of the same update() call.
+        $this->assertNull($store->loadIndex('user'));
+        $this->assertFileDoesNotExist($this->tempDir . '/user/MEMORY.md');
+
+        $projectIndex = $store->loadIndex('project');
+        $this->assertNotNull($projectIndex);
+        $this->assertStringContainsString('Movable content', $projectIndex);
+    }
+
+    public function testUpdateMovingScopeLeavesOldScopeIndexCorrectWhenOtherEntriesRemain(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $keepId = $store->add('Stays in user scope', 'user');
+        $moveId = $store->add('Moves to project scope', 'user');
+
+        $moving = $store->get($moveId);
+        $this->assertNotNull($moving);
+        $store->update($moveId, $moving->withScope('project'));
+
+        // The old scope's index must be regenerated to reflect that the
+        // moved entry is gone, while still describing the entry that stayed.
+        $userIndex = $store->loadIndex('user');
+        $this->assertNotNull($userIndex);
+        $this->assertStringContainsString('Stays in user scope', $userIndex);
+        $this->assertStringNotContainsString('Moves to project scope', $userIndex);
+
+        $projectIndex = $store->loadIndex('project');
+        $this->assertNotNull($projectIndex);
+        $this->assertStringContainsString('Moves to project scope', $projectIndex);
+
+        $this->assertFileExists($this->tempDir . '/user/' . $keepId . '.md');
+        $this->assertFileDoesNotExist($this->tempDir . '/user/' . $moveId . '.md');
+        $this->assertFileExists($this->tempDir . '/project/' . $moveId . '.md');
+    }
+
+    public function testUpdateWithUnknownIdInsertsNewEntry(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // update() is documented as an upsert: an id that has never been
+        // written before must still succeed and create the file, rather
+        // than requiring a prior add().
+        $id = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+        $entry = MemoryEntry::new(
+            type: 'pattern',
+            content: 'Inserted via update',
+            scope: 'user',
+            id: $id,
+        );
+
+        $store->update($id, $entry);
+
+        $this->assertFileExists($this->tempDir . '/user/' . $id . '.md');
+        $fetched = $store->get($id);
+        $this->assertNotNull($fetched);
+        $this->assertEquals('Inserted via update', $fetched->content());
+
+        $index = $store->loadIndex('user');
+        $this->assertStringContainsString('Inserted via update', $index);
     }
 
     public function testDeleteRemovesFile(): void
@@ -380,6 +488,51 @@ final class MemoryStoreTest extends TestCase
         $this->assertFileDoesNotExist($projectDir . '/' . $userId . '.md');
     }
 
+    public function testAddAcceptsMemoryScopeEnumAndResolvesToMatchingDirectory(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // The whole point of this fix, part two: the enum itself must be
+        // able to drive directory selection, not just its ->value string.
+        $projectId = $store->add('Project via enum', MemoryScope::Project);
+        $userId = $store->add('User via enum', MemoryScope::User);
+
+        $this->assertFileExists($this->tempDir . '/project/' . $projectId . '.md');
+        $this->assertFileExists($this->tempDir . '/user/' . $userId . '.md');
+
+        // Passing the enum must resolve to the SAME directory as passing
+        // the equivalent legacy string -- add()/list() are interchangeable
+        // regardless of which form the caller uses.
+        $viaString = $store->list('project');
+        $viaEnum = $store->list(MemoryScope::Project);
+        $this->assertCount(1, $viaString);
+        $this->assertCount(1, $viaEnum);
+        $this->assertEquals($viaString[0]->id(), $viaEnum[0]->id());
+    }
+
+    public function testMemoryScopeLocalResolvesToSameDirectoryAsLegacyAgentString(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // MemoryScope's own vocabulary spells this case 'local', but every
+        // existing string-based caller (Chat.php) spells it 'agent'. Both
+        // forms must land in the same physical directory so a caller that
+        // adopts the enum can't silently fragment scope storage away from
+        // callers still using the legacy string.
+        $viaEnumId = $store->add('Local via enum', MemoryScope::Local);
+        $viaStringId = $store->add('Agent via string', 'agent');
+
+        $this->assertFileExists($this->tempDir . '/agent/' . $viaEnumId . '.md');
+        $this->assertFileExists($this->tempDir . '/agent/' . $viaStringId . '.md');
+        $this->assertDirectoryDoesNotExist($this->tempDir . '/local');
+
+        $entries = $store->list(MemoryScope::Local);
+        $this->assertCount(2, $entries);
+        $ids = array_map(fn($e) => $e->id(), $entries);
+        $this->assertContains($viaEnumId, $ids);
+        $this->assertContains($viaStringId, $ids);
+    }
+
     public function testIndexByteCapTruncatesOnACharacterBoundary(): void
     {
         $store = new MemoryStore($this->tempDir);
@@ -408,6 +561,29 @@ final class MemoryStoreTest extends TestCase
         );
     }
 
+    public function testIndexByteCapTruncatesOnACharacterBoundaryWithFourByteEmoji(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // Same repro as above but with a 4-byte UTF-8 sequence (emoji)
+        // rather than a 3-byte CJK character, so the cap is proven not to
+        // depend on the specific byte-width of the multibyte content that
+        // happens to straddle the truncation boundary.
+        $bigMultibyteTag = str_repeat('🎉', 15000); // 60,000 bytes, zero '\n'.
+        $store->add('short content', 'user', [$bigMultibyteTag]);
+
+        $content = $store->loadIndex();
+        $this->assertNotNull($content);
+
+        $this->assertLessThanOrEqual(25 * 1024, strlen($content));
+        $this->assertGreaterThan(25 * 1024 - 16, strlen($content));
+
+        $this->assertTrue(
+            mb_check_encoding($content, 'UTF-8'),
+            'Truncated index content must remain valid UTF-8 even when the boundary falls inside a 4-byte character.'
+        );
+    }
+
     public function testIndexNeverExceeds200RenderedLines(): void
     {
         $store = new MemoryStore($this->tempDir);
@@ -420,6 +596,27 @@ final class MemoryStoreTest extends TestCase
 
         for ($i = 0; $i < 95; $i++) {
             $store->add($multilineContent, 'user');
+        }
+
+        $content = $store->loadIndex();
+        $this->assertNotNull($content);
+
+        $renderedLines = explode("\n", $content);
+        $this->assertLessThanOrEqual(200, count($renderedLines));
+    }
+
+    public function testIndexNeverExceeds200RenderedLinesWithHeavyEmbeddedNewlines(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // Heavier repro: 60 entries x 10 embedded newlines each (600 raw
+        // content newlines), well beyond the 95-entry/3-line-each case
+        // above, to prove the cap holds under a much larger embedded-newline
+        // load, not just the specific input size already covered.
+        $tenLineContent = implode("\n", array_fill(0, 10, 'Embedded line of memory content'));
+
+        for ($i = 0; $i < 60; $i++) {
+            $store->add($tenLineContent, 'user');
         }
 
         $content = $store->loadIndex();

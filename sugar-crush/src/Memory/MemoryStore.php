@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Memory;
 
+use SugarCraft\Crush\Agents\MemoryScope;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -24,16 +25,32 @@ use Symfony\Component\Yaml\Yaml;
  * on disk). Per-scope index files make loadIndex()/generateIndex() immune to that:
  * touching one scope never reads, writes, or deletes another scope's index.
  *
- * Design decision: every public method here already accepted scope as a plain
- * string (not the SugarCraft\Crush\Agents\MemoryScope enum) before this class was
- * wired up to actually separate storage by scope. Rather than changing method
- * signatures to require MemoryScope -- which would ripple into every call site
- * (Chat.php's /memory command parsing, which only ever has a raw string from user
- * input) -- scope resolution stays internal: scopeDirectory() maps the existing
- * string $scope to its subdirectory of memoryPath, creating it on first write.
- * This keeps every current caller unchanged while making scope authoritative for
- * physical layout. search() and get() take no scope argument, so they glob across
- * every scope subdirectory instead of a single one.
+ * Design decision: every public method that takes a scope accepts
+ * `string|MemoryScope` (Chat.php's /memory command parsing only ever has a raw
+ * string from user input, so requiring MemoryScope everywhere would ripple into
+ * every call site; but the enum is the one that must actually govern physical
+ * layout, per the original requirement). normalizeScope() is the single
+ * resolver: it turns either form into the canonical string used as the
+ * on-disk subdirectory name, and scopeDirectory() runs every scope through it
+ * before touching the filesystem. A bare string is passed through unchanged
+ * (this is how Chat.php's 'user'/'project'/'agent' vocabulary keeps working
+ * without modification); a MemoryScope is resolved via ->value, EXCEPT
+ * MemoryScope::Local, which is deliberately mapped to the string 'agent'.
+ *
+ * That last mapping closes a real naming mismatch: MemoryScope's own enum
+ * cases are User/Project/Local ('user'/'project'/'local'), but every existing
+ * string-based caller (Chat.php's /memory add|list|clear --scope regexes)
+ * only ever accepts/emits 'user'|'project'|'agent' -- 'local' does not appear
+ * anywhere else in this codebase. Without the explicit mapping, a future
+ * caller that passed MemoryScope::Local would silently write to a local/
+ * directory that no string-based caller (list/clear/search) ever looks at,
+ * fragmenting scope storage rather than partitioning it. normalizeScope()
+ * treats MemoryScope::Local and the string 'agent' as the same physical
+ * scope so the enum can be adopted without a coordinated rename of Chat.php's
+ * vocabulary.
+ *
+ * search() and get() take no scope argument, so they glob across every scope
+ * subdirectory instead of a single one.
  */
 final class MemoryStore
 {
@@ -58,15 +75,17 @@ final class MemoryStore
      * empty tags, current timestamps, and writes it to
      * {memoryPath}/{scope}/{id}.md.
      *
-     * @param string         $content The memory content as markdown.
-     * @param string         $scope  The scope: 'user', 'project', or 'agent'.
-     * @param array<string>  $tags   Optional categorization tags.
+     * @param string              $content The memory content as markdown.
+     * @param string|MemoryScope  $scope   The scope: 'user', 'project', 'agent',
+     *                                     or the equivalent MemoryScope case.
+     * @param array<string>       $tags    Optional categorization tags.
      * @return string The generated UUID of the new entry.
      */
-    public function add(string $content, string $scope = 'user', array $tags = []): string
+    public function add(string $content, string|MemoryScope $scope = 'user', array $tags = []): string
     {
         $id = $this->generateUuid();
         $now = new \DateTimeImmutable();
+        $scope = $this->normalizeScope($scope);
 
         $entry = MemoryEntry::new(
             type: 'pattern',
@@ -131,11 +150,12 @@ final class MemoryStore
      * Reads only {memoryPath}/{scope}/*.md -- other scopes' directories are
      * never touched, so this is authoritative for "what lives in this scope".
      *
-     * @param string $scope The scope to filter by.
+     * @param string|MemoryScope $scope The scope to filter by.
      * @return MemoryEntry[] All entries matching the scope.
      */
-    public function list(string $scope = 'user'): array
+    public function list(string|MemoryScope $scope = 'user'): array
     {
+        $scope = $this->normalizeScope($scope);
         $results = [];
         $dir = $this->scopeDirectory($scope, false);
         $files = is_dir($dir) ? glob($dir . '/*.md') : [];
@@ -253,10 +273,11 @@ final class MemoryStore
     /**
      * Clear all memory entries for a given scope.
      *
-     * @param string $scope The scope to clear.
+     * @param string|MemoryScope $scope The scope to clear.
      */
-    public function clear(string $scope): void
+    public function clear(string|MemoryScope $scope): void
     {
+        $scope = $this->normalizeScope($scope);
         $dir = $this->scopeDirectory($scope, false);
         $files = is_dir($dir) ? glob($dir . '/*.md') : [];
 
@@ -280,10 +301,11 @@ final class MemoryStore
      * regenerating scope A's index never reads, writes, or deletes scope B's
      * index -- see the class docblock.
      *
-     * @param string $scope The scope to index.
+     * @param string|MemoryScope $scope The scope to index.
      */
-    public function generateIndex(string $scope): void
+    public function generateIndex(string|MemoryScope $scope): void
     {
+        $scope = $this->normalizeScope($scope);
         $entries = $this->list($scope);
         $indexPath = $this->scopeDirectory($scope, false) . '/' . self::MEMORY_INDEX_FILENAME;
 
@@ -346,10 +368,10 @@ final class MemoryStore
     /**
      * Load and return the content of the given scope's index file.
      *
-     * @param string $scope The scope whose index to load.
+     * @param string|MemoryScope $scope The scope whose index to load.
      * @return string|null The index content, or null if no index exists.
      */
-    public function loadIndex(string $scope = 'user'): ?string
+    public function loadIndex(string|MemoryScope $scope = 'user'): ?string
     {
         $indexPath = $this->scopeDirectory($scope, false) . '/' . self::MEMORY_INDEX_FILENAME;
 
@@ -402,6 +424,27 @@ final class MemoryStore
     }
 
     /**
+     * Resolve a scope argument -- either the legacy raw string vocabulary
+     * ('user'/'project'/'agent', as used by Chat.php) or a MemoryScope enum
+     * case -- to the canonical string that actually names the on-disk
+     * subdirectory. A string is passed through unchanged; a MemoryScope is
+     * resolved via ->value, EXCEPT MemoryScope::Local, which maps to the
+     * string 'agent' rather than 'local' -- see the class docblock for why
+     * that mapping exists (it reconciles the enum's own vocabulary with the
+     * string vocabulary every existing caller already uses).
+     *
+     * @param string|MemoryScope $scope
+     */
+    private function normalizeScope(string|MemoryScope $scope): string
+    {
+        if ($scope instanceof MemoryScope) {
+            return $scope === MemoryScope::Local ? 'agent' : $scope->value;
+        }
+
+        return $scope;
+    }
+
+    /**
      * Resolve the on-disk subdirectory of memoryPath that a given scope's
      * entries live in, optionally creating it.
      *
@@ -409,12 +452,12 @@ final class MemoryStore
      * unexpected scope value can't escape memoryPath or collide with
      * MEMORY_INDEX_FILENAME.
      *
-     * @param string $scope           The scope to resolve.
-     * @param bool   $createIfMissing Whether to mkdir() the directory if absent.
+     * @param string|MemoryScope $scope           The scope to resolve.
+     * @param bool               $createIfMissing Whether to mkdir() the directory if absent.
      */
-    private function scopeDirectory(string $scope, bool $createIfMissing): string
+    private function scopeDirectory(string|MemoryScope $scope, bool $createIfMissing): string
     {
-        $safeScope = preg_replace('/[^A-Za-z0-9_-]/', '_', $scope);
+        $safeScope = preg_replace('/[^A-Za-z0-9_-]/', '_', $this->normalizeScope($scope));
         if ($safeScope === null || $safeScope === '') {
             $safeScope = 'default';
         }
