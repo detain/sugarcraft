@@ -39,14 +39,7 @@ final class SessionTab
      */
     public function withActive(bool $isActive): self
     {
-        return new self(
-            $this->id,
-            $this->sessionName,
-            $isActive,
-            $this->lastActivityAt,
-            $this->agentSummary,
-            $this->isDetached,
-        );
+        return $this->mutate(['isActive' => $isActive]);
     }
 
     /**
@@ -54,14 +47,7 @@ final class SessionTab
      */
     public function withDetached(bool $isDetached): self
     {
-        return new self(
-            $this->id,
-            $this->sessionName,
-            $this->isActive,
-            $this->lastActivityAt,
-            $this->agentSummary,
-            $isDetached,
-        );
+        return $this->mutate(['isDetached' => $isDetached]);
     }
 
     /**
@@ -69,14 +55,7 @@ final class SessionTab
      */
     public function withSummary(string $summary): self
     {
-        return new self(
-            $this->id,
-            $this->sessionName,
-            $this->isActive,
-            $this->lastActivityAt,
-            $summary,
-            $this->isDetached,
-        );
+        return $this->mutate(['agentSummary' => $summary]);
     }
 
     /**
@@ -84,14 +63,29 @@ final class SessionTab
      */
     public function withLastActivity(DateTimeImmutable $lastActivityAt): self
     {
-        return new self(
-            $this->id,
-            $this->sessionName,
-            $this->isActive,
-            $lastActivityAt,
-            $this->agentSummary,
-            $this->isDetached,
-        );
+        return $this->mutate(['lastActivityAt' => $lastActivityAt]);
+    }
+
+    /**
+     * Create a new instance with the given changes merged in.
+     *
+     * Mirrors the repo-wide immutable+fluent `mutate()` convention (see
+     * candy-sprinkles/src/Style.php, candy-buffer/src/Style.php) so every
+     * `with*()` builds through a single point instead of hand-listing all
+     * constructor params.
+     *
+     * @param array<string, mixed> $changes Key-value pairs to change
+     */
+    private function mutate(array $changes): static
+    {
+        return new static(...array_merge([
+            'id' => $this->id,
+            'sessionName' => $this->sessionName,
+            'isActive' => $this->isActive,
+            'lastActivityAt' => $this->lastActivityAt,
+            'agentSummary' => $this->agentSummary,
+            'isDetached' => $this->isDetached,
+        ], $changes));
     }
 
     /**

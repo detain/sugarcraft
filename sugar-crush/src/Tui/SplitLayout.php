@@ -71,13 +71,10 @@ final class SplitLayout
             throw new \InvalidArgumentException('Numerator must be between 0 and denominator inclusive');
         }
 
-        return new self(
-            $this->topOrLeftContent,
-            $this->bottomOrRightContent,
-            $this->direction,
-            $numerator,
-            $denominator,
-        );
+        return $this->mutate([
+            'numerator' => $numerator,
+            'denominator' => $denominator,
+        ]);
     }
 
     /**
@@ -85,13 +82,31 @@ final class SplitLayout
      */
     public function withContent(string $topOrLeft, string $bottomOrRight): self
     {
-        return new self(
-            $topOrLeft,
-            $bottomOrRight,
-            $this->direction,
-            $this->numerator,
-            $this->denominator,
-        );
+        return $this->mutate([
+            'topOrLeftContent' => $topOrLeft,
+            'bottomOrRightContent' => $bottomOrRight,
+        ]);
+    }
+
+    /**
+     * Create a new instance with the given changes merged in.
+     *
+     * Mirrors the repo-wide immutable+fluent `mutate()` convention (see
+     * candy-sprinkles/src/Style.php, candy-buffer/src/Style.php) so every
+     * `with*()` builds through a single point instead of hand-listing all
+     * constructor params.
+     *
+     * @param array<string, mixed> $changes Key-value pairs to change
+     */
+    private function mutate(array $changes): static
+    {
+        return new static(...array_merge([
+            'topOrLeftContent' => $this->topOrLeftContent,
+            'bottomOrRightContent' => $this->bottomOrRightContent,
+            'direction' => $this->direction,
+            'numerator' => $this->numerator,
+            'denominator' => $this->denominator,
+        ], $changes));
     }
 
     /**
