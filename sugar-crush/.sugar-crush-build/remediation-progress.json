@@ -184,17 +184,19 @@
     ]
   },
   "R29": {
-    "status": "not_started",
-    "reviewCycles": 0,
+    "status": "done",
+    "reviewCycles": 1,
     "lastFindings": [
-      "Checked git log --oneline --all for any R29-tagged commit and searched the working tree for tests/Integration/FanOutResearchTest.php and tests/Integration/MultiAgentRefactorTest.php: neither commit nor either file exists yet as of this check. This is a sibling track running concurrently in this same wave -- status reflects the real state at the moment this file was written, not an assumption that it will land."
+      "Verified: commit 235ead1f adds tests/Integration/FanOutResearchTest.php and tests/Integration/MultiAgentRefactorTest.php (602 lines total). FanOutResearchTest drives 5 explorer SubAgents through AgentWorkerPool's real pcntl_fork()-based executeAll() (R14a-hardened), verifying genuine concurrent completion with no IPC/result-file cross-contamination. MultiAgentRefactorTest forks 2 real coder processes racing for R1-guarded TaskList/Team::claimTask() against a disposable git repo, verifying single-claim-under-contention plus dependency-gated unblocking and isolated per-coder worktrees. Ran both files directly: 77 assertions, all passing, genuine pcntl_fork-based multi-process exercises, not trivially-true stubs.",
+      "Single commit, no .fix follow-up found. Landed after the original R31-finalize snapshot (9e65598a) as a sibling track in this same wave; this pass re-verified it against current git log/source rather than trusting the prior not_started snapshot."
     ]
   },
   "R30": {
-    "status": "not_started",
-    "reviewCycles": 0,
+    "status": "done",
+    "reviewCycles": 1,
     "lastFindings": [
-      "Checked git log --oneline --all for any R30-tagged commit and searched the repo for a root-level CHANGELOG.md: neither exists yet (only vendor/ third-party CHANGELOG.md files were found, which are unrelated). README.md test-count/feature-list catch-up and the example workflow file are likewise not yet confirmed. This is a sibling track running concurrently in this same wave -- status reflects the real state at the moment this file was written, not an assumption that it will land."
+      "Verified: commit 576904ff adds root-level CHANGELOG.md, updates README.md's test-count/Capabilities section to cite 3,159 tests / 8,048 assertions / 0 failures / 0 errors and document teams/worktrees/workflows/permission-modes/the 12-skill roster, and adds examples/workflows/lint-then-fix.yaml. Independently loaded lint-then-fix.yaml through SugarCraft\\Crush\\Workflows\\WorkflowRegistry::loadYaml(): parses correctly (3 stages, maxConcurrent=3, timeout=1800).",
+      "Single commit, no .fix follow-up found. Landed after the original R31-finalize snapshot (9e65598a) as a sibling track in this same wave; this pass re-verified it against current git log/source rather than trusting the prior not_started snapshot. Note: README's cited counts (3,159/8,048) reflect the tree at 576904ff's own commit, before this wave's R29 test additions landed on top -- expected, not a discrepancy."
     ]
   },
   "R31-setup": {
