@@ -18,20 +18,35 @@ final class McpClient
     /**
      * The preset of the agent currently driving this client, if any. When set,
      * listTools()/callTool()/callToolByName() are filtered through McpRouter
-     * against $agentPreset->mcpServers; when null, routing is unrestricted
-     * (equivalent to a preset with an empty mcpServers allowlist).
+     * against $agentPreset->mcpServers.
      */
     private ?AgentPreset $agentPreset;
+
+    /**
+     * Escape hatch for callers that are genuinely not agent-scoped (e.g.
+     * system/admin tooling). Fails CLOSED by default: with no agent preset
+     * attached, listTools()/callTool() see and reach nothing at all, so a
+     * caller that forgets to call setAgentPreset() is denied rather than
+     * silently handed every configured server's every tool.
+     */
+    private bool $unrestricted;
+
+    /** @var array<string, string> */
+    private array $denyPatterns;
 
     public function __construct(
         private string $configPath,
         ?Client $httpClient = null,
         ?AgentPreset $agentPreset = null,
+        bool $unrestricted = false,
+        array $denyPatterns = [],
     ) {
         // Injectable so tests can supply a MockHandler-backed client; defaults to
         // a real client for production use.
         $this->httpClient = $httpClient ?? new Client(['timeout' => 30]);
         $this->agentPreset = $agentPreset;
+        $this->unrestricted = $unrestricted;
+        $this->denyPatterns = $denyPatterns;
     }
 
     /**
@@ -43,6 +58,18 @@ final class McpClient
     public function setAgentPreset(?AgentPreset $agentPreset): void
     {
         $this->agentPreset = $agentPreset;
+    }
+
+    /**
+     * Set the global wildcard deny-pattern map (server-name pattern => "deny")
+     * forwarded to McpRouter on every routed call, alongside the active agent
+     * preset's allowlist.
+     *
+     * @param array<string, string> $denyPatterns
+     */
+    public function setDenyPatterns(array $denyPatterns): void
+    {
+        $this->denyPatterns = $denyPatterns;
     }
 
     /**
@@ -110,29 +137,37 @@ final class McpClient
 
     /**
      * List available tools, restricted to what the current agent preset (if
-     * any) is allowed to see per McpRouter::resolveAllowedTools().
+     * any) is allowed to see per McpRouter::resolveAllowedTools(). With no
+     * preset attached, returns nothing unless $unrestricted was explicitly
+     * set at construction time.
      *
      * @return array<McpTool>
      */
     public function listTools(): array
     {
-        if ($this->agentPreset === null) {
-            $tools = [];
-
-            foreach ($this->servers as $server) {
-                $tools = array_merge($tools, $server->listTools());
-            }
-
-            return $tools;
+        if ($this->agentPreset !== null) {
+            return $this->router()->resolveAllowedTools($this->agentPreset);
         }
 
-        return $this->router()->resolveAllowedTools($this->agentPreset);
+        if (!$this->unrestricted) {
+            return [];
+        }
+
+        $tools = [];
+
+        foreach ($this->servers as $server) {
+            $tools = array_merge($tools, $server->listTools());
+        }
+
+        return $tools;
     }
 
     /**
      * Call a tool on a specific server. Rejected when the current agent
      * preset's mcpServers allowlist does not cover $serverName, so a caller
      * cannot bypass listTools() filtering by naming a denied server directly.
+     * With no preset attached, rejected unconditionally unless $unrestricted
+     * was explicitly set at construction time.
      */
     public function callTool(string $serverName, string $toolName, array $args): array
     {
@@ -142,11 +177,25 @@ final class McpClient
             throw new \RuntimeException("Unknown MCP server: $serverName");
         }
 
-        if ($this->agentPreset !== null && !in_array($serverName, $this->router()->resolveAllowedServers($this->agentPreset), true)) {
+        if (!$this->isServerAllowed($serverName)) {
             throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
         }
 
         return $server->callTool($toolName, $args);
+    }
+
+    /**
+     * Whether $serverName is reachable under the current routing mode: via
+     * the active agent preset's allowlist (and any deny patterns), or via the
+     * explicit $unrestricted escape hatch when no preset is attached.
+     */
+    private function isServerAllowed(string $serverName): bool
+    {
+        if ($this->agentPreset !== null) {
+            return in_array($serverName, $this->router()->resolveAllowedServers($this->agentPreset), true);
+        }
+
+        return $this->unrestricted;
     }
 
     /**
@@ -171,11 +220,14 @@ final class McpClient
     }
 
     /**
-     * Build an McpRouter over this client's currently-started servers.
+     * Build an McpRouter over this client's currently-started servers,
+     * forwarding the configured global deny patterns alongside the servers
+     * so both halves of McpRouter's enforcement (allowlist + deny patterns)
+     * are actually wired through, not just the allowlist.
      */
     private function router(): McpRouter
     {
-        return new McpRouter($this->servers);
+        return new McpRouter($this->servers, $this->denyPatterns);
     }
 
     private function loadConfig(): array

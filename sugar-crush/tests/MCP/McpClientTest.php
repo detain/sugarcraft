@@ -341,7 +341,7 @@ final class McpClientTest extends TestCase
         ];
         file_put_contents($this->configPath, json_encode($config));
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
         $client->startServers();
 
         // Verify we can list tools - GitMcpServer provides 29 tools
@@ -372,7 +372,7 @@ final class McpClientTest extends TestCase
         ];
         file_put_contents($this->configPath, json_encode($config));
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
         $client->startServers();
 
         $tools = $client->listTools();
@@ -458,7 +458,7 @@ final class McpClientTest extends TestCase
             new McpTool('tool2', 'Tool 2', [], 'server2'),
         ]);
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
 
         // Use reflection to inject the mock server
         $reflection = new \ReflectionClass($client);
@@ -471,6 +471,27 @@ final class McpClientTest extends TestCase
         $this->assertCount(2, $tools);
         $this->assertSame('tool1', $tools[0]->name);
         $this->assertSame('tool2', $tools[1]->name);
+    }
+
+    public function testListToolsReturnsEmptyByDefaultWithNoAgentPresetAndNotUnrestricted(): void
+    {
+        // R15 finding #2: fail CLOSED by default -- a client that nobody ever
+        // called setAgentPreset() on (the reality for every real McpClient
+        // today, since nothing in production wires that up yet) must not
+        // silently expose every configured server's tools.
+        $mockServer = $this->createMock(McpServer::class);
+        $mockServer->method('listTools')->willReturn([
+            new McpTool('tool1', 'Tool 1', [], 'server1'),
+        ]);
+
+        $client = new McpClient($this->configPath);
+
+        $reflection = new \ReflectionClass($client);
+        $property = $reflection->getProperty('servers');
+        $property->setAccessible(true);
+        $property->setValue($client, ['mock-server' => $mockServer]);
+
+        $this->assertSame([], $client->listTools());
     }
 
     // =========================================================================
@@ -494,7 +515,7 @@ final class McpClientTest extends TestCase
             ->with('test_tool', ['arg1' => 'value1'])
             ->willReturn(['result' => 'success']);
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
 
         $reflection = new \ReflectionClass($client);
         $property = $reflection->getProperty('servers');
@@ -504,6 +525,27 @@ final class McpClientTest extends TestCase
         $result = $client->callTool('test-server', 'test_tool', ['arg1' => 'value1']);
 
         $this->assertSame(['result' => 'success'], $result);
+    }
+
+    public function testCallToolThrowsByDefaultWithNoAgentPresetAndNotUnrestricted(): void
+    {
+        // Same fail-closed default as listTools(): a known, started server is
+        // still unreachable via callTool() when nobody has attached an agent
+        // preset and nobody explicitly opted into $unrestricted.
+        $mockServer = $this->createMock(McpServer::class);
+        $mockServer->expects($this->never())->method('callTool');
+
+        $client = new McpClient($this->configPath);
+
+        $reflection = new \ReflectionClass($client);
+        $property = $reflection->getProperty('servers');
+        $property->setAccessible(true);
+        $property->setValue($client, ['test-server' => $mockServer]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('MCP server not allowed for this agent: test-server');
+
+        $client->callTool('test-server', 'test_tool', ['arg1' => 'value1']);
     }
 
     // =========================================================================
@@ -517,7 +559,7 @@ final class McpClientTest extends TestCase
             new McpTool('other_tool', 'Other tool', [], 'server1'),
         ]);
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
 
         $reflection = new \ReflectionClass($client);
         $property = $reflection->getProperty('servers');
@@ -541,7 +583,7 @@ final class McpClientTest extends TestCase
             ->with('target_tool', ['arg' => 'value'])
             ->willReturn(['found' => true]);
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
 
         $reflection = new \ReflectionClass($client);
         $property = $reflection->getProperty('servers');
@@ -568,7 +610,7 @@ final class McpClientTest extends TestCase
             ->with('unique_tool_2', [])
             ->willReturn(['server' => 'server2']);
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
 
         $reflection = new \ReflectionClass($client);
         $property = $reflection->getProperty('servers');
@@ -716,11 +758,13 @@ final class McpClientTest extends TestCase
         $this->assertSame(['ok' => true], $result);
     }
 
-    public function testListToolsIsUnrestrictedWhenNoAgentPresetIsSet(): void
+    public function testListToolsIsUnrestrictedWhenNoAgentPresetIsSetAndUnrestrictedIsExplicit(): void
     {
-        // Regression guard: a client with no agent preset attached (the
-        // pre-fix default, and still correct for non-agent-scoped callers)
-        // keeps seeing every configured server's tools.
+        // A client with no agent preset attached only sees every configured
+        // server's tools when $unrestricted was explicitly requested at
+        // construction time -- the deliberate escape hatch for genuinely
+        // non-agent-scoped callers (e.g. system/admin tooling), not a silent
+        // default (see testListToolsReturnsEmptyByDefault... above).
         $serverA = $this->createMock(McpServer::class);
         $serverA->method('listTools')->willReturn([
             new McpTool('tool_a', 'A', [], 'server-a'),
@@ -730,7 +774,7 @@ final class McpClientTest extends TestCase
             new McpTool('tool_b', 'B', [], 'server-b'),
         ]);
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
 
         $reflection = new \ReflectionClass($client);
         $property = $reflection->getProperty('servers');
@@ -742,7 +786,7 @@ final class McpClientTest extends TestCase
         $this->assertCount(2, $tools);
     }
 
-    public function testSetAgentPresetCanBeClearedBackToUnrestricted(): void
+    public function testSetAgentPresetCanBeClearedBackToUnrestrictedWhenConstructedUnrestricted(): void
     {
         $allowedServer = $this->createMock(McpServer::class);
         $allowedServer->method('listTools')->willReturn([
@@ -753,7 +797,7 @@ final class McpClientTest extends TestCase
             new McpTool('secret_tool', 'Secret', [], 'denied-server'),
         ]);
 
-        $client = new McpClient($this->configPath);
+        $client = new McpClient($this->configPath, unrestricted: true);
 
         $reflection = new \ReflectionClass($client);
         $property = $reflection->getProperty('servers');
@@ -768,5 +812,125 @@ final class McpClientTest extends TestCase
 
         $client->setAgentPreset(null);
         $this->assertCount(2, $client->listTools());
+    }
+
+    public function testSetAgentPresetClearedBackToNullStaysDeniedWithoutUnrestricted(): void
+    {
+        // Without the explicit $unrestricted escape hatch, clearing back to
+        // no preset must NOT fall open -- it must stay in the fail-closed
+        // default, same as a client that never had a preset set at all.
+        $allowedServer = $this->createMock(McpServer::class);
+        $allowedServer->method('listTools')->willReturn([
+            new McpTool('allowed_tool', 'Allowed', [], 'allowed-server'),
+        ]);
+
+        $client = new McpClient($this->configPath);
+
+        $reflection = new \ReflectionClass($client);
+        $property = $reflection->getProperty('servers');
+        $property->setAccessible(true);
+        $property->setValue($client, ['allowed-server' => $allowedServer]);
+
+        $client->setAgentPreset($this->makePreset(['allowed-server']));
+        $this->assertCount(1, $client->listTools());
+
+        $client->setAgentPreset(null);
+        $this->assertSame([], $client->listTools());
+    }
+
+    // =========================================================================
+    // Deny-pattern forwarding (R15 finding #3)
+    //
+    // McpRouter enforces both an allowlist AND global wildcard deny patterns,
+    // but McpClient must actually forward $denyPatterns to the McpRouter it
+    // builds internally, or the deny-pattern half is silently dropped.
+    // =========================================================================
+
+    public function testListToolsAppliesConstructorSuppliedDenyPatternsEvenWhenAllowlisted(): void
+    {
+        $allowedServer = $this->createMock(McpServer::class);
+        $allowedServer->method('listTools')->willReturn([
+            new McpTool('allowed_tool', 'Allowed', [], 'allowed-server'),
+        ]);
+        $untrustedServer = $this->createMock(McpServer::class);
+        $untrustedServer->method('listTools')->willReturn([
+            new McpTool('untrusted_tool', 'Untrusted', [], 'untrusted-server'),
+        ]);
+
+        $client = new McpClient(
+            $this->configPath,
+            denyPatterns: ['untrusted-*' => 'deny'],
+        );
+
+        $reflection = new \ReflectionClass($client);
+        $property = $reflection->getProperty('servers');
+        $property->setAccessible(true);
+        $property->setValue($client, [
+            'allowed-server' => $allowedServer,
+            'untrusted-server' => $untrustedServer,
+        ]);
+
+        // The preset's own allowlist names BOTH servers -- only the global
+        // deny pattern should strip the untrusted one.
+        $client->setAgentPreset($this->makePreset(['allowed-server', 'untrusted-server']));
+
+        $tools = $client->listTools();
+
+        $this->assertCount(1, $tools);
+        $this->assertSame('allowed_tool', $tools[0]->name);
+    }
+
+    public function testCallToolThrowsWhenServerMatchesConstructorSuppliedDenyPatternEvenIfAllowlisted(): void
+    {
+        $untrustedServer = $this->createMock(McpServer::class);
+        $untrustedServer->expects($this->never())->method('callTool');
+
+        $client = new McpClient(
+            $this->configPath,
+            denyPatterns: ['untrusted-*' => 'deny'],
+        );
+
+        $reflection = new \ReflectionClass($client);
+        $property = $reflection->getProperty('servers');
+        $property->setAccessible(true);
+        $property->setValue($client, ['untrusted-server' => $untrustedServer]);
+
+        $client->setAgentPreset($this->makePreset(['untrusted-server']));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('MCP server not allowed for this agent: untrusted-server');
+
+        $client->callTool('untrusted-server', 'secret_tool', []);
+    }
+
+    public function testSetDenyPatternsAppliesToSubsequentRouting(): void
+    {
+        $allowedServer = $this->createMock(McpServer::class);
+        $allowedServer->method('listTools')->willReturn([
+            new McpTool('allowed_tool', 'Allowed', [], 'allowed-server'),
+        ]);
+        $untrustedServer = $this->createMock(McpServer::class);
+        $untrustedServer->method('listTools')->willReturn([
+            new McpTool('untrusted_tool', 'Untrusted', [], 'untrusted-server'),
+        ]);
+
+        $client = new McpClient($this->configPath);
+
+        $reflection = new \ReflectionClass($client);
+        $property = $reflection->getProperty('servers');
+        $property->setAccessible(true);
+        $property->setValue($client, [
+            'allowed-server' => $allowedServer,
+            'untrusted-server' => $untrustedServer,
+        ]);
+
+        $client->setAgentPreset($this->makePreset(['allowed-server', 'untrusted-server']));
+        $this->assertCount(2, $client->listTools());
+
+        $client->setDenyPatterns(['untrusted-*' => 'deny']);
+        $tools = $client->listTools();
+
+        $this->assertCount(1, $tools);
+        $this->assertSame('allowed_tool', $tools[0]->name);
     }
 }
