@@ -30,6 +30,22 @@ class AgentDisplayState
     ) {}
 
     /**
+     * Factory method to create a new AgentDisplayState instance.
+     *
+     * Mirrors SugarCraft\Crush\Tui\AgentDisplayState.__construct.
+     */
+    public static function new(
+        string $name,
+        string $status,
+        string $operation,
+        int $elapsedSeconds,
+        int $tokensUsed,
+        float $costUsd,
+    ): self {
+        return new self($name, $status, $operation, $elapsedSeconds, $tokensUsed, $costUsd);
+    }
+
+    /**
      * Formatted elapsed time string, e.g. "1m 23s" or "2m".
      */
     public function elapsedDisplay(): string

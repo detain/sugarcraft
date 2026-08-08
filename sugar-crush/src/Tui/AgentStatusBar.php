@@ -24,7 +24,10 @@ use SugarCraft\Sprinkles\Style;
  */
 final class AgentStatusBar
 {
-    /** @var array<string, string> Maps status keyword to CSS hex colour. */
+    /**
+     * @var array<'working'|'waiting'|'streaming'|'failed'|'completed'|'stopped', string>
+     * Maps status keyword to CSS hex colour.
+     */
     private const STATUS_HEX = [
         'working'   => '#9ece6a',
         'waiting'   => '#e0af68',
