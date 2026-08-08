@@ -219,22 +219,6 @@ final class AgentWorkerPool
         $this->queue = [];
 
         $this->executor?->cancelAll();
-
-        // Reap all forked children before clearing active — otherwise they become
-        // zombies and any results they wrote are orphaned (waitForCompletion won't
-        // find them once active is empty).
-        while ($this->active !== []) {
-            $completedId = $this->waitForCompletion();
-            // waitForCompletion removes from active when a child exits.
-            // If it returns null (no child exited this cycle), break to avoid
-            // an infinite loop — the executor cancelAll has already sent SIGTERM.
-            if ($completedId === null) {
-                break;
-            }
-            // Discard the result — cancelAll intentionally abandons in-flight work.
-            $this->extractResult($completedId);
-        }
-
         $this->active = [];
     }
 
@@ -262,7 +246,7 @@ final class AgentWorkerPool
     /**
      * Returns the configured concurrency limit.
      */
-    public function maxConcurrent(): int
+    public function getMaxConcurrent(): int
     {
         return $this->maxConcurrent;
     }
@@ -270,7 +254,7 @@ final class AgentWorkerPool
     /**
      * Returns the executor instance used by this pool.
      */
-    public function executor(): ?ExecutorInterface
+    public function getExecutor(): ?ExecutorInterface
     {
         return $this->executor;
     }
