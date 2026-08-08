@@ -19,14 +19,20 @@ use SugarCraft\Crush\ToolCall;
  * - Plan:        all writes Deny; reads Allow
  * - Auto:        everything runs gated by SafetyClassifier; 3-strike / 20-total circuit breaker
  *
+ * The `rm -rf /` / `rm -rf ~` circuit breaker (R3) is evaluated unconditionally in
+ * `evaluate()`, before rules and before mode dispatch — no rule and no mode can
+ * override it.
+ *
  * @see PermissionMode for the full set of modes
  */
 final class PermissionGate
 {
     /**
-     * Filesystem operations that AcceptEdits may auto-approve when scoped to the working directory.
+     * Filesystem primitive commands that AcceptEdits may auto-approve, via Bash,
+     * when scoped to the working directory. Real tool calls route these through
+     * Bash(command: "mkdir ..."); there is no dedicated "mkdir" tool at runtime.
      */
-    private const SCOPED_WRITE_TOOLS = ['mkdir', 'touch', 'mv', 'cp', 'rm', 'rmdir'];
+    private const SCOPED_WRITE_COMMANDS = ['mkdir', 'touch', 'mv', 'cp', 'rm', 'rmdir'];
 
     /**
      * Circuit-breaker thresholds for Auto mode.
@@ -61,6 +67,13 @@ final class PermissionGate
      */
     public function evaluate(ToolCall $call): PermissionDecision
     {
+        // 0. Circuit breaker: `rm -rf /` / `rm -rf ~` is refused unconditionally,
+        // in every mode, before rules are considered — no Allow rule and no mode
+        // (including BypassPermissions) can talk this gate into a self-destruct.
+        if ($this->isRmRfRootOrHome($call)) {
+            return PermissionDecision::Deny;
+        }
+
         // 1. Check explicit rules first (highest priority)
         $ruleDecision = $this->evaluateRules($call);
         if ($ruleDecision !== null) {
@@ -160,10 +173,11 @@ final class PermissionGate
      */
     private function evaluateAuto(ToolCall $call): PermissionDecision
     {
-        // SafetyClassifier is the gatekeeper for Auto mode
+        // SafetyClassifier is the gatekeeper for Auto mode. Fail CLOSED when it's
+        // missing — a misconfigured gate must never silently become "allow everything";
+        // that would turn a config bug into a security hole. Ask instead of Allow.
         if ($this->classifier === null) {
-            // No classifier available — behave like BypassPermissions: allow everything
-            return PermissionDecision::Allow;
+            return PermissionDecision::Ask;
         }
 
         $category = $this->classifier->classify($call);
@@ -224,7 +238,7 @@ final class PermissionGate
     }
 
     /**
-     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/Find)
+     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/WebFetch)
      * are implicitly allowed without an explicit rule. Hook-approved calls would also be allowed
      * via the hook system, but in practice: no explicit Allow rule + non-read-only tool → Deny.
      *
@@ -243,29 +257,29 @@ final class PermissionGate
     }
 
     /**
-     * BypassPermissions: allows everything EXCEPT explicit Deny rules and the hardcoded
-     * circuit breaker for `rm -rf /` or `rm -rf ~` (case-insensitive, handles prefixes
-     * like `sudo`).
+     * BypassPermissions: allows everything EXCEPT explicit Deny rules. The `rm -rf /`
+     * / `rm -rf ~` circuit breaker no longer lives here — it's evaluated unconditionally
+     * in evaluate() before this method (or any rule) ever runs.
      *
      * Explicit rules always take priority — if a rule matches, its action wins.
      * (The rules check happens before this method is called in evaluate().)
      */
     private function evaluateBypassPermissions(ToolCall $call): PermissionDecision
     {
-        // Circuit breaker: refuse `rm -rf /` or `rm -rf ~` regardless of anything else
-        if ($this->isRmRfRootOrHome($call)) {
-            return PermissionDecision::Deny;
-        }
-
         // Everything else is allowed in BypassPermissions mode
         return PermissionDecision::Allow;
     }
 
     /**
-     * Detect the `rm -rf /` or `rm -rf ~` circuit breaker pattern.
-     * Case-insensitive; handles prefixes like `sudo`.
+     * Detect the `rm -rf /` or `rm -rf ~` circuit-breaker pattern (R3).
      *
-     * Matches: rm -rf /, rm -rf ~, sudo rm -rf /, SUDO RM -RF ~
+     * Deliberately tolerant of evasion via flag reordering (`-fr`), flag splitting
+     * (`-r -f`), long-form flags (`--recursive --force`), and `--no-preserve-root`
+     * riding along. Case-insensitive; handles prefixes like `sudo`. Command chains
+     * (`foo && rm -rf /`) are checked segment-by-segment.
+     *
+     * Matches: rm -rf /, rm -fr /, rm -r -f /, rm --recursive --force /,
+     * rm -rf --no-preserve-root /, rm -rf ~, sudo rm -rf /, SUDO RM -RF ~
      */
     private function isRmRfRootOrHome(ToolCall $call): bool
     {
@@ -279,25 +293,118 @@ final class PermissionGate
             return false;
         }
 
-        $cmd = $args['command'];
+        foreach (preg_split('/[;&|]+/', $args['command']) as $segment) {
+            if ($this->segmentIsRmRfRootOrHome($segment)) {
+                return true;
+            }
+        }
 
-        // Pattern: any prefix(es) then "rm -rf" then whitespace then "/" or "~"
-        // Case-insensitive to catch sudo, SUDO, RM, etc.
-        return (bool) preg_match('#(?:\S+\s+)*rm\s+-rf\s+[/~]#i', $cmd);
+        return false;
+    }
+
+    /**
+     * Tokenize a single shell command segment and ask: is this an `rm` invocation
+     * that combines recursive + force flags (in any spelling/order/split) against
+     * a `/` or `~` target?
+     */
+    private function segmentIsRmRfRootOrHome(string $segment): bool
+    {
+        $tokens = array_values(array_filter(
+            preg_split('/\s+/', trim($segment)) ?: [],
+            static fn (string $t): bool => $t !== '',
+        ));
+        if ($tokens === []) {
+            return false;
+        }
+
+        $i = 0;
+        $count = count($tokens);
+
+        // Skip leading prefixes like `sudo` (case-insensitive).
+        while ($i < $count && strtolower($tokens[$i]) === 'sudo') {
+            ++$i;
+        }
+
+        if ($i >= $count || strtolower($tokens[$i]) !== 'rm') {
+            return false;
+        }
+        ++$i;
+
+        $recursive = false;
+        $force = false;
+        $target = null;
+
+        for (; $i < $count; ++$i) {
+            $token = $tokens[$i];
+            $lower = strtolower($token);
+
+            if ($lower === '--recursive') {
+                $recursive = true;
+                continue;
+            }
+            if ($lower === '--force') {
+                $force = true;
+                continue;
+            }
+            if ($lower === '--no-preserve-root' || $lower === '--') {
+                // Modifier flags that don't affect the recursive/force determination.
+                continue;
+            }
+            if (str_starts_with($token, '--')) {
+                // Unrecognized long flag — ignore, don't treat as the target.
+                continue;
+            }
+            if ($token !== '-' && str_starts_with($token, '-')) {
+                // Short flag cluster, e.g. -rf, -fr, -r, -f, -Rf (case-insensitive).
+                $flags = strtolower(substr($token, 1));
+                if (str_contains($flags, 'r')) {
+                    $recursive = true;
+                }
+                if (str_contains($flags, 'f')) {
+                    $force = true;
+                }
+                continue;
+            }
+
+            // First non-flag token is the target path.
+            $target = $token;
+            break;
+        }
+
+        if (!$recursive || !$force || $target === null) {
+            return false;
+        }
+
+        return $target === '/' || $target === '~';
     }
 
     // -------------------------------------------------------------------------
     // Tool classifiers
     // -------------------------------------------------------------------------
 
+    /**
+     * Read-only built-in tools (@see src/Tools/BuiltIn/): Read, Grep, Glob, WebFetch
+     * fetch/inspect without mutating local state. `Find` was never a real tool name.
+     */
     private function isReadOnlyTool(ToolCall $call): bool
     {
-        return in_array($call->name, ['Read', 'Grep', 'Glob', 'Find'], true);
+        return in_array($call->name, ['Read', 'Grep', 'Glob', 'WebFetch'], true);
     }
 
+    /**
+     * Write-capable tools: `Edit` mutates files directly, `Bash` can do anything
+     * a shell can, and MCP tools follow the `mcp__<server>__<tool>` naming
+     * convention (@see PermissionRule) — their capability is server-defined and
+     * unknowable here, so they're treated conservatively as writes. `Write` and
+     * `McpTool` were never real tool names.
+     */
     private function isWriteTool(ToolCall $call): bool
     {
-        return in_array($call->name, ['Edit', 'Write', 'Bash', 'McpTool'], true);
+        if (in_array($call->name, ['Bash', 'Edit'], true)) {
+            return true;
+        }
+
+        return str_starts_with($call->name, 'mcp__');
     }
 
     /**
@@ -319,49 +426,52 @@ final class PermissionGate
             || (bool) preg_match('/\|\s*tee(\s+|$)/', $cmd);
     }
 
+    /**
+     * AcceptEdits allows safe filesystem primitives (mkdir, touch, mv, cp, rm, rmdir)
+     * scoped to the working directory. Real tool calls route these through
+     * Bash(command: "mkdir ..."), never through a dedicated tool named "mkdir".
+     *
+     * Every non-flag argument must be a relative path — e.g. `mv /etc/passwd ./x`
+     * is NOT scoped, even though the destination is relative, because the source
+     * reaches outside the working directory.
+     */
     private function isScopedWriteTool(ToolCall $call): bool
     {
-        // AcceptEdits allows safe filesystem primitives scoped to the working directory
-        if (!in_array($call->name, self::SCOPED_WRITE_TOOLS, true)) {
+        if ($call->name !== 'Bash') {
             return false;
         }
 
-        // Extract the target path from arguments
-        $path = $this->extractPathArgument($call);
-        if ($path === null) {
-            return false;
-        }
-
-        // Relative paths are considered scoped to the working directory
-        return !$this->isAbsolutePath($path);
-    }
-
-    private function extractPathArgument(ToolCall $call): ?string
-    {
         $args = $call->arguments;
+        if (!isset($args['command']) || !is_string($args['command'])) {
+            return false;
+        }
 
-        // Most filesystem tools use 'path' or 'file_path'
-        foreach (['path', 'file_path', 'target', 'source', 'destination'] as $key) {
-            if (isset($args[$key]) && is_string($args[$key])) {
-                return $args[$key];
+        $tokens = array_values(array_filter(
+            preg_split('/\s+/', trim($args['command'])) ?: [],
+            static fn (string $t): bool => $t !== '',
+        ));
+        if ($tokens === []) {
+            return false;
+        }
+
+        $command = strtolower(array_shift($tokens));
+        if (!in_array($command, self::SCOPED_WRITE_COMMANDS, true)) {
+            return false;
+        }
+
+        // Every remaining non-flag token is a path argument; all must be relative.
+        $paths = array_filter($tokens, static fn (string $t): bool => !str_starts_with($t, '-'));
+        if ($paths === []) {
+            return false;
+        }
+
+        foreach ($paths as $path) {
+            if ($this->isAbsolutePath($path)) {
+                return false;
             }
         }
 
-        // Bash commands embed the path in the command string
-        if ($call->name === 'Bash' && isset($args['command'])) {
-            return $this->extractPathFromBashCommand($args['command']);
-        }
-
-        return null;
-    }
-
-    private function extractPathFromBashCommand(string $command): ?string
-    {
-        // Extract first path-like token from the command
-        if (preg_match('/\s+([.\/~][^\s;|`$(){}[\]]*)/', $command, $matches)) {
-            return $matches[1];
-        }
-        return null;
+        return true;
     }
 
     private function isAbsolutePath(string $path): bool
