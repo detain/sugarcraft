@@ -33,8 +33,11 @@ final class GitCommandHandlersTest extends TestCase
     {
         parent::tearDown();
         if (is_dir($this->tempDir)) {
+            // CHILD_FIRST so nested dirs are empty by the time we try to rmdir() them —
+            // the previous LEAVES_ONLY-default order hit non-empty dirs and silently warned.
             $files = new \RecursiveIteratorIterator(
                 new \RecursiveDirectoryIterator($this->tempDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST,
             );
             foreach ($files as $file) {
                 is_dir($file->getPathname()) ? rmdir($file->getPathname()) : unlink($file->getPathname());
@@ -733,6 +736,36 @@ final class GitCommandHandlersTest extends TestCase
         $handlers = new GitCommandHandlers($this->repoPath);
 
         $result = $handlers->gitBranchCreate('MAIN');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Cannot create branch', $result->error);
+    }
+
+    public function testGitBranchCreateRejectsLowercaseHead(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCreate('head');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Cannot create branch', $result->error);
+    }
+
+    public function testGitBranchCreateRejectsMixedCaseMaster(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCreate('Master');
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertStringContainsString('Cannot create branch', $result->error);
+    }
+
+    public function testGitBranchCreateRejectsLowercaseMain(): void
+    {
+        $handlers = new GitCommandHandlers($this->repoPath);
+
+        $result = $handlers->gitBranchCreate('main');
 
         $this->assertFalse($result->isSuccess());
         $this->assertStringContainsString('Cannot create branch', $result->error);

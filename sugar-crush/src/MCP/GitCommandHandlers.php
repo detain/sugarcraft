@@ -603,8 +603,9 @@ final readonly class GitCommandHandlers
             );
         }
 
-        // Refuse dangerously named branches
-        if ($name === 'HEAD' || $name === 'MASTER' || $name === 'MAIN') {
+        // Refuse dangerously named branches (case-insensitive: 'head'/'Master'/'main' are just as dangerous)
+        $normalizedName = strtolower($name);
+        if ($normalizedName === 'head' || $normalizedName === 'master' || $normalizedName === 'main') {
             return GitOperationResult::failure(
                 error: "Cannot create branch named '{$name}'",
                 operation: 'git_branch_create',
