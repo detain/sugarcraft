@@ -15,6 +15,25 @@ use SugarCraft\Crush\Hooks\HookResult;
 
 /**
  * @see HookDispatcher
+ *
+ * Deliberate, tracked exclusion (R5, exit-code-semantics coverage):
+ * crush_code_plan.md's Testing Strategy "HookDispatcherTest" block names 5
+ * cases. Three are exit-code-branching behavior of HookDispatcher::dispatch()
+ * itself and live here: testExitCode2BlocksPreToolUse,
+ * testExitCode2OnPostToolUseUsesContinueOnBlock,
+ * testUserPromptSubmitExitCode2DiscardsPrompt. The other two —
+ * testTeammateIdleHookAssignsMoreWork ("idle teammate receives new task
+ * instead of going idle") and testTaskCompletedHookCanRejectCompletion
+ * ("task stays in_progress when hook exits 2") — describe
+ * TaskList/TeamManager wiring behavior that is R6's scope (see the audit's
+ * P2B.S6 finding: TaskList::dispatchTeammateIdle() exists but has no
+ * production caller anywhere). HookDispatcher has no TaskList/TeamManager
+ * dependency to exercise, and TaskListHooksTest already covers the
+ * equivalent "marks contested" behavior under TaskList's own suite, so
+ * adding those two names here would mean testing functionality that does
+ * not exist in this class or duplicating that coverage under a different
+ * name. Intentionally NOT added to this file; they belong in R6's test
+ * scope instead.
  */
 final class HookDispatcherTest extends TestCase
 {
