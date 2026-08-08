@@ -13,6 +13,17 @@ use SugarCraft\Crush\ToolCall;
 
 final class AgentManager
 {
+    /**
+     * Modes Plan is allowed to exit into once sub-agents are live: approving
+     * a plan hands control to normal working modes, so this is a deliberate
+     * carve-out from the seal rather than a mid-session mode change.
+     */
+    private const array PLAN_EXIT_MODES = [
+        PermissionMode::Auto,
+        PermissionMode::AcceptEdits,
+        PermissionMode::Default,
+    ];
+
     /** @var array<string, Agent> */
     private array $agents = [];
 
@@ -23,7 +34,9 @@ final class AgentManager
 
     /**
      * Tracks the permission mode locked for this session.
-     * Once the first sub-agent is created, the session mode is sealed.
+     * Once the first sub-agent is created, the session mode is sealed except
+     * for the explicit Plan -> {Auto, AcceptEdits, Default} exit carved out
+     * below.
      *
      * @see createSubAgent() enforcement
      */
@@ -94,13 +107,21 @@ final class AgentManager
         $mode = $permissionMode ?? PermissionMode::Default;
 
         // Enforce permission mode cannot be changed mid-session.
-        // Plan spec says BypassPermissions can only be set at launch — once any
-        // sub-agent is created the session's permission mode is sealed to what
-        // was used first. Throwing LogicException makes the contract explicit.
+        // Plan spec says BypassPermissions/DontAsk can only be set at launch —
+        // once any sub-agent is created, re-entering either of those dangerous
+        // modes is sealed off for the rest of the session. The one explicit
+        // exception the plan carves out: Plan mode is allowed to exit into
+        // Auto/AcceptEdits/Default once a plan is approved and sub-agents are
+        // already live. Throwing LogicException makes the contract explicit.
         if ($this->sessionPermissionMode !== null && $this->sessionPermissionMode !== $mode) {
-            throw new \LogicException('Permission mode cannot be changed mid-session');
+            $isPlanExit = $this->sessionPermissionMode === PermissionMode::Plan
+                && in_array($mode, self::PLAN_EXIT_MODES, true);
+
+            if (!$isPlanExit) {
+                throw new \LogicException('Permission mode cannot be changed mid-session');
+            }
         }
-        $this->sessionPermissionMode ??= $mode;
+        $this->sessionPermissionMode = $mode;
 
         $gate = $this->createPermissionGate($mode);
 

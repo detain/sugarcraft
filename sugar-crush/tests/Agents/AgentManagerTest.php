@@ -168,6 +168,138 @@ final class AgentManagerTest extends TestCase
         $this->agentManager->createSubAgent('mode-test-agent', 'Task 2', PermissionMode::BypassPermissions);
     }
 
+    /**
+     * Plan -> Auto/AcceptEdits/Default is the plan's explicit carve-out from the mode
+     * seal: approving a plan hands control to a normal working mode, so it must succeed
+     * even though sub-agents are already live.
+     */
+    public function testCreateSubAgentPlanModeCanExitToAuto(): void
+    {
+        $agent = $this->createAgent(name: 'plan-exit-auto-agent', prompt: 'Plan exit agent');
+        $this->agentManager->register($agent);
+
+        $this->agentManager->createSubAgent('plan-exit-auto-agent', 'Draft plan', PermissionMode::Plan);
+
+        $second = $this->agentManager->createSubAgent('plan-exit-auto-agent', 'Execute plan', PermissionMode::Auto);
+
+        $this->assertNotNull($second->permissionGate);
+        $this->assertSame(PermissionMode::Auto, $second->permissionGate->mode());
+    }
+
+    public function testCreateSubAgentPlanModeCanExitToAcceptEdits(): void
+    {
+        $agent = $this->createAgent(name: 'plan-exit-accept-agent', prompt: 'Plan exit agent');
+        $this->agentManager->register($agent);
+
+        $this->agentManager->createSubAgent('plan-exit-accept-agent', 'Draft plan', PermissionMode::Plan);
+
+        $second = $this->agentManager->createSubAgent(
+            'plan-exit-accept-agent',
+            'Execute plan',
+            PermissionMode::AcceptEdits,
+        );
+
+        $this->assertNotNull($second->permissionGate);
+        $this->assertSame(PermissionMode::AcceptEdits, $second->permissionGate->mode());
+    }
+
+    public function testCreateSubAgentPlanModeCanExitToDefault(): void
+    {
+        $agent = $this->createAgent(name: 'plan-exit-default-agent', prompt: 'Plan exit agent');
+        $this->agentManager->register($agent);
+
+        $this->agentManager->createSubAgent('plan-exit-default-agent', 'Draft plan', PermissionMode::Plan);
+
+        $second = $this->agentManager->createSubAgent(
+            'plan-exit-default-agent',
+            'Execute plan',
+            PermissionMode::Default,
+        );
+
+        $this->assertNotNull($second->permissionGate);
+        $this->assertSame(PermissionMode::Default, $second->permissionGate->mode());
+    }
+
+    /**
+     * The seal against re-entering BypassPermissions once sub-agents are live must
+     * still hold even through the Plan-exit carve-out: exiting Plan into Auto does not
+     * open the door to BypassPermissions afterward.
+     */
+    public function testCreateSubAgentPlanExitDoesNotReopenBypassPermissions(): void
+    {
+        $agent = $this->createAgent(name: 'plan-exit-then-bypass-agent', prompt: 'Plan exit agent');
+        $this->agentManager->register($agent);
+
+        $this->agentManager->createSubAgent('plan-exit-then-bypass-agent', 'Draft plan', PermissionMode::Plan);
+        $this->agentManager->createSubAgent('plan-exit-then-bypass-agent', 'Execute plan', PermissionMode::Auto);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Permission mode cannot be changed mid-session');
+
+        $this->agentManager->createSubAgent(
+            'plan-exit-then-bypass-agent',
+            'Escalate',
+            PermissionMode::BypassPermissions,
+        );
+    }
+
+    /**
+     * Re-entering BypassPermissions/DontAsk once sub-agents are live must still be
+     * sealed off — the fix only carves out the Plan -> {Auto, AcceptEdits, Default}
+     * exit, it must not weaken this part of the seal.
+     */
+    public function testCreateSubAgentCannotReenterBypassPermissionsAfterLive(): void
+    {
+        $agent = $this->createAgent(name: 'reenter-bypass-agent', prompt: 'Reenter bypass agent');
+        $this->agentManager->register($agent);
+
+        $this->agentManager->createSubAgent('reenter-bypass-agent', 'Task 1', PermissionMode::Default);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Permission mode cannot be changed mid-session');
+
+        $this->agentManager->createSubAgent(
+            'reenter-bypass-agent',
+            'Task 2',
+            PermissionMode::BypassPermissions,
+        );
+    }
+
+    public function testCreateSubAgentCannotReenterDontAskAfterLive(): void
+    {
+        $agent = $this->createAgent(name: 'reenter-dontask-agent', prompt: 'Reenter dont-ask agent');
+        $this->agentManager->register($agent);
+
+        $this->agentManager->createSubAgent('reenter-dontask-agent', 'Task 1', PermissionMode::AcceptEdits);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Permission mode cannot be changed mid-session');
+
+        $this->agentManager->createSubAgent(
+            'reenter-dontask-agent',
+            'Task 2',
+            PermissionMode::DontAsk,
+        );
+    }
+
+    /**
+     * Plan mode itself must still be sealed against arbitrary non-carve-out modes —
+     * only Auto/AcceptEdits/Default are allowed exits, not e.g. re-entering Plan from
+     * a different starting mode.
+     */
+    public function testCreateSubAgentCannotEnterPlanModeAfterDifferentModeIsLive(): void
+    {
+        $agent = $this->createAgent(name: 'enter-plan-agent', prompt: 'Enter plan agent');
+        $this->agentManager->register($agent);
+
+        $this->agentManager->createSubAgent('enter-plan-agent', 'Task 1', PermissionMode::Default);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Permission mode cannot be changed mid-session');
+
+        $this->agentManager->createSubAgent('enter-plan-agent', 'Task 2', PermissionMode::Plan);
+    }
+
     // -------------------------------------------------------------------------
     // getSubAgent()
     // -------------------------------------------------------------------------
