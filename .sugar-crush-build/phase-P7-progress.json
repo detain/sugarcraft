@@ -1,4 +1,5 @@
 {
+  "_note": "This file predates an independent audit and remediation pass (see sugar-crush/.sugar-crush-build/remediation-progress.json) and contradicts other tracking layers; do not trust it as a source of truth going forward.",
   "steps": {
     "P7.S1": {"status": "done", "reviewCycles": 1, "lastFindings": []},
     "P7.S2": {"status": "done", "reviewCycles": 1, "lastFindings": []},
