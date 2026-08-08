@@ -19,14 +19,15 @@ final class Task
         public readonly string $title,
         public readonly string $description,
         public readonly string $prompt,
+        public readonly \DateTimeImmutable $createdAt,
         public readonly ?string $assignedTo = null,
         public readonly TaskStatus $status = TaskStatus::Pending,
         public readonly ?string $result = null,
         public readonly ?string $error = null,
-        public readonly \DateTimeImmutable $createdAt,
         public readonly ?\DateTimeImmutable $claimedAt = null,
         public readonly ?\DateTimeImmutable $completedAt = null,
         /** @var string[] */
         public readonly array $dependsOn = [],
+        public readonly bool $isContested = false,
     ) {}
 }

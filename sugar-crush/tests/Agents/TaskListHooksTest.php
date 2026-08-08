@@ -197,6 +197,7 @@ final class TaskListHooksTest extends TestCase
             error: null,
             createdAt: new \DateTimeImmutable(),
             dependsOn: $dependsOn,
+            isContested: false,
         );
     }
 

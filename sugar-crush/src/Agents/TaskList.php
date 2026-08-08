@@ -145,6 +145,8 @@ final class TaskList
         $stmt->close();
 
         $this->assertTaskFound($taskId, $handle);
+
+        $this->closeForWrite($handle);
     }
 
     /**
@@ -177,7 +179,12 @@ final class TaskList
 
         $this->assertTaskFound($taskId, $handle);
 
-        // Dispatch TaskCompleted hook — block with continueOnBlock marks contested
+        // Release before dispatching: flock() is per open-file-description, so a
+        // hook path that re-enters TaskList (markContested) would fopen() the same
+        // file again and block on the lock this very process still holds.
+        $this->closeForWrite($handle);
+
+        // Dispatch TaskCompleted hook (post-action) — block with continueOnBlock marks contested
         if ($this->hookDispatcher !== null && $teamId !== '') {
             $context = $this->makeHookContext($teamId, $taskId, '');
             $hookResult = $this->hookDispatcher->dispatchTaskCompleted($context);
@@ -209,6 +216,8 @@ final class TaskList
         $stmt->close();
 
         $this->assertTaskFound($taskId, $handle);
+
+        $this->closeForWrite($handle);
     }
 
     /**
@@ -534,6 +543,7 @@ final class TaskList
             claimedAt: $row['claimed_at'] !== null ? new \DateTimeImmutable($row['claimed_at']) : null,
             completedAt: $row['completed_at'] !== null ? new \DateTimeImmutable($row['completed_at']) : null,
             dependsOn: json_decode($row['depends_on'] ?? '[]', true, 512, JSON_THROW_ON_ERROR),
+            isContested: (bool) (int) ($row['contested'] ?? 0),
         );
     }
 
