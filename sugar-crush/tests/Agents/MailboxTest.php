@@ -325,6 +325,98 @@ final class MailboxTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // waitForMessage
+    // -------------------------------------------------------------------------
+
+    public function testWaitForMessageReturnsImmediatelyWhenMessageAlreadyUnread(): void
+    {
+        $mailbox = new Mailbox($this->basePath);
+
+        $mailbox->send('teammate-a', 'teammate-h', new TeamMessage(
+            id: 'msg-already-there',
+            fromTeammateId: 'teammate-a',
+            toTeammateId: 'teammate-h',
+            type: 'idle',
+            payload: [],
+            sentAt: new \DateTimeImmutable(),
+        ));
+
+        $start = microtime(true);
+        $message = $mailbox->waitForMessage('teammate-h', 2.0);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertNotNull($message);
+        $this->assertSame('msg-already-there', $message->id);
+        // Already-unread fast path — must not fall through to the poll loop.
+        $this->assertLessThan(0.5, $elapsed);
+    }
+
+    public function testWaitForMessageReturnsNullAfterBoundedTimeoutWithNoMessage(): void
+    {
+        $mailbox = new Mailbox($this->basePath);
+
+        $start = microtime(true);
+        $message = $mailbox->waitForMessage('teammate-nobody', 0.2);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertNull($message);
+        // Genuinely polled for (roughly) the requested timeout rather than
+        // returning instantly or hanging indefinitely.
+        $this->assertGreaterThanOrEqual(0.15, $elapsed);
+        $this->assertLessThan(1.0, $elapsed);
+    }
+
+    /**
+     * Reproduces the real "wait for the next message" scenario: a message
+     * is sent from a genuinely separate OS process (via pcntl_fork) after a
+     * short delay, and a caller blocked in waitForMessage() must notice and
+     * return the message well before its timeout expires. This is the
+     * closest deterministic proxy to a live cross-process wake available in
+     * CI — skipped when pcntl is unavailable.
+     */
+    public function testWaitForMessageReturnsPromptlyWhenSentFromForkedProcess(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl required for a genuine cross-process wake test');
+        }
+
+        $basePath = $this->basePath;
+        $mailbox = new Mailbox($basePath);
+
+        $pid = pcntl_fork();
+        $this->assertNotSame(-1, $pid, 'fork failed');
+
+        if ($pid === 0) {
+            // Child process: wait a beat, then send() from an independent
+            // process so the parent has to observe the wake marker written
+            // by someone else, not merely re-read its own memory state.
+            usleep(150_000);
+            $childMailbox = new Mailbox($basePath);
+            $childMailbox->send('teammate-a', 'teammate-i', new TeamMessage(
+                id: 'fork-msg-1',
+                fromTeammateId: 'teammate-a',
+                toTeammateId: 'teammate-i',
+                type: 'task_result',
+                payload: ['ok' => true],
+                sentAt: new \DateTimeImmutable(),
+            ));
+            exit(0);
+        }
+
+        $start = microtime(true);
+        $message = $mailbox->waitForMessage('teammate-i', 3.0);
+        $elapsed = microtime(true) - $start;
+
+        pcntl_waitpid($pid, $status);
+
+        $this->assertNotNull($message, 'waitForMessage should have received the forked send()');
+        $this->assertSame('fork-msg-1', $message->id);
+        // Comfortably below the 3s deadline — proves it woke on the
+        // child's send() rather than exhausting the timeout.
+        $this->assertLessThan(2.0, $elapsed);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
