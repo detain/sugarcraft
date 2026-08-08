@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Workflows;
 /**
  * Thrown when a requested workflow cannot be found.
  */
-final class WorkflowNotFoundException extends \RuntimeException
+final class WorkflowNotFoundException extends \InvalidArgumentException
 {
     public function __construct(string $message = 'Workflow not found')
     {

@@ -254,9 +254,7 @@ final class WorkflowRegistry
      */
     private function validateName(string $name): void
     {
-        $sanitized = preg_replace('/[^a-zA-Z0-9_\-]/', '', $name);
-
-        if ($sanitized === '' || $sanitized !== $name) {
+        if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $name)) {
             throw new WorkflowNotFoundException(
                 "Invalid workflow name '{$name}'. Use only alphanumeric characters, underscores, and hyphens."
             );
