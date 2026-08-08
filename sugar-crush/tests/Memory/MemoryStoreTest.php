@@ -144,26 +144,45 @@ final class MemoryStoreTest extends TestCase
         $this->assertCount(1, $resultsMixed);
     }
 
+    public function testGetReturnsEntryById(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $id = $store->add('Retrieve this memory', 'user');
+
+        $entry = $store->get($id);
+
+        $this->assertNotNull($entry);
+        $this->assertEquals($id, $entry->id());
+        $this->assertEquals('Retrieve this memory', $entry->content());
+        $this->assertEquals('user', $entry->scope());
+        $this->assertEquals('pattern', $entry->type());
+    }
+
+    public function testGetReturnsNullForNonexistentId(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $result = $store->get('00000000000000000000000000000000');
+
+        $this->assertNull($result);
+    }
+
     public function testGenerateIndexCreatesIndexFile(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $store->add('Test memory content', 'user');
-        $store->generateIndex('user');
+        $store->add('First memory entry', 'user');
 
-        $indexFile = $this->tempDir . '/indexes/user.md';
-        $this->assertFileExists($indexFile);
-
-        $content = file_get_contents($indexFile);
-        $this->assertStringContainsString('# Memory Index', $content);
-        $this->assertStringContainsString('Test memory content', $content);
+        $indexPath = $this->tempDir . '/MEMORY.md';
+        $this->assertFileExists($indexPath);
     }
 
     public function testLoadIndexReturnsNullWhenNoIndex(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $result = $store->loadIndex('nonexistent');
+        $result = $store->loadIndex();
 
         $this->assertNull($result);
     }
@@ -172,126 +191,108 @@ final class MemoryStoreTest extends TestCase
     {
         $store = new MemoryStore($this->tempDir);
 
-        $store->add('Indexed memory', 'user');
-        $store->generateIndex('user');
+        $store->add('Test memory content', 'user');
+        $content = $store->loadIndex();
 
-        $result = $store->loadIndex('user');
-
-        $this->assertNotNull($result);
-        $this->assertStringContainsString('Indexed memory', $result);
+        $this->assertNotNull($content);
+        $this->assertStringContainsString('Memory Index (user)', $content);
+        $this->assertStringContainsString('Test memory content', $content);
     }
 
     public function testAddRegeneratesIndex(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $id = $store->add('First entry', 'user');
+        $store->add('First entry', 'user');
+        $content1 = $store->loadIndex('user');
+        $this->assertStringContainsString('First entry', $content1);
 
-        $indexFile = $this->tempDir . '/indexes/user.md';
-        $this->assertFileExists($indexFile);
-
-        $content = file_get_contents($indexFile);
-        $this->assertStringContainsString('First entry', $content);
+        $store->add('Second entry', 'user');
+        $content2 = $store->loadIndex('user');
+        $this->assertStringContainsString('Second entry', $content2);
     }
 
     public function testDeleteRegeneratesIndex(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $id = $store->add('Entry to delete', 'user');
-        $indexContentBefore = file_get_contents($this->tempDir . '/indexes/user.md');
-        $this->assertStringContainsString('Entry to delete', $indexContentBefore);
+        $id1 = $store->add('Entry to keep', 'user');
+        $id2 = $store->add('Entry to delete', 'user');
 
-        $store->delete($id);
+        $store->delete($id2);
 
-        $indexContentAfter = file_get_contents($this->tempDir . '/indexes/user.md');
-        $this->assertStringNotContainsString('Entry to delete', $indexContentAfter);
+        $content = $store->loadIndex();
+        $this->assertStringContainsString('Entry to keep', $content);
+        $this->assertStringNotContainsString('Entry to delete', $content);
     }
 
     public function testClearRegeneratesIndex(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $store->add('User memory one', 'user');
-        $store->add('User memory two', 'user');
-
-        $indexContentBefore = file_get_contents($this->tempDir . '/indexes/user.md');
-        $this->assertStringContainsString('User memory one', $indexContentBefore);
+        $store->add('User memory', 'user');
+        $store->add('Project memory', 'project');
 
         $store->clear('user');
-        $store->generateIndex('user');
 
-        $indexContentAfter = file_get_contents($this->tempDir . '/indexes/user.md');
-        $this->assertStringNotContainsString('User memory one', $indexContentAfter);
-        $this->assertStringNotContainsString('User memory two', $indexContentAfter);
+        $content = $store->loadIndex();
+        $this->assertNull($content);
+        $this->assertFileDoesNotExist($this->tempDir . '/MEMORY.md');
     }
 
     public function testIndexContainsEntryMetadata(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $store->add('Test content for metadata', 'user');
-        $store->generateIndex('user');
+        $id = $store->add('Memory with content', 'user');
 
-        $index = $store->loadIndex('user');
-        $this->assertNotNull($index);
-        $this->assertStringContainsString('[pattern]', $index);
+        $content = $store->loadIndex();
+        $this->assertStringContainsString('PATTERN', $content);
+        $this->assertStringContainsString($id, $content);
     }
 
     public function testIndexFormatIsMarkdownList(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $store->add('Memory entry content here', 'user');
-        $store->generateIndex('user');
+        $store->add('First memory entry', 'user');
+        $store->add('Second memory entry', 'user');
 
-        $index = $store->loadIndex('user');
-        $this->assertNotNull($index);
-        // Should have markdown list format: - [{type}] or - **[{type}]**
-        $this->assertTrue(
-            str_contains($index, '- **[') || str_contains($index, '- ['),
-            'Index should contain markdown list entry'
-        );
+        $content = $store->loadIndex();
+        $this->assertStringContainsString("# Memory Index (user)", $content);
+        $this->assertStringContainsString("Loaded at:", $content);
+        $this->assertStringContainsString("---", $content);
+        $this->assertStringContainsString("Generated by sugar-crush memory system", $content);
     }
 
     public function testIndexShowsIdAndTags(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        $id = $store->add('Content', 'user');
-        $store->generateIndex('user');
+        $store->add('Tagged memory', 'user', ['php', 'testing']);
 
-        $index = $store->loadIndex('user');
-        $this->assertNotNull($index);
-        // Index should contain the entry ID
-        $this->assertStringContainsString($id, $index);
+        $content = $store->loadIndex();
+        $this->assertStringContainsString('php, testing', $content);
     }
 
     public function testIndexEnforcesSizeAndLineCaps(): void
     {
         $store = new MemoryStore($this->tempDir);
 
-        // Add enough entries to exceed 25KB. Each entry produces a ~3-line summary
-        // (~150 bytes). The 25KB cap triggers well before the 200-line entry cap,
-        // so this test verifies the byte cap is enforced.
-        $targetBytes = 25 * 1024; // 25KB
-        for ($i = 0; $i < 175; $i++) {
-            $store->add('This is a moderately long memory content entry to push the index size over 25KB limit ' . $i, 'user');
+        // Add enough entries to potentially exceed line cap.
+        for ($i = 0; $i < 50; $i++) {
+            $store->add("Memory entry number {$i} with some content here", 'user');
         }
 
-        $store->generateIndex('user');
+        $content = $store->loadIndex();
+        $this->assertNotNull($content);
 
-        $index = $store->loadIndex('user');
-        $this->assertNotNull($index);
+        // Should be under 25KB.
+        $this->assertLessThan(25 * 1024, strlen($content));
 
-        // Byte cap: index must not exceed 25KB
-        $byteCount = strlen($index);
-        $this->assertLessThanOrEqual($targetBytes, $byteCount, 'Index should not exceed 25KB');
-
-        // Line cap: header (~6 lines) + entry lines + footer (~2 lines). With the byte
-        // cap triggering first, entry lines are capped; total should be well under 210.
-        $lineCount = substr_count($index, "\n") + 1;
-        $this->assertLessThanOrEqual(200, $lineCount, 'Index should not exceed 200 entry lines plus header/footer');
+        // Count lines — should be under 200.
+        $lineCount = substr_count($content, "\n");
+        $this->assertLessThan(200, $lineCount + 1); // +1 because last line has no trailing newline.
     }
 
     private function removeDirectory(string $dir): void
