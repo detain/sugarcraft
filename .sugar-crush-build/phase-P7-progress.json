@@ -1,0 +1,22 @@
+{
+  "steps": {
+    "P7.S1": {"status": "done", "reviewCycles": 1, "lastFindings": []},
+    "P7.S2": {"status": "done", "reviewCycles": 1, "lastFindings": []},
+    "P7.S3": {"status": "done", "reviewCycles": 1, "lastFindings": []},
+    "P7.S4": {"status": "done", "reviewCycles": 1, "lastFindings": []},
+    "P7.S5": {"status": "done", "reviewCycles": 1, "lastFindings": []},
+    "P7.S6": {"status": "done", "reviewCycles": 1, "lastFindings": []},
+    "P7.S7": {"status": "done", "reviewCycles": 1, "lastFindings": []},
+    "P7.S8": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S9": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S10": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S11": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S12": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S13": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S14": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S15": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S16": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S17": {"status": "not_started", "reviewCycles": 0, "lastFindings": []},
+    "P7.S18": {"status": "not_started", "reviewCycles": 0, "lastFindings": []}
+  }
+}

@@ -16,7 +16,7 @@ final class LspCacheTest extends TestCase
     // Factory
     // -------------------------------------------------------------------------
 
-    public function testDefaultTtlIsSixtySeconds(): void
+    public function testEntryPersistsWithinShortDuration(): void
     {
         $cache = new LspCache();
         $cache->set('file:///a.php', 'textDocument/definition', ['result']);
