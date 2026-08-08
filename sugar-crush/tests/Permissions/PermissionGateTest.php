@@ -491,6 +491,53 @@ final class PermissionGateTest extends TestCase
     }
 
     /**
+     * R3(b): a double-quoted target (`"/"`) must still trip the breaker — quoting
+     * a path is a routine shell habit, not an unusual evasion, and the original
+     * literal token comparison missed it because the quotes were part of the token.
+     */
+    public function testRmRfCircuitBreakerCatchesDoubleQuotedTarget(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => 'rm -rf "/"'],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * R3(b): a single-quoted target (`'/'`) must still trip the breaker.
+     */
+    public function testRmRfCircuitBreakerCatchesSingleQuotedTarget(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => "rm -rf '/'"],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
+     * R3(b): a quoted home-dir target (`'~'`) must still trip the breaker.
+     */
+    public function testRmRfCircuitBreakerCatchesQuotedHomeTarget(): void
+    {
+        $gate = new PermissionGate(PermissionMode::BypassPermissions);
+
+        $decision = $gate->evaluate(new ToolCall(
+            name: 'Bash',
+            arguments: ['command' => "rm -rf '~'"],
+        ));
+
+        $this->assertSame(PermissionDecision::Deny, $decision);
+    }
+
+    /**
      * R3(a): an explicit Bash*: Allow rule must NOT defeat the circuit breaker —
      * the breaker is evaluated before rules, unconditionally.
      */

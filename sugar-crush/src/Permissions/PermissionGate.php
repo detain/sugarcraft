@@ -274,12 +274,16 @@ final class PermissionGate
      * Detect the `rm -rf /` or `rm -rf ~` circuit-breaker pattern (R3).
      *
      * Deliberately tolerant of evasion via flag reordering (`-fr`), flag splitting
-     * (`-r -f`), long-form flags (`--recursive --force`), and `--no-preserve-root`
-     * riding along. Case-insensitive; handles prefixes like `sudo`. Command chains
-     * (`foo && rm -rf /`) are checked segment-by-segment.
+     * (`-r -f`), long-form flags (`--recursive --force`), `--no-preserve-root`
+     * riding along, and the target being wrapped in matching quotes (`"/"`, `'~'`)
+     * — a quoted path is a routine shell habit, not an unusual evasion, and the
+     * literal token comparison must see through it. Case-insensitive; handles
+     * prefixes like `sudo`. Command chains (`foo && rm -rf /`) are checked
+     * segment-by-segment.
      *
      * Matches: rm -rf /, rm -fr /, rm -r -f /, rm --recursive --force /,
-     * rm -rf --no-preserve-root /, rm -rf ~, sudo rm -rf /, SUDO RM -RF ~
+     * rm -rf --no-preserve-root /, rm -rf "/", rm -rf '/', rm -rf ~,
+     * sudo rm -rf /, SUDO RM -RF ~
      */
     private function isRmRfRootOrHome(ToolCall $call): bool
     {
@@ -375,7 +379,28 @@ final class PermissionGate
             return false;
         }
 
+        $target = $this->stripMatchingQuotes($target);
+
         return $target === '/' || $target === '~';
+    }
+
+    /**
+     * Strip a single pair of matching surrounding quotes (`"/"` -> `/`, `'~'` -> `~`)
+     * so a quoted target can't evade the literal token comparison — a quoted path is
+     * a routine shell habit, not an unusual evasion.
+     */
+    private function stripMatchingQuotes(string $token): string
+    {
+        $length = strlen($token);
+        if ($length >= 2) {
+            $first = $token[0];
+            $last = $token[$length - 1];
+            if (($first === '"' || $first === "'") && $first === $last) {
+                return substr($token, 1, -1);
+            }
+        }
+
+        return $token;
     }
 
     // -------------------------------------------------------------------------
