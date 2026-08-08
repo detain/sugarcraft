@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands;
 
-use DateTimeImmutable;
 use LogicException;
 use RuntimeException;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Share\ShareResult;
 use SugarCraft\Crush\Share\ShareSession;
-use SugarCraft\Crush\Share\ShareUploader;
 
 /**
  * Implements the /share command that exports the current session to a signed URL.
