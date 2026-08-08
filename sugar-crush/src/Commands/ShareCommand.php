@@ -7,7 +7,6 @@ namespace SugarCraft\Crush\Commands;
 use LogicException;
 use RuntimeException;
 use SugarCraft\Crush\Chat;
-use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Share\ShareResult;
 use SugarCraft\Crush\Share\ShareSession;
 
