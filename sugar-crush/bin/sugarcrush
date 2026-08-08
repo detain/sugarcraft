@@ -17,70 +17,10 @@ declare(strict_types=1);
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
-use SugarCraft\Crush\Backend;
-use SugarCraft\Crush\Backend\CommandBackend;
-use SugarCraft\Crush\Backend\EngineBackend;
-use SugarCraft\Crush\Chat;
-use SugarCraft\Crush\Hooks\HookManager;
-use SugarCraft\Crush\Hooks\HookRegistry;
-use SugarCraft\Crush\Providers\EchoProvider;
-use SugarCraft\Crush\Providers\ProviderFactory;
-use SugarCraft\Crush\Tools\BuiltIn\Bash;
-use SugarCraft\Crush\Tools\BuiltIn\Edit;
-use SugarCraft\Crush\Tools\BuiltIn\Glob;
-use SugarCraft\Crush\Tools\BuiltIn\Grep;
-use SugarCraft\Crush\Tools\BuiltIn\Read;
-use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
+use SugarCraft\Crush\Cli\Bootstrap;
 
-/**
- * Backend selection, in priority order:
- *
- *   1. $SUGARCRUSH_PROVIDER (+ provider env, e.g. $OPENAI_API_KEY) — run the
- *      full agent engine: that provider driven by the Runtime with the
- *      built-in coding tools (Bash/Read/Edit/Glob/Grep/WebFetch) gated by the
- *      safety hooks. $SUGARCRUSH_MODEL overrides the model.
- *   2. $SUGARCRUSH_BACKEND_CMD — dependency-free shell-out: a command that
- *      reads JSON history on stdin and writes the reply to stdout.
- *   3. (default) the offline EchoProvider, still run through the engine so the
- *      binary launches with zero network and zero config.
- */
-$backend = (static function (): Backend {
-    $root = getcwd();
-    $tools = [
-        new Bash($root),
-        new Read($root),
-        new Edit($root),
-        new Glob($root),
-        new Grep($root),
-        new WebFetch(),
-    ];
-
-    $hooks = new HookManager(new HookRegistry());
-    $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
-
-    $providerType = getenv('SUGARCRUSH_PROVIDER');
-    if ($providerType !== false && $providerType !== '') {
-        try {
-            $factory = new ProviderFactory();
-            $provider = $factory->create($factory->defaultConfig($providerType));
-            $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerType)['model'] ?? 'gpt-4o');
-
-            return (new EngineBackend($provider, (string) $model))
-                ->withTools($tools)
-                ->withHooks($hooks);
-        } catch (\Throwable $e) {
-            fwrite(STDERR, "sugarcrush: provider '{$providerType}' unavailable ({$e->getMessage()}); falling back to echo.\n");
-        }
-    }
-
-    $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
-    if ($cmd !== false && $cmd !== '') {
-        return new CommandBackend($cmd);
-    }
-
-    return (new EngineBackend(new EchoProvider(), 'echo'))
-        ->withTools($tools)
-        ->withHooks($hooks);
-})();
-
-(new Program(new Chat(backend: $backend), new ProgramOptions(useAltScreen: true)))->run();
+// All backend/tool/session-store/memory-store/instruction-loader wiring
+// lives in Bootstrap (R19) so it can be exercised by a test without
+// shelling out to this script and blocking on Program::run(). See
+// Bootstrap's class docblock for the reasoning.
+(new Program(Bootstrap::chat(), new ProgramOptions(useAltScreen: true)))->run();
