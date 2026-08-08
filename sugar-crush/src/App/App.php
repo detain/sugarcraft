@@ -178,11 +178,17 @@ final class App
     }
 
     /**
-     * The real command surface for a /skills or command-palette listing:
-     * only skills the registry marks user-invocable are ever shown, so a
-     * skill authored with `user-invocable: false` can never be picked from
-     * such a listing (it remains reachable only via auto-invocation or
-     * direct programmatic enable()).
+     * Filter to the registry's user-invocable skills.
+     *
+     * A skill authored with `user-invocable: false` is excluded from
+     * whatever list is passed through this filter, and remains reachable
+     * only via auto-invocation or direct programmatic enable(). This is
+     * the filtering primitive a future /skills or command-palette listing
+     * should call — no such listing is wired up anywhere in the codebase
+     * yet (`src/Tui/KeyboardHandler.php` emits `CommandPaletteCmd` /
+     * `SourceSkillCmd`, but nothing currently consumes either), so calling
+     * this method today has no user-visible effect until a listing exists
+     * that calls it.
      *
      * @return array<Skill>
      */

@@ -41,7 +41,10 @@ final class AppSkillDispatchTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // userInvocableSkills() — the real command-surface listing
+    // userInvocableSkills() — the user-invocable filter primitive. Nothing
+    // in the codebase currently wires this into a live /skills or
+    // command-palette listing (see App::userInvocableSkills() doc comment);
+    // these tests only prove the filtering logic itself is correct.
     // -------------------------------------------------------------------------
 
     public function testUserInvocableSkillsExcludesNonUserInvocableSkill(): void
@@ -57,9 +60,9 @@ final class AppSkillDispatchTest extends TestCase
         // Act
         $result = $app->userInvocableSkills();
 
-        // Assert - the command-surface listing must never include a skill
-        // that opted out of user invocation, even though it is registered
-        // and otherwise enabled/discoverable.
+        // Assert - the filter must never include a skill that opted out of
+        // user invocation, even though it is registered and otherwise
+        // enabled/discoverable.
         $names = array_map(fn(Skill $s) => $s->name, $result);
         $this->assertContains('palette-skill', $names);
         $this->assertNotContains('system-only-skill', $names);
