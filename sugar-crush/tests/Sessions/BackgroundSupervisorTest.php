@@ -37,8 +37,7 @@ final class BackgroundSupervisorTest extends TestCase
             task: 'test task',
             workingDirectory: '/tmp',
         );
-        $session->status = $status;
-        return $session;
+        return $session->withStatus($status);
     }
 
     public function testHasActiveSessionsReturnsFalseWhenEmpty(): void
@@ -120,5 +119,35 @@ final class BackgroundSupervisorTest extends TestCase
         };
         $clone = $supervisor->withListener($listener);
         $this->assertNotSame($supervisor, $clone);
+    }
+
+    public function testReconnectReturnsEmptyWhenAlreadyReconnected(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $session = $this->makeSession('s1', BackgroundSessionStatus::Running);
+        $supervisor->addSession($session);
+
+        // First reconnect returns the session
+        $result1 = $supervisor->reconnect();
+        $this->assertCount(1, $result1);
+
+        // Second reconnect (already reconnected) returns empty
+        $result2 = $supervisor->reconnect();
+        $this->assertCount(0, $result2);
+    }
+
+    public function testOnSessionStreamingAppendsOutput(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $session = $this->makeSession('s1', BackgroundSessionStatus::Running);
+        $supervisor->addSession($session);
+
+        // Simulate streaming chunks
+        $supervisor->onSessionStreaming($session, 'Hello, ');
+        $supervisor->onSessionStreaming($session, 'World!');
+
+        // Verify output is accumulated in the session stored in supervisor
+        $updatedSession = $supervisor->getSession('s1');
+        $this->assertSame('Hello, World!', $updatedSession->output);
     }
 }

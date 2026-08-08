@@ -34,21 +34,16 @@ final class BackgroundSession
         public readonly int $timeoutSeconds = 3600,
         ?array $tags = null,
         public readonly \DateTimeImmutable $createdAt = new \DateTimeImmutable(),
+        public readonly BackgroundSessionStatus $status = BackgroundSessionStatus::Pending,
+        public readonly string $output = '',
     ) {
         $this->tags = $tags ?? [];
         $this->lastHeartbeat = time();
-        $this->status = BackgroundSessionStatus::Pending;
-        $this->output = '';
     }
 
     // =========================================================================
     // Status
     // =========================================================================
-
-    public BackgroundSessionStatus $status;
-
-    /** @var string Accumulated streaming output */
-    public string $output;
 
     /** @var int Tokens consumed so far */
     public int $tokensUsed = 0;
@@ -67,9 +62,37 @@ final class BackgroundSession
      */
     public function withStatus(BackgroundSessionStatus $status): self
     {
-        $clone = clone $this;
-        $clone->status = $status;
-        return $clone;
+        return new self(
+            id: $this->id,
+            name: $this->name,
+            agent: $this->agent,
+            task: $this->task,
+            workingDirectory: $this->workingDirectory,
+            timeoutSeconds: $this->timeoutSeconds,
+            tags: $this->tags,
+            createdAt: $this->createdAt,
+            status: $status,
+            output: $this->output,
+        );
+    }
+
+    /**
+     * Update the accumulated output.
+     */
+    public function withOutput(string $output): self
+    {
+        return new self(
+            id: $this->id,
+            name: $this->name,
+            agent: $this->agent,
+            task: $this->task,
+            workingDirectory: $this->workingDirectory,
+            timeoutSeconds: $this->timeoutSeconds,
+            tags: $this->tags,
+            createdAt: $this->createdAt,
+            status: $this->status,
+            output: $output,
+        );
     }
 
     /**

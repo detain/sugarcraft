@@ -313,7 +313,7 @@ final class BackgroundSessionTest extends TestCase
             task: 't', workingDirectory: '/tmp',
         );
         $done = $session->withStatus(BackgroundSessionStatus::Completed);
-        $done->output = 'test output';
+        $done = $done->withOutput('test output');
         $result = $done->toAgentResult();
         $this->assertSame('s1', $result->agentId);
         $this->assertSame(AgentStatus::Completed, $result->status);
