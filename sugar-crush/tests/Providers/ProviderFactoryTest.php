@@ -560,4 +560,109 @@ final class ProviderFactoryTest extends TestCase
 
         return $client;
     }
+
+    // -------------------------------------------------------------------------
+    // fromProjectConfig() - reads .sugar-crush/config.dev.json off disk
+    // -------------------------------------------------------------------------
+
+    public function testDefaultConfigPathPointsAtConfigDevJson(): void
+    {
+        $this->assertStringEndsWith('/.sugar-crush/config.dev.json', ProviderFactory::defaultConfigPath());
+    }
+
+    /**
+     * Reproduces R24: loads the ACTUAL committed .sugar-crush/config.dev.json
+     * (not a fixture stand-in) via defaultConfigPath(), with no explicit
+     * $name, and asserts the 'defaultProvider' key ('dev-sglang') resolves
+     * to a real, working SglangProvider wired from that file's own
+     * baseUrl/model. Before this fix nothing in the runtime ever read this
+     * file, so dev-sglang was declared but unreachable.
+     */
+    public function testFromProjectConfigLoadsRealConfigDevJsonDefaultProvider(): void
+    {
+        $configPath = ProviderFactory::defaultConfigPath();
+        $this->assertFileExists($configPath, 'Expected the committed .sugar-crush/config.dev.json to exist on disk');
+
+        $raw = json_decode(file_get_contents($configPath), true);
+        $this->assertIsArray($raw);
+        $this->assertSame('dev-sglang', $raw['defaultProvider']);
+
+        $provider = $this->factory->fromProjectConfig();
+
+        $this->assertInstanceOf(SglangProvider::class, $provider);
+        $this->assertInstanceOf(ProviderInterface::class, $provider);
+        $this->assertSame('sglang', $provider->name());
+
+        $expected = $raw['providers']['dev-sglang'];
+        $this->assertSame($expected['baseUrl'], $this->sglangPropertyOf($provider, 'baseUrl'));
+        $this->assertSame($expected['model'], $this->sglangPropertyOf($provider, 'model'));
+    }
+
+    public function testFromProjectConfigSelectsProviderByNameNotJustDefault(): void
+    {
+        $provider = $this->factory->fromProjectConfig('dev-sglang');
+
+        $this->assertInstanceOf(SglangProvider::class, $provider);
+        $this->assertSame('sglang', $provider->name());
+    }
+
+    public function testFromProjectConfigThrowsWhenFileMissing(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Provider config file not found');
+
+        $this->factory->fromProjectConfig(configPath: '/nonexistent/.sugar-crush/config.dev.json');
+    }
+
+    public function testFromProjectConfigThrowsWhenDefaultProviderKeyMissing(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'pf_cfg_');
+        file_put_contents($tmp, json_encode([
+            'providers' => [
+                'dev-sglang' => ['type' => 'sglang', 'baseUrl' => 'http://localhost:30000', 'model' => 'm'],
+            ],
+        ]));
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage("missing a 'defaultProvider' key");
+
+            $this->factory->fromProjectConfig(configPath: $tmp);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testFromProjectConfigThrowsWhenNamedProviderEntryMissing(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'pf_cfg_');
+        file_put_contents($tmp, json_encode([
+            'providers' => [
+                'dev-sglang' => ['type' => 'sglang', 'baseUrl' => 'http://localhost:30000', 'model' => 'm'],
+            ],
+            'defaultProvider' => 'dev-sglang',
+        ]));
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage("no 'providers.missing-provider' entry");
+
+            $this->factory->fromProjectConfig('missing-provider', configPath: $tmp);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    /**
+     * Reads a private scalar property off a SglangProvider instance, to
+     * assert the provider was actually built from the config file's own
+     * baseUrl/model rather than some hardcoded default.
+     */
+    private function sglangPropertyOf(SglangProvider $provider, string $name): mixed
+    {
+        $prop = (new \ReflectionClass(SglangProvider::class))->getProperty($name);
+        $prop->setAccessible(true);
+
+        return $prop->getValue($provider);
+    }
 }

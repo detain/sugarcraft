@@ -86,6 +86,60 @@ final readonly class ProviderFactory
     }
 
     /**
+     * Filesystem location of the dev/test-fixture provider config, resolved
+     * relative to this file the same way Agents\WorktreeConfig::new()
+     * resolves .sugar-crush/config.json, so both stay in lockstep if the
+     * project root ever moves.
+     */
+    public static function defaultConfigPath(): string
+    {
+        return __DIR__ . '/../../../.sugar-crush/config.dev.json';
+    }
+
+    /**
+     * Creates a provider from the project's .sugar-crush/config.dev.json
+     * (or an explicit override path).
+     *
+     * Without $name, the provider named by the config file's
+     * 'defaultProvider' key is used - this is what makes dev-sglang the
+     * default backend for the dev loop and test fixtures. With $name, a
+     * specific entry under 'providers' is selected instead, so any provider
+     * declared in the file - not only the default - is loadable.
+     *
+     * @throws \RuntimeException When the file is missing/unreadable, invalid
+     *     JSON, missing 'defaultProvider' (when $name is null), or missing
+     *     the requested entry under 'providers'.
+     */
+    public function fromProjectConfig(?string $name = null, ?string $configPath = null): ProviderInterface
+    {
+        $configPath ??= self::defaultConfigPath();
+
+        if (!is_file($configPath)) {
+            throw new \RuntimeException("Provider config file not found: {$configPath}");
+        }
+
+        $contents = file_get_contents($configPath);
+        if ($contents === false) {
+            throw new \RuntimeException("Failed to read provider config file: {$configPath}");
+        }
+
+        $data = $this->parseJson($contents);
+
+        if ($name === null) {
+            if (!isset($data['defaultProvider']) || !is_string($data['defaultProvider']) || $data['defaultProvider'] === '') {
+                throw new \RuntimeException("Provider config file '{$configPath}' is missing a 'defaultProvider' key");
+            }
+            $name = $data['defaultProvider'];
+        }
+
+        if (!isset($data['providers'][$name]) || !is_array($data['providers'][$name])) {
+            throw new \RuntimeException("Provider config file '{$configPath}' has no 'providers.{$name}' entry");
+        }
+
+        return $this->create($data['providers'][$name]);
+    }
+
+    /**
      * Resolves ${VAR} and ${VAR:-default} patterns from environment.
      *
      * @param string|null $value The value to resolve
