@@ -5,19 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\LSP;
 
 /**
- * LSP client connection over stdio or TCP using JSON-RPC 2.0.
+ * LSP client connection over stdio using JSON-RPC 2.0.
  *
  * Spawns a language server process and communicates with it via the
  * Language Server Protocol over stdio. Handles request/response routing
  * by matching message IDs, supports multiple in-flight requests, and
  * properly cleans up the process on disconnect.
  *
- * Mirrors the LSP spec: https://microsoft.github.io/language-server-protocol/
- *
- * @note When transport is 'tcp', connects via stream_socket_client() to host:port
- *       instead of spawning a subprocess via proc_open().
+ * Mirrors sugar-crush design.
  */
-class LspConnection
+final class LspConnection
 {
     /** @var resource|null */
     private $process = null;
@@ -25,47 +22,76 @@ class LspConnection
     /** @var array{0: resource, 1: resource, 2: resource}|null */
     private $pipes = null;
 
-    /** @var resource|null */
-    private $socket = null;
-
     /** Monotonic JSON-RPC request id — avoids collisions that time() causes. */
     private int $nextId = 0;
 
-    /** Persistent read buffer so partial lines survive across reads. */
+    /** Persistent read buffer so partial messages survive across reads. */
     private string $readBuffer = '';
 
+    /** Whether we have completed the LSP initialization handshake. */
     private bool $initialized = false;
 
     /** Server capabilities cached after initialize. */
     private ?array $capabilities = null;
 
-    /**
-     * @param 'stdio'|'tcp' $transport
-     */
+    /** Callback for server-initiated notifications. */
+    private mixed $notificationCallback = null;
+
+    /** Default request timeout in seconds. */
+    private float $requestTimeout = 30.0;
+
     public function __construct(
         private readonly string $serverPath,
         private readonly array $serverArgs = [],
-        private readonly ?string $cwd = null,
-        private readonly string $transport = 'stdio',
-        private readonly ?string $host = null,
-        private readonly ?int $port = null,
-    ) {
-        if (!in_array($transport, ['stdio', 'tcp'], true)) {
-            throw new \InvalidArgumentException('transport must be "stdio" or "tcp"');
+    ) {}
+
+    /**
+     * Start the LSP server process with the given command and environment.
+     *
+     * @param string $command The server executable path
+     * @param array<string, string> $env Environment variables to pass to the server
+     * @param string|null $cwd Working directory for the subprocess (null = inherited)
+     * @param float $timeout Request timeout in seconds
+     */
+    public function connect(string $command, array $env, ?string $cwd = null, float $timeout = 30.0): void
+    {
+        $this->requestTimeout = $timeout;
+
+        $this->process = proc_open(
+            [$command, ...array_values($this->serverArgs)],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $this->pipes,
+            $cwd,
+            $env,
+        );
+
+        if (!is_resource($this->process)) {
+            throw new \RuntimeException("Failed to start LSP server: {$command}");
         }
+
+        // Mark as initialized so isConnected returns true.
+        // Caller is responsible for calling initialize() to complete LSP handshake.
+        $this->initialized = true;
     }
 
     /**
-     * Spawn the server process, send initialize, and return server capabilities.
+     * Complete the LSP initialization handshake and return server capabilities.
      *
      * @return array Server capabilities from the initialize response result.
      * @throws \RuntimeException If the server fails to start or respond.
+     * @throws LspResponseException If the server returns a JSON-RPC error.
      */
-    public function connect(): array
+    public function initialize(): array
     {
-        $this->startTransport();
+        if (!$this->initialized || !is_resource($this->process)) {
+            throw new \RuntimeException('Not connected to LSP server');
+        }
 
-        $response = $this->request('initialize', [
+        $response = $this->sendRequest('initialize', [
             'processId' => getmypid(),
             'clientInfo' => ['name' => 'sugar-crush', 'version' => '1.0.0'],
             'capabilities' => [
@@ -81,16 +107,20 @@ class LspConnection
             ],
         ]);
 
-        if ($response === null) {
+        if ($response->isTimeout()) {
             $this->disconnect();
             throw new \RuntimeException('Server did not respond to initialize');
         }
 
-        $this->capabilities = $response['capabilities'] ?? [];
-        $this->initialized = true;
+        if ($response->isError) {
+            $this->disconnect();
+            throw new LspResponseException($response->errorMessage ?? 'Server returned error on initialize');
+        }
+
+        $this->capabilities = $response->result['capabilities'] ?? [];
 
         // Send initialized notification (no response expected).
-        $this->notify('initialized', ['capabilities' => $this->capabilities]);
+        $this->sendNotification('initialized', []);
 
         return $this->capabilities;
     }
@@ -105,135 +135,77 @@ class LspConnection
             return;
         }
 
-        try {
-            $this->request('shutdown', null);
-        } catch (\Throwable) {
-            // Server may have already terminated — ignore.
+        if (is_resource($this->process)) {
+            try {
+                $this->sendRequest('shutdown', null);
+            } catch (\Throwable) {
+                // Server may have already terminated — ignore.
+            }
+
+            $this->sendNotification('exit', null);
         }
 
-        $this->notify('exit');
         $this->stopProcess();
         $this->initialized = false;
         $this->capabilities = null;
     }
 
     /**
-     * textDocument/definition — go-to-definition.
+     * Send a JSON-RPC request and wait for the response.
      *
-     * @return array Locations (LSP Location[]).
+     * @param string $method The LSP method name
+     * @param array<string, mixed>|null $params The method parameters
+     * @return LspResponse Wrapped response — use $response->isError to check for errors
      */
-    public function definitions(string $uri, int $line, int $col): array
+    public function sendRequest(string $method, ?array $params): LspResponse
     {
-        $response = $this->request('textDocument/definition', [
-            'textDocument' => ['uri' => $uri],
-            'position' => ['line' => $line, 'character' => $col],
-        ]);
-
-        if ($response === null) {
-            return [];
+        if (!is_resource($this->process) || $this->pipes === null) {
+            return LspResponse::ioError('Not connected to LSP server');
         }
 
-        return $this->normalizeLocations($response);
+        $id = (string) $this->nextId++;
+        $payload = ['jsonrpc' => '2.0', 'id' => $id, 'method' => $method];
+        if ($params !== null) {
+            $payload['params'] = $params;
+        }
+
+        if (!$this->writeMessage($payload)) {
+            return LspResponse::ioError('Failed to write message');
+        }
+
+        $deadline = microtime(true) + $this->requestTimeout;
+
+        return $this->readResponse($id, $deadline);
     }
 
     /**
-     * textDocument/references — find all references.
+     * Send a JSON-RPC notification (no response expected).
      *
-     * @return array Locations (LSP Location[]).
+     * @param string $method The LSP method name
+     * @param array<string, mixed>|null $params The method parameters
      */
-    public function references(string $uri, int $line, int $col): array
+    public function sendNotification(string $method, ?array $params): void
     {
-        $response = $this->request('textDocument/references', [
-            'textDocument' => ['uri' => $uri],
-            'position' => ['line' => $line, 'character' => $col],
-            'context' => ['includeDeclaration' => true],
-        ]);
-
-        if ($response === null) {
-            return [];
+        if (!is_resource($this->process) || $this->pipes === null) {
+            return;
         }
 
-        return $this->normalizeLocations($response);
+        $payload = ['jsonrpc' => '2.0', 'method' => $method];
+        if ($params !== null) {
+            $payload['params'] = $params;
+        }
+
+        $this->writeMessage($payload);
     }
 
     /**
-     * textDocument/hover — hover information.
+     * Register a callback for server-initiated notifications.
      *
-     * @return array|null Hover result (contents + range) or null if not available.
+     * @param callable $callback Called with (method: string, params: array|null) when server sends a notification
      */
-    public function hover(string $uri, int $line, int $col): ?array
+    public function onNotification(callable $callback): void
     {
-        $response = $this->request('textDocument/hover', [
-            'textDocument' => ['uri' => $uri],
-            'position' => ['line' => $line, 'character' => $col],
-        ]);
-
-        if ($response === null || !array_key_exists('contents', $response)) {
-            return null;
-        }
-
-        return $response;
-    }
-
-    /**
-     * textDocument/documentSymbol — list symbols in a document.
-     *
-     * @return array DocumentSymbol[] or SymbolInformation[].
-     */
-    public function symbols(string $uri): array
-    {
-        $response = $this->request('textDocument/documentSymbol', [
-            'textDocument' => ['uri' => $uri],
-        ]);
-
-        if ($response === null) {
-            return [];
-        }
-
-        return $response;
-    }
-
-    /**
-     * textDocument/codeAction — get code actions (quick fixes, refactorings, etc.).
-     *
-     * @param string $uri     File URI
-     * @param int    $line    Cursor line (0-indexed)
-     * @param int    $col     Cursor column (0-indexed)
-     * @param array  $context Context containing diagnostics; empty array uses server defaults
-     * @return array<mixed> CodeAction[] — never null, may be empty
-     */
-    public function codeActions(string $uri, int $line = 0, int $col = 0, array $context = []): array
-    {
-        $response = $this->request('textDocument/codeAction', [
-            'textDocument' => ['uri' => $uri],
-            'range' => [
-                'start' => ['line' => $line, 'character' => $col],
-                'end'   => ['line' => $line, 'character' => $col],
-            ],
-            'context' => $context,
-        ]);
-
-        if ($response === null) {
-            return [];
-        }
-
-        return is_array($response) ? $response : [];
-    }
-
-    /**
-     * textDocument/publishDiagnostics — returns cached diagnostics for a URI.
-     *
-     * @deprecated since P7.S11 will implement proper publishDiagnostics subscription via LspClient.
-     *             This stub returns an empty array; real use requires a subscription flow.
-     *
-     * @return array Diagnostics for the given URI (empty if none cached).
-     */
-    public function diagnostics(string $uri): array
-    {
-        // Diagnostics are pushed by the server via publishDiagnostics notifications.
-        // Clients must register for them via the $/subscribe method.
-        // This stub returns an empty array; real use requires a subscription flow.
-        return [];
+        $this->notificationCallback = $callback;
     }
 
     public function isConnected(): bool
@@ -241,107 +213,172 @@ class LspConnection
         if (!$this->initialized) {
             return false;
         }
-        if ($this->transport === 'tcp') {
-            return $this->socket !== null && is_resource($this->socket);
-        }
+
         return $this->process !== null && is_resource($this->process);
+    }
+
+    /**
+     * Get cached server capabilities.
+     *
+     * @return array|null Server capabilities or null if not yet initialized
+     */
+    public function capabilities(): ?array
+    {
+        return $this->capabilities;
+    }
+
+    // -------------------------------------------------------------------------
+    // Domain convenience methods
+    // -------------------------------------------------------------------------
+
+    /**
+     * textDocument/definition — go-to-definition.
+     *
+     * @return array<mixed> Location[]
+     */
+    public function definitions(string $uri, int $line, int $col): array
+    {
+        $response = $this->sendRequest('textDocument/definition', [
+            'textDocument' => ['uri' => $uri],
+            'position' => ['line' => $line, 'character' => $col],
+        ]);
+
+        if ($response->isError) {
+            return [];
+        }
+
+        return $response->result ?? [];
+    }
+
+    /**
+     * textDocument/references — find all references.
+     *
+     * @return array<mixed> Location[]
+     */
+    public function references(string $uri, int $line, int $col): array
+    {
+        $response = $this->sendRequest('textDocument/references', [
+            'textDocument' => ['uri' => $uri],
+            'position' => ['line' => $line, 'character' => $col],
+            'context' => ['includeDeclaration' => true],
+        ]);
+
+        if ($response->isError) {
+            return [];
+        }
+
+        return $response->result ?? [];
+    }
+
+    /**
+     * textDocument/hover — hover information.
+     *
+     * @return array|null Hover result or null if not available
+     */
+    public function hover(string $uri, int $line, int $col): ?array
+    {
+        $response = $this->sendRequest('textDocument/hover', [
+            'textDocument' => ['uri' => $uri],
+            'position' => ['line' => $line, 'character' => $col],
+        ]);
+
+        if ($response->isError) {
+            return null;
+        }
+
+        if ($response->result === null || $response->result === []) {
+            return null;
+        }
+
+        return $response->result;
+    }
+
+    /**
+     * textDocument/documentSymbol — list symbols in a document.
+     *
+     * @return array<mixed> DocumentSymbol[] or SymbolInformation[]
+     */
+    public function symbols(string $uri): array
+    {
+        $response = $this->sendRequest('textDocument/documentSymbol', [
+            'textDocument' => ['uri' => $uri],
+        ]);
+
+        if ($response->isError) {
+            return [];
+        }
+
+        return $response->result ?? [];
+    }
+
+    /**
+     * textDocument/codeAction — get code actions (quick fixes, refactorings, etc.).
+     *
+     * @return array<mixed> CodeAction[]
+     */
+    public function codeActions(string $uri, int $line, int $col, array $context = []): array
+    {
+        $response = $this->sendRequest('textDocument/codeAction', [
+            'textDocument' => ['uri' => $uri],
+            'position' => ['line' => $line, 'character' => $col],
+            'context' => $context ?: ['diagnostics' => []],
+        ]);
+
+        if ($response->isError) {
+            return [];
+        }
+
+        return $response->result ?? [];
+    }
+
+    /**
+     * textDocument/diagnostics — pull current diagnostics for a document.
+     *
+     * Note: Diagnostics are primarily delivered via publishDiagnostics notifications.
+     * This method sends a textDocument/diagnostic request if the server supports it.
+     *
+     * @return array<mixed> Diagnostic[]
+     */
+    public function diagnostics(string $uri): array
+    {
+        $response = $this->sendRequest('textDocument/diagnostic', [
+            'textDocument' => ['uri' => $uri],
+        ]);
+
+        if ($response->isError) {
+            return [];
+        }
+
+        return $response->result['items'] ?? [];
     }
 
     // -------------------------------------------------------------------------
     // Private primitives
     // -------------------------------------------------------------------------
 
-    /** @param array<string, mixed>|null $params */
-    private function request(string $method, ?array $params): ?array
-    {
-        $id = (string) $this->nextId++;
-
-        $payload = ['jsonrpc' => '2.0', 'id' => $id, 'method' => $method];
-        if ($params !== null) {
-            $payload['params'] = $params;
-        }
-
-        if (!$this->writeLine(json_encode($payload, JSON_THROW_ON_ERROR))) {
-            return null;
-        }
-
-        $message = $this->readResponse($id);
-        if ($message === null) {
-            return null;
-        }
-
-        return $message;
-    }
-
-    /** @param array<string, mixed>|null $params */
-    private function notify(string $method, ?array $params = null): void
-    {
-        $payload = ['jsonrpc' => '2.0', 'method' => $method];
-        if ($params !== null) {
-            $payload['params'] = $params;
-        }
-
-        $this->writeLine(json_encode($payload, JSON_THROW_ON_ERROR));
-    }
-
     /**
-     * Write one newline-framed message to the child's stdin or TCP socket.
+     * Write a message with LSP Content-Length header framing.
+     *
+     * @param array<string, mixed> $payload
      */
-    private function writeLine(string $json): bool
+    private function writeMessage(array $payload): bool
     {
-        if ($this->transport === 'tcp') {
-            if (!is_resource($this->socket)) {
-                return false;
-            }
-            if (@fwrite($this->socket, $json . "\n") === false) {
-                return false;
-            }
-            fflush($this->socket);
-            return true;
-        }
-
         if (!is_resource($this->process) || $this->pipes === null) {
             return false;
         }
 
-        if (@fwrite($this->pipes[0], $json . "\n") === false) {
+        $json = json_encode($payload, JSON_THROW_ON_ERROR);
+        $contentLength = strlen($json);
+
+        $header = "Content-Length: {$contentLength}\r\n\r\n";
+        $message = $header . $json;
+
+        if (@fwrite($this->pipes[0], $message) === false) {
             return false;
         }
         fflush($this->pipes[0]);
 
         return true;
-    }
-
-    private function startTransport(): void
-    {
-        if ($this->transport === 'tcp') {
-            $host = $this->host ?? '127.0.0.1';
-            $port = $this->port ?? 0;
-            $addr = "tcp://{$host}:{$port}";
-            $this->socket = @stream_socket_client($addr, $errno, $errstr, 5.0);
-            if ($this->socket === false) {
-                throw new \RuntimeException("Failed to connect to LSP server at {$addr}: {$errstr} ({$errno})");
-            }
-            return;
-        }
-
-        // stdio: spawn subprocess
-        $cmd = implode(' ', array_map('escapeshellarg', [$this->serverPath, ...$this->serverArgs]));
-
-        $this->process = proc_open(
-            $cmd,
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $this->pipes,
-            $this->cwd,
-        );
-
-        if (!is_resource($this->process)) {
-            throw new \RuntimeException("Failed to start LSP server: {$this->serverPath}");
-        }
     }
 
     private function stopProcess(): void
@@ -350,118 +387,165 @@ class LspConnection
             proc_terminate($this->process);
             proc_close($this->process);
         }
-        if ($this->socket !== null && is_resource($this->socket)) {
-            fclose($this->socket);
-        }
         $this->process = null;
         $this->pipes = null;
-        $this->socket = null;
         $this->readBuffer = '';
     }
 
     /**
-     * Read until we have a line whose id matches $id, skipping server notifications.
+     * Read until we have a response whose id matches $id, skipping server notifications.
+     *
+     * @return LspResponse Wrapped response
      */
-    private function readResponse(string $id): ?array
+    private function readResponse(string $id, float $deadline): LspResponse
     {
-        while (true) {
-            $line = $this->readLine();
-            if ($line === null) {
-                return null;
-            }
-
-            /** @var array<string, mixed>|null $decoded */
-            $decoded = json_decode($line, true);
-            if ($decoded === null || !isset($decoded['jsonrpc']) || $decoded['jsonrpc'] !== '2.0') {
-                continue;
-            }
-
-            $msgId = isset($decoded['id']) ? (string) $decoded['id'] : null;
-
-            // Skip server-initiated notifications and stale responses.
-            if ($msgId === null || $msgId !== $id) {
-                // Collect server notifications for future use (e.g. publishDiagnostics).
-                if ($msgId === null && isset($decoded['method'])) {
-                    $this->handleNotification($decoded);
+        while (microtime(true) < $deadline) {
+            $message = $this->readMessage();
+            if ($message === null) {
+                // No complete message available yet, check if process is still alive.
+                if (!is_resource($this->process)) {
+                    return LspResponse::ioError('Process ended while reading response');
                 }
+                // Brief sleep to avoid busy-waiting.
+                usleep(10000); // 10ms
                 continue;
             }
 
-            if (isset($decoded['error'])) {
-                return null;
+            $msgId = isset($message['id']) ? (string) $message['id'] : null;
+
+            // Server-initiated notification.
+            if ($msgId === null && isset($message['method'])) {
+                $this->handleNotification($message['method'], $message['params'] ?? null);
+                continue;
             }
 
-            return $decoded['result'] ?? null;
-        }
-    }
+            // Not our response — skip it.
+            if ($msgId === null || $msgId !== $id) {
+                continue;
+            }
 
-    /** @param array<string, mixed> $notification */
-    private function handleNotification(array $notification): void
-    {
-        $method = $notification['method'] ?? null;
-        if ($method === 'textDocument/publishDiagnostics') {
-            // Could store diagnostics per URI here for diagnostics().
+            if (isset($message['error'])) {
+                return LspResponse::error($message['error']);
+            }
+
+            return LspResponse::ok($message['result'] ?? null);
         }
+
+        // Timeout reached.
+        return LspResponse::timeout();
     }
 
     /**
-     * Pull one newline-terminated line from the buffer, refilling as needed.
+     * Read one LSP message (header + body) from the server.
+     *
+     * @return array<string, mixed>|null Decoded message or null if no complete message
+     * @throws LspProtocolException When Content-Length header is missing
      */
-    private function readLine(): ?string
+    private function readMessage(): ?array
     {
-        while (($newline = strpos($this->readBuffer, "\n")) === false) {
-            if ($this->transport === 'tcp') {
-                if ($this->socket === null || !is_resource($this->socket)) {
-                    return $this->readBuffer === '' ? null : $this->drainBuffer();
-                }
-                $chunk = fgets($this->socket);
-                if ($chunk === false || $chunk === '') {
-                    return $this->readBuffer === '' ? null : $this->drainBuffer();
-                }
-                $this->readBuffer .= $chunk;
-                continue;
-            }
-
+        // Read headers byte-by-byte until we find the header-body separator \r\n\r\n.
+        // fgets() is line-oriented and would consume the JSON body if it has no newline,
+        // so we use fread() with a small chunk size to read precisely.
+        while (strpos($this->readBuffer, "\r\n\r\n") === false) {
             if ($this->pipes === null) {
-                return $this->readBuffer === '' ? null : $this->drainBuffer();
+                return null;
             }
-
-            $chunk = fgets($this->pipes[1]);
+            $chunk = fread($this->pipes[1], 1024);
             if ($chunk === false || $chunk === '') {
-                return $this->readBuffer === '' ? null : $this->drainBuffer();
+                if ($this->readBuffer === '') {
+                    return null;
+                }
+                return $this->parseMessage($this->drainBuffer());
             }
             $this->readBuffer .= $chunk;
         }
 
-        $line = substr($this->readBuffer, 0, $newline);
-        $this->readBuffer = substr($this->readBuffer, $newline + 1);
+        // Parse headers.
+        $newline = strpos($this->readBuffer, "\r\n\r\n");
+        $headerBlock = substr($this->readBuffer, 0, $newline);
+        $this->readBuffer = substr($this->readBuffer, $newline + 4);
 
-        return trim($line);
+        $contentLength = null;
+        foreach (explode("\r\n", $headerBlock) as $header) {
+            if (str_starts_with($header, 'Content-Length:')) {
+                $contentLength = (int) trim(substr($header, 15));
+                break;
+            }
+        }
+
+        if ($contentLength === null) {
+            throw new LspProtocolException(
+                'Missing Content-Length header in LSP message: ' . substr($this->readBuffer, 0, 200)
+            );
+        }
+
+        // Read body until we have contentLength bytes.
+        // Use fread() (not fgets()) because the JSON body may span multiple lines.
+        // If readBuffer already has enough bytes (fgets consumed body during header phase),
+        // skip the read loop.
+        if (strlen($this->readBuffer) >= $contentLength) {
+            $body = substr($this->readBuffer, 0, $contentLength);
+            $this->readBuffer = substr($this->readBuffer, $contentLength);
+            return $this->parseMessage($body);
+        }
+
+        while (strlen($this->readBuffer) < $contentLength) {
+            if ($this->pipes === null) {
+                return null;
+            }
+            $remaining = $contentLength - strlen($this->readBuffer);
+            $chunk = fread($this->pipes[1], $remaining);
+            if ($chunk === false || $chunk === '') {
+                return null;
+            }
+            $this->readBuffer .= $chunk;
+        }
+
+        $body = substr($this->readBuffer, 0, $contentLength);
+        $this->readBuffer = substr($this->readBuffer, $contentLength);
+
+        return $this->parseMessage($body);
     }
 
+    /**
+     * Parse a JSON-RPC message from a string.
+     *
+     * @param string|null $data Raw JSON string
+     * @return array<string, mixed>|null Decoded message or null on parse error
+     */
+    private function parseMessage(?string $data): ?array
+    {
+        if ($data === null || $data === '') {
+            return null;
+        }
+
+        try {
+            $decoded = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        if (!is_array($decoded) || !isset($decoded['jsonrpc']) || $decoded['jsonrpc'] !== '2.0') {
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    /** Consume and return the entire pending buffer as one trimmed line. */
     private function drainBuffer(): string
     {
         $line = $this->readBuffer;
         $this->readBuffer = '';
+
         return trim($line);
     }
 
-    /**
-     * @param array<mixed> $response
-     * @return array<mixed>
-     */
-    private function normalizeLocations(mixed $response): array
+    /** @param array<string, mixed>|null $params */
+    private function handleNotification(string $method, ?array $params): void
     {
-        if ($response === null) {
-            return [];
+        if ($this->notificationCallback !== null) {
+            ($this->notificationCallback)($method, $params);
         }
-        if (is_array($response) && array_key_exists('uri', $response)) {
-            // Single Location object.
-            return [$response];
-        }
-        if (is_array($response) && isset($response[0])) {
-            return $response;
-        }
-        return [];
     }
 }
