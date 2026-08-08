@@ -635,6 +635,67 @@ final class ProviderFactoryTest extends TestCase
         $this->assertSame($expected['model'], $this->sglangPropertyOf($provider, 'model'));
     }
 
+    /**
+     * Reproduces R24 finding #1: reviewer's exact hand-tested repro was
+     * `$factory->create($factory->defaultConfig(getenv('SUGARCRUSH_PROVIDER')))`
+     * with SUGARCRUSH_PROVIDER=dev-sglang - the precise call chain
+     * bin/sugarcrush's $SUGARCRUSH_PROVIDER selection uses (bin/sugarcrush
+     * lines 61-66). Before the R24.fix, defaultConfig('dev-sglang') threw
+     * "Unknown provider type: dev-sglang" because it only recognized the
+     * seven built-in TYPE_SCHEMAS types, so this exact path never reached
+     * fromProjectConfig() at all and bin/sugarcrush silently fell back to
+     * the offline EchoProvider. defaultConfig() must now resolve
+     * 'dev-sglang' via the project's real, committed
+     * .sugar-crush/config.dev.json so this reproduction succeeds without
+     * bin/sugarcrush needing any change or any awareness of
+     * fromProjectConfig().
+     */
+    public function testDefaultConfigAndCreateSelectDevSglangLikeBinSugarcrushDoes(): void
+    {
+        $config = $this->factory->defaultConfig('dev-sglang');
+
+        $this->assertSame('sglang', $config['type']);
+
+        $provider = $this->factory->create($config);
+
+        $this->assertInstanceOf(SglangProvider::class, $provider);
+        $this->assertInstanceOf(ProviderInterface::class, $provider);
+        $this->assertSame('sglang', $provider->name());
+
+        $configPath = ProviderFactory::defaultConfigPath();
+        $raw = json_decode(file_get_contents($configPath), true);
+        $expected = $raw['providers']['dev-sglang'];
+
+        $this->assertSame($expected['baseUrl'], $this->sglangPropertyOf($provider, 'baseUrl'));
+        $this->assertSame($expected['model'], $this->sglangPropertyOf($provider, 'model'));
+    }
+
+    /**
+     * bin/sugarcrush also reads `$factory->defaultConfig($providerType)['model']`
+     * as the $SUGARCRUSH_MODEL env-var fallback (bin/sugarcrush line 64) -
+     * confirm that resolves to the project config's own model too, not just
+     * provider construction.
+     */
+    public function testDefaultConfigModelFallbackResolvesFromProjectConfigForDevSglang(): void
+    {
+        $config = $this->factory->defaultConfig('dev-sglang');
+
+        $this->assertSame('MiniMax-M2.7', $config['model']);
+    }
+
+    /**
+     * A name that is neither a built-in type nor declared in the project's
+     * config.dev.json must still throw exactly as before - the project-config
+     * fallback must not swallow genuinely-unknown types.
+     */
+    public function testDefaultConfigStillThrowsForNameAbsentFromBothSchemaAndProjectConfig(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown provider type: totally-unknown-provider');
+
+        $this->factory->defaultConfig('totally-unknown-provider');
+    }
+
     public function testFromProjectConfigSelectsProviderByNameNotJustDefault(): void
     {
         $provider = $this->factory->fromProjectConfig('dev-sglang');

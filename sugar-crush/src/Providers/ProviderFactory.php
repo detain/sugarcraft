@@ -190,13 +190,28 @@ final readonly class ProviderFactory
     /**
      * Returns default configuration for a provider type.
      *
-     * @param string $type The provider type
+     * bin/sugarcrush's $SUGARCRUSH_PROVIDER backend selection calls exactly
+     * `$factory->create($factory->defaultConfig($providerType))` - it has no
+     * other hook into the provider system. Before a name is rejected as
+     * unknown, fall back to the project's .sugar-crush/config.dev.json
+     * 'providers' map: this is what makes 'dev-sglang' (config.dev.json's own
+     * 'defaultProvider') a name $SUGARCRUSH_PROVIDER can actually select,
+     * without bin/sugarcrush needing any awareness of fromProjectConfig().
+     *
+     * @param string $type The provider type, or a name declared under
+     *     'providers' in .sugar-crush/config.dev.json (e.g. 'dev-sglang')
      * @return array<string, mixed> Default configuration for the type
-     * @throws \InvalidArgumentException When type is unknown
+     * @throws \InvalidArgumentException When type is neither a built-in type
+     *     nor a name declared in the project's provider config
      */
     public function defaultConfig(string $type): array
     {
         if (!$this->isValidType($type)) {
+            $projectConfig = $this->projectProviderConfig($type);
+            if ($projectConfig !== null) {
+                return $projectConfig;
+            }
+
             throw new \InvalidArgumentException("Unknown provider type: {$type}");
         }
 
@@ -254,6 +269,48 @@ final readonly class ProviderFactory
     private function isValidType(string $type): bool
     {
         return isset(self::TYPE_SCHEMAS[$type]);
+    }
+
+    /**
+     * Looks up $name under 'providers' in the project's
+     * .sugar-crush/config.dev.json, for defaultConfig()'s fallback.
+     *
+     * Returns null - never throws - when the config file is absent,
+     * unreadable, invalid JSON, or simply doesn't declare $name, so
+     * defaultConfig() can fall through to its normal "Unknown provider
+     * type" error for a name that is neither a built-in type nor a
+     * project-config entry. fromProjectConfig() covers the throwing,
+     * diagnostic-message variant of this same lookup; this helper is
+     * deliberately silent because defaultConfig() must keep working with
+     * zero project config present (e.g. the standalone-repo split case
+     * documented on defaultConfigPath()).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function projectProviderConfig(string $name): ?array
+    {
+        $configPath = self::defaultConfigPath();
+
+        if (!is_file($configPath)) {
+            return null;
+        }
+
+        $contents = file_get_contents($configPath);
+        if ($contents === false) {
+            return null;
+        }
+
+        try {
+            $data = $this->parseJson($contents);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        if (!isset($data['providers'][$name]) || !is_array($data['providers'][$name])) {
+            return null;
+        }
+
+        return $data['providers'][$name];
     }
 
     /**
