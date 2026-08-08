@@ -414,10 +414,29 @@ final class ContextCompactor
     }
 
     /**
+     * Navigation command patterns matched by removeNavigationSteps().
+     *
+     * @var array<string>
+     */
+    private const NAV_PATTERNS = [
+        '/^cd\s+/m',
+        '/^ls\s*/m',
+        '/^pwd$/m',
+        '/^mkdir\s+/m',
+        '/^rm\s+/m',
+        '/^mv\s+/m',
+        '/^cp\s+/m',
+    ];
+
+    /**
      * Stage 5: Remove navigation steps while preserving final destination or result.
      *
      * Removes messages whose content indicates navigation commands (e.g., "cd /path/to/dir",
      * "ls", "pwd") while preserving the final destination or result that follows.
+     *
+     * When a nav-pattern message is removed, the immediate following assistant message
+     * (the result/destination output) is preserved — unless that result message also
+     * represents independent content worth keeping on its own.
      *
      * @param array<array{role:string,content:string}> $messages
      * @return array<array{role:string,content:string}>
@@ -429,21 +448,15 @@ final class ContextCompactor
         }
 
         $result = [];
-        $navPatterns = [
-            '/^cd\s+/m',
-            '/^ls\s*/m',
-            '/^pwd$/m',
-            '/^mkdir\s+/m',
-            '/^rm\s+/m',
-            '/^mv\s+/m',
-            '/^cp\s+/m',
-        ];
+        $i = 0;
+        $count = count($messages);
 
-        foreach ($messages as $msg) {
+        while ($i < $count) {
+            $msg = $messages[$i];
             $content = $msg['content'] ?? '';
             $isNavigation = false;
 
-            foreach ($navPatterns as $pattern) {
+            foreach (self::NAV_PATTERNS as $pattern) {
                 if (preg_match($pattern, $content)) {
                     $isNavigation = true;
                     break;
@@ -452,6 +465,23 @@ final class ContextCompactor
 
             if (!$isNavigation) {
                 $result[] = $msg;
+                $i++;
+                continue;
+            }
+
+            // Navigation message found — skip it, but preserve the following
+            // assistant result message if it describes the outcome of this navigation.
+            $i++;
+            if ($i < $count) {
+                $nextMsg = $messages[$i];
+                $nextRole = $nextMsg['role'] ?? '';
+
+                // Keep the result message if it's an assistant's output describing
+                // the navigation outcome (path, directory listing, etc.).
+                if ($nextRole === 'assistant') {
+                    $result[] = $nextMsg;
+                    $i++;
+                }
             }
         }
 
