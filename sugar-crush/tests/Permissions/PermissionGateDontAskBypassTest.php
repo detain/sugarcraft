@@ -69,15 +69,22 @@ final class PermissionGateDontAskBypassTest extends TestCase
     }
 
     /**
-     * DontAsk: Find is read-only → Allow.
+     * DontAsk: WebFetch is read-only → Allow.
+     *
+     * 'Find' was never a real tool name in this codebase (R3 replaced the
+     * fictional SCOPED_WRITE_TOOLS/isReadOnlyTool() names with the actual
+     * ones: Bash, Grep, Glob, Edit, Read, WebFetch), so it now correctly
+     * falls through to DontAsk's no-matching-rule Deny like any other
+     * unrecognized tool name — this case is replaced with a real read-only
+     * tool not already covered above (Read/Grep/Glob).
      */
-    public function testDontAskAllowsFindWithoutRule(): void
+    public function testDontAskAllowsWebFetchWithoutRule(): void
     {
         $gate = new PermissionGate(PermissionMode::DontAsk);
 
         $decision = $gate->evaluate(new ToolCall(
-            name: 'Find',
-            arguments: ['path' => '.', 'pattern' => '*.php'],
+            name: 'WebFetch',
+            arguments: ['url' => 'https://example.com'],
         ));
 
         $this->assertSame(PermissionDecision::Allow, $decision);
