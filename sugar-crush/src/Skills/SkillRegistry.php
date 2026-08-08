@@ -60,6 +60,14 @@ final class SkillRegistry
         $matches = [];
 
         foreach ($this->all() as $skill) {
+            // A skill with disable-model-invocation: true is only reachable via
+            // explicit user invocation (getUserInvocable()) — it must never be
+            // surfaced for auto-triggering off a free-text prompt, even if its
+            // description keywords match.
+            if ($skill->disableModelInvocation) {
+                continue;
+            }
+
             if ($skill->matchesPrompt($prompt)) {
                 $matches[] = $skill;
             }

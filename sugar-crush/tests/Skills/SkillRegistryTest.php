@@ -237,6 +237,61 @@ SKILL;
         $this->assertSame('developer-tester', $result[1]->name);
     }
 
+    public function testFindForPromptExcludesDisableModelInvocationSkills(): void
+    {
+        // Arrange - description keywords match the prompt exactly, but the
+        // skill opts out of auto-invocation via disable-model-invocation.
+        // R16 regression: findForPrompt() previously ignored this flag
+        // entirely and would have returned this skill anyway.
+        $registry = new SkillRegistry();
+        $autoSkill = Skill::parse(
+            <<<SKILL
+---
+description: Laravel developer helper skill
+disable-model-invocation: true
+---
+Content
+SKILL,
+            'no-auto-invoke'
+        );
+        $registry->register(['no-auto-invoke' => $autoSkill]);
+
+        // Act
+        $result = $registry->findForPrompt('I need a Laravel developer');
+
+        // Assert - model-invocation-disabled skill must never auto-trigger,
+        // even though its description keywords match the prompt.
+        $this->assertEmpty($result);
+        $this->assertFalse($registry->isAutoInvocable('no-auto-invoke'));
+    }
+
+    public function testFindForPromptIncludesAutoInvocableSkillAlongsideDisabledOne(): void
+    {
+        // Arrange - one auto-invocable skill and one that opts out; only the
+        // auto-invocable one should surface for the matching prompt.
+        $registry = new SkillRegistry();
+        $autoSkill = $this->createSkill('auto-dev', 'Laravel developer skill');
+        $noAutoSkill = Skill::parse(
+            <<<SKILL
+---
+description: Laravel developer helper skill
+disable-model-invocation: true
+---
+Content
+SKILL,
+            'manual-dev'
+        );
+        $registry->register(['auto-dev' => $autoSkill, 'manual-dev' => $noAutoSkill]);
+
+        // Act
+        $result = $registry->findForPrompt('I need a Laravel developer');
+
+        // Assert
+        $foundNames = array_map(fn($s) => $s->name, $result);
+        $this->assertContains('auto-dev', $foundNames);
+        $this->assertNotContains('manual-dev', $foundNames);
+    }
+
     public function testFindForPromptDisabledSkillsExcluded(): void
     {
         // Arrange

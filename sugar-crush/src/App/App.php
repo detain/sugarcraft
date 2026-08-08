@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\App;
 
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentResult;
+use SugarCraft\Crush\Agents\AgentWorkerPool;
+use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
@@ -138,15 +143,25 @@ final class App
 
     /**
      * Apply enabled skills to the base system prompt.
+     *
+     * Skills declared `context: fork` are excluded — they run as isolated
+     * sub-agents via dispatchSkill()/AgentWorkerPool::executeOne() rather
+     * than being inlined into the primary conversation's system prompt.
      */
     public function applySkillsToSystemPrompt(string $baseSystemPrompt): string
     {
         $result = $baseSystemPrompt;
 
         foreach ($this->enabledSkills as $skill) {
-            if ($skill instanceof Skill) {
-                $result .= $skill->systemPromptContribution();
+            if (!$skill instanceof Skill) {
+                continue;
             }
+
+            if ($this->availableSkills->isContextFork($skill->name)) {
+                continue;
+            }
+
+            $result .= $skill->systemPromptContribution();
         }
 
         return $result;
@@ -160,6 +175,68 @@ final class App
     public function findSkillsForTask(string $task): array
     {
         return $this->availableSkills->findForPrompt($task);
+    }
+
+    /**
+     * The real command surface for a /skills or command-palette listing:
+     * only skills the registry marks user-invocable are ever shown, so a
+     * skill authored with `user-invocable: false` can never be picked from
+     * such a listing (it remains reachable only via auto-invocation or
+     * direct programmatic enable()).
+     *
+     * @return array<Skill>
+     */
+    public function userInvocableSkills(): array
+    {
+        return $this->availableSkills->getUserInvocable();
+    }
+
+    /**
+     * Dispatch a matched skill according to its declared execution context.
+     *
+     * Skills declaring `context: fork` must run isolated from the main
+     * conversation: this runs them through AgentWorkerPool::executeOne() as
+     * a standalone SubAgent and returns only the finished result, instead of
+     * inlining the skill's content into the primary thread's system prompt.
+     *
+     * Returns null for anything that is not a fork-context skill so the
+     * caller can distinguish "not handled here — fall back to the normal
+     * inline path via applySkillsToSystemPrompt()" from "handled, here is
+     * the result".
+     */
+    public function dispatchSkill(Skill $skill, AgentWorkerPool $pool, string $task): ?AgentResult
+    {
+        if (!$this->availableSkills->isContextFork($skill->name)) {
+            return null;
+        }
+
+        $agent = new Agent(
+            name: $skill->name,
+            description: $skill->description,
+            prompt: $skill->content,
+            model: $skill->model ?? $this->model,
+            provider: $this->provider->name(),
+            tools: [],
+            skillNames: [$skill->name],
+            hooks: [],
+            isActive: true,
+        );
+
+        $subAgent = new SubAgent(
+            id: uniqid('skill_fork_'),
+            agent: $agent,
+            task: $task,
+        );
+
+        $request = new CompleteRequest(
+            model: $agent->model,
+            messages: [
+                ['role' => 'user', 'content' => $task],
+            ],
+            systemPrompt: $skill->content,
+        );
+
+        return $pool->executeOne($subAgent, $request);
     }
 
     /**
