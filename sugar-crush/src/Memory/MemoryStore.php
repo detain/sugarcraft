@@ -9,8 +9,22 @@ use Symfony\Component\Yaml\Yaml;
 /**
  * Manages persistent cross-session memory stored as Markdown files with YAML frontmatter.
  *
- * Each memory entry is stored as a separate .md file in the memoryPath directory.
- * Files are named {id}.md and contain YAML frontmatter followed by markdown content.
+ * Each memory entry is stored as a separate .md file, partitioned on disk by scope:
+ * {memoryPath}/{scope}/{id}.md. Partitioning by directory (rather than only by the
+ * 'scope' YAML field) means 'project', 'user', and 'agent' memories genuinely live
+ * at different physical paths, not just under a different label inside one shared
+ * directory.
+ *
+ * Design decision: every public method here already accepted scope as a plain
+ * string (not the SugarCraft\Crush\Agents\MemoryScope enum) before this class was
+ * wired up to actually separate storage by scope. Rather than changing method
+ * signatures to require MemoryScope -- which would ripple into every call site
+ * (Chat.php's /memory command parsing, which only ever has a raw string from user
+ * input) -- scope resolution stays internal: scopeDirectory() maps the existing
+ * string $scope to its subdirectory of memoryPath, creating it on first write.
+ * This keeps every current caller unchanged while making scope authoritative for
+ * physical layout. search() and get() take no scope argument, so they glob across
+ * every scope subdirectory instead of a single one.
  */
 final class MemoryStore
 {
@@ -32,7 +46,8 @@ final class MemoryStore
      * Add a new memory entry with the given content and scope.
      *
      * Creates a new MemoryEntry with a generated UUID, type='pattern',
-     * empty tags, current timestamps, and writes it to {memoryPath}/{id}.md.
+     * empty tags, current timestamps, and writes it to
+     * {memoryPath}/{scope}/{id}.md.
      *
      * @param string         $content The memory content as markdown.
      * @param string         $scope  The scope: 'user', 'project', or 'agent'.
@@ -59,10 +74,10 @@ final class MemoryStore
     }
 
     /**
-     * Search all memory entries for content matching the query string.
+     * Search all memory entries, across every scope, for content matching the query string.
      *
-     * Case-insensitive search that reads all .md files and filters by
-     * whether the query appears in the content field.
+     * Case-insensitive search that reads all .md files under every scope
+     * subdirectory and filters by whether the query appears in the content field.
      *
      * @param string $query The search query string.
      * @return MemoryEntry[] Matching entries.
@@ -70,7 +85,7 @@ final class MemoryStore
     public function search(string $query): array
     {
         $results = [];
-        $files = glob($this->memoryPath . '/*.md');
+        $files = glob($this->memoryPath . '/*/*.md');
 
         if ($files === false) {
             return [];
@@ -104,13 +119,17 @@ final class MemoryStore
     /**
      * List all memory entries for a given scope.
      *
+     * Reads only {memoryPath}/{scope}/*.md -- other scopes' directories are
+     * never touched, so this is authoritative for "what lives in this scope".
+     *
      * @param string $scope The scope to filter by.
      * @return MemoryEntry[] All entries matching the scope.
      */
     public function list(string $scope = 'user'): array
     {
         $results = [];
-        $files = glob($this->memoryPath . '/*.md');
+        $dir = $this->scopeDirectory($scope, false);
+        $files = is_dir($dir) ? glob($dir . '/*.md') : [];
 
         if ($files === false) {
             return [];
@@ -129,6 +148,9 @@ final class MemoryStore
     /**
      * Retrieve a single memory entry by its ID.
      *
+     * Ids don't carry their scope, so this globs across every scope
+     * subdirectory to find the matching file.
+     *
      * @param string $id The UUID of the entry.
      * @return MemoryEntry|null The entry, or null if not found.
      */
@@ -142,12 +164,12 @@ final class MemoryStore
             return null;
         }
 
-        $file = $this->memoryPath . '/' . $id . '.md';
-        if (!file_exists($file)) {
+        $matches = glob($this->memoryPath . '/*/' . $id . '.md');
+        if ($matches === false || $matches === []) {
             return null;
         }
 
-        return $this->readEntry($file);
+        return $this->readEntry($matches[0]);
     }
 
     /**
@@ -157,6 +179,11 @@ final class MemoryStore
      * UUID validation is enforced here rather than inside writeEntry() so
      * that callers get a clear InvalidArgumentException immediately, rather
      * than a generic RuntimeException from a failed file_put_contents().
+     *
+     * If the update changes $entry->scope() relative to the existing entry,
+     * the stale copy in the old scope directory is removed so the same id
+     * doesn't end up living in two scope directories at once, and both the
+     * old and new scope's indexes are regenerated.
      *
      * @param string      $id    The UUID of the entry to update.
      * @param MemoryEntry $entry The updated entry data.
@@ -170,8 +197,21 @@ final class MemoryStore
             throw new \InvalidArgumentException('Invalid memory entry id format');
         }
 
+        $existingMatches = glob($this->memoryPath . '/*/' . $id . '.md');
+        $oldFile = ($existingMatches !== false && $existingMatches !== []) ? $existingMatches[0] : null;
+        $oldScope = $oldFile !== null ? $this->readEntry($oldFile)?->scope() : null;
+
         $this->writeEntry($id, $entry);
+
+        $newFile = $this->scopeDirectory($entry->scope(), false) . '/' . $id . '.md';
+        if ($oldFile !== null && $oldFile !== $newFile) {
+            unlink($oldFile);
+        }
+
         $this->generateIndex($entry->scope());
+        if ($oldScope !== null && $oldScope !== $entry->scope()) {
+            $this->generateIndex($oldScope);
+        }
     }
 
     /**
@@ -185,14 +225,17 @@ final class MemoryStore
             throw new \InvalidArgumentException('Invalid memory entry id format');
         }
 
-        $file = $this->memoryPath . '/' . $id . '.md';
+        $matches = glob($this->memoryPath . '/*/' . $id . '.md');
+        $file = ($matches !== false && $matches !== []) ? $matches[0] : null;
+        $scope = 'user';
 
-        // Capture scope before deleting so we can regenerate the index.
-        $entry = $this->readEntry($file);
-        $scope = $entry?->scope() ?? 'user';
+        if ($file !== null) {
+            $entry = $this->readEntry($file);
+            $scope = $entry?->scope() ?? 'user';
 
-        if (@unlink($file) === false && file_exists($file)) {
-            throw new \RuntimeException("Failed to delete memory file: {$file}");
+            if (@unlink($file) === false && file_exists($file)) {
+                throw new \RuntimeException("Failed to delete memory file: {$file}");
+            }
         }
 
         $this->generateIndex($scope);
@@ -205,17 +248,15 @@ final class MemoryStore
      */
     public function clear(string $scope): void
     {
-        $files = glob($this->memoryPath . '/*.md');
+        $dir = $this->scopeDirectory($scope, false);
+        $files = is_dir($dir) ? glob($dir . '/*.md') : [];
 
         if ($files === false) {
-            return;
+            $files = [];
         }
 
         foreach ($files as $file) {
-            $entry = $this->readEntry($file);
-            if ($entry !== null && $entry->scope() === $scope) {
-                unlink($file);
-            }
+            unlink($file);
         }
 
         $this->generateIndex($scope);
@@ -225,7 +266,8 @@ final class MemoryStore
      * Generate a markdown index file for the given scope.
      *
      * Creates {memoryPath}/MEMORY.md containing header, summarized entries
-     * (capped at MAX_INDEX_LINES or MAX_INDEX_BYTES), and footer.
+     * (capped at MAX_INDEX_LINES actual rendered lines and MAX_INDEX_BYTES
+     * bytes), and footer.
      *
      * @param string $scope The scope to index.
      */
@@ -255,8 +297,13 @@ final class MemoryStore
             foreach ($summaryLines as $line) {
                 $lines[] = $line;
             }
-            // Enforce line cap mid-way if we're about to exceed.
-            if (count($lines) >= self::MAX_INDEX_LINES) {
+
+            // Enforce line cap mid-way if we're about to exceed it. Counted
+            // against the ACTUAL rendered newlines of the joined string, not
+            // count($lines) -- a single summary line can itself embed "\n"
+            // characters (e.g. multi-line memory content), so the two counts
+            // diverge and array-element count alone under-counts real lines.
+            if ($this->renderedLineCount($lines) >= self::MAX_INDEX_LINES) {
                 break;
             }
         }
@@ -265,9 +312,19 @@ final class MemoryStore
 
         $content = implode("\n", $lines);
 
-        // Enforce byte cap.
+        // Authoritative line cap: re-derive the real line count from the
+        // FINAL joined string rather than trusting the incremental check
+        // above (the footer line is appended after that check runs).
+        $renderedLines = explode("\n", $content);
+        if (count($renderedLines) > self::MAX_INDEX_LINES) {
+            $content = implode("\n", array_slice($renderedLines, 0, self::MAX_INDEX_LINES));
+        }
+
+        // Byte cap: mb_strcut() cuts by byte offset but rounds down to the
+        // nearest complete character, so multibyte UTF-8 sequences are never
+        // split mid-way the way a raw substr() byte cut could split them.
         if (strlen($content) > self::MAX_INDEX_BYTES) {
-            $content = substr($content, 0, self::MAX_INDEX_BYTES);
+            $content = mb_strcut($content, 0, self::MAX_INDEX_BYTES, 'UTF-8');
         }
 
         $written = file_put_contents($indexPath, $content);
@@ -319,6 +376,45 @@ final class MemoryStore
         $lines[] = '';
 
         return $lines;
+    }
+
+    /**
+     * Count the actual number of rendered lines that implode("\n", $lines)
+     * would produce -- i.e. real "\n" occurrences in the joined string plus
+     * one, not the number of array elements.
+     *
+     * @param array<string> $lines
+     */
+    private function renderedLineCount(array $lines): int
+    {
+        return substr_count(implode("\n", $lines), "\n") + 1;
+    }
+
+    /**
+     * Resolve the on-disk subdirectory of memoryPath that a given scope's
+     * entries live in, optionally creating it.
+     *
+     * The scope string is sanitized to a safe directory name so an
+     * unexpected scope value can't escape memoryPath or collide with
+     * MEMORY_INDEX_FILENAME.
+     *
+     * @param string $scope           The scope to resolve.
+     * @param bool   $createIfMissing Whether to mkdir() the directory if absent.
+     */
+    private function scopeDirectory(string $scope, bool $createIfMissing): string
+    {
+        $safeScope = preg_replace('/[^A-Za-z0-9_-]/', '_', $scope);
+        if ($safeScope === null || $safeScope === '') {
+            $safeScope = 'default';
+        }
+
+        $dir = $this->memoryPath . '/' . $safeScope;
+
+        if ($createIfMissing && !is_dir($dir) && !mkdir($dir, 0777, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Failed to create scope directory: {$dir}");
+        }
+
+        return $dir;
     }
 
     /**
@@ -376,14 +472,15 @@ final class MemoryStore
     }
 
     /**
-     * Write a memory entry to a file.
+     * Write a memory entry to a file under its scope's subdirectory.
      *
      * @param string      $id    The UUID of the entry.
      * @param MemoryEntry $entry The entry to write.
      */
     private function writeEntry(string $id, MemoryEntry $entry): void
     {
-        $file = $this->memoryPath . '/' . $id . '.md';
+        $dir = $this->scopeDirectory($entry->scope(), true);
+        $file = $dir . '/' . $id . '.md';
 
         $frontmatter = Yaml::dump([
             'id' => $entry->id(),

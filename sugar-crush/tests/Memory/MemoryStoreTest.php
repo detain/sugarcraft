@@ -31,9 +31,11 @@ final class MemoryStoreTest extends TestCase
         $id = $store->add('Test memory content', 'user');
 
         $this->assertNotEmpty($id);
-        $this->assertFileExists($this->tempDir . '/' . $id . '.md');
+        // 'user'-scoped entries live under a dedicated user/ subdirectory,
+        // not directly in tempDir -- that's what genuinely separates scopes.
+        $this->assertFileExists($this->tempDir . '/user/' . $id . '.md');
 
-        $content = file_get_contents($this->tempDir . '/' . $id . '.md');
+        $content = file_get_contents($this->tempDir . '/user/' . $id . '.md');
         $this->assertStringContainsString('---', $content);
         $this->assertStringContainsString('id:', $content);
         $this->assertStringContainsString('type: pattern', $content);
@@ -89,7 +91,7 @@ final class MemoryStoreTest extends TestCase
         $store = new MemoryStore($this->tempDir);
 
         $id = $store->add('Memory to delete', 'user');
-        $filePath = $this->tempDir . '/' . $id . '.md';
+        $filePath = $this->tempDir . '/user/' . $id . '.md';
 
         $this->assertFileExists($filePath);
 
@@ -108,7 +110,9 @@ final class MemoryStoreTest extends TestCase
 
         $store->clear('user');
 
-        $remainingFiles = glob($this->tempDir . '/*.md');
+        // 'user' scope's directory should now be empty; the surviving entry
+        // lives under the separate project/ directory.
+        $remainingFiles = glob($this->tempDir . '/project/*.md');
         $this->assertCount(1, $remainingFiles);
 
         $remainingContent = file_get_contents($remainingFiles[0]);
@@ -293,6 +297,80 @@ final class MemoryStoreTest extends TestCase
         // Count lines — should be under 200.
         $lineCount = substr_count($content, "\n");
         $this->assertLessThan(200, $lineCount + 1); // +1 because last line has no trailing newline.
+    }
+
+    public function testProjectAndUserScopesResolveToDifferentDirectories(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $projectId = $store->add('Project-scoped content', 'project');
+        $userId = $store->add('User-scoped content', 'user');
+
+        $projectDir = $this->tempDir . '/project';
+        $userDir = $this->tempDir . '/user';
+
+        // The whole point of this fix: scope must select a genuinely
+        // different physical directory, not just a different YAML field
+        // inside one shared directory.
+        $this->assertDirectoryExists($projectDir);
+        $this->assertDirectoryExists($userDir);
+        $this->assertNotEquals($projectDir, $userDir);
+
+        $this->assertFileExists($projectDir . '/' . $projectId . '.md');
+        $this->assertFileExists($userDir . '/' . $userId . '.md');
+
+        // Each entry must live ONLY under its own scope's directory.
+        $this->assertFileDoesNotExist($userDir . '/' . $projectId . '.md');
+        $this->assertFileDoesNotExist($projectDir . '/' . $userId . '.md');
+    }
+
+    public function testIndexByteCapTruncatesOnACharacterBoundary(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // A single very long multibyte tag (3-byte UTF-8 CJK characters)
+        // inflates one rendered line to well past the 25KB cap while
+        // adding almost no extra rendered LINES, so the byte cap -- not the
+        // line cap -- is what actually binds here. The old implementation
+        // truncated with a raw byte-offset substr(), which can (and, given
+        // this content, provably does) land mid-character; mb_strcut()
+        // rounds down to the nearest full character instead.
+        $bigMultibyteTag = str_repeat('文', 20000); // 60,000 bytes, zero '\n'.
+        $store->add('short content', 'user', [$bigMultibyteTag]);
+
+        $content = $store->loadIndex();
+        $this->assertNotNull($content);
+
+        // Prove the cap actually bound -- otherwise the encoding assertion
+        // below would be vacuous.
+        $this->assertLessThanOrEqual(25 * 1024, strlen($content));
+        $this->assertGreaterThan(25 * 1024 - 16, strlen($content));
+
+        $this->assertTrue(
+            mb_check_encoding($content, 'UTF-8'),
+            'Truncated index content must remain valid UTF-8, never a raw byte cut mid multibyte character.'
+        );
+    }
+
+    public function testIndexNeverExceeds200RenderedLines(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        // Content with embedded newlines: the old cap counted PHP array
+        // elements pushed to $lines (a fixed 3 per entry), which under-counts
+        // the ACTUAL rendered "\n" occurrences once a preview line itself
+        // contains literal newlines -- these two counts diverge.
+        $multilineContent = "Line one of memory\nLine two of memory\nLine three";
+
+        for ($i = 0; $i < 95; $i++) {
+            $store->add($multilineContent, 'user');
+        }
+
+        $content = $store->loadIndex();
+        $this->assertNotNull($content);
+
+        $renderedLines = explode("\n", $content);
+        $this->assertLessThanOrEqual(200, count($renderedLines));
     }
 
     private function removeDirectory(string $dir): void
