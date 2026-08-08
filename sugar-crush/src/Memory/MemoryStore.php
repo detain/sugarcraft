@@ -15,6 +15,15 @@ use Symfony\Component\Yaml\Yaml;
  * at different physical paths, not just under a different label inside one shared
  * directory.
  *
+ * The MEMORY.md index mirrors that same per-scope partitioning: each scope gets
+ * its own {memoryPath}/{scope}/MEMORY.md, generated only from that scope's entries.
+ * A single shared index file could never represent more than one scope's entries
+ * at a time -- every mutation of scope A would silently overwrite whatever the
+ * index last said about scope B (and clearing an empty-looking scope A could even
+ * delete the one index file entirely, even though scope B's files were untouched
+ * on disk). Per-scope index files make loadIndex()/generateIndex() immune to that:
+ * touching one scope never reads, writes, or deletes another scope's index.
+ *
  * Design decision: every public method here already accepted scope as a plain
  * string (not the SugarCraft\Crush\Agents\MemoryScope enum) before this class was
  * wired up to actually separate storage by scope. Rather than changing method
@@ -265,26 +274,27 @@ final class MemoryStore
     /**
      * Generate a markdown index file for the given scope.
      *
-     * Creates {memoryPath}/MEMORY.md containing header, summarized entries
-     * (capped at MAX_INDEX_LINES actual rendered lines and MAX_INDEX_BYTES
-     * bytes), and footer.
+     * Creates {memoryPath}/{scope}/MEMORY.md containing header, summarized
+     * entries (capped at MAX_INDEX_LINES actual rendered lines and
+     * MAX_INDEX_BYTES bytes), and footer. Scoped to its own subdirectory so
+     * regenerating scope A's index never reads, writes, or deletes scope B's
+     * index -- see the class docblock.
      *
      * @param string $scope The scope to index.
      */
     public function generateIndex(string $scope): void
     {
         $entries = $this->list($scope);
+        $indexPath = $this->scopeDirectory($scope, false) . '/' . self::MEMORY_INDEX_FILENAME;
 
         // If no entries remain, remove the existing index and return early.
         if (empty($entries)) {
-            $indexPath = $this->memoryPath . '/' . self::MEMORY_INDEX_FILENAME;
             if (file_exists($indexPath)) {
                 unlink($indexPath);
             }
             return;
         }
 
-        $indexPath = $this->memoryPath . '/' . self::MEMORY_INDEX_FILENAME;
         $timestamp = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
 
         $lines = [];
@@ -334,13 +344,14 @@ final class MemoryStore
     }
 
     /**
-     * Load and return the content of the index file.
+     * Load and return the content of the given scope's index file.
      *
+     * @param string $scope The scope whose index to load.
      * @return string|null The index content, or null if no index exists.
      */
-    public function loadIndex(): ?string
+    public function loadIndex(string $scope = 'user'): ?string
     {
-        $indexPath = $this->memoryPath . '/' . self::MEMORY_INDEX_FILENAME;
+        $indexPath = $this->scopeDirectory($scope, false) . '/' . self::MEMORY_INDEX_FILENAME;
 
         if (!file_exists($indexPath)) {
             return null;

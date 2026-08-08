@@ -111,8 +111,13 @@ final class MemoryStoreTest extends TestCase
         $store->clear('user');
 
         // 'user' scope's directory should now be empty; the surviving entry
-        // lives under the separate project/ directory.
-        $remainingFiles = glob($this->tempDir . '/project/*.md');
+        // lives under the separate project/ directory. Exclude project/'s own
+        // MEMORY.md index file from the count -- it's a sibling artifact in
+        // the same directory, not an entry file.
+        $remainingFiles = array_values(array_filter(
+            glob($this->tempDir . '/project/*.md') ?: [],
+            static fn(string $file): bool => basename($file) !== 'MEMORY.md',
+        ));
         $this->assertCount(1, $remainingFiles);
 
         $remainingContent = file_get_contents($remainingFiles[0]);
@@ -178,7 +183,7 @@ final class MemoryStoreTest extends TestCase
 
         $store->add('First memory entry', 'user');
 
-        $indexPath = $this->tempDir . '/MEMORY.md';
+        $indexPath = $this->tempDir . '/user/MEMORY.md';
         $this->assertFileExists($indexPath);
     }
 
@@ -235,13 +240,64 @@ final class MemoryStoreTest extends TestCase
         $store = new MemoryStore($this->tempDir);
 
         $store->add('User memory', 'user');
-        $store->add('Project memory', 'project');
+        $projectId = $store->add('Project memory', 'project');
 
         $store->clear('user');
 
-        $content = $store->loadIndex();
+        // Clearing 'user' removes only 'user's own index...
+        $content = $store->loadIndex('user');
         $this->assertNull($content);
-        $this->assertFileDoesNotExist($this->tempDir . '/MEMORY.md');
+        $this->assertFileDoesNotExist($this->tempDir . '/user/MEMORY.md');
+
+        // ...and must never touch 'project's index or physical file: each
+        // scope's index lives in its own subdirectory, so clearing one scope
+        // can't clobber or delete another scope's index/entries.
+        $projectContent = $store->loadIndex('project');
+        $this->assertNotNull($projectContent);
+        $this->assertStringContainsString('Project memory', $projectContent);
+        $this->assertFileExists($this->tempDir . '/project/' . $projectId . '.md');
+    }
+
+    public function testAddingToOneScopeDoesNotClobberAnotherScopesIndex(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $store->add('User entry A', 'user');
+        $store->add('Project entry A', 'project');
+
+        // Each scope gets its own index file, generated only from that
+        // scope's own entries -- mutating 'project' must never overwrite or
+        // erase what 'user's index says, and vice versa.
+        $userIndex = $store->loadIndex('user');
+        $projectIndex = $store->loadIndex('project');
+
+        $this->assertNotNull($userIndex);
+        $this->assertNotNull($projectIndex);
+        $this->assertStringContainsString('User entry A', $userIndex);
+        $this->assertStringNotContainsString('Project entry A', $userIndex);
+        $this->assertStringContainsString('Project entry A', $projectIndex);
+        $this->assertStringNotContainsString('User entry A', $projectIndex);
+    }
+
+    public function testClearingOneScopeLeavesOtherScopesIndexAndFilesIntact(): void
+    {
+        $store = new MemoryStore($this->tempDir);
+
+        $store->add('User entry A', 'user');
+        $projectId = $store->add('Project entry A', 'project');
+
+        // Regression repro for the cross-scope clobber: clearing an unrelated
+        // scope must not delete a still-live entry (or its index) in a scope
+        // that was never touched.
+        $store->clear('user');
+
+        $this->assertNull($store->loadIndex('user'));
+        $this->assertFileDoesNotExist($this->tempDir . '/user/MEMORY.md');
+
+        $projectIndex = $store->loadIndex('project');
+        $this->assertNotNull($projectIndex);
+        $this->assertStringContainsString('Project entry A', $projectIndex);
+        $this->assertFileExists($this->tempDir . '/project/' . $projectId . '.md');
     }
 
     public function testIndexContainsEntryMetadata(): void
