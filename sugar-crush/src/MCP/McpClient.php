@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\MCP;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use SugarCraft\Crush\Agents\AgentPreset;
 
 final class McpClient
 {
@@ -14,13 +15,34 @@ final class McpClient
 
     private Client $httpClient;
 
+    /**
+     * The preset of the agent currently driving this client, if any. When set,
+     * listTools()/callTool()/callToolByName() are filtered through McpRouter
+     * against $agentPreset->mcpServers; when null, routing is unrestricted
+     * (equivalent to a preset with an empty mcpServers allowlist).
+     */
+    private ?AgentPreset $agentPreset;
+
     public function __construct(
         private string $configPath,
         ?Client $httpClient = null,
+        ?AgentPreset $agentPreset = null,
     ) {
         // Injectable so tests can supply a MockHandler-backed client; defaults to
         // a real client for production use.
         $this->httpClient = $httpClient ?? new Client(['timeout' => 30]);
+        $this->agentPreset = $agentPreset;
+    }
+
+    /**
+     * Set (or clear) the preset of the agent driving this client, so that
+     * subsequent listTools()/callTool()/callToolByName() calls are routed
+     * through McpRouter::resolveAllowedTools() against the preset's mcpServers
+     * allowlist rather than exposing every configured server unconditionally.
+     */
+    public function setAgentPreset(?AgentPreset $agentPreset): void
+    {
+        $this->agentPreset = $agentPreset;
     }
 
     /**
@@ -87,23 +109,30 @@ final class McpClient
     }
 
     /**
-     * List available tools from all servers.
+     * List available tools, restricted to what the current agent preset (if
+     * any) is allowed to see per McpRouter::resolveAllowedTools().
      *
      * @return array<McpTool>
      */
     public function listTools(): array
     {
-        $tools = [];
+        if ($this->agentPreset === null) {
+            $tools = [];
 
-        foreach ($this->servers as $server) {
-            $tools = array_merge($tools, $server->listTools());
+            foreach ($this->servers as $server) {
+                $tools = array_merge($tools, $server->listTools());
+            }
+
+            return $tools;
         }
 
-        return $tools;
+        return $this->router()->resolveAllowedTools($this->agentPreset);
     }
 
     /**
-     * Call a tool on a specific server.
+     * Call a tool on a specific server. Rejected when the current agent
+     * preset's mcpServers allowlist does not cover $serverName, so a caller
+     * cannot bypass listTools() filtering by naming a denied server directly.
      */
     public function callTool(string $serverName, string $toolName, array $args): array
     {
@@ -113,24 +142,40 @@ final class McpClient
             throw new \RuntimeException("Unknown MCP server: $serverName");
         }
 
+        if ($this->agentPreset !== null && !in_array($serverName, $this->router()->resolveAllowedServers($this->agentPreset), true)) {
+            throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
+        }
+
         return $server->callTool($toolName, $args);
     }
 
     /**
-     * Call a tool by name across all servers (first match).
+     * Call a tool by name across all servers the current agent preset is
+     * allowed to see (first match). Tools belonging to servers outside the
+     * preset's allowlist are invisible here, not merely unlisted.
      */
     public function callToolByName(string $toolName, array $args): array
     {
-        foreach ($this->servers as $server) {
-            $tools = $server->listTools();
-            foreach ($tools as $tool) {
-                if ($tool->name === $toolName) {
-                    return $server->callTool($toolName, $args);
-                }
+        foreach ($this->listTools() as $tool) {
+            if ($tool->name !== $toolName) {
+                continue;
+            }
+
+            $server = $this->servers[$tool->serverName] ?? null;
+            if ($server !== null) {
+                return $server->callTool($toolName, $args);
             }
         }
 
         throw new \RuntimeException("Tool not found: $toolName");
+    }
+
+    /**
+     * Build an McpRouter over this client's currently-started servers.
+     */
+    private function router(): McpRouter
+    {
+        return new McpRouter($this->servers);
     }
 
     private function loadConfig(): array
