@@ -296,4 +296,16 @@ final class SessionPickerTest extends TestCase
         $this->assertSame('browse', $action);
         $this->assertSame(1, $newPicker->selectedIndex());
     }
+
+    public function testHandleKeyCtrlB(): void
+    {
+        $sessions = $this->makeSessions();
+
+        // When branch filter is already set, ctrl+b clears it (toggle off)
+        $picker = SessionPicker::new($sessions)->withBranchFilter('main');
+        $this->assertSame('main', $picker->branchFilter());
+        [$newPicker, $action] = $picker->handleKey('ctrl+b');
+        $this->assertSame('browse', $action);
+        $this->assertNull($newPicker->branchFilter());
+    }
 }

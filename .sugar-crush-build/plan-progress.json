@@ -1,11 +1,11 @@
 {
     "P0": {"status": "done"},
-    "P1": {"status": "done"},
-    "P2": {"status": "done"},
-    "P2B": {"status": "done"},
-    "P3": {"status": "done"},
-    "P4": {"status": "done"},
-    "P5": {"status": "done"},
-    "P6": {"status": "in_progress"},
+    "P1": {"status": "not_started"},
+    "P2": {"status": "not_started"},
+    "P2B": {"status": "not_started"},
+    "P3": {"status": "not_started"},
+    "P4": {"status": "not_started"},
+    "P5": {"status": "not_started"},
+    "P6": {"status": "not_started"},
     "P7": {"status": "not_started"}
 }

@@ -629,7 +629,7 @@ final class TaskList
     {
         $dir = \dirname($lockPath);
         if (!\is_dir($dir)) {
-            \mkdir($dir, 0755, true);
+            @\mkdir($dir, 0755, true);
         }
 
         $fp = \fopen($lockPath, 'a');

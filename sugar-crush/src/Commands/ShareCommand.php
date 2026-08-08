@@ -26,9 +26,6 @@ final class ShareCommand
 
     private const DEFAULT_EXPIRY_DAYS = 7;
 
-    /** Default expiry in hours (for short-lived shares). */
-    private const DEFAULT_EXPIRY_HOURS = 1;
-
     /**
      * @param list<string> $args Command arguments: [format, expiry]
      */
@@ -47,12 +44,7 @@ final class ShareCommand
         $expiryDisplay = $expiry['display'];
 
         // Build ShareSession from chat history
-        $messages = array_map(
-            static fn(Message $m): Message => $m,
-            $chat->history,
-        );
-
-        $session = new ShareSession($messages, $format, $expiry['days']);
+        $session = new ShareSession($chat->history, $format, $expiry['days']);
 
         // Upload and get share result
         $uploadBaseUrl = $this->getUploadBaseUrl();

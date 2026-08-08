@@ -10,17 +10,17 @@ namespace SugarCraft\Crush\Agents;
  * Mirrors upstream result structure: captures output, error, metrics, and timing
  * for each agent run in the parallel execution engine.
  */
-final readonly class AgentResult
+final class AgentResult
 {
     public function __construct(
-        public string $agentId,
-        public AgentStatus $status,
-        public ?string $output = null,
-        public ?\Throwable $error = null,
-        public int $tokensUsed = 0,
-        public float $costUsd = 0.0,
-        public ?\DateTimeImmutable $startedAt = null,
-        public ?\DateTimeImmutable $completedAt = null,
+        public readonly string $agentId,
+        public readonly AgentStatus $status,
+        public readonly ?string $output = null,
+        public readonly ?\Throwable $error = null,
+        public readonly int $tokensUsed = 0,
+        public readonly float $costUsd = 0.0,
+        public readonly ?\DateTimeImmutable $startedAt = null,
+        public readonly ?\DateTimeImmutable $completedAt = null,
     ) {}
 
     /**

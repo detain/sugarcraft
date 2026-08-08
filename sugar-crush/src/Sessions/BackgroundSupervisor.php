@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Tui\StallDetector;
+use SugarCraft\Crush\Tui\StallWarning;
 
 /**
  * Manages all background sessions as a supervisor process.
@@ -40,9 +42,15 @@ final class BackgroundSupervisor implements SessionNotificationInterface
      */
     private array $sessionIpc = [];
 
-    public function __construct(?SessionNotificationInterface $listener = null)
-    {
+    /** Tracks per-session token output rates to detect stalls. */
+    private StallDetector $stallDetector;
+
+    public function __construct(
+        ?SessionNotificationInterface $listener = null,
+        ?StallDetector $stallDetector = null,
+    ) {
         $this->listener = $listener;
+        $this->stallDetector = $stallDetector ?? new StallDetector();
     }
 
     // =========================================================================
@@ -466,6 +474,20 @@ exit(0);
     }
 
     // =========================================================================
+    // Stall Detection
+    // =========================================================================
+
+    /**
+     * Return all agents currently flagged as stalled via their token throughput.
+     *
+     * @return array<string, StallWarning>
+     */
+    public function getStallWarnings(): array
+    {
+        return $this->stallDetector->getStallWarnings();
+    }
+
+    // =========================================================================
     // SessionNotificationInterface Implementation
     // =========================================================================
 
@@ -499,10 +521,15 @@ exit(0);
 
     public function onSessionStreaming(BackgroundSession $session, string $chunk): void
     {
+        // Track tokens for stall detection. The provider increments
+        // $session->tokensUsed before calling this callback, so we read
+        // it from the stored session reference (same object instance).
+        $currentSession = $this->sessions[$session->id] ?? $session;
+        $this->stallDetector->track($session->id, $currentSession->tokensUsed);
+
         // Look up the current session from our map to get the latest state.
         // This is necessary because the caller's reference may be stale
         // (immutable session pattern: each update creates a new object).
-        $currentSession = $this->sessions[$session->id] ?? $session;
         $newSession = $currentSession->withOutput($currentSession->output . $chunk);
         $this->sessions[$session->id] = $newSession;
 

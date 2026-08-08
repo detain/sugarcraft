@@ -25,6 +25,10 @@ final class AgentPresetRegistry
     {
         foreach ($this->searchPaths as $path) {
             $filePath = $path . '/' . $name . '.md';
+            $realPath = realpath($filePath);
+            if ($realPath === false || !str_starts_with($realPath, realpath($path))) {
+                continue;
+            }
             if (file_exists($filePath)) {
                 return $this->parsePresetFile($filePath);
             }
@@ -50,7 +54,7 @@ final class AgentPresetRegistry
             $files = glob($path . '/*.md');
             foreach ($files as $file) {
                 $name = basename($file, '.md');
-                // Later search paths take precedence on name conflicts
+                // First search path takes precedence on name conflicts
                 if (!isset($presets[$name])) {
                     $presets[$name] = $this->parsePresetFile($file);
                 }

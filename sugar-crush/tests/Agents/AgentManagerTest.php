@@ -11,10 +11,14 @@ use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Agents\Team;
 use SugarCraft\Crush\Agents\TeamConfig;
 use SugarCraft\Crush\Agents\TeamManager;
+use SugarCraft\Crush\Permissions\PermissionDecision;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\Skills\SkillRegistry;
 
 /**
@@ -134,6 +138,36 @@ final class AgentManagerTest extends TestCase
         $this->assertNotSame($subAgent1, $subAgent2);
     }
 
+    public function testCreateSubAgentWithBypassPermissionsCreatesPermissionGate(): void
+    {
+        $agent = $this->createAgent(name: 'bypass-agent', prompt: 'Bypass agent');
+        $this->agentManager->register($agent);
+
+        $subAgent = $this->agentManager->createSubAgent(
+            'bypass-agent',
+            'Task requiring bypass',
+            PermissionMode::BypassPermissions,
+        );
+
+        $this->assertNotNull($subAgent->permissionGate);
+        $this->assertSame(PermissionMode::BypassPermissions, $subAgent->permissionGate->mode());
+    }
+
+    public function testCreateSubAgentMidSessionModeChangeThrowsLogicException(): void
+    {
+        $agent = $this->createAgent(name: 'mode-test-agent', prompt: 'Mode test agent');
+        $this->agentManager->register($agent);
+
+        // First sub-agent with Default mode seals the session
+        $this->agentManager->createSubAgent('mode-test-agent', 'Task 1', PermissionMode::Default);
+
+        // Attempting to create a second sub-agent with a different mode throws
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Permission mode cannot be changed mid-session');
+
+        $this->agentManager->createSubAgent('mode-test-agent', 'Task 2', PermissionMode::BypassPermissions);
+    }
+
     // -------------------------------------------------------------------------
     // getSubAgent()
     // -------------------------------------------------------------------------
@@ -235,6 +269,83 @@ final class AgentManagerTest extends TestCase
             $this->assertSame('Provider error', $e->getMessage());
             $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
             $this->assertSame('Provider error', $subAgent->error);
+        }
+    }
+
+    public function testExecuteSubAgentPermissionGateDenySetsFailedStatus(): void
+    {
+        // Custom gate factory that returns a gate which denies Bash tool calls
+        $denyGate = new PermissionGate(PermissionMode::DontAsk);
+
+        $customAgentManager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: null,
+            permissionGateFactory: fn() => $denyGate,
+        );
+
+        $agent = $this->createAgent(name: 'deny-agent', prompt: 'Deny agent');
+        $customAgentManager->register($agent);
+
+        $subAgent = $customAgentManager->createSubAgent('deny-agent', 'Execute with deny');
+
+        $this->provider->method('supportsStreaming')->willReturn(false);
+        $this->provider->method('complete')
+            ->willReturn(new CompleteResponse(
+                content: 'Result',
+                toolCalls: [
+                    new ToolCall(name: 'Bash', arguments: ['command' => 'ls']),
+                ],
+            ));
+
+        try {
+            foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
+                // No-op
+            }
+            $this->fail('Expected RuntimeException was not thrown');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('denied by permission gate', $e->getMessage());
+            $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+            $this->assertStringContainsString('denied by permission gate', $subAgent->error);
+        }
+    }
+
+    public function testExecuteSubAgentPermissionGateAskThrowsRuntimeException(): void
+    {
+        // Custom gate factory that returns a gate which asks (not denies) for Bash tool calls
+        // Default mode: Bash is not read-only, so it returns Ask
+        $askGate = new PermissionGate(PermissionMode::Default);
+
+        $customAgentManager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: null,
+            permissionGateFactory: fn() => $askGate,
+        );
+
+        $agent = $this->createAgent(name: 'ask-agent', prompt: 'Ask agent');
+        $customAgentManager->register($agent);
+
+        $subAgent = $customAgentManager->createSubAgent('ask-agent', 'Execute with ask');
+
+        $this->provider->method('supportsStreaming')->willReturn(false);
+        $this->provider->method('complete')
+            ->willReturn(new CompleteResponse(
+                content: 'Result',
+                toolCalls: [
+                    new ToolCall(name: 'Bash', arguments: ['command' => 'ls']),
+                ],
+            ));
+
+        try {
+            foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
+                // No-op
+            }
+            $this->fail('Expected RuntimeException was not thrown');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('requires user input', $e->getMessage());
+            $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+            $this->assertStringContainsString('requires user input', $subAgent->error);
         }
     }
 

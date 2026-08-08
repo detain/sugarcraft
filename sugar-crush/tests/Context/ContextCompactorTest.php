@@ -506,6 +506,35 @@ final class ContextCompactorTest extends TestCase
         $this->assertSame('Here is the content', $result[1]['content']);
     }
 
+    public function testStage1RemovesToolResults(): void
+    {
+        // Stage 1 (stage 0 in code) removes tool result messages to free context space.
+        // Successful Read tool results are voluminous intermediate outputs that are
+        // summarized by stage 2 anyway, so they are safe to remove early.
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', 'Read the configuration file'),
+            ['role' => 'system', 'content' => 'File contents', 'tool_results' => [
+                'name' => 'Read',
+                'output' => "<?php\ndeclare(strict_types=1);\nnamespace App;\nclass Config {\n  public string \$host = 'localhost';\n}\n",
+            ]],
+            $this->msg('assistant', 'Here is the configuration: localhost'),
+            $this->msg('user', 'Show me the database file'),
+            ['role' => 'system', 'content' => 'DB file contents', 'tool_results' => [
+                'name' => 'Read',
+                'output' => "<?php\nclass Database {\n  private string \$dsn = 'mysql:host=127.0.0.1';\n}\n",
+            ]],
+            $this->msg('assistant', 'The database file shows MySQL connection'),
+        ];
+        $result = $compactor->removeToolResults($messages);
+        // Both tool_result messages should be removed, leaving only user/assistant pairs
+        $this->assertCount(4, $result);
+        $this->assertSame('Read the configuration file', $result[0]['content']);
+        $this->assertSame('Here is the configuration: localhost', $result[1]['content']);
+        $this->assertSame('Show me the database file', $result[2]['content']);
+        $this->assertSame('The database file shows MySQL connection', $result[3]['content']);
+    }
+
     public function testRemoveToolResultsPreservesNonSystemMessages(): void
     {
         $compactor = new ContextCompactor($this->cfg());

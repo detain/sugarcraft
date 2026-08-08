@@ -76,7 +76,8 @@ final class BranchCommandTest extends TestCase
     public function testBranchCommandWithActiveSession(): void
     {
         // Create an active session
-        $this->sessionStore->createSession('active-session', 'openai', 'gpt-4', 'You are helpful', 'Test Session');
+        $sessionId = 'active-session';
+        $this->sessionStore->createSession($sessionId, 'openai', 'gpt-4', 'You are helpful', 'Test Session');
 
         $chat = new Chat(
             history: [],
@@ -84,15 +85,18 @@ final class BranchCommandTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->sessionStore,
         );
+        $chat = $chat->withCurrentSessionId($sessionId);
 
-        // Manually set the session ID somehow - for now this test documents
-        // that branch needs an active session to work
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
-        // Without an active session context, branch should report no active session
+        // Branch should succeed: session is active, input is /branch (fork current)
         $this->assertFalse($next->inFlight);
         $lastMsg = $next->history[count($next->history) - 1];
-        $this->assertStringContainsString('No active session', $lastMsg->content);
+        $this->assertSame(\SugarCraft\Crush\Role::Assistant, $lastMsg->role);
+        // A successful fork creates a new session and responds with its ID
+        $this->assertStringContainsString('branch created:', strtolower($lastMsg->content));
+        // The new chat should have a different (forked) session ID
+        $this->assertNotSame($sessionId, $next->currentSessionId());
     }
 
     // =========================================================================
@@ -153,7 +157,8 @@ final class BranchCommandTest extends TestCase
     public function testRenameCommandWithValidName(): void
     {
         // Create an active session
-        $this->sessionStore->createSession('active-session', 'openai', 'gpt-4', null, 'Original');
+        $sessionId = 'active-session';
+        $this->sessionStore->createSession($sessionId, 'openai', 'gpt-4', null, 'Original');
 
         $chat = new Chat(
             history: [],
@@ -161,13 +166,14 @@ final class BranchCommandTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->sessionStore,
         );
+        $chat = $chat->withCurrentSessionId($sessionId);
 
-        // Without an active session context, rename should report no active session
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertFalse($next->inFlight);
         $lastMsg = $next->history[count($next->history) - 1];
-        $this->assertStringContainsString('No active session', $lastMsg->content);
+        $this->assertSame(\SugarCraft\Crush\Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString("Session renamed to 'NewName'", $lastMsg->content);
     }
 
     // =========================================================================

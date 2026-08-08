@@ -31,9 +31,20 @@ final class StallDetector
      * @param float $minTokensPerSecond  Minimum token rate considered healthy (default 0.5).
      */
     public function __construct(
-        private readonly int $thresholdSeconds = 30,
-        private readonly float $minTokensPerSecond = 0.5,
+        private int $thresholdSeconds = 30,
+        private float $minTokensPerSecond = 0.5,
     ) {}
+
+    /**
+     * Update the stall threshold at runtime.
+     *
+     * Allows the TUI to adjust sensitivity without recreating the detector.
+     */
+    public function setThreshold(int $thresholdSeconds, float $minTokensPerSecond): void
+    {
+        $this->thresholdSeconds = $thresholdSeconds;
+        $this->minTokensPerSecond = $minTokensPerSecond;
+    }
 
     /**
      * Record a token update for an agent and update its rate statistics.
@@ -52,8 +63,14 @@ final class StallDetector
             $elapsed = $now - $snap->lastTimestamp;
 
             if ($elapsed <= 0) {
-                // Clock skew — treat as no elapsed time.
-                $this->agents[$agentId] = $snap->withTokenCount($tokenCount);
+                // Clock skew — preserve previous snapshot, only token count advances.
+                $this->agents[$agentId] = new AgentSnapshot(
+                    lastTokenCount: $tokenCount,
+                    lastTimestamp: $snap->lastTimestamp,
+                    slowPeriodSeconds: $snap->slowPeriodSeconds,
+                    previousTokenCount: $snap->previousTokenCount,
+                    previousTimestamp: $snap->previousTimestamp,
+                );
                 return;
             }
 
@@ -62,15 +79,17 @@ final class StallDetector
 
             if ($rate >= $this->minTokensPerSecond) {
                 // Healthy throughput — reset slow period.
-                $this->agents[$agentId] = new AgentSnapshot(
+                $this->agents[$agentId] = $snap->withPreviousSnapshot(
                     lastTokenCount: $tokenCount,
                     lastTimestamp: $now,
                     slowPeriodSeconds: 0.0,
                 );
             } else {
                 // Insufficient throughput — accumulate slow time.
-                $this->agents[$agentId] = $snap->withTokenCount($tokenCount)->withSlowPeriod(
-                    $snap->slowPeriodSeconds + $elapsed
+                $this->agents[$agentId] = $snap->withPreviousSnapshot(
+                    lastTokenCount: $tokenCount,
+                    lastTimestamp: $now,
+                    slowPeriodSeconds: $snap->slowPeriodSeconds + $elapsed,
                 );
             }
         } else {
@@ -122,7 +141,9 @@ final class StallDetector
 
     /**
      * Calculate the current approximate token rate for an agent in tokens/second.
-     * Returns 0.0 when the agent has no history.
+     * Uses the delta between the last two track() observations, not the cumulative
+     * token count — giving an accurate picture of recent throughput.
+     * Returns 0.0 when the agent has no prior observation.
      */
     private function calculateCurrentRate(string $agentId): float
     {
@@ -131,13 +152,20 @@ final class StallDetector
         }
 
         $snap = $this->agents[$agentId];
-        $elapsed = microtime(true) - $snap->lastTimestamp;
 
-        if ($elapsed <= 0) {
+        // Cannot compute rate without a prior observation.
+        if ($snap->previousTimestamp === 0.0) {
             return 0.0;
         }
 
-        return max(0.0, ($snap->lastTokenCount / $elapsed));
+        $timeDelta = $snap->lastTimestamp - $snap->previousTimestamp;
+        if ($timeDelta <= 0) {
+            return 0.0;
+        }
+
+        $tokensDelta = $snap->lastTokenCount - $snap->previousTokenCount;
+
+        return max(0.0, $tokensDelta / $timeDelta);
     }
 }
 
@@ -148,27 +176,36 @@ final class StallDetector
  */
 final class AgentSnapshot
 {
+    /**
+     * @param int    $lastTokenCount     Most recent token count observed.
+     * @param float  $lastTimestamp      Wall-clock (microtime) of most recent observation.
+     * @param float  $slowPeriodSeconds Accumulated seconds with throughput below threshold.
+     * @param int    $previousTokenCount Token count from the prior observation (for rate delta).
+     * @param float  $previousTimestamp  Wall-clock of the prior observation (for rate delta).
+     */
     public function __construct(
         public int $lastTokenCount,
         public float $lastTimestamp,
         public float $slowPeriodSeconds,
+        public int $previousTokenCount = 0,
+        public float $previousTimestamp = 0.0,
     ) {}
 
-    public function withTokenCount(int $tokenCount): self
-    {
+    /**
+     * Shift current last* values into previous* fields and apply new last* values.
+     * Used by track() to maintain the two-point history needed for rate calculation.
+     */
+    public function withPreviousSnapshot(
+        int $lastTokenCount,
+        float $lastTimestamp,
+        float $slowPeriodSeconds,
+    ): self {
         return new self(
-            lastTokenCount: $tokenCount,
-            lastTimestamp: $this->lastTimestamp,
-            slowPeriodSeconds: $this->slowPeriodSeconds,
-        );
-    }
-
-    public function withSlowPeriod(float $slowPeriodSeconds): self
-    {
-        return new self(
-            lastTokenCount: $this->lastTokenCount,
-            lastTimestamp: $this->lastTimestamp,
+            lastTokenCount: $lastTokenCount,
+            lastTimestamp: $lastTimestamp,
             slowPeriodSeconds: $slowPeriodSeconds,
+            previousTokenCount: $this->lastTokenCount,
+            previousTimestamp: $this->lastTimestamp,
         );
     }
 }

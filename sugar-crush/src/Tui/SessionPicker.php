@@ -276,7 +276,7 @@ final class SessionPicker
         }
 
         $summary = $session['summary'] ?? '(no summary)';
-        $maxWidth = $width - 10;
+        $maxWidth = max(1, $width - 10);
 
         if (strlen($summary) > $maxWidth) {
             $summary = substr($summary, 0, $maxWidth - 3) . '…';
@@ -302,10 +302,9 @@ final class SessionPicker
         }
 
         $maxOffset = $totalItems - $visibleHeight;
-        $scrollOffset = 0;
 
         // If selected is not within visible range, scroll to center it
-        if ($this->selectedIndex < $scrollOffset || $this->selectedIndex >= $scrollOffset + $visibleHeight) {
+        if ($this->selectedIndex < 0 || $this->selectedIndex >= $visibleHeight) {
             $idealOffset = $this->selectedIndex - (int) floor($visibleHeight / 2);
             return max(0, min($maxOffset, $idealOffset));
         }

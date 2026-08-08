@@ -14,7 +14,7 @@ namespace SugarCraft\Crush\LSP;
  *
  * Mirrors sugar-crush design.
  */
-final class LspConnection
+final class LspConnection implements LspConnectionInterface
 {
     /** @var resource|null */
     private $process = null;
@@ -57,7 +57,7 @@ final class LspConnection
     {
         $this->requestTimeout = $timeout;
 
-        $this->process = proc_open(
+        $this->process = @proc_open(
             [$command, ...array_values($this->serverArgs)],
             [
                 0 => ['pipe', 'r'],

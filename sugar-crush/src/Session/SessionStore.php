@@ -156,9 +156,12 @@ final class SessionStore
         ]);
 
         // Copy all messages from original session to new session
+        // Build a map of old message_id => new message_id for tool_calls copying
         $messages = $this->getMessages($id);
+        $oldToNewMessageId = [];
         foreach ($messages as $msg) {
-            $this->addMessage($newId, [
+            $oldMessageId = (int) $msg['id'];
+            $newMessageId = $this->addMessage($newId, [
                 'role' => $msg['role'],
                 'content' => $msg['content'],
                 'tool_calls' => $msg['tool_calls'],
@@ -166,6 +169,35 @@ final class SessionStore
                 'model' => $msg['model'],
                 'tokens_used' => $msg['tokens_used'],
             ]);
+            $oldToNewMessageId[$oldMessageId] = $newMessageId;
+        }
+
+        // Copy tool_calls records for each message, remapping message_id to the new one
+        if (!empty($oldToNewMessageId)) {
+            $placeholders = implode(',', array_fill(0, count($oldToNewMessageId), '?'));
+            $stmt = $this->pdo->prepare("
+                SELECT * FROM tool_calls
+                WHERE session_id = ? AND message_id IN ({$placeholders})
+            ");
+            $stmt->execute(array_merge([$id], array_keys($oldToNewMessageId)));
+            $toolCalls = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            foreach ($toolCalls as $tc) {
+                $newMessageId = $oldToNewMessageId[(int) $tc['message_id']];
+                $insertStmt = $this->pdo->prepare('
+                    INSERT INTO tool_calls (session_id, message_id, tool_name, tool_args, tool_result, duration_ms, success)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ');
+                $insertStmt->execute([
+                    $newId,
+                    $newMessageId,
+                    $tc['tool_name'],
+                    $tc['tool_args'],
+                    $tc['tool_result'],
+                    $tc['duration_ms'],
+                    $tc['success'],
+                ]);
+            }
         }
 
         return $newId;
