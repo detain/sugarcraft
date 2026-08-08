@@ -379,6 +379,67 @@ final class ChatTest extends TestCase
         $this->assertCount(3, $next->history);
     }
 
+    public function testMultipleToolCallsWithPoolConfiguredExecuteRealToolsSequentially(): void
+    {
+        // R14b: even with 2+ tool calls AND a non-null pool configured, execution
+        // must go through the real sequential executeTool() path, never through
+        // executeToolsParallel()/AgentWorkerPool. That path dispatches SubAgents
+        // through the pool's executor WITHOUT ever invoking the registered tool
+        // closures or the onToolCall listener - it fabricates a result from
+        // whatever the executor (here, a stub standing in for a forked worker
+        // process) returns instead. Wire a stub executor that returns fabricated
+        // output distinct from any real tool's output, and a registered-tool set
+        // whose closures record their own invocation + real return value via
+        // onToolCall. Under the old parallel-routing code onToolCall never fires
+        // (empty $observed); under the fixed sequential fallback both real tool
+        // outputs are observed and the fabricated stub output never appears.
+        $executor = new class implements ExecutorInterface {
+            public function execute(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                return new AgentResult($agent->id, \SugarCraft\Crush\Agents\AgentStatus::Completed, 'FABRICATED-NOT-REAL-OUTPUT');
+            }
+
+            public function executeStream(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield new AgentResult($agent->id, \SugarCraft\Crush\Agents\AgentStatus::Completed, 'FABRICATED-NOT-REAL-OUTPUT');
+            }
+
+            public function cancel(string $agentId): void {}
+            public function cancelAll(): void {}
+        };
+        $pool = new AgentWorkerPool(maxConcurrent: 2, executor: $executor);
+
+        $toolCallA = new \SugarCraft\Crush\ToolCall('toolA', ['x' => 1]);
+        $toolCallB = new \SugarCraft\Crush\ToolCall('toolB', ['y' => 2]);
+        $message = Message::assistant('Calling two tools...')->withToolCalls([$toolCallA, $toolCallB]);
+
+        $observed = [];
+        $chat = (new Chat(
+            history: [Message::user('do two things')],
+            inFlight: true,
+        ))
+            ->withWorkerPool($pool)
+            ->onToolCall(function (string $name, array $args, mixed $result) use (&$observed): void {
+                $observed[$name] = $result;
+            })
+            ->registerTool('toolA', static fn(array $args) => 'REAL-TOOL-A-OUTPUT')
+            ->registerTool('toolB', static fn(array $args) => 'REAL-TOOL-B-OUTPUT');
+
+        [$next] = $chat->update(new AssistantMsg($message));
+
+        // Both real tool closures ran in-process and their real output was observed -
+        // this is only possible via the sequential executeTool() path.
+        $this->assertSame(
+            ['toolA' => 'REAL-TOOL-A-OUTPUT', 'toolB' => 'REAL-TOOL-B-OUTPUT'],
+            $observed
+        );
+        $this->assertNotContains('FABRICATED-NOT-REAL-OUTPUT', $observed);
+
+        // History: user msg + assistant msg + tool result A + tool result B
+        $this->assertCount(4, $next->history);
+        $this->assertTrue($next->inFlight);
+    }
+
     public function testToolsAndCallbacksPreservedOnInput(): void
     {
         $chat = new Chat(tools: ['test' => static fn() => 'result']);

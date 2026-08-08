@@ -187,9 +187,8 @@ final class Chat implements Model
      * Handle tool calls in an assistant message.
      * Executes each tool and schedules a follow-up backend call with results.
      *
-     * When multiple independent tools are called, they are dispatched through the
-     * AgentWorkerPool in parallel for better performance. Single tools execute
-     * sequentially via the fallback path.
+     * All tool calls execute sequentially in-process. See {@see executeToolsParallel()}
+     * for why the AgentWorkerPool dispatch path is disabled.
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -197,16 +196,17 @@ final class Chat implements Model
     {
         $toolResults = [];
 
-        // P1.S10: Parallel dispatch via AgentWorkerPool when multiple tools are called.
-        // Single tools use the sequential fallback for simplicity.
-        if (count($message->toolCalls) > 1 && $this->effectivePool !== null) {
-            $toolResults = $this->executeToolsParallel($message->toolCalls);
-        } else {
-            // Sequential fallback: single tool or no pool available
-            foreach ($message->toolCalls as $toolCall) {
-                $result = $this->executeTool($toolCall);
-                $toolResults[] = $result;
-            }
+        // R14b: executeToolsParallel()/AgentWorkerPool routing is disabled unconditionally.
+        // It forks a child process per tool call and re-invokes the tool by name+args JSON
+        // inside that process, but the actual tool callbacks living in $this->tools are PHP
+        // closures that cannot be serialized across the fork/process boundary. The forked
+        // worker has no way to reconstruct them, so it was fabricating/simulating output
+        // instead of running the real closure - silently corrupting tool results. Always
+        // execute sequentially in-process until the redesign described on
+        // executeToolsParallel() lands.
+        foreach ($message->toolCalls as $toolCall) {
+            $result = $this->executeTool($toolCall);
+            $toolResults[] = $result;
         }
 
         // Add assistant message and tool results to history
@@ -278,9 +278,24 @@ final class Chat implements Model
     /**
      * Execute multiple tool calls in parallel via the AgentWorkerPool.
      *
-     * Each tool call is wrapped in a SubAgent and dispatched through the pool's
-     * executeAll() method, which forks child processes for true parallelism.
-     * Results are converted back to ToolResult format for consistency.
+     * DISABLED (R14b): no longer called from {@see handleToolCalls()}. This method
+     * wraps each tool call in a SubAgent and dispatches it through the pool's
+     * executeAll(), which runs each SubAgent in a forked child process. That is
+     * fundamentally broken for real tool execution: $this->tools holds PHP \Closure
+     * callbacks, and closures cannot cross a process/fork boundary - the child has
+     * no reference to the parent's closure, only the JSON-encoded tool name/args.
+     * Whatever the child produced was simulated/fabricated output standing in for
+     * the real tool call, not the actual closure's result, so routing through here
+     * silently replaced real tool output with fabricated text.
+     *
+     * @todo Real fix requires a name-keyed tool registry that the worker process can
+     *       look up by string (e.g. a class map or service locator resolvable inside
+     *       the forked process), NOT a closure captured from the parent's $this->tools.
+     *       The worker would decode {tool_name, tool_args} from the task, resolve
+     *       tool_name against that registry inside its own process, invoke it there,
+     *       and return the real result. Until that registry-based dispatch exists,
+     *       this method must stay unused and all tool calls go through the sequential
+     *       path in handleToolCalls().
      *
      * @param ToolCall[] $toolCalls
      * @return ToolResult[]
