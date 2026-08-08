@@ -379,7 +379,7 @@ final class TaskList
 
             return true;
         } finally {
-            $this->releaseTaskLock($lockFp, $lockPath);
+            $this->releaseTaskLock($lockFp);
         }
     }
 
@@ -645,15 +645,22 @@ final class TaskList
     }
 
     /**
-     * Release the task lock and remove the lock file.
+     * Release the task lock, closing this process's handle to it.
+     *
+     * The lock file is deliberately NEVER unlinked. Deleting it here would
+     * open a TOCTOU window: a contender already blocked in flock() on the
+     * (now-unlinked) inode would be woken up and granted the lock on that
+     * dead inode, while a fresh contender's fopen() on the same path would
+     * create a brand-new inode and acquire an uncontended lock on it
+     * immediately — letting two claimants run claimTask()'s critical
+     * section at the same time. Keeping the lock file resident for the
+     * whole process lifetime means the path always resolves to the same
+     * inode, so flock() alone is a correct mutual-exclusion primitive.
      */
-    private function releaseTaskLock(mixed $fp, string $lockPath): void
+    private function releaseTaskLock(mixed $fp): void
     {
         \flock($fp, \LOCK_UN);
         \fclose($fp);
-        if (\file_exists($lockPath)) {
-            \unlink($lockPath);
-        }
     }
 
     /**
@@ -678,18 +685,5 @@ final class TaskList
             provider: '',
             projectRoot: '',
         );
-    }
-}
-
-/**
- * Thrown when a TaskCreated hook blocks the insertion of a new task.
- */
-final class TaskBlockedException extends \RuntimeException
-{
-    public function __construct(
-        public readonly string $taskId,
-        string $message = '',
-    ) {
-        parent::__construct($message !== '' ? $message : "Task creation blocked: {$taskId}");
     }
 }

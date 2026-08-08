@@ -735,9 +735,139 @@ final class TaskListTest extends TestCase
         $this->assertSame(TaskStatus::InProgress, $task->status);
     }
 
+    /**
+     * Real multi-process race: fork N children that all race to claim the
+     * SAME task, in true OS processes with independent SQLite3 connections
+     * and independent file descriptors — the only way to actually exercise
+     * flock()-based mutual exclusion. A single-process, sequential test
+     * (like testConcurrentClaimPreventsDoubleClaim above) can never observe
+     * a TOCTOU race because nothing genuinely runs at the same time.
+     *
+     * Regression coverage for R1: the old releaseTaskLock() called
+     * flock(LOCK_UN) and then unlinked the per-task lock file. Every claim
+     * attempt that BAILS OUT (task blocked by an unmet dependency, wrong
+     * assignee, etc.) still goes through that unlock-then-unlink cycle even
+     * though it wrote nothing — so while a task is blocked, many bailout
+     * cycles unlink-and-recreate the lock file in quick succession. If that
+     * churn is happening at the exact moment the blocking dependency
+     * completes, a contender that was blocked on the (now unlinked, but
+     * still valid as a lock) old inode can be woken up and proceed with its
+     * claim at the same time as a brand new contender who fopen()'d the
+     * freshly recreated inode — two processes now both believe they hold
+     * the exclusive per-task lock, both observe "pending", and both write a
+     * successful claim.
+     *
+     * To reproduce that window deterministically, this test seeds a task
+     * with an unmet dependency, starts many children hammering claimTask()
+     * for it in a tight retry loop (maximizing unlock/unlink churn), then
+     * completes the dependency from a separate process partway through —
+     * exactly the "still-being-decided outcome" scenario the bug exposed.
+     * Confirmed against the pre-fix code: this design reliably produced
+     * 3-5 simultaneous winners per run; with the fix it is reliably 1.
+     */
+    public function testConcurrentForkedClaimAllowsExactlyOneWinner(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl extension not available.');
+        }
+
+        $childCount = 40;
+        $resultDir = $this->dbPath . '.results';
+        \mkdir($resultDir, 0755, true);
+
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('dep-fork', 'team-fork-race', 'Dependency'));
+        $list->addTask($this->makeTask('race-task-fork', 'team-fork-race', 'Fork race', ['dep-fork']));
+
+        // Forget the cached SQLite3 connection before forking, so every
+        // child below opens its OWN fresh connection instead of racing on a
+        // fork-inherited (copy-on-write) one — SQLite3 connections are not
+        // documented as fork-safe, and the point of this test is to exercise
+        // the real multi-process contract (independent process, independent
+        // connection, independent file descriptors).
+        $this->resetTaskListConnectionCache();
+
+        $pids = [];
+        for ($i = 0; $i < $childCount; $i++) {
+            $pid = \pcntl_fork();
+            $this->assertNotSame(-1, $pid, 'pcntl_fork() must succeed.');
+
+            if ($pid === 0) {
+                // Child: retry in a tight loop for up to 2s so a good number
+                // of claim attempts land right around the dependency
+                // completing (below), maximizing unlock/unlink churn at the
+                // exact moment the task transitions from blocked to claimable.
+                $childList = new TaskList($this->dbPath);
+                $deadline = \microtime(true) + 2.0;
+                $claimed = false;
+                while (\microtime(true) < $deadline) {
+                    if ($childList->claimTask('race-task-fork', "teammate-{$i}")) {
+                        $claimed = true;
+                        break;
+                    }
+                }
+                if ($claimed) {
+                    \file_put_contents($resultDir . "/{$i}.won", "teammate-{$i}");
+                }
+                exit(0);
+            }
+
+            $pids[] = $pid;
+        }
+
+        // Completer: satisfies the dependency shortly after the claimants
+        // start racing, so the task transitions from blocked to claimable
+        // while many of them are mid-retry-loop.
+        $completerPid = \pcntl_fork();
+        $this->assertNotSame(-1, $completerPid, 'pcntl_fork() must succeed.');
+        if ($completerPid === 0) {
+            \usleep(50_000);
+            $completerList = new TaskList($this->dbPath);
+            $completerList->completeTask('dep-fork', 'done');
+            exit(0);
+        }
+        $pids[] = $completerPid;
+
+        foreach ($pids as $pid) {
+            \pcntl_waitpid($pid, $status);
+        }
+
+        $winners = \glob($resultDir . '/*.won');
+        $this->assertCount(
+            1,
+            $winners,
+            "Expected exactly one winner among {$childCount} concurrent claimants, got: "
+                . implode(', ', $winners)
+        );
+
+        $task = $list->getTask('race-task-fork');
+        $this->assertSame(TaskStatus::InProgress, $task->status);
+        $this->assertNotNull($task->assignedTo);
+
+        foreach ($winners as $winnerFile) {
+            \unlink($winnerFile);
+        }
+        \rmdir($resultDir);
+    }
+
     // -------------------------------------------------------------------------
     // Helper
     // -------------------------------------------------------------------------
+
+    /**
+     * Clear TaskList's static connection cache via reflection.
+     *
+     * Used only by testConcurrentForkedClaimAllowsExactlyOneWinner: existing
+     * TaskList instances keep their own SQLite3 handle regardless (it is
+     * captured as an instance property at construction time), so this only
+     * affects connections opened by `new TaskList(...)` calls made after it
+     * runs — specifically, the ones inside the forked children.
+     */
+    private function resetTaskListConnectionCache(): void
+    {
+        $property = new \ReflectionProperty(TaskList::class, 'connections');
+        $property->setValue(null, []);
+    }
 
     /**
      * Create a Task with sensible defaults for testing.
