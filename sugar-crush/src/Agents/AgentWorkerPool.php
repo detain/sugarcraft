@@ -378,14 +378,34 @@ final class AgentWorkerPool
      * enum, scalars, and an optional error message), so there is no need for
      * unserialize()'s arbitrary-class instantiation on the read side, which is
      * a latent security smell even when the file is one we wrote ourselves.
+     *
+     * If json_encode() still fails despite resultToArray() sanitizing
+     * non-finite floats (belt-and-suspenders for any future field that isn't
+     * JSON-safe), we must NOT skip the write: hasResult()/waitForCompletion()
+     * key entirely off file_exists(), so a skipped write leaves the agent
+     * stuck in $active forever and executeAll()'s outer loop never
+     * terminates — a silent infinite hang, strictly worse than the busy-spin
+     * this IPC mechanism replaced. Fall back to a minimal failure payload
+     * (all-scalar, always JSON-safe) so the pool always makes progress.
      */
     protected function storeResult(string $agentId, AgentResult $result): void
     {
         $file = $this->resultFile($agentId);
         $json = json_encode($this->resultToArray($result), JSON_INVALID_UTF8_SUBSTITUTE);
-        if ($json !== false) {
-            file_put_contents($file, $json);
+        if ($json === false) {
+            $json = json_encode([
+                'agentId' => $agentId,
+                'status' => AgentStatus::Failed->value,
+                'output' => null,
+                'errorMessage' => 'AgentWorkerPool: failed to encode agent result to JSON for IPC.',
+                'tokensUsed' => 0,
+                'costUsd' => 0.0,
+                'startedAt' => null,
+                'completedAt' => null,
+            ]);
         }
+
+        file_put_contents($file, $json === false ? '' : $json);
     }
 
     /**
@@ -473,6 +493,13 @@ final class AgentWorkerPool
      * only its message survives — sufficient for isFailure() semantics and
      * for surfacing the failure reason, without resurrecting an arbitrary
      * exception class via unserialize().
+     *
+     * costUsd is sanitized to null when non-finite (NAN/INF/-INF): unlike
+     * serialize(), json_encode() has no representation for non-finite floats
+     * and returns false for the whole payload if one slips through, which
+     * (before this guard) silently skipped the result-file write entirely and
+     * hung the pool forever. arrayToResult()'s `?? 0.0` coalesces the null
+     * back to a safe default on the read side.
      */
     private function resultToArray(AgentResult $result): array
     {
@@ -482,7 +509,7 @@ final class AgentWorkerPool
             'output' => $result->output,
             'errorMessage' => $result->error?->getMessage(),
             'tokensUsed' => $result->tokensUsed,
-            'costUsd' => $result->costUsd,
+            'costUsd' => is_finite($result->costUsd) ? $result->costUsd : null,
             'startedAt' => $result->startedAt?->format('U.u'),
             'completedAt' => $result->completedAt?->format('U.u'),
         ];

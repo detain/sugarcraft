@@ -687,4 +687,111 @@ final class AgentWorkerPoolTest extends TestCase
             @unlink($logFile);
         }
     }
+
+    // -------------------------------------------------------------------------
+    // R14a.fix: storeResult() must not silently drop a result when
+    // json_encode() cannot represent it (non-finite costUsd), which
+    // previously hung the pool forever waiting on a file that was never
+    // written.
+    // -------------------------------------------------------------------------
+
+    /**
+     * json_encode() returns false — and previously skipped the write
+     * entirely — for a costUsd of NAN/INF/-INF. Drives storeResult() and
+     * extractResult() directly via Reflection (rather than the full
+     * executeAll() loop) so a regression fails with a clear assertion
+     * instead of hanging the test process.
+     */
+    public function testStoreResultRoundTripsNonFiniteCostUsdInsteadOfSilentlyDroppingTheWrite(): void
+    {
+        $pool = new AgentWorkerPool();
+
+        $storeResult = new \ReflectionMethod(AgentWorkerPool::class, 'storeResult');
+        $storeResult->setAccessible(true);
+        $hasResult = new \ReflectionMethod(AgentWorkerPool::class, 'hasResult');
+        $hasResult->setAccessible(true);
+        $extractResult = new \ReflectionMethod(AgentWorkerPool::class, 'extractResult');
+        $extractResult->setAccessible(true);
+
+        foreach (['nan-cost' => NAN, 'inf-cost' => INF, 'neg-inf-cost' => -INF] as $agentId => $costUsd) {
+            $result = new AgentResult(
+                agentId: $agentId,
+                status: AgentStatus::Completed,
+                output: 'ok',
+                costUsd: $costUsd,
+            );
+
+            $storeResult->invoke($pool, $agentId, $result);
+
+            $this->assertTrue(
+                $hasResult->invoke($pool, $agentId),
+                "Expected a result file to be written for {$agentId} even though its costUsd "
+                    . "is non-finite — a skipped write here means the agent is stuck in \$active "
+                    . 'forever and executeAll() never terminates.',
+            );
+
+            $decoded = $extractResult->invoke($pool, $agentId);
+            $this->assertNotNull(
+                $decoded,
+                "Expected extractResult() to recover a valid AgentResult for {$agentId} instead "
+                    . 'of silently returning null.',
+            );
+            $this->assertSame(AgentStatus::Completed, $decoded->status);
+            $this->assertTrue(
+                is_finite($decoded->costUsd),
+                "Expected the round-tripped costUsd for {$agentId} to be sanitized to a finite value.",
+            );
+        }
+    }
+
+    /**
+     * End-to-end reproduction of the hang: a mock (customExecutor) result
+     * with a NAN costUsd fed through the real executeAll() loop. Guarded by
+     * an alarm-based safety timeout (via pcntl_async_signals) so that if the
+     * fix regresses, this test fails with a clear timeout exception instead
+     * of hanging the whole suite forever, mirroring how the regression was
+     * originally reproduced with `timeout 6 php ...`.
+     */
+    public function testExecuteAllTerminatesWhenResultHasNonFiniteCostUsd(): void
+    {
+        if (!function_exists('pcntl_async_signals') || !function_exists('pcntl_alarm')) {
+            $this->markTestSkipped('pcntl_async_signals()/pcntl_alarm() are not available in this environment.');
+        }
+
+        $agents = [$this->makeAgent('nan-cost-agent')];
+        $executor = $this->makeBlockingExecutor([
+            'nan-cost-agent' => new AgentResult(
+                agentId: 'nan-cost-agent',
+                status: AgentStatus::Completed,
+                output: 'ok',
+                costUsd: NAN,
+            ),
+        ]);
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $executor);
+
+        $previousAsync = pcntl_async_signals();
+        pcntl_async_signals(true);
+        $previousHandler = pcntl_signal_get_handler(SIGALRM);
+        pcntl_signal(SIGALRM, function () {
+            throw new \RuntimeException(
+                'executeAll() did not terminate within the safety timeout — likely the '
+                    . 'NAN-costUsd json_encode-failure hang regression.',
+            );
+        });
+        pcntl_alarm(5);
+
+        try {
+            $results = [];
+            foreach ($pool->executeAll($agents, $this->request) as $result) {
+                $results[$result->agentId] = $result;
+            }
+        } finally {
+            pcntl_alarm(0);
+            pcntl_signal(SIGALRM, $previousHandler);
+            pcntl_async_signals($previousAsync);
+        }
+
+        $this->assertCount(1, $results);
+        $this->assertArrayHasKey('nan-cost-agent', $results);
+    }
 }
