@@ -82,11 +82,12 @@ final class HookDispatcher
                 continue;
             }
 
-            // For pre-action blocks or discard events, stop immediately
+            // Every remaining category stops the dispatch loop immediately;
+            // resolveBlockMessage() is what actually differs per event.
             return HookDispatchResult::block(
                 event: $event,
                 context: $context,
-                message: $lastBlockMessage,
+                message: $this->resolveBlockMessage($event, $lastBlockMessage),
                 continueOnBlock: false,
             );
         }
@@ -176,6 +177,31 @@ final class HookDispatcher
         }
 
         return $message;
+    }
+
+    /**
+     * Resolve what the hard-block message on the dispatch result should be
+     * for a given event, per the effect documented on HookEvent:
+     *
+     * - discardsOnBlock() (UserPromptSubmit): the prompt is discarded
+     *   entirely — nothing, not even the hook's message, survives to reach
+     *   the agent. The block still happens; the message is wiped.
+     * - blocksOnPreAction() (PreToolUse/Stop/TaskCreated): the action
+     *   hasn't happened yet, so the message is fed back to the agent so it
+     *   can adjust — preserved as-is.
+     * - stderrToUserOnly() (PreCompact/SessionStart): there's no agent turn
+     *   to hand the message to at these lifecycle points, so it can only
+     *   ever reach the user — preserved as-is so it has somewhere to go.
+     * - Any event matching none of the above (e.g. SessionEnd,
+     *   TeammateIdle): preserved as-is, same as blocksOnPreAction().
+     */
+    private function resolveBlockMessage(HookEvent $event, string $blockMessage): string
+    {
+        if ($event->discardsOnBlock()) {
+            return '';
+        }
+
+        return $blockMessage;
     }
 
     // ========================================================================

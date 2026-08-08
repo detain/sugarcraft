@@ -104,8 +104,10 @@ final class HookDispatcherTest extends TestCase
     // dispatch() - Block (Hard Block) Tests
     // =========================================================================
 
-    public function testDispatchReturnsBlockForPreToolUseHardBlock(): void
+    public function testExitCode2BlocksPreToolUse(): void
     {
+        // blocksOnPreAction(): the tool call never executes, and the hook's
+        // stderr is fed back — visible on the result — for the agent to act on.
         $hook = $this->createHardBlockHook('BlockHook', HookEvent::PreToolUse, 'Read', '^Read$');
         $this->registry->register($hook);
         $context = $this->createContext('Read');
@@ -114,12 +116,17 @@ final class HookDispatcherTest extends TestCase
 
         $this->assertTrue($result->isBlock());
         $this->assertFalse($result->shouldContinueOnBlock());
-        // Message should have [exit-2] prefix stripped
+        // Message should have [exit-2] prefix stripped, and is fed back
+        // (non-empty) since blocksOnPreAction() never discards it.
         $this->assertStringContainsString('Hard block message', $result->message);
+        $this->assertNotSame('', $result->message);
     }
 
-    public function testDispatchReturnsBlockWithContinueOnBlockForPostToolUse(): void
+    public function testExitCode2OnPostToolUseUsesContinueOnBlock(): void
     {
+        // usesContinueOnBlockOnBlock(): the action already ran, so the block
+        // surfaces the problem via continueOnBlock rather than discarding
+        // the (already-produced) result or its message.
         $hook = $this->createHardBlockHook('BlockHook', HookEvent::PostToolUse, 'Read', '^Read$');
         $this->registry->register($hook);
         $context = $this->createContext('Read');
@@ -128,6 +135,7 @@ final class HookDispatcherTest extends TestCase
 
         $this->assertTrue($result->isBlock());
         $this->assertTrue($result->shouldContinueOnBlock());
+        $this->assertStringContainsString('Hard block message', $result->message);
     }
 
     public function testDispatchReturnsBlockWithContinueOnBlockForSubagentStop(): void
@@ -177,8 +185,12 @@ final class HookDispatcherTest extends TestCase
         $this->assertTrue($result->isAllowed());
     }
 
-    public function testDispatchForUserPromptSubmitBlocksOnHardBlock(): void
+    public function testUserPromptSubmitExitCode2DiscardsPrompt(): void
     {
+        // discardsOnBlock(): the prompt is discarded entirely — the hook's
+        // message never reaches the agent (unlike blocksOnPreAction(),
+        // where the same message would be preserved and fed back). This is
+        // the empirical difference between "discard" and a generic block.
         $hook = $this->createHardBlockHook('BlockHook', HookEvent::UserPromptSubmit, 'Read', '^Read$');
         $this->registry->register($hook);
         $context = $this->createContext('Read');
@@ -186,8 +198,59 @@ final class HookDispatcherTest extends TestCase
         $result = $this->dispatcher->dispatch(HookEvent::UserPromptSubmit, $context);
 
         $this->assertTrue($result->isBlock());
-        // UserPromptSubmit blocks (discards) but doesn't use continueOnBlock
         $this->assertFalse($result->shouldContinueOnBlock());
+        $this->assertSame('', $result->message, 'UserPromptSubmit must discard the hook message, not surface it');
+    }
+
+    public function testUserPromptSubmitDiscardDiffersFromPreToolUseBlock(): void
+    {
+        // Same hook message, same exit code (2), different HookEvent — proves
+        // the discard behavior is event-specific, not a hardcoded blank message.
+        $promptContext = $this->createContext('Read');
+        $preToolContext = $this->createContext('Read');
+        $this->registry->register($this->createHardBlockHook('BlockHook', HookEvent::UserPromptSubmit, 'Read', '^Read$'));
+
+        $discardResult = $this->dispatcher->dispatch(HookEvent::UserPromptSubmit, $promptContext);
+
+        $secondRegistry = new HookRegistry();
+        $secondRegistry->register($this->createHardBlockHook('BlockHook', HookEvent::PreToolUse, 'Read', '^Read$'));
+        $secondDispatcher = new HookDispatcher($secondRegistry);
+        $blockResult = $secondDispatcher->dispatch(HookEvent::PreToolUse, $preToolContext);
+
+        $this->assertSame('', $discardResult->message);
+        $this->assertStringContainsString('Hard block message', $blockResult->message);
+        $this->assertNotSame($discardResult->message, $blockResult->message);
+    }
+
+    public function testExitCode2OnPreCompactStderrReachesUserOnly(): void
+    {
+        // stderrToUserOnly(): there's no agent turn at PreCompact, so the
+        // message is preserved (it has to reach the user somehow) but
+        // never discarded the way UserPromptSubmit's is.
+        $hook = $this->createHardBlockHook('BlockHook', HookEvent::PreCompact, 'PreCompact', '^PreCompact$');
+        $this->registry->register($hook);
+        $context = $this->createContext('PreCompact');
+
+        $result = $this->dispatcher->dispatch(HookEvent::PreCompact, $context);
+
+        $this->assertTrue($result->isBlock());
+        $this->assertFalse($result->shouldContinueOnBlock());
+        $this->assertStringContainsString('Hard block message', $result->message);
+        $this->assertNotSame('', $result->message);
+    }
+
+    public function testExitCode2OnSessionStartStderrReachesUserOnly(): void
+    {
+        $hook = $this->createHardBlockHook('BlockHook', HookEvent::SessionStart, 'SessionStart', '^SessionStart$');
+        $this->registry->register($hook);
+        $context = $this->createContext('SessionStart');
+
+        $result = $this->dispatcher->dispatch(HookEvent::SessionStart, $context);
+
+        $this->assertTrue($result->isBlock());
+        $this->assertFalse($result->shouldContinueOnBlock());
+        $this->assertStringContainsString('Hard block message', $result->message);
+        $this->assertNotSame('', $result->message);
     }
 
     // =========================================================================
