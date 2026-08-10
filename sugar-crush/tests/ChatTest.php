@@ -933,31 +933,31 @@ final class ChatTest extends TestCase
      * Frame 2: delta output (smaller than full 80x24 re-emit)
      * Frame 3: delta output (smaller than full 80x24 re-emit)
      */
-    public function testDiffEmissionByteBenchmark(): void
+    /**
+     * view() used to compute its own cell-level diff and return only the
+     * changed bytes for a repeat frame - but Program's own Renderer ALSO
+     * diffs whatever a Model's view() returns, so that pre-diffed byte
+     * soup was being diffed a second time against unrelated bytes from the
+     * previous call, producing wrong cursor placement (visible as typed
+     * text/replies landing in the wrong row - e.g. the status bar - once a
+     * conversation grew past a single frame). view() now always returns
+     * the full literal frame; the real diffing happens once, correctly, in
+     * candy-core's Program/Renderer.
+     */
+    public function testViewReturnsTheFullFrameOnEveryCall(): void
     {
         $chat = new Chat(history: [Message::user('hello'), Message::assistant('Hi there!')]);
 
-        // Frame 1: full render
         $out1 = $chat->view();
-        $bytes1 = \strlen($out1);
-
-        // Frame 2: type a character (input buffer changes)
         [$chat2] = $chat->update(new KeyMsg(KeyType::Char, '!'));
         $out2 = $chat2->view();
-        $bytes2 = \strlen($out2);
 
-        // Frame 3: type another character
-        [$chat3] = $chat2->update(new KeyMsg(KeyType::Char, '!'));
-        $out3 = $chat3->view();
-        $bytes3 = \strlen($out3);
-
-        // Delta frames should be smaller than a full 80x24 re-emit (≥1920 bytes).
-        // The 30-byte threshold was a placeholder guess; the real goal is
-        // delta < full 80x24 re-emit, which these renders satisfy since they
-        // emit ~350 bytes for small state changes vs the 1920+ bytes for a full frame.
-        $fullRepaintBytes = 1920;
-        $this->assertLessThan($fullRepaintBytes, $bytes2, 'Frame 2 delta should be smaller than full 80x24 re-emit');
-        $this->assertLessThan($fullRepaintBytes, $bytes3, 'Frame 3 delta should be smaller than full 80x24 re-emit');
+        $this->assertStringContainsString('hello', $out1);
+        $this->assertStringContainsString('hello', $out2);
+        $this->assertStringContainsString('!', $out2);
+        // Both are full frames of the same conversation at the same terminal
+        // size - comparable magnitude, not a shrinking delta.
+        $this->assertGreaterThan(0.5 * \strlen($out1), \strlen($out2));
     }
 
     // ─── AgentWorkerPool wiring tests (P1.S10) ─────────────────────────────────

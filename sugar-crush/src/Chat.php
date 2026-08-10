@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use React\Promise\PromiseInterface;
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -83,18 +80,6 @@ final class Chat implements Model
 
     /** @var string|null ID of the currently active session */
     private ?string $currentSessionId = null;
-
-    /** @var Buffer|null Previous rendered frame for diff-based emission */
-    private ?Buffer $previousFrame = null;
-
-    /** @var int|null Previous output height for dimension-change detection */
-    private ?int $prevHeight = null;
-
-    /** @var int|null Previous terminal width for resize detection */
-    private ?int $prevWidth = null;
-
-    /** Terminal width for buffer rendering. Updated from Renderer on each view(). */
-    private int $width = 80;
 
     /**
      * Token budget used as the {@see ContextCompactor::shouldSendReminder()}
@@ -688,36 +673,27 @@ final class Chat implements Model
         return $result;
     }
 
+    /**
+     * Returns the full literal frame every call. This used to compute its
+     * own cell-level diff (via {@see Buffer}/{@see DiffEncoder}) and return
+     * only the changed bytes - but Program (see `bin/sugarcrush`, a plain
+     * `new Program(Bootstrap::chat(), ...)`) ALSO diffs whatever a Model's
+     * view() returns, line-by-line, against the previous call's return
+     * value (candy-core's own Renderer::render(), which every other Model
+     * in this framework relies on for exactly this). Chat's pre-diffed
+     * cursor-jump escape bytes were never literal display text, so
+     * Program's Renderer was diffing one diff's raw bytes against the
+     * previous diff's raw bytes as if they were screen content - any time
+     * the two differed (i.e. almost always) that produced cursor
+     * placement that had no relationship to the actual frame, which is
+     * what made typed input / replies appear to land in the wrong row
+     * (e.g. the status bar) once a conversation grew past a single frame.
+     * Program's Renderer already does correct, safe diffing on real text;
+     * doing it a second time here was redundant at best.
+     */
     public function view(): string
     {
-        // Get actual terminal dimensions from TUI Renderer (queries Tty for real size).
-        $size = TuiRenderer::getTerminalSize();
-        $width = $size['cols'];
-        $fullOutput = Renderer::render($this);
-        $height = substr_count($fullOutput, "\n") + 1;
-
-        // Detect terminal resize: reset diff state on width or height change.
-        if ($this->previousFrame !== null
-            && ($this->prevWidth !== null && $this->prevWidth !== $width)
-        ) {
-            $this->previousFrame = null;
-        }
-        $this->prevWidth = $width;
-        $this->prevHeight = $height;
-
-        // First frame or dimension change: emit full output and store as previousFrame.
-        if ($this->previousFrame === null) {
-            $this->previousFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-            return $fullOutput;
-        }
-
-        // Subsequent frames with same dimensions: compute diff and emit delta.
-        $currentFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-        $ops = $currentFrame->diff($this->previousFrame);
-        $this->previousFrame = $currentFrame;
-
-        $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        return Renderer::render($this);
     }
 
     public function backend(): Backend
@@ -900,15 +876,12 @@ final class Chat implements Model
     /**
      * Merge changes into a new Chat instance.
      *
-     * Only constructor-promoted properties are passed through to avoid
-     * leaking private fields like $previousFrame, $prevHeight, etc.
+     * Only constructor-promoted properties are passed through.
      *
      * @param array<string, mixed> $changes
      */
     private function mutate(array $changes): static
     {
-        // Only include constructor-promoted properties (excludes backend,
-        // previousFrame, prevHeight, prevWidth, width)
         $constructorProps = [
             'history' => $this->history,
             'inputBuf' => $this->inputBuf,
@@ -2559,47 +2532,6 @@ final class Chat implements Model
         ]);
 
         return [$next, null];
-    }
-
-    /**
-     * Build a Buffer from a multi-line string output.
-     *
-     * All cells are created with null style — the diff algorithm will
-     * still work correctly for detecting changed character positions.
-     *
-     * Uses Buffer::fromGrid() for O(w×h) bulk construction instead of
-     * O(w²×h) repeated withCellAt() calls, and mb_str_split per row
-     * instead of per-cell mb_substr for O(w) vs O(w²) string ops.
-     *
-     * @param string $output Multi-line string from Renderer::render()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
-     */
-    private function bufferFromOutput(string $output, int $width, int $height): Buffer
-    {
-        $lines = \explode("\n", $output);
-        $grid = [];
-
-        for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
-            // mb_str_split is O(width) per row vs mb_substr called width×height times (O(width²×height))
-            $chars = \mb_str_split($line, 1) ?: [];
-            for ($col = 0; $col < $width; $col++) {
-                $char = $chars[$col] ?? ' ';
-                $grid[] = Cell::new($char, null, null, 1);
-            }
-        }
-
-        return Buffer::fromGrid($width, $height, $grid);
-    }
-
-    /**
-     * Reset the previous-frame buffer, forcing the next view to emit
-     * a full frame (used on window resize or cursor-position-lost events).
-     */
-    public function resetPreviousFrame(): void
-    {
-        $this->previousFrame = null;
     }
 
     /**
