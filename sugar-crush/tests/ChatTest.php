@@ -589,6 +589,37 @@ final class ChatTest extends TestCase
         $this->assertSame('', $next->inputBuf);
     }
 
+    public function testThemeCommandFiresOnConfigChangeForPersistence(): void
+    {
+        $observed = [];
+        $chat = (new Chat(inputBuf: '/theme dracula'))
+            ->withOnConfigChange(function (string $key, string $value) use (&$observed): void {
+                $observed[] = [$key, $value];
+            });
+
+        $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame([['theme', 'dracula']], $observed);
+    }
+
+    public function testPaletteSwitchThemeFiresOnConfigChangeForPersistence(): void
+    {
+        $observed = [];
+        $chat = (new Chat())->withOnConfigChange(function (string $key, string $value) use (&$observed): void {
+            $observed[] = [$key, $value];
+        });
+
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $current = $opened;
+        foreach (str_split('switch theme') as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch === ' ' ? ' ' : $ch));
+        }
+        [$inThemes] = $current->update(new KeyMsg(KeyType::Enter, ''));
+        [$inThemes] = $inThemes->update(new KeyMsg(KeyType::Enter, '')); // selects the top match ('dark')
+
+        $this->assertSame([['theme', 'dark']], $observed);
+    }
+
     public function testThemeCommandWithUnknownNameLeavesThemeUnchanged(): void
     {
         $chat = new Chat(inputBuf: '/theme nonexistent');

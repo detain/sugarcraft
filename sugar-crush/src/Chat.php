@@ -141,6 +141,15 @@ final class Chat implements Model
         private readonly string $themeName = 'dark',
         /** Ctrl+P command palette state; null when closed. */
         private readonly ?PaletteState $palette = null,
+        /**
+         * Optional callable(string $key, string $value): void, fired when
+         * the Switch Model/Switch Theme palette actions (or /theme) apply a
+         * choice - the persistence side effect itself (writing to
+         * ~/.sugar-crush/config.json) lives in Bootstrap::chat()'s wiring,
+         * not here, so this stays a no-op by default for tests/embedders
+         * that never call withOnConfigChange()/pass one to the constructor.
+         */
+        private readonly ?\Closure $onConfigChange = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -820,6 +829,7 @@ final class Chat implements Model
             'slashMenuIndex' => $this->slashMenuIndex,
             'themeName' => $this->themeName,
             'palette' => $this->palette,
+            'onConfigChange' => $this->onConfigChange,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -861,6 +871,19 @@ final class Chat implements Model
     {
         return $this->mutate([
             'onToolCall' => $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
+        ]);
+    }
+
+    /**
+     * Register a callback(string $key, string $value): void fired when the
+     * Switch Model/Switch Theme palette actions (or /theme) apply a choice
+     * - see the constructor param's docblock for why the actual persistence
+     * side effect lives in Bootstrap::chat()'s wiring, not this class.
+     */
+    public function withOnConfigChange(callable $callback): self
+    {
+        return $this->mutate([
+            'onConfigChange' => $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
         ]);
     }
 
@@ -2215,6 +2238,8 @@ final class Chat implements Model
             ]), null];
         }
 
+        $this->onConfigChange?->__invoke('provider', $name);
+
         return [$this->mutate([
             'palette' => null,
             'backend' => $backend,
@@ -2224,6 +2249,8 @@ final class Chat implements Model
 
     private function selectPaletteTheme(string $name): array
     {
+        $this->onConfigChange?->__invoke('theme', $name);
+
         return [$this->mutate([
             'palette' => null,
             'themeName' => $name,
@@ -2460,6 +2487,8 @@ final class Chat implements Model
         } catch (\InvalidArgumentException $e) {
             return $this->sessionResponse($inputText, $e->getMessage());
         }
+
+        $this->onConfigChange?->__invoke('theme', $afterTheme);
 
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputText), Message::assistant("Theme set to '{$afterTheme}'.")],
