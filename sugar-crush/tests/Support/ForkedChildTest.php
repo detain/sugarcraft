@@ -71,6 +71,34 @@ final class ForkedChildTest extends TestCase
         return str_contains($out, '-icanon') && str_contains($out, '-echo');
     }
 
+    /**
+     * A blocking pcntl_waitpid() has no bound - if the child were ever stuck
+     * (a hung syscall, an environment where SIGKILL-to-self somehow doesn't
+     * land) this test would hang the whole suite/CI job indefinitely rather
+     * than failing with a clear message. Same WNOHANG-polling + deadline +
+     * SIGKILL-fallback shape as Chat::waitForToolChildrenAsync()'s
+     * synchronous sibling - just without the ReactPHP loop, since this test
+     * doesn't need one.
+     */
+    private function waitWithTimeout(int $pid, float $timeoutSeconds): void
+    {
+        $deadline = microtime(true) + $timeoutSeconds;
+        do {
+            $status = 0;
+            if (pcntl_waitpid($pid, $status, WNOHANG) === $pid) {
+                return;
+            }
+            usleep(10_000);
+        } while (microtime(true) < $deadline);
+
+        if (function_exists('posix_kill')) {
+            posix_kill($pid, SIGKILL);
+        }
+        $status = 0;
+        pcntl_waitpid($pid, $status);
+        $this->fail("forked child {$pid} did not exit within {$timeoutSeconds}s - had to SIGKILL it");
+    }
+
     public function testExitNowLeavesTheRealTerminalsRawModeIntactAcrossAForkedChild(): void
     {
         $this->requirePtySyscalls();
@@ -101,8 +129,7 @@ final class ForkedChildTest extends TestCase
                 ForkedChild::exitNow(0);
             }
 
-            $status = 0;
-            pcntl_waitpid($pid, $status);
+            $this->waitWithTimeout($pid, 5.0);
 
             $this->assertTrue(
                 $this->isRaw($slavePath),
@@ -150,8 +177,7 @@ final class ForkedChildTest extends TestCase
                 exit(0);
             }
 
-            $status = 0;
-            pcntl_waitpid($pid, $status);
+            $this->waitWithTimeout($pid, 5.0);
 
             $this->assertFalse(
                 $this->isRaw($slavePath),
