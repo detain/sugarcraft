@@ -17,6 +17,7 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\AgentsCommand;
+use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
@@ -131,6 +132,8 @@ final class Chat implements Model
         \SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null $sessionStore = null,
         ?string $currentSessionId = null,
         private readonly ?\DateTimeImmutable $lastActivityAt = null,
+        /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
+        private readonly int $slashMenuIndex = 0,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -176,7 +179,16 @@ final class Chat implements Model
 
         return match (true) {
             $msg->type === KeyType::Enter
-                => $this->submit(),
+                => $this->slashMenuShouldIntercept()
+                    ? $this->completeSlashMenuSelection()
+                    : $this->submit(),
+            // Up/Down navigate the "/" popup while it's showing (see
+            // slashMenuMatches()); otherwise fall through to the default
+            // no-op arm below, unchanged from before this popup existed.
+            $msg->type === KeyType::Up && $this->slashMenuMatches() !== []
+                => [$this->moveSlashMenuSelection(-1), null],
+            $msg->type === KeyType::Down && $this->slashMenuMatches() !== []
+                => [$this->moveSlashMenuSelection(1), null],
             // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
             // already uses for typed input (handleAgentsCommand()), giving
             // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
@@ -781,6 +793,7 @@ final class Chat implements Model
             'sessionStore' => $this->sessionStore,
             'currentSessionId' => $this->currentSessionId,
             'lastActivityAt' => $this->lastActivityAt,
+            'slashMenuIndex' => $this->slashMenuIndex,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -1892,7 +1905,103 @@ final class Chat implements Model
 
     private function withInputBuf(string $buf): self
     {
-        return $this->mutate(['inputBuf' => $buf]);
+        // Resetting slashMenuIndex here (rather than only in the Up/Down
+        // handlers) means every inputBuf change - not just the ones that
+        // change the filtered match set - re-highlights the top match, so a
+        // stale selection index from a previous, differently-filtered list
+        // can never leak into the new one. See slashMenuMatches()'s docblock
+        // for why this makes the stored index always valid without an
+        // explicit clamp on every read.
+        return $this->mutate(['inputBuf' => $buf, 'slashMenuIndex' => 0]);
+    }
+
+    /**
+     * Commands from {@see CommandRegistry} matching the in-progress "/name"
+     * being typed - the "/" popup's data source ({@see
+     * Renderer::renderSlashMenu()}). Returns [] (hiding the popup) when
+     * inputBuf isn't slash-prefixed, or once it contains a space: at that
+     * point the command name is already fixed and the user is typing
+     * arguments, so there is nothing left to filter/complete.
+     *
+     * @return list<\SugarCraft\Crush\Commands\CommandSpec>
+     */
+    public function slashMenuMatches(): array
+    {
+        if (!str_starts_with($this->inputBuf, '/') || str_contains($this->inputBuf, ' ')) {
+            return [];
+        }
+
+        return CommandRegistry::filter(substr($this->inputBuf, 1));
+    }
+
+    /**
+     * The "/" popup's currently-highlighted row index into {@see
+     * slashMenuMatches()}'s current result - always in range for it, never
+     * needs clamping by a caller (see {@see withInputBuf()}'s docblock).
+     */
+    public function slashMenuIndex(): int
+    {
+        return $this->slashMenuIndex;
+    }
+
+    /**
+     * Whether Enter should complete the "/" popup's selection instead of
+     * submitting. False whenever the popup isn't showing, AND false when
+     * the name typed so far is already an exact, complete match for one of
+     * the registered commands - "/agents" + Enter should run /agents, not
+     * silently re-fill the same text, even while the popup is still
+     * technically showing that single match. Only a genuinely partial/
+     * ambiguous prefix (e.g. "/age") intercepts Enter for completion.
+     */
+    private function slashMenuShouldIntercept(): bool
+    {
+        $matches = $this->slashMenuMatches();
+        if ($matches === []) {
+            return false;
+        }
+
+        $typed = strtolower(substr($this->inputBuf, 1));
+        foreach ($matches as $spec) {
+            if (strtolower($spec->name) === $typed) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Move the "/" popup's highlighted row by $direction, wrapping around
+     * the current match list. A no-op (returns $this unchanged) when the
+     * popup isn't showing.
+     */
+    private function moveSlashMenuSelection(int $direction): self
+    {
+        $count = count($this->slashMenuMatches());
+        if ($count === 0) {
+            return $this;
+        }
+
+        $next = ($this->slashMenuIndex + $direction + $count) % $count;
+
+        return $this->mutate(['slashMenuIndex' => $next]);
+    }
+
+    /**
+     * Enter, while the "/" popup is showing: complete the highlighted
+     * command into inputBuf (with a trailing space, ready for arguments)
+     * rather than submitting immediately - several commands take required
+     * arguments (e.g. /rename <name>), so completing first and sending on a
+     * second Enter is the more forgiving default.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function completeSlashMenuSelection(): array
+    {
+        $matches = $this->slashMenuMatches();
+        $index = min($this->slashMenuIndex, count($matches) - 1);
+
+        return [$this->withInputBuf('/' . $matches[$index]->name . ' '), null];
     }
 
     /**

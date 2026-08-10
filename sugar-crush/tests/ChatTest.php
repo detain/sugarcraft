@@ -497,6 +497,65 @@ final class ChatTest extends TestCase
         $this->assertSame(getmypid(), $observedPid);
     }
 
+    public function testSlashMenuFiltersAsUserTypes(): void
+    {
+        $chat = new Chat(inputBuf: '/');
+        $this->assertGreaterThan(1, count($chat->slashMenuMatches()));
+
+        [$narrowed] = $chat->update(new KeyMsg(KeyType::Char, 'b'));
+        $names = array_map(static fn($spec) => $spec->name, $narrowed->slashMenuMatches());
+        $this->assertSame(['branch'], $names);
+    }
+
+    public function testSlashMenuHiddenOnceArgumentsStart(): void
+    {
+        $chat = new Chat(inputBuf: '/rename');
+        [$next] = $chat->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertSame([], $next->slashMenuMatches());
+    }
+
+    public function testSlashMenuUpDownWrapsSelection(): void
+    {
+        $chat = new Chat(inputBuf: '/re'); // matches: rename, rewind
+        $this->assertSame(0, $chat->slashMenuIndex());
+
+        [$down] = $chat->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(1, $down->slashMenuIndex());
+
+        [$wrapped] = $down->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(0, $wrapped->slashMenuIndex());
+
+        [$up] = $wrapped->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(1, $up->slashMenuIndex());
+    }
+
+    public function testEnterCompletesAmbiguousMatchInsteadOfSubmitting(): void
+    {
+        $chat = new Chat(inputBuf: '/re'); // matches: rename, rewind — ambiguous
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('/rename ', $next->inputBuf);
+        $this->assertSame([], $next->history); // not submitted
+    }
+
+    public function testEnterSubmitsExactCommandMatchInsteadOfRefilling(): void
+    {
+        // Only one command starts with "sessions" and the typed text is an
+        // exact match for it — Enter must submit, not re-fill the same text.
+        $chat = new Chat(inputBuf: '/sessions');
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNotSame('/sessions ', $next->inputBuf);
+        $this->assertNotSame([], $next->history);
+    }
+
+    public function testDownArrowIsNoOpOutsideSlashMenu(): void
+    {
+        $chat = new Chat(inputBuf: 'hello');
+        [$next] = $chat->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame($chat, $next);
+    }
+
     public function testToolsAndCallbacksPreservedOnInput(): void
     {
         $chat = new Chat(tools: ['test' => static fn() => 'result']);
