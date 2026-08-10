@@ -184,9 +184,19 @@ final class InputReader
                     $i = $next_i;
                     continue;
                 }
-                // Alt-prefixed key.
+                // Alt-prefixed key. The printable range (0x20-0x7e) covers
+                // ordinary Alt+letter/digit/punctuation; DEL (0x7f, most
+                // terminals' Backspace byte), Tab (0x09), and CR/LF
+                // (0x0d/0x0a, Enter) are also valid decodeChar() inputs and
+                // must be accepted here too - excluding them meant
+                // Alt+Backspace/Alt+Enter/Alt+Tab decoded as a bare,
+                // un-alt-flagged Escape (dropping just this ESC byte) plus a
+                // second, unrelated non-alt KeyMsg from the leftover byte on
+                // the next loop iteration - e.g. Alt+Backspace fired Escape
+                // (which callers often bind to quit) immediately followed by
+                // a plain Backspace, rather than one Alt+Backspace event.
                 $code2 = ord($next);
-                if ($code2 >= 0x20 && $code2 < 0x7f) {
+                if (($code2 >= 0x20 && $code2 < 0x7f) || $code2 === 0x7f || $code2 === 0x09 || $code2 === 0x0d || $code2 === 0x0a || $code2 === 0x08) {
                     $msgs[] = $this->decodeChar($code2, alt: true);
                     $i += 2;
                     continue;
