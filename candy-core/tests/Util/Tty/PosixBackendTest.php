@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Tests\Util\Tty;
 
 use SugarCraft\Core\Util\Tty\PosixBackend;
+use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Posix\PosixPtySystem;
+use SugarCraft\Pty\Posix\PosixTermios;
 use PHPUnit\Framework\TestCase;
 
 final class PosixBackendTest extends TestCase
@@ -203,5 +205,87 @@ final class PosixBackendTest extends TestCase
                 putenv('SUGARCRAFT_TERMIOS=' . $prevTermios);
             }
         }
+    }
+
+    /**
+     * Regression: a `pcntl_fork()`'d child inherits a COPY of a raw-mode
+     * PosixBackend, with $saved already populated. Termios settings live
+     * on the shared kernel TTY device, not per-process - before this fix,
+     * a plain `exit()` in that child ran PHP's normal shutdown sequence,
+     * destructing the inherited PosixBackend and applying $saved (the
+     * PARENT's pre-raw-mode termios) onto the REAL, shared terminal - i.e.
+     * a forked child that does nothing but exit() would silently knock the
+     * live parent process's terminal out of raw mode. Any consumer of this
+     * class that ever forks while raw mode is active (sugar-crush's async
+     * backend completion and tool-call execution both do) is exposed.
+     * Fixed by recording the PID that called enableRawMode() and skipping
+     * the real restore syscall when restore()/the destructor fires from a
+     * DIFFERENT pid - see restore()'s docblock. Proven here with a real
+     * PTY and a real fork(), asserting raw mode survives a plain exit()
+     * in the child with no special handling required at all.
+     */
+    public function testChildProcessExitingDoesNotResetTheParentsRawMode(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('PosixBackend is POSIX-only.');
+        }
+        if (!\extension_loaded('ffi')) {
+            $this->markTestSkipped('ext-ffi is required for termios FFI.');
+        }
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl is required to fork a real child.');
+        }
+        if (!is_readable('/dev/ptmx') || !is_writable('/dev/ptmx')) {
+            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
+        }
+
+        $pair = (new PosixPtySystem())->open();
+        $slavePath = $pair->slave()->path();
+
+        $libc = Libc::lib();
+        $slaveFd = $libc->open($slavePath, 0x0002 /* O_RDWR */);
+        if ($slaveFd < 0) {
+            $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
+        }
+
+        // Injected Termios (real fd, obtained via candy-pty's own FFI
+        // open()) rather than fopen() + PosixBackend's (int)-cast fd
+        // resolution - that cast is PHP's internal resource ID, not the OS
+        // fd, and only coincides with the real fd for a process's original
+        // STDIN/STDOUT. Irrelevant to what this test is verifying.
+        $backend = new PosixBackend(null, new PosixTermios($slaveFd));
+        $backend->enableRawMode();
+
+        try {
+            $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before forking');
+
+            $pid = pcntl_fork();
+            $this->assertNotSame(-1, $pid, 'fork failed - cannot exercise this path');
+
+            if ($pid === 0) {
+                // Child inherits the SAME $backend object. A PLAIN exit() -
+                // no special helper needed now that the fix lives here.
+                exit(0);
+            }
+
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+
+            $this->assertTrue(
+                $this->isRaw($slavePath),
+                'the real terminal was knocked out of raw mode by the forked child exiting',
+            );
+        } finally {
+            $backend->restore();
+            $libc->close($slaveFd);
+            $pair->master()->close();
+        }
+    }
+
+    private function isRaw(string $slavePath): bool
+    {
+        $out = trim((string) shell_exec('stty -F ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
+
+        return str_contains($out, '-icanon') && str_contains($out, '-echo');
     }
 }
