@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Crush\LSP\Tests;
+namespace SugarCraft\Crush\Tests\LSP;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\LSP\LspClient;

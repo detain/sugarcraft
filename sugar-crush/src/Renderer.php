@@ -180,18 +180,29 @@ final class Renderer
             $content .= "\n" . $agentView;
         }
 
-        // Full-window usage: pad short conversations (the common empty/new-
-        // session case) with blank lines so the status bar - one row,
-        // always the true LAST line - lands at the bottom of the actual
-        // terminal instead of leaving most of the window blank below a
-        // small box. A conversation already taller than the window is left
-        // exactly as-is (no truncation of real scrollback content) and
-        // keeps scrolling the way it always has.
+        // Full-window usage: fit the frame to exactly $rows lines, always.
+        // candy-core's Renderer repaints changed rows via an ABSOLUTE
+        // cursorTo($row, 1) - it has no concept of scrolling. If $content
+        // is ever taller than the real terminal, every cursorTo() past the
+        // terminal's last row gets silently clamped there by the terminal
+        // itself, so distinct logical rows (input box, status bar, the
+        // newest history lines) all collide on that one physical row -
+        // which is exactly what "text/cursor ends up in the status bar"
+        // looks like once a conversation grows past one screen. Clipping
+        // to the tail keeps the input box (the last part of $content)
+        // and the newest history visible, scrolling older turns off the
+        // top - the same tradeoff any fixed-viewport TUI makes. Short
+        // conversations still get padded so the status bar lands on the
+        // true last line instead of leaving most of the window blank.
         $rows = TuiRenderer::getTerminalSize()['rows'];
+        $available = max(1, $rows - 1);
         $contentLines = explode("\n", $content);
-        $targetRows = max(count($contentLines), $rows - 1);
-        while (count($contentLines) < $targetRows) {
-            $contentLines[] = '';
+        if (count($contentLines) > $available) {
+            $contentLines = array_slice($contentLines, -$available);
+        } else {
+            while (count($contentLines) < $available) {
+                $contentLines[] = '';
+            }
         }
 
         $frame = implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);

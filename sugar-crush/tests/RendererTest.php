@@ -393,6 +393,46 @@ final class RendererTest extends TestCase
         $this->assertCount($rows, explode("\n", $out));
     }
 
+    /**
+     * Regression: candy-core's Renderer repaints a changed row via an
+     * ABSOLUTE cursorTo($row, 1) - once a frame is taller than the real
+     * terminal, every row past the terminal's last line gets clamped there
+     * by the terminal itself, so distinct rows (input box, status bar,
+     * newest history) all collide on that one physical row. The frame must
+     * never exceed $rows lines regardless of how long history gets.
+     */
+    public function testLongConversationIsClippedToFullTerminalHeightNotLeftUnbounded(): void
+    {
+        $rows = \SugarCraft\Crush\Tui\Renderer::getTerminalSize()['rows'];
+        $history = [];
+        for ($i = 0; $i < $rows * 3; $i++) {
+            $history[] = Message::user("message {$i}");
+        }
+
+        $out = Renderer::render($this->chat($history));
+
+        $this->assertCount($rows, explode("\n", $out));
+    }
+
+    /**
+     * The tail of history - not the head - must survive clipping: the
+     * newest turn and the input box (rendered after history) need to stay
+     * visible, with older turns scrolling off the top instead.
+     */
+    public function testLongConversationClippingKeepsTheMostRecentMessageVisible(): void
+    {
+        $rows = \SugarCraft\Crush\Tui\Renderer::getTerminalSize()['rows'];
+        $history = [];
+        for ($i = 0; $i < $rows * 3; $i++) {
+            $history[] = Message::user("message {$i}");
+        }
+
+        $out = Renderer::render($this->chat($history));
+
+        $this->assertStringContainsString('message ' . ($rows * 3 - 1), $out);
+        $this->assertStringNotContainsString('message 0' . "\n", $out);
+    }
+
     public function testStatusBarIsTheLastLineAndIncludesContextPercent(): void
     {
         $out = Renderer::render($this->chat());

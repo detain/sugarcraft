@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Crush\Workflows\Tests;
+namespace SugarCraft\Crush\Tests\Workflows;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\AgentResult;
