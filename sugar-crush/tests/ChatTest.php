@@ -379,20 +379,18 @@ final class ChatTest extends TestCase
         $this->assertCount(3, $next->history);
     }
 
-    public function testMultipleToolCallsWithPoolConfiguredExecuteRealToolsSequentially(): void
+    public function testMultipleToolCallsWithPoolConfiguredExecuteRealTools(): void
     {
-        // R14b: even with 2+ tool calls AND a non-null pool configured, execution
-        // must go through the real sequential executeTool() path, never through
-        // executeToolsParallel()/AgentWorkerPool. That path dispatches SubAgents
-        // through the pool's executor WITHOUT ever invoking the registered tool
-        // closures or the onToolCall listener - it fabricates a result from
-        // whatever the executor (here, a stub standing in for a forked worker
-        // process) returns instead. Wire a stub executor that returns fabricated
-        // output distinct from any real tool's output, and a registered-tool set
-        // whose closures record their own invocation + real return value via
-        // onToolCall. Under the old parallel-routing code onToolCall never fires
-        // (empty $observed); under the fixed sequential fallback both real tool
-        // outputs are observed and the fabricated stub output never appears.
+        // R14b.fix: with 2+ tool calls AND a non-null pool configured,
+        // execution now goes through executeToolsParallel()'s direct
+        // pcntl_fork() fan-out (see its docblock) rather than the old
+        // AgentWorkerPool/SubAgent/ProcessExecutor detour that could only
+        // fabricate output. A stub AgentWorkerPool executor is still wired
+        // here (unused by the new code path) purely to prove that: even
+        // configuring one has no bearing on tool output correctness anymore -
+        // real registered-tool closures run and their real return values are
+        // what the onToolCall listener observes, never anything the executor
+        // would have fabricated.
         $executor = new class implements ExecutorInterface {
             public function execute(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): AgentResult
             {
@@ -427,8 +425,9 @@ final class ChatTest extends TestCase
 
         [$next] = $chat->update(new AssistantMsg($message));
 
-        // Both real tool closures ran in-process and their real output was observed -
-        // this is only possible via the sequential executeTool() path.
+        // Both real tool closures ran (whether via a forked child or the
+        // pcntl-unavailable sequential fallback) and their real output was
+        // observed, keyed correctly by name despite running concurrently.
         $this->assertSame(
             ['toolA' => 'REAL-TOOL-A-OUTPUT', 'toolB' => 'REAL-TOOL-B-OUTPUT'],
             $observed
@@ -438,6 +437,64 @@ final class ChatTest extends TestCase
         // History: user msg + assistant msg + tool result A + tool result B
         $this->assertCount(4, $next->history);
         $this->assertTrue($next->inFlight);
+    }
+
+    public function testParallelToolCallsActuallyRunInSeparateForkedProcesses(): void
+    {
+        // Deterministic proxy for "this really is parallel, not just
+        // sequential-with-extra-steps": each tool closure reports its own
+        // getmypid(). If executeToolsParallel() forked one child per call (as
+        // designed), every reported PID differs both from each other and
+        // from this test's own process - the only way that's possible given
+        // invokeTool() is a pure, synchronous call with no other source of a
+        // different PID. A single shared PID (or this test's own PID) would
+        // mean execution silently fell back to running in-process.
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl extension not available in this environment.');
+        }
+
+        $toolCallA = new \SugarCraft\Crush\ToolCall('pidA', []);
+        $toolCallB = new \SugarCraft\Crush\ToolCall('pidB', []);
+        $message = Message::assistant('Calling two tools...')->withToolCalls([$toolCallA, $toolCallB]);
+
+        $pool = new AgentWorkerPool(maxConcurrent: 2);
+        $observedPids = [];
+        $chat = (new Chat(history: [Message::user('report pids')], inFlight: true))
+            ->withWorkerPool($pool)
+            ->onToolCall(function (string $name, array $args, mixed $result) use (&$observedPids): void {
+                $observedPids[$name] = $result;
+            })
+            ->registerTool('pidA', static fn(array $args) => getmypid())
+            ->registerTool('pidB', static fn(array $args) => getmypid());
+
+        $chat->update(new AssistantMsg($message));
+
+        $this->assertCount(2, $observedPids);
+        $this->assertNotSame($observedPids['pidA'], getmypid());
+        $this->assertNotSame($observedPids['pidB'], getmypid());
+        $this->assertNotSame($observedPids['pidA'], $observedPids['pidB']);
+    }
+
+    public function testSingleToolCallWithPoolConfiguredStaysSequential(): void
+    {
+        // handleToolCalls() only takes the fork-per-call path for 2+ calls -
+        // a lone tool call has no parallelism to gain and should run
+        // in-process (same PID as the test itself), avoiding fork overhead.
+        $toolCall = new \SugarCraft\Crush\ToolCall('solo', []);
+        $message = Message::assistant('Calling one tool...')->withToolCalls([$toolCall]);
+
+        $pool = new AgentWorkerPool(maxConcurrent: 2);
+        $observedPid = null;
+        $chat = (new Chat(history: [Message::user('report pid')], inFlight: true))
+            ->withWorkerPool($pool)
+            ->onToolCall(function (string $name, array $args, mixed $result) use (&$observedPid): void {
+                $observedPid = $result;
+            })
+            ->registerTool('solo', static fn(array $args) => getmypid());
+
+        $chat->update(new AssistantMsg($message));
+
+        $this->assertSame(getmypid(), $observedPid);
     }
 
     public function testToolsAndCallbacksPreservedOnInput(): void
