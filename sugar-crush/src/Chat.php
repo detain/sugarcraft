@@ -12,6 +12,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Backend\CancellationToken;
@@ -168,6 +169,21 @@ final class Chat implements Model
          * double-Escape-to-abort window in update().
          */
         private readonly ?float $lastEscapeAt = null,
+        /**
+         * Real terminal dimensions, sourced from {@see WindowSizeMsg} - the
+         * one size candy-core's Program actually dispatches at startup AND
+         * again on every SIGWINCH resize (see Program::installSignalHandlers()).
+         * Null until the first WindowSizeMsg arrives (or for a Chat built
+         * directly in a test, never); {@see rows()}/{@see cols()} fall back
+         * to {@see TuiRenderer::getTerminalSize()}'s own detection in that
+         * case. Renderer MUST read this instead of querying terminal size
+         * itself - a second, independent, statically-cached size source
+         * (which is what caused #1403's fix to not fully land: it clipped
+         * to a size that could silently disagree with the real terminal, or
+         * never picked up a live resize).
+         */
+        private readonly ?int $rows = null,
+        private readonly ?int $cols = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -210,6 +226,12 @@ final class Chat implements Model
         }
         if ($msg instanceof ToolResultsMsg) {
             return $this->finishToolCalls($msg);
+        }
+        if ($msg instanceof WindowSizeMsg) {
+            // The one authoritative size - see the constructor docblock on
+            // $rows/$cols for why Renderer must read these instead of
+            // querying terminal size itself.
+            return [$this->mutate(['rows' => $msg->rows, 'cols' => $msg->cols]), null];
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -964,6 +986,8 @@ final class Chat implements Model
             'generation' => $this->generation,
             'inFlightCancellation' => $this->inFlightCancellation,
             'lastEscapeAt' => $this->lastEscapeAt,
+            'rows' => $this->rows,
+            'cols' => $this->cols,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -2497,6 +2521,23 @@ final class Chat implements Model
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
         return null;
+    }
+
+    /**
+     * Real terminal row count, from the last {@see WindowSizeMsg} this Chat
+     * received - falls back to {@see TuiRenderer::getTerminalSize()}'s own
+     * detection only when no WindowSizeMsg has arrived yet (a Chat built
+     * directly, e.g. in a test, without going through a real Program).
+     */
+    public function rows(): int
+    {
+        return $this->rows ?? TuiRenderer::getTerminalSize()['rows'];
+    }
+
+    /** @see rows() */
+    public function cols(): int
+    {
+        return $this->cols ?? TuiRenderer::getTerminalSize()['cols'];
     }
 
     /**
