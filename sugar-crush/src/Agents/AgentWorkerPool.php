@@ -307,10 +307,18 @@ final class AgentWorkerPool
         }
 
         if ($pid === 0) {
-            // Child process: execute and store result, then exit
+            // Child process: execute and store result, then exit. A plain
+            // exit() is safe here (not ForkedChild::exitNow()) because the
+            // one thing that made a bare exit() dangerous - an inherited
+            // raw-mode Tty's destructor clobbering the real terminal on the
+            // way out - is now fixed at the ROOT in candy-core's
+            // PosixBackend::restore() (PID-aware; see #1406). This path is
+            // also currently unreachable from bin/sugarcrush's live path
+            // (Renderer.php's R20.fix docblock), so there is no live-TUI
+            // scenario this protects that candy-core doesn't already cover.
             $result = $executor->execute($agent, $request);
             $this->storeResult($agent->id, $result);
-            \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
+            exit(0);
         }
 
         // Parent: store a PID marker so waitForCompletion can find this agent

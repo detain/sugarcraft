@@ -15,12 +15,23 @@ use PHPUnit\Framework\TestCase;
  * Regression coverage for the actual bug behind "typed text ends up in the
  * status bar / Enter and Ctrl+P stop working after the first message" (see
  * EngineBackendTest for the same assertion against the real production code
- * path). This file isolates the underlying mechanism against a real PTY:
- * a forked child that inherits a raw-mode-enabled Tty object and exits via
- * a plain `exit()` restores the terminal's ORIGINAL (cooked/echo) settings
- * on the way out, because that inherited object's destructor fires during
- * PHP's normal shutdown sequence and termios lives on the shared kernel TTY
- * device, not per-process. {@see ForkedChild::exitNow()} is the fix.
+ * path). A forked child that inherits a raw-mode-enabled Tty object and
+ * exits via a plain `exit()` used to restore the terminal's ORIGINAL
+ * (cooked/echo) settings on the way out, because that inherited object's
+ * destructor fired during PHP's normal shutdown sequence and termios lives
+ * on the shared kernel TTY device, not per-process.
+ *
+ * This is now fixed at the ROOT, in candy-core itself:
+ * `PosixBackend::restore()` records the PID that called `enableRawMode()`
+ * and skips the real syscall when called from a different one (see that
+ * method's docblock, and `candy-core/tests/Util/Tty/PosixBackendTest::
+ * testChildProcessExitingDoesNotResetTheParentsRawMode()` for the
+ * equivalent proof at that layer) - so a forked child ending in a bare
+ * `exit()` is safe regardless of what calls it, with no special handling
+ * required. {@see ForkedChild::exitNow()} (used by
+ * `EngineBackend::runCompleteInChild()`/`Chat::forkToolCalls()`) remains as
+ * defense-in-depth: it protects against ANY inherited object's destructor
+ * with a real side effect, not just this one.
  *
  * Uses `Tty`'s injected-Termios test seam (a real fd obtained via candy-pty's
  * own FFI `open()`, mirroring `candy-pty/tests/Posix/PosixTermiosTest.php`)
@@ -59,11 +70,44 @@ final class ForkedChildTest extends TestCase
 
     private function isRaw(string $slavePath): bool
     {
-        $out = trim((string) shell_exec('stty -F ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
+        // BSD/macOS stty takes the device flag lowercase (-f); GNU/Linux
+        // coreutils uses uppercase (-F). Using the wrong one silently
+        // fails (empty output), which reads as "not raw" regardless of
+        // the real terminal state.
+        $flag = PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
+        $out = trim((string) shell_exec('stty ' . $flag . ' ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
 
         // A raw-mode tty reports "-icanon -echo" (leading dash = disabled);
         // cooked mode reports the bare "icanon echo" flags instead.
         return str_contains($out, '-icanon') && str_contains($out, '-echo');
+    }
+
+    /**
+     * A blocking pcntl_waitpid() has no bound - if the child were ever stuck
+     * (a hung syscall, an environment where SIGKILL-to-self somehow doesn't
+     * land) this test would hang the whole suite/CI job indefinitely rather
+     * than failing with a clear message. Same WNOHANG-polling + deadline +
+     * SIGKILL-fallback shape as Chat::waitForToolChildrenAsync()'s
+     * synchronous sibling - just without the ReactPHP loop, since this test
+     * doesn't need one.
+     */
+    private function waitWithTimeout(int $pid, float $timeoutSeconds): void
+    {
+        $deadline = microtime(true) + $timeoutSeconds;
+        do {
+            $status = 0;
+            if (pcntl_waitpid($pid, $status, WNOHANG) === $pid) {
+                return;
+            }
+            usleep(10_000);
+        } while (microtime(true) < $deadline);
+
+        if (function_exists('posix_kill')) {
+            posix_kill($pid, SIGKILL);
+        }
+        $status = 0;
+        pcntl_waitpid($pid, $status);
+        $this->fail("forked child {$pid} did not exit within {$timeoutSeconds}s - had to SIGKILL it");
     }
 
     public function testExitNowLeavesTheRealTerminalsRawModeIntactAcrossAForkedChild(): void
@@ -96,8 +140,7 @@ final class ForkedChildTest extends TestCase
                 ForkedChild::exitNow(0);
             }
 
-            $status = 0;
-            pcntl_waitpid($pid, $status);
+            $this->waitWithTimeout($pid, 5.0);
 
             $this->assertTrue(
                 $this->isRaw($slavePath),
@@ -112,14 +155,11 @@ final class ForkedChildTest extends TestCase
     }
 
     /**
-     * Documents the bug this whole file guards against: without the fix, a
-     * forked child that ends with a PLAIN exit() DOES clobber the parent's
-     * real terminal, because its inherited Tty object's destructor restores
-     * the pre-raw-mode termios onto the shared TTY device. This is exactly
-     * what EngineBackend::runCompleteInChild()/Chat::forkToolCalls() did
-     * before switching to ForkedChild::exitNow().
+     * With the candy-core-level fix (PosixBackend::restore() is now
+     * PID-aware), even a BARE exit() in the forked child - no
+     * ForkedChild::exitNow(), no special handling at all - is safe.
      */
-    public function testPlainExitInAForkedChildDoesClobberRawModeUnfixed(): void
+    public function testPlainExitInAForkedChildNoLongerClobbersRawMode(): void
     {
         $this->requirePtySyscalls();
 
@@ -145,21 +185,15 @@ final class ForkedChildTest extends TestCase
                 exit(0);
             }
 
-            $status = 0;
-            pcntl_waitpid($pid, $status);
+            $this->waitWithTimeout($pid, 5.0);
 
-            $this->assertFalse(
+            $this->assertTrue(
                 $this->isRaw($slavePath),
-                'expected the OLD, unfixed exit() pattern to clobber raw mode - ' .
-                'if this fails, the underlying PHP/OS behaviour this whole fix relies on has changed',
+                'the real terminal was knocked out of raw mode by a plain exit() in the forked child - ' .
+                'the candy-core-level PID-aware restore() fix did not hold',
             );
         } finally {
-            // Raw mode is already gone at this point (that's what this test
-            // demonstrates) - nothing to restore explicitly, but Tty's own
-            // destructor will still fire and try to; unset it FIRST, while
-            // $slaveFd is still open, so that lands cleanly instead of
-            // throwing from a destructor against an already-closed fd.
-            unset($tty);
+            $tty->restore();
             $libc->close($slaveFd);
             $pair->master()->close();
         }
