@@ -197,9 +197,15 @@ final class EngineBackend implements Backend
      * extended here to cross the ReactPHP loop boundary rather than just
      * fanning out sibling tool calls.
      */
-    public function completeAsync(array $history, ?callable $onToken = null): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface
     {
         $deferred = new Deferred();
+
+        if ($cancellation?->isCancelled() === true) {
+            $deferred->reject(new \RuntimeException('Request cancelled'));
+
+            return $deferred->promise();
+        }
 
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
             return $this->completeAsyncBlocking($history, $onToken, $deferred);
@@ -231,27 +237,69 @@ final class EngineBackend implements Backend
         $buffer = '';
         $settled = false;
 
-        $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, function () use ($loop, $parentSocket, $pid, $deferred, &$settled): void {
+        // $timeoutTimer/$cancelTimer are assigned below, AFTER $teardown is
+        // built (each timer's own callback needs to call $teardown) - they're
+        // captured by reference here specifically so $teardown still sees
+        // the real TimerInterface once addTimer()/addPeriodicTimer() below
+        // assign into these same variables.
+        $timeoutTimer = null;
+        $cancelTimer = null;
+
+        // Shared teardown for every way this can end (success, timeout,
+        // cancellation): stop watching the socket, cancel BOTH timers
+        // (critical for $cancelTimer, a periodic timer that would otherwise
+        // keep polling forever after settling via a different path), and
+        // reap the child so it never zombies. $rejectMessage is null on the
+        // success path (the caller settles $deferred itself via
+        // settleFromChildPayload(), after doing its own equivalent cleanup).
+        $teardown = function (?string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer): void {
             if ($settled) {
                 return;
             }
             $settled = true;
             $loop->removeReadStream($parentSocket);
             fclose($parentSocket);
-            if (function_exists('posix_kill')) {
+            if ($timeoutTimer !== null) {
+                $loop->cancelTimer($timeoutTimer);
+            }
+            if ($cancelTimer !== null) {
+                $loop->cancelTimer($cancelTimer);
+            }
+            if ($rejectMessage !== null && function_exists('posix_kill')) {
                 posix_kill($pid, SIGKILL);
             }
             $status = 0;
             pcntl_waitpid($pid, $status);
-            $deferred->reject(new \RuntimeException('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's'));
+            if ($rejectMessage !== null) {
+                $deferred->reject(new \RuntimeException($rejectMessage));
+            }
+        };
+
+        $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, function () use ($teardown): void {
+            $teardown('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's');
         });
 
-        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$settled, $deferred, $loop, $pid, $onToken, $timeoutTimer): void {
+        // Escape-Escape abort (see Chat::update()'s Escape handling): the
+        // cancellation flag can flip at any point after this call returns,
+        // long after the closures below were built, so it has to be polled
+        // rather than checked once up front.
+        $cancelTimer = $cancellation === null ? null : $loop->addPeriodicTimer(0.1, function () use ($cancellation, $teardown): void {
+            if ($cancellation->isCancelled()) {
+                $teardown('Request cancelled');
+            }
+        });
+
+        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$settled, $deferred, $loop, $pid, $onToken, &$timeoutTimer, &$cancelTimer): void {
             $chunk = fread($stream, 65536);
             if ($chunk === '' || $chunk === false) {
                 $loop->removeReadStream($stream);
                 fclose($stream);
-                $loop->cancelTimer($timeoutTimer);
+                if ($timeoutTimer !== null) {
+                    $loop->cancelTimer($timeoutTimer);
+                }
+                if ($cancelTimer !== null) {
+                    $loop->cancelTimer($cancelTimer);
+                }
                 if ($settled) {
                     return;
                 }

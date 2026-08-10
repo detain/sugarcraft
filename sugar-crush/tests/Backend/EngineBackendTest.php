@@ -104,6 +104,63 @@ final class EngineBackendTest extends TestCase
         );
     }
 
+    public function testCancellationTokenAbortsAnInFlightCompletion(): void
+    {
+        // Backs Chat's double-Escape-to-abort feature: a provider stuck for
+        // longer than any reasonable test timeout, cancelled shortly after
+        // starting - the promise must reject quickly (well under the
+        // provider's own delay) rather than waiting for it to finish.
+        $provider = new class implements ProviderInterface {
+            public function name(): string { return 'stuck'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return false; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                sleep(5);
+
+                return new CompleteResponse(content: 'too late');
+            }
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+
+        $backend = EngineBackend::new($provider, 'stuck');
+        $loop = \React\EventLoop\Loop::get();
+        $cancellation = new \SugarCraft\Crush\Backend\CancellationToken();
+
+        $loop->addTimer(0.2, static function () use ($cancellation): void {
+            $cancellation->cancel();
+        });
+
+        $start = microtime(true);
+        $error = null;
+        try {
+            $this->awaitPromise($backend->completeAsync([Message::user('go')], null, $cancellation));
+        } catch (\Throwable $e) {
+            $error = $e;
+        }
+        $elapsed = microtime(true) - $start;
+
+        $this->assertNotNull($error, 'cancelled completion must reject, not resolve');
+        $this->assertStringContainsString('cancelled', $error->getMessage());
+        $this->assertLessThan(5.0, $elapsed, 'cancellation must not wait for the provider to finish on its own');
+    }
+
+    public function testAlreadyCancelledTokenRejectsImmediatelyWithoutForking(): void
+    {
+        $backend = EngineBackend::new(new EchoProvider(), 'echo');
+        $cancellation = new \SugarCraft\Crush\Backend\CancellationToken();
+        $cancellation->cancel();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/cancelled/');
+        $this->awaitPromise($backend->completeAsync([Message::user('go')], null, $cancellation));
+    }
+
     /**
      * Pump the real ReactPHP loop until $promise settles, returning its
      * resolved value (or rethrowing its rejection). Bounded so a genuine
@@ -132,9 +189,16 @@ final class EngineBackendTest extends TestCase
             function (\Throwable $e) use (&$settled, &$error, $loop): void { $settled = true; $error = $e; $loop->stop(); },
         );
 
-        $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
-        $loop->run();
-        $loop->cancelTimer($safety);
+        // then() on an already-settled promise (e.g. completeAsync()'s
+        // already-cancelled fast path) invokes its callback synchronously,
+        // before run() is even called - stop() on a not-yet-running loop is
+        // a no-op, so without this check run() would sit idle until the
+        // 10s safety timer, not return immediately.
+        if (!$settled) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
 
         if (!$settled) {
             $this->fail('Promise did not settle within the test timeout');

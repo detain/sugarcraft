@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -15,6 +14,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\SessionPicker;
+use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandRegistry;
@@ -83,18 +83,6 @@ final class Chat implements Model
     /** @var string|null ID of the currently active session */
     private ?string $currentSessionId = null;
 
-    /** @var Buffer|null Previous rendered frame for diff-based emission */
-    private ?Buffer $previousFrame = null;
-
-    /** @var int|null Previous output height for dimension-change detection */
-    private ?int $prevHeight = null;
-
-    /** @var int|null Previous terminal width for resize detection */
-    private ?int $prevWidth = null;
-
-    /** Terminal width for buffer rendering. Updated from Renderer on each view(). */
-    private int $width = 80;
-
     /**
      * Token budget used as the {@see ContextCompactor::shouldSendReminder()}
      * denominator. Mirrors the fixed 100,000-token proxy limit already used
@@ -105,12 +93,20 @@ final class Chat implements Model
     private const REMINDER_TOKEN_LIMIT = 100000;
 
     /**
-     * Wall-clock budget for {@see executeToolsParallel()}'s forked children.
+     * Wall-clock budget for {@see forkToolCalls()}'s forked children.
      * A tool call that never returns (e.g. a hung shell command) would
      * otherwise leave the parent blocked forever waiting on pcntl_waitpid();
      * past this deadline, stragglers are SIGKILLed and reported as timeouts.
      */
     private const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
+
+    /**
+     * Two Escape presses within this window while a request is in flight
+     * abort it (see the Escape arm in {@see update()}). A single Escape
+     * never quits the app any more - use /exit, Ctrl+C, or the palette's
+     * Exit action for that.
+     */
+    private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
 
     /**
      * @param list<Message> $history
@@ -150,6 +146,28 @@ final class Chat implements Model
          * that never call withOnConfigChange()/pass one to the constructor.
          */
         private readonly ?\Closure $onConfigChange = null,
+        /**
+         * Bumped by every submit()/beginToolCalls()/finishToolCalls() call that schedules a
+         * backend Cmd; stamped onto that Cmd's eventual {@see AssistantMsg}
+         * so a reply for a turn that was later aborted (see Escape-Escape
+         * handling below) or superseded is recognisable as stale and
+         * dropped in update() rather than appended after newer messages.
+         */
+        private readonly int $generation = 0,
+        /**
+         * Shared cancel flag for the turn currently in flight; null when
+         * idle. See {@see \SugarCraft\Crush\Backend\CancellationToken}'s
+         * docblock for why this can't be a normal immutable value-object
+         * field - Escape-Escape needs to mutate the SAME instance the
+         * already-scheduled Cmd captured.
+         */
+        private readonly ?CancellationToken $inFlightCancellation = null,
+        /**
+         * Wall-clock timestamp (microtime(true)) of the most recent
+         * un-paired Escape press; null once consumed/expired. Drives the
+         * double-Escape-to-abort window in update().
+         */
+        private readonly ?float $lastEscapeAt = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -168,23 +186,70 @@ final class Chat implements Model
     public function update(Msg $msg): array
     {
         if ($msg instanceof AssistantMsg) {
+            // A reply for a turn that was aborted (double-Escape) or
+            // otherwise superseded arrives after inFlight/generation have
+            // already moved on - drop it rather than appending it after
+            // whatever the user has done since. See AssistantMsg's
+            // docblock and the Escape arm below.
+            if ($msg->generation !== null && $msg->generation !== $this->generation) {
+                return [$this, null];
+            }
+
             $message = $msg->message;
 
             // Check if the message has tool calls to execute
             if ($message->toolCalls !== [] && $this->tools !== []) {
-                return $this->handleToolCalls($message);
+                return $this->beginToolCalls($message);
             }
 
             return [$this->mutate([
                 'history' => [...$this->history, $message],
                 'inFlight' => false,
+                'inFlightCancellation' => null,
             ]), null];
+        }
+        if ($msg instanceof ToolResultsMsg) {
+            return $this->finishToolCalls($msg);
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === "\x03" /* ^C */) {
             return [$this, Cmd::quit()];
+        }
+        // Escape is checked before the inFlight blanket-swallow below (like
+        // Ctrl+C above) because its whole point while a request is running
+        // is to let the user cancel it. A single Escape never quits the app
+        // any more (see this arm's history - it used to, and Alt+Backspace's
+        // terminal-decoding bug made Escape fire on its own by accident,
+        // quitting unexpectedly). Two Escapes within
+        // DOUBLE_ESCAPE_WINDOW_SECONDS while inFlight abort the in-progress
+        // turn instead. Excluded while the palette is open so Escape keeps
+        // its existing, more specific meaning there - see
+        // handlePaletteKey()'s own Escape arm, reached below once this `if`
+        // doesn't match.
+        if ($msg->type === KeyType::Escape && $this->palette === null) {
+            if (!$this->inFlight) {
+                return [$this->mutate(['lastEscapeAt' => null]), null];
+            }
+
+            $now = microtime(true);
+            $isSecondPress = $this->lastEscapeAt !== null
+                && ($now - $this->lastEscapeAt) <= self::DOUBLE_ESCAPE_WINDOW_SECONDS;
+
+            if (!$isSecondPress) {
+                return [$this->mutate(['lastEscapeAt' => $now]), null];
+            }
+
+            $this->inFlightCancellation?->cancel();
+
+            return [$this->mutate([
+                'inFlight' => false,
+                'inFlightCancellation' => null,
+                'lastEscapeAt' => null,
+                'generation' => $this->generation + 1,
+                'history' => [...$this->history, Message::system('_Request cancelled._')],
+            ]), null];
         }
         if ($this->inFlight) {
             // Ignore keystrokes while waiting for the backend
@@ -201,6 +266,14 @@ final class Chat implements Model
         }
 
         return match (true) {
+            // Alt/Shift/Ctrl+Enter insert a newline instead of submitting.
+            // Alt+Enter is the reliable one across plain terminals (ESC+CR,
+            // now decoded correctly by InputReader - see candy-core's
+            // Alt-prefixed-key fix); Shift/Ctrl+Enter only arrive
+            // distinguishably on terminals that report the Kitty keyboard
+            // protocol unprompted, but cost nothing to also honor.
+            $msg->type === KeyType::Enter && ($msg->alt || $msg->shift || $msg->ctrl)
+                => [$this->withInputBuf($this->inputBuf . "\n"), null],
             $msg->type === KeyType::Enter
                 => $this->slashMenuShouldIntercept()
                     ? $this->completeSlashMenuSelection()
@@ -212,6 +285,11 @@ final class Chat implements Model
                 => [$this->moveSlashMenuSelection(-1), null],
             $msg->type === KeyType::Down && $this->slashMenuMatches() !== []
                 => [$this->moveSlashMenuSelection(1), null],
+            // Shell-history-style recall: Up on an empty input box (and no
+            // "/" popup showing - the arm above already claimed that case)
+            // fills inputBuf with the last message the user actually sent.
+            $msg->type === KeyType::Up && $this->inputBuf === ''
+                => [$this->withInputBuf($this->lastUserMessageContent()), null],
             // Ctrl+P opens the command palette. Checked before the generic
             // Char arm below, or the literal "p" would be typed into the
             // input buffer instead - same reasoning as Ctrl+A just below.
@@ -226,6 +304,14 @@ final class Chat implements Model
             // input buffer instead.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
                 => $this->withInputBuf('/agents')->submit(),
+            // Word-delete: Ctrl+W (the usual terminal-wide convention) or a
+            // correctly alt-flagged Backspace (see candy-core's
+            // Alt-prefixed-key fix - before it, Alt+Backspace mis-decoded
+            // as a bare Escape and quit the app instead of reaching here at
+            // all). Must be checked before the plain Backspace arm below.
+            ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'w')
+                || ($msg->type === KeyType::Backspace && $msg->alt)
+                => [$this->withInputBuf(self::dropLastWord($this->inputBuf)), null],
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the real SessionStore listing — see
             // cycleSessionTab()'s docblock for reachability caveats and how
@@ -238,8 +324,6 @@ final class Chat implements Model
                 => [$this->withInputBuf($this->inputBuf . ' '), null],
             $msg->type === KeyType::Backspace
                 => [$this->withInputBuf(self::dropLast($this->inputBuf)), null],
-            $msg->type === KeyType::Escape
-                => [$this, Cmd::quit()],
             default => [$this, null],
         };
     }
@@ -312,45 +396,38 @@ final class Chat implements Model
     }
 
     /**
-     * Handle tool calls in an assistant message.
-     * Executes each tool and schedules a follow-up backend call with results.
-     *
-     * All tool calls execute sequentially in-process. See {@see executeToolsParallel()}
-     * for why the AgentWorkerPool dispatch path is disabled.
+     * Handle tool calls in an assistant message: show a "running" placeholder
+     * for each one IMMEDIATELY (visible on the very next render, before any
+     * of them execute), fork all of them right away (see {@see forkToolCalls()}),
+     * and schedule a Cmd that waits for them off the render loop (see
+     * {@see waitForToolChildrenAsync()}) - the same non-blocking-socket
+     * rationale as {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()},
+     * applied to tool execution instead of the provider call. Finishing is
+     * handled by {@see finishToolCalls()} once the resulting
+     * {@see ToolResultsMsg} arrives.
      *
      * @return array{0:Chat,1:?\Closure}
      */
-    private function handleToolCalls(Message $message): array
+    private function beginToolCalls(Message $message): array
     {
-        // R14b.fix: genuine parallelism only pays for itself with 2+ calls and
-        // only when a pool was actually opted into via withWorkerPool() - the
-        // common single-tool-call/no-pool case stays on the cheaper sequential
-        // path with zero fork overhead. See executeToolsParallel()'s docblock
-        // for why this no longer routes through AgentWorkerPool/SubAgent.
-        $toolResults = ($this->effectivePool !== null && count($message->toolCalls) > 1)
-            ? $this->executeToolsParallel($message->toolCalls)
-            : $this->executeToolsSequentially($message->toolCalls);
+        $placeholders = array_map(
+            static fn(ToolCall $call): Message => Message::toolRunning($call),
+            $message->toolCalls,
+        );
 
-        // Add assistant message and tool results to history
-        $newHistory = [...$this->history, $message];
-        foreach ($toolResults as $result) {
-            $newHistory[] = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
-                ->withToolResults([$result]);
-        }
-
-        // Schedule follow-up backend call with updated history
+        $generation = $this->generation + 1;
+        $cancellation = new CancellationToken();
         $next = $this->mutate([
-            'history' => $newHistory,
+            'history' => [...$this->history, $message, ...$placeholders],
             'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
         ]);
 
-        $backend = $this->backend;
-        $history = $next->history;
-        $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken): PromiseInterface {
-            return $backend->completeAsync($history, $onToken)->then(
-                static fn(Message $msg): ?Msg => new AssistantMsg($msg),
-                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')),
+        $jobs = $this->forkToolCalls($message->toolCalls);
+        $cmd = Cmd::promise(function () use ($jobs, $cancellation, $message, $generation): PromiseInterface {
+            return $this->waitForToolChildrenAsync($jobs, $cancellation)->then(
+                static fn(array $results): Msg => new ToolResultsMsg($message, $results, $generation),
             );
         });
 
@@ -358,41 +435,55 @@ final class Chat implements Model
     }
 
     /**
-     * Execute a single tool call and return the result.
+     * Handle a completed {@see ToolResultsMsg}: replace each "running"
+     * placeholder {@see beginToolCalls()} put in history with its real
+     * result (matched by {@see Message::$pendingToolCallId}), then schedule
+     * the follow-up backend call exactly like {@see submit()}'s tail does.
+     *
+     * @return array{0:Chat,1:?\Closure}
      */
-    private function executeTool(ToolCall $toolCall): ToolResult
+    private function finishToolCalls(ToolResultsMsg $msg): array
     {
-        [$result, $raw, $succeeded] = $this->invokeTool($toolCall);
-
-        // Notify tool call listener if set - only on a genuinely successful
-        // invocation, matching invokeTool()'s contract (see its docblock).
-        if ($succeeded && $this->onToolCall !== null) {
-            ($this->onToolCall)($toolCall->name, $toolCall->arguments, $raw);
+        if ($msg->generation !== null && $msg->generation !== $this->generation) {
+            return [$this, null];
         }
 
-        return $result;
-    }
-
-    /**
-     * @param ToolCall[] $toolCalls
-     * @return ToolResult[]
-     */
-    private function executeToolsSequentially(array $toolCalls): array
-    {
-        $toolResults = [];
-        foreach ($toolCalls as $toolCall) {
-            $toolResults[] = $this->executeTool($toolCall);
+        $resultsById = [];
+        foreach ($msg->results as $result) {
+            $resultsById[$result->id ?? $result->name] = $result;
         }
-        return $toolResults;
+
+        $newHistory = [];
+        foreach ($this->history as $historyMessage) {
+            $pendingId = $historyMessage->pendingToolCallId;
+            if ($pendingId !== null && isset($resultsById[$pendingId])) {
+                $result = $resultsById[$pendingId];
+                $newHistory[] = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
+                    ->withToolResults([$result]);
+
+                continue;
+            }
+            $newHistory[] = $historyMessage;
+        }
+
+        $generation = $this->generation + 1;
+        $cancellation = new CancellationToken();
+        $next = $this->mutate([
+            'history' => $newHistory,
+            'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
+        ]);
+
+        return [$next, $this->scheduleBackendCompletion($next, $cancellation, $generation)];
     }
 
     /**
      * Look up and invoke the registered callback for a tool call, without
-     * firing {@see $onToolCall} - the pure primitive shared by the sequential
-     * path ({@see executeTool()}) and the forked-child path
-     * ({@see executeToolsParallel()}), so the listener can be fired exactly
-     * once, in the right process (see executeToolsParallel()'s docblock for
-     * why that matters).
+     * firing {@see $onToolCall} - the listener fires exactly once, in the
+     * parent process, once {@see finishToolCalls()} collects this call's
+     * real result (see {@see forkToolCalls()}'s docblock for why that can't
+     * happen in the child that actually runs this).
      *
      * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
      *     output (only meaningful when $succeeded), succeeded]
@@ -417,7 +508,9 @@ final class Chat implements Model
     }
 
     /**
-     * Execute multiple tool calls in parallel via a direct pcntl_fork() fan-out.
+     * Fork one child per tool call via a direct pcntl_fork() fan-out (or,
+     * when forking isn't available, run it synchronously in-process right
+     * here - see {@see executeToolSynchronously()}).
      *
      * R14b.fix: the original design routed through AgentWorkerPool/SubAgent,
      * which - for its default ExecutorInterface (ProcessExecutor) - forks
@@ -434,35 +527,38 @@ final class Chat implements Model
      * so the child's copy of $this (and every closure it holds) is fully
      * intact and callable. This method forks one child per tool call, has each
      * child invoke the real closure via {@see invokeTool()} and write its
-     * result to a temp file, then collects and returns them in the parent -
-     * genuinely concurrent, with the real callback output, no registry needed.
+     * result to a temp file; {@see waitForToolChildrenAsync()} collects them
+     * once every child has exited - genuinely concurrent, with the real
+     * callback output, no registry needed.
      *
-     * $onToolCall is deliberately NOT invoked inside a child: a listener
-     * closure that mutates state by reference (e.g. a test's
+     * $onToolCall is deliberately NOT invoked inside a forked child: a
+     * listener closure that mutates state by reference (e.g. a test's
      * `use (&$captured)` array) would mutate only the child's own
-     * copy-on-write copy, invisible to the parent. It is invoked here in the
-     * parent instead, once per call, after collecting that call's real result.
+     * copy-on-write copy, invisible to the parent. It's invoked later, in
+     * the parent, once {@see waitForToolChildrenAsync()} collects that
+     * call's real result.
      *
      * @param ToolCall[] $toolCalls
-     * @return ToolResult[]
+     * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}>
      */
-    private function executeToolsParallel(array $toolCalls): array
+    private function forkToolCalls(array $toolCalls): array
     {
-        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
-            return $this->executeToolsSequentially($toolCalls);
-        }
+        $canFork = function_exists('pcntl_fork') && function_exists('pcntl_waitpid');
 
         $jobs = [];
-        foreach ($toolCalls as $index => $toolCall) {
+        foreach ($toolCalls as $toolCall) {
+            if (!$canFork) {
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
+                continue;
+            }
+
             $file = sys_get_temp_dir() . '/sc_chat_tool_' . bin2hex(random_bytes(8)) . '.json';
             $pid = pcntl_fork();
 
             if ($pid === -1) {
                 // Fork failed for this call only - run it synchronously right
-                // here and store its result the same way a child would, so
-                // the collection loop below treats every call uniformly.
-                $this->storeToolResult($file, $toolCall);
-                $jobs[$index] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => null];
+                // here, same as the no-pcntl fallback.
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
                 continue;
             }
 
@@ -471,17 +567,28 @@ final class Chat implements Model
                 exit(0);
             }
 
-            $jobs[$index] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid];
+            $jobs[] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid, 'result' => null];
         }
 
-        $this->waitForToolChildren($jobs);
+        return $jobs;
+    }
 
-        $toolResults = [];
-        foreach ($jobs as $job) {
-            $toolResults[] = $this->collectToolResult($job['file'], $job['toolCall']);
+    /**
+     * Run a tool call that never crossed (or won't cross) a fork boundary -
+     * pcntl unavailable, or this specific pcntl_fork() call failed. Safe,
+     * and necessary, to fire $onToolCall directly here: there's no child
+     * memory for its effects to be lost in (contrast {@see forkToolCalls()}'s
+     * docblock on why a genuinely forked job can't do this).
+     */
+    private function executeToolSynchronously(ToolCall $toolCall): ToolResult
+    {
+        [$result, $raw, $succeeded] = $this->invokeTool($toolCall);
+
+        if ($succeeded && $this->onToolCall !== null) {
+            ($this->onToolCall)($toolCall->name, $toolCall->arguments, $raw);
         }
 
-        return $toolResults;
+        return $result;
     }
 
     /**
@@ -513,48 +620,84 @@ final class Chat implements Model
     }
 
     /**
-     * Block (with a bounded wall-clock timeout) until every forked child in
-     * $jobs has exited, SIGKILLing any stragglers past
-     * {@see PARALLEL_TOOL_TIMEOUT_SECONDS} so a hung tool (e.g. a stuck shell
-     * command) cannot block this request forever. Mirrors the WNOHANG-poll
-     * pattern {@see \SugarCraft\Crush\Agents\AgentWorkerPool::waitForCompletion()}
-     * already uses for the same reason.
+     * Non-blocking counterpart to the old (removed) waitForToolChildren():
+     * resolves once every forked job in $jobs has exited, collecting each
+     * one's real result via {@see collectToolResult()} (which fires
+     * $onToolCall in the parent - see {@see forkToolCalls()}'s docblock),
+     * polling via a periodic timer instead of a blocking usleep() loop so
+     * the render/input loop keeps running while tools execute - same
+     * rationale as {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
+     * fork+socket rewrite, here via WNOHANG polling since these jobs report
+     * through temp files, not a socket. A hung tool (e.g. a stuck shell
+     * command) is SIGKILLed past {@see PARALLEL_TOOL_TIMEOUT_SECONDS}, same
+     * ceiling the old blocking version used. Escape-Escape abort (see
+     * Chat::update()) also lands here via $cancellation, same as it does
+     * for the backend call.
      *
-     * @param array<int, array{toolCall: ToolCall, file: string, pid: ?int}> $jobs
+     * @param list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}> $jobs
+     * @return PromiseInterface<list<ToolResult>>
      */
-    private function waitForToolChildren(array $jobs): void
+    private function waitForToolChildrenAsync(array $jobs, CancellationToken $cancellation): PromiseInterface
     {
-        $pending = array_filter($jobs, static fn(array $job): bool => $job['pid'] !== null);
-        if ($pending === []) {
-            return;
+        $deferred = new Deferred();
+
+        $collect = fn(array $job): ToolResult => $job['result'] ?? $this->collectToolResult((string) $job['file'], $job['toolCall']);
+
+        $pendingIndexes = [];
+        foreach ($jobs as $index => $job) {
+            if ($job['pid'] !== null) {
+                $pendingIndexes[$index] = true;
+            }
         }
 
+        if ($pendingIndexes === []) {
+            $deferred->resolve(array_map($collect, $jobs));
+
+            return $deferred->promise();
+        }
+
+        $loop = Loop::get();
+        $settled = false;
+        $timer = null;
         $deadline = microtime(true) + self::PARALLEL_TOOL_TIMEOUT_SECONDS;
-        while ($pending !== [] && microtime(true) < $deadline) {
-            foreach ($pending as $index => $job) {
+
+        $timer = $loop->addPeriodicTimer(0.05, function () use (&$pendingIndexes, $jobs, $deadline, $cancellation, $collect, $loop, &$settled, &$timer, $deferred): void {
+            if ($settled) {
+                return;
+            }
+
+            foreach ($pendingIndexes as $index => $_) {
                 $status = 0;
-                if (pcntl_waitpid($job['pid'], $status, WNOHANG) === $job['pid']) {
-                    unset($pending[$index]);
+                if (pcntl_waitpid($jobs[$index]['pid'], $status, WNOHANG) === $jobs[$index]['pid']) {
+                    unset($pendingIndexes[$index]);
                 }
             }
-            if ($pending !== []) {
-                usleep(10000);
-            }
-        }
 
-        foreach ($pending as $job) {
-            if (function_exists('posix_kill')) {
-                posix_kill($job['pid'], SIGKILL);
+            $mustStop = $pendingIndexes === [] || microtime(true) >= $deadline || $cancellation->isCancelled();
+            if (!$mustStop) {
+                return;
             }
-            $status = 0;
-            pcntl_waitpid($job['pid'], $status);
-        }
+
+            foreach ($pendingIndexes as $index => $_) {
+                if (function_exists('posix_kill')) {
+                    posix_kill($jobs[$index]['pid'], SIGKILL);
+                }
+                $status = 0;
+                pcntl_waitpid($jobs[$index]['pid'], $status);
+            }
+
+            $settled = true;
+            $loop->cancelTimer($timer);
+            $deferred->resolve(array_map($collect, $jobs));
+        });
+
+        return $deferred->promise();
     }
 
     /**
      * Read + decode + delete a forked child's result file, reconstruct its
      * ToolResult, and fire $onToolCall in THIS (the parent) process when the
-     * underlying callback succeeded - see executeToolsParallel()'s docblock
+     * underlying callback succeeded - see forkToolCalls()'s docblock
      * for why that firing can't happen in the child itself. A missing or
      * unreadable file (the child never wrote one - killed by the timeout
      * above, or crashed) is reported as a timeout error rather than silently
@@ -587,36 +730,27 @@ final class Chat implements Model
         return $result;
     }
 
+    /**
+     * Returns the full literal frame every call. This used to compute its
+     * own cell-level diff (via {@see Buffer}/{@see DiffEncoder}) and return
+     * only the changed bytes - but Program (see `bin/sugarcrush`, a plain
+     * `new Program(Bootstrap::chat(), ...)`) ALSO diffs whatever a Model's
+     * view() returns, line-by-line, against the previous call's return
+     * value (candy-core's own Renderer::render(), which every other Model
+     * in this framework relies on for exactly this). Chat's pre-diffed
+     * cursor-jump escape bytes were never literal display text, so
+     * Program's Renderer was diffing one diff's raw bytes against the
+     * previous diff's raw bytes as if they were screen content - any time
+     * the two differed (i.e. almost always) that produced cursor
+     * placement that had no relationship to the actual frame, which is
+     * what made typed input / replies appear to land in the wrong row
+     * (e.g. the status bar) once a conversation grew past a single frame.
+     * Program's Renderer already does correct, safe diffing on real text;
+     * doing it a second time here was redundant at best.
+     */
     public function view(): string
     {
-        // Get actual terminal dimensions from TUI Renderer (queries Tty for real size).
-        $size = TuiRenderer::getTerminalSize();
-        $width = $size['cols'];
-        $fullOutput = Renderer::render($this);
-        $height = substr_count($fullOutput, "\n") + 1;
-
-        // Detect terminal resize: reset diff state on width or height change.
-        if ($this->previousFrame !== null
-            && ($this->prevWidth !== null && $this->prevWidth !== $width)
-        ) {
-            $this->previousFrame = null;
-        }
-        $this->prevWidth = $width;
-        $this->prevHeight = $height;
-
-        // First frame or dimension change: emit full output and store as previousFrame.
-        if ($this->previousFrame === null) {
-            $this->previousFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-            return $fullOutput;
-        }
-
-        // Subsequent frames with same dimensions: compute diff and emit delta.
-        $currentFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-        $ops = $currentFrame->diff($this->previousFrame);
-        $this->previousFrame = $currentFrame;
-
-        $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        return Renderer::render($this);
     }
 
     public function backend(): Backend
@@ -799,15 +933,12 @@ final class Chat implements Model
     /**
      * Merge changes into a new Chat instance.
      *
-     * Only constructor-promoted properties are passed through to avoid
-     * leaking private fields like $previousFrame, $prevHeight, etc.
+     * Only constructor-promoted properties are passed through.
      *
      * @param array<string, mixed> $changes
      */
     private function mutate(array $changes): static
     {
-        // Only include constructor-promoted properties (excludes backend,
-        // previousFrame, prevHeight, prevWidth, width)
         $constructorProps = [
             'history' => $this->history,
             'inputBuf' => $this->inputBuf,
@@ -830,6 +961,9 @@ final class Chat implements Model
             'themeName' => $this->themeName,
             'palette' => $this->palette,
             'onConfigChange' => $this->onConfigChange,
+            'generation' => $this->generation,
+            'inFlightCancellation' => $this->inFlightCancellation,
+            'lastEscapeAt' => $this->lastEscapeAt,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -908,6 +1042,12 @@ final class Chat implements Model
         $text = trim($this->inputBuf);
         if ($text === '') {
             return [$this, null];
+        }
+
+        // Handle /exit (and /quit) - same as Ctrl+C / the palette's Exit
+        // action, just reachable without a modifier key.
+        if ($text === '/exit' || $text === '/quit') {
+            return [$this, Cmd::quit()];
         }
 
         // Handle /compact command to manually compact chat history
@@ -993,10 +1133,14 @@ final class Chat implements Model
             $newTurnMessages[] = $this->contextReminderMessage($tokenCount);
         }
 
+        $generation = $this->generation + 1;
+        $cancellation = new CancellationToken();
         $next = $this->mutate([
             'history' => [...$this->history, ...$newTurnMessages],
             'inputBuf' => '',
             'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
             'lastActivityAt' => new \DateTimeImmutable(),
         ]);
 
@@ -1017,16 +1161,28 @@ final class Chat implements Model
             }
         }
 
-        $backend = $this->backend;
+        return [$next, $this->scheduleBackendCompletion($next, $cancellation, $generation)];
+    }
+
+    /**
+     * Build the Cmd that calls the backend with $next's history and
+     * dispatches its outcome as an {@see AssistantMsg} stamped with
+     * $generation - the common tail {@see submit()} and the tool-call
+     * pipeline (see {@see beginToolCalls()}/{@see ToolResultsMsg}) both
+     * schedule once their turn's history is settled.
+     */
+    private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation): \Closure
+    {
+        $backend = $next->backend;
         $history = $next->history;
-        $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken): PromiseInterface {
-            return $backend->completeAsync($history, $onToken)->then(
-                static fn(Message $msg): ?Msg => new AssistantMsg($msg),
-                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')),
+        $onToken = $next->streaming ? $next->onToken : null;
+
+        return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
+            return $backend->completeAsync($history, $onToken, $cancellation)->then(
+                static fn(Message $msg): ?Msg => new AssistantMsg($msg, $generation),
+                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_'), $generation),
             );
         });
-        return [$next, $cmd];
     }
 
     /**
@@ -2310,6 +2466,34 @@ final class Chat implements Model
         return substr($s, 0, $i);
     }
 
+    /**
+     * Trim the trailing "word" off $s: any trailing whitespace, then any
+     * trailing run of non-whitespace. Mirrors the usual terminal-wide
+     * Ctrl+W convention. Multi-byte-safe by operating on whole characters
+     * via preg (UTF-8 mode) rather than raw byte indices.
+     */
+    private static function dropLastWord(string $s): string
+    {
+        return (string) preg_replace('/[^\s]+\s*$/u', '', $s);
+    }
+
+    /**
+     * The content of the most recently sent (Role::User) message in
+     * history, or '' if none exists yet - backs the shell-history-style Up
+     * arrow recall in update(). Only ever looks at real user turns, so it
+     * skips over assistant replies and tool-result/system messages.
+     */
+    private function lastUserMessageContent(): string
+    {
+        for ($i = count($this->history) - 1; $i >= 0; $i--) {
+            if ($this->history[$i]->role === Role::User) {
+                return $this->history[$i]->content;
+            }
+        }
+
+        return '';
+    }
+
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
         return null;
@@ -2417,47 +2601,6 @@ final class Chat implements Model
         ]);
 
         return [$next, null];
-    }
-
-    /**
-     * Build a Buffer from a multi-line string output.
-     *
-     * All cells are created with null style — the diff algorithm will
-     * still work correctly for detecting changed character positions.
-     *
-     * Uses Buffer::fromGrid() for O(w×h) bulk construction instead of
-     * O(w²×h) repeated withCellAt() calls, and mb_str_split per row
-     * instead of per-cell mb_substr for O(w) vs O(w²) string ops.
-     *
-     * @param string $output Multi-line string from Renderer::render()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
-     */
-    private function bufferFromOutput(string $output, int $width, int $height): Buffer
-    {
-        $lines = \explode("\n", $output);
-        $grid = [];
-
-        for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
-            // mb_str_split is O(width) per row vs mb_substr called width×height times (O(width²×height))
-            $chars = \mb_str_split($line, 1) ?: [];
-            for ($col = 0; $col < $width; $col++) {
-                $char = $chars[$col] ?? ' ';
-                $grid[] = Cell::new($char, null, null, 1);
-            }
-        }
-
-        return Buffer::fromGrid($width, $height, $grid);
-    }
-
-    /**
-     * Reset the previous-frame buffer, forcing the next view to emit
-     * a full frame (used on window resize or cursor-position-lost events).
-     */
-    public function resetPreviousFrame(): void
-    {
-        $this->previousFrame = null;
     }
 
     /**

@@ -15,6 +15,21 @@ use SugarCraft\Core\Msg;
  */
 final class AssistantMsg implements Msg
 {
-    public function __construct(public readonly Message $message)
-    {}
+    /**
+     * @param int|null $generation Stamped with {@see Chat}'s generation
+     *                              counter at the moment its Cmd was built,
+     *                              so a reply that arrives after the user
+     *                              aborted (or superseded) that turn can be
+     *                              recognised as stale and dropped instead
+     *                              of appearing after a later turn's own
+     *                              messages. Null (the default) always
+     *                              passes the staleness check - used by
+     *                              every call site that doesn't track
+     *                              generations (tests constructing this
+     *                              directly).
+     */
+    public function __construct(
+        public readonly Message $message,
+        public readonly ?int $generation = null,
+    ) {}
 }

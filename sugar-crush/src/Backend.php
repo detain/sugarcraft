@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use React\Promise\PromiseInterface;
+use SugarCraft\Crush\Backend\CancellationToken;
 
 /**
  * Pluggable assistant backend.
@@ -44,6 +45,15 @@ interface Backend
      *
      * Default implementation wraps the sync {@see complete()} call
      * in a promise. Backends with native async can override.
+     *
+     * @param CancellationToken|null $cancellation Optional shared cancel
+     *                                flag; a backend whose work can outlive
+     *                                the caller's interest in it (e.g. one
+     *                                that forks off a real request) SHOULD
+     *                                poll {@see CancellationToken::isCancelled()}
+     *                                and reject early instead of running to
+     *                                completion. A backend that can't act on
+     *                                this may ignore it.
      */
-    public function completeAsync(array $history, callable $onToken = null): PromiseInterface;
+    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface;
 }

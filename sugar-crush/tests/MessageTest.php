@@ -83,4 +83,45 @@ final class MessageTest extends TestCase
         $wire = $m->toWire();
         $this->assertArrayNotHasKey('attachments', $wire);
     }
+
+    public function testToolRunningSetsPendingToolCallIdToTheCallId(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls'], 'call_1');
+        $m = Message::toolRunning($call);
+
+        $this->assertSame('call_1', $m->pendingToolCallId);
+        $this->assertSame(Role::System, $m->role);
+        $this->assertStringContainsString('bash', $m->content);
+    }
+
+    public function testToolRunningFallsBackToNameWhenCallHasNoId(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', []);
+        $m = Message::toolRunning($call);
+
+        $this->assertSame('bash', $m->pendingToolCallId);
+    }
+
+    public function testWithToolResultsClearsPendingToolCallId(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', [], 'call_1');
+        $result = \SugarCraft\Crush\ToolResult::ok('bash', 'ok', 'call_1');
+
+        $m = Message::toolRunning($call)->withToolResults([$result]);
+
+        $this->assertNull($m->pendingToolCallId);
+        $this->assertSame([$result], $m->toolResults);
+    }
+
+    public function testDescribeToolCallFormatsArguments(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls -la']);
+        $this->assertSame('bash(command: "ls -la")', Message::describeToolCall($call));
+    }
+
+    public function testDescribeToolCallWithNoArguments(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', []);
+        $this->assertSame('bash()', Message::describeToolCall($call));
+    }
 }

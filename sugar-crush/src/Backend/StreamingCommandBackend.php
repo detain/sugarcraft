@@ -144,18 +144,27 @@ final class StreamingCommandBackend implements Backend
         return Message::assistant(trim($body));
     }
 
-    public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface
     {
-        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
-            Loop::futureTick(function () use ($history, $onToken, $resolve, $reject): void {
+        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $cancellation): void {
+            Loop::futureTick(function () use ($history, $onToken, $resolve, $reject, $cancellation): void {
+                if ($cancellation?->isCancelled() === true) {
+                    $reject(new \RuntimeException('Request cancelled'));
+
+                    return;
+                }
                 try {
                     $message = $this->complete($history, $onToken);
                     $resolve($message);
                 } catch (\Throwable $e) {
                     $reject($e);
-                } finally {
-                    Loop::stop();
                 }
+                // No Loop::stop() here - this backend is constructed by
+                // callers (see this class's own "Usage" docblock) and driven
+                // by Program's own long-lived Loop::run(); stopping the
+                // shared global loop after a single completion would kill
+                // the whole program's render/input loop the moment the
+                // first reply arrived, not just this one async call.
             });
         });
     }
