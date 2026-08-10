@@ -513,7 +513,10 @@ final class ChatTest extends TestCase
         }
 
         $isRaw = static function (string $path): bool {
-            $out = trim((string) shell_exec('stty -F ' . escapeshellarg($path) . ' -a 2>/dev/null'));
+            // BSD/macOS stty takes the device flag lowercase (-f); GNU/Linux
+            // coreutils uses uppercase (-F).
+            $flag = PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
+            $out = trim((string) shell_exec('stty ' . $flag . ' ' . escapeshellarg($path) . ' -a 2>/dev/null'));
 
             return str_contains($out, '-icanon') && str_contains($out, '-echo');
         };

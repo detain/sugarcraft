@@ -59,7 +59,12 @@ final class ForkedChildTest extends TestCase
 
     private function isRaw(string $slavePath): bool
     {
-        $out = trim((string) shell_exec('stty -F ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
+        // BSD/macOS stty takes the device flag lowercase (-f); GNU/Linux
+        // coreutils uses uppercase (-F). Using the wrong one silently
+        // fails (empty output), which reads as "not raw" regardless of
+        // the real terminal state.
+        $flag = PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
+        $out = trim((string) shell_exec('stty ' . $flag . ' ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
 
         // A raw-mode tty reports "-icanon -echo" (leading dash = disabled);
         // cooked mode reports the bare "icanon echo" flags instead.
