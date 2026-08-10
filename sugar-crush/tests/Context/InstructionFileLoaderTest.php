@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Crush\Context\Tests;
+namespace SugarCraft\Crush\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Context\InstructionFileLoader;

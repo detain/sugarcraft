@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Crush\Tui\Tests;
+namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Tui\AgentOutputPane;
