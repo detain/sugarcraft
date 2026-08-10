@@ -156,24 +156,10 @@ final class Chat implements Model
                 return $this->handleToolCalls($message);
             }
 
-            return [new self(
-                history: [...$this->history, $message],
-                inputBuf: $this->inputBuf,
-                inFlight: false,
-                backend: $this->backend,
-                streaming: $this->streaming,
-                onToken: $this->onToken,
-                tools: $this->tools,
-                onToolCall: $this->onToolCall,
-                agentPoolConfig: $this->agentPoolConfig,
-                effectivePool: $this->effectivePool,
-                workflowEngine: $this->workflowEngine,
-                agentManager: $this->agentManager,
-                memoryStore: $this->memoryStore,
-                sessionStore: $this->sessionStore,
-                currentSessionId: $this->currentSessionId,
-                lastActivityAt: $this->lastActivityAt,
-            ), null];
+            return [$this->mutate([
+                'history' => [...$this->history, $message],
+                'inFlight' => false,
+            ]), null];
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -313,24 +299,10 @@ final class Chat implements Model
         }
 
         // Schedule follow-up backend call with updated history
-        $next = new self(
-            history: $newHistory,
-            inputBuf: $this->inputBuf,
-            inFlight: true,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => $newHistory,
+            'inFlight' => true,
+        ]);
 
         $backend = $this->backend;
         $history = $next->history;
@@ -816,46 +788,14 @@ final class Chat implements Model
 
     public function withStreaming(bool $enable): self
     {
-        return new self(
-            history: $this->history,
-            inputBuf: $this->inputBuf,
-            inFlight: $this->inFlight,
-            backend: $this->backend,
-            streaming: $enable,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        return $this->mutate(['streaming' => $enable]);
     }
 
     public function onToken(callable $callback): self
     {
-        return new self(
-            history: $this->history,
-            inputBuf: $this->inputBuf,
-            inFlight: $this->inFlight,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        return $this->mutate([
+            'onToken' => $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
+        ]);
     }
 
     /**
@@ -869,24 +809,7 @@ final class Chat implements Model
     {
         $tools = $this->tools;
         $tools[$name] = $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback);
-        return new self(
-            history: $this->history,
-            inputBuf: $this->inputBuf,
-            inFlight: $this->inFlight,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        return $this->mutate(['tools' => $tools]);
     }
 
     /**
@@ -897,24 +820,9 @@ final class Chat implements Model
      */
     public function onToolCall(callable $callback): self
     {
-        return new self(
-            history: $this->history,
-            inputBuf: $this->inputBuf,
-            inFlight: $this->inFlight,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        return $this->mutate([
+            'onToolCall' => $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
+        ]);
     }
 
     public function isStreaming(): bool
@@ -1018,24 +926,12 @@ final class Chat implements Model
             $newTurnMessages[] = $this->contextReminderMessage($tokenCount);
         }
 
-        $next = new self(
-            history: [...$this->history, ...$newTurnMessages],
-            inputBuf: '',
-            inFlight: true,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: new \DateTimeImmutable(),
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, ...$newTurnMessages],
+            'inputBuf' => '',
+            'inFlight' => true,
+            'lastActivityAt' => new \DateTimeImmutable(),
+        ]);
 
         // Auto-save checkpoint before processing prompt
         if ($this->sessionStore !== null && $this->currentSessionId !== null && method_exists($this->sessionStore, 'saveCheckpoint')) {
@@ -1105,24 +1001,11 @@ final class Chat implements Model
      */
     private function workflowResponse(string $inputText, string $response): array
     {
-        $next = new self(
-            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
         return [$next, null];
     }
 
@@ -1342,24 +1225,11 @@ final class Chat implements Model
      */
     private function shareResponse(string $inputBuf, string $response): array
     {
-        $next = new self(
-            history: [...$this->history, Message::user($inputBuf), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
         return [$next, null];
     }
 
@@ -1413,24 +1283,11 @@ final class Chat implements Model
      */
     private function agentsResponse(string $inputBuf, string $response): array
     {
-        $next = new self(
-            history: [...$this->history, Message::user($inputBuf), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
         return [$next, null];
     }
 
@@ -1474,24 +1331,11 @@ final class Chat implements Model
             $response = "Context compacted: was {$originalCount} messages, now {$newCount} messages (saved {$savingsPercentage}% tokens)";
         }
 
-        $next = new self(
-            history: [...$compactedHistory, Message::user($inputText), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$compactedHistory, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
 
         return [$next, null];
     }
@@ -1563,24 +1407,11 @@ final class Chat implements Model
      */
     private function sessionResponse(string $inputText, string $response): array
     {
-        $next = new self(
-            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
         return [$next, null];
     }
 
@@ -1616,24 +1447,12 @@ final class Chat implements Model
         }
 
         // Return Chat with same state but currentSessionId updated to the new branch
-        $next = new self(
-            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $newSessionId ?? $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+            'currentSessionId' => $newSessionId ?? $this->currentSessionId,
+        ]);
 
         return [$next, null];
     }
@@ -1744,24 +1563,11 @@ final class Chat implements Model
             $response = "Rewound {$rewoundCount} messages to checkpoint {$targetIndex}. Use /branch to save this state before continuing.";
 
             // Return Chat with restored state
-            $next = new self(
-                history: [...$messages, Message::user($inputText), Message::assistant($response)],
-                inputBuf: '',
-                inFlight: false,
-                backend: $this->backend,
-                streaming: $this->streaming,
-                onToken: $this->onToken,
-                tools: $this->tools,
-                onToolCall: $this->onToolCall,
-                agentPoolConfig: $this->agentPoolConfig,
-                effectivePool: $this->effectivePool,
-                workflowEngine: $this->workflowEngine,
-                agentManager: $this->agentManager,
-                memoryStore: $this->memoryStore,
-                sessionStore: $this->sessionStore,
-                currentSessionId: $this->currentSessionId,
-                lastActivityAt: $this->lastActivityAt,
-            );
+            $next = $this->mutate([
+                'history' => [...$messages, Message::user($inputText), Message::assistant($response)],
+                'inputBuf' => '',
+                'inFlight' => false,
+            ]);
 
             return [$next, null];
         } catch (\Throwable $e) {
@@ -1807,24 +1613,11 @@ final class Chat implements Model
      */
     private function memoryResponse(string $inputText, string $response): array
     {
-        $next = new self(
-            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
         return [$next, null];
     }
 
@@ -2205,24 +1998,12 @@ final class Chat implements Model
             . "~{$tokenCount} estimated tokens. Run /compact to shrink the context "
             . "before continuing, or send another message to proceed anyway.";
 
-        $next = new self(
-            history: [...$this->history, Message::user($inputText), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: new \DateTimeImmutable(),
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+            'lastActivityAt' => new \DateTimeImmutable(),
+        ]);
 
         return [$next, null];
     }
@@ -2295,24 +2076,11 @@ final class Chat implements Model
      */
     private function mcpAuthResponse(string $inputBuf, string $response): array
     {
-        $next = new self(
-            history: [...$this->history, Message::user($inputBuf), Message::assistant($response)],
-            inputBuf: '',
-            inFlight: false,
-            backend: $this->backend,
-            streaming: $this->streaming,
-            onToken: $this->onToken,
-            tools: $this->tools,
-            onToolCall: $this->onToolCall,
-            agentPoolConfig: $this->agentPoolConfig,
-            effectivePool: $this->effectivePool,
-            workflowEngine: $this->workflowEngine,
-            agentManager: $this->agentManager,
-            memoryStore: $this->memoryStore,
-            sessionStore: $this->sessionStore,
-            currentSessionId: $this->currentSessionId,
-            lastActivityAt: $this->lastActivityAt,
-        );
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
         return [$next, null];
     }
 }
