@@ -302,4 +302,26 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString("\x1b[1m", $out, 'legitimate Shine SGR must survive');
         $this->assertStringContainsString('bold', $out);
     }
+
+    public function testSlashMenuNotRenderedForPlainInput(): void
+    {
+        $out = Renderer::render($this->chat(buf: 'hello'));
+        $this->assertStringNotContainsString('▸', $out);
+    }
+
+    public function testSlashMenuRendersFilteredMatchesWithSelectionMarker(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/re'));
+
+        $this->assertStringContainsString('▸ /rename', $out);
+        $this->assertStringContainsString('/rewind', $out);
+        // The unselected row is present but not marked as selected.
+        $this->assertStringNotContainsString('▸ /rewind', $out);
+    }
+
+    public function testSlashMenuNotRenderedOnceArgumentsStart(): void
+    {
+        $out = Renderer::render($this->chat(buf: '/rename foo'));
+        $this->assertStringNotContainsString('▸', $out);
+    }
 }

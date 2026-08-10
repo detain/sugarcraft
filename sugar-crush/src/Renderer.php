@@ -151,6 +151,7 @@ final class Renderer
     {
         $body = self::renderHistory($chat->history);
         $input = self::renderInput($chat);
+        $slashMenu = self::renderSlashMenu($chat);
         $status = $chat->inFlight ? '⠴ thinking…' : 'Enter to send · Esc / ^C to quit';
 
         $shell = Style::new()
@@ -158,7 +159,7 @@ final class Renderer
             ->padding(1, 2)
             ->render($body);
 
-        $frame = $shell . "\n" . $input . "\n" . $status;
+        $frame = $shell . "\n" . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '') . "\n" . $status;
 
         $tabStrip = self::renderSessionTabStrip($chat);
         if ($tabStrip !== '') {
@@ -279,6 +280,35 @@ final class Renderer
             };
         }
         return implode("\n\n", $blocks);
+    }
+
+    /**
+     * The "/" popup: {@see Chat::slashMenuMatches()}'s filtered command list,
+     * with the highlighted row ({@see Chat::slashMenuIndex()}) marked with
+     * "▸" and rendered brighter than the rest. Returns '' (nothing rendered)
+     * once matches is empty - inputBuf isn't slash-prefixed, already
+     * contains a space, or the typed prefix matches no command.
+     */
+    private static function renderSlashMenu(Chat $chat): string
+    {
+        $matches = $chat->slashMenuMatches();
+        if ($matches === []) {
+            return '';
+        }
+
+        $selected = $chat->slashMenuIndex();
+        $lines = [];
+        foreach ($matches as $index => $spec) {
+            $label = '/' . $spec->name . ' — ' . $spec->description;
+            $lines[] = $index === $selected
+                ? Ansi::sgr(1, 36) . '▸ ' . $label . Ansi::reset()
+                : Ansi::sgr(Ansi::FAINT) . '  ' . $label . Ansi::reset();
+        }
+
+        return Style::new()
+            ->border(Border::normal())
+            ->padding(0, 1)
+            ->render(implode("\n", $lines));
     }
 
     private static function renderInput(Chat $chat): string
