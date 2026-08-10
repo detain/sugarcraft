@@ -8,6 +8,8 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Veil\Position;
+use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
@@ -172,6 +174,15 @@ final class Renderer
             $frame .= "\n" . $agentView;
         }
 
+        $palette = self::renderPalette($chat, $theme);
+        if ($palette !== '') {
+            // A fresh Veil per render call (rather than one persisted on
+            // Chat) means its own frame-diffing never kicks in - fine here,
+            // since Chat already does its own diffing at a higher level in
+            // view() and double-diffing isn't needed for correctness.
+            $frame = Veil::new()->withBackdrop(50)->composite($palette, $frame, Position::CENTER, Position::CENTER);
+        }
+
         return $frame;
     }
 
@@ -310,6 +321,46 @@ final class Renderer
             ->border(Border::normal())
             ->borderForeground($theme->border)
             ->padding(0, 1)
+            ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The Ctrl+P command palette's content, composited over the whole frame
+     * by {@see render()} via {@see Veil}. Returns '' (nothing composited)
+     * when the palette is closed - see {@see Chat::palette()}.
+     */
+    private static function renderPalette(Chat $chat, Theme $theme): string
+    {
+        $palette = $chat->palette();
+        if ($palette === null) {
+            return '';
+        }
+
+        $matches = $chat->paletteMatches();
+        $selected = $palette->selectedIndex;
+
+        $lines = ['🔍 ' . Sanitize::untrusted($palette->query) . '█', ''];
+        if ($matches === []) {
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render('No matches');
+        } else {
+            foreach ($matches as $index => $label) {
+                $lines[] = $index === $selected
+                    ? Style::new()->foreground($theme->userLabel)->bold()->render('▸ ' . $label)
+                    : Style::new()->foreground($theme->systemLabel)->render('  ' . $label);
+            }
+        }
+
+        $title = match ($palette->mode) {
+            'providers' => ' switch model ',
+            'themes' => ' switch theme ',
+            default => ' command palette ',
+        };
+
+        return Style::new()
+            ->border(Border::rounded()->withTitle($title))
+            ->borderForeground($theme->border)
+            ->padding(1, 2)
+            ->width(50)
             ->render(implode("\n", $lines));
     }
 

@@ -20,6 +20,9 @@ use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
+use SugarCraft\Crush\Palette\PaletteAction;
+use SugarCraft\Crush\Palette\PaletteState;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
@@ -136,6 +139,8 @@ final class Chat implements Model
         private readonly int $slashMenuIndex = 0,
         /** Active {@see Theme} name (see {@see theme()}); resolved lazily, not stored as an object. */
         private readonly string $themeName = 'dark',
+        /** Ctrl+P command palette state; null when closed. */
+        private readonly ?PaletteState $palette = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -179,6 +184,13 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // While the Ctrl+P command palette is open, every keystroke feeds
+        // its own query/navigation/dispatch handling instead of inputBuf/the
+        // "/" popup - see handlePaletteKey()'s docblock.
+        if ($this->palette !== null) {
+            return $this->handlePaletteKey($msg);
+        }
+
         return match (true) {
             $msg->type === KeyType::Enter
                 => $this->slashMenuShouldIntercept()
@@ -191,6 +203,11 @@ final class Chat implements Model
                 => [$this->moveSlashMenuSelection(-1), null],
             $msg->type === KeyType::Down && $this->slashMenuMatches() !== []
                 => [$this->moveSlashMenuSelection(1), null],
+            // Ctrl+P opens the command palette. Checked before the generic
+            // Char arm below, or the literal "p" would be typed into the
+            // input buffer instead - same reasoning as Ctrl+A just below.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
+                => [$this->mutate(['palette' => PaletteState::root()]), null],
             // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
             // already uses for typed input (handleAgentsCommand()), giving
             // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
@@ -598,6 +615,11 @@ final class Chat implements Model
         return $this->backend;
     }
 
+    public function withBackend(Backend $backend): self
+    {
+        return $this->mutate(['backend' => $backend]);
+    }
+
     /**
      * Get the agent pool config, if set.
      */
@@ -797,6 +819,7 @@ final class Chat implements Model
             'lastActivityAt' => $this->lastActivityAt,
             'slashMenuIndex' => $this->slashMenuIndex,
             'themeName' => $this->themeName,
+            'palette' => $this->palette,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -2025,6 +2048,222 @@ final class Chat implements Model
         $index = min($this->slashMenuIndex, count($matches) - 1);
 
         return [$this->withInputBuf('/' . $matches[$index]->name . ' '), null];
+    }
+
+    /**
+     * The Ctrl+P command palette's current mode/query/selection, or null
+     * when closed.
+     */
+    public function palette(): ?PaletteState
+    {
+        return $this->palette;
+    }
+
+    /**
+     * Fuzzy-filtered (or full, when the query is empty) item labels for the
+     * palette's current mode, ranked best-match-first via {@see
+     * SmithWatermanMatcher} - the same matcher `phlix-console-client`'s own
+     * Ctrl+P palette already uses for the same purpose. Returns [] when the
+     * palette is closed.
+     *
+     * @return list<string>
+     */
+    public function paletteMatches(): array
+    {
+        if ($this->palette === null) {
+            return [];
+        }
+
+        $items = $this->paletteItemLabels();
+        $query = $this->palette->query;
+        if ($query === '' || $items === []) {
+            return $items;
+        }
+
+        $results = (new SmithWatermanMatcher())->matchAll($query, $items);
+
+        return array_map(static fn($result) => $result->haystack, $results);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function paletteItemLabels(): array
+    {
+        return match ($this->palette?->mode) {
+            'providers' => array_keys(\SugarCraft\Crush\Cli\Bootstrap::availableProviders()),
+            'themes' => Theme::names(),
+            default => array_map(static fn(PaletteAction $a): string => $a->label(), PaletteAction::all()),
+        };
+    }
+
+    /**
+     * Route every keystroke while the palette is open - see the Ctrl+P
+     * bind in update()'s main match(true) block for how it gets opened.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handlePaletteKey(KeyMsg $msg): array
+    {
+        return match (true) {
+            $msg->type === KeyType::Escape
+                => [$this->mutate(['palette' => null]), null],
+            $msg->type === KeyType::Up
+                => [$this->movePaletteSelection(-1), null],
+            $msg->type === KeyType::Down
+                => [$this->movePaletteSelection(1), null],
+            // A second Ctrl+P closes the palette rather than opening it
+            // again on top of itself.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
+                => [$this->mutate(['palette' => null]), null],
+            $msg->type === KeyType::Char
+                => [$this->withPaletteQuery($this->palette->query . $msg->rune), null],
+            $msg->type === KeyType::Space
+                => [$this->withPaletteQuery($this->palette->query . ' '), null],
+            $msg->type === KeyType::Backspace
+                => [$this->withPaletteQuery(self::dropLast($this->palette->query)), null],
+            $msg->type === KeyType::Enter
+                => $this->runSelectedPaletteAction(),
+            default => [$this, null],
+        };
+    }
+
+    private function withPaletteQuery(string $query): self
+    {
+        return $this->mutate(['palette' => $this->palette->withQuery($query)]);
+    }
+
+    private function movePaletteSelection(int $direction): self
+    {
+        $count = count($this->paletteMatches());
+        if ($count === 0) {
+            return $this;
+        }
+
+        $next = ($this->palette->selectedIndex + $direction + $count) % $count;
+
+        return $this->mutate(['palette' => $this->palette->withSelectedIndex($next)]);
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function runSelectedPaletteAction(): array
+    {
+        $matches = $this->paletteMatches();
+        if ($matches === []) {
+            return [$this->mutate(['palette' => null]), null];
+        }
+
+        $label = $matches[min($this->palette->selectedIndex, count($matches) - 1)];
+
+        return match ($this->palette->mode) {
+            'providers' => $this->selectPaletteProvider($label),
+            'themes' => $this->selectPaletteTheme($label),
+            default => $this->runRootPaletteAction($label),
+        };
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function runRootPaletteAction(string $label): array
+    {
+        $action = PaletteAction::byLabel($label);
+        if ($action === null) {
+            return [$this->mutate(['palette' => null]), null];
+        }
+
+        // SwitchModel/SwitchTheme transition to a second-level list rather
+        // than closing the palette - every other action below closes it
+        // first (mutate() default-preserves $this->palette, so the handler
+        // it delegates to must run against the ALREADY-closed copy, not
+        // $this, or its own internal mutate() call would silently reopen
+        // the palette in its result).
+        if ($action === PaletteAction::SwitchModel) {
+            return [$this->mutate(['palette' => $this->palette->withMode('providers')]), null];
+        }
+        if ($action === PaletteAction::SwitchTheme) {
+            return [$this->mutate(['palette' => $this->palette->withMode('themes')]), null];
+        }
+
+        $closed = $this->mutate(['palette' => null]);
+
+        return match ($action) {
+            PaletteAction::ShareSession => $closed->handleShareCommand('/share'),
+            PaletteAction::SwitchAgent => $closed->handleAgentsCommand('/agents'),
+            PaletteAction::SwitchSession => $closed->handleSessionsCommand('/sessions'),
+            PaletteAction::ToggleMcp => $closed->handleMcpAuthCommand('mcp auth list'),
+            PaletteAction::NewSession => $closed->handlePaletteNewSession(),
+            PaletteAction::OpenDocs => $closed->handlePaletteOpenDocs(),
+            PaletteAction::Exit => [$closed, Cmd::quit()],
+            default => [$closed, null],
+        };
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function selectPaletteProvider(string $name): array
+    {
+        try {
+            $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor($name);
+        } catch (\Throwable $e) {
+            return [$this->mutate([
+                'palette' => null,
+                'history' => [...$this->history, Message::assistant("Could not switch to provider '{$name}': {$e->getMessage()}")],
+            ]), null];
+        }
+
+        return [$this->mutate([
+            'palette' => null,
+            'backend' => $backend,
+            'history' => [...$this->history, Message::assistant("Switched to provider '{$name}'.")],
+        ]), null];
+    }
+
+    private function selectPaletteTheme(string $name): array
+    {
+        return [$this->mutate([
+            'palette' => null,
+            'themeName' => $name,
+            'history' => [...$this->history, Message::assistant("Theme set to '{$name}'.")],
+        ]), null];
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handlePaletteNewSession(): array
+    {
+        if ($this->sessionStore === null) {
+            return [$this->mutate([
+                'history' => [...$this->history, Message::assistant('Session store not configured. Set a SessionStore to create sessions.')],
+            ]), null];
+        }
+
+        // Chat's Backend interface exposes no provider/model name to record
+        // here - 'sugarcrush'/'unknown' are honest placeholders, not
+        // fabricated telemetry (same disclosed-gap pattern as Renderer's own
+        // R20 docblock elsewhere in this class).
+        $sessionId = bin2hex(random_bytes(8));
+        $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
+
+        return [$this->mutate([
+            'history' => [...$this->history, Message::assistant("New session created: {$sessionId}")],
+            'currentSessionId' => $sessionId,
+        ]), null];
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handlePaletteOpenDocs(): array
+    {
+        $message = 'Docs: see README.md in this project, or '
+            . 'https://sugarcraft.github.io/lib/sugar-crush.html';
+
+        return [$this->mutate(['history' => [...$this->history, Message::assistant($message)]]), null];
     }
 
     /**
