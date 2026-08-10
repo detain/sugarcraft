@@ -134,6 +134,8 @@ final class Chat implements Model
         private readonly ?\DateTimeImmutable $lastActivityAt = null,
         /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
         private readonly int $slashMenuIndex = 0,
+        /** Active {@see Theme} name (see {@see theme()}); resolved lazily, not stored as an object. */
+        private readonly string $themeName = 'dark',
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -794,6 +796,7 @@ final class Chat implements Model
             'currentSessionId' => $this->currentSessionId,
             'lastActivityAt' => $this->lastActivityAt,
             'slashMenuIndex' => $this->slashMenuIndex,
+            'themeName' => $this->themeName,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -904,6 +907,11 @@ final class Chat implements Model
         // Handle /sessions command (R20: list + render the real SessionPicker)
         if (str_starts_with($text, '/sessions')) {
             return $this->handleSessionsCommand($text);
+        }
+
+        // Handle /theme command (switch color theme)
+        if (str_starts_with($text, '/theme')) {
+            return $this->handleThemeCommand($text);
         }
 
         // Handle mcp auth commands
@@ -1945,6 +1953,21 @@ final class Chat implements Model
     }
 
     /**
+     * The active color theme, resolved from the stored name on every call -
+     * cheap (a handful of Color/Theme factory calls, no I/O) and keeps
+     * Chat's own stored state to a plain string rather than an object.
+     */
+    public function theme(): Theme
+    {
+        return Theme::byName($this->themeName);
+    }
+
+    public function withThemeName(string $themeName): self
+    {
+        return $this->mutate(['themeName' => $themeName]);
+    }
+
+    /**
      * Whether Enter should complete the "/" popup's selection instead of
      * submitting. False whenever the popup isn't showing, AND false when
      * the name typed so far is already an exact, complete match for one of
@@ -2163,6 +2186,39 @@ final class Chat implements Model
      *
      * @return array{0:Chat,1:?\Closure}
      */
+    /**
+     * Handle /theme command — switch the active color theme, or show the
+     * current one + available choices when called with no argument.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleThemeCommand(string $inputText): array
+    {
+        $afterTheme = trim(ltrim(substr($inputText, 6))); // after "/theme"
+
+        if ($afterTheme === '') {
+            return $this->sessionResponse(
+                $inputText,
+                "Current theme: {$this->themeName}. Available: " . implode(', ', Theme::names()) . '.'
+            );
+        }
+
+        try {
+            Theme::byName($afterTheme);
+        } catch (\InvalidArgumentException $e) {
+            return $this->sessionResponse($inputText, $e->getMessage());
+        }
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText), Message::assistant("Theme set to '{$afterTheme}'.")],
+            'inputBuf' => '',
+            'inFlight' => false,
+            'themeName' => $afterTheme,
+        ]);
+
+        return [$next, null];
+    }
+
     private function handleMcpAuthCommand(string $inputBuf): array
     {
         // Parse sub-command and args after "mcp auth"

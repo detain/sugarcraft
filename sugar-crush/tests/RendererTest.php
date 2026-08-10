@@ -324,4 +324,12 @@ final class RendererTest extends TestCase
         $out = Renderer::render($this->chat(buf: '/rename foo'));
         $this->assertStringNotContainsString('▸', $out);
     }
+
+    public function testDifferentThemesProduceDifferentOutput(): void
+    {
+        $dark = new Chat(history: [Message::user('hi')], themeName: 'dark');
+        $dracula = new Chat(history: [Message::user('hi')], themeName: 'dracula');
+
+        $this->assertNotSame(Renderer::render($dark), Renderer::render($dracula));
+    }
 }

@@ -556,6 +556,34 @@ final class ChatTest extends TestCase
         $this->assertSame($chat, $next);
     }
 
+    public function testThemeCommandWithNoArgsShowsCurrentAndAvailable(): void
+    {
+        $chat = new Chat(inputBuf: '/theme');
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('dark', $next->theme()->name);
+        $this->assertStringContainsString('dark', $next->history[1]->content);
+        $this->assertStringContainsString('dracula', $next->history[1]->content);
+    }
+
+    public function testThemeCommandSwitchesTheme(): void
+    {
+        $chat = new Chat(inputBuf: '/theme dracula');
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('dracula', $next->theme()->name);
+        $this->assertSame('', $next->inputBuf);
+    }
+
+    public function testThemeCommandWithUnknownNameLeavesThemeUnchanged(): void
+    {
+        $chat = new Chat(inputBuf: '/theme nonexistent');
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('dark', $next->theme()->name);
+        $this->assertStringContainsString('Unknown theme', $next->history[1]->content);
+    }
+
     public function testToolsAndCallbacksPreservedOnInput(): void
     {
         $chat = new Chat(tools: ['test' => static fn() => 'result']);
