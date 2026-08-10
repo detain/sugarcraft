@@ -43,7 +43,11 @@ final readonly class CustomProvider implements ProviderInterface
         }
 
         $client = new Client([
-            'base_uri' => $baseUrl,
+            // See SglangProvider::openAiCompatible() - Guzzle's RFC 3986
+            // relative-resolution drops a base_uri path suffix (e.g. '/v1')
+            // when the request URI starts with '/'. Trailing-slash the base
+            // and keep request paths below relative (no leading '/').
+            'base_uri' => rtrim($baseUrl, '/') . '/',
             'headers' => $headers,
         ]);
 
@@ -127,7 +131,7 @@ final readonly class CustomProvider implements ProviderInterface
         }
 
         try {
-            $response = $this->httpClient->post('/chat/completions', [
+            $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
             ]);
 
@@ -165,7 +169,7 @@ final readonly class CustomProvider implements ProviderInterface
         }
 
         try {
-            $response = $this->httpClient->post('/chat/completions', [
+            $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
                 'stream' => true,
             ]);
@@ -211,7 +215,7 @@ final readonly class CustomProvider implements ProviderInterface
     public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
     {
         try {
-            $response = $this->httpClient->post('/embeddings', [
+            $response = $this->httpClient->post('embeddings', [
                 'json' => [
                     'model' => $request->model,
                     'input' => $request->input,
