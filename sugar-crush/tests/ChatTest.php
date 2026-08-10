@@ -584,6 +584,132 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('Unknown theme', $next->history[1]->content);
     }
 
+    public function testCtrlPOpensPaletteAndEscapeCloses(): void
+    {
+        $chat = new Chat();
+        $this->assertNull($chat->palette());
+
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($opened->palette());
+        $this->assertSame('root', $opened->palette()->mode);
+
+        [$closed] = $opened->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($closed->palette());
+    }
+
+    public function testSecondCtrlPClosesAnOpenPalette(): void
+    {
+        $chat = new Chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        [$closed] = $opened->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($closed->palette());
+    }
+
+    public function testPaletteQueryFiltersActionsAndResetsSelection(): void
+    {
+        $chat = new Chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        [$down] = $opened->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(1, $down->palette()->selectedIndex);
+
+        $current = $down;
+        foreach (str_split('theme') as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
+        }
+
+        $this->assertSame(0, $current->palette()->selectedIndex);
+        $this->assertSame('Switch theme', $current->paletteMatches()[0]);
+    }
+
+    public function testPaletteUpDownWraps(): void
+    {
+        $chat = new Chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $count = count($opened->paletteMatches());
+
+        [$up] = $opened->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame($count - 1, $up->palette()->selectedIndex);
+    }
+
+    public function testPaletteEnterOnExitQuits(): void
+    {
+        $chat = new Chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $exitIndex = array_search('Exit', $opened->paletteMatches(), true);
+        $current = $opened;
+        for ($i = 0; $i < $exitIndex; $i++) {
+            [$current] = $current->update(new KeyMsg(KeyType::Down, ''));
+        }
+
+        [$next, $cmd] = $current->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($next->palette());
+        $this->assertNotNull($cmd);
+    }
+
+    public function testPaletteEnterOnShareSessionDispatchesRealHandlerAndCloses(): void
+    {
+        $chat = new Chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $current = $opened;
+        foreach (str_split('share') as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        $this->assertSame('Share session', $current->paletteMatches()[0]);
+
+        // A bare Chat() has no session store, so the real ShareCommand
+        // handler this dispatches through legitimately has nothing to
+        // share and reports an error via the print-closure path rather
+        // than history - the point proven here is that dispatch reached
+        // the real handler (and closed the palette) at all, not that it
+        // necessarily succeeded.
+        [$next, $cmd] = $current->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($next->palette());
+        $this->assertNotNull($cmd);
+    }
+
+    public function testPaletteSwitchModelTransitionsToProviderListWithoutClosing(): void
+    {
+        $chat = new Chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $current = $opened;
+        foreach (str_split('switch model') as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch === ' ' ? ' ' : $ch));
+        }
+        $this->assertSame('Switch model', $current->paletteMatches()[0]);
+
+        [$next] = $current->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($next->palette());
+        $this->assertSame('providers', $next->palette()->mode);
+        $this->assertContains('sglang', $next->paletteMatches());
+    }
+
+    public function testPaletteSwitchThemeTransitionsAndSelectingAThemeAppliesIt(): void
+    {
+        $chat = new Chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $current = $opened;
+        foreach (str_split('switch theme') as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch === ' ' ? ' ' : $ch));
+        }
+        [$inThemes] = $current->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame('themes', $inThemes->palette()->mode);
+        $this->assertSame(['dark', 'light', 'dracula', 'tokyoNight', 'ansi'], $inThemes->paletteMatches());
+
+        $draculaIndex = array_search('dracula', $inThemes->paletteMatches(), true);
+        $current = $inThemes;
+        for ($i = 0; $i < $draculaIndex; $i++) {
+            [$current] = $current->update(new KeyMsg(KeyType::Down, ''));
+        }
+
+        [$next] = $current->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($next->palette());
+        $this->assertSame('dracula', $next->theme()->name);
+    }
+
     public function testToolsAndCallbacksPreservedOnInput(): void
     {
         $chat = new Chat(tools: ['test' => static fn() => 'result']);

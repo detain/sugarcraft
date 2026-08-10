@@ -332,4 +332,21 @@ final class RendererTest extends TestCase
 
         $this->assertNotSame(Renderer::render($dark), Renderer::render($dracula));
     }
+
+    public function testPaletteNotRenderedWhenClosed(): void
+    {
+        $out = Renderer::render($this->chat());
+        $this->assertStringNotContainsString('New session', $out);
+    }
+
+    public function testPaletteRendersOverACompositedBackdropWhenOpen(): void
+    {
+        $chat = $this->chat();
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $out = Renderer::render($opened);
+
+        $this->assertStringContainsString('New session', $out);
+        $this->assertStringContainsString('Exit', $out);
+    }
 }

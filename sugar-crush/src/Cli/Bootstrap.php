@@ -71,21 +71,11 @@ final class Bootstrap
     public static function backend(?string $root = null): Backend
     {
         $root ??= getcwd();
-        $tools = self::tools($root);
-
-        $hooks = new HookManager(new HookRegistry());
-        $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
 
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
             try {
-                $factory = new ProviderFactory();
-                $provider = $factory->create($factory->defaultConfig($providerType));
-                $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerType)['model'] ?? 'gpt-4o');
-
-                return (new EngineBackend($provider, (string) $model))
-                    ->withTools($tools)
-                    ->withHooks($hooks);
+                return self::backendFor($providerType, $root);
             } catch (\Throwable $e) {
                 fwrite(STDERR, "sugarcrush: provider '{$providerType}' unavailable ({$e->getMessage()}); falling back to echo.\n");
             }
@@ -97,8 +87,81 @@ final class Bootstrap
         }
 
         return (new EngineBackend(new EchoProvider(), 'echo'))
-            ->withTools($tools)
-            ->withHooks($hooks);
+            ->withTools(self::tools($root))
+            ->withHooks(self::hooks());
+    }
+
+    /**
+     * Build a Backend for an explicit, already-known provider name - the
+     * same construction backend() does for $SUGARCRUSH_PROVIDER, extracted
+     * so a caller (the Ctrl+P palette's Switch Model action) can request a
+     * specific provider directly rather than only via an env var read once
+     * at process start.
+     *
+     * Unlike backend()'s env-var path, which catches failures and falls
+     * back to Echo with a warning, this throws on an invalid/unreachable
+     * $providerName - a caller here asked for this provider explicitly and
+     * should see the real error rather than silently getting something else.
+     *
+     * @throws \Throwable
+     */
+    public static function backendFor(string $providerName, ?string $root = null): Backend
+    {
+        $root ??= getcwd();
+        $factory = new ProviderFactory();
+        $provider = $factory->create($factory->defaultConfig($providerName));
+        $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
+
+        return (new EngineBackend($provider, (string) $model))
+            ->withTools(self::tools($root))
+            ->withHooks(self::hooks());
+    }
+
+    /**
+     * Every provider name currently selectable, for the Ctrl+P palette's
+     * Switch Model action: the built-in provider types {@see
+     * ProviderFactory::availableTypes()} knows about, plus every name
+     * declared under 'providers' in the project's
+     * .sugar-crush/config.dev.json (e.g. 'dev-sglang') - reusing
+     * ProviderFactory's existing lookups rather than adding new discovery
+     * logic. Silently returns just the built-ins when that config file is
+     * absent/unreadable/invalid, matching {@see
+     * ProviderFactory::projectProviderConfig()}'s own tolerance for a
+     * missing project config.
+     *
+     * @return array<string, array<string, mixed>> name => defaultConfig()'s config array
+     */
+    public static function availableProviders(): array
+    {
+        $factory = new ProviderFactory();
+        $providers = [];
+
+        foreach ($factory->availableTypes() as $type) {
+            $providers[$type] = $factory->defaultConfig($type);
+        }
+
+        $configPath = ProviderFactory::defaultConfigPath();
+        if (is_file($configPath)) {
+            $contents = file_get_contents($configPath);
+            $data = $contents !== false ? json_decode($contents, true) : null;
+            if (is_array($data) && is_array($data['providers'] ?? null)) {
+                foreach ($data['providers'] as $name => $config) {
+                    if (is_string($name) && is_array($config)) {
+                        $providers[$name] = $config;
+                    }
+                }
+            }
+        }
+
+        return $providers;
+    }
+
+    private static function hooks(): HookManager
+    {
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
+
+        return $hooks;
     }
 
     /**
