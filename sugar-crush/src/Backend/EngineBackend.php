@@ -335,7 +335,7 @@ final class EngineBackend implements Backend
 
         fwrite($childSocket, $payload);
         fclose($childSocket);
-        exit(0);
+        \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
     }
 
     /**

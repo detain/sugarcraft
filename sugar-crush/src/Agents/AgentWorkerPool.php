@@ -310,7 +310,7 @@ final class AgentWorkerPool
             // Child process: execute and store result, then exit
             $result = $executor->execute($agent, $request);
             $this->storeResult($agent->id, $result);
-            exit(0);
+            \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
         }
 
         // Parent: store a PID marker so waitForCompletion can find this agent

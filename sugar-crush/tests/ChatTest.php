@@ -478,6 +478,73 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('total 0', $next->history[2]->content);
     }
 
+    /**
+     * Regression for the same bug as EngineBackendTest::
+     * testCompleteAsyncDoesNotResetTheRealTerminalsRawMode() - forkToolCalls()
+     * forks a real child per tool call (see that method's docblock). If the
+     * child ends with a plain exit(), its inherited Tty's destructor fires
+     * during PHP's shutdown sequence and restores the ORIGINAL (cooked/echo)
+     * termios onto the REAL, shared terminal device. Drives a real tool call
+     * through the real fork path against a real PTY and asserts the
+     * terminal is still in raw mode afterwards.
+     */
+    public function testToolExecutionDoesNotResetTheRealTerminalsRawMode(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('candy-pty is POSIX-only.');
+        }
+        if (!\extension_loaded('ffi')) {
+            $this->markTestSkipped('ext-ffi is required for termios FFI.');
+        }
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl is required to exercise the real fork path.');
+        }
+        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
+            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
+        }
+
+        $pair = (new \SugarCraft\Pty\Posix\PosixPtySystem())->open();
+        $slavePath = $pair->slave()->path();
+
+        $libc = \SugarCraft\Pty\Libc::lib();
+        $slaveFd = $libc->open($slavePath, 0x0002 /* O_RDWR */);
+        if ($slaveFd < 0) {
+            $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
+        }
+
+        $isRaw = static function (string $path): bool {
+            $out = trim((string) shell_exec('stty -F ' . escapeshellarg($path) . ' -a 2>/dev/null'));
+
+            return str_contains($out, '-icanon') && str_contains($out, '-echo');
+        };
+
+        // Injected Termios test seam - see EngineBackendTest's matching test
+        // for why this bypasses candy-core's (int)-cast fd resolution.
+        $tty = new \SugarCraft\Core\Util\Tty(null, new \SugarCraft\Pty\Posix\PosixTermios($slaveFd));
+        $tty->enableRawMode();
+
+        try {
+            $this->assertTrue($isRaw($slavePath), 'setup: raw mode must be active before running the tool');
+
+            $toolCall = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls -la']);
+            $message = Message::assistant('Running command...')->withToolCalls([$toolCall]);
+            $chat = (new Chat(history: [Message::user('list files')], inFlight: true))
+                ->registerTool('bash', static fn(array $args) => 'total 0');
+
+            [, $next] = $this->runToolCallsToCompletion($chat, $message);
+
+            $this->assertTrue($next->inFlight, 'sanity: the tool call must actually have run');
+            $this->assertTrue(
+                $isRaw($slavePath),
+                'the real terminal was knocked out of raw mode by forkToolCalls()\'s forked child exiting',
+            );
+        } finally {
+            $tty->restore();
+            $libc->close($slaveFd);
+            $pair->master()->close();
+        }
+    }
+
     public function testToolResultAddedToHistoryAfterExecution(): void
     {
         $toolCall = new \SugarCraft\Crush\ToolCall('echo', ['text' => 'hello']);

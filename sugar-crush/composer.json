@@ -40,7 +40,6 @@
         "aws/aws-sdk-php": "^3.300",
         "google/cloud-ai-platform": "^1.0",
         "symfony/yaml": "^7.4",
-        "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-shine": "dev-master",
@@ -49,7 +48,8 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
-        "mockery/mockery": "^1.6"
+        "mockery/mockery": "^1.6",
+        "sugarcraft/candy-pty": "dev-master"
     },
     "suggest": {
         "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom)."
