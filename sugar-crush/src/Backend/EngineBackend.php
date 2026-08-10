@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Backend;
 
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
@@ -36,6 +38,15 @@ use SugarCraft\Crush\Runtime;
  */
 final class EngineBackend implements Backend
 {
+    /**
+     * Hard wall-clock ceiling on a forked completion child in
+     * {@see completeAsync()} - a hung provider (or a tool stuck in the
+     * agentic loop) is SIGKILLed and reported as a timeout rather than
+     * blocking that turn forever. Generous: up to {@see $maxSteps} model
+     * round-trips can legitimately take a while.
+     */
+    private const COMPLETE_TIMEOUT_SECONDS = 120;
+
     /**
      * @param array<int, \SugarCraft\Crush\Tools\Tool>   $tools
      * @param array<int, \SugarCraft\Crush\Skills\Skill> $skills
@@ -167,15 +178,163 @@ final class EngineBackend implements Backend
         return Message::assistant($content);
     }
 
+    /**
+     * Runs {@see complete()} - one or more real, blocking provider HTTP calls
+     * plus any tool execution the agentic loop drives - in a forked child so
+     * the caller's event loop (the TUI's render/input loop) never blocks on
+     * it. Without this, `Program`'s `futureTick()`-scheduled Cmd execution
+     * calls this method's factory closure directly on the loop: the old
+     * implementation wrapped a *synchronous* {@see complete()} call in a
+     * `React\Promise\Promise` whose executor runs immediately (that's the
+     * Promise constructor's contract, not deferred), so the "async" call was
+     * really just a blocking one wearing a Promise - the whole terminal
+     * froze (no spinner animation, no keystrokes, no Ctrl+C) for the full
+     * duration of every provider round-trip. Forking moves that blocking
+     * work off the loop entirely; the parent only watches a non-blocking
+     * socket via {@see Loop::addReadStream()} for the result, so rendering
+     * and input keep flowing while a turn is in flight - same rationale as
+     * {@see \SugarCraft\Crush\Chat::executeToolsParallel()}'s R14b fork fix,
+     * extended here to cross the ReactPHP loop boundary rather than just
+     * fanning out sibling tool calls.
+     */
     public function completeAsync(array $history, ?callable $onToken = null): PromiseInterface
     {
-        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
-            try {
-                $resolve($this->complete($history, $onToken));
-            } catch (\Throwable $e) {
-                $reject($e);
+        $deferred = new Deferred();
+
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            return $this->completeAsyncBlocking($history, $onToken, $deferred);
+        }
+
+        $sockets = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($sockets === false) {
+            return $this->completeAsyncBlocking($history, $onToken, $deferred);
+        }
+
+        [$parentSocket, $childSocket] = $sockets;
+        $pid = pcntl_fork();
+
+        if ($pid === -1) {
+            fclose($parentSocket);
+            fclose($childSocket);
+
+            return $this->completeAsyncBlocking($history, $onToken, $deferred);
+        }
+
+        if ($pid === 0) {
+            $this->runCompleteInChild($childSocket, $history);
+        }
+
+        fclose($childSocket);
+        stream_set_blocking($parentSocket, false);
+
+        $loop = Loop::get();
+        $buffer = '';
+        $settled = false;
+
+        $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, function () use ($loop, $parentSocket, $pid, $deferred, &$settled): void {
+            if ($settled) {
+                return;
             }
+            $settled = true;
+            $loop->removeReadStream($parentSocket);
+            fclose($parentSocket);
+            if (function_exists('posix_kill')) {
+                posix_kill($pid, SIGKILL);
+            }
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+            $deferred->reject(new \RuntimeException('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's'));
         });
+
+        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$settled, $deferred, $loop, $pid, $onToken, $timeoutTimer): void {
+            $chunk = fread($stream, 65536);
+            if ($chunk === '' || $chunk === false) {
+                $loop->removeReadStream($stream);
+                fclose($stream);
+                $loop->cancelTimer($timeoutTimer);
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+
+                $status = 0;
+                pcntl_waitpid($pid, $status);
+                $this->settleFromChildPayload($buffer, $deferred, $onToken);
+
+                return;
+            }
+            $buffer .= $chunk;
+        });
+
+        return $deferred->promise();
+    }
+
+    /**
+     * The forked child's half of {@see completeAsync()}: run the real
+     * (blocking) engine loop in isolation, write its outcome back over the
+     * socket as a single serialized payload, and exit. Never returns.
+     *
+     * @param array<int, Message> $history
+     */
+    private function runCompleteInChild($childSocket, array $history): never
+    {
+        try {
+            $message = $this->complete($history, null);
+            $payload = serialize(['ok' => true, 'content' => $message->content]);
+        } catch (\Throwable $e) {
+            $payload = serialize(['ok' => false, 'error' => $e->getMessage()]);
+        }
+
+        fwrite($childSocket, $payload);
+        fclose($childSocket);
+        exit(0);
+    }
+
+    /**
+     * Decode the forked child's payload and settle $deferred - resolving
+     * with the real content (firing $onToken once, matching {@see complete()}'s
+     * own one-shot-at-the-end semantics) or rejecting with its error message.
+     * A missing/undecodable payload (child crashed before writing anything)
+     * is reported as a failure rather than silently resolving empty.
+     */
+    private function settleFromChildPayload(string $buffer, Deferred $deferred, ?callable $onToken): void
+    {
+        $data = $buffer !== '' ? @unserialize($buffer, ['allowed_classes' => false]) : false;
+        if (!is_array($data)) {
+            $deferred->reject(new \RuntimeException('Provider worker process exited without a result'));
+
+            return;
+        }
+
+        if (($data['ok'] ?? false) !== true) {
+            $deferred->reject(new \RuntimeException((string) ($data['error'] ?? 'Provider worker process failed')));
+
+            return;
+        }
+
+        $content = (string) ($data['content'] ?? '');
+        if ($onToken !== null && $content !== '') {
+            $onToken($content);
+        }
+
+        $deferred->resolve(Message::assistant($content));
+    }
+
+    /**
+     * Fallback for an environment without pcntl/stream_socket_pair support:
+     * the old synchronous-under-a-Promise behaviour. Blocks the caller for
+     * the duration of the request instead of freezing the whole program
+     * silently - a real capability gap, not a bug to hide.
+     */
+    private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred): PromiseInterface
+    {
+        try {
+            $deferred->resolve($this->complete($history, $onToken));
+        } catch (\Throwable $e) {
+            $deferred->reject($e);
+        }
+
+        return $deferred->promise();
     }
 
     /**

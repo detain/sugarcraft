@@ -46,13 +46,105 @@ final class EngineBackendTest extends TestCase
         $promise = $backend->completeAsync([Message::user('ping')]);
         $this->assertInstanceOf(PromiseInterface::class, $promise);
 
-        $resolved = null;
-        $promise->then(static function (Message $m) use (&$resolved): void {
-            $resolved = $m;
-        });
+        // completeAsync() forks the real work off-process (see its docblock)
+        // and only settles once the parent's ReactPHP loop observes the
+        // child's result over a socket - genuinely async, so the promise is
+        // NOT resolved synchronously right after then() the way every other
+        // Backend's fake-async completeAsync() is. Pump the loop until it
+        // settles instead of asserting immediately.
+        $resolved = $this->awaitPromise($promise);
 
         $this->assertInstanceOf(Message::class, $resolved);
         $this->assertStringContainsString('> ping', $resolved->content);
+    }
+
+    public function testCompleteAsyncDoesNotBlockTheEventLoop(): void
+    {
+        // The whole point of the fork-based rewrite: while a completion is
+        // in flight, the caller's event loop must keep ticking (spinner
+        // animation, keystroke handling) instead of freezing until the
+        // provider call returns. Prove it by counting periodic-timer fires
+        // that happen concurrently with an in-flight completeAsync() call.
+        $provider = new class implements ProviderInterface {
+            public function name(): string { return 'slow'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return false; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                usleep(150_000);
+
+                return new CompleteResponse(content: 'slow reply');
+            }
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+
+        $backend = EngineBackend::new($provider, 'slow');
+        $loop = \React\EventLoop\Loop::get();
+
+        $ticks = 0;
+        $timer = $loop->addPeriodicTimer(0.02, static function () use (&$ticks): void {
+            $ticks++;
+        });
+
+        $resolved = $this->awaitPromise($backend->completeAsync([Message::user('go')]));
+
+        $loop->cancelTimer($timer);
+
+        $this->assertInstanceOf(Message::class, $resolved);
+        $this->assertSame('slow reply', $resolved->content);
+        $this->assertGreaterThan(
+            0,
+            $ticks,
+            'periodic timer never fired while completeAsync() was in flight - the event loop was blocked',
+        );
+    }
+
+    /**
+     * Pump the real ReactPHP loop until $promise settles, returning its
+     * resolved value (or rethrowing its rejection). Bounded so a genuine
+     * regression (the promise never settling) fails the test instead of
+     * hanging the suite forever.
+     */
+    private function awaitPromise(PromiseInterface $promise): mixed
+    {
+        // A single run()/stop() pair, exactly like Program::run()'s own
+        // one-shot $this->loop->run() - NOT a repeated add-short-timer-then-
+        // run() polling dance. That looks equivalent but isn't: re-entering
+        // run() over and over via a freshly re-added timer raced against a
+        // forked child's real (curl/HTTPS) I/O and could miss the socket's
+        // readability edge between iterations, hanging the test. A single
+        // long-lived run(), stopped only once by whichever settles first
+        // (the promise's own callback or the safety timer), matches how the
+        // real Program drives this and is what completeAsync() is verified
+        // against.
+        $loop = \React\EventLoop\Loop::get();
+        $settled = false;
+        $value = null;
+        $error = null;
+
+        $promise->then(
+            function ($v) use (&$settled, &$value, $loop): void { $settled = true; $value = $v; $loop->stop(); },
+            function (\Throwable $e) use (&$settled, &$error, $loop): void { $settled = true; $error = $e; $loop->stop(); },
+        );
+
+        $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+        $loop->run();
+        $loop->cancelTimer($safety);
+
+        if (!$settled) {
+            $this->fail('Promise did not settle within the test timeout');
+        }
+
+        if ($error !== null) {
+            throw $error;
+        }
+
+        return $value;
     }
 
     public function testAgenticLoopExecutesToolThenAnswers(): void
