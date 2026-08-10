@@ -2337,6 +2337,19 @@ final class Chat implements Model
     }
 
     /**
+     * Current history's estimated size as a fraction of {@see
+     * REMINDER_TOKEN_LIMIT} - the same fixed proxy limit already used by
+     * the 70% reminder tier and idle-compaction check - for the status
+     * bar's context-usage indicator ({@see Renderer}). Not clamped to
+     * [0, 1]: a value above 1.0 is real signal (context has grown past the
+     * reminder threshold and compaction hasn't run yet), not a bug to hide.
+     */
+    public function contextUsagePercent(): float
+    {
+        return $this->estimateTokenCount($this->history) / self::REMINDER_TOKEN_LIMIT;
+    }
+
+    /**
      * Build the soft, non-blocking reminder message surfaced once
      * {@see ContextCompactor::shouldSendReminder()} reports the conversation
      * has crossed its 70%-of-budget tier. Rendered with a distinct

@@ -333,6 +333,24 @@ final class RendererTest extends TestCase
         $this->assertNotSame(Renderer::render($dark), Renderer::render($dracula));
     }
 
+    public function testShortConversationIsPaddedToFullTerminalHeight(): void
+    {
+        $rows = \SugarCraft\Crush\Tui\Renderer::getTerminalSize()['rows'];
+        $out = Renderer::render($this->chat());
+
+        $this->assertCount($rows, explode("\n", $out));
+    }
+
+    public function testStatusBarIsTheLastLineAndIncludesContextPercent(): void
+    {
+        $out = Renderer::render($this->chat());
+        $lines = explode("\n", $out);
+        $lastLine = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
+
+        $this->assertMatchesRegularExpression('/\d+% context/', $lastLine);
+        $this->assertStringContainsString('Enter to send', $lastLine);
+    }
+
     public function testPaletteNotRenderedWhenClosed(): void
     {
         $out = Renderer::render($this->chat());

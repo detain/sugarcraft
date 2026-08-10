@@ -154,7 +154,6 @@ final class Renderer
         $body = self::renderHistory($chat->history, $theme);
         $input = self::renderInput($chat, $theme);
         $slashMenu = self::renderSlashMenu($chat, $theme);
-        $status = $chat->inFlight ? '⠴ thinking…' : 'Enter to send · Esc / ^C to quit';
 
         $shell = Style::new()
             ->border(Border::rounded())
@@ -162,17 +161,33 @@ final class Renderer
             ->padding(1, 2)
             ->render($body);
 
-        $frame = $shell . "\n" . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '') . "\n" . $status;
+        $content = $shell . "\n" . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
 
         $tabStrip = self::renderSessionTabStrip($chat);
         if ($tabStrip !== '') {
-            $frame = $tabStrip . "\n" . $frame;
+            $content = $tabStrip . "\n" . $content;
         }
 
         $agentView = self::renderAgentView($chat);
         if ($agentView !== '') {
-            $frame .= "\n" . $agentView;
+            $content .= "\n" . $agentView;
         }
+
+        // Full-window usage: pad short conversations (the common empty/new-
+        // session case) with blank lines so the status bar - one row,
+        // always the true LAST line - lands at the bottom of the actual
+        // terminal instead of leaving most of the window blank below a
+        // small box. A conversation already taller than the window is left
+        // exactly as-is (no truncation of real scrollback content) and
+        // keeps scrolling the way it always has.
+        $rows = TuiRenderer::getTerminalSize()['rows'];
+        $contentLines = explode("\n", $content);
+        $targetRows = max(count($contentLines), $rows - 1);
+        while (count($contentLines) < $targetRows) {
+            $contentLines[] = '';
+        }
+
+        $frame = implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
 
         $palette = self::renderPalette($chat, $theme);
         if ($palette !== '') {
@@ -184,6 +199,20 @@ final class Renderer
         }
 
         return $frame;
+    }
+
+    /**
+     * The bottom status bar: the existing processing indicator/help text,
+     * plus a context-usage percentage from {@see Chat::contextUsagePercent()}
+     * so a user can see how full the context window is without running
+     * /compact speculatively.
+     */
+    private static function renderStatusBar(Chat $chat): string
+    {
+        $processing = $chat->inFlight ? '⠴ thinking…' : 'Enter to send · Esc / ^C to quit';
+        $percent = (int) round($chat->contextUsagePercent() * 100);
+
+        return "{$percent}% context · {$processing}";
     }
 
     /**
