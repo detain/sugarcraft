@@ -224,13 +224,118 @@
 					"git add .": "deny",
 					"git add --all*": "deny",
 					"git commit --amend*": "deny",
-					"git push --force*": "deny",
-					"git push -f*": "deny",
+					"git push*": "deny",
+					"git push origin master": "allow",
 					"git reset*": "deny",
-					"git checkout --*": "deny",
+					"git checkout*": "deny",
+					"git switch*": "deny",
+					"git branch*": "deny",
+					"git branch --show-current": "allow",
+					"git worktree*": "deny",
 					"git clean*": "deny",
 					"rm -rf*": "deny"
 				}
+			}
+		},
+		"sugarcrush-feat-orchestrator": {
+			"permission": {
+				"edit": "deny",
+				"write": "allow",
+				"bash": {
+					"*": "deny"
+				},
+				"task": "allow",
+				"plan_read": "allow",
+				"todoread": "deny"
+			}
+		},
+		"sugarcrush-feat-phase-lead": {
+			"permission": {
+				"edit": "deny",
+				"write": "allow",
+				"bash": {
+					"*": "deny"
+				},
+				"task": "allow",
+				"plan_read": "allow",
+				"todoread": "deny"
+			}
+		},
+		"sugarcrush-feat-reviewer": {
+			"temperature": 0.1,
+			"permission": {
+				"edit": "deny",
+				"write": "deny",
+				"task": "deny",
+				"bash": {
+					"*": "deny",
+					"git status*": "allow",
+					"git diff*": "allow",
+					"git log*": "allow",
+					"git show*": "allow",
+					"git blame*": "allow",
+					"git rev-parse*": "allow",
+					"git branch*": "allow",
+					"grep *": "allow",
+					"rg *": "allow",
+					"composer *": "allow",
+					"php *": "allow"
+				},
+				"plan_read": "allow",
+				"delegation_read": "allow",
+				"delegation_list": "allow"
+			}
+		},
+		"sugarcrush-feat-committer": {
+			"permission": {
+				"edit": "deny",
+				"write": "deny",
+				"bash": {
+					"*": "allow",
+					"git add -A": "deny",
+					"git add .": "deny",
+					"git add --all*": "deny",
+					"git commit --amend*": "deny",
+					"git push*": "deny",
+					"git push origin master": "allow",
+					"git reset*": "deny",
+					"git checkout*": "deny",
+					"git switch*": "deny",
+					"git branch*": "deny",
+					"git branch --show-current": "allow",
+					"git worktree*": "deny",
+					"git clean*": "deny",
+					"rm -rf*": "deny"
+				}
+			}
+		},
+		"sugarcrush-feat-final-reviewer": {
+			"temperature": 0.1,
+			"permission": {
+				"edit": "deny",
+				"write": {
+					"*": "deny",
+					".sugar-crush-build/feat-audit-log.json": "allow"
+				},
+				"task": "deny",
+				"bash": {
+					"*": "deny",
+					"git status*": "allow",
+					"git diff*": "allow",
+					"git log*": "allow",
+					"git show*": "allow",
+					"git blame*": "allow",
+					"git rev-parse*": "allow",
+					"git branch*": "allow",
+					"find /tmp*": "allow",
+					"grep *": "allow",
+					"rg *": "allow",
+					"composer *": "allow",
+					"php *": "allow"
+				},
+				"plan_read": "allow",
+				"delegation_read": "allow",
+				"delegation_list": "allow"
 			}
 		}
 	},

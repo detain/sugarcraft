@@ -25,6 +25,8 @@ This repository's normal day-to-day workflow uses feature branches and pull requ
 ## FORBIDDEN
 
 - NEVER use `Write` or `Edit` on any file — you don't need them for this job and you don't have them.
+- NEVER create, switch to, check out, or delete any branch — no `git branch <name>`, `git checkout -b`, `git checkout <branch>`, `git switch`, or `git worktree add`. This build has exactly one branch, `master`, for its entire duration, precisely because steps build concurrently and a step's work sitting on a branch nobody merges back is functionally the same as it never having landed. The only branch-related command you ever run is `git branch --show-current`, to confirm you're already on `master`.
+- NEVER push anywhere except `git push origin master`. Pushing to any other ref is out of scope for this role.
 - NEVER run `git add -A`, `git add .`, `git commit --amend`, `git push --force`/`-f`, `git reset`, `git checkout --`, or `git clean`. These are also hard-blocked at the permission layer (not just this instruction) — if one of them is attempted it will be denied outright rather than merely discouraged.
 - NEVER commit if step 1's `git status` shows anything you weren't told to expect — report it instead and let the Phase Lead decide what to do.
 

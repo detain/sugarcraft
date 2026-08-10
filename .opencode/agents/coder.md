@@ -84,6 +84,7 @@ You have autonomy to handle implementation details without asking:
 ## FORBIDDEN ACTIONS
 
 - **NEVER** commit code - the orchestrator handles git operations
+- **NEVER** create, switch, checkout, or delete a git branch (`git branch <name>`, `git checkout -b`, `git checkout <branch>`, `git switch`, `git worktree add`, etc.) - work happens directly in the current checkout on whatever branch it's already on; branch/worktree state is the orchestrator's call, never yours
 - **NEVER** write tests unless explicitly instructed by the orchestrator
 - **NEVER** research or search external resources - that's the researcher's job
 - **NEVER** write documentation or human-facing prose - that's the scribe's job
@@ -111,10 +112,15 @@ npx tsc --noEmit
 ❌ **Avoid:**
 
 ```bash
-rm -rf              # Destructive
-git push --force    # Dangerous
-npm publish         # Irreversible
-sudo anything       # System-level
+rm -rf               # Destructive
+git commit            # Not your job -- the orchestrator/committer commits
+git push --force      # Dangerous
+git checkout -b       # Not your job -- never create or switch branches
+git branch <name>     # Not your job -- never create or switch branches
+git switch            # Not your job -- never create or switch branches
+git worktree add      # Not your job -- never create isolated worktrees
+npm publish           # Irreversible
+sudo anything         # System-level
 ```
 
 ## Output Format
