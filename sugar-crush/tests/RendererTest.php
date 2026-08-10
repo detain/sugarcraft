@@ -399,17 +399,23 @@ final class RendererTest extends TestCase
      * terminal, every row past the terminal's last line gets clamped there
      * by the terminal itself, so distinct rows (input box, status bar,
      * newest history) all collide on that one physical row. The frame must
-     * never exceed $rows lines regardless of how long history gets.
+     * never exceed $rows lines regardless of how long history gets. Forces
+     * an explicit small size via WindowSizeMsg rather than the ambient
+     * terminal's real size, both for a deterministic assertion and to
+     * prove Renderer reads Chat::rows() (see that method's docblock for why
+     * a second, independent terminal-size query is exactly the bug this
+     * guards against).
      */
     public function testLongConversationIsClippedToFullTerminalHeightNotLeftUnbounded(): void
     {
-        $rows = \SugarCraft\Crush\Tui\Renderer::getTerminalSize()['rows'];
+        $rows = 20;
         $history = [];
         for ($i = 0; $i < $rows * 3; $i++) {
             $history[] = Message::user("message {$i}");
         }
+        [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, $rows));
 
-        $out = Renderer::render($this->chat($history));
+        $out = Renderer::render($sized);
 
         $this->assertCount($rows, explode("\n", $out));
     }
@@ -421,16 +427,32 @@ final class RendererTest extends TestCase
      */
     public function testLongConversationClippingKeepsTheMostRecentMessageVisible(): void
     {
-        $rows = \SugarCraft\Crush\Tui\Renderer::getTerminalSize()['rows'];
+        $rows = 20;
         $history = [];
         for ($i = 0; $i < $rows * 3; $i++) {
             $history[] = Message::user("message {$i}");
         }
+        [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, $rows));
 
-        $out = Renderer::render($this->chat($history));
+        $out = Renderer::render($sized);
 
         $this->assertStringContainsString('message ' . ($rows * 3 - 1), $out);
         $this->assertStringNotContainsString('message 0' . "\n", $out);
+    }
+
+    /**
+     * Renderer must lay out against whatever size Chat was actually told
+     * via WindowSizeMsg, not the ambient terminal TuiRenderer::getTerminalSize()
+     * happens to detect for THIS process - the two can legitimately differ
+     * (a resize Chat received but the cached detector never re-queried).
+     */
+    public function testRendererUsesChatsWindowSizeNotAmbientTerminalDetection(): void
+    {
+        [$sized] = $this->chat()->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 15));
+
+        $out = Renderer::render($sized);
+
+        $this->assertCount(15, explode("\n", $out));
     }
 
     public function testStatusBarIsTheLastLineAndIncludesContextPercent(): void

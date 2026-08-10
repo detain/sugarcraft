@@ -254,10 +254,36 @@ final class ChatTest extends TestCase
     public function testNonKeyMessageIgnored(): void
     {
         $chat = new Chat(inputBuf: 'x');
-        $msg = new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24);
+        $msg = new \SugarCraft\Core\Msg\EnvMsg([]);
         [$next, $cmd] = $chat->update($msg);
         $this->assertSame($chat, $next);
         $this->assertNull($cmd);
+    }
+
+    /**
+     * Regression: Renderer must lay out against the REAL terminal size, and
+     * the only place that size can come from without silently disagreeing
+     * with what candy-core's Program itself detected (or missing a live
+     * resize) is the WindowSizeMsg Program dispatches at startup and on
+     * every SIGWINCH - see rows()/cols()'s docblock.
+     */
+    public function testWindowSizeMsgUpdatesRowsAndCols(): void
+    {
+        $chat = new Chat();
+        [$next, $cmd] = $chat->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+
+        $this->assertNull($cmd);
+        $this->assertSame(24, $next->rows());
+        $this->assertSame(80, $next->cols());
+    }
+
+    public function testRowsAndColsFallBackToTerminalDetectionBeforeAnyWindowSizeMsg(): void
+    {
+        $chat = new Chat();
+        $this->assertSame(
+            \SugarCraft\Crush\Tui\Renderer::getTerminalSize()['rows'],
+            $chat->rows(),
+        );
     }
 
     public function testWithStreamingEnablesFlag(): void

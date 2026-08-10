@@ -14,7 +14,6 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
-use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 
 /**
  * Pure view function for {@see Chat} — the renderer actually reached by a
@@ -194,7 +193,17 @@ final class Renderer
         // top - the same tradeoff any fixed-viewport TUI makes. Short
         // conversations still get padded so the status bar lands on the
         // true last line instead of leaving most of the window blank.
-        $rows = TuiRenderer::getTerminalSize()['rows'];
+        //
+        // $chat->rows() (sourced from WindowSizeMsg - the size candy-core's
+        // Program actually dispatches, live, on every resize) is the
+        // authoritative value here - NOT a second, independent
+        // TuiRenderer::getTerminalSize() query. That second query has its
+        // own statically-cached, never-invalidated detection of the SAME
+        // terminal that can silently disagree with what Program itself
+        // knows (and never learns about a live resize either), which
+        // reintroduces the exact row-collision this clipping is meant to
+        // prevent even after clipping was added.
+        $rows = $chat->rows();
         $available = max(1, $rows - 1);
         $contentLines = explode("\n", $content);
         if (count($contentLines) > $available) {
@@ -256,7 +265,7 @@ final class Renderer
 
         $states = array_map(self::agentDisplayState(...), $agents);
 
-        $cols = TuiRenderer::getTerminalSize()['cols'];
+        $cols = $chat->cols();
         $width = max(40, $cols - 4);
 
         return AgentStatusBar::render($states)
