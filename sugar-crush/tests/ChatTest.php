@@ -549,6 +549,20 @@ final class ChatTest extends TestCase
         $this->assertNotSame([], $next->history);
     }
 
+    public function testContextUsagePercentIsZeroForEmptyHistory(): void
+    {
+        $chat = new Chat();
+        $this->assertSame(0.0, $chat->contextUsagePercent());
+    }
+
+    public function testContextUsagePercentGrowsWithHistorySize(): void
+    {
+        $short = new Chat(history: [Message::user('hi')]);
+        $long = new Chat(history: [Message::user(str_repeat('a', 40000))]);
+
+        $this->assertGreaterThan($short->contextUsagePercent(), $long->contextUsagePercent());
+    }
+
     public function testDownArrowIsNoOpOutsideSlashMenu(): void
     {
         $chat = new Chat(inputBuf: 'hello');
