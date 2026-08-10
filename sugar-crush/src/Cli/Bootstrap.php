@@ -49,10 +49,14 @@ final class Bootstrap
      */
     public static function chat(?string $root = null): Chat
     {
+        $userConfig = self::readUserConfig();
+
         return new Chat(
             backend: self::backend($root),
             memoryStore: self::memoryStore(),
             sessionStore: self::sessionStore(),
+            themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
+            onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
         );
     }
 
@@ -65,7 +69,10 @@ final class Bootstrap
      *      safety hooks. $SUGARCRUSH_MODEL overrides the model.
      *   2. $SUGARCRUSH_BACKEND_CMD — dependency-free shell-out: a command that
      *      reads JSON history on stdin and writes the reply to stdout.
-     *   3. (default) the offline EchoProvider, still run through the engine so the
+     *   3. A provider name persisted by a previous Ctrl+P "Switch model"
+     *      (see writeUserConfig()) — makes that choice survive a restart
+     *      without needing $SUGARCRUSH_PROVIDER exported every time.
+     *   4. (default) the offline EchoProvider, still run through the engine so the
      *      binary launches with zero network and zero config.
      */
     public static function backend(?string $root = null): Backend
@@ -84,6 +91,15 @@ final class Bootstrap
         $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
         if ($cmd !== false && $cmd !== '') {
             return new CommandBackend($cmd);
+        }
+
+        $persisted = self::readUserConfig()['provider'] ?? null;
+        if (is_string($persisted) && $persisted !== '') {
+            try {
+                return self::backendFor($persisted, $root);
+            } catch (\Throwable $e) {
+                fwrite(STDERR, "sugarcrush: persisted provider '{$persisted}' unavailable ({$e->getMessage()}); falling back to echo.\n");
+            }
         }
 
         return (new EngineBackend(new EchoProvider(), 'echo'))
@@ -154,6 +170,64 @@ final class Bootstrap
         }
 
         return $providers;
+    }
+
+    /**
+     * ~/.sugar-crush/config.json — per-user persisted UI choices (currently
+     * `provider`/`theme`, written by the Ctrl+P palette's Switch Model/
+     * Switch Theme actions). Distinct from {@see
+     * ProviderFactory::defaultConfigPath()}'s project-level
+     * .sugar-crush/config.dev.json dev/test fixture — that one is checked
+     * into the repo and shared; this one is a real per-user runtime state
+     * file, same directory convention as {@see sessionStore()}/{@see
+     * memoryStore()}.
+     */
+    public static function userConfigPath(): string
+    {
+        return self::configDir() . '/config.json';
+    }
+
+    /**
+     * Reads the persisted user config, tolerantly: a missing, unreadable,
+     * or invalid-JSON file returns [] rather than throwing - there is
+     * nothing yet to persist on a fresh install, and a corrupt file
+     * shouldn't block the CLI from starting.
+     *
+     * @return array<string, mixed>
+     */
+    public static function readUserConfig(): array
+    {
+        $path = self::userConfigPath();
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            return [];
+        }
+
+        $data = json_decode($contents, true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * Read-merge-write $patch into the persisted user config, so a single
+     * call only ever touches the keys it names (e.g. switching the theme
+     * doesn't clobber a previously-persisted provider choice).
+     *
+     * @param array<string, mixed> $patch
+     */
+    public static function writeUserConfig(array $patch): void
+    {
+        $merged = array_merge(self::readUserConfig(), $patch);
+        $json = json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            return;
+        }
+
+        file_put_contents(self::userConfigPath(), $json);
     }
 
     private static function hooks(): HookManager
