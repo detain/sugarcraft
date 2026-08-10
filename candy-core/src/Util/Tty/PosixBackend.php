@@ -28,6 +28,13 @@ final class PosixBackend implements Backend
     private ?Termios $saved = null;
 
     /**
+     * PID that called {@see enableRawMode()} - {@see restore()} only
+     * applies the saved termios when called from this SAME process. See
+     * restore()'s docblock for why.
+     */
+    private ?int $ownerPid = null;
+
+    /**
      * Injected Termios override (set when a caller wired one via
      * {@see \SugarCraft\Core\ProgramOptions::$termios}). When non-null
      * {@see enableRawMode()} uses it directly instead of resolving via
@@ -186,20 +193,42 @@ final class PosixBackend implements Backend
         }
 
         $this->saved = $this->termios->current();
+        $this->ownerPid = getmypid();
         $this->termios->makeRaw()->apply();
         if (is_resource($this->stream)) {
             @stream_set_blocking($this->stream, false);
         }
     }
 
+    /**
+     * Restore the termios captured by {@see enableRawMode()}.
+     *
+     * A `pcntl_fork()`'d child inherits a COPY of this object with $saved
+     * already populated - termios settings live on the shared kernel TTY
+     * device, not per-process, so if that child's own shutdown sequence
+     * ever reaches here (a plain `exit()` runs PHP's normal destructor
+     * chain), applying $saved would restore the PARENT's terminal to its
+     * pre-raw-mode state the instant the child exits, even though the
+     * parent's raw-mode session is still live. Only the process that
+     * actually called enableRawMode() may take the terminal back out of
+     * raw mode - a forked child silently skips the real syscall instead.
+     */
     public function restore(): void
     {
         if ($this->saved === null) {
             return;
         }
+        if ($this->ownerPid !== null && $this->ownerPid !== getmypid()) {
+            $this->termios = null;
+            $this->saved = null;
+            $this->ownerPid = null;
+
+            return;
+        }
         $this->saved->apply();
         $this->termios = null;
         $this->saved = null;
+        $this->ownerPid = null;
         if (is_resource($this->stream)) {
             @stream_set_blocking($this->stream, true);
         }
