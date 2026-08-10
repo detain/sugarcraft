@@ -957,6 +957,28 @@ final class CustomProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Regression: a baseUrl with a path suffix must survive request-URI
+    // resolution instead of being dropped by Guzzle's absolute-path
+    // resolution rule (see SglangProvider's equivalent test/fix).
+    // -------------------------------------------------------------------------
+
+    public function testOpenAiCompatibleWithPathSuffixResolvesRequestsUnderThatPath(): void
+    {
+        $provider = CustomProvider::openAiCompatible('custom', 'https://example.com/api/v2', 'gpt-4');
+
+        $reflection = new \ReflectionClass($provider);
+        $property = $reflection->getProperty('httpClient');
+        $property->setAccessible(true);
+        /** @var Client $client */
+        $client = $property->getValue($provider);
+        $baseUri = $client->getConfig('base_uri');
+
+        $resolved = \GuzzleHttp\Psr7\UriResolver::resolve($baseUri, \GuzzleHttp\Psr7\Utils::uriFor('chat/completions'));
+
+        $this->assertSame('https://example.com/api/v2/chat/completions', (string) $resolved);
+    }
+
+    // -------------------------------------------------------------------------
     // Helper: Invoke private method using reflection
     // -------------------------------------------------------------------------
 

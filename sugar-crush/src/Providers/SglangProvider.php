@@ -37,7 +37,13 @@ final readonly class SglangProvider implements ProviderInterface
         }
 
         $client = new Client([
-            'base_uri' => $baseUrl,
+            // Guzzle resolves a relative request URI against base_uri per
+            // RFC 3986: an absolute-path request URI (leading '/') replaces
+            // the whole base path instead of appending to it, silently
+            // dropping a base_uri suffix like '/v1'. Trailing-slash the
+            // base and use relative (no leading '/') request paths below so
+            // '/v1' is preserved instead of producing a 404 at the bare host.
+            'base_uri' => rtrim($baseUrl, '/') . '/',
             'headers' => $headers,
         ]);
 
@@ -94,7 +100,7 @@ final readonly class SglangProvider implements ProviderInterface
         }
 
         try {
-            $response = $this->httpClient->post('/chat/completions', [
+            $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
             ]);
 
@@ -121,19 +127,29 @@ final readonly class SglangProvider implements ProviderInterface
         }
 
         try {
-            $response = $this->httpClient->post('/chat/completions', [
+            $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
                 'stream' => true,
             ]);
 
             $stream = $response->getBody();
+            $buffer = '';
 
+            // GuzzleHttp\Psr7\Stream has no readLine() - it implements only
+            // the plain PSR-7 StreamInterface. Buffer raw chunks and split on
+            // "\n" ourselves (same approach as CustomProvider::completeStream()).
             while (!$stream->eof()) {
-                $line = $stream->readLine();
-                if (str_starts_with($line, 'data: ')) {
-                    $data = json_decode(substr($line, 6), true);
-                    if ($data !== null && isset($data['choices'][0]['delta'])) {
-                        yield $this->parseChunk($data);
+                $buffer .= $stream->read(8192);
+
+                while (($newlinePos = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $newlinePos));
+                    $buffer = substr($buffer, $newlinePos + 1);
+
+                    if (str_starts_with($line, 'data: ')) {
+                        $data = json_decode(substr($line, 6), true);
+                        if ($data !== null && isset($data['choices'][0]['delta'])) {
+                            yield $this->parseChunk($data);
+                        }
                     }
                 }
             }
@@ -145,7 +161,7 @@ final readonly class SglangProvider implements ProviderInterface
     public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
     {
         try {
-            $response = $this->httpClient->post('/embeddings', [
+            $response = $this->httpClient->post('embeddings', [
                 'json' => [
                     'model' => $request->model,
                     'input' => $request->input,

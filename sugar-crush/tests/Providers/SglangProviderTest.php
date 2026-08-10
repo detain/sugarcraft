@@ -356,7 +356,7 @@ final class SglangProviderTest extends TestCase
         $response = new Response(200, [], $responseBody);
         $httpClient->expects($this->once())
             ->method('post')
-            ->with('/chat/completions')
+            ->with('chat/completions')
             ->willReturn($response);
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -403,7 +403,7 @@ final class SglangProviderTest extends TestCase
         $response = new Response(200, [], $responseBody);
         $httpClient->expects($this->once())
             ->method('post')
-            ->with('/chat/completions')
+            ->with('chat/completions')
             ->willReturn($response);
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -473,7 +473,7 @@ final class SglangProviderTest extends TestCase
             ->method('post')
             ->willThrowException(new \GuzzleHttp\Exception\ConnectException(
                 'Connection failed',
-                new Request('POST', '/chat/completions')
+                new Request('POST', 'chat/completions')
             ));
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -497,25 +497,25 @@ final class SglangProviderTest extends TestCase
     {
         $httpClient = $this->createMock(Client::class);
 
-        // GuzzleHttp\Psr7\Stream has no readLine() of its own (it is a Utils helper),
-        // so the body double must declare it explicitly via addMethods().
+        // GuzzleHttp\Psr7\Stream only implements plain PSR-7 StreamInterface
+        // (read()/eof(), no readLine()) - stub those two real methods so this
+        // test exercises the same chunk-and-buffer path production hits,
+        // rather than a fictional readLine() that would mask its absence.
+        $streamContent = 'data: {"choices":[{"delta":{"content":"Hello"}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"content":" world"}}]}' . "\n"
+            . 'data: [DONE]' . "\n";
+
         $responseBody = $this->getMockBuilder(Stream::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['eof'])
-            ->addMethods(['readLine'])
+            ->onlyMethods(['eof', 'read'])
             ->getMock();
-        $responseBody->method('eof')->willReturnOnConsecutiveCalls(false, false, false, true);
-        $responseBody->method('readLine')->willReturnOnConsecutiveCalls(
-            'data: {"choices":[{"delta":{"content":"Hello"}}]}',
-            'data: {"choices":[{"delta":{"content":" world"}}]}',
-            'data: [DONE]',
-            ''
-        );
+        $responseBody->method('eof')->willReturnOnConsecutiveCalls(false, true);
+        $responseBody->method('read')->willReturn($streamContent);
 
         $response = new Response(200, [], $responseBody);
         $httpClient->expects($this->once())
             ->method('post')
-            ->with('/chat/completions', $this->callback(static fn ($opts): bool => is_array($opts) && ($opts['stream'] ?? false) === true))
+            ->with('chat/completions', $this->callback(static fn ($opts): bool => is_array($opts) && ($opts['stream'] ?? false) === true))
             ->willReturn($response);
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -544,7 +544,7 @@ final class SglangProviderTest extends TestCase
             ->method('post')
             ->willThrowException(new \GuzzleHttp\Exception\ConnectException(
                 'Connection failed',
-                new Request('POST', '/chat/completions')
+                new Request('POST', 'chat/completions')
             ));
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -581,7 +581,7 @@ final class SglangProviderTest extends TestCase
         $response = new Response(200, [], $responseBody);
         $httpClient->expects($this->once())
             ->method('post')
-            ->with('/embeddings')
+            ->with('embeddings')
             ->willReturn($response);
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -610,7 +610,7 @@ final class SglangProviderTest extends TestCase
         $response = new Response(200, [], $responseBody);
         $httpClient->expects($this->once())
             ->method('post')
-            ->with('/embeddings')
+            ->with('embeddings')
             ->willReturn($response);
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -633,7 +633,7 @@ final class SglangProviderTest extends TestCase
             ->method('post')
             ->willThrowException(new \GuzzleHttp\Exception\ConnectException(
                 'Connection failed',
-                new Request('POST', '/embeddings')
+                new Request('POST', 'embeddings')
             ));
 
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
@@ -648,6 +648,25 @@ final class SglangProviderTest extends TestCase
         // Per the implementation, embeddings returns empty array on exception
         $this->assertInstanceOf(EmbeddingsResponse::class, $result);
         $this->assertCount(0, $result->embeddings);
+    }
+
+    // -------------------------------------------------------------------------
+    // Regression: a baseUrl with a path suffix (e.g. sglang's OpenAI-compatible
+    // '/v1') must survive request-URI resolution instead of being dropped,
+    // which previously 404'd every completion request.
+    // -------------------------------------------------------------------------
+
+    public function testOpenAiCompatibleWithPathSuffixResolvesRequestsUnderThatPath(): void
+    {
+        $provider = SglangProvider::openAiCompatible('https://skynet2.interserver.net/v1');
+
+        /** @var Client $client */
+        $client = $this->getPrivateProperty($provider, 'httpClient');
+        $baseUri = $client->getConfig('base_uri');
+
+        $resolved = \GuzzleHttp\Psr7\UriResolver::resolve($baseUri, \GuzzleHttp\Psr7\Utils::uriFor('chat/completions'));
+
+        $this->assertSame('https://skynet2.interserver.net/v1/chat/completions', (string) $resolved);
     }
 
     // -------------------------------------------------------------------------
