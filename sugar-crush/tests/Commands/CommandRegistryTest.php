@@ -13,7 +13,7 @@ final class CommandRegistryTest extends TestCase
     {
         $names = array_map(static fn($spec) => $spec->name, CommandRegistry::all());
 
-        foreach (['compact', 'workflow', 'share', 'agents', 'memory', 'branch', 'rename', 'rewind', 'sessions'] as $expected) {
+        foreach (['compact', 'workflow', 'share', 'agents', 'memory', 'branch', 'rename', 'rewind', 'sessions', 'theme'] as $expected) {
             $this->assertContains($expected, $names);
         }
     }

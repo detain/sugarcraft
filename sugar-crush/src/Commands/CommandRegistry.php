@@ -29,6 +29,7 @@ final class CommandRegistry
             CommandSpec::new('rename', 'Rename the current session', 'Session'),
             CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session'),
             CommandSpec::new('sessions', 'List all sessions', 'Session'),
+            CommandSpec::new('theme', 'Switch the color theme', 'Appearance'),
         ];
     }
 

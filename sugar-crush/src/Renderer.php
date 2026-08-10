@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
@@ -149,13 +148,15 @@ final class Renderer
 
     public static function render(Chat $chat): string
     {
-        $body = self::renderHistory($chat->history);
-        $input = self::renderInput($chat);
-        $slashMenu = self::renderSlashMenu($chat);
+        $theme = $chat->theme();
+        $body = self::renderHistory($chat->history, $theme);
+        $input = self::renderInput($chat, $theme);
+        $slashMenu = self::renderSlashMenu($chat, $theme);
         $status = $chat->inFlight ? '⠴ thinking…' : 'Enter to send · Esc / ^C to quit';
 
         $shell = Style::new()
             ->border(Border::rounded())
+            ->borderForeground($theme->border)
             ->padding(1, 2)
             ->render($body);
 
@@ -257,12 +258,12 @@ final class Renderer
     /**
      * @param list<Message> $history
      */
-    private static function renderHistory(array $history): string
+    private static function renderHistory(array $history, Theme $theme): string
     {
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
         }
-        $md = new Markdown();
+        $md = new Markdown($theme->markdown);
         $blocks = [];
         foreach ($history as $msg) {
             // Defense-in-depth (candy-buffer #1362): User and System content is
@@ -274,9 +275,9 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             $blocks[] = match ($msg->role) {
-                Role::User      => Ansi::sgr(1, 36) . "user>" . Ansi::reset() . " " . Sanitize::untrusted($msg->content),
-                Role::Assistant => Ansi::sgr(1, 35) . "assistant" . Ansi::reset() . "\n" . trim($md->render($msg->content)),
-                Role::System    => Ansi::sgr(Ansi::FAINT) . "system: " . Sanitize::untrusted($msg->content) . Ansi::reset(),
+                Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . Sanitize::untrusted($msg->content),
+                Role::Assistant => Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant') . "\n" . trim($md->render($msg->content)),
+                Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . Sanitize::untrusted($msg->content)),
             };
         }
         return implode("\n\n", $blocks);
@@ -289,7 +290,7 @@ final class Renderer
      * once matches is empty - inputBuf isn't slash-prefixed, already
      * contains a space, or the typed prefix matches no command.
      */
-    private static function renderSlashMenu(Chat $chat): string
+    private static function renderSlashMenu(Chat $chat, Theme $theme): string
     {
         $matches = $chat->slashMenuMatches();
         if ($matches === []) {
@@ -301,17 +302,18 @@ final class Renderer
         foreach ($matches as $index => $spec) {
             $label = '/' . $spec->name . ' — ' . $spec->description;
             $lines[] = $index === $selected
-                ? Ansi::sgr(1, 36) . '▸ ' . $label . Ansi::reset()
-                : Ansi::sgr(Ansi::FAINT) . '  ' . $label . Ansi::reset();
+                ? Style::new()->foreground($theme->userLabel)->bold()->render('▸ ' . $label)
+                : Style::new()->foreground($theme->systemLabel)->faint()->render('  ' . $label);
         }
 
         return Style::new()
             ->border(Border::normal())
+            ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $lines));
     }
 
-    private static function renderInput(Chat $chat): string
+    private static function renderInput(Chat $chat, Theme $theme): string
     {
         $cursor = $chat->inFlight ? '' : '█';
         // The in-progress input buffer is untrusted keystroke data (e.g. a
@@ -320,6 +322,7 @@ final class Renderer
         $body = "> " . Sanitize::untrusted($chat->inputBuf) . $cursor;
         return Style::new()
             ->border(Border::normal())
+            ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render($body);
     }
