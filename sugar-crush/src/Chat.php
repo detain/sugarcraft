@@ -101,6 +101,14 @@ final class Chat implements Model
     private const REMINDER_TOKEN_LIMIT = 100000;
 
     /**
+     * Wall-clock budget for {@see executeToolsParallel()}'s forked children.
+     * A tool call that never returns (e.g. a hung shell command) would
+     * otherwise leave the parent blocked forever waiting on pcntl_waitpid();
+     * past this deadline, stragglers are SIGKILLed and reported as timeouts.
+     */
+    private const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
+
+    /**
      * @param list<Message> $history
      * @param array<string, callable> $tools Map of tool name => callable(array $arguments): mixed
      * @param callable|null $onToolCall Optional callback called when tools are invoked
@@ -288,20 +296,14 @@ final class Chat implements Model
      */
     private function handleToolCalls(Message $message): array
     {
-        $toolResults = [];
-
-        // R14b: executeToolsParallel()/AgentWorkerPool routing is disabled unconditionally.
-        // It forks a child process per tool call and re-invokes the tool by name+args JSON
-        // inside that process, but the actual tool callbacks living in $this->tools are PHP
-        // closures that cannot be serialized across the fork/process boundary. The forked
-        // worker has no way to reconstruct them, so it was fabricating/simulating output
-        // instead of running the real closure - silently corrupting tool results. Always
-        // execute sequentially in-process until the redesign described on
-        // executeToolsParallel() lands.
-        foreach ($message->toolCalls as $toolCall) {
-            $result = $this->executeTool($toolCall);
-            $toolResults[] = $result;
-        }
+        // R14b.fix: genuine parallelism only pays for itself with 2+ calls and
+        // only when a pool was actually opted into via withWorkerPool() - the
+        // common single-tool-call/no-pool case stays on the cheaper sequential
+        // path with zero fork overhead. See executeToolsParallel()'s docblock
+        // for why this no longer routes through AgentWorkerPool/SubAgent.
+        $toolResults = ($this->effectivePool !== null && count($message->toolCalls) > 1)
+            ? $this->executeToolsParallel($message->toolCalls)
+            : $this->executeToolsSequentially($message->toolCalls);
 
         // Add assistant message and tool results to history
         $newHistory = [...$this->history, $message];
@@ -348,137 +350,229 @@ final class Chat implements Model
      */
     private function executeTool(ToolCall $toolCall): ToolResult
     {
+        [$result, $raw, $succeeded] = $this->invokeTool($toolCall);
+
+        // Notify tool call listener if set - only on a genuinely successful
+        // invocation, matching invokeTool()'s contract (see its docblock).
+        if ($succeeded && $this->onToolCall !== null) {
+            ($this->onToolCall)($toolCall->name, $toolCall->arguments, $raw);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param ToolCall[] $toolCalls
+     * @return ToolResult[]
+     */
+    private function executeToolsSequentially(array $toolCalls): array
+    {
+        $toolResults = [];
+        foreach ($toolCalls as $toolCall) {
+            $toolResults[] = $this->executeTool($toolCall);
+        }
+        return $toolResults;
+    }
+
+    /**
+     * Look up and invoke the registered callback for a tool call, without
+     * firing {@see $onToolCall} - the pure primitive shared by the sequential
+     * path ({@see executeTool()}) and the forked-child path
+     * ({@see executeToolsParallel()}), so the listener can be fired exactly
+     * once, in the right process (see executeToolsParallel()'s docblock for
+     * why that matters).
+     *
+     * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
+     *     output (only meaningful when $succeeded), succeeded]
+     */
+    private function invokeTool(ToolCall $toolCall): array
+    {
         $name = $toolCall->name;
         $args = $toolCall->arguments;
 
         if (!isset($this->tools[$name])) {
-            return ToolResult::error($name, "Unknown tool: {$name}", $toolCall->id);
+            return [ToolResult::error($name, "Unknown tool: {$name}", $toolCall->id), null, false];
         }
 
         try {
             $callback = $this->tools[$name];
-            $result = $callback($args);
-
-            // Notify tool call listener if set
-            if ($this->onToolCall !== null) {
-                ($this->onToolCall)($name, $args, $result);
-            }
-
-            return ToolResult::ok($name, is_string($result) ? $result : (json_encode($result) ?: 'null'), $toolCall->id);
+            $raw = $callback($args);
+            $result = ToolResult::ok($name, is_string($raw) ? $raw : (json_encode($raw) ?: 'null'), $toolCall->id);
+            return [$result, $raw, true];
         } catch (\Throwable $e) {
-            return ToolResult::error($name, $e->getMessage(), $toolCall->id);
+            return [ToolResult::error($name, $e->getMessage(), $toolCall->id), null, false];
         }
     }
 
     /**
-     * Execute multiple tool calls in parallel via the AgentWorkerPool.
+     * Execute multiple tool calls in parallel via a direct pcntl_fork() fan-out.
      *
-     * DISABLED (R14b): no longer called from {@see handleToolCalls()}. This method
-     * wraps each tool call in a SubAgent and dispatches it through the pool's
-     * executeAll(), which runs each SubAgent in a forked child process. That is
-     * fundamentally broken for real tool execution: $this->tools holds PHP \Closure
-     * callbacks, and closures cannot cross a process/fork boundary - the child has
-     * no reference to the parent's closure, only the JSON-encoded tool name/args.
-     * Whatever the child produced was simulated/fabricated output standing in for
-     * the real tool call, not the actual closure's result, so routing through here
-     * silently replaced real tool output with fabricated text.
+     * R14b.fix: the original design routed through AgentWorkerPool/SubAgent,
+     * which - for its default ExecutorInterface (ProcessExecutor) - forks
+     * once and then has that fork spawn a SECOND, unrelated process via
+     * proc_open() to run an inline worker script. A closure cannot cross
+     * that second boundary (proc_open starts a brand-new PHP process with no
+     * shared memory, communicating only via JSON over pipes), so the worker
+     * had no way to reach the real callback in $this->tools and fabricated
+     * output instead - hence R14b's original fix disabled this path entirely.
      *
-     * @todo Real fix requires a name-keyed tool registry that the worker process can
-     *       look up by string (e.g. a class map or service locator resolvable inside
-     *       the forked process), NOT a closure captured from the parent's $this->tools.
-     *       The worker would decode {tool_name, tool_args} from the task, resolve
-     *       tool_name against that registry inside its own process, invoke it there,
-     *       and return the real result. Until that registry-based dispatch exists,
-     *       this method must stay unused and all tool calls go through the sequential
-     *       path in handleToolCalls().
+     * That whole detour was unnecessary: $this->tools' closures need to
+     * survive only ONE process boundary - a direct pcntl_fork() of THIS
+     * process - and a fork duplicates the entire process memory (copy-on-write),
+     * so the child's copy of $this (and every closure it holds) is fully
+     * intact and callable. This method forks one child per tool call, has each
+     * child invoke the real closure via {@see invokeTool()} and write its
+     * result to a temp file, then collects and returns them in the parent -
+     * genuinely concurrent, with the real callback output, no registry needed.
+     *
+     * $onToolCall is deliberately NOT invoked inside a child: a listener
+     * closure that mutates state by reference (e.g. a test's
+     * `use (&$captured)` array) would mutate only the child's own
+     * copy-on-write copy, invisible to the parent. It is invoked here in the
+     * parent instead, once per call, after collecting that call's real result.
      *
      * @param ToolCall[] $toolCalls
      * @return ToolResult[]
      */
     private function executeToolsParallel(array $toolCalls): array
     {
-        // Build a minimal Agent to satisfy SubAgent's requirement.
-        // This agent won't actually make LLM calls - the pool forks and we
-        // capture results directly from each forked process.
-        $agent = new \SugarCraft\Crush\Agents\Agent(
-            name: 'tool-executor',
-            description: 'Executes tool callbacks in parallel',
-            prompt: '',
-            model: 'echo', // Won't be used - tools run in forked processes
-            provider: 'echo',
-            tools: [],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-        );
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            return $this->executeToolsSequentially($toolCalls);
+        }
 
-        // Build SubAgents from tool calls.
-        // The task encodes the tool name and arguments as JSON; the pool forks
-        // child processes that run executeTool and store AgentResult to a temp
-        // file, which we read back in the parent.
-        $subAgents = [];
+        $jobs = [];
         foreach ($toolCalls as $index => $toolCall) {
-            $subAgentId = 'tool-' . ($toolCall->id ?? (string) $index);
+            $file = sys_get_temp_dir() . '/sc_chat_tool_' . bin2hex(random_bytes(8)) . '.json';
+            $pid = pcntl_fork();
 
-            // Encode tool name + args as the task for the SubAgent.
-            // Each forked process will decode this and call executeTool.
-            $task = json_encode([
-                'tool_name' => $toolCall->name,
-                'tool_args' => $toolCall->arguments,
-            ]);
+            if ($pid === -1) {
+                // Fork failed for this call only - run it synchronously right
+                // here and store its result the same way a child would, so
+                // the collection loop below treats every call uniformly.
+                $this->storeToolResult($file, $toolCall);
+                $jobs[$index] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => null];
+                continue;
+            }
 
-            $subAgents[] = new \SugarCraft\Crush\Agents\SubAgent(
-                id: $subAgentId,
-                agent: $agent,
-                task: $task,
-                timeout: 300,
-            );
+            if ($pid === 0) {
+                $this->storeToolResult($file, $toolCall);
+                exit(0);
+            }
+
+            $jobs[$index] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid];
         }
 
-        // Build a minimal CompleteRequest - tools are not LLM calls,
-        // but the pool/executor interface requires this parameter.
-        $request = new \SugarCraft\Crush\Providers\CompleteRequest(
-            model: 'echo',
-            messages: [],
-        );
+        $this->waitForToolChildren($jobs);
 
-        // Dispatch all tool SubAgents through the pool.
-        // The pool handles parallelism via pcntl_fork when available.
-        try {
-            $agentResults = [];
-            foreach ($this->executeAgents($subAgents, $request) as $agentResult) {
-                $agentResults[$agentResult->agentId] = $agentResult;
-            }
-        } catch (\Throwable) {
-            // Pool dispatch failed - fall back to sequential
-            $toolResults = [];
-            foreach ($toolCalls as $toolCall) {
-                $toolResults[] = $this->executeTool($toolCall);
-            }
-            return $toolResults;
-        }
-
-        // Convert AgentResult[] back to ToolResult[], preserving tool call order.
-        // agentResults is keyed by subAgentId ('tool-' . index), same scheme used when building subAgents.
         $toolResults = [];
-        foreach ($toolCalls as $index => $toolCall) {
-            $subAgentId = 'tool-' . ($toolCall->id ?? (string) $index);
-            if (isset($agentResults[$subAgentId])) {
-                $ar = $agentResults[$subAgentId];
-                // Map AgentResult fields to ToolResult.
-                // output contains the executeTool result string on success.
-                if ($ar->error !== null) {
-                    $toolResults[] = ToolResult::error($toolCall->name, $ar->error->getMessage(), $toolCall->id);
-                } else {
-                    $toolResults[] = ToolResult::ok($toolCall->name, $ar->output ?? '', $toolCall->id);
-                }
-            } else {
-                // Result not found - treat as error
-                $toolResults[] = ToolResult::error($toolCall->name, 'Tool execution failed', $toolCall->id);
-            }
+        foreach ($jobs as $job) {
+            $toolResults[] = $this->collectToolResult($job['file'], $job['toolCall']);
         }
 
         return $toolResults;
+    }
+
+    /**
+     * Run inside a forked child (or synchronously, on fork failure): invoke
+     * the real tool callback and write a JSON-safe payload the parent can
+     * reconstruct via {@see collectToolResult()}. `raw` is best-effort
+     * JSON-round-tripped for the parent's later $onToolCall call - tool
+     * callbacks are documented as returning `mixed`, but anything that isn't
+     * itself JSON-safe (a resource, a closure) can't survive any IPC
+     * mechanism, forked or not, and isn't a realistic tool return value.
+     */
+    private function storeToolResult(string $file, ToolCall $toolCall): void
+    {
+        [$result, $raw, $succeeded] = $this->invokeTool($toolCall);
+
+        $payload = [
+            'succeeded' => $succeeded,
+            'result' => [
+                'name' => $result->name,
+                'result' => $result->result,
+                'error' => $result->error,
+                'id' => $result->id,
+            ],
+            'raw' => json_decode(json_encode($raw) ?: 'null', true),
+        ];
+
+        $json = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+        file_put_contents($file, $json === false ? '' : $json);
+    }
+
+    /**
+     * Block (with a bounded wall-clock timeout) until every forked child in
+     * $jobs has exited, SIGKILLing any stragglers past
+     * {@see PARALLEL_TOOL_TIMEOUT_SECONDS} so a hung tool (e.g. a stuck shell
+     * command) cannot block this request forever. Mirrors the WNOHANG-poll
+     * pattern {@see \SugarCraft\Crush\Agents\AgentWorkerPool::waitForCompletion()}
+     * already uses for the same reason.
+     *
+     * @param array<int, array{toolCall: ToolCall, file: string, pid: ?int}> $jobs
+     */
+    private function waitForToolChildren(array $jobs): void
+    {
+        $pending = array_filter($jobs, static fn(array $job): bool => $job['pid'] !== null);
+        if ($pending === []) {
+            return;
+        }
+
+        $deadline = microtime(true) + self::PARALLEL_TOOL_TIMEOUT_SECONDS;
+        while ($pending !== [] && microtime(true) < $deadline) {
+            foreach ($pending as $index => $job) {
+                $status = 0;
+                if (pcntl_waitpid($job['pid'], $status, WNOHANG) === $job['pid']) {
+                    unset($pending[$index]);
+                }
+            }
+            if ($pending !== []) {
+                usleep(10000);
+            }
+        }
+
+        foreach ($pending as $job) {
+            if (function_exists('posix_kill')) {
+                posix_kill($job['pid'], SIGKILL);
+            }
+            $status = 0;
+            pcntl_waitpid($job['pid'], $status);
+        }
+    }
+
+    /**
+     * Read + decode + delete a forked child's result file, reconstruct its
+     * ToolResult, and fire $onToolCall in THIS (the parent) process when the
+     * underlying callback succeeded - see executeToolsParallel()'s docblock
+     * for why that firing can't happen in the child itself. A missing or
+     * unreadable file (the child never wrote one - killed by the timeout
+     * above, or crashed) is reported as a timeout error rather than silently
+     * dropped.
+     */
+    private function collectToolResult(string $file, ToolCall $toolCall): ToolResult
+    {
+        $data = is_file($file) ? file_get_contents($file) : false;
+        if ($data !== false && $data !== '') {
+            @unlink($file);
+        }
+
+        $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
+        if (!is_array($decoded) || !is_array($decoded['result'] ?? null)) {
+            return ToolResult::error($toolCall->name, 'Tool execution timed out or produced no result', $toolCall->id);
+        }
+
+        $r = $decoded['result'];
+        $result = new ToolResult(
+            (string) ($r['name'] ?? $toolCall->name),
+            (string) ($r['result'] ?? ''),
+            $r['error'] ?? null,
+            $r['id'] ?? $toolCall->id,
+        );
+
+        if (($decoded['succeeded'] ?? false) === true && $this->onToolCall !== null) {
+            ($this->onToolCall)($toolCall->name, $toolCall->arguments, $decoded['raw'] ?? null);
+        }
+
+        return $result;
     }
 
     public function view(): string
