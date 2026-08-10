@@ -144,10 +144,15 @@ final class StreamingCommandBackend implements Backend
         return Message::assistant(trim($body));
     }
 
-    public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface
     {
-        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
-            Loop::futureTick(function () use ($history, $onToken, $resolve, $reject): void {
+        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $cancellation): void {
+            Loop::futureTick(function () use ($history, $onToken, $resolve, $reject, $cancellation): void {
+                if ($cancellation?->isCancelled() === true) {
+                    $reject(new \RuntimeException('Request cancelled'));
+
+                    return;
+                }
                 try {
                     $message = $this->complete($history, $onToken);
                     $resolve($message);

@@ -152,6 +152,13 @@ final class Renderer
     {
         $theme = $chat->theme();
         $body = self::renderHistory($chat->history, $theme);
+        if ($chat->inFlight) {
+            // Visible in the chat window itself, not just the status bar -
+            // a spinner-only status line is easy to miss; this sits right
+            // where the reply is about to appear.
+            $thinking = Style::new()->foreground($theme->assistantLabel)->faint()->render('⠴ assistant is thinking…');
+            $body = $body === '' ? $thinking : $body . "\n\n" . $thinking;
+        }
         $input = self::renderInput($chat, $theme);
         $slashMenu = self::renderSlashMenu($chat, $theme);
 
@@ -209,7 +216,9 @@ final class Renderer
      */
     private static function renderStatusBar(Chat $chat): string
     {
-        $processing = $chat->inFlight ? '⠴ thinking…' : 'Enter to send · Esc / ^C to quit';
+        $processing = $chat->inFlight
+            ? '⠴ thinking… · Esc Esc to cancel'
+            : 'Enter to send · Ctrl+P menu · /exit or ^C to quit';
         $percent = (int) round($chat->contextUsagePercent() * 100);
 
         return "{$percent}% context · {$processing}";
@@ -314,6 +323,11 @@ final class Renderer
             // These turns are plain text with no legitimate SGR, so untrusted()
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
+            if ($msg->toolResults !== []) {
+                $blocks[] = self::renderToolResults($msg, $theme);
+
+                continue;
+            }
             $blocks[] = match ($msg->role) {
                 Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . Sanitize::untrusted($msg->content),
                 Role::Assistant => Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant') . "\n" . trim($md->render($msg->content)),
@@ -321,6 +335,28 @@ final class Renderer
             };
         }
         return implode("\n\n", $blocks);
+    }
+
+    /**
+     * A message carrying {@see ToolResult}s (see {@see Message::withToolResults()})
+     * gets a distinct "🔧 tool" marker per result instead of the plain
+     * assistant bubble {@see renderHistory()} uses for real replies -
+     * otherwise a tool call is visually indistinguishable from the model's
+     * own words, which is exactly what made tool execution look silent.
+     */
+    private static function renderToolResults(Message $msg, Theme $theme): string
+    {
+        $lines = [];
+        foreach ($msg->toolResults as $result) {
+            $status = $result->isError()
+                ? Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error')
+                : Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
+            $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . $result->name) . ' ' . $status;
+            $body = Sanitize::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
+            $lines[] = $body === '' ? $label : $label . "\n" . $body;
+        }
+
+        return implode("\n\n", $lines);
     }
 
     /**

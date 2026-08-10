@@ -30,6 +30,7 @@ final class CommandRegistry
             CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session'),
             CommandSpec::new('sessions', 'List all sessions', 'Session'),
             CommandSpec::new('theme', 'Switch the color theme', 'Appearance'),
+            CommandSpec::new('exit', 'Quit the app', 'Session'),
         ];
     }
 

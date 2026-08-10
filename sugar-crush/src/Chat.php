@@ -15,6 +15,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\SessionPicker;
+use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandRegistry;
@@ -113,6 +114,14 @@ final class Chat implements Model
     private const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
 
     /**
+     * Two Escape presses within this window while a request is in flight
+     * abort it (see the Escape arm in {@see update()}). A single Escape
+     * never quits the app any more - use /exit, Ctrl+C, or the palette's
+     * Exit action for that.
+     */
+    private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
+
+    /**
      * @param list<Message> $history
      * @param array<string, callable> $tools Map of tool name => callable(array $arguments): mixed
      * @param callable|null $onToolCall Optional callback called when tools are invoked
@@ -150,6 +159,28 @@ final class Chat implements Model
          * that never call withOnConfigChange()/pass one to the constructor.
          */
         private readonly ?\Closure $onConfigChange = null,
+        /**
+         * Bumped by every submit()/handleToolCalls() call that schedules a
+         * backend Cmd; stamped onto that Cmd's eventual {@see AssistantMsg}
+         * so a reply for a turn that was later aborted (see Escape-Escape
+         * handling below) or superseded is recognisable as stale and
+         * dropped in update() rather than appended after newer messages.
+         */
+        private readonly int $generation = 0,
+        /**
+         * Shared cancel flag for the turn currently in flight; null when
+         * idle. See {@see \SugarCraft\Crush\Backend\CancellationToken}'s
+         * docblock for why this can't be a normal immutable value-object
+         * field - Escape-Escape needs to mutate the SAME instance the
+         * already-scheduled Cmd captured.
+         */
+        private readonly ?CancellationToken $inFlightCancellation = null,
+        /**
+         * Wall-clock timestamp (microtime(true)) of the most recent
+         * un-paired Escape press; null once consumed/expired. Drives the
+         * double-Escape-to-abort window in update().
+         */
+        private readonly ?float $lastEscapeAt = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -168,6 +199,15 @@ final class Chat implements Model
     public function update(Msg $msg): array
     {
         if ($msg instanceof AssistantMsg) {
+            // A reply for a turn that was aborted (double-Escape) or
+            // otherwise superseded arrives after inFlight/generation have
+            // already moved on - drop it rather than appending it after
+            // whatever the user has done since. See AssistantMsg's
+            // docblock and the Escape arm below.
+            if ($msg->generation !== null && $msg->generation !== $this->generation) {
+                return [$this, null];
+            }
+
             $message = $msg->message;
 
             // Check if the message has tool calls to execute
@@ -178,6 +218,7 @@ final class Chat implements Model
             return [$this->mutate([
                 'history' => [...$this->history, $message],
                 'inFlight' => false,
+                'inFlightCancellation' => null,
             ]), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -185,6 +226,40 @@ final class Chat implements Model
         }
         if ($msg->type === KeyType::Char && $msg->rune === "\x03" /* ^C */) {
             return [$this, Cmd::quit()];
+        }
+        // Escape is checked before the inFlight blanket-swallow below (like
+        // Ctrl+C above) because its whole point while a request is running
+        // is to let the user cancel it. A single Escape never quits the app
+        // any more (see this arm's history - it used to, and Alt+Backspace's
+        // terminal-decoding bug made Escape fire on its own by accident,
+        // quitting unexpectedly). Two Escapes within
+        // DOUBLE_ESCAPE_WINDOW_SECONDS while inFlight abort the in-progress
+        // turn instead. Excluded while the palette is open so Escape keeps
+        // its existing, more specific meaning there - see
+        // handlePaletteKey()'s own Escape arm, reached below once this `if`
+        // doesn't match.
+        if ($msg->type === KeyType::Escape && $this->palette === null) {
+            if (!$this->inFlight) {
+                return [$this->mutate(['lastEscapeAt' => null]), null];
+            }
+
+            $now = microtime(true);
+            $isSecondPress = $this->lastEscapeAt !== null
+                && ($now - $this->lastEscapeAt) <= self::DOUBLE_ESCAPE_WINDOW_SECONDS;
+
+            if (!$isSecondPress) {
+                return [$this->mutate(['lastEscapeAt' => $now]), null];
+            }
+
+            $this->inFlightCancellation?->cancel();
+
+            return [$this->mutate([
+                'inFlight' => false,
+                'inFlightCancellation' => null,
+                'lastEscapeAt' => null,
+                'generation' => $this->generation + 1,
+                'history' => [...$this->history, Message::system('_Request cancelled._')],
+            ]), null];
         }
         if ($this->inFlight) {
             // Ignore keystrokes while waiting for the backend
@@ -201,6 +276,14 @@ final class Chat implements Model
         }
 
         return match (true) {
+            // Alt/Shift/Ctrl+Enter insert a newline instead of submitting.
+            // Alt+Enter is the reliable one across plain terminals (ESC+CR,
+            // now decoded correctly by InputReader - see candy-core's
+            // Alt-prefixed-key fix); Shift/Ctrl+Enter only arrive
+            // distinguishably on terminals that report the Kitty keyboard
+            // protocol unprompted, but cost nothing to also honor.
+            $msg->type === KeyType::Enter && ($msg->alt || $msg->shift || $msg->ctrl)
+                => [$this->withInputBuf($this->inputBuf . "\n"), null],
             $msg->type === KeyType::Enter
                 => $this->slashMenuShouldIntercept()
                     ? $this->completeSlashMenuSelection()
@@ -212,6 +295,11 @@ final class Chat implements Model
                 => [$this->moveSlashMenuSelection(-1), null],
             $msg->type === KeyType::Down && $this->slashMenuMatches() !== []
                 => [$this->moveSlashMenuSelection(1), null],
+            // Shell-history-style recall: Up on an empty input box (and no
+            // "/" popup showing - the arm above already claimed that case)
+            // fills inputBuf with the last message the user actually sent.
+            $msg->type === KeyType::Up && $this->inputBuf === ''
+                => [$this->withInputBuf($this->lastUserMessageContent()), null],
             // Ctrl+P opens the command palette. Checked before the generic
             // Char arm below, or the literal "p" would be typed into the
             // input buffer instead - same reasoning as Ctrl+A just below.
@@ -226,6 +314,14 @@ final class Chat implements Model
             // input buffer instead.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'a'
                 => $this->withInputBuf('/agents')->submit(),
+            // Word-delete: Ctrl+W (the usual terminal-wide convention) or a
+            // correctly alt-flagged Backspace (see candy-core's
+            // Alt-prefixed-key fix - before it, Alt+Backspace mis-decoded
+            // as a bare Escape and quit the app instead of reaching here at
+            // all). Must be checked before the plain Backspace arm below.
+            ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'w')
+                || ($msg->type === KeyType::Backspace && $msg->alt)
+                => [$this->withInputBuf(self::dropLastWord($this->inputBuf)), null],
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the real SessionStore listing — see
             // cycleSessionTab()'s docblock for reachability caveats and how
@@ -238,8 +334,6 @@ final class Chat implements Model
                 => [$this->withInputBuf($this->inputBuf . ' '), null],
             $msg->type === KeyType::Backspace
                 => [$this->withInputBuf(self::dropLast($this->inputBuf)), null],
-            $msg->type === KeyType::Escape
-                => [$this, Cmd::quit()],
             default => [$this, null],
         };
     }
@@ -338,19 +432,26 @@ final class Chat implements Model
                 ->withToolResults([$result]);
         }
 
-        // Schedule follow-up backend call with updated history
+        // Schedule follow-up backend call with updated history. A fresh
+        // CancellationToken/generation bump for this leg, same as submit()
+        // - see its docblock for why (Escape-Escape abort, stale-reply
+        // dropping).
+        $generation = $this->generation + 1;
+        $cancellation = new CancellationToken();
         $next = $this->mutate([
             'history' => $newHistory,
             'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
         ]);
 
         $backend = $this->backend;
         $history = $next->history;
         $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken): PromiseInterface {
-            return $backend->completeAsync($history, $onToken)->then(
-                static fn(Message $msg): ?Msg => new AssistantMsg($msg),
-                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')),
+        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
+            return $backend->completeAsync($history, $onToken, $cancellation)->then(
+                static fn(Message $msg): ?Msg => new AssistantMsg($msg, $generation),
+                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_'), $generation),
             );
         });
 
@@ -830,6 +931,9 @@ final class Chat implements Model
             'themeName' => $this->themeName,
             'palette' => $this->palette,
             'onConfigChange' => $this->onConfigChange,
+            'generation' => $this->generation,
+            'inFlightCancellation' => $this->inFlightCancellation,
+            'lastEscapeAt' => $this->lastEscapeAt,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -908,6 +1012,12 @@ final class Chat implements Model
         $text = trim($this->inputBuf);
         if ($text === '') {
             return [$this, null];
+        }
+
+        // Handle /exit (and /quit) - same as Ctrl+C / the palette's Exit
+        // action, just reachable without a modifier key.
+        if ($text === '/exit' || $text === '/quit') {
+            return [$this, Cmd::quit()];
         }
 
         // Handle /compact command to manually compact chat history
@@ -993,10 +1103,14 @@ final class Chat implements Model
             $newTurnMessages[] = $this->contextReminderMessage($tokenCount);
         }
 
+        $generation = $this->generation + 1;
+        $cancellation = new CancellationToken();
         $next = $this->mutate([
             'history' => [...$this->history, ...$newTurnMessages],
             'inputBuf' => '',
             'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
             'lastActivityAt' => new \DateTimeImmutable(),
         ]);
 
@@ -1020,10 +1134,10 @@ final class Chat implements Model
         $backend = $this->backend;
         $history = $next->history;
         $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken): PromiseInterface {
-            return $backend->completeAsync($history, $onToken)->then(
-                static fn(Message $msg): ?Msg => new AssistantMsg($msg),
-                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')),
+        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
+            return $backend->completeAsync($history, $onToken, $cancellation)->then(
+                static fn(Message $msg): ?Msg => new AssistantMsg($msg, $generation),
+                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_'), $generation),
             );
         });
         return [$next, $cmd];
@@ -2308,6 +2422,34 @@ final class Chat implements Model
             $i--;
         }
         return substr($s, 0, $i);
+    }
+
+    /**
+     * Trim the trailing "word" off $s: any trailing whitespace, then any
+     * trailing run of non-whitespace. Mirrors the usual terminal-wide
+     * Ctrl+W convention. Multi-byte-safe by operating on whole characters
+     * via preg (UTF-8 mode) rather than raw byte indices.
+     */
+    private static function dropLastWord(string $s): string
+    {
+        return (string) preg_replace('/[^\s]+\s*$/u', '', $s);
+    }
+
+    /**
+     * The content of the most recently sent (Role::User) message in
+     * history, or '' if none exists yet - backs the shell-history-style Up
+     * arrow recall in update(). Only ever looks at real user turns, so it
+     * skips over assistant replies and tool-result/system messages.
+     */
+    private function lastUserMessageContent(): string
+    {
+        for ($i = count($this->history) - 1; $i >= 0; $i--) {
+            if ($this->history[$i]->role === Role::User) {
+                return $this->history[$i]->content;
+            }
+        }
+
+        return '';
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

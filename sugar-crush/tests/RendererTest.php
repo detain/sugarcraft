@@ -241,6 +241,47 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('quit', $out);
     }
 
+    public function testIdleStatusMentionsCtrlPMenu(): void
+    {
+        $out = Renderer::render($this->chat());
+        $this->assertStringContainsString('Ctrl+P', $out);
+    }
+
+    public function testInFlightIndicatorAppearsInChatWindowNotJustStatusBar(): void
+    {
+        $out = Renderer::render($this->chat(history: [Message::user('hi')], inFlight: true));
+        $lines = explode("\n", $out);
+        $statusLine = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
+
+        $this->assertStringContainsString('assistant is thinking', $out);
+        // The in-window indicator is a separate line from the status bar -
+        // proves it's rendered in the chat body, not only at the bottom.
+        $this->assertStringNotContainsString('assistant is thinking', $statusLine);
+    }
+
+    public function testToolResultsRenderWithADistinctMarkerNotAsPlainAssistantText(): void
+    {
+        $toolMsg = Message::assistant('42')->withToolResults([
+            \SugarCraft\Crush\ToolResult::ok('calculator', '42', 'call_1'),
+        ]);
+        $out = Renderer::render($this->chat(history: [Message::user('what is 6*7?'), $toolMsg]));
+
+        $this->assertStringContainsString('tool: calculator', $out);
+        $this->assertStringContainsString('42', $out);
+    }
+
+    public function testFailedToolResultShowsErrorMarker(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Crush\ToolResult::error('bash', 'command not found', 'call_2'),
+        ]);
+        $out = Renderer::render($this->chat(history: [Message::user('run it'), $toolMsg]));
+
+        $this->assertStringContainsString('tool: bash', $out);
+        $this->assertStringContainsString('error', $out);
+        $this->assertStringContainsString('command not found', $out);
+    }
+
     /**
      * candy-buffer #1362 defense-in-depth: raw User turns reach the terminal
      * wire verbatim, so a C0/DEL byte or a smuggled SGR sequence must be

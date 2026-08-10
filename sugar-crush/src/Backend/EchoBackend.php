@@ -32,9 +32,14 @@ final class EchoBackend implements Backend
         return Message::assistant($body);
     }
 
-    public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface
     {
-        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
+        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $cancellation): void {
+            if ($cancellation?->isCancelled() === true) {
+                $reject(new \RuntimeException('Request cancelled'));
+
+                return;
+            }
             try {
                 $message = $this->complete($history, $onToken);
                 $resolve($message);

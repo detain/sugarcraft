@@ -19,6 +19,7 @@ final class Message
     /**
      * @param list<Attachment> $attachments
      * @param list<ToolCall> $toolCalls
+     * @param list<ToolResult> $toolResults
      */
     public function __construct(
         public readonly Role  $role,
@@ -26,6 +27,7 @@ final class Message
         public readonly int   $createdAt,
         public readonly array $attachments = [],
         public readonly array $toolCalls = [],
+        public readonly array $toolResults = [],
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -51,6 +53,7 @@ final class Message
             createdAt: $this->createdAt,
             attachments: [...$this->attachments, new Attachment($path, AttachmentType::File)],
             toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
         );
     }
 
@@ -62,6 +65,7 @@ final class Message
             createdAt: $this->createdAt,
             attachments: [...$this->attachments, new Attachment($path, AttachmentType::Image)],
             toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
         );
     }
 
@@ -78,26 +82,27 @@ final class Message
             createdAt: $this->createdAt,
             attachments: $this->attachments,
             toolCalls: $toolCalls,
+            toolResults: $this->toolResults,
         );
     }
 
     /**
-     * Create a message from a tool result.
-     * Tool results are treated as assistant messages with the result as content.
+     * Attach the tool result(s) this message reports, keeping its existing
+     * content/role/attachments/toolCalls untouched - {@see Renderer} uses a
+     * non-empty $toolResults to render a distinct "tool call" marker instead
+     * of a plain assistant bubble.
      *
      * @param list<ToolResult> $toolResults
      */
     public function withToolResults(array $toolResults): self
     {
-        // For tool results, we create an assistant message with empty content
-        // that carries the tool results. The actual result content is in the
-        // separate messages added to history after tool execution.
         return new self(
-            role: Role::Assistant,
-            content: '',
+            role: $this->role,
+            content: $this->content,
             createdAt: $this->createdAt,
-            attachments: [],
-            toolCalls: [],
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $toolResults,
         );
     }
 

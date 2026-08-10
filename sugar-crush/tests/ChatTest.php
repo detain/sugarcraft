@@ -94,11 +94,133 @@ final class ChatTest extends TestCase
         $this->assertSame('', $next->inputBuf);
     }
 
-    public function testEscQuits(): void
+    public function testEscDoesNotQuitWhenIdle(): void
     {
         $chat = new Chat();
-        [, $cmd] = $chat->update(new KeyMsg(KeyType::Escape, ''));
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($cmd);
+        $this->assertInstanceOf(Chat::class, $next);
+    }
+
+    public function testSingleEscWhileInFlightDoesNotAbort(): void
+    {
+        $chat = (new Chat(backend: new EchoBackend(), inputBuf: 'hi'))->update(new KeyMsg(KeyType::Enter, ''))[0];
+        $this->assertTrue($chat->inFlight);
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertTrue($next->inFlight);
+        $this->assertNull($cmd);
+    }
+
+    public function testDoubleEscWithinWindowAbortsInFlightRequest(): void
+    {
+        $chat = (new Chat(backend: new EchoBackend(), inputBuf: 'hi'))->update(new KeyMsg(KeyType::Enter, ''))[0];
+        $this->assertTrue($chat->inFlight);
+
+        [$afterFirst] = $chat->update(new KeyMsg(KeyType::Escape, ''));
+        [$afterSecond, $cmd] = $afterFirst->update(new KeyMsg(KeyType::Escape, ''));
+
+        $this->assertFalse($afterSecond->inFlight);
+        $this->assertNull($cmd);
+        $history = $afterSecond->history;
+        $this->assertStringContainsString('cancelled', end($history)->content);
+    }
+
+    public function testStaleAssistantMsgAfterAbortIsDropped(): void
+    {
+        $chat = (new Chat(backend: new EchoBackend(), inputBuf: 'hi'))->update(new KeyMsg(KeyType::Enter, ''))[0];
+        [$afterFirst] = $chat->update(new KeyMsg(KeyType::Escape, ''));
+        [$aborted] = $afterFirst->update(new KeyMsg(KeyType::Escape, ''));
+
+        $historyBeforeStaleReply = $aborted->history;
+
+        // A reply for the aborted turn arrives late, stamped with the
+        // generation it was scheduled under - a fresh Chat starts at
+        // generation 0, and submit() bumps to 1 for this turn's Cmd (the
+        // subsequent abort bumps again to 2, which is why this is stale).
+        [$afterStaleReply] = $aborted->update(new AssistantMsg(Message::assistant('late reply'), 1));
+
+        $this->assertSame($historyBeforeStaleReply, $afterStaleReply->history);
+    }
+
+    public function testCtrlWDeletesLastWordFromInput(): void
+    {
+        $chat = new Chat(inputBuf: 'hello there world');
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
+        $this->assertSame('hello there ', $next->inputBuf);
+    }
+
+    public function testAltBackspaceDeletesLastWordFromInput(): void
+    {
+        $chat = new Chat(inputBuf: 'hello there world');
+        [$next] = $chat->update(new KeyMsg(KeyType::Backspace, '', alt: true));
+        $this->assertSame('hello there ', $next->inputBuf);
+    }
+
+    public function testPlainBackspaceStillDeletesOneCharacter(): void
+    {
+        $chat = new Chat(inputBuf: 'hello');
+        [$next] = $chat->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertSame('hell', $next->inputBuf);
+    }
+
+    public function testAltEnterInsertsNewlineInsteadOfSubmitting(): void
+    {
+        $chat = new Chat(inputBuf: 'line one');
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, '', alt: true));
+        $this->assertNull($cmd);
+        $this->assertSame("line one\n", $next->inputBuf);
+        $this->assertFalse($next->inFlight);
+    }
+
+    public function testShiftEnterInsertsNewlineInsteadOfSubmitting(): void
+    {
+        $chat = new Chat(inputBuf: 'line one');
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, '', shift: true));
+        $this->assertNull($cmd);
+        $this->assertSame("line one\n", $next->inputBuf);
+    }
+
+    public function testUpArrowRecallsLastSentUserMessageWhenInputEmpty(): void
+    {
+        $chat = new Chat(history: [
+            Message::user('first message'),
+            Message::assistant('a reply'),
+            Message::user('second message'),
+        ]);
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Up, ''));
+
+        $this->assertSame('second message', $next->inputBuf);
+    }
+
+    public function testUpArrowDoesNothingWhenNoUserMessageInHistory(): void
+    {
+        $chat = new Chat();
+        [$next] = $chat->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame('', $next->inputBuf);
+    }
+
+    public function testUpArrowNavigatesSlashMenuInsteadOfRecallingWhenPopupShowing(): void
+    {
+        $chat = new Chat(
+            history: [Message::user('should not be recalled')],
+            inputBuf: '/th',
+        );
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Up, ''));
+
+        // The "/" popup claimed this Up press - inputBuf is untouched
+        // (only slashMenuIndex moves), not overwritten with history recall.
+        $this->assertSame('/th', $next->inputBuf);
+    }
+
+    public function testExitCommandQuits(): void
+    {
+        $chat = new Chat(inputBuf: '/exit');
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertInstanceOf(\SugarCraft\Core\Msg\QuitMsg::class, $cmd());
     }
 
     public function testEchoBackendRoundTrip(): void
@@ -199,7 +321,7 @@ final class ChatTest extends TestCase
                     }
                     return \SugarCraft\Crush\Message::assistant('streaming reply');
                 }
-                public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+                public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): PromiseInterface
                 {
                     return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
                         try {
@@ -233,7 +355,7 @@ final class ChatTest extends TestCase
                 {
                     return \SugarCraft\Crush\Message::assistant('reply');
                 }
-                public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+                public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): PromiseInterface
                 {
                     return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
                         try {
@@ -338,7 +460,14 @@ final class ChatTest extends TestCase
         // After tool execution, history should have 3 items:
         // user msg, assistant msg with tool call, tool result
         $this->assertCount(3, $next->history);
-        $this->assertSame('', $next->history[2]->content); // tool result content is in a separate message
+        // Message::withToolResults() used to discard both the passed-in
+        // ToolResult array AND the message's own content, so every tool
+        // result rendered as a blank assistant bubble - the actual bug
+        // behind "tool calls are silent in the chat window". Fixed to
+        // preserve content and actually carry the results.
+        $this->assertSame('hello', $next->history[2]->content);
+        $this->assertCount(1, $next->history[2]->toolResults);
+        $this->assertSame('echo', $next->history[2]->toolResults[0]->name);
     }
 
     public function testUnknownToolReturnsError(): void
