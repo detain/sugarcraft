@@ -649,8 +649,6 @@ jobs:
     # always the right move.
     needs: [build-matrix, coverage]
     if: always() && needs.build-matrix.outputs.coverage_count != '0'
-    env:
-      CODACY_DIR: $RUNNER_TEMP/codacy-coverage
     steps:
       - name: Download codacy coverage reporter
         env:
@@ -662,6 +660,13 @@ jobs:
             -o "$CODACY_DIR/codacy-coverage-reporter"
           chmod +x "$CODACY_DIR/codacy-coverage-reporter"
           test -x "$CODACY_DIR/codacy-coverage-reporter" || { echo "::error::Codacy reporter binary not found or not executable"; exit 1; }
+          # A step's own shell variables don't propagate to LATER steps in
+          # the same job - only $GITHUB_ENV does. The job-level env: block
+          # this used to rely on instead ($RUNNER_TEMP/codacy-coverage as a
+          # literal, unexpanded string - YAML env: values aren't shell-
+          # interpolated) resolved to a path that never existed, so the next
+          # step always failed with "No such file or directory".
+          echo "CODACY_DIR=$CODACY_DIR" >> "$GITHUB_ENV"
 
       - name: Mark coverage as complete
         run: |

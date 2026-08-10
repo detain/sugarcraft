@@ -18,6 +18,10 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Pty\Libc;
+use SugarCraft\Pty\Posix\PosixPtySystem;
+use SugarCraft\Pty\Posix\PosixTermios;
+use SugarCraft\Core\Util\Tty;
 
 /**
  * @see EngineBackend
@@ -159,6 +163,77 @@ final class EngineBackendTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/cancelled/');
         $this->awaitPromise($backend->completeAsync([Message::user('go')], null, $cancellation));
+    }
+
+    /**
+     * Regression for the actual bug behind "typed text ends up in the status
+     * bar / Enter and Ctrl+P stop working after the first message":
+     * completeAsync() forks a child (see runCompleteInChild()) that inherits
+     * a copy of whatever raw-mode Tty a real Program has already set up. If
+     * that child ends with a plain exit(), its inherited Tty's destructor
+     * fires during PHP's shutdown sequence and restores the ORIGINAL
+     * (cooked/echo) termios onto the REAL, shared terminal device - which is
+     * exactly what a user watched happen right after sending their first
+     * message. Drives the real completeAsync() (real fork, real child exit)
+     * against a real PTY and asserts the terminal is still in raw mode
+     * afterwards. See ForkedChildTest for the isolated mechanism.
+     */
+    public function testCompleteAsyncDoesNotResetTheRealTerminalsRawMode(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('candy-pty is POSIX-only.');
+        }
+        if (!\extension_loaded('ffi')) {
+            $this->markTestSkipped('ext-ffi is required for termios FFI.');
+        }
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl is required to exercise the real fork path.');
+        }
+        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
+            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
+        }
+
+        $pair = (new PosixPtySystem())->open();
+        $slavePath = $pair->slave()->path();
+
+        $libc = Libc::lib();
+        $slaveFd = $libc->open($slavePath, 0x0002 /* O_RDWR */);
+        if ($slaveFd < 0) {
+            $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
+        }
+
+        // Injected Termios test seam (see Tty's constructor docblock) -
+        // exercises the real PosixBackend raw-mode/restore machinery against
+        // a real fd without depending on candy-core's separate (int)-cast fd
+        // resolution, which only coincides with the real OS fd for a
+        // process's original STDIN/STDOUT (irrelevant to production, which
+        // only ever wraps the real STDIN).
+        $tty = new Tty(null, new PosixTermios($slaveFd));
+        $tty->enableRawMode();
+
+        try {
+            $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before completing');
+
+            $backend = EngineBackend::new(new EchoProvider(), 'echo');
+            $message = $this->awaitPromise($backend->completeAsync([Message::user('hello')]));
+
+            $this->assertInstanceOf(Message::class, $message, 'completion must still resolve normally');
+            $this->assertTrue(
+                $this->isRaw($slavePath),
+                'the real terminal was knocked out of raw mode by completeAsync()\'s forked child exiting',
+            );
+        } finally {
+            $tty->restore();
+            $libc->close($slaveFd);
+            $pair->master()->close();
+        }
+    }
+
+    private function isRaw(string $slavePath): bool
+    {
+        $out = trim((string) shell_exec('stty -F ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
+
+        return str_contains($out, '-icanon') && str_contains($out, '-echo');
     }
 
     /**

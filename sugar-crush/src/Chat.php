@@ -586,7 +586,7 @@ final class Chat implements Model
 
             if ($pid === 0) {
                 $this->storeToolResult($file, $toolCall);
-                exit(0);
+                \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
             }
 
             $jobs[] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid, 'result' => null];
