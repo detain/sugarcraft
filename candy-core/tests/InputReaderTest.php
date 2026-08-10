@@ -100,6 +100,31 @@ final class InputReaderTest extends TestCase
         $this->assertSame('alt+a', $msgs[0]->string());
     }
 
+    public function testAltBackspaceDecodesAsOneAltFlaggedBackspaceNotEscapePlusBackspace(): void
+    {
+        // ESC + DEL (0x7f) is how most terminals send Alt+Backspace.
+        $msgs = (new InputReader())->parse("\x1b\x7f");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Backspace, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->alt);
+    }
+
+    public function testAltEnterDecodesAsOneAltFlaggedEnter(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b\r");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Enter, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->alt);
+    }
+
+    public function testAltTabDecodesAsOneAltFlaggedTab(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b\t");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->alt);
+    }
+
     public function testBareEscapeIsBufferedThenFlushed(): void
     {
         $r = new InputReader();
