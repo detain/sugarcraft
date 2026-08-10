@@ -158,9 +158,13 @@ final class StreamingCommandBackend implements Backend
                     $resolve($message);
                 } catch (\Throwable $e) {
                     $reject($e);
-                } finally {
-                    Loop::stop();
                 }
+                // No Loop::stop() here - this backend is constructed by
+                // callers (see this class's own "Usage" docblock) and driven
+                // by Program's own long-lived Loop::run(); stopping the
+                // shared global loop after a single completion would kill
+                // the whole program's render/input loop the moment the
+                // first reply arrived, not just this one async call.
             });
         });
     }

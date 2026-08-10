@@ -328,6 +328,11 @@ final class Renderer
 
                 continue;
             }
+            if ($msg->pendingToolCallId !== null) {
+                $blocks[] = self::renderPendingToolCall($msg, $theme);
+
+                continue;
+            }
             $blocks[] = match ($msg->role) {
                 Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . Sanitize::untrusted($msg->content),
                 Role::Assistant => Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant') . "\n" . trim($md->render($msg->content)),
@@ -357,6 +362,20 @@ final class Renderer
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * A "tool X is running" placeholder (see {@see Message::toolRunning()}) -
+     * shown the moment a tool call is dispatched, before it finishes, so a
+     * slow command doesn't look like nothing is happening. Replaced in
+     * history with {@see renderToolResults()}'s finished marker once the
+     * real result arrives (see Chat's ToolResultsMsg handling).
+     */
+    private static function renderPendingToolCall(Message $msg, Theme $theme): string
+    {
+        $spinner = Style::new()->foreground($theme->assistantLabel)->render('⠴');
+
+        return $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . $msg->content);
     }
 
     /**

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
@@ -91,7 +93,7 @@ final class Chat implements Model
     private const REMINDER_TOKEN_LIMIT = 100000;
 
     /**
-     * Wall-clock budget for {@see executeToolsParallel()}'s forked children.
+     * Wall-clock budget for {@see forkToolCalls()}'s forked children.
      * A tool call that never returns (e.g. a hung shell command) would
      * otherwise leave the parent blocked forever waiting on pcntl_waitpid();
      * past this deadline, stragglers are SIGKILLed and reported as timeouts.
@@ -145,7 +147,7 @@ final class Chat implements Model
          */
         private readonly ?\Closure $onConfigChange = null,
         /**
-         * Bumped by every submit()/handleToolCalls() call that schedules a
+         * Bumped by every submit()/beginToolCalls()/finishToolCalls() call that schedules a
          * backend Cmd; stamped onto that Cmd's eventual {@see AssistantMsg}
          * so a reply for a turn that was later aborted (see Escape-Escape
          * handling below) or superseded is recognisable as stale and
@@ -197,7 +199,7 @@ final class Chat implements Model
 
             // Check if the message has tool calls to execute
             if ($message->toolCalls !== [] && $this->tools !== []) {
-                return $this->handleToolCalls($message);
+                return $this->beginToolCalls($message);
             }
 
             return [$this->mutate([
@@ -205,6 +207,9 @@ final class Chat implements Model
                 'inFlight' => false,
                 'inFlightCancellation' => null,
             ]), null];
+        }
+        if ($msg instanceof ToolResultsMsg) {
+            return $this->finishToolCalls($msg);
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -391,36 +396,76 @@ final class Chat implements Model
     }
 
     /**
-     * Handle tool calls in an assistant message.
-     * Executes each tool and schedules a follow-up backend call with results.
-     *
-     * All tool calls execute sequentially in-process. See {@see executeToolsParallel()}
-     * for why the AgentWorkerPool dispatch path is disabled.
+     * Handle tool calls in an assistant message: show a "running" placeholder
+     * for each one IMMEDIATELY (visible on the very next render, before any
+     * of them execute), fork all of them right away (see {@see forkToolCalls()}),
+     * and schedule a Cmd that waits for them off the render loop (see
+     * {@see waitForToolChildrenAsync()}) - the same non-blocking-socket
+     * rationale as {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()},
+     * applied to tool execution instead of the provider call. Finishing is
+     * handled by {@see finishToolCalls()} once the resulting
+     * {@see ToolResultsMsg} arrives.
      *
      * @return array{0:Chat,1:?\Closure}
      */
-    private function handleToolCalls(Message $message): array
+    private function beginToolCalls(Message $message): array
     {
-        // R14b.fix: genuine parallelism only pays for itself with 2+ calls and
-        // only when a pool was actually opted into via withWorkerPool() - the
-        // common single-tool-call/no-pool case stays on the cheaper sequential
-        // path with zero fork overhead. See executeToolsParallel()'s docblock
-        // for why this no longer routes through AgentWorkerPool/SubAgent.
-        $toolResults = ($this->effectivePool !== null && count($message->toolCalls) > 1)
-            ? $this->executeToolsParallel($message->toolCalls)
-            : $this->executeToolsSequentially($message->toolCalls);
+        $placeholders = array_map(
+            static fn(ToolCall $call): Message => Message::toolRunning($call),
+            $message->toolCalls,
+        );
 
-        // Add assistant message and tool results to history
-        $newHistory = [...$this->history, $message];
-        foreach ($toolResults as $result) {
-            $newHistory[] = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
-                ->withToolResults([$result]);
+        $generation = $this->generation + 1;
+        $cancellation = new CancellationToken();
+        $next = $this->mutate([
+            'history' => [...$this->history, $message, ...$placeholders],
+            'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
+            'generation' => $generation,
+        ]);
+
+        $jobs = $this->forkToolCalls($message->toolCalls);
+        $cmd = Cmd::promise(function () use ($jobs, $cancellation, $message, $generation): PromiseInterface {
+            return $this->waitForToolChildrenAsync($jobs, $cancellation)->then(
+                static fn(array $results): Msg => new ToolResultsMsg($message, $results, $generation),
+            );
+        });
+
+        return [$next, $cmd];
+    }
+
+    /**
+     * Handle a completed {@see ToolResultsMsg}: replace each "running"
+     * placeholder {@see beginToolCalls()} put in history with its real
+     * result (matched by {@see Message::$pendingToolCallId}), then schedule
+     * the follow-up backend call exactly like {@see submit()}'s tail does.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function finishToolCalls(ToolResultsMsg $msg): array
+    {
+        if ($msg->generation !== null && $msg->generation !== $this->generation) {
+            return [$this, null];
         }
 
-        // Schedule follow-up backend call with updated history. A fresh
-        // CancellationToken/generation bump for this leg, same as submit()
-        // - see its docblock for why (Escape-Escape abort, stale-reply
-        // dropping).
+        $resultsById = [];
+        foreach ($msg->results as $result) {
+            $resultsById[$result->id ?? $result->name] = $result;
+        }
+
+        $newHistory = [];
+        foreach ($this->history as $historyMessage) {
+            $pendingId = $historyMessage->pendingToolCallId;
+            if ($pendingId !== null && isset($resultsById[$pendingId])) {
+                $result = $resultsById[$pendingId];
+                $newHistory[] = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
+                    ->withToolResults([$result]);
+
+                continue;
+            }
+            $newHistory[] = $historyMessage;
+        }
+
         $generation = $this->generation + 1;
         $cancellation = new CancellationToken();
         $next = $this->mutate([
@@ -430,55 +475,15 @@ final class Chat implements Model
             'generation' => $generation,
         ]);
 
-        $backend = $this->backend;
-        $history = $next->history;
-        $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
-            return $backend->completeAsync($history, $onToken, $cancellation)->then(
-                static fn(Message $msg): ?Msg => new AssistantMsg($msg, $generation),
-                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_'), $generation),
-            );
-        });
-
-        return [$next, $cmd];
-    }
-
-    /**
-     * Execute a single tool call and return the result.
-     */
-    private function executeTool(ToolCall $toolCall): ToolResult
-    {
-        [$result, $raw, $succeeded] = $this->invokeTool($toolCall);
-
-        // Notify tool call listener if set - only on a genuinely successful
-        // invocation, matching invokeTool()'s contract (see its docblock).
-        if ($succeeded && $this->onToolCall !== null) {
-            ($this->onToolCall)($toolCall->name, $toolCall->arguments, $raw);
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param ToolCall[] $toolCalls
-     * @return ToolResult[]
-     */
-    private function executeToolsSequentially(array $toolCalls): array
-    {
-        $toolResults = [];
-        foreach ($toolCalls as $toolCall) {
-            $toolResults[] = $this->executeTool($toolCall);
-        }
-        return $toolResults;
+        return [$next, $this->scheduleBackendCompletion($next, $cancellation, $generation)];
     }
 
     /**
      * Look up and invoke the registered callback for a tool call, without
-     * firing {@see $onToolCall} - the pure primitive shared by the sequential
-     * path ({@see executeTool()}) and the forked-child path
-     * ({@see executeToolsParallel()}), so the listener can be fired exactly
-     * once, in the right process (see executeToolsParallel()'s docblock for
-     * why that matters).
+     * firing {@see $onToolCall} - the listener fires exactly once, in the
+     * parent process, once {@see finishToolCalls()} collects this call's
+     * real result (see {@see forkToolCalls()}'s docblock for why that can't
+     * happen in the child that actually runs this).
      *
      * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
      *     output (only meaningful when $succeeded), succeeded]
@@ -503,7 +508,9 @@ final class Chat implements Model
     }
 
     /**
-     * Execute multiple tool calls in parallel via a direct pcntl_fork() fan-out.
+     * Fork one child per tool call via a direct pcntl_fork() fan-out (or,
+     * when forking isn't available, run it synchronously in-process right
+     * here - see {@see executeToolSynchronously()}).
      *
      * R14b.fix: the original design routed through AgentWorkerPool/SubAgent,
      * which - for its default ExecutorInterface (ProcessExecutor) - forks
@@ -520,35 +527,38 @@ final class Chat implements Model
      * so the child's copy of $this (and every closure it holds) is fully
      * intact and callable. This method forks one child per tool call, has each
      * child invoke the real closure via {@see invokeTool()} and write its
-     * result to a temp file, then collects and returns them in the parent -
-     * genuinely concurrent, with the real callback output, no registry needed.
+     * result to a temp file; {@see waitForToolChildrenAsync()} collects them
+     * once every child has exited - genuinely concurrent, with the real
+     * callback output, no registry needed.
      *
-     * $onToolCall is deliberately NOT invoked inside a child: a listener
-     * closure that mutates state by reference (e.g. a test's
+     * $onToolCall is deliberately NOT invoked inside a forked child: a
+     * listener closure that mutates state by reference (e.g. a test's
      * `use (&$captured)` array) would mutate only the child's own
-     * copy-on-write copy, invisible to the parent. It is invoked here in the
-     * parent instead, once per call, after collecting that call's real result.
+     * copy-on-write copy, invisible to the parent. It's invoked later, in
+     * the parent, once {@see waitForToolChildrenAsync()} collects that
+     * call's real result.
      *
      * @param ToolCall[] $toolCalls
-     * @return ToolResult[]
+     * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}>
      */
-    private function executeToolsParallel(array $toolCalls): array
+    private function forkToolCalls(array $toolCalls): array
     {
-        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
-            return $this->executeToolsSequentially($toolCalls);
-        }
+        $canFork = function_exists('pcntl_fork') && function_exists('pcntl_waitpid');
 
         $jobs = [];
-        foreach ($toolCalls as $index => $toolCall) {
+        foreach ($toolCalls as $toolCall) {
+            if (!$canFork) {
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
+                continue;
+            }
+
             $file = sys_get_temp_dir() . '/sc_chat_tool_' . bin2hex(random_bytes(8)) . '.json';
             $pid = pcntl_fork();
 
             if ($pid === -1) {
                 // Fork failed for this call only - run it synchronously right
-                // here and store its result the same way a child would, so
-                // the collection loop below treats every call uniformly.
-                $this->storeToolResult($file, $toolCall);
-                $jobs[$index] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => null];
+                // here, same as the no-pcntl fallback.
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
                 continue;
             }
 
@@ -557,17 +567,28 @@ final class Chat implements Model
                 exit(0);
             }
 
-            $jobs[$index] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid];
+            $jobs[] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid, 'result' => null];
         }
 
-        $this->waitForToolChildren($jobs);
+        return $jobs;
+    }
 
-        $toolResults = [];
-        foreach ($jobs as $job) {
-            $toolResults[] = $this->collectToolResult($job['file'], $job['toolCall']);
+    /**
+     * Run a tool call that never crossed (or won't cross) a fork boundary -
+     * pcntl unavailable, or this specific pcntl_fork() call failed. Safe,
+     * and necessary, to fire $onToolCall directly here: there's no child
+     * memory for its effects to be lost in (contrast {@see forkToolCalls()}'s
+     * docblock on why a genuinely forked job can't do this).
+     */
+    private function executeToolSynchronously(ToolCall $toolCall): ToolResult
+    {
+        [$result, $raw, $succeeded] = $this->invokeTool($toolCall);
+
+        if ($succeeded && $this->onToolCall !== null) {
+            ($this->onToolCall)($toolCall->name, $toolCall->arguments, $raw);
         }
 
-        return $toolResults;
+        return $result;
     }
 
     /**
@@ -599,48 +620,84 @@ final class Chat implements Model
     }
 
     /**
-     * Block (with a bounded wall-clock timeout) until every forked child in
-     * $jobs has exited, SIGKILLing any stragglers past
-     * {@see PARALLEL_TOOL_TIMEOUT_SECONDS} so a hung tool (e.g. a stuck shell
-     * command) cannot block this request forever. Mirrors the WNOHANG-poll
-     * pattern {@see \SugarCraft\Crush\Agents\AgentWorkerPool::waitForCompletion()}
-     * already uses for the same reason.
+     * Non-blocking counterpart to the old (removed) waitForToolChildren():
+     * resolves once every forked job in $jobs has exited, collecting each
+     * one's real result via {@see collectToolResult()} (which fires
+     * $onToolCall in the parent - see {@see forkToolCalls()}'s docblock),
+     * polling via a periodic timer instead of a blocking usleep() loop so
+     * the render/input loop keeps running while tools execute - same
+     * rationale as {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
+     * fork+socket rewrite, here via WNOHANG polling since these jobs report
+     * through temp files, not a socket. A hung tool (e.g. a stuck shell
+     * command) is SIGKILLed past {@see PARALLEL_TOOL_TIMEOUT_SECONDS}, same
+     * ceiling the old blocking version used. Escape-Escape abort (see
+     * Chat::update()) also lands here via $cancellation, same as it does
+     * for the backend call.
      *
-     * @param array<int, array{toolCall: ToolCall, file: string, pid: ?int}> $jobs
+     * @param list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}> $jobs
+     * @return PromiseInterface<list<ToolResult>>
      */
-    private function waitForToolChildren(array $jobs): void
+    private function waitForToolChildrenAsync(array $jobs, CancellationToken $cancellation): PromiseInterface
     {
-        $pending = array_filter($jobs, static fn(array $job): bool => $job['pid'] !== null);
-        if ($pending === []) {
-            return;
+        $deferred = new Deferred();
+
+        $collect = fn(array $job): ToolResult => $job['result'] ?? $this->collectToolResult((string) $job['file'], $job['toolCall']);
+
+        $pendingIndexes = [];
+        foreach ($jobs as $index => $job) {
+            if ($job['pid'] !== null) {
+                $pendingIndexes[$index] = true;
+            }
         }
 
+        if ($pendingIndexes === []) {
+            $deferred->resolve(array_map($collect, $jobs));
+
+            return $deferred->promise();
+        }
+
+        $loop = Loop::get();
+        $settled = false;
+        $timer = null;
         $deadline = microtime(true) + self::PARALLEL_TOOL_TIMEOUT_SECONDS;
-        while ($pending !== [] && microtime(true) < $deadline) {
-            foreach ($pending as $index => $job) {
+
+        $timer = $loop->addPeriodicTimer(0.05, function () use (&$pendingIndexes, $jobs, $deadline, $cancellation, $collect, $loop, &$settled, &$timer, $deferred): void {
+            if ($settled) {
+                return;
+            }
+
+            foreach ($pendingIndexes as $index => $_) {
                 $status = 0;
-                if (pcntl_waitpid($job['pid'], $status, WNOHANG) === $job['pid']) {
-                    unset($pending[$index]);
+                if (pcntl_waitpid($jobs[$index]['pid'], $status, WNOHANG) === $jobs[$index]['pid']) {
+                    unset($pendingIndexes[$index]);
                 }
             }
-            if ($pending !== []) {
-                usleep(10000);
-            }
-        }
 
-        foreach ($pending as $job) {
-            if (function_exists('posix_kill')) {
-                posix_kill($job['pid'], SIGKILL);
+            $mustStop = $pendingIndexes === [] || microtime(true) >= $deadline || $cancellation->isCancelled();
+            if (!$mustStop) {
+                return;
             }
-            $status = 0;
-            pcntl_waitpid($job['pid'], $status);
-        }
+
+            foreach ($pendingIndexes as $index => $_) {
+                if (function_exists('posix_kill')) {
+                    posix_kill($jobs[$index]['pid'], SIGKILL);
+                }
+                $status = 0;
+                pcntl_waitpid($jobs[$index]['pid'], $status);
+            }
+
+            $settled = true;
+            $loop->cancelTimer($timer);
+            $deferred->resolve(array_map($collect, $jobs));
+        });
+
+        return $deferred->promise();
     }
 
     /**
      * Read + decode + delete a forked child's result file, reconstruct its
      * ToolResult, and fire $onToolCall in THIS (the parent) process when the
-     * underlying callback succeeded - see executeToolsParallel()'s docblock
+     * underlying callback succeeded - see forkToolCalls()'s docblock
      * for why that firing can't happen in the child itself. A missing or
      * unreadable file (the child never wrote one - killed by the timeout
      * above, or crashed) is reported as a timeout error rather than silently
@@ -1104,16 +1161,28 @@ final class Chat implements Model
             }
         }
 
-        $backend = $this->backend;
+        return [$next, $this->scheduleBackendCompletion($next, $cancellation, $generation)];
+    }
+
+    /**
+     * Build the Cmd that calls the backend with $next's history and
+     * dispatches its outcome as an {@see AssistantMsg} stamped with
+     * $generation - the common tail {@see submit()} and the tool-call
+     * pipeline (see {@see beginToolCalls()}/{@see ToolResultsMsg}) both
+     * schedule once their turn's history is settled.
+     */
+    private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation): \Closure
+    {
+        $backend = $next->backend;
         $history = $next->history;
-        $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
+        $onToken = $next->streaming ? $next->onToken : null;
+
+        return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
             return $backend->completeAsync($history, $onToken, $cancellation)->then(
                 static fn(Message $msg): ?Msg => new AssistantMsg($msg, $generation),
                 static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_'), $generation),
             );
         });
-        return [$next, $cmd];
     }
 
     /**

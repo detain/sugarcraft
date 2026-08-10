@@ -259,6 +259,17 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString('assistant is thinking', $statusLine);
     }
 
+    public function testRunningToolCallShowsAPendingPlaceholderBeforeItFinishes(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls -la'], 'call_1');
+        $running = Message::toolRunning($call);
+
+        $out = Renderer::render($this->chat(history: [Message::user('list files'), $running]));
+
+        $this->assertStringContainsString('running: bash', $out);
+        $this->assertStringContainsString('ls -la', $out);
+    }
+
     public function testToolResultsRenderWithADistinctMarkerNotAsPlainAssistantText(): void
     {
         $toolMsg = Message::assistant('42')->withToolResults([

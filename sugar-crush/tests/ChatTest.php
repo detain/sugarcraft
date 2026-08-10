@@ -433,16 +433,23 @@ final class ChatTest extends TestCase
             return 'total 0' . "\n" . 'drwxr-xr-x 2 user user 4096 May 10 00:00 .';
         });
 
-        [$next] = $chat->update(new AssistantMsg($message));
+        [$afterPlaceholders, $next] = $this->runToolCallsToCompletion($chat, $message);
 
-        // Tool should have been executed synchronously
-        $this->assertNotNull($executedArgs);
-        $this->assertSame(['cmd' => 'ls -la'], $executedArgs);
+        // "running" placeholder was visible before the result arrived.
+        $this->assertCount(3, $afterPlaceholders->history);
+        $this->assertNotNull($afterPlaceholders->history[2]->pendingToolCallId);
+
+        // Tool executed in a forked child (see runToolCallsToCompletion()) -
+        // $executedArgs, captured by reference, can't cross that boundary
+        // (same reasoning documented on forkToolCalls()); the real args
+        // ARE observable via the finished result's own content instead.
+        $this->assertNull($executedArgs);
 
         // A follow-up backend call should be scheduled
         $this->assertTrue($next->inFlight);
         // History: user msg + assistant msg + tool result msg
         $this->assertCount(3, $next->history);
+        $this->assertStringContainsString('total 0', $next->history[2]->content);
     }
 
     public function testToolResultAddedToHistoryAfterExecution(): void
@@ -455,7 +462,7 @@ final class ChatTest extends TestCase
             inFlight: true,
         ))->registerTool('echo', static fn(array $args) => $args['text'] ?? '');
 
-        [$next, ] = $chat->update(new AssistantMsg($message));
+        [, $next] = $this->runToolCallsToCompletion($chat, $message);
 
         // After tool execution, history should have 3 items:
         // user msg, assistant msg with tool call, tool result
@@ -502,10 +509,12 @@ final class ChatTest extends TestCase
             throw new \RuntimeException('Tool failed intentionally');
         });
 
-        [$next] = $chat->update(new AssistantMsg($message));
+        [, $next] = $this->runToolCallsToCompletion($chat, $message);
 
         // History should have user msg, assistant msg, and error result
         $this->assertCount(3, $next->history);
+        $this->assertStringContainsString('Tool failed intentionally', $next->history[2]->content);
+        $this->assertTrue($next->history[2]->toolResults[0]->isError());
     }
 
     public function testMultipleToolCallsWithPoolConfiguredExecuteRealTools(): void
@@ -552,7 +561,7 @@ final class ChatTest extends TestCase
             ->registerTool('toolA', static fn(array $args) => 'REAL-TOOL-A-OUTPUT')
             ->registerTool('toolB', static fn(array $args) => 'REAL-TOOL-B-OUTPUT');
 
-        [$next] = $chat->update(new AssistantMsg($message));
+        [, $next] = $this->runToolCallsToCompletion($chat, $message);
 
         // Both real tool closures ran (whether via a forked child or the
         // pcntl-unavailable sequential fallback) and their real output was
@@ -596,7 +605,7 @@ final class ChatTest extends TestCase
             ->registerTool('pidA', static fn(array $args) => getmypid())
             ->registerTool('pidB', static fn(array $args) => getmypid());
 
-        $chat->update(new AssistantMsg($message));
+        $this->runToolCallsToCompletion($chat, $message);
 
         $this->assertCount(2, $observedPids);
         $this->assertNotSame($observedPids['pidA'], getmypid());
@@ -604,26 +613,32 @@ final class ChatTest extends TestCase
         $this->assertNotSame($observedPids['pidA'], $observedPids['pidB']);
     }
 
-    public function testSingleToolCallWithPoolConfiguredStaysSequential(): void
+    public function testSingleToolCallAlsoRunsInAForkedChildForLiveVisibility(): void
     {
-        // handleToolCalls() only takes the fork-per-call path for 2+ calls -
-        // a lone tool call has no parallelism to gain and should run
-        // in-process (same PID as the test itself), avoiding fork overhead.
+        // Every tool call forks now, single or not - beginToolCalls()'s
+        // "running" placeholder (shown the instant the call is dispatched,
+        // before it finishes - see Message::toolRunning()) needs the render
+        // loop to keep ticking while even a lone, potentially slow tool call
+        // runs, the same reason EngineBackend::completeAsync() forks the
+        // provider call. A shared PID here would mean it silently fell back
+        // to blocking in-process, defeating that visibility.
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl extension not available in this environment.');
+        }
+
         $toolCall = new \SugarCraft\Crush\ToolCall('solo', []);
         $message = Message::assistant('Calling one tool...')->withToolCalls([$toolCall]);
 
-        $pool = new AgentWorkerPool(maxConcurrent: 2);
         $observedPid = null;
         $chat = (new Chat(history: [Message::user('report pid')], inFlight: true))
-            ->withWorkerPool($pool)
             ->onToolCall(function (string $name, array $args, mixed $result) use (&$observedPid): void {
                 $observedPid = $result;
             })
             ->registerTool('solo', static fn(array $args) => getmypid());
 
-        $chat->update(new AssistantMsg($message));
+        $this->runToolCallsToCompletion($chat, $message);
 
-        $this->assertSame(getmypid(), $observedPid);
+        $this->assertNotSame(getmypid(), $observedPid);
     }
 
     public function testSlashMenuFiltersAsUserTypes(): void
@@ -1695,5 +1710,49 @@ final class ChatTest extends TestCase
     {
         parent::tearDown();
         \Mockery::close();
+    }
+
+    /**
+     * Drive an assistant message with tool calls through the full async
+     * two-step flow: update(AssistantMsg) shows "running" placeholders and
+     * returns a Cmd; running that Cmd forks the tool calls and returns a
+     * Promise (AsyncCmd) that only settles once every forked child has
+     * exited (see Chat::waitForToolChildrenAsync()) - so, unlike the old
+     * fully-synchronous handleToolCalls(), the real results (and any
+     * onToolCall side effects) aren't observable until the resulting
+     * ToolResultsMsg is actually dispatched back into update(). Returns
+     * [$afterPlaceholders, $final].
+     *
+     * @return array{0: Chat, 1: Chat}
+     */
+    private function runToolCallsToCompletion(Chat $chat, Message $assistantMessage): array
+    {
+        [$afterPlaceholders, $cmd] = $chat->update(new AssistantMsg($assistantMessage));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+
+        // A single run()/stop() pair - see EngineBackendTest::awaitPromise()'s
+        // docblock for why a repeated add-short-timer-then-run() polling
+        // dance is fragile against real fork/WNOHANG timing.
+        $loop = \React\EventLoop\Loop::get();
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved, $loop): void {
+            $resolved = $msg;
+            $loop->stop();
+        });
+
+        if ($resolved === null) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
+
+        $this->assertInstanceOf(\SugarCraft\Crush\ToolResultsMsg::class, $resolved, 'tool execution did not complete within the test timeout');
+
+        [$final] = $afterPlaceholders->update($resolved);
+
+        return [$afterPlaceholders, $final];
     }
 }

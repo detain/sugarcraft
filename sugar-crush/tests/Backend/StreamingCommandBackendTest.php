@@ -137,9 +137,14 @@ final class StreamingCommandBackendTest extends TestCase
 
     // =========================================================================
     // completeAsync() Tests
-    // Note: completeAsync() uses Loop::futureTick() which requires a running
-    // event loop. We verify it returns a PromiseInterface without testing
-    // resolution (the synchronous complete() method is tested above).
+    // completeAsync() schedules its real work via Loop::futureTick(), which
+    // only runs once something actually drives the loop - awaitPromise()
+    // below does that with a bounded run(), and (critically) drains the
+    // futureTick queue before returning either way so a test that doesn't
+    // itself await resolution can't leave a callback dangling on the
+    // GLOBAL Loop::get() singleton for some unrelated LATER test to trip
+    // over - which is exactly what the old version of this test did, and
+    // why it's no longer just "verify it returns a PromiseInterface".
     // =========================================================================
 
     public function testCompleteAsyncReturnsPromise(): void
@@ -153,8 +158,105 @@ final class StreamingCommandBackendTest extends TestCase
             $promise = $backend->completeAsync([Message::user('hello')]);
 
             $this->assertInstanceOf(\React\Promise\PromiseInterface::class, $promise);
+            $this->awaitPromise($promise);
         } finally {
             unlink($script);
         }
+    }
+
+    public function testCompleteAsyncResolvesWithTheCommandsOutput(): void
+    {
+        $script = sys_get_temp_dir() . '/stream_async_' . uniqid() . '.sh';
+        file_put_contents($script, "#!/bin/bash\necho 'async test'");
+        chmod($script, 0755);
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $message = $this->awaitPromise($backend->completeAsync([Message::user('hello')]));
+
+            $this->assertInstanceOf(Message::class, $message);
+            $this->assertStringContainsString('async test', $message->content);
+        } finally {
+            unlink($script);
+        }
+    }
+
+    /**
+     * Regression: completeAsync() used to call Loop::stop() unconditionally
+     * in a finally block - since this backend is driven by Program's own
+     * long-lived Loop::run() (see the class docblock's "Usage" example),
+     * that killed the WHOLE program's render/input loop the instant the
+     * first reply arrived, not just this one async call. Proven here by
+     * running a second, independent timer alongside the completion and
+     * confirming it still gets to fire.
+     */
+    public function testCompleteAsyncDoesNotStopTheSharedEventLoop(): void
+    {
+        $script = sys_get_temp_dir() . '/stream_async_' . uniqid() . '.sh';
+        file_put_contents($script, "#!/bin/bash\necho 'async test'");
+        chmod($script, 0755);
+
+        try {
+            $backend = new StreamingCommandBackend($script);
+            $loop = \React\EventLoop\Loop::get();
+
+            $otherTimerFired = false;
+            $loop->addTimer(0.02, static function () use (&$otherTimerFired): void {
+                $otherTimerFired = true;
+            });
+
+            $this->awaitPromise($backend->completeAsync([Message::user('hello')]));
+
+            // Give the independent timer a chance to fire too, proving the
+            // loop is still alive after completeAsync() settled.
+            $this->awaitPromise($this->timerPromise(0.05));
+
+            $this->assertTrue($otherTimerFired, 'an unrelated timer never fired - completeAsync() stopped the shared event loop');
+        } finally {
+            unlink($script);
+        }
+    }
+
+    private function timerPromise(float $seconds): \React\Promise\PromiseInterface
+    {
+        $deferred = new \React\Promise\Deferred();
+        \React\EventLoop\Loop::get()->addTimer($seconds, static function () use ($deferred): void {
+            $deferred->resolve(null);
+        });
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Single run()/stop() pair - see EngineBackendTest::awaitPromise()'s
+     * docblock for why a repeated add-short-timer-then-run() polling dance
+     * is fragile, and why leaving a scheduled callback un-drained on the
+     * shared Loop::get() singleton corrupts unrelated later tests.
+     */
+    private function awaitPromise(\React\Promise\PromiseInterface $promise): mixed
+    {
+        $loop = \React\EventLoop\Loop::get();
+        $settled = false;
+        $value = null;
+        $error = null;
+
+        $promise->then(
+            function ($v) use (&$settled, &$value, $loop): void { $settled = true; $value = $v; $loop->stop(); },
+            function (\Throwable $e) use (&$settled, &$error, $loop): void { $settled = true; $error = $e; $loop->stop(); },
+        );
+
+        if (!$settled) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
+
+        $this->assertTrue($settled, 'Promise did not settle within the test timeout');
+
+        if ($error !== null) {
+            throw $error;
+        }
+
+        return $value;
     }
 }

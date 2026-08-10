@@ -28,6 +28,14 @@ final class Message
         public readonly array $attachments = [],
         public readonly array $toolCalls = [],
         public readonly array $toolResults = [],
+        /**
+         * Set only on a transient "tool X is running" placeholder (see
+         * {@see toolRunning()}) - the ToolCall::$id it stands in for, so
+         * {@see Chat}'s ToolResultsMsg handler can find and replace it with
+         * the real result once execution finishes. Null on every other
+         * message, including the finished result itself.
+         */
+        public readonly ?string $pendingToolCallId = null,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -45,6 +53,49 @@ final class Message
         return new self(Role::System, $content, $now ?? time());
     }
 
+    /**
+     * A transient placeholder shown the moment a tool call is dispatched,
+     * before it finishes - see this class's $pendingToolCallId docblock and
+     * {@see \SugarCraft\Crush\Renderer::renderToolResults()} for how it's
+     * displayed distinctly from a finished result. $call->id must be
+     * non-null and unique per in-flight turn for the later replace-by-id
+     * lookup to find the right placeholder; {@see \SugarCraft\Crush\Chat}
+     * only ever calls this with backend-issued tool calls, which always
+     * carry an id.
+     */
+    public static function toolRunning(ToolCall $call, ?int $now = null): self
+    {
+        return new self(
+            role: Role::System,
+            content: self::describeToolCall($call),
+            createdAt: $now ?? time(),
+            pendingToolCallId: $call->id ?? $call->name,
+        );
+    }
+
+    /**
+     * Human-readable one-liner for a tool invocation, e.g.
+     * `bash(command: "ls -la")` - used both for the running placeholder and
+     * (via Renderer) the finished marker's label.
+     */
+    public static function describeToolCall(ToolCall $call): string
+    {
+        if ($call->arguments === []) {
+            return $call->name . '()';
+        }
+
+        $parts = [];
+        foreach ($call->arguments as $key => $value) {
+            $rendered = is_string($value) ? $value : (json_encode($value) ?: '');
+            if (mb_strlen($rendered) > 80) {
+                $rendered = mb_substr($rendered, 0, 80) . '…';
+            }
+            $parts[] = is_int($key) ? $rendered : "{$key}: " . json_encode($rendered);
+        }
+
+        return $call->name . '(' . implode(', ', $parts) . ')';
+    }
+
     public function attachFile(string $path): self
     {
         return new self(
@@ -54,6 +105,7 @@ final class Message
             attachments: [...$this->attachments, new Attachment($path, AttachmentType::File)],
             toolCalls: $this->toolCalls,
             toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
         );
     }
 
@@ -66,6 +118,7 @@ final class Message
             attachments: [...$this->attachments, new Attachment($path, AttachmentType::Image)],
             toolCalls: $this->toolCalls,
             toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
         );
     }
 
@@ -83,6 +136,7 @@ final class Message
             attachments: $this->attachments,
             toolCalls: $toolCalls,
             toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
         );
     }
 
@@ -103,6 +157,7 @@ final class Message
             attachments: $this->attachments,
             toolCalls: $this->toolCalls,
             toolResults: $toolResults,
+            pendingToolCallId: null,
         );
     }
 
