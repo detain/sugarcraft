@@ -153,14 +153,21 @@ final class MouseWiringTest extends TestCase
         self::assertStringNotContainsString("\xEE\x80\x80", $frame);
         self::assertStringNotContainsString("\xEE\x80\x81", $frame);
         // Since W2.S11c the frame's own chrome legitimately marks a zone (the
-        // status bar's `pane:menu` hint), so the invariant is "no INJECTED
-        // zone reached the registry", not "the registry is empty": the ids
-        // the message tried to smuggle in are absent, and every id that IS
-        // registered was emitted by the renderer itself.
+        // status bar's `pane:menu` hint), and since W2.S12b a tool-result turn
+        // marks its own row (`toolcall:<id>`), so the invariant is "no
+        // INJECTED zone reached the registry", not "the registry is empty":
+        // the ids the message tried to smuggle in are absent, and every id
+        // that IS registered was emitted by the renderer itself under one of
+        // its own prefixes.
+        $ownPrefixes = [Renderer::PANE_ZONE_PREFIX, Renderer::TOOL_CALL_ZONE_PREFIX];
         $ids = array_keys(Renderer::scanner()->all());
         self::assertNotContains('a', $ids);
         foreach ($ids as $id) {
-            self::assertStringStartsWith(Renderer::PANE_ZONE_PREFIX, $id);
+            $isOurs = false;
+            foreach ($ownPrefixes as $prefix) {
+                $isOurs = $isOurs || str_starts_with($id, $prefix);
+            }
+            self::assertTrue($isOurs, "unexpected zone id registered: {$id}");
         }
     }
 

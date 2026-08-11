@@ -197,6 +197,16 @@ final class Renderer
     public const PANE_ZONE_PREFIX = 'pane:';
 
     /**
+     * Zone-id prefix every clickable tool-call row carries (crush_feat.md §8
+     * E5). The suffix is the SAME key {@see Chat::expanded()} is keyed by
+     * (`ToolResult::$id`, falling back to its name), so a click can be handed
+     * straight to {@see Chat::toggleToolOutput()} — §8 E5's note is explicit
+     * that this reuses §1 E5's expanded map rather than introducing a second
+     * expansion mechanism.
+     */
+    public const TOOL_CALL_ZONE_PREFIX = 'toolcall:';
+
+    /**
      * The zone-id charset {@see Mark::wrap()} accepts, duplicated here
      * because Mark's own copy is private and it THROWS on a violation.
      * Session ids arrive from disk (`SessionStore::listSessions()`), so an id
@@ -222,6 +232,24 @@ final class Renderer
     {
         return self::$scanner ??= Scanner::new();
     }
+
+    /**
+     * Tool-call rows the current frame wants clickable, collected while the
+     * transcript is built and consumed once the shell around it is drawn.
+     *
+     * This detour exists because the markers are NOT free to the layout.
+     * `Style::render()` measures every line to size the shell's border and
+     * pad the short ones, and a sentinel pair is ~29 codepoints of
+     * Private-Use text it happily counts as content: marking the label
+     * in-place (the way {@see markSessionTab()} can, being outside any box)
+     * widens the whole box by the marker length and leaves the marked row's
+     * right border ~29 columns short of every other row. Marking the row
+     * AFTER it has been measured and padded costs nothing and is what
+     * bubblezone recommends for width-sensitive containers.
+     *
+     * @var list<array{id: string, label: string}> in document order
+     */
+    private static array $toolCallZones = [];
 
     /**
      * How many content lines the most recent frame had to drop off the top
@@ -354,6 +382,7 @@ final class Renderer
     public static function render(Chat $chat): string
     {
         $theme = $chat->theme();
+        self::$toolCallZones = [];
         $body = self::renderHistory($chat->history, $theme, max(20, $chat->cols() - self::SHELL_CHROME_COLS), $chat->expanded());
         if ($chat->inFlight) {
             // Visible in the chat window itself, not just the status bar -
@@ -370,6 +399,7 @@ final class Renderer
             ->borderForeground($theme->border)
             ->padding(1, 2)
             ->render($body);
+        $shell = self::markToolCalls($shell);
 
         $content = $shell . "\n" . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
 
@@ -671,6 +701,90 @@ final class Renderer
     }
 
     /**
+     * Remember that $label's row should become a `toolcall:<key>` click zone
+     * (crush_feat.md §8 E5). Called as the transcript is built; the actual
+     * {@see Mark::zone()} happens later in {@see markToolCalls()}, for the
+     * layout reason documented on {@see $toolCallZones}.
+     *
+     * $key is validated the way {@see markSessionTab()} validates a session
+     * id, and for the same reason: it is `ToolResult::$id`, which is whatever
+     * the provider (ultimately the model) put in the tool call, so an id
+     * carrying anything outside {@see Mark}'s charset would throw from inside
+     * `view()` and take the TUI down. An unmarkable row simply stays
+     * unclickable — Ctrl+O still expands it.
+     *
+     * A key already recorded this frame is skipped rather than recorded
+     * twice: duplicate ids make {@see \SugarCraft\Mouse\Scan::parse()} throw,
+     * and {@see scanRoot()} answers a throw by clearing the registry, which
+     * would cost the whole frame its zones. Keys collide when a result has no
+     * id and shares its name with an earlier one — those two rows already
+     * share a single expanded-state entry, so only one of them could have
+     * shown an independent result anyway.
+     */
+    private static function recordToolCallZone(string $key, string $label): void
+    {
+        $zoneId = self::TOOL_CALL_ZONE_PREFIX . $key;
+
+        if (
+            $key === ''
+            || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $key) !== 1
+            || strlen($zoneId) > Mark::MAX_ID_BYTES
+        ) {
+            return;
+        }
+
+        foreach (self::$toolCallZones as $zone) {
+            if ($zone['id'] === $key) {
+                return;
+            }
+        }
+
+        self::$toolCallZones[] = ['id' => $key, 'label' => $label];
+    }
+
+    /**
+     * Turn each row recorded by {@see recordToolCallZone()} into a click zone
+     * on the already-bordered, already-padded shell (crush_feat.md §8 E5).
+     *
+     * Rows are located by their label text rather than by index because the
+     * shell adds its own border/padding rows and a tool block is preceded by
+     * a variable number of transcript lines. Each shell row is claimed at
+     * most once and searching resumes from the row after the last claim, so
+     * two results that render an identical label (same tool, same status, no
+     * ids) map to the two rows in the order they were emitted instead of both
+     * resolving to the first one.
+     *
+     * The WHOLE row is wrapped, borders included: the label already spans
+     * most of it, and a click landing on the padding beside a tool row has no
+     * other meaning, so a generous target beats an exact one here. It stays a
+     * single-line zone, which is what keeps it clip-safe — see
+     * {@see markPaneHeader()} for what a multi-row zone does when
+     * {@see render()} slices the frame to the terminal's height.
+     */
+    private static function markToolCalls(string $shell): string
+    {
+        if (self::$toolCallZones === []) {
+            return $shell;
+        }
+
+        $lines = explode("\n", $shell);
+        $from  = 0;
+        foreach (self::$toolCallZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $zone['label'])) {
+                    $lines[$i] = Mark::zone(self::TOOL_CALL_ZONE_PREFIX . $zone['id'], $lines[$i]);
+                    $from      = $i + 1;
+
+                    break;
+                }
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * Mark only the FIRST line of a multi-line block as the pane's zone —
      * its header row, which is the "title/border region" §8 E3 asks for.
      *
@@ -818,7 +932,11 @@ final class Renderer
                 : Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
             $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
             $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
-            $isExpanded = ($expanded[$result->id ?? $result->name] ?? false) === true;
+            $key = $result->id ?? $result->name;
+            $isExpanded = ($expanded[$key] ?? false) === true;
+            // §8 E5: the same key Ctrl+O toggles, so a click and the keystroke
+            // drive one expansion mechanism rather than two.
+            self::recordToolCallZone($key, $label);
 
             $block = $label;
             if ($body !== '') {

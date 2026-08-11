@@ -1220,8 +1220,9 @@ final class Chat implements Model
     }
 
     /**
-     * Click-to-switch session tab (crush_feat.md §8 E2), plus wheel-scroll
-     * of the transcript (§8 E4).
+     * Click-to-switch session tab (crush_feat.md §8 E2), click-to-switch pane
+     * (§8 E3), click-to-expand a tool call (§8 E5), plus wheel-scroll of the
+     * transcript (§8 E4).
      *
      * Wheel events branch off FIRST and never reach the click tracker: they
      * are the one gesture that survives `SUGARCRUSH_DISABLE_MOUSE_CLICKS`
@@ -1272,6 +1273,19 @@ final class Chat implements Model
         $panePrefix = Renderer::PANE_ZONE_PREFIX;
         if (str_starts_with($zoneId, $panePrefix)) {
             return $this->selectPane(substr($zoneId, strlen($panePrefix)));
+        }
+
+        // §8 E5. The zone id carries the SAME key {@see $expanded} is keyed by
+        // (see {@see Renderer::recordToolCallZone()}), so the click lands on
+        // {@see toggleToolOutput()} - the one Ctrl+O already drives - rather
+        // than on a parallel click-only expansion state that could disagree
+        // with it. Unlike Ctrl+O, which can only name the LAST tool call
+        // (Chat has no history cursor to select an earlier one with), a click
+        // names the exact row the user pointed at, so this also reaches the
+        // older calls the keyboard cannot.
+        $toolPrefix = Renderer::TOOL_CALL_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $toolPrefix)) {
+            return [$this->toggleToolOutput(substr($zoneId, strlen($toolPrefix))), null];
         }
 
         return [$this, null];
