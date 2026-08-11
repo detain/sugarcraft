@@ -306,9 +306,13 @@ final class ReasoningExtractionTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // D3 also asks to pin `extra_body.separate_reasoning = true` on the
-    // outgoing request so a properly-splitting parser is told to populate
-    // reasoning_content even if a given deployment's default ever changes.
+    // D3 also asks to pin `separate_reasoning = true` on the outgoing request
+    // so a properly-splitting parser is told to populate reasoning_content
+    // even if a given deployment's default ever changes. SglangProvider sends
+    // it at the top level (W1.A3 fix: the `extra_body` wrapper D3/D4 called
+    // for is a Python-SDK concept SGLang itself never parses); CustomProvider
+    // still uses the ineffective nested form - out of scope here, tracked in
+    // crush_feat.md §12 D4.
     // -------------------------------------------------------------------------
 
     public function testSglangCompletePinsSeparateReasoningInRequestBody(): void
@@ -329,7 +333,7 @@ final class ReasoningExtractionTest extends TestCase
 
         $sent = json_decode((string) $history[0]['request']->getBody(), true);
 
-        $this->assertTrue($sent['extra_body']['separate_reasoning'] ?? null);
+        $this->assertTrue($sent['separate_reasoning'] ?? null);
     }
 
     public function testCustomProviderCompletePinsSeparateReasoningInRequestBody(): void

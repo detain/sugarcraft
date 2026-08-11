@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
+use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
+
 /**
  * Factory for creating provider instances from configuration arrays.
  *
@@ -12,6 +16,15 @@ namespace SugarCraft\Crush\Providers;
  */
 final readonly class ProviderFactory
 {
+    /**
+     * §12 D6 tool-call-parser names, mirroring SGLang's `--tool-call-parser`
+     * flag: the default assumes the server was launched with a real parser
+     * flag; the fallback is for one that was not.
+     */
+    public const TOOL_CALL_PARSER_OPENAI = 'openai';
+
+    public const TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK = 'minimax-xml-fallback';
+
     /** @var array<string, array{required: string[], optional: string[]}> */
     private const TYPE_SCHEMAS = [
         'openai' => [
@@ -28,7 +41,7 @@ final readonly class ProviderFactory
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey'],
+            'optional' => ['apiKey', 'toolCallParser'],
         ],
         'bedrock' => [
             'required' => ['region'],
@@ -238,6 +251,12 @@ final readonly class ProviderFactory
                 'baseUrl' => 'http://localhost:30000',
                 'model' => 'MiniMax-M2.7',
                 'apiKey' => getenv('SGLANG_API_KEY') ?: null,
+                // §12 D6's documented default. Named explicitly rather than
+                // left implicit so the knob is discoverable from
+                // defaultConfig() output - which is exactly what the Ctrl+P
+                // palette's Switch Model listing shows
+                // ({@see \SugarCraft\Crush\Cli\Bootstrap::availableProviders()}).
+                'toolCallParser' => self::TOOL_CALL_PARSER_OPENAI,
             ],
             'bedrock' => [
                 'type' => 'bedrock',
@@ -462,6 +481,27 @@ final readonly class ProviderFactory
     }
 
     /**
+     * W1.A6 (§12 D6): selects the client-side tool-call parser from the
+     * optional `toolCallParser` config key, defaulting to `'openai'`.
+     *
+     * Before this, both parser classes existed but nothing constructed either
+     * one; the factory now selects between them. The default deliberately
+     * matches the confirmed live deployment (which does pass
+     * `--tool-call-parser`), so this is a seam a misconfigured deployment can
+     * switch, not a change to normal behaviour.
+     *
+     * KNOWN GAP, still open: the selected parser is consulted only by
+     * {@see SglangProvider::parseResponse()}, i.e. the batch `complete()`
+     * path. `SglangProvider::supportsStreaming()` returns true and both
+     * production consumers branch on it ({@see \SugarCraft\Crush\Runtime} and
+     * {@see \SugarCraft\Crush\Agents\AgentManager}), so the live chat loop
+     * takes `completeStream()` -> `parseChunk()` ->
+     * `resolveStreamedToolCalls()`, which reassembles tool calls itself and
+     * never touches {@see ToolCallParser\ToolCallParserInterface}. Selecting
+     * `minimax-xml-fallback` therefore recovers nothing on the streaming path
+     * today. Threading the parser through streaming reassembly is §12 D2
+     * territory, outside D6's scope, and remains unscheduled.
+     *
      * @param array<string, mixed> $config
      */
     private function createSglang(array $config): SglangProvider
@@ -470,7 +510,45 @@ final readonly class ProviderFactory
             baseUrl: $config['baseUrl'],
             model: $config['model'],
             apiKey: $config['apiKey'] ?? null,
+            toolCallParser: $this->toolCallParser($config['toolCallParser'] ?? null),
         );
+    }
+
+    /**
+     * Builds the named tool-call parser.
+     *
+     * Both strategies decode `function.arguments` through
+     * {@see SglangProvider::argumentDecoder()} so the §12 D5 MiniMax
+     * `</parameter>` truncation stays observable whichever one is selected -
+     * picking the fallback must not cost the diagnostics.
+     *
+     * An unrecognised name throws rather than silently falling back to the
+     * default: a typo'd `toolCallParser` would otherwise leave the operator
+     * believing the fallback is armed when it is not, and CONTRIBUTING.md's
+     * no-silent-failures rule covers exactly that.
+     *
+     * The empty string is the one deliberate exception to that rule, because
+     * it is not a name an operator types: `''` is what
+     * {@see resolveEnvVars()} yields for a `${SUGARCRUSH_TOOL_CALL_PARSER}`
+     * placeholder whose variable is unset. That is the config key being
+     * absent, not misspelled, so it takes the same branch as `null`.
+     *
+     * @throws \InvalidArgumentException When the name is not a known parser.
+     */
+    private function toolCallParser(mixed $name): ToolCallParserInterface
+    {
+        $default = OpenAiArrayToolCallParser::new(SglangProvider::argumentDecoder());
+
+        return match ($name) {
+            null, '', self::TOOL_CALL_PARSER_OPENAI => $default,
+            self::TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK => MinimaxXmlFallbackToolCallParser::new($default),
+            default => throw new \InvalidArgumentException(sprintf(
+                'Unknown toolCallParser: %s (expected "%s" or "%s")',
+                is_scalar($name) ? (string) $name : get_debug_type($name),
+                self::TOOL_CALL_PARSER_OPENAI,
+                self::TOOL_CALL_PARSER_MINIMAX_XML_FALLBACK,
+            )),
+        };
     }
 
     /**
