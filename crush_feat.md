@@ -1979,19 +1979,48 @@ private function extractReasoning(array $message): array
 ```
 Use this in both `parseResponse()` (non-streaming) and the D2 streaming buffer (accumulate `delta.reasoning_content` the same way `function.arguments` fragments are accumulated, falling back to the `<think>` strip on the final assembled `content` once `finish_reason` arrives — mid-stream tag-stripping on partial chunks is unreliable since a `</think>` closer can straddle a chunk boundary). Have `EngineBackend`/`App` surface the result rendered dimmed/collapsed in the TUI regardless of which path produced it. Explicitly set `extra_body.separate_reasoning = true` in the request (SGLang default is already `true`, but pin it) — this only affects whether the server attempts to populate `reasoning_content` for parsers capable of it; it doesn't change `minimax-append-think`'s behavior, which is exactly why the client-side fallback in Case 2 above is still needed regardless.
 
-**D4. Send `extra_body` and the missing sampling knobs.**
+**D4. Send the SGLang route extras and the missing sampling knobs.**
+
+> **CORRECTED 2026-08-10 (during W1.A3 implementation).** This step originally
+> prescribed nesting the extras under `$params['extra_body']`. That is wrong on
+> the wire: `extra_body` is an OpenAI **Python SDK** client-side concept — the
+> SDK splices the dict into the top level before sending, so an HTTP body that
+> literally contains `{"extra_body": {...}}` is not something SGLang parses.
+> Probed live against skynet2's SGLang v0.5.16 / MiniMax-M2.7:
+> a top-level `"chat_template_kwargs": "NOT_A_DICT"` or `"separate_reasoning":
+> "NOT_A_BOOL"` is rejected `400` by `ChatCompletionRequest`'s pydantic model
+> (so both are genuine top-level fields), while the identical garbage nested
+> under `extra_body` returns `200` — the nested form was silently discarded.
+> Separately, there is **no** top-level `json_schema` field on that route
+> (`"json_schema": 12345` sails through `200`, and the output is unconstrained
+> prose); constrained decoding on the OpenAI-compatible route is reachable only
+> via `response_format`, verified live to actually bind output to the schema.
+
 ```php
-$params['extra_body'] = array_filter([
-    'separate_reasoning' => true,
-    'chat_template_kwargs' => $request->extraTemplateKwargs ?? null,  // new optional CompleteRequest field
-]);
+$params['separate_reasoning'] = true;
+if ($request->extraTemplateKwargs) {  // new optional CompleteRequest field
+    $params['chat_template_kwargs'] = $request->extraTemplateKwargs;
+}
 if ($request->jsonSchema !== null) {
     // finally actually use the DTO field that already exists but is dropped today
-    $params['extra_body']['json_schema'] = is_array($request->jsonSchema)
-        ? json_encode($request->jsonSchema)
-        : $request->jsonSchema;
+    $params['response_format'] = [
+        'type' => 'json_schema',
+        'json_schema' => [
+            'name' => 'response',
+            // decoded object, not a JSON string - a caller holding pre-encoded
+            // JSON is decoded back with JSON_THROW_ON_ERROR so a malformed
+            // schema fails loudly instead of silently disabling constraints
+            'schema' => is_string($request->jsonSchema)
+                ? json_decode($request->jsonSchema, true, 512, JSON_THROW_ON_ERROR)
+                : $request->jsonSchema,
+        ],
+    ];
 }
 ```
+
+`CustomProvider::complete()`/`completeStream()` still send the ineffective
+nested `extra_body.separate_reasoning` — same bug, out of D4's scope, worth
+folding into whichever step next touches that provider.
 Also add `top_p`, `top_k`, `min_p`, `repetition_penalty`, `stop` as optional `CompleteRequest` fields — MiniMax-M2.7 in particular benefits from a nonzero `repetition_penalty`/`min_p` to control repetition in long agentic tool-loop transcripts, exactly sugar-crush's usage pattern (`EngineBackend`'s bounded 8-step tool loop). Turns `supportsJsonSchema()` from a hardcoded `false` into something actually backed by real constrained decoding.
 
 **D5. Guard against the `</parameter>` XML-delimiter truncation bug (B/D2's known-bug finding).**
