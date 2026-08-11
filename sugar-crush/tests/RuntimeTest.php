@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
@@ -946,6 +947,75 @@ final class RuntimeTest extends TestCase
         $this->assertNull($app->instructionLoader);
         $this->assertSame($loader, $next->instructionLoader);
         $this->assertNull($next->withInstructionLoader(null)->instructionLoader);
+    }
+
+    // =========================================================================
+    // buildSystemPrompt() environment-block wiring
+    // =========================================================================
+
+    public function testBuildSystemPromptIncludesEnvironmentBlock(): void
+    {
+        // The gap this closes: no cwd, no git state, no platform, no model and
+        // no date reached the model at all. EnvironmentBlock existed but had
+        // no caller, so this assertion fails against the old
+        // buildSystemPrompt().
+        $app = App::new($this->provider, 'gpt-4');
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertStringContainsString('<env>', $result);
+        $this->assertStringContainsString('</env>', $result);
+        $this->assertStringContainsString('Working directory: ' . getcwd(), $result);
+        $this->assertStringContainsString('Model: gpt-4', $result);
+        $this->assertStringContainsString('Platform: ' . strtolower(PHP_OS_FAMILY), $result);
+        $this->assertStringContainsString('Current date: ' . date('Y-m-d'), $result);
+    }
+
+    public function testBuildSystemPromptUsesAnInjectedEnvironmentBlock(): void
+    {
+        $root = $this->makeTempRepo();
+        $runtime = new Runtime(
+            $this->provider,
+            $this->hookManager,
+            new EnvironmentBlock($root, 'injected-model', new DateTimeImmutable('2026-01-02 03:04:05')),
+        );
+
+        $result = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [App::new($this->provider, 'gpt-4')]);
+
+        $this->assertStringContainsString('Working directory: ' . $root, $result);
+        $this->assertStringContainsString('Model: injected-model', $result);
+        $this->assertStringContainsString('Current date: 2026-01-02', $result);
+    }
+
+    public function testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns(): void
+    {
+        // The block documents itself as a point-in-time snapshot and shells out
+        // to git three times to build one: re-capturing per turn would both
+        // burn three subprocesses per step of the agentic loop and let the
+        // rendered date/git state drift mid-session.
+        $app = App::new($this->provider, 'gpt-4');
+
+        $first = $this->invokePrivateMethod($this->runtime, 'environmentSnapshot', [$app]);
+        $second = $this->invokePrivateMethod($this->runtime, 'environmentSnapshot', [$app]);
+
+        $this->assertSame($first, $second);
+    }
+
+    public function testBuildSystemPromptOrdersEnvironmentBlockBeforeProjectInstructions(): void
+    {
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/AGENTS.md', 'ROOT AGENTS CONVENTION TEXT');
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertLessThan(
+            strpos($result, '<project-instructions>'),
+            strpos($result, '<env>'),
+            'the model must learn where it is before it reads path-relative conventions',
+        );
     }
 
     // =========================================================================

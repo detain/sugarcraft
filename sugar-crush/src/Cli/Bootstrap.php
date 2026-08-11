@@ -187,9 +187,11 @@ final class Bootstrap
     }
 
     /**
-     * ~/.sugar-crush/config.json — per-user persisted UI choices (currently
-     * `provider`/`theme`, written by the Ctrl+P palette's Switch Model/
-     * Switch Theme actions). Distinct from {@see
+     * ~/.sugar-crush/config.json — per-user persisted UI choices
+     * (`provider`/`theme`, written by the Ctrl+P palette's Switch Model/
+     * Switch Theme actions) plus hand-authored settings the CLI never writes
+     * back, currently the `instructions` glob array {@see
+     * forcedInstructions()} reads. Distinct from {@see
      * ProviderFactory::defaultConfigPath()}'s project-level
      * .sugar-crush/config.dev.json dev/test fixture — that one is checked
      * into the repo and shared; this one is a real per-user runtime state
@@ -311,18 +313,53 @@ final class Bootstrap
      * read (and its `@import`s expanded) once per session rather than once
      * per consumer.
      *
-     * DEFERRED: the second constructor argument - the forced-instruction glob
-     * patterns {@see InstructionFileLoader::loadForced()} resolves - is not
-     * passed yet, so loadForced() is live on the call path from
-     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} but always returns
-     * an empty list in production. Sourcing those patterns from the
-     * "instructions" key of ~/.sugar-crush/config.json is W1.B4
-     * (crush_feat.md section 6 recommendation #4); until it lands, forced
-     * instructions are a working mechanism with no data source.
+     * The forced-instruction glob patterns {@see
+     * InstructionFileLoader::loadForced()} resolves come from {@see
+     * forcedInstructions()} — the "instructions" key of
+     * ~/.sugar-crush/config.json — which is what gives loadForced() a real
+     * data source instead of a permanently-empty constructor default.
      */
     public static function instructionLoader(?string $root = null): InstructionFileLoader
     {
-        return new InstructionFileLoader($root ?? getcwd());
+        return new InstructionFileLoader($root ?? getcwd(), self::forcedInstructions());
+    }
+
+    /**
+     * The user-configured forced-instruction glob patterns, read from the
+     * "instructions" key of ~/.sugar-crush/config.json.
+     *
+     * Mirrors opencode's `opencode.json` `instructions` array: a list of
+     * repo-relative globs (e.g. "docs/conventions/*.md") whose matches are
+     * force-loaded into the system prompt every session regardless of what
+     * the agent happens to touch. Before this existed, {@see
+     * InstructionFileLoader::loadForced()} was reachable but could never
+     * return anything on a real run — nothing ever passed it a pattern.
+     *
+     * Everything that is not a non-empty string is dropped here rather than
+     * handed downstream: these values land verbatim in the model's system
+     * prompt, and a hand-edited config file is the expected authoring route,
+     * so a malformed entry must degrade to "that one pattern is ignored"
+     * instead of a type error at session start. Containment (absolute paths,
+     * `..` traversal) stays {@see InstructionFileLoader::loadForced()}'s job —
+     * it is the layer that resolves a pattern against the repo root.
+     *
+     * @return list<string>
+     */
+    public static function forcedInstructions(): array
+    {
+        $configured = self::readUserConfig()['instructions'] ?? null;
+        if (!is_array($configured)) {
+            return [];
+        }
+
+        $patterns = [];
+        foreach ($configured as $pattern) {
+            if (is_string($pattern) && trim($pattern) !== '') {
+                $patterns[] = $pattern;
+            }
+        }
+
+        return $patterns;
     }
 
     /**
