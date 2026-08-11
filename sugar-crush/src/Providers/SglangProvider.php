@@ -73,9 +73,16 @@ final readonly class SglangProvider implements ProviderInterface
         return false;
     }
 
+    /**
+     * True because {@see buildParams()} forwards `CompleteRequest::$jsonSchema`
+     * as `response_format.json_schema.schema`, which a live round-trip against
+     * the skynet2 SGLang v0.5.16 / MiniMax-M2.7 deployment (2026-08-10)
+     * confirmed actually binds output to the schema: the same prompt returns
+     * free prose without `response_format` and schema-conforming JSON with it.
+     */
     public function supportsJsonSchema(): bool
     {
-        return false;
+        return true;
     }
 
     public function contextWindow(): int
@@ -91,23 +98,7 @@ final readonly class SglangProvider implements ProviderInterface
 
     public function complete(CompleteRequest $request): CompleteResponse
     {
-        $params = [
-            'model' => $request->model,
-            'messages' => $this->formatMessages($request->messages),
-            'temperature' => $request->temperature ?? 0.7,
-            'max_tokens' => $request->maxTokens ?? 4096,
-            // Pin SGLang's reasoning-splitting behavior explicitly rather than
-            // relying on its (currently true) default - see D3/D4: this is
-            // what tells a properly-splitting parser (the deployed `minimax`
-            // one) to populate `reasoning_content` at all. It's a no-op for
-            // `minimax-append-think`, which is exactly why extractReasoning()'s
-            // <think>-stripping fallback below still matters regardless.
-            'extra_body' => ['separate_reasoning' => true],
-        ];
-
-        if ($request->tools !== null) {
-            $params['tools'] = $this->formatTools($request->tools);
-        }
+        $params = $this->buildParams($request);
 
         try {
             $response = $this->httpClient->post('chat/completions', [
@@ -124,18 +115,8 @@ final readonly class SglangProvider implements ProviderInterface
 
     public function completeStream(CompleteRequest $request): \Generator
     {
-        $params = [
-            'model' => $request->model,
-            'messages' => $this->formatMessages($request->messages),
-            'temperature' => $request->temperature ?? 0.7,
-            'max_tokens' => $request->maxTokens ?? 4096,
-            'stream' => true,
-            'extra_body' => ['separate_reasoning' => true],
-        ];
-
-        if ($request->tools !== null) {
-            $params['tools'] = $this->formatTools($request->tools);
-        }
+        $params = $this->buildParams($request);
+        $params['stream'] = true;
 
         try {
             $response = $this->httpClient->post('chat/completions', [
@@ -199,6 +180,121 @@ final readonly class SglangProvider implements ProviderInterface
         } catch (GuzzleException $e) {
             return new EmbeddingsResponse(embeddings: []);
         }
+    }
+
+    /**
+     * W1.A3 (§12 D4): builds the full `/v1/chat/completions` body.
+     *
+     * Before this, the entire request surface was `model`, `messages`,
+     * `temperature`, `max_tokens`, `tools` (+ `stream`), so none of SGLang's
+     * sampling knobs or route-specific extras were reachable at all and
+     * `CompleteRequest::$jsonSchema` was silently dropped on every call.
+     *
+     * Placement rationale - EVERYTHING is top level, including the three
+     * SGLang extras. §12 D4 prescribes wrapping those in `extra_body`, but
+     * `extra_body` is an OpenAI *Python SDK* client-side concept: the SDK
+     * splices that dict into the top level before it ever hits the wire, so a
+     * literal `{"extra_body": {...}}` body is not something SGLang parses.
+     * Probed against the live skynet2 SGLang v0.5.16 deployment (2026-08-10):
+     * a top-level `chat_template_kwargs: "NOT_A_DICT"` / `separate_reasoning:
+     * "NOT_A_BOOL"` is rejected 400 by `ChatCompletionRequest`'s pydantic
+     * model (proving both are real top-level fields), while the same garbage
+     * nested under `extra_body` returns 200 - i.e. the nested form was being
+     * dropped in silence. §12 D4's snippet is corrected in place there.
+     *
+     * `json_schema` is the one extra that has no top-level home at all: a
+     * top-level `json_schema` is not on `ChatCompletionRequest` (a bogus
+     * `json_schema: 12345` sails through 200) and does not constrain decoding.
+     * The OpenAI-compatible route exposes constrained decoding only through
+     * `response_format`, which was verified live to actually bind output to
+     * the schema, so that is what the DTO field maps to.
+     *
+     * Optional knobs are only emitted when the caller actually set them -
+     * sending a null/implicit value would override the server's launch-time
+     * default rather than defer to it. `null` AND empty are both treated as
+     * "defer to server": an empty `stop` list or empty schema is not a
+     * meaningful instruction, it is an unset one.
+     *
+     * Shared by complete() and completeStream() so the two bodies cannot
+     * drift apart (they already had byte-identical duplicated bodies), and
+     * so §12 D7's RadixAttention prefix-cache stability depends on one
+     * serialization path instead of two.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildParams(CompleteRequest $request): array
+    {
+        $params = [
+            'model' => $request->model,
+            'messages' => $this->formatMessages($request->messages),
+            'temperature' => $request->temperature ?? 0.7,
+            'max_tokens' => $request->maxTokens ?? 4096,
+
+            // Pin SGLang's reasoning-splitting behavior explicitly rather than
+            // relying on its (currently true) default - see D3/D4: this is
+            // what tells a properly-splitting parser (the deployed `minimax`
+            // one) to populate `reasoning_content` at all. It's a no-op for
+            // `minimax-append-think`, which is exactly why extractReasoning()'s
+            // <think>-stripping fallback still matters regardless.
+            'separate_reasoning' => true,
+        ];
+
+        foreach ([
+            'top_p' => $request->topP,
+            'top_k' => $request->topK,
+            'min_p' => $request->minP,
+            'repetition_penalty' => $request->repetitionPenalty,
+            'stop' => $request->stop,
+            'chat_template_kwargs' => $request->extraTemplateKwargs,
+        ] as $key => $value) {
+            // Strict comparisons throughout: `0` / `0.0` are meaningful
+            // top_k/min_p values and must survive, unlike a falsy filter.
+            if ($value !== null && $value !== [] && $value !== '') {
+                $params[$key] = $value;
+            }
+        }
+
+        if ($request->jsonSchema !== null && $request->jsonSchema !== '') {
+            // `response_format` wants the schema as a decoded object, so a
+            // caller holding pre-encoded JSON is decoded back here rather than
+            // shipped as a string the server would reject. JSON_THROW_ON_ERROR
+            // because the silent alternative is a `null` schema that disables
+            // constrained decoding while the request still returns 200 - the
+            // same invisible-failure class §12 D5 exists to eliminate.
+            $schema = is_string($request->jsonSchema)
+                ? json_decode($request->jsonSchema, true, 512, JSON_THROW_ON_ERROR)
+                : $request->jsonSchema;
+
+            // JSON_THROW_ON_ERROR only rejects *syntactically* broken JSON:
+            // `'null'`, `'123'` and `'false'` all decode cleanly to scalars and
+            // would ship `schema: null` / `schema: 123`, reproducing exactly the
+            // 200-with-unconstrained-decoding failure the decode exists to
+            // prevent. A JSON Schema is always an object, so a scalar is a
+            // caller bug worth an immediate, loud failure.
+            if (!is_array($schema)) {
+                throw new \InvalidArgumentException(
+                    'CompleteRequest::$jsonSchema must decode to a JSON object; got '
+                    . get_debug_type($schema)
+                );
+            }
+
+            // Emptiness is judged AFTER the decode so the two accepted shapes
+            // agree: `[]` and its pre-encoded twin `'{}'` are the same caller
+            // intent and must both mean "defer to the server", never one
+            // silent no-op and one hard throw depending on who encoded it.
+            if ($schema !== []) {
+                $params['response_format'] = [
+                    'type' => 'json_schema',
+                    'json_schema' => ['name' => 'response', 'schema' => $schema],
+                ];
+            }
+        }
+
+        if ($request->tools !== null) {
+            $params['tools'] = $this->formatTools($request->tools);
+        }
+
+        return $params;
     }
 
     /**

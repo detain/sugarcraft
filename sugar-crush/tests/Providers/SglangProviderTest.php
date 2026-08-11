@@ -124,15 +124,17 @@ final class SglangProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // 7. supportsJsonSchema() returns false
+    // 7. supportsJsonSchema() returns true (§12 D4 - jsonSchema is now
+    //    forwarded to SGLang's constrained decoding; see
+    //    SglangProviderRequestBuildingTest for the request-body coverage)
     // -------------------------------------------------------------------------
 
-    public function testSupportsJsonSchemaReturnsFalse(): void
+    public function testSupportsJsonSchemaReturnsTrue(): void
     {
         $client = $this->createMock(Client::class);
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $client);
 
-        $this->assertFalse($provider->supportsJsonSchema());
+        $this->assertTrue($provider->supportsJsonSchema());
     }
 
     // -------------------------------------------------------------------------
