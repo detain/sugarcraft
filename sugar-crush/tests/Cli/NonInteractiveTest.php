@@ -58,14 +58,14 @@ final class NonInteractiveTest extends TestCase
         $backend = new class implements Backend {
             public bool $called = false;
 
-            public function complete(array $history, callable $onToken = null): Message
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
             {
                 $this->called = true;
 
                 return Message::assistant('should not run');
             }
 
-            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): \React\Promise\PromiseInterface
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
             {
                 return \React\Promise\resolve($this->complete($history, $onToken));
             }
@@ -161,12 +161,12 @@ final class NonInteractiveTest extends TestCase
     {
         $args = ArgvParser::parse(['sugarcrush', '-p', 'boom']);
         $backend = new class implements Backend {
-            public function complete(array $history, callable $onToken = null): Message
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
             {
                 throw new \RuntimeException('backend unavailable');
             }
 
-            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): \React\Promise\PromiseInterface
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
             {
                 return \React\Promise\reject(new \RuntimeException('backend unavailable'));
             }

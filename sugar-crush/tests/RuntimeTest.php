@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
@@ -254,6 +256,207 @@ final class RuntimeTest extends TestCase
         $this->assertInstanceOf(AssistantMessage::class, $results[0]);
         $this->assertInstanceOf(ToolResultMessage::class, $results[1]);
         $this->assertSame('call_456', $results[1]->toolCallId());
+    }
+
+    // =========================================================================
+    // $onEvent tool-lifecycle plumbing (crush_feat.md §1 E1)
+    // =========================================================================
+
+    public function testRunEmitsToolStartedThenToolFinishedForEachToolCall(): void
+    {
+        $this->provider->method('supportsStreaming')->willReturn(false);
+
+        $toolCall = new ToolCall('call_ev', 'ev_tool', ['arg' => 'value']);
+        $this->provider->method('complete')
+            ->willReturn(new CompleteResponse(content: 'calling', toolCalls: [$toolCall]));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([$this->createMockTool('ev_tool', 'tool output')]);
+
+        $events = [];
+        iterator_to_array($this->runtime->run($app, function ($event) use (&$events): void {
+            $events[] = $event;
+        }));
+
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(ToolStarted::class, $events[0]);
+        $this->assertSame('call_ev', $events[0]->toolCallId);
+        $this->assertSame('ev_tool', $events[0]->toolName);
+        $this->assertSame(['arg' => 'value'], $events[0]->arguments);
+
+        $this->assertInstanceOf(ToolFinished::class, $events[1]);
+        $this->assertSame('call_ev', $events[1]->toolCallId);
+        $this->assertSame('ev_tool', $events[1]->toolName);
+        $this->assertSame('tool output', $events[1]->result->content());
+        $this->assertFalse($events[1]->result->isError());
+    }
+
+    public function testRunEmitsToolEventsOnTheStreamingPathToo(): void
+    {
+        $this->provider->method('supportsStreaming')->willReturn(true);
+
+        $toolCall = new ToolCall('call_stream_ev', 'stream_tool', []);
+        $this->provider->method('completeStream')->willReturnCallback(fn () => $this->streamOf([
+            new CompleteResponse(content: 'thinking', toolCalls: [$toolCall]),
+        ]));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([$this->createMockTool('stream_tool', 'streamed')]);
+
+        $events = [];
+        iterator_to_array($this->runtime->run($app, function ($event) use (&$events): void {
+            $events[] = $event;
+        }));
+
+        $this->assertSame(
+            [ToolStarted::class, ToolFinished::class],
+            array_map(static fn ($e) => $e::class, $events),
+        );
+        $this->assertSame('call_stream_ev', $events[1]->toolCallId);
+    }
+
+    /**
+     * A tool never sees its own call id, so `createMockTool()` (like the real
+     * built-ins) returns an invented one — the event must carry the id the
+     * MODEL used, or a consumer cannot match a finish to its own placeholder.
+     */
+    public function testToolFinishedCarriesTheOriginalToolCallIdNotTheToolsOwn(): void
+    {
+        $toolCall = new ToolCall('call_original', 'id_tool', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$this->createMockTool('id_tool', 'out')]);
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [$toolCall],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $this->assertSame('call_original', $events[1]->toolCallId);
+        // The embedded result is handed over verbatim, so its own id is still
+        // the tool's invented one - the EVENT's toolCallId is the correlation
+        // key a consumer must key off, not result->toolCallId().
+        $this->assertSame('call_id_tool', $events[1]->result->toolCallId());
+    }
+
+    public function testUnknownToolStillEmitsAStartAndAnErrorFinish(): void
+    {
+        $toolCall = new ToolCall('call_missing', 'nope', []);
+        $app = App::new($this->provider, 'gpt-4');
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [$toolCall],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(ToolStarted::class, $events[0]);
+        $this->assertInstanceOf(ToolFinished::class, $events[1]);
+        $this->assertTrue($events[1]->result->isError());
+        $this->assertStringContainsString('Tool not found: nope', $events[1]->result->content());
+    }
+
+    public function testHookDenialEmitsAnErrorFinishWithTheDenialReason(): void
+    {
+        $tool = $this->createMockTool('denied_ev_tool', 'must not run');
+        $this->hookRegistry->register(new class implements HookInterface {
+            public function name(): string { return 'deny-ev'; }
+            public function event(): HookEvent { return HookEvent::PreToolUse; }
+            public function matcher(): string { return '.*'; }
+            public function execute(HookContext $context): HookResult { return HookResult::deny('too risky'); }
+        });
+
+        $toolCall = new ToolCall('call_denied_ev', 'denied_ev_tool', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$tool]);
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [$toolCall],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $this->assertCount(2, $events);
+        $this->assertSame('call_denied_ev', $events[1]->toolCallId);
+        $this->assertTrue($events[1]->result->isError());
+        $this->assertStringContainsString('too risky', $events[1]->result->content());
+    }
+
+    /**
+     * The renderer-side payloads (diff from W1.F1, image bytes from W1.G2) have
+     * to ride on the event: re-deriving them downstream would mean scanning the
+     * result's free text.
+     */
+    public function testToolFinishedCarriesTheWholeResultIncludingDiffAndImage(): void
+    {
+        $tool = $this->createMock(Tool::class);
+        $tool->method('name')->willReturn('rich_tool');
+        $tool->method('description')->willReturn('rich');
+        $tool->method('inputSchema')->willReturn([]);
+        $tool->method('execute')->willReturn(new ToolResult(
+            toolCallId: 'ignored',
+            content: 'File updated',
+            isError: false,
+            durationMs: 12,
+            imageBytes: "\x89PNG\x00binary",
+            imageProtocol: 'kitty',
+            diff: "--- a/x.php\n+++ b/x.php\n",
+        ));
+
+        $toolCall = new ToolCall('call_rich', 'rich_tool', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$tool]);
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [$toolCall],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $this->assertSame("--- a/x.php\n+++ b/x.php\n", $events[1]->result->diff());
+        $this->assertSame("\x89PNG\x00binary", $events[1]->result->imageBytes());
+        $this->assertSame('kitty', $events[1]->result->imageProtocol());
+        $this->assertSame(12, $events[1]->result->durationMs());
+    }
+
+    public function testEveryToolCallInABatchGetsItsOwnStartFinishPair(): void
+    {
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createMockTool('a_tool', 'A'),
+            $this->createMockTool('b_tool', 'B'),
+        ]);
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [new ToolCall('call_a', 'a_tool', []), new ToolCall('call_b', 'b_tool', [])],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $this->assertSame(
+            ['call_a', 'call_a', 'call_b', 'call_b'],
+            array_map(static fn ($e) => $e->toolCallId, $events),
+        );
+        $this->assertSame(
+            [ToolStarted::class, ToolFinished::class, ToolStarted::class, ToolFinished::class],
+            array_map(static fn ($e) => $e::class, $events),
+        );
+    }
+
+    public function testRunWithoutAnOnEventCallbackStillYieldsTheSameMessages(): void
+    {
+        $this->provider->method('supportsStreaming')->willReturn(false);
+        $this->provider->method('complete')
+            ->willReturn(new CompleteResponse(content: 'go', toolCalls: [new ToolCall('call_noev', 'noev_tool', [])]));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([$this->createMockTool('noev_tool', 'silent')]);
+
+        $results = iterator_to_array($this->runtime->run($app));
+
+        $this->assertCount(2, $results);
+        $this->assertInstanceOf(AssistantMessage::class, $results[0]);
+        $this->assertInstanceOf(ToolResultMessage::class, $results[1]);
+        $this->assertSame('silent', $results[1]->content());
     }
 
     // =========================================================================

@@ -104,23 +104,43 @@ final class HookRegistry
 
     /**
      * Execute all matching hooks for an event.
+     *
+     * Precedence: DENY (and any action that does not permit execution) wins
+     * outright; ASK only wins over ALLOW. An ASK therefore does NOT stop the
+     * scan — a later hook's hard DENY still has to be seen, otherwise the user
+     * approving the prompt would resurrect a call another hook had already
+     * refused.
      */
     public function executeHooks(string $event, HookContext $context): HookResult
     {
         $matches = $this->findMatches($event, $context->toolName);
+        $pendingAsk = null;
 
         foreach ($matches as $hook) {
             $result = $hook->execute($context);
 
-            if (!$result->isAllowed()) {
+            if ($result->isAsk()) {
+                // First question asked wins; a second ASK adds nothing since
+                // one unanswered prompt already blocks the call.
+                $pendingAsk ??= $result;
+                continue;
+            }
+
+            if (!$result->permitsExecution()) {
                 return $result;
             }
 
             if ($result->isModified()) {
-                $context = $context->withToolInput($result->modifiedInput);
+                // A pending question outranks a rewrite: the rewritten input
+                // is only worth anything once the call is permitted at all.
+                if ($pendingAsk !== null) {
+                    return $pendingAsk;
+                }
+
+                return $result;
             }
         }
 
-        return HookResult::allow();
+        return $pendingAsk ?? HookResult::allow();
     }
 }

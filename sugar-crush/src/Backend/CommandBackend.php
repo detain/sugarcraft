@@ -46,7 +46,12 @@ final class CommandBackend implements Backend
     public function __construct(private readonly string|array $command)
     {}
 
-    public function complete(array $history, callable $onToken = null): Message
+    /**
+     * $onEvent is accepted and ignored: the external command owns whatever tool
+     * use happens on its side and reports nothing back but final text, so this
+     * backend has no tool lifecycle it can honestly emit.
+     */
+    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
     {
         $payload = json_encode(
             array_map(static fn(Message $m) => $m->toWire(), $history),
@@ -82,7 +87,7 @@ final class CommandBackend implements Backend
         return Message::assistant(trim($stdout));
     }
 
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface
+    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
         return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $cancellation): void {
             if ($cancellation?->isCancelled() === true) {

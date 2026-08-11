@@ -24,6 +24,15 @@ use SugarCraft\Crush\Backend\CancellationToken;
  * streaming, it must still return a valid Message (synchronous
  * fallback).
  *
+ * **Tool lifecycle:** Pass an optional `$onEvent` callback to observe
+ * the tool calls a backend makes *during* a turn
+ * ({@see Events\ToolStarted} / {@see Events\ToolFinished}). It exists
+ * because the returned Message is a single opaque final answer: an
+ * agentic backend such as {@see Backend\EngineBackend} can run several
+ * rounds of tool calls behind it, and without this callback none of
+ * them are observable by the caller at all (crush_feat.md §1 E1).
+ * A backend that never calls tools ignores it.
+ *
  * @see Backend\EchoBackend  for the default offline / test impl
  */
 interface Backend
@@ -36,8 +45,11 @@ interface Backend
      *                                each token as it arrives when
      *                                streaming is enabled. Signature:
      *                                `function(string $token): void`
+     * @param callable|null $onEvent optional tool-lifecycle observer.
+     *                                Signature:
+     *                                `function(Events\ToolStarted|Events\ToolFinished $event): void`
      */
-    public function complete(array $history, callable $onToken = null): Message;
+    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message;
 
     /**
      * Async version of {@see complete()}. Returns a promise that
@@ -54,6 +66,13 @@ interface Backend
      *                                and reject early instead of running to
      *                                completion. A backend that can't act on
      *                                this may ignore it.
+     * @param callable|null $onEvent Optional tool-lifecycle observer, see
+     *                                {@see complete()}. A backend that moves the
+     *                                work off-process MUST still deliver these
+     *                                in the CALLER's process (replayed if it
+     *                                cannot forward them live) — a callback
+     *                                invoked inside a forked child reaches
+     *                                nobody.
      */
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface;
+    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface;
 }

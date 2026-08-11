@@ -48,7 +48,12 @@ final class StreamingCommandBackend implements Backend
         private readonly int $timeout = 120,
     ) {}
 
-    public function complete(array $history, callable $onToken = null): Message
+    /**
+     * $onEvent is accepted and ignored: this backend streams text tokens only —
+     * the external command's tool use, if any, is invisible on the wire, so
+     * there is no tool lifecycle to report.
+     */
+    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
     {
         $payload = json_encode(
             array_map(static fn(Message $m) => $m->toWire(), $history),
@@ -144,7 +149,7 @@ final class StreamingCommandBackend implements Backend
         return Message::assistant(trim($body));
     }
 
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface
+    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
         return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $cancellation): void {
             Loop::futureTick(function () use ($history, $onToken, $resolve, $reject, $cancellation): void {

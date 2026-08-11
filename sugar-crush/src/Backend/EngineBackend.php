@@ -10,6 +10,8 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
@@ -22,6 +24,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tools\ToolResult;
 
 /**
  * Bridges the chat-shell {@see Backend} seam to the full agent engine —
@@ -158,7 +161,17 @@ final class EngineBackend implements Backend
         return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader);
     }
 
-    public function complete(array $history, ?callable $onToken = null): Message
+    /**
+     * @param ?callable $onEvent Tool-lifecycle observer threaded straight into
+     *                           {@see Runtime::run()} so every tool call this
+     *                           bounded loop makes — including the ones on
+     *                           intermediate steps whose messages get folded
+     *                           back into $app and never reach the caller — is
+     *                           observable while the turn is still running
+     *                           (crush_feat.md §1 E1). Without it the caller
+     *                           sees only $lastAssistant's text.
+     */
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
         $runtime = new Runtime($this->provider, $this->resolveHookManager());
 
@@ -182,7 +195,7 @@ final class EngineBackend implements Backend
             $assistant = null;
             $toolResults = [];
 
-            foreach ($runtime->run($app) as $message) {
+            foreach ($runtime->run($app, $onEvent) as $message) {
                 if ($message instanceof AssistantMessage) {
                     $assistant = $message;
                 } elseif ($message instanceof ToolResultMessage) {
@@ -247,7 +260,7 @@ final class EngineBackend implements Backend
      * extended here to cross the ReactPHP loop boundary rather than just
      * fanning out sibling tool calls.
      */
-    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
         $deferred = new Deferred();
 
@@ -258,12 +271,12 @@ final class EngineBackend implements Backend
         }
 
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
-            return $this->completeAsyncBlocking($history, $onToken, $deferred);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent);
         }
 
         $sockets = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($sockets === false) {
-            return $this->completeAsyncBlocking($history, $onToken, $deferred);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent);
         }
 
         [$parentSocket, $childSocket] = $sockets;
@@ -273,7 +286,7 @@ final class EngineBackend implements Backend
             fclose($parentSocket);
             fclose($childSocket);
 
-            return $this->completeAsyncBlocking($history, $onToken, $deferred);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent);
         }
 
         if ($pid === 0) {
@@ -339,7 +352,7 @@ final class EngineBackend implements Backend
             }
         });
 
-        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$settled, $deferred, $loop, $pid, $onToken, &$timeoutTimer, &$cancelTimer): void {
+        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$settled, $deferred, $loop, $pid, $onToken, $onEvent, &$timeoutTimer, &$cancelTimer): void {
             $chunk = fread($stream, 65536);
             if ($chunk === '' || $chunk === false) {
                 $loop->removeReadStream($stream);
@@ -357,7 +370,7 @@ final class EngineBackend implements Backend
 
                 $status = 0;
                 pcntl_waitpid($pid, $status);
-                $this->settleFromChildPayload($buffer, $deferred, $onToken);
+                $this->settleFromChildPayload($buffer, $deferred, $onToken, $onEvent);
 
                 return;
             }
@@ -377,7 +390,17 @@ final class EngineBackend implements Backend
     private function runCompleteInChild($childSocket, array $history): never
     {
         try {
-            $message = $this->complete($history, null);
+            // Tool events are COLLECTED here, not delivered: this is a forked
+            // child, so invoking the caller's callback in-process would write
+            // into a copy of its state and vanish on exit. They ride back in
+            // the payload and the parent replays them (see
+            // settleFromChildPayload()) - end-of-turn rather than live, the
+            // same latency $onToken's one-shot-at-the-end delivery already has
+            // on this path.
+            $events = [];
+            $message = $this->complete($history, null, static function (ToolStarted|ToolFinished $event) use (&$events): void {
+                $events[] = self::encodeEvent($event);
+            });
             // imageBytes/imageProtocol survive this fork boundary too - PHP's
             // serialize()/unserialize() (unlike JSON) round-trip arbitrary
             // binary strings natively, so no base64 step is needed here the
@@ -389,6 +412,7 @@ final class EngineBackend implements Backend
                 'reasoning' => $message->reasoning,
                 'imageBytes' => $message->imageBytes,
                 'imageProtocol' => $message->imageProtocol,
+                'events' => $events,
             ]);
         } catch (\Throwable $e) {
             $payload = serialize(['ok' => false, 'error' => $e->getMessage()]);
@@ -406,7 +430,7 @@ final class EngineBackend implements Backend
      * A missing/undecodable payload (child crashed before writing anything)
      * is reported as a failure rather than silently resolving empty.
      */
-    private function settleFromChildPayload(string $buffer, Deferred $deferred, ?callable $onToken): void
+    private function settleFromChildPayload(string $buffer, Deferred $deferred, ?callable $onToken, ?callable $onEvent = null): void
     {
         $data = $buffer !== '' ? @unserialize($buffer, ['allowed_classes' => false]) : false;
         if (!is_array($data)) {
@@ -419,6 +443,18 @@ final class EngineBackend implements Backend
             $deferred->reject(new \RuntimeException((string) ($data['error'] ?? 'Provider worker process failed')));
 
             return;
+        }
+
+        // Tool events first: they all happened before the answer text they
+        // led to, so replaying them after $onToken would hand a consumer a
+        // finished turn followed by the tool calls that produced it.
+        if ($onEvent !== null && is_array($data['events'] ?? null)) {
+            foreach ($data['events'] as $encoded) {
+                $event = is_array($encoded) ? self::decodeEvent($encoded) : null;
+                if ($event !== null) {
+                    $onEvent($event);
+                }
+            }
         }
 
         $content = (string) ($data['content'] ?? '');
@@ -439,15 +475,88 @@ final class EngineBackend implements Backend
     }
 
     /**
+     * Flatten one tool event for the fork payload.
+     *
+     * Plain nested arrays, not the objects themselves, because the parent
+     * unserializes with `allowed_classes => false` (a hostile/corrupt payload
+     * must never be able to instantiate anything) - so the objects are rebuilt
+     * on the other side by {@see decodeEvent()} instead of round-tripped.
+     *
+     * @return array<string, mixed>
+     */
+    private static function encodeEvent(ToolStarted|ToolFinished $event): array
+    {
+        if ($event instanceof ToolStarted) {
+            return [
+                'kind' => 'started',
+                'id' => $event->toolCallId,
+                'name' => $event->toolName,
+                'arguments' => $event->arguments,
+            ];
+        }
+
+        return [
+            'kind' => 'finished',
+            'id' => $event->toolCallId,
+            'name' => $event->toolName,
+            'content' => $event->result->content(),
+            'isError' => $event->result->isError(),
+            'durationMs' => $event->result->durationMs(),
+            'imageBytes' => $event->result->imageBytes(),
+            'imagePath' => $event->result->imagePath(),
+            'imageProtocol' => $event->result->imageProtocol(),
+            'diff' => $event->result->diff(),
+        ];
+    }
+
+    /**
+     * Rebuild a tool event flattened by {@see encodeEvent()}, or null when the
+     * entry is not a shape this version wrote (a partial write, or a payload
+     * from a mismatched build) - one unrecognizable event is skipped rather
+     * than failing the whole turn.
+     *
+     * @param array<string, mixed> $encoded
+     */
+    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|null
+    {
+        $id = is_string($encoded['id'] ?? null) ? $encoded['id'] : null;
+        $name = is_string($encoded['name'] ?? null) ? $encoded['name'] : null;
+        if ($id === null || $name === null) {
+            return null;
+        }
+
+        if (($encoded['kind'] ?? null) === 'started') {
+            return new ToolStarted($id, $name, is_array($encoded['arguments'] ?? null) ? $encoded['arguments'] : []);
+        }
+
+        if (($encoded['kind'] ?? null) !== 'finished') {
+            return null;
+        }
+
+        return new ToolFinished($id, $name, new ToolResult(
+            toolCallId: $id,
+            content: (string) ($encoded['content'] ?? ''),
+            isError: (bool) ($encoded['isError'] ?? false),
+            durationMs: is_int($encoded['durationMs'] ?? null) ? $encoded['durationMs'] : null,
+            imageBytes: is_string($encoded['imageBytes'] ?? null) ? $encoded['imageBytes'] : null,
+            imagePath: is_string($encoded['imagePath'] ?? null) ? $encoded['imagePath'] : null,
+            imageProtocol: is_string($encoded['imageProtocol'] ?? null) ? $encoded['imageProtocol'] : null,
+            diff: is_string($encoded['diff'] ?? null) ? $encoded['diff'] : null,
+        ));
+    }
+
+    /**
      * Fallback for an environment without pcntl/stream_socket_pair support:
      * the old synchronous-under-a-Promise behaviour. Blocks the caller for
      * the duration of the request instead of freezing the whole program
      * silently - a real capability gap, not a bug to hide.
      */
-    private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred): PromiseInterface
+    private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null): PromiseInterface
     {
         try {
-            $deferred->resolve($this->complete($history, $onToken));
+            // No fork here, so tool events reach the caller LIVE on this path
+            // (mid-turn, as each call starts/ends) rather than replayed.
+            $deferred->resolve($this->complete($history, $onToken, $onEvent));
         } catch (\Throwable $e) {
             $deferred->reject($e);
         }

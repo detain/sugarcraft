@@ -377,8 +377,93 @@ final class HookRegistryTest extends TestCase
     }
 
     // =========================================================================
+    // executeHooks ask() Precedence Tests
+    // =========================================================================
+
+    public function testExecuteHooksReturnsAskWhenEveryOtherHookAllows(): void
+    {
+        $this->registry->register($this->createAllowHook('allow-first', '.*'));
+        $this->registry->register($this->createAskHook('ask-second', '.*', 'Proceed?'));
+        $this->registry->register($this->createAllowHook('allow-third', '.*'));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isAsk());
+        $this->assertSame('Proceed?', $result->message);
+    }
+
+    public function testDenyAfterAskStillWins(): void
+    {
+        // Fail-open guard: if the ASK short-circuited the scan, approving the
+        // prompt would run a call the later hook flatly refused.
+        $this->registry->register($this->createAskHook('ask-first', '.*', 'Proceed?'));
+        $this->registry->register($this->createDenyHook('deny-second', '.*', 'Protected path'));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isDenied());
+        $this->assertSame('Protected path', $result->message);
+        $this->assertFalse($result->permitsExecution());
+    }
+
+    public function testModifyAfterAskDoesNotPermitExecution(): void
+    {
+        // A rewrite is worthless until the call is permitted at all, so the
+        // outstanding question must survive a MODIFY.
+        $this->registry->register($this->createAskHook('ask-first', '.*', 'Proceed?'));
+        $this->registry->register($this->createModifyHook('modify-second', '.*', '{"cmd":"ls"}'));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isAsk());
+        $this->assertFalse($result->permitsExecution());
+    }
+
+    public function testFirstAskWinsWhenSeveralHooksAsk(): void
+    {
+        $this->registry->register($this->createAskHook('ask-first', '.*', 'First question?'));
+        $this->registry->register($this->createAskHook('ask-second', '.*', 'Second question?'));
+
+        $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
+
+        $this->assertTrue($result->isAsk());
+        $this->assertSame('First question?', $result->message);
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
+
+    private function createAskHook(string $name, string $matcher, string $question): HookInterface
+    {
+        return new class($name, $matcher, $question) implements HookInterface {
+            public function __construct(
+                private string $name,
+                private string $matcher,
+                private string $question,
+            ) {}
+
+            public function name(): string
+            {
+                return $this->name;
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return $this->matcher;
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                return HookResult::ask($this->question);
+            }
+        };
+    }
 
     private function createHook(string $name, HookEvent $event, string $toolName, string $matcher): HookInterface
     {
