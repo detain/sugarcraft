@@ -92,8 +92,6 @@ final class CommandRegistry
                 paletteAction: PaletteAction::SwitchAgent,
                 paletteLabel: 'Switch agent',
             ),
-            // Dispatched today as a bare "mcp auth …" string with no leading
-            // slash, so the "/" popup must not advertise "/mcp" yet.
             CommandSpec::new(
                 'mcp',
                 'Manage MCP server auth (list/add/remove)',
@@ -101,7 +99,6 @@ final class CommandRegistry
                 paletteAction: PaletteAction::ToggleMcp,
                 paletteLabel: 'Toggle MCPs',
                 argumentHint: '<list|add|remove> [server]',
-                slashVisible: false,
             ),
             CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
             CommandSpec::new('workflow', 'Run, pause, resume, or inspect a workflow', 'Workflow'),

@@ -1266,8 +1266,11 @@ final class Chat implements Model
             return $this->handleThemeCommand($text);
         }
 
-        // Handle mcp auth commands
-        if (str_starts_with($text, 'mcp auth')) {
+        // Handle /mcp (the discoverable spelling) and the bare "mcp auth …"
+        // form it replaces. The bare form has no leading slash, so it never
+        // showed up in the "/" popup; it stays dispatched here so existing
+        // muscle memory and the palette's ToggleMcp action keep working.
+        if (str_starts_with($text, '/mcp') || str_starts_with($text, 'mcp auth')) {
             return $this->handleMcpAuthCommand($text);
         }
 
@@ -2885,11 +2888,6 @@ final class Chat implements Model
     }
 
     /**
-     * Handle `mcp auth` command for managing MCP server OAuth credentials.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    /**
      * Handle /theme command — switch the active color theme, or show the
      * current one + available choices when called with no argument.
      *
@@ -2924,19 +2922,46 @@ final class Chat implements Model
         return [$next, null];
     }
 
+    /**
+     * Handle the `/mcp` slash command (and its legacy bare `mcp auth …`
+     * spelling) for managing MCP server OAuth credentials.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
     private function handleMcpAuthCommand(string $inputBuf): array
     {
-        // Parse sub-command and args after "mcp auth"
-        $afterMcpAuth = ltrim(substr($inputBuf, 8)); // after "mcp auth"
-        $args = $afterMcpAuth !== '' ? preg_split('/\s+/', $afterMcpAuth) : [];
-
         ob_start();
         $authStore = \SugarCraft\Crush\MCP\McpAuthStore::create();
         $command = new McpAuthCommand($authStore);
-        $exitCode = $command->execute($this, $args);
-        $output = ob_get_clean();
+        $command->execute($this, self::parseMcpArgs($inputBuf));
+        $output = (string) ob_get_clean();
 
         return $this->mcpAuthResponse($inputBuf, $output);
+    }
+
+    /**
+     * Split an MCP command line into {@see McpAuthCommand::execute()}'s argv.
+     *
+     * Both spellings reduce to the same argv: the leading command word is
+     * dropped whether it is written `/mcp` or `mcp`, and the `auth` noun the
+     * bare form spells out is optional under the slash form - `/mcp list`
+     * and `mcp auth list` are the same command.
+     *
+     * @return list<string>
+     */
+    private static function parseMcpArgs(string $inputBuf): array
+    {
+        $tokens = preg_split('/\s+/', trim($inputBuf), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        if (isset($tokens[0]) && ltrim($tokens[0], '/') === 'mcp') {
+            array_shift($tokens);
+        }
+
+        if (($tokens[0] ?? null) === 'auth') {
+            array_shift($tokens);
+        }
+
+        return array_values($tokens);
     }
 
     /**

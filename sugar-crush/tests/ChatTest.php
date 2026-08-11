@@ -2184,4 +2184,60 @@ final class ChatTest extends TestCase
         $withBackend = $chat->withTitleBackend($this->titleBackend('x'));
         $this->assertNotSame($chat, $withBackend);
     }
+
+    public function testSlashMcpDispatchesToTheMcpAuthCommand(): void
+    {
+        // Regression: "/mcp …" had no branch in submit(), so it was sent to
+        // the backend as an ordinary prompt - the command was only reachable
+        // by typing the slashless "mcp auth …" form.
+        $chat = new Chat(inputBuf: '/mcp add');
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertSame('', $next->inputBuf);
+        $this->assertCount(2, $next->history);
+        $this->assertSame('/mcp add', $next->history[0]->content);
+        $this->assertStringContainsString('Usage: mcp auth add <server>', $next->history[1]->content);
+    }
+
+    public function testSlashMcpAcceptsTheOptionalAuthWord(): void
+    {
+        // "/mcp auth remove" and "/mcp remove" must reduce to the same argv,
+        // i.e. "auth" must not be mistaken for the sub-command.
+        foreach (['/mcp remove', '/mcp auth remove'] as $line) {
+            $chat = new Chat(inputBuf: $line);
+            [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+            $this->assertStringContainsString('Usage: mcp auth remove <server>', $next->history[1]->content);
+        }
+    }
+
+    public function testBareMcpAuthFormStillDispatches(): void
+    {
+        $chat = new Chat(inputBuf: 'mcp auth bogus');
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertStringContainsString("Unknown sub-command 'bogus'", $next->history[1]->content);
+    }
+
+    public function testSlashMcpReportsUnknownSubCommands(): void
+    {
+        $chat = new Chat(inputBuf: '/mcp bogus');
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString("Unknown sub-command 'bogus'", $next->history[1]->content);
+    }
+
+    public function testBareSlashMcpDefaultsToListing(): void
+    {
+        $chat = new Chat(inputBuf: '/mcp');
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertSame('', $next->inputBuf);
+        $this->assertCount(2, $next->history);
+        // No argv means McpAuthCommand's "list" default, never an error.
+        $this->assertStringNotContainsString('Unknown sub-command', $next->history[1]->content);
+    }
 }
