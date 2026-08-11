@@ -41,11 +41,7 @@ final class SkillLoader
             if ($file->getBasename() === 'SKILL.md' && $file->isFile()) {
                 try {
                     $skill = Skill::fromFile($file->getPathname());
-                    // Compute skill name as relative path from base directory
-                    $filePath = $file->getPathname();
-                    $relativePath = substr($filePath, strlen($dir) + 1);
-                    $skillDir = dirname($relativePath);
-                    $skillName = $skillDir === '.' ? $skill->name : $skillDir;
+                    $skillName = $this->skillKeyFor($dir, $file->getPathname(), $skill->name);
                     $skill = $skill->withName($skillName);
                     $skills[$skill->name] = $skill;
                 } catch (\Throwable $e) {
@@ -65,10 +61,7 @@ final class SkillLoader
      */
     public function loadUserSkills(): array
     {
-        $dir = $_SERVER['HOME'] ?? '/root';
-        $dir .= '/.sugar-crush/skills';
-
-        return $this->loadFromDirectory($dir);
+        return $this->loadFromDirectory($this->userSkillsDir());
     }
 
     /**
@@ -78,9 +71,7 @@ final class SkillLoader
      */
     public function loadProjectSkills(string $projectRoot): array
     {
-        $dir = rtrim($projectRoot, '/') . '/.sugar-crush/skills';
-
-        return $this->loadFromDirectory($dir);
+        return $this->loadFromDirectory($this->projectSkillsDir($projectRoot));
     }
 
     /**
@@ -90,23 +81,57 @@ final class SkillLoader
      */
     public function loadBuiltInSkills(): array
     {
-        $reflection = new \ReflectionClass($this);
-        $dir = dirname($reflection->getFileName()) . '/BuiltIn';
+        return $this->loadFromDirectory($this->builtInSkillsDir());
+    }
 
-        return $this->loadFromDirectory($dir);
+    /** ~/.sugar-crush/skills — shared by the eager and manifest-only loaders. */
+    private function userSkillsDir(): string
+    {
+        $dir = $_SERVER['HOME'] ?? '/root';
+
+        return $dir . '/.sugar-crush/skills';
+    }
+
+    /** <projectRoot>/.sugar-crush/skills — shared by the eager and manifest-only loaders. */
+    private function projectSkillsDir(string $projectRoot): string
+    {
+        return rtrim($projectRoot, '/') . '/.sugar-crush/skills';
+    }
+
+    /** src/Skills/BuiltIn — shared by the eager and manifest-only loaders. */
+    private function builtInSkillsDir(): string
+    {
+        $reflection = new \ReflectionClass($this);
+
+        return dirname($reflection->getFileName()) . '/BuiltIn';
+    }
+
+    /**
+     * Compute a discovered skill's registry key the same way for both the
+     * eager (loadFromDirectory) and manifest-only (loadManifestsFromDirectory)
+     * walkers: a skill nested more than one level under $baseDir is keyed by
+     * its path relative to $baseDir (so sibling skills sharing a leaf dirname
+     * don't collide); a top-level skill keeps its own name.
+     */
+    private function skillKeyFor(string $baseDir, string $skillFilePath, string $fallbackName): string
+    {
+        $relativePath = substr($skillFilePath, strlen($baseDir) + 1);
+        $relativeSkillDir = dirname($relativePath);
+
+        return $relativeSkillDir === '.' ? $fallbackName : $relativeSkillDir;
     }
 
     /**
      * Load skills from multiple sources.
      *
-     * Priority order: built-in < user < project (later sources override earlier)
+     * Priority order: built-in < user < project (later sources override
+     * earlier). Foreign (.claude/.opencode) source merging is W1.D2a's
+     * concern, not this step's -- see ForeignSkillDiscovery's own doc-block.
      *
      * @return array<string, Skill>
      */
     public function loadAll(string $projectRoot = '.'): array
     {
-        $skills = [];
-
         // Built-in first (lowest priority)
         $builtin = $this->loadBuiltInSkills();
 
@@ -134,9 +159,13 @@ final class SkillLoader
      *   - disableModelInvocation: bool
      *   - userInvocable: bool
      *   - context: 'thread' or 'fork' (context-fork mode)
+     *   - paths: glob patterns for path-based auto-scoping (SkillRegistry::getForPaths())
      *   - sourcePath: absolute path to SKILL.md
      *
-     * @return array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, sourcePath: string}
+     * paths comes from frontmatter (already parsed above), so surfacing it
+     * here doesn't cost the body-read this stage exists to avoid.
+     *
+     * @return array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, paths: array<string>, sourcePath: string}
      */
     public function loadSkillManifest(string $skillDir): array
     {
@@ -166,8 +195,86 @@ final class SkillLoader
             'disableModelInvocation' => (bool)($frontmatter['disable-model-invocation'] ?? false),
             'userInvocable' => (bool)($frontmatter['user-invocable'] ?? true),
             'context' => $frontmatter['context'] ?? 'thread',
+            'paths' => $frontmatter['paths'] ?? [],
             'sourcePath' => realpath($skillPath) ?: $skillPath,
         ];
+    }
+
+    /**
+     * Stage-1 equivalent of loadFromDirectory(): walks the same directory
+     * tree for SKILL.md files, but loads only each one's manifest
+     * (loadSkillManifest()) instead of the full Skill (Skill::fromFile()),
+     * so no body content is read from disk at this stage.
+     *
+     * @return array<string, array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, paths: array<string>, sourcePath: string}>
+     */
+    public function loadManifestsFromDirectory(string $dir): array
+    {
+        $realDir = realpath($dir);
+        if ($realDir === false || !is_dir($realDir)) {
+            return [];
+        }
+
+        $manifests = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if ($file->getBasename() === 'SKILL.md' && $file->isFile()) {
+                try {
+                    $skillFilePath = $file->getPathname();
+                    $manifest = $this->loadSkillManifest(dirname($skillFilePath));
+                    $manifest['name'] = $this->skillKeyFor($dir, $skillFilePath, $manifest['name']);
+                    $manifests[$manifest['name']] = $manifest;
+                } catch (\Throwable $e) {
+                    // Log and skip invalid skills -- same contract as loadFromDirectory().
+                    error_log("Failed to load skill manifest from {$file->getPathname()}: {$e->getMessage()}");
+                }
+            }
+        }
+
+        return $manifests;
+    }
+
+    /**
+     * Stage-1 equivalent of loadAll(): discovers every skill across the same
+     * sources and priority order (built-in < user < project, later
+     * overrides earlier) but loads only each one's manifest, not its body.
+     *
+     * Fixes the defect described in crush_feat.md section 7.E3: every
+     * ReactPHP-loop session used to pay the full I/O + YAML-parse cost of
+     * every built-in/user/project skill's body at startup even when zero
+     * skills were invoked that session, defeating the point of the
+     * already-designed three-stage progressive disclosure. The body is
+     * designed to backfill just-in-time via loadSkillBody(), called from
+     * Tools\BuiltIn\SkillTool::execute() -- but that tool is not yet
+     * registered into Bootstrap::tools()/EngineBackend, so the backfill
+     * half is implemented and tested, not yet reachable from
+     * bin/sugarcrush (tracked separately: crush_feat.md section 7 item 2 /
+     * W3.S8).
+     *
+     * Foreign-imported skills (.claude/skills, .opencode/skills) are
+     * W1.D2a's concern (ForeignSkillDiscovery) and are deliberately not
+     * merged in here -- that step lands its own merge-order change on top
+     * once it's independently reviewed, keeping this step's diff scoped to
+     * SkillLoader.php/SkillManager.php per crush_feat_plan.md's Wave 1
+     * file-disjoint-steps design.
+     *
+     * @return array<string, array{name: string, description: string, disableModelInvocation: bool, userInvocable: bool, context: string, paths: array<string>, sourcePath: string}>
+     */
+    public function loadAllManifests(string $projectRoot = '.'): array
+    {
+        // Built-in overrides nothing (lowest priority)
+        $manifests = $this->loadManifestsFromDirectory($this->builtInSkillsDir());
+
+        // User skills override builtins
+        $manifests = array_merge($manifests, $this->loadManifestsFromDirectory($this->userSkillsDir()));
+
+        // Project skills override everything else
+        $manifests = array_merge($manifests, $this->loadManifestsFromDirectory($this->projectSkillsDir($projectRoot)));
+
+        return $manifests;
     }
 
     /**

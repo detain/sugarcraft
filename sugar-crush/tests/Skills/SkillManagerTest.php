@@ -53,6 +53,126 @@ SKILL;
     }
 
     // =========================================================================
+    // loadAll() - registers Stage-1 manifests only, never the eager full
+    // body (crush_feat.md section 7.E3)
+    // =========================================================================
+
+    /**
+     * Regression test for the fix in crush_feat.md section 7.E3: before
+     * this fix, SkillManager::loadAll() called SkillLoader::loadAll(),
+     * which reads every SKILL.md's full body off disk (via
+     * Skill::fromFile()) and registers it verbatim -- so the registered
+     * Skill's ->content held the entire body text after loadAll() ran.
+     * That defeated the whole point of the three-stage progressive
+     * disclosure design: every session paid the full I/O + YAML-parse cost
+     * up front regardless of whether any skill was ever invoked.
+     *
+     * Against the OLD SkillManager::loadAll() implementation this test
+     * fails, because $registry->get('marker-skill')->content would equal
+     * the marker body text instead of the empty string a manifest-only
+     * registration produces.
+     */
+    public function testLoadAllRegistersManifestOnlyNotFullBody(): void
+    {
+        // Arrange
+        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid();
+        $bodyMarker = 'MANAGER_LOAD_ALL_BODY_SHOULD_STAY_UNREAD_' . uniqid();
+        mkdir($projectRoot . '/.sugar-crush/skills/marker-skill', 0777, true);
+        file_put_contents(
+            $projectRoot . '/.sugar-crush/skills/marker-skill/SKILL.md',
+            "---\ndescription: Marker skill\n---\n\n{$bodyMarker}"
+        );
+
+        try {
+            // Act
+            $this->manager->loadAll($projectRoot);
+
+            // Assert -- skill is registered (manifest reached the registry)...
+            $skill = $this->registry->get('marker-skill');
+            $this->assertNotNull($skill);
+            $this->assertSame('Marker skill', $skill->description);
+
+            // ...but its body was never read off disk.
+            $this->assertSame('', $skill->content);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    /**
+     * Regression test: SkillManager::loadAll() (the production loading path
+     * -- SkillLoader::loadAllManifests() -> SkillRegistry::registerFromManifest())
+     * must preserve a skill's `paths` frontmatter so path-based auto-scoping
+     * (getSkillsForPaths() / SkillRegistry::getForPaths()) keeps matching it.
+     * Before this fix, loadSkillManifest() never returned a `paths` key and
+     * registerFromManifest() hardcoded `paths: []`, so this always returned
+     * empty despite the pattern matching exactly.
+     */
+    public function testLoadAllPreservesPathsForPathBasedScoping(): void
+    {
+        // Arrange
+        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid();
+        mkdir($projectRoot . '/.sugar-crush/skills/path-scoped-skill', 0777, true);
+        file_put_contents(
+            $projectRoot . '/.sugar-crush/skills/path-scoped-skill/SKILL.md',
+            "---\ndescription: Path scoped skill\npaths:\n  - /src/**/*.php\n---\n\nBody."
+        );
+
+        try {
+            // Act
+            $this->manager->loadAll($projectRoot);
+            $result = $this->manager->getSkillsForPaths(['/src/App.php']);
+
+            // Assert -- built-in skills with their own **/*.php patterns also
+            // legitimately match /src/App.php now that paths flow through, so
+            // assert our project skill is among the matches rather than the
+            // only one.
+            $names = array_map(fn($skill) => $skill->name, $result);
+            $this->assertContains('path-scoped-skill', $names);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    public function testLoadAllProjectSkillOverridesRegistrySafely(): void
+    {
+        // Arrange
+        $projectRoot = sys_get_temp_dir() . '/sugar-crush-manager-test-' . uniqid();
+        mkdir($projectRoot . '/.sugar-crush/skills/override-skill', 0777, true);
+        file_put_contents(
+            $projectRoot . '/.sugar-crush/skills/override-skill/SKILL.md',
+            "---\ndescription: Overridden by project\n---\n\nBody."
+        );
+
+        try {
+            // Act
+            $this->manager->loadAll($projectRoot);
+            $result = $this->manager->getSkillsForTask('Overridden by project');
+
+            // Assert
+            $this->assertNotEmpty($result);
+            $this->assertSame('override-skill', $result[0]->name);
+        } finally {
+            $this->removeTestProject($projectRoot);
+        }
+    }
+
+    private function removeTestProject(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
+        }
+        rmdir($dir);
+    }
+
+    // =========================================================================
     // getSkillsForTask() - delegates to registry.findForPrompt()
     // =========================================================================
 

@@ -18,11 +18,26 @@ final class SkillManager
 
     /**
      * Load all skills from standard locations.
+     *
+     * Registers Stage-1 manifests only (name/description/flags) via
+     * SkillLoader::loadAllManifests() -- not the previous
+     * SkillLoader::loadAll(), which eagerly read every skill's full
+     * SKILL.md body off disk regardless of whether it was ever used that
+     * session. Fixes crush_feat.md section 7.E3.
+     *
+     * The body is *designed* to backfill lazily, on-demand, via
+     * Tools\BuiltIn\SkillTool::execute() (which already calls
+     * loadSkillBody() correctly) -- but as of this step that tool is not
+     * yet registered into Bootstrap::tools()/EngineBackend, so that half of
+     * the backfill path is implemented and tested, not yet production
+     * reachable from bin/sugarcrush. Wiring it in is tracked separately
+     * (crush_feat.md section 7, item 2 / W3.S8 in crush_feat_plan.md).
      */
     public function loadAll(string $projectRoot = '.'): void
     {
-        $skills = $this->loader->loadAll($projectRoot);
-        $this->registry->register($skills);
+        foreach ($this->loader->loadAllManifests($projectRoot) as $manifest) {
+            $this->registry->registerFromManifest($manifest);
+        }
     }
 
     /**

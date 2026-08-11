@@ -24,6 +24,7 @@ final readonly class Skill
         public array $paths,
         public string $content,
         public string $sourcePath,
+        public SkillSource $source = SkillSource::Native,
     ) {}
 
     /**
@@ -143,6 +144,7 @@ final readonly class Skill
             paths: $this->paths,
             content: $this->content,
             sourcePath: $this->sourcePath,
+            source: $this->source,
         );
     }
 }

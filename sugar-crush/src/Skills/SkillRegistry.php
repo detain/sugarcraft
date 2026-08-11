@@ -148,7 +148,13 @@ final class SkillRegistry
     /**
      * Register a skill from a manifest array (e.g., from SkillLoader::loadSkillManifest).
      *
-     * @param array{name:string,description:string,disableModelInvocation:bool,userInvocable:bool,context:string,sourcePath:string} $manifest
+     * paths must come through from the manifest -- it drives path-based
+     * auto-scoping (getForPaths()) and, unlike content, is cheap frontmatter
+     * data the Stage-1 manifest already carries; hardcoding it to [] here
+     * would silently break every path-scoped skill loaded via the lazy
+     * manifest path (crush_feat.md section 7 E3/E4).
+     *
+     * @param array{name:string,description:string,disableModelInvocation:bool,userInvocable:bool,context:string,paths:array<string>,sourcePath:string} $manifest
      */
     public function registerFromManifest(array $manifest): void
     {
@@ -162,7 +168,7 @@ final class SkillRegistry
             model: null,
             effort: 'medium',
             context: $manifest['context'],
-            paths: [],
+            paths: $manifest['paths'],
             content: '',
             sourcePath: $manifest['sourcePath'],
         );

@@ -838,6 +838,7 @@ SKILL,
             'disableModelInvocation' => true,
             'userInvocable' => false,
             'context' => 'fork',
+            'paths' => [],
             'sourcePath' => '/path/to/manifest-skill/SKILL.md',
         ];
 
@@ -851,5 +852,34 @@ SKILL,
         $this->assertFalse($registry->isAutoInvocable('manifest-skill'));
         $this->assertFalse($registry->isUserInvocable('manifest-skill'));
         $this->assertTrue($registry->isContextFork('manifest-skill'));
+    }
+
+    /**
+     * Regression test for the blocker fix: registerFromManifest() must pass
+     * the manifest's `paths` through to the constructed Skill instead of
+     * hardcoding `[]`, or path-based auto-scoping (getForPaths()) silently
+     * loses every skill registered via the manifest path.
+     */
+    public function testRegisterFromManifestPreservesPaths(): void
+    {
+        // Arrange
+        $registry = new SkillRegistry();
+        $manifest = [
+            'name' => 'path-manifest-skill',
+            'description' => 'Skill from manifest with paths',
+            'disableModelInvocation' => false,
+            'userInvocable' => true,
+            'context' => 'thread',
+            'paths' => ['/src/**/*.php'],
+            'sourcePath' => '/path/to/path-manifest-skill/SKILL.md',
+        ];
+
+        // Act
+        $registry->registerFromManifest($manifest);
+        $result = $registry->getForPaths(['/src/App.php']);
+
+        // Assert
+        $names = array_map(fn($skill) => $skill->name, $result);
+        $this->assertContains('path-manifest-skill', $names);
     }
 }

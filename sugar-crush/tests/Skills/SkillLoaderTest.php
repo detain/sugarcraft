@@ -373,6 +373,7 @@ SKILL
         $this->assertFalse($manifest['disableModelInvocation']);
         $this->assertTrue($manifest['userInvocable']);
         $this->assertSame('thread', $manifest['context']);
+        $this->assertSame([], $manifest['paths']);
     }
 
     public function testLoadSkillManifestThrowsWhenMissingSkillMd(): void
@@ -440,9 +441,12 @@ SKILL
         // Assert – sourcePath is populated
         $this->assertStringEndsWith('startup-skill/SKILL.md', $manifest['sourcePath']);
 
-        // Assert – body content is NOT part of the manifest (staged loading contract)
+        // Assert – body content is NOT part of the manifest (staged loading contract).
+        // `paths` IS present -- it's frontmatter, not body, so surfacing it costs
+        // nothing extra and is required for path-based auto-scoping (getForPaths())
+        // to work when a skill is registered via the lazy manifest path.
         $this->assertArrayNotHasKey('content', $manifest);
-        $this->assertArrayNotHasKey('paths', $manifest);
+        $this->assertSame(['extra/path'], $manifest['paths']);
         $this->assertArrayNotHasKey('allowedTools', $manifest);
         $this->assertArrayNotHasKey('disallowedTools', $manifest);
         $this->assertArrayNotHasKey('model', $manifest);
@@ -668,5 +672,144 @@ SKILL
 
         // Act
         $loader->loadSkillAsset($skillPath, 'otherdir/file.txt');
+    }
+
+    // -------------------------------------------------------------------------
+    // loadManifestsFromDirectory() / loadAllManifests() -- lazy progressive
+    // loading (crush_feat.md section 7.E3)
+    // -------------------------------------------------------------------------
+
+    public function testLoadManifestsFromDirectoryNonExistent(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $nonExistentDir = '/non/existent/directory/path/' . uniqid();
+
+        // Act
+        $result = $loader->loadManifestsFromDirectory($nonExistentDir);
+
+        // Assert
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    public function testLoadManifestsFromDirectoryReturnsManifestsNotFullBody(): void
+    {
+        // Arrange -- a skill with a large, distinctive body. The old
+        // eager path (loadFromDirectory()/Skill::fromFile()) reads this
+        // whole body into memory at startup; the manifest-only path must
+        // not, so the marker string must never surface in the manifest.
+        $loader = new SkillLoader();
+        $bodyMarker = 'BODY_SHOULD_NOT_BE_READ_AT_STARTUP_' . uniqid();
+        $this->createSkillFile('lazy-skill', 'A lazily-loaded skill', $bodyMarker);
+
+        // Act
+        $result = $loader->loadManifestsFromDirectory($this->tempDir);
+
+        // Assert -- manifest shape only, no body/content field at all
+        $this->assertCount(1, $result);
+        $this->assertArrayHasKey('lazy-skill', $result);
+        $manifest = $result['lazy-skill'];
+        $this->assertSame('lazy-skill', $manifest['name']);
+        $this->assertSame('A lazily-loaded skill', $manifest['description']);
+        $this->assertArrayNotHasKey('content', $manifest);
+        $this->assertStringNotContainsString($bodyMarker, json_encode($manifest));
+    }
+
+    public function testLoadManifestsFromDirectoryUsesNestedRelativeNaming(): void
+    {
+        // Arrange -- mirrors loadFromDirectory()'s own nested-naming test:
+        // a skill more than one level deep is keyed by its path relative
+        // to the base dir, not just its own directory's basename.
+        $loader = new SkillLoader();
+        $this->createSkillFile('top-level-skill', 'Top level');
+        $subDir = $this->tempDir . '/nested/skill';
+        mkdir($subDir, 0777, true);
+        file_put_contents($subDir . '/SKILL.md', "---\ndescription: Nested skill\n---\nNested content");
+
+        // Act
+        $result = $loader->loadManifestsFromDirectory($this->tempDir);
+
+        // Assert
+        $this->assertCount(2, $result);
+        $this->assertArrayHasKey('top-level-skill', $result);
+        $this->assertArrayHasKey('nested/skill', $result);
+        $this->assertSame('nested/skill', $result['nested/skill']['name']);
+    }
+
+    public function testLoadManifestsFromDirectoryHandlesMissingFrontmatterGracefully(): void
+    {
+        // Arrange -- unlike Skill::fromFile() (which requires frontmatter
+        // and throws), loadSkillManifest() tolerates a SKILL.md with no
+        // frontmatter block and falls back to defaults, so the directory
+        // walker's try/catch must not swallow this as if it were invalid.
+        $loader = new SkillLoader();
+        $this->createSkillFile('valid-skill', 'A valid skill');
+        $noFrontmatterDir = $this->tempDir . '/no-frontmatter-skill';
+        mkdir($noFrontmatterDir, 0777, true);
+        file_put_contents($noFrontmatterDir . '/SKILL.md', 'Just plain content, no frontmatter at all.');
+
+        // Act
+        $result = $loader->loadManifestsFromDirectory($this->tempDir);
+
+        // Assert -- both skills surface; the frontmatter-less one gets defaults
+        $this->assertCount(2, $result);
+        $this->assertArrayHasKey('valid-skill', $result);
+        $this->assertArrayHasKey('no-frontmatter-skill', $result);
+        $this->assertSame('Skill: no-frontmatter-skill', $result['no-frontmatter-skill']['description']);
+    }
+
+    public function testLoadAllManifestsReturnsBuiltInManifestsWithoutBody(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+
+        // Act
+        $result = $loader->loadAllManifests('.');
+
+        // Assert -- built-in skills exist and are manifest-shaped
+        $this->assertIsArray($result);
+        $this->assertNotEmpty($result);
+        foreach ($result as $manifest) {
+            $this->assertArrayHasKey('name', $manifest);
+            $this->assertArrayHasKey('description', $manifest);
+            $this->assertArrayHasKey('sourcePath', $manifest);
+            $this->assertArrayNotHasKey('content', $manifest);
+        }
+    }
+
+    public function testLoadAllManifestsWithProjectOverride(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $projectRoot = $this->tempDir . '/manifest-override-project';
+        $bodyMarker = 'PROJECT_MANIFEST_BODY_MARKER_' . uniqid();
+        mkdir($projectRoot . '/.sugar-crush/skills/override-skill', 0777, true);
+        file_put_contents(
+            $projectRoot . '/.sugar-crush/skills/override-skill/SKILL.md',
+            "---\ndescription: Project override manifest skill\n---\n\n{$bodyMarker}"
+        );
+
+        // Act
+        $result = $loader->loadAllManifests($projectRoot);
+
+        // Assert
+        $this->assertArrayHasKey('override-skill', $result);
+        $this->assertSame('Project override manifest skill', $result['override-skill']['description']);
+        $this->assertStringNotContainsString($bodyMarker, json_encode($result['override-skill']));
+    }
+
+    public function testLoadAllManifestsEmptyProject(): void
+    {
+        // Arrange
+        $loader = new SkillLoader();
+        $emptyProject = $this->tempDir . '/empty-manifest-project-' . uniqid();
+        mkdir($emptyProject, 0777, true);
+
+        // Act
+        $result = $loader->loadAllManifests($emptyProject);
+
+        // Assert
+        $this->assertIsArray($result);
     }
 }
