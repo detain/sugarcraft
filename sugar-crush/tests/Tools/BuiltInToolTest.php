@@ -9,6 +9,7 @@ use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
+use SugarCraft\Crush\Tools\BuiltIn\Doctor;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
@@ -22,6 +23,7 @@ use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
  * @see Grep
  * @see Glob
  * @see WebFetch
+ * @see Doctor
  */
 final class BuiltInToolTest extends TestCase
 {
@@ -63,6 +65,7 @@ final class BuiltInToolTest extends TestCase
         yield Grep::class => [Grep::class];
         yield Glob::class => [Glob::class];
         yield WebFetch::class => [WebFetch::class];
+        yield Doctor::class => [Doctor::class];
     }
 
     // =========================================================================
@@ -115,6 +118,14 @@ final class BuiltInToolTest extends TestCase
 
         $this->assertSame('WebFetch', $tool->name());
         $this->assertSame('Fetch content from a URL', $tool->description());
+    }
+
+    public function testDoctorToolHasCorrectName(): void
+    {
+        $tool = new Doctor();
+
+        $this->assertSame('doctor', $tool->name());
+        $this->assertNotSame('', $tool->description());
     }
 
     // =========================================================================
@@ -199,6 +210,14 @@ final class BuiltInToolTest extends TestCase
 
         $this->assertArrayHasKey('url', $schema['properties']);
         $this->assertContains('url', $schema['required']);
+    }
+
+    public function testDoctorToolInputSchemaHasNoRequiredFields(): void
+    {
+        $tool = new Doctor();
+        $schema = $tool->inputSchema();
+
+        $this->assertSame([], $schema['required']);
     }
 
     // =========================================================================
@@ -286,6 +305,35 @@ final class BuiltInToolTest extends TestCase
 
         $this->assertTrue($result->isError());
         $this->assertStringContainsString('http', $result->content());
+    }
+
+    /**
+     * The real production caller of an image-bearing Tools\ToolResult
+     * (W1.G2 reachability fix): SugarCraft\Crush\Runtime::executeToolCalls()
+     * calls exactly this method for every 'doctor' ToolCall the live
+     * EngineBackend/Runtime/App loop resolves.
+     */
+    public function testDoctorToolExecutesAndAttachesAnImage(): void
+    {
+        $tool = new Doctor();
+
+        $result = $tool->execute(['id' => 'call_doctor']);
+
+        $this->assertSame('call_doctor', $result->toolCallId());
+        $this->assertFalse($result->isError());
+        $this->assertTrue($result->hasImage());
+        $this->assertStringStartsWith("\x89PNG", (string) $result->imageBytes());
+        $this->assertNotNull($result->imageProtocol());
+    }
+
+    public function testDoctorToolProbesTheMosaicCapabilityOnceAcrossCalls(): void
+    {
+        $tool = new Doctor();
+
+        $first = $tool->execute([]);
+        $second = $tool->execute([]);
+
+        $this->assertSame($first->imageProtocol(), $second->imageProtocol());
     }
 
     // =========================================================================
@@ -436,8 +484,13 @@ final class BuiltInToolTest extends TestCase
             'new_string' => 'Replaced',
         ]);
 
-        // str_replace returns original content, file_put_contents succeeds
-        $this->assertFalse($result->isError());
+        // A zero-match edit is a failed edit. This previously asserted
+        // isError:false because str_replace() no-op'd and file_put_contents()
+        // "succeeded" writing identical bytes - which reported success for an
+        // edit that never happened.
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('old_string not found', $result->content());
+        $this->assertSame('Hello World', file_get_contents($tempFile));
 
         unlink($tempFile);
     }
@@ -472,6 +525,7 @@ final class BuiltInToolTest extends TestCase
             Grep::class => new Grep(),
             Glob::class => new Glob(),
             WebFetch::class => new WebFetch(),
+            Doctor::class => new Doctor(),
             default => throw new \InvalidArgumentException("Unknown tool class: $className"),
         };
     }

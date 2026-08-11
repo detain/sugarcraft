@@ -195,4 +195,41 @@ final class ToolResultTest extends TestCase
         $originalContent = 'Modified';
         $this->assertSame('Original', $result->content());
     }
+
+    // =========================================================================
+    // Image field tests (W1.G2 reachability fix)
+    // =========================================================================
+
+    public function testImageFieldsDefaultToNull(): void
+    {
+        $result = new ToolResult('call_1', 'Content');
+
+        $this->assertNull($result->imageBytes());
+        $this->assertNull($result->imagePath());
+        $this->assertNull($result->imageProtocol());
+        $this->assertFalse($result->hasImage());
+    }
+
+    public function testCanBeCreatedWithImageFields(): void
+    {
+        $result = new ToolResult(
+            toolCallId: 'call_img',
+            content: 'Detected kitty',
+            imageBytes: "\x89PNGfake",
+            imagePath: '/tmp/shot.png',
+            imageProtocol: 'kitty',
+        );
+
+        $this->assertTrue($result->hasImage());
+        $this->assertSame("\x89PNGfake", $result->imageBytes());
+        $this->assertSame('/tmp/shot.png', $result->imagePath());
+        $this->assertSame('kitty', $result->imageProtocol());
+    }
+
+    public function testHasImageIsFalseWithNoImageBytes(): void
+    {
+        $result = new ToolResult('call_1', 'Content', false, null, null, '/tmp/shot.png', 'kitty');
+
+        $this->assertFalse($result->hasImage());
+    }
 }
