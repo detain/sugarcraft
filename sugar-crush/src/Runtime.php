@@ -237,7 +237,13 @@ final class Runtime
             );
         }
 
-        return $this->hookManager->resolveAsk($ask, (bool) $onPermissionRequest($toolCall, $ask));
+        // `=== true`, never a (bool) cast: only a literal true is a grant.
+        // A cast would turn ANY truthy return into permission, and the
+        // obvious wiring for this seam is Chat handing over an approver that
+        // returns a PermissionReply — every case of which, Reject included,
+        // is a truthy object. That is exactly how ForeignAgentPresetRegistry
+        // silently granted tool access earlier in this build.
+        return $this->hookManager->resolveAsk($ask, $onPermissionRequest($toolCall, $ask) === true);
     }
 
     /**

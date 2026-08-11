@@ -23,6 +23,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Tools\Tool;
@@ -1340,6 +1341,35 @@ final class RuntimeTest extends TestCase
 
         $this->assertTrue($results[0]->isError());
         $this->assertStringContainsString('Run it?', $results[0]->content());
+    }
+
+    /**
+     * Only a literal `true` is a grant. settleAsk() used to cast the
+     * approver's answer with `(bool)`, which turns EVERY truthy value into
+     * permission - and the natural approver to wire here is one returning a
+     * {@see PermissionReply}, whose `Reject` case is a truthy object. Under
+     * the old cast a user pressing "n" would have run the tool.
+     *
+     * This is the same fail-open shape as the tools-map bug earlier in this
+     * build, where a truthy non-boolean silently granted tool access.
+     */
+    public function testATruthyNonBooleanApproverAnswerIsNotTreatedAsPermission(): void
+    {
+        $tool = $this->createMockTool('ask_tool', 'must not run');
+        $this->hookRegistry->register($this->askHook('Run it?'));
+
+        $toolCall = new ToolCall('call_ask', 'ask_tool', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$tool]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [$toolCall],
+            $app,
+            null,
+            static fn(ToolCall $call, HookResult $ask): PermissionReply => PermissionReply::Reject,
+        ]));
+
+        $this->assertTrue($results[0]->isError(), 'a Reject reply must not run the tool');
+        $this->assertStringNotContainsString('must not run', $results[0]->content());
     }
 
     /** A PreToolUse hook that always defers to the user. */
