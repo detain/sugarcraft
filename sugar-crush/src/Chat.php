@@ -18,6 +18,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
@@ -131,6 +132,13 @@ final class Chat implements Model
      * through near the top, not to permanently re-rank the whole palette.
      */
     private const PALETTE_MRU_LIMIT = 8;
+
+    /**
+     * Transcript lines moved per wheel notch (crush_feat.md §8 E4's literal
+     * `$delta = ... ? -3 : 3`). Three keeps a notch's worth of context
+     * overlapping between the old and new window instead of paging blind.
+     */
+    private const SCROLL_WHEEL_LINES = 3;
 
     /**
      * @param list<Message> $history
@@ -265,6 +273,24 @@ final class Chat implements Model
          * @var list<string>
          */
         private readonly array $paletteMru = [],
+        /**
+         * How many lines the transcript is scrolled back from the newest
+         * one (crush_feat.md §8 E4). 0 pins the view to the bottom, which
+         * is what every non-wheel path leaves it at.
+         *
+         * Measured from the BOTTOM rather than the top because that is the
+         * end {@see Renderer::render()} anchors to: it clips a too-tall
+         * frame to its tail so the input box and newest turn stay visible,
+         * and this offset just moves that window's start earlier.
+         *
+         * Clamped at both ends, in the two places that can know each bound:
+         * {@see withScrollOffset()} refuses to go below 0, and the upper
+         * bound is the painted frame's own overflow ({@see
+         * Renderer::maxScrollOffset()}), applied when a wheel event is
+         * handled and again by the renderer against the frame it is
+         * actually building.
+         */
+        private readonly int $scrollOffset = 0,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -1194,12 +1220,16 @@ final class Chat implements Model
     }
 
     /**
-     * Click-to-switch session tab (crush_feat.md §8 E2).
+     * Click-to-switch session tab (crush_feat.md §8 E2), plus wheel-scroll
+     * of the transcript (§8 E4).
      *
-     * Only left press/release are fed to the tracker. Motion and wheel
-     * events are dropped here rather than translated: candy-mouse's tracker
-     * ignores Drag and Scroll anyway, and nothing else consumes them yet, so
-     * translating them would be building a consumer that does not exist.
+     * Wheel events branch off FIRST and never reach the click tracker: they
+     * are the one gesture that survives `SUGARCRUSH_DISABLE_MOUSE_CLICKS`
+     * (see {@see mouseMode()}), and hit-testing them through
+     * {@see zoneAt()} — which is where that flag is enforced — would take
+     * scrolling down with clicks. candy-mouse's tracker ignores Scroll
+     * anyway. Only left press/release are fed to it; motion is still
+     * dropped rather than translated, since nothing consumes hover yet.
      *
      * The hit test uses the click's own coordinates against the zones
      * {@see Renderer::scanRoot()} recorded for the frame currently on
@@ -1210,6 +1240,10 @@ final class Chat implements Model
      */
     private function handleMouse(MouseMsg $msg): array
     {
+        if ($msg instanceof MouseWheelMsg) {
+            return $this->scrollTranscript($msg->button);
+        }
+
         if ($msg->button !== MouseButton::Left) {
             return [$this, null];
         }
@@ -1241,6 +1275,75 @@ final class Chat implements Model
         }
 
         return [$this, null];
+    }
+
+    /**
+     * Wheel-scroll the chat transcript (crush_feat.md §8 E4).
+     *
+     * `WheelUp` moves BACK into history, so it raises the offset — §8 E4's
+     * sketch subtracts because its `$app->chatScrollOffset` counts from the
+     * top; this one counts from the bottom (see the constructor's
+     * `$scrollOffset` docblock for why that end is the anchor).
+     *
+     * The upper clamp comes from {@see Renderer::maxScrollOffset()}, the
+     * overflow of the frame currently on screen — the same "a mouse event
+     * is reported against what is painted, not against the frame being
+     * built" rule {@see zoneAt()} follows. A transcript that fits the
+     * window reports 0 and the wheel does nothing.
+     *
+     * §8 E4 gates this on `$app->pane === Pane::Chat`. There is no live
+     * pane state to gate on — see {@see selectPane()} for why `App::$pane`
+     * is not reachable from `bin/sugarcrush` — and the transcript is the
+     * only scrollable surface this path renders, so the wheel always
+     * addresses it.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function scrollTranscript(MouseButton $button): array
+    {
+        $delta = match ($button) {
+            MouseButton::WheelUp   => self::SCROLL_WHEEL_LINES,
+            MouseButton::WheelDown => -self::SCROLL_WHEEL_LINES,
+            default                => 0,
+        };
+        if ($delta === 0) {
+            return [$this, null];
+        }
+
+        // Both ends are clamped here, not just the top: without the max(0)
+        // a wheel-down at the bottom would compute -3, differ from the
+        // current 0, and hand back a fresh instance for a scroll that
+        // cannot happen - a new frame diffed for nothing on every notch.
+        $offset = max(0, min($this->scrollOffset + $delta, Renderer::maxScrollOffset()));
+        if ($offset === $this->scrollOffset) {
+            return [$this, null];
+        }
+
+        return [$this->withScrollOffset($offset), null];
+    }
+
+    /**
+     * How far back the transcript is scrolled, in lines from the newest
+     * one. 0 means pinned to the bottom. Read by {@see Renderer::render()}.
+     */
+    public function scrollOffset(): int
+    {
+        return $this->scrollOffset;
+    }
+
+    /**
+     * Scroll the transcript back $offset lines from the newest one.
+     *
+     * Negatives clamp to 0 — the bottom is the furthest the view can go
+     * forward, there is nothing below the newest line. The upper end is
+     * clamped by the caller against a real frame's overflow (see
+     * {@see scrollTranscript()}); a value beyond it stored anyway is
+     * harmless, since {@see Renderer::render()} re-clamps to whatever the
+     * frame it is drawing can actually offer.
+     */
+    public function withScrollOffset(int $offset): self
+    {
+        return $this->mutate(['scrollOffset' => max(0, $offset)]);
     }
 
     /**
@@ -1684,6 +1787,7 @@ final class Chat implements Model
             'hooks' => $this->hooks,
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
+            'scrollOffset' => $this->scrollOffset,
         ];
 
         return new self(...array_merge($constructorProps, $changes));

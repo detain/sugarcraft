@@ -224,6 +224,28 @@ final class Renderer
     }
 
     /**
+     * How many content lines the most recent frame had to drop off the top
+     * to fit the terminal — i.e. the largest {@see Chat::scrollOffset()}
+     * that still shows a full screen of transcript.
+     *
+     * Static for the same reason {@see $scanner} is: a wheel event arrives
+     * *between* frames, so the only content height it can be clamped
+     * against is the one already painted. {@see Chat} is immutable and
+     * would discard a per-instance copy of it anyway.
+     */
+    private static int $maxScrollOffset = 0;
+
+    /**
+     * Upper clamp for {@see Chat::scrollOffset()}, measured on the last
+     * rendered frame. 0 when the transcript fits the window (nothing to
+     * scroll) or when nothing has been rendered yet.
+     */
+    public static function maxScrollOffset(): int
+    {
+        return self::$maxScrollOffset;
+    }
+
+    /**
      * The zone-scan pass, run exactly ONCE per frame and only at the root.
      *
      * candy-mouse (like bubblezone) records absolute bounding boxes as it
@@ -385,11 +407,25 @@ final class Renderer
         // knows (and never learns about a live resize either), which
         // reintroduces the exact row-collision this clipping is meant to
         // prevent even after clipping was added.
+        //
+        // Which $available-line window of $content is shown is the one thing
+        // the tail clip above leaves to the user: $chat->scrollOffset() is a
+        // distance in lines from the BOTTOM (0 = pinned to the newest line,
+        // the historical behaviour), so scrolling back moves the window's
+        // start earlier by exactly that many lines (crush_feat.md §8 E4).
+        // It is re-clamped against THIS frame's overflow rather than trusted:
+        // the offset was clamped against the frame that was on screen when
+        // the wheel turned, and the transcript can have shrunk since (/clear,
+        // a session switch, a resize), which would otherwise slice past the
+        // start of the content and show a short frame.
         $rows = $chat->rows();
         $available = max(1, $rows - 1);
         $contentLines = explode("\n", $content);
-        if (count($contentLines) > $available) {
-            $contentLines = array_slice($contentLines, -$available);
+        $overflow = max(0, count($contentLines) - $available);
+        self::$maxScrollOffset = $overflow;
+        if ($overflow > 0) {
+            $offset = max(0, min($chat->scrollOffset(), $overflow));
+            $contentLines = array_slice($contentLines, $overflow - $offset, $available);
         } else {
             while (count($contentLines) < $available) {
                 $contentLines[] = '';
@@ -428,8 +464,69 @@ final class Renderer
             ? '⠴ thinking… · Esc Esc to cancel'
             : 'Enter to send · ' . self::markPane(Pane::Menu, 'Ctrl+P menu') . ' · /exit or ^C to quit';
         $percent = (int) round($chat->contextUsagePercent() * 100);
+        $bar = "{$percent}% context · {$processing}";
 
-        return "{$percent}% context · {$processing}";
+        // The bar is the frame's LAST line, so it is the one line that must
+        // never wrap: a wrapped bar makes the frame rows+1 physical rows tall,
+        // which is precisely the absolute-cursorTo row collision render()'s
+        // tail clip exists to prevent (renderDiff() guards the same
+        // one-logical-line-per-row invariant with Width::truncate). The scroll
+        // readout is therefore fitted to whatever room the bar leaves instead
+        // of being prepended unconditionally — the bar is already ~62 columns,
+        // and any transcript tall enough to scroll produces 2-3 digit offsets,
+        // so the long form alone pushes it past 80 columns.
+        //
+        // "Fitted" means picking a narrower form or dropping it — never
+        // truncating the assembled string. $bar carries markPane(Pane::Menu)'s
+        // sentinel PAIR, and a cut between them leaves an unmatched open
+        // marker, which makes Scan::parse() throw and costs the WHOLE frame
+        // its click zones (same failure mode markPaneHeader() documents). The
+        // sentinels are invisible on screen, so they come off before measuring.
+        $room = $chat->cols() - Width::of(self::stripZoneMarkers($bar));
+        foreach (self::scrollIndicators($chat) as $indicator) {
+            if (Width::of($indicator) <= $room) {
+                return $indicator . $bar;
+            }
+        }
+
+        return $bar;
+    }
+
+    /**
+     * "How far back am I?" readout, shown only while the transcript is
+     * scrolled off the bottom (crush_feat.md §8 E4's scrollbar-during-scroll).
+     *
+     * A fixed-height frame has no spare column for crush's real scrollbar
+     * gutter, and the frame is clipped to the terminal anyway, so the
+     * position is reported as text on the status bar the frame already
+     * reserves. It hides on the state that matters — being back at the
+     * newest line — rather than on a timer: the offset persists until the
+     * user scrolls back down, so a timed hide would blank the only clue
+     * that the newest output is off-screen while it still is.
+     *
+     * Reads {@see maxScrollOffset()} rather than recomputing: this runs
+     * inside {@see render()}, AFTER the window slice recorded this frame's
+     * own overflow.
+     *
+     * Returns the candidate forms widest-first so {@see renderStatusBar()} can
+     * take the most informative one the row still has room for; an empty list
+     * means "not scrolled, draw nothing".
+     *
+     * @return list<string>
+     */
+    private static function scrollIndicators(Chat $chat): array
+    {
+        $max = self::maxScrollOffset();
+        $offset = max(0, min($chat->scrollOffset(), $max));
+        if ($offset === 0) {
+            return [];
+        }
+
+        // The compact fallback keeps the number that actually matters — how
+        // far back the window is — when the full "of how many" readout would
+        // not fit. Losing the readout entirely on a narrow terminal would
+        // leave no clue at all that the newest output is off-screen.
+        return ["↑ {$offset}/{$max} scrolled · ", "↑{$offset} "];
     }
 
     /**
