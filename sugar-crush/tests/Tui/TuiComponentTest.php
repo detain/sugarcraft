@@ -298,6 +298,83 @@ final class TuiComponentTest extends TestCase
         $this->assertStringContainsString('object-skill', $output);
     }
 
+    /**
+     * @testdox SkillsPane::render() prefixes a foreign skill with a coloured provenance badge
+     */
+    public function testSkillsPanePickerShowsForeignProvenanceBadge(): void
+    {
+        $app = $this->appWithPickerSkill(\SugarCraft\Crush\Skills\SkillSource::Claude);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        // Badge text, its own colour (#ffb86c), and the badge preceding the name.
+        $this->assertStringContainsString('[claude]', $output);
+        $this->assertStringContainsString("\x1b[38;2;255;184;108m", $output);
+        $this->assertMatchesRegularExpression('/\[claude\].*imported-skill/s', $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() renders an opencode-sourced skill with the opencode badge
+     */
+    public function testSkillsPanePickerShowsOpencodeProvenanceBadge(): void
+    {
+        $app = $this->appWithPickerSkill(\SugarCraft\Crush\Skills\SkillSource::Opencode);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('[opencode]', $output);
+        $this->assertStringContainsString("\x1b[38;2;139;233;253m", $output);
+    }
+
+    /**
+     * @testdox SkillsPane::render() adds no badge for a native skill
+     */
+    public function testSkillsPanePickerOmitsBadgeForNativeSkill(): void
+    {
+        $app = $this->appWithPickerSkill(\SugarCraft\Crush\Skills\SkillSource::Native);
+        Renderer::setSize(120, 40);
+
+        $output = SkillsPane::render($app, 40, 20);
+
+        $this->assertStringContainsString('imported-skill', $output);
+        $this->assertStringNotContainsString('[claude]', $output);
+        $this->assertStringNotContainsString('[opencode]', $output);
+        $this->assertStringNotContainsString('[spec]', $output);
+    }
+
+    /**
+     * Build an App whose skill picker is open over a single user-invocable
+     * skill tagged with $source.
+     */
+    private function appWithPickerSkill(\SugarCraft\Crush\Skills\SkillSource $source): App
+    {
+        $skill = new \SugarCraft\Crush\Skills\Skill(
+            name: 'imported-skill',
+            description: 'Imported skill',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'inline',
+            paths: [],
+            content: 'Content.',
+            sourcePath: '/tmp/imported-skill/SKILL.md',
+            source: $source,
+        );
+        $registry = new \SugarCraft\Crush\Skills\SkillRegistry();
+        $registry->register(['imported-skill' => $skill]);
+        $app = App::new($this->provider, 'test-model')
+            ->withAvailableSkills($registry)
+            ->withPane(Pane::Skills);
+        [$app] = $app->update(new \SugarCraft\Crush\App\OpenSkillPickerMsg());
+
+        return $app;
+    }
+
     // =========================================================================
     // AgentsPane Tests
     // =========================================================================
