@@ -629,7 +629,7 @@ Internally serial (all five steps touch `SglangProvider.php`; `CustomProvider.ph
 |---|---|---|---|---|
 | W1.C1a | `SkillMatcher` service (Level-1 metadata listing) | `src/Skills/SkillMatcher.php` (new), `tests/Skills/SkillMatcherTest.php` | — | §7 E2 (the system-prompt-listing half only) |
 | W1.C1b | `Skill` tool (Level-2 on-demand body load) | `src/Tools/BuiltIn/SkillTool.php` (new), `tests/Tools/BuiltIn/SkillToolTest.php` | W1.C1a | §7 E2 (the `SkillTool` sketch) |
-| W1.C2 | Lazy progressive-loading fix in `SkillLoader`/`SkillManager` | `src/Skills/SkillLoader.php`, `src/Skills/SkillManager.php`, `tests/Skills/SkillLoaderTest.php` | W1.C1a, W1.C1b | §7 E3 |
+| W1.C2 | Lazy progressive-loading fix in `SkillLoader`/`SkillManager` | `src/Skills/SkillLoader.php`, `src/Skills/SkillManager.php`, `src/Skills/SkillRegistry.php` (paths-passthrough in `registerFromManifest()`, required so the new manifest `paths` key isn't silently dropped), `tests/Skills/SkillLoaderTest.php`, `tests/Skills/SkillManagerTest.php`, `tests/Skills/SkillRegistryTest.php` | W1.C1a, W1.C1b | §7 E3 |
 
 ### Track D — Cross-tool skill/agent/memory import (`crush_feat.md` §10)
 
@@ -675,6 +675,12 @@ Internally serial (all five steps touch `SglangProvider.php`; `CustomProvider.ph
 ### Goal
 Every step below touches `src/Chat.php` and/or `src/Renderer.php`. Per "The Chat.php/Renderer.php rule" above, these run **strictly one at a time**, in the exact order listed, full Builder→Review→Fix→Commit loop to completion before the next step's Builder Agent is spawned. Do not parallelize any pair of these, even ones that look like they touch different line ranges.
 
+> **Read before dispatching any Wave 2 step.** Wave 1's run already modified both files, so `git diff` against the Wave 0 baseline is no longer a clean slate:
+> - `src/Renderer.php` gained `renderAssistantTurn()`/`renderReasoning()` in `28c55a6f` (§12 D3's TUI half — the W1.A2 row omitted it, but the spec requires it).
+> - `src/Chat.php` gained the `?Mosaic $mosaic` constructor param, `mosaic()`, base64 image threading across the fork/IPC seam, and `ToolResult` passthrough in `8f794c19` (W2.S14a, landed early).
+>
+> **Why this happened, and the rule it produced.** Category 11 (Production Reachability) is a mandatory blocker, but Wave 1's file lists exclude the very files where production wiring lives (`Chat.php`, `Renderer.php`, `Bootstrap.php`). For any step whose spec says "surface X to the user," those two constraints cannot both be satisfied — so builders followed `crush_feat.md` (the specification) over this document's file lists, and reviewers then correctly flagged the result as scope creep. **A step's file list is a guide; `crush_feat.md` is the authority.** When the two conflict, the Builder Agent must say so in its report and the Phase Lead must re-scope, rather than the Builder silently widening scope or a Reviewer blocking work that the spec actually mandates. Never let an agent resolve the conflict by editing this plan (one did, to W1.C2's row).
+
 ### Step Manifest
 
 | Step ID | Title | Files | Depends On | Where to look |
@@ -702,7 +708,7 @@ Every step below touches `src/Chat.php` and/or `src/Renderer.php`. Per "The Chat
 | W2.S12b | Click-to-expand tool-call | `src/Renderer.php`, `src/Chat.php` | W2.S12a | §8 E5 |
 | W2.S13a | Click-to-select in palette/picker | `src/Renderer.php`, `src/Chat.php` | W2.S12b | §8 E6 |
 | W2.S13b | Drag-vs-click disambiguation / text-selection passthrough guard | `src/Renderer.php` (or wherever `ZoneClickTracker` usage lives for this repo — confirm at implementation time) | W2.S13a | §8 E8 |
-| W2.S14a | Thread `Mosaic::auto()` into `Chat`'s constructor | `src/Chat.php` | W1.G1, W1.G2, W2.S1d | §9 E2 (plumbing only — the step W1.G2 deferred if it turned out to need `Chat.php`) |
+| W2.S14a | ~~Thread `Mosaic::auto()` into `Chat`'s constructor~~ **LANDED EARLY in `8f794c19` (Wave 1)** — `Chat` already takes `?Mosaic $mosaic` and exposes `mosaic()`. Verify before dispatching; do not rebuild. | `src/Chat.php` | W1.G1, W1.G2, W2.S1d | §9 E2 (plumbing only — the step W1.G2 deferred if it turned out to need `Chat.php`) |
 | W2.S14b | Render tool-result images via `ImageLayer`/`ImageOverlay` | `src/Renderer.php` | W2.S14a | §9 E3 |
 | W2.S15 | `SkillsPane.php` provenance badges | `src/Tui/Components/SkillsPane.php` | W1.D1, W1.D2a, W1.D2b | §10 10.5 (1), the `SkillsPane.php` render-change sketch |
 
