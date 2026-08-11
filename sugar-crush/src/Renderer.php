@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
@@ -175,6 +178,129 @@ final class Renderer
 
     private const TOOL_OUTPUT_MAX_CHARS = 2000;
 
+    /**
+     * Zone registry the root scan pass writes into, shared across renders
+     * because a mouse event arrives *between* frames: the click handler has
+     * only the previously-painted frame's boxes to hit-test against.
+     * Mirrors bubblezone's single global manager.
+     */
+    private static ?Scanner $scanner = null;
+
+    /**
+     * Zone registry produced by the most recent {@see scanRoot()} pass.
+     * Hit-tested by {@see Chat::zoneAt()}.
+     */
+    public static function scanner(): Scanner
+    {
+        return self::$scanner ??= Scanner::new();
+    }
+
+    /**
+     * The zone-scan pass, run exactly ONCE per frame and only at the root.
+     *
+     * candy-mouse (like bubblezone) records absolute bounding boxes as it
+     * walks the string, so scanning a sub-widget's output would register
+     * boxes relative to that widget's own origin rather than the terminal's
+     * — every nested scan would have to be thrown away and redone here
+     * anyway. Scanning after the last compositing step (including the
+     * palette overlay) is therefore both the cheapest and the only correct
+     * placement.
+     *
+     * The scan is skipped outright when `SUGARCRUSH_DISABLE_MOUSE` is set —
+     * with tracking off no mouse coordinates ever arrive, so keeping a stale
+     * zone registry around would be pure waste. Sentinel *stripping* is
+     * unconditional: the markers are Private-Use codepoints a terminal would
+     * paint as a replacement glyph, and candy-core's line diff counts them
+     * as content.
+     *
+     * Marker-free frames take a `str_contains()` fast path (~0.0004ms) and
+     * skip both the parse and the strip. That is not a micro-optimisation:
+     * {@see \SugarCraft\Mouse\Scan::parse()} walks the frame cluster by
+     * cluster through `grapheme_extract()`, which measures ~24ms on a
+     * full-screen frame — roughly doubling the cost of a keystroke repaint.
+     * Nothing in `src/` wraps a widget in {@see \SugarCraft\Mouse\Mark::zone()}
+     * yet (that is W2.S11b's job), so today EVERY frame takes this branch and
+     * the scan would otherwise be pure waste; once widgets are marked the
+     * sentinel is present and the full scan runs unchanged.
+     *
+     * The scan is also non-fatal. `Scan::parse()` throws on malformed markup
+     * (duplicate/unclosed ids), and this runs inside `Chat::view()`, where an
+     * escaping exception kills the whole TUI. Degrading to "no zones this
+     * frame" costs at most an unclickable frame; the alternative is a crash.
+     * Untrusted text is sentinel-stripped on the way in (see
+     * {@see untrusted()}), so a throw here means OUR markup is wrong, not
+     * that a model injected something.
+     *
+     * @param string $frame The fully-composited root frame.
+     * @param int    $width Viewport width; zone end columns clamp to it.
+     */
+    public static function scanRoot(string $frame, int $width): string
+    {
+        if (!str_contains($frame, Sentinel::OPEN) && !str_contains($frame, Sentinel::CLOSE)) {
+            self::scanner()->clear();
+
+            return $frame;
+        }
+
+        if (Chat::mouseMode() === MouseMode::Off) {
+            self::scanner()->clear();
+        } else {
+            try {
+                self::scanner()->scan($frame, $width);
+            } catch (\Throwable) {
+                self::scanner()->clear();
+            }
+        }
+
+        return self::stripZoneMarkers($frame);
+    }
+
+    /**
+     * {@see Sanitize::untrusted()} plus zone-sentinel removal, for every
+     * string that originated outside this process (model replies, tool
+     * output, pasted keystrokes).
+     *
+     * The sentinel strip is the security half. `Sanitize::untrusted()` only
+     * removes ANSI/C0/C1/DEL; `U+E000`/`U+E001` are well-formed 3-byte UTF-8
+     * Private-Use codepoints, so they survive it untouched and would reach
+     * {@see scanRoot()}'s parser verbatim. A model reply — or any tool output
+     * echoed into a message: a file read, a web fetch, a shell command run in
+     * a hostile repo — could then either crash the render (duplicate ids make
+     * `Scan::parse()` throw) or, worse, register attacker-chosen boxes in the
+     * hit-test registry {@see Chat::zoneAt()} reads, hijacking clicks meant
+     * for real UI. Stripping at the boundary keeps the invariant that only
+     * {@see \SugarCraft\Mouse\Mark}-emitted markers ever reach the scan.
+     */
+    private static function untrusted(string $text): string
+    {
+        return self::stripSentinels(Sanitize::untrusted($text));
+    }
+
+    /**
+     * Remove bare zone sentinels, for content that must NOT go through
+     * {@see untrusted()} — assistant Markdown, which CandyShine renders into
+     * legitimate SGR that `Sanitize::untrusted()` would strip back out.
+     */
+    private static function stripSentinels(string $text): string
+    {
+        return str_replace([Sentinel::OPEN, Sentinel::CLOSE], '', $text);
+    }
+
+    /**
+     * Remove every `U+E000 <id> U+E001` open/close sentinel pair emitted by
+     * {@see \SugarCraft\Mouse\Mark}. Matched byte-wise against Mark's own id
+     * charset (plus the closing `/`) so a frame carrying invalid UTF-8 can
+     * never make the pattern fail open and leak markers to the terminal.
+     */
+    private static function stripZoneMarkers(string $frame): string
+    {
+        return (string) preg_replace(
+            '/\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81/',
+            '',
+            $frame
+        );
+    }
+
     public static function render(Chat $chat): string
     {
         $theme = $chat->theme();
@@ -253,7 +379,7 @@ final class Renderer
             $frame = Veil::new()->withBackdrop(50)->composite($palette, $frame, Position::CENTER, Position::CENTER);
         }
 
-        return $frame;
+        return self::scanRoot($frame, $chat->cols());
     }
 
     /**
@@ -387,9 +513,9 @@ final class Renderer
                 continue;
             }
             $blocks[] = match ($msg->role) {
-                Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . Sanitize::untrusted($msg->content),
+                Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . self::untrusted($msg->content),
                 Role::Assistant => self::renderAssistantTurn($msg, $theme, $md),
-                Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . Sanitize::untrusted($msg->content)),
+                Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . self::untrusted($msg->content)),
             };
         }
         return implode("\n\n", $blocks);
@@ -406,7 +532,10 @@ final class Renderer
     private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md): string
     {
         $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
-        $body = trim($md->render($msg->content));
+        // Sentinels stripped BEFORE CandyShine, not after: the rendered output
+        // is legitimate SGR that untrusted() would destroy, but the model's
+        // raw text can still smuggle U+E000/U+E001 into the frame.
+        $body = trim($md->render(self::stripSentinels($msg->content)));
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $label . "\n" . $body;
@@ -428,7 +557,7 @@ final class Renderer
      */
     private static function renderReasoning(string $reasoning, Theme $theme): string
     {
-        $flat = trim(preg_replace('/\s+/', ' ', Sanitize::untrusted($reasoning)) ?? '');
+        $flat = trim(preg_replace('/\s+/', ' ', self::untrusted($reasoning)) ?? '');
         if (mb_strlen($flat) > 120) {
             $flat = mb_substr($flat, 0, 120) . '…';
         }
@@ -466,11 +595,16 @@ final class Renderer
     {
         $lines = [];
         foreach ($msg->toolResults as $result) {
+            // The name is model-chosen, not ours: Chat::executeToolCall() copies
+            // it verbatim off the parsed tool call, so an unknown-tool reply can
+            // carry an OSC title-set or a screen-clear. Unlike assistant
+            // Markdown it has no legitimate SGR of its own, so it takes the full
+            // {@see untrusted()} scrub rather than only the sentinel strip.
             $status = $result->isError()
                 ? Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error')
                 : Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
-            $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . $result->name) . ' ' . $status;
-            $body = Sanitize::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
+            $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
+            $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
             $isExpanded = ($expanded[$result->id ?? $result->name] ?? false) === true;
 
             $block = $label;
@@ -594,7 +728,7 @@ final class Renderer
 
         $painted = [];
         foreach ($rows as $row) {
-            $text = Width::truncate(Sanitize::untrusted($row), $inner);
+            $text = Width::truncate(self::untrusted($row), $inner);
             $painted[] = self::styleDiffLine($text, $theme)->render($text);
         }
 
@@ -645,7 +779,7 @@ final class Renderer
     {
         $spinner = Style::new()->foreground($theme->assistantLabel)->render('⠴');
 
-        return $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . $msg->content);
+        return $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . self::untrusted($msg->content));
     }
 
     /**
@@ -701,7 +835,7 @@ final class Renderer
         $selected = $palette->selectedIndex;
         $grouped = $palette->query === '' && $palette->mode !== 'providers' && $palette->mode !== 'themes';
 
-        $lines = ['🔍 ' . Sanitize::untrusted($palette->query) . '█', ''];
+        $lines = ['🔍 ' . self::untrusted($palette->query) . '█', ''];
         if ($results === []) {
             $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render('No matches');
         } else {
@@ -771,7 +905,7 @@ final class Renderer
         // The in-progress input buffer is untrusted keystroke data (e.g. a
         // bracketed-paste dump can smuggle ESC/C0/DEL). Strip it before it hits
         // the terminal so a paste can't inject control sequences at draw time.
-        $body = "> " . Sanitize::untrusted($chat->inputBuf) . $cursor;
+        $body = "> " . self::untrusted($chat->inputBuf) . $cursor;
         return Style::new()
             ->border(Border::normal())
             ->borderForeground($theme->border)

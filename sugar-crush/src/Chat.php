@@ -10,6 +10,8 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
+use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -29,6 +31,7 @@ use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Mouse\Zone;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
@@ -1104,6 +1107,80 @@ final class Chat implements Model
     public function view(): string
     {
         return Renderer::render($this);
+    }
+
+    /**
+     * How the terminal is asked to report mouse events (crush_feat.md §8 E1).
+     *
+     * `CellMotion` rather than `AllMotion`: hover-everywhere turns every
+     * pointer move into a MouseMotionMsg on the ReactPHP read loop, and
+     * nothing consumes hover yet.
+     *
+     * `SUGARCRUSH_DISABLE_MOUSE` turns tracking off completely. That escape
+     * hatch is not optional politeness — while SGR mouse tracking is active
+     * the terminal stops offering its own copy-on-select, which is the
+     * single most-repeated complaint across every tool surveyed in §8.
+     *
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` deliberately does NOT change the
+     * mode: wheel events are reported over the same tracking mode as
+     * clicks, so "keep scroll, drop clicks" can only be honoured above the
+     * protocol — by refusing to hit-test (see {@see zoneAt()}).
+     */
+    public static function mouseMode(): MouseMode
+    {
+        return self::envFlag('SUGARCRUSH_DISABLE_MOUSE') ? MouseMode::Off : MouseMode::CellMotion;
+    }
+
+    /**
+     * Whether click/drag hit-testing is live. False when either
+     * `SUGARCRUSH_DISABLE_MOUSE` (no tracking at all) or
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` (clicks off, wheel kept) is set.
+     */
+    public static function mouseClicksEnabled(): bool
+    {
+        return self::mouseMode() !== MouseMode::Off
+            && !self::envFlag('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
+    }
+
+    /**
+     * The marked zone under a reported pointer cell, or null when there is
+     * none — the one hit-test entry point every future click handler goes
+     * through, so `SUGARCRUSH_DISABLE_MOUSE_CLICKS` is enforced in exactly
+     * one place instead of at each call site.
+     *
+     * Reads the registry {@see Renderer::scanRoot()} filled on the last
+     * frame, because a click reports coordinates against what is currently
+     * painted, not against the frame being built.
+     */
+    public static function zoneAt(int $col, int $row): ?Zone
+    {
+        if (!self::mouseClicksEnabled()) {
+            return null;
+        }
+
+        return Renderer::scanner()->hit($col, $row);
+    }
+
+    /**
+     * Runtime options `bin/sugarcrush` starts the chat Program with. Exists
+     * so the mouse-mode decision above is made once, next to the state it
+     * governs, instead of being duplicated in the entrypoint script.
+     */
+    public static function programOptions(): ProgramOptions
+    {
+        return new ProgramOptions(useAltScreen: true, mouseMode: self::mouseMode());
+    }
+
+    /**
+     * Treats an unset, empty, or literal `0` value as "not set" so
+     * `SUGARCRUSH_DISABLE_MOUSE=0` reads as "leave the mouse on" rather than
+     * as any-value-means-true.
+     */
+    private static function envFlag(string $name): bool
+    {
+        $value = getenv($name);
+
+        return $value !== false && $value !== '' && $value !== '0';
     }
 
     public function backend(): Backend
