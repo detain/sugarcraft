@@ -21,6 +21,12 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookEvent;
+use SugarCraft\Crush\Hooks\HookInterface;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Crush\Message;
@@ -2170,5 +2176,253 @@ final class ChatTest extends TestCase
         }
 
         return $chat;
+    }
+
+    // ---------------------------------------------------------------
+    // Hook gating on the Chat-native tool path (crush_feat.md §1 E1, W2.S1d)
+    // ---------------------------------------------------------------
+
+    /**
+     * A hook that delegates to $handler, matching every tool name.
+     *
+     * The matcher is `.*`, not `*`: HookRegistry compiles matchers as
+     * regexes, and a bare `*` is invalid and would silently never match.
+     */
+    private function spyHook(HookEvent $event, \Closure $handler): HookInterface
+    {
+        return new class ($event, $handler) implements HookInterface {
+            public function __construct(
+                private readonly HookEvent $hookEvent,
+                private readonly \Closure $handler,
+            ) {}
+
+            public function name(): string
+            {
+                return 'spy-' . $this->hookEvent->value;
+            }
+
+            public function event(): HookEvent
+            {
+                return $this->hookEvent;
+            }
+
+            public function matcher(): string
+            {
+                return '.*';
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                return ($this->handler)($context);
+            }
+        };
+    }
+
+    private function hookManagerWith(HookInterface ...$hooks): HookManager
+    {
+        $manager = new HookManager(new HookRegistry());
+        foreach ($hooks as $hook) {
+            $manager->register($hook);
+        }
+
+        return $manager;
+    }
+
+    public function testWithHooksReturnsANewChatAndLeavesTheOriginalUngated(): void
+    {
+        $chat = new Chat();
+        $hooks = $this->hookManagerWith();
+
+        $gated = $chat->withHooks($hooks);
+
+        $this->assertNull($chat->hooks());
+        $this->assertSame($hooks, $gated->hooks());
+        $this->assertNotSame($chat, $gated);
+    }
+
+    /**
+     * The Chat-native (registerTool) pipeline used to invoke its callback
+     * with zero gating while the engine pipeline ran the very same call
+     * through HookManager - crush_feat.md §1 D's "two independent,
+     * non-unified tool-calling pipelines". Fails against the old Chat: no
+     * PreToolUse hook ever fired for a registerTool() call.
+     */
+    public function testChatNativeToolCallRunsThroughThePreToolUseHook(): void
+    {
+        $seen = [];
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static function (HookContext $context) use (&$seen): HookResult {
+                $seen[] = [$context->toolName, $context->toolArgs];
+
+                return HookResult::allow();
+            },
+        ));
+
+        $chat = (new Chat(history: [Message::user('list files')]))
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        // Recorded in THIS process: hooks run parent-side, before the fork.
+        $this->assertSame([['bash', ['cmd' => 'ls']]], $seen);
+        $this->assertStringContainsString('total 0', $final->history[2]->content);
+    }
+
+    /**
+     * A PreToolUse DENY must block the callback outright and still resolve
+     * the running placeholder - the ToolFinished half of the pair - with an
+     * honest error result rather than leaving a spinner forever.
+     */
+    public function testPreToolUseDenyBlocksTheToolAndStillResolvesThePlaceholder(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_hook_deny_' . bin2hex(random_bytes(8));
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static fn(HookContext $context): HookResult => HookResult::deny('rm -rf is not allowed'),
+        ));
+
+        $chat = (new Chat())
+            ->registerTool('bash', static function (array $args) use ($sentinel): string {
+                // Written from the forked child if the deny leaks through:
+                // an on-disk sentinel is the only side effect that survives
+                // the fork boundary back to this process.
+                file_put_contents($sentinel, 'ran');
+
+                return 'deleted everything';
+            })
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf /'], 'call_1');
+        [$afterPlaceholders, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertFileDoesNotExist($sentinel, 'a denied tool call still reached its callback');
+
+        $this->assertSame('call_1', $afterPlaceholders->history[1]->pendingToolCallId);
+        $this->assertNull($final->history[1]->pendingToolCallId);
+        $this->assertSame('Tool error: Hook denied: rm -rf is not allowed', $final->history[1]->content);
+        $this->assertTrue($final->history[1]->toolResults[0]->isError());
+        $this->assertSame('call_1', $final->history[1]->toolResults[0]->id);
+    }
+
+    /**
+     * PostToolUse has to observe the real output in the PARENT: run inside
+     * the forked child, every effect of the hook chain (audit trail,
+     * accumulated state) would die with that child's memory.
+     */
+    public function testPostToolUseHookObservesTheToolOutputInTheParentProcess(): void
+    {
+        $outputs = [];
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PostToolUse,
+            static function (HookContext $context) use (&$outputs): HookResult {
+                $outputs[] = $context->toolOutput;
+
+                return HookResult::allow();
+            },
+        ));
+
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame(['total 0'], $outputs);
+    }
+
+    /**
+     * A call that never ran has no output to observe - Runtime skips its own
+     * postToolUse on the deny branch, and so must Chat.
+     */
+    public function testDeniedToolCallSkipsThePostToolUseHook(): void
+    {
+        $postCalls = 0;
+        $hooks = $this->hookManagerWith(
+            $this->spyHook(HookEvent::PreToolUse, static fn(HookContext $c): HookResult => HookResult::deny('nope')),
+            $this->spyHook(HookEvent::PostToolUse, static function (HookContext $c) use (&$postCalls): HookResult {
+                ++$postCalls;
+
+                return HookResult::allow();
+            }),
+        );
+
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame(0, $postCalls);
+    }
+
+    /**
+     * MODIFY is "allowed, with rewritten input" on both pipelines - the
+     * rewritten arguments are what the callback must actually receive.
+     */
+    public function testModifyHookRewritesTheArgumentsBeforeTheToolRuns(): void
+    {
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static fn(HookContext $c): HookResult => HookResult::modify((string) json_encode(['cmd' => 'ls -la'])),
+        ));
+
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args): string => 'ran: ' . ($args['cmd'] ?? 'nothing'))
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf /'], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame('ran: ls -la', $final->history[1]->content);
+    }
+
+    /**
+     * Runtime resolves the tool first and only builds a HookContext once it
+     * has one, so an unknown name never reaches the hook chain. Chat matches
+     * that ordering rather than inventing a second convention.
+     */
+    public function testUnknownToolIsReportedWithoutConsultingTheHooks(): void
+    {
+        $preCalls = 0;
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static function (HookContext $c) use (&$preCalls): HookResult {
+                ++$preCalls;
+
+                return HookResult::allow();
+            },
+        ));
+
+        // Some tool must be registered for update() to enter the tool path
+        // at all - just not the one the assistant asked for.
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('nope', [], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame(0, $preCalls);
+        $this->assertSame('Tool error: Unknown tool: nope', $final->history[1]->content);
+    }
+
+    /**
+     * A Chat with no HookManager keeps its pre-gating behaviour exactly:
+     * embedders and tests that never wire hooks must be unaffected.
+     */
+    public function testToolCallsStillRunUngatedWhenNoHookManagerIsWired(): void
+    {
+        $chat = (new Chat())->registerTool('bash', static fn(array $args) => 'total 0');
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertNull($chat->hooks());
+        $this->assertSame('total 0', $final->history[1]->content);
     }
 }

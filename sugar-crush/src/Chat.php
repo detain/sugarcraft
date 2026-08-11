@@ -19,6 +19,8 @@ use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandRegistry;
@@ -199,6 +201,22 @@ final class Chat implements Model
          * test that never needs it.
          */
         private readonly ?\SugarCraft\Mosaic\Mosaic $mosaic = null,
+        /**
+         * Hook chain gating this Chat's OWN ({@see registerTool()}) tool
+         * calls, so `PreToolUse`/`PostToolUse` fire for a call no matter
+         * which of the two pipelines crush_feat.md §1 D describes dispatched
+         * it. Before this, {@see Runtime}'s engine pipeline ran every call
+         * through {@see HookManager} while the Chat-native pipeline called
+         * the registered closure with zero gating - so the same `rm -rf`
+         * argument was denied by {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}
+         * on one path and executed on the other.
+         *
+         * Null (the default) keeps the pre-gating behaviour for tests and
+         * embedders that never wire hooks; {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+         * passes the same built-in guard chain (`Bootstrap::hooks()`) it
+         * hands the engine backend.
+         */
+        private readonly ?HookManager $hooks = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -708,8 +726,15 @@ final class Chat implements Model
      * the parent, once {@see waitForToolChildrenAsync()} collects that
      * call's real result.
      *
+     * Hook gating (crush_feat.md §1 E1) runs HERE, in the parent, before any
+     * fork: a denied call must never reach a child at all, and a
+     * {@see HookManager} whose hooks ran inside a forked child would have
+     * every effect of that run (audit log, accumulated state) die with the
+     * child's copy-on-write memory - the same reason $onToolCall is fired in
+     * the parent rather than in {@see invokeTool()}.
+     *
      * @param ToolCall[] $toolCalls
-     * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}>
+     * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult, hookContext: ?HookContext}>
      */
     private function forkToolCalls(array $toolCalls): array
     {
@@ -717,8 +742,21 @@ final class Chat implements Model
 
         $jobs = [];
         foreach ($toolCalls as $toolCall) {
+            [$toolCall, $denied, $hookContext] = $this->gateToolCall($toolCall);
+
+            if ($denied !== null) {
+                // A denied call is never forked and never reaches its
+                // callback, but still becomes a job carrying an honest error
+                // ToolResult under the ORIGINAL call id - so finishToolCalls()
+                // replaces beginToolCalls()'s "running" placeholder for it
+                // exactly as it does for an executed call, instead of leaving
+                // a spinner that never resolves.
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $denied, 'hookContext' => null];
+                continue;
+            }
+
             if (!$canFork) {
-                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall), 'hookContext' => $hookContext];
                 continue;
             }
 
@@ -728,7 +766,7 @@ final class Chat implements Model
             if ($pid === -1) {
                 // Fork failed for this call only - run it synchronously right
                 // here, same as the no-pcntl fallback.
-                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall), 'hookContext' => $hookContext];
                 continue;
             }
 
@@ -737,10 +775,87 @@ final class Chat implements Model
                 \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
             }
 
-            $jobs[] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid, 'result' => null];
+            $jobs[] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid, 'result' => null, 'hookContext' => $hookContext];
         }
 
         return $jobs;
+    }
+
+    /**
+     * Run the `PreToolUse` hook chain for ONE Chat-native tool call and
+     * report what should happen to it.
+     *
+     * Deliberately a mirror of {@see Runtime::executeToolCalls()}'s gating,
+     * decision for decision, because the whole point of §1 E1 is that a
+     * given tool call is treated identically whichever pipeline dispatched
+     * it: an unknown tool is reported as unknown WITHOUT consulting hooks
+     * (Runtime resolves the tool first and only then builds a HookContext),
+     * only a true DENY blocks (a MODIFY is "allowed, with rewritten input",
+     * and `isAllowed()` is false for it too), and an unparseable
+     * `modifiedInput` falls back to the original arguments.
+     *
+     * @return array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext} [the call
+     *     to execute (arguments rewritten by a MODIFY hook), a pre-resolved
+     *     error result when the call was DENIED, the context to hand
+     *     `PostToolUse` once the call finishes (null when it will not run)]
+     */
+    private function gateToolCall(ToolCall $toolCall): array
+    {
+        if ($this->hooks === null || !isset($this->tools[$toolCall->name])) {
+            return [$toolCall, null, null];
+        }
+
+        $context = new HookContext(
+            sessionId: $this->currentSessionId ?? '',
+            toolName: $toolCall->name,
+            toolArgs: $toolCall->arguments,
+            toolInput: json_encode($toolCall->arguments) ?: '{}',
+            toolOutput: '',
+            // Chat has no model/provider identity to report: Backend's whole
+            // contract is complete(history), so neither ever reaches here.
+            // Left empty rather than guessed at - every hook that ships with
+            // sugar-crush gates on toolName/toolArgs/toolInput.
+            model: '',
+            provider: '',
+            projectRoot: getcwd() ?: '',
+        );
+
+        $hookResult = $this->hooks->preToolUse($context);
+
+        if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
+            return [
+                $toolCall,
+                ToolResult::error($toolCall->name, "Hook denied: {$hookResult->message}", $toolCall->id),
+                null,
+            ];
+        }
+
+        if ($hookResult->isModified()) {
+            $decoded = json_decode($hookResult->modifiedInput ?? '', true);
+            if (is_array($decoded)) {
+                $toolCall = new ToolCall($toolCall->name, $decoded, $toolCall->id);
+            }
+        }
+
+        return [$toolCall, null, $context];
+    }
+
+    /**
+     * Run the `PostToolUse` hook chain over a finished tool call's output,
+     * in the parent process, and return the result unchanged.
+     *
+     * Paired with {@see gateToolCall()}: `$context` is null exactly when the
+     * pre-hook never allowed the call (no hooks wired, unknown tool, or a
+     * DENY), which is also when {@see Runtime} skips its own postToolUse -
+     * a call that never ran has no output to observe.
+     */
+    private function applyPostToolUse(?HookContext $context, ToolResult $result): ToolResult
+    {
+        if ($context !== null && $this->hooks !== null) {
+            $this->hooks->postToolUse($context->withToolOutput($result->result));
+        }
+
+        return $result;
     }
 
     /**
@@ -816,14 +931,20 @@ final class Chat implements Model
      * Chat::update()) also lands here via $cancellation, same as it does
      * for the backend call.
      *
-     * @param list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}> $jobs
+     * @param list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult, hookContext: ?HookContext}> $jobs
      * @return PromiseInterface<list<ToolResult>>
      */
     private function waitForToolChildrenAsync(array $jobs, CancellationToken $cancellation): PromiseInterface
     {
         $deferred = new Deferred();
 
-        $collect = fn(array $job): ToolResult => $job['result'] ?? $this->collectToolResult((string) $job['file'], $job['toolCall']);
+        // PostToolUse runs here, on the parent's side of the fork boundary,
+        // for the same reason PreToolUse runs before the fork - see
+        // forkToolCalls()'s docblock.
+        $collect = fn(array $job): ToolResult => $this->applyPostToolUse(
+            $job['hookContext'] ?? null,
+            $job['result'] ?? $this->collectToolResult((string) $job['file'], $job['toolCall']),
+        );
 
         $pendingIndexes = [];
         foreach ($jobs as $index => $job) {
@@ -1109,6 +1230,27 @@ final class Chat implements Model
     }
 
     /**
+     * The hook chain gating this Chat's own tool calls, if wired (see the
+     * `$hooks` constructor docblock).
+     */
+    public function hooks(): ?HookManager
+    {
+        return $this->hooks;
+    }
+
+    /**
+     * Gate this Chat's {@see registerTool()} calls through `$hooks`, the
+     * same {@see HookManager} the engine pipeline already runs its calls
+     * through (crush_feat.md §1 E1).
+     *
+     * @return self A new Chat with the hook chain attached
+     */
+    public function withHooks(HookManager $hooks): self
+    {
+        return $this->mutate(['hooks' => $hooks]);
+    }
+
+    /**
      * Timestamp of the last real user prompt submitted through submit(),
      * or null if none has been recorded yet on this instance.
      */
@@ -1163,6 +1305,7 @@ final class Chat implements Model
             'rows' => $this->rows,
             'cols' => $this->cols,
             'mosaic' => $this->mosaic,
+            'hooks' => $this->hooks,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
