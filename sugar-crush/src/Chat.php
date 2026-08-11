@@ -29,6 +29,7 @@ use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
@@ -113,6 +114,13 @@ final class Chat implements Model
      * Exit action for that.
      */
     private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
+
+    /**
+     * How many palette rows the MRU list remembers. Small on purpose: the
+     * bias is only meant to keep the handful of rows a user actually cycles
+     * through near the top, not to permanently re-rank the whole palette.
+     */
+    private const PALETTE_MRU_LIMIT = 8;
 
     /**
      * @param list<Message> $history
@@ -231,6 +239,22 @@ final class Chat implements Model
          * @var array<string, bool>
          */
         private readonly array $expanded = [],
+        /**
+         * Most-recently-used Ctrl+P palette rows, most recent FIRST, capped
+         * at {@see PALETTE_MRU_LIMIT} (crush_feat.md §4 E7). Only consulted
+         * by the empty-query root list ({@see paletteMatchResults()}), which
+         * floats recent rows to the top of their category - a typed query
+         * stays purely relevance-ranked so the matcher's score, not history,
+         * decides what the user is pointing at.
+         *
+         * In-memory for the life of the process: cross-session persistence
+         * would have to be written/read by Bootstrap the way `themeName` is,
+         * which is outside this step's file scope; the constructor param is
+         * how a seeded list would arrive once that lands.
+         *
+         * @var list<string>
+         */
+        private readonly array $paletteMru = [],
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -1427,6 +1451,7 @@ final class Chat implements Model
             'mosaic' => $this->mosaic,
             'hooks' => $this->hooks,
             'expanded' => $this->expanded,
+            'paletteMru' => $this->paletteMru,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -2742,6 +2767,27 @@ final class Chat implements Model
      */
     public function paletteMatches(): array
     {
+        return array_map(
+            static fn(MatchResult $result): string => $result->haystack,
+            $this->paletteMatchResults(),
+        );
+    }
+
+    /**
+     * {@see paletteMatches()}'s rows with their matched-character indices
+     * kept, in the SAME order - the label list is just this list's haystacks
+     * (crush_feat.md §4 E3: the indices used to be discarded here, so
+     * {@see Renderer::renderPalette()} had nothing to highlight with and
+     * could only bold whole rows).
+     *
+     * An empty query yields index-less results (a {@see Highlighter} no-ops
+     * on those), MRU-biased and category-grouped per §4 E6/E7; a non-empty
+     * query yields the matcher's own relevance order, ungrouped.
+     *
+     * @return list<MatchResult>
+     */
+    public function paletteMatchResults(): array
+    {
         if ($this->palette === null) {
             return [];
         }
@@ -2749,12 +2795,83 @@ final class Chat implements Model
         $items = $this->paletteItemLabels();
         $query = $this->palette->query;
         if ($query === '' || $items === []) {
-            return $items;
+            if ($this->palette->mode !== 'providers' && $this->palette->mode !== 'themes') {
+                $items = $this->rankRootPaletteLabels($items);
+            }
+
+            return array_map(
+                static fn(string $label): MatchResult => new MatchResult($query, $label, 0, []),
+                $items,
+            );
         }
 
-        $results = (new SmithWatermanMatcher())->matchAll($query, $items);
+        return (new SmithWatermanMatcher())->matchAll($query, $items);
+    }
 
-        return array_map(static fn($result) => $result->haystack, $results);
+    /**
+     * The grouping label ("Session", "Model", …) the palette renders above a
+     * root row, or null for a row that has none (provider/theme names).
+     */
+    public function paletteCategory(string $label): ?string
+    {
+        return PaletteAction::byLabel($label)?->category();
+    }
+
+    /**
+     * Palette rows the user has run, most recent first (crush_feat.md §4 E7).
+     *
+     * @return list<string>
+     */
+    public function paletteMru(): array
+    {
+        return $this->paletteMru;
+    }
+
+    /**
+     * Order the root palette's full (unfiltered) row list: recently-used rows
+     * first, then declared registry order, and finally bucketed by category
+     * preserving that first-seen order so each category stays contiguous and
+     * {@see Renderer::renderPalette()} can emit one header per bucket without
+     * re-sorting - the renderer must not reorder rows, or `selectedIndex`
+     * would stop addressing the row the user sees highlighted.
+     *
+     * @param list<string> $labels
+     * @return list<string>
+     */
+    private function rankRootPaletteLabels(array $labels): array
+    {
+        $recency = array_flip($this->paletteMru);
+
+        // usort() is stable in PHP 8, so rows absent from the MRU keep their
+        // declared registry order behind the recent ones.
+        usort(
+            $labels,
+            static fn(string $a, string $b): int
+                => ($recency[$a] ?? PHP_INT_MAX) <=> ($recency[$b] ?? PHP_INT_MAX),
+        );
+
+        $buckets = [];
+        foreach ($labels as $label) {
+            $buckets[$this->paletteCategory($label) ?? ''][] = $label;
+        }
+
+        return $buckets === [] ? [] : array_merge(...array_values($buckets));
+    }
+
+    /**
+     * Record a palette row as just-used, moving it to the front of the MRU
+     * list (and dropping any older entry for the same row) so the list stays
+     * a recency order rather than a use-count histogram.
+     */
+    private function rememberPaletteUse(string $label): self
+    {
+        $mru = array_values(array_filter(
+            $this->paletteMru,
+            static fn(string $existing): bool => $existing !== $label,
+        ));
+        array_unshift($mru, $label);
+
+        return $this->mutate(['paletteMru' => array_slice($mru, 0, self::PALETTE_MRU_LIMIT)]);
     }
 
     /**
@@ -2832,7 +2949,11 @@ final class Chat implements Model
         return match ($this->palette->mode) {
             'providers' => $this->selectPaletteProvider($label),
             'themes' => $this->selectPaletteTheme($label),
-            default => $this->runRootPaletteAction($label),
+            // Recorded BEFORE dispatch (crush_feat.md §4 E7): several root
+            // actions return a Cmd/second-level palette rather than a plain
+            // copy of $this, so the MRU has to be folded into the instance
+            // the handler runs against, not bolted onto its result.
+            default => $this->rememberPaletteUse($label)->runRootPaletteAction($label),
         };
     }
 

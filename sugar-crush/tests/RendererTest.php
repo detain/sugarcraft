@@ -753,4 +753,132 @@ final class RendererTest extends TestCase
         $this->assertSame(1, substr_count($out, '┌'));
         $this->assertSame(2, substr_count($withDiff, '┌'));
     }
+
+    // =========================================================================
+    // crush_feat.md §4 E3/E6/E7: palette highlighting, grouping, MRU order
+    // =========================================================================
+
+    /**
+     * A visible line with the surrounding box-drawing frame and padding
+     * removed. Uses a /u regex rather than trim(): trim()'s character list
+     * is byte-based, so "│" and "▸" share a leading 0xE2 byte and trimming
+     * the former would eat the latter's first byte.
+     */
+    private static function stripBox(string $line): string
+    {
+        return (string) preg_replace('/^[\s│╭╮╰╯─]+|[\s│╭╮╰╯─]+$/u', '', $line);
+    }
+
+    /** An open palette, optionally with $query already typed into it. */
+    private function openPalette(string $query = ''): Chat
+    {
+        [$current] = $this->chat()->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        foreach (str_split($query) as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
+        }
+
+        return $current;
+    }
+
+    /**
+     * §4 E3: the matched run carries its own SGR (bold + underline) inside
+     * the row, and the row still reads as plain text once ANSI is stripped.
+     */
+    public function testPaletteHighlightsTheMatchedRunOfATypedQuery(): void
+    {
+        $out = Renderer::render($this->openPalette('them'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains(preg_replace('/\x1b\[[0-9;]*m/', '', $line), 'Switch theme')) {
+                $row = $line;
+            }
+        }
+
+        $this->assertNotSame('', $row, 'the matching palette row was not rendered');
+        // "them" of "Switch theme" is wrapped in its own styled run; the "e"
+        // after it is NOT part of that run.
+        $this->assertMatchesRegularExpression('/\x1b\[[0-9;]*4[;m][^m]*m?them/', $row);
+        $this->assertStringContainsString('them', $row);
+        $this->assertStringContainsString(
+            'Switch theme',
+            preg_replace('/\x1b\[[0-9;]*m/', '', $row),
+        );
+    }
+
+    /**
+     * A highlighted run ends in a full SGR reset, so the row style has to be
+     * re-opened behind it - otherwise everything after the match renders in
+     * the terminal's default colour instead of the row's.
+     */
+    public function testPaletteReopensTheRowStyleAfterAHighlightedRun(): void
+    {
+        $out = Renderer::render($this->openPalette('them'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains(preg_replace('/\x1b\[[0-9;]*m/', '', $line), 'Switch theme')) {
+                $row = $line;
+            }
+        }
+
+        // …them<reset><row-style>e…  — a reset immediately followed by an SGR
+        // colour re-open, not by bare text.
+        $this->assertMatchesRegularExpression('/them\x1b\[0m(\x1b\[[0-9;]*m)+e/', $row);
+    }
+
+    /** §4 E6: the empty-query palette carries a header per category. */
+    public function testEmptyQueryPaletteRendersCategoryHeaders(): void
+    {
+        $lines = $this->visibleLines(Renderer::render($this->openPalette()));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertContains('Session', $trimmed);
+        $this->assertContains('Appearance', $trimmed);
+        // A header is a bare category name; the rows under it keep their
+        // "▸ "/"  " markers, so the label and its header never collide.
+        $this->assertContains('▸ New session', $trimmed);
+    }
+
+    /** A typed query is a flat relevance list — no headers to break the ranking. */
+    public function testQueriedPaletteOmitsCategoryHeaders(): void
+    {
+        $lines = $this->visibleLines(Renderer::render($this->openPalette('them')));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertNotContains('Appearance', $trimmed);
+        $this->assertContains('▸ Switch theme', $trimmed);
+    }
+
+    /** Theme/provider lists have no categories, so they render ungrouped. */
+    public function testThemeListPaletteRendersWithoutHeaders(): void
+    {
+        $chat = new Chat(palette: new \SugarCraft\Crush\Palette\PaletteState('themes', '', 0));
+
+        $lines = $this->visibleLines(Renderer::render($chat));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertContains('▸ dark', $trimmed);
+        $this->assertContains('dracula', $trimmed);
+        $this->assertNotContains('Appearance', $trimmed);
+    }
+
+    /** §4 E7: a recently-run row renders at the top of the reopened palette. */
+    public function testRecentlyUsedRowRendersFirst(): void
+    {
+        $chat = new Chat(
+            palette: \SugarCraft\Crush\Palette\PaletteState::root(),
+            paletteMru: ['Switch theme'],
+        );
+
+        $rows = [];
+        foreach ($this->visibleLines(Renderer::render($chat)) as $line) {
+            $trimmed = self::stripBox($line);
+            if (str_starts_with($trimmed, '▸ ') || in_array($trimmed, ['Switch session', 'Exit'], true)) {
+                $rows[] = $trimmed;
+            }
+        }
+
+        $this->assertSame('▸ Switch theme', $rows[0]);
+    }
 }

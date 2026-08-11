@@ -2505,4 +2505,150 @@ final class ChatTest extends TestCase
         $this->assertNull($chat->hooks());
         $this->assertSame('total 0', $final->history[1]->content);
     }
+
+    // =========================================================================
+    // crush_feat.md §4 E3/E6/E7: match indices, category grouping, MRU bias
+    // =========================================================================
+
+    /** Open palette, then type $query into it. */
+    private function paletteWithQuery(string $query): Chat
+    {
+        [$current] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        foreach (str_split($query) as $ch) {
+            [$current] = $current->update($ch === ' '
+                ? new KeyMsg(KeyType::Space, ' ')
+                : new KeyMsg(KeyType::Char, $ch));
+        }
+
+        return $current;
+    }
+
+    /**
+     * §4 E3: paletteMatches() used to map every MatchResult down to its
+     * haystack, throwing the matched indices away - Highlighter had nothing
+     * to work with. The sibling accessor keeps them.
+     */
+    public function testPaletteMatchResultsKeepMatchedIndicesForHighlighting(): void
+    {
+        $chat = $this->paletteWithQuery('them');
+
+        $results = $chat->paletteMatchResults();
+        $this->assertSame('Switch theme', $results[0]->haystack);
+        $this->assertNotSame([], $results[0]->matchedIndices);
+        // Every typed character landed, and on the "theme" run specifically.
+        $this->assertCount(4, $results[0]->matchedIndices);
+        $this->assertSame('t', mb_substr('Switch theme', $results[0]->matchedIndices[0], 1));
+    }
+
+    /** The label list stays exactly the haystacks of the result list. */
+    public function testPaletteMatchesMirrorsPaletteMatchResults(): void
+    {
+        $chat = $this->paletteWithQuery('s');
+
+        $this->assertSame(
+            array_map(static fn($r) => $r->haystack, $chat->paletteMatchResults()),
+            $chat->paletteMatches(),
+        );
+    }
+
+    /** An empty query yields index-less results, so highlighting no-ops. */
+    public function testEmptyQueryPaletteResultsCarryNoMatchedIndices(): void
+    {
+        [$opened] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        foreach ($opened->paletteMatchResults() as $result) {
+            $this->assertSame([], $result->matchedIndices);
+        }
+    }
+
+    /**
+     * §4 E6: every category occupies ONE contiguous run of rows, which is
+     * what lets the renderer emit a single header per bucket without
+     * reordering rows out from under `selectedIndex`.
+     */
+    public function testEmptyQueryPaletteGroupsRowsIntoContiguousCategories(): void
+    {
+        [$opened] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $seen = [];
+        $previous = null;
+        foreach ($opened->paletteMatches() as $label) {
+            $category = $opened->paletteCategory($label);
+            if ($category !== $previous) {
+                $this->assertNotContains($category, $seen, "category {$category} is split across the list");
+                $seen[] = $category;
+                $previous = $category;
+            }
+        }
+
+        $this->assertContains('Session', $seen);
+        $this->assertContains('App', $seen);
+    }
+
+    /** Second-level lists (theme/provider names) have no category to group by. */
+    public function testThemeRowsHaveNoPaletteCategory(): void
+    {
+        $chat = new Chat();
+        $this->assertNull($chat->paletteCategory('dracula'));
+    }
+
+    /**
+     * §4 E7: running a palette row records it, and it floats to the top of
+     * the next empty-query list.
+     */
+    public function testRunningAPaletteActionBiasesTheNextEmptyQueryList(): void
+    {
+        [$opened] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertSame([], $opened->paletteMru());
+        $this->assertNotSame('Exit', $opened->paletteMatches()[0]);
+
+        $exitIndex = array_search('Exit', $opened->paletteMatches(), true);
+        $current = $opened;
+        for ($i = 0; $i < $exitIndex; $i++) {
+            [$current] = $current->update(new KeyMsg(KeyType::Down, ''));
+        }
+        [$ran] = $current->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(['Exit'], $ran->paletteMru());
+
+        [$reopened] = $ran->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertSame('Exit', $reopened->paletteMatches()[0]);
+    }
+
+    /** Re-running a row moves it to the front instead of duplicating it. */
+    public function testPaletteMruDeduplicatesAndCapsItsLength(): void
+    {
+        $seeded = new Chat(
+            palette: \SugarCraft\Crush\Palette\PaletteState::root(),
+            paletteMru: ['Exit', 'a', 'b', 'c', 'd', 'e', 'f', 'g'],
+        );
+
+        [$ran] = $seeded->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('Exit', $ran->paletteMru()[0]);
+        $this->assertCount(8, $ran->paletteMru());
+        $this->assertSame(['Exit'], array_values(array_filter(
+            $ran->paletteMru(),
+            static fn(string $label): bool => $label === 'Exit',
+        )));
+    }
+
+    /**
+     * A typed query stays purely relevance-ranked - history must not
+     * outrank the matcher's own score.
+     */
+    public function testMruDoesNotReorderAQueriedPalette(): void
+    {
+        $seeded = new Chat(
+            palette: \SugarCraft\Crush\Palette\PaletteState::root(),
+            paletteMru: ['Exit'],
+        );
+
+        [$queried] = $seeded->update(new KeyMsg(KeyType::Char, 't'));
+        foreach (str_split('heme') as $ch) {
+            [$queried] = $queried->update(new KeyMsg(KeyType::Char, $ch));
+        }
+
+        $this->assertSame('Switch theme', $queried->paletteMatches()[0]);
+    }
 }

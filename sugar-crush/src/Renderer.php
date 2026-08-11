@@ -7,6 +7,7 @@ namespace SugarCraft\Crush;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -681,6 +682,13 @@ final class Renderer
      * The Ctrl+P command palette's content, composited over the whole frame
      * by {@see render()} via {@see Veil}. Returns '' (nothing composited)
      * when the palette is closed - see {@see Chat::palette()}.
+     *
+     * Rows come from {@see Chat::paletteMatchResults()} rather than the bare
+     * label list so the matched characters can be highlighted through
+     * {@see Highlighter} (crush_feat.md §4 E3). With no query typed, the root
+     * list arrives category-grouped and MRU-biased and gets a faint header
+     * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
+     * list, headers omitted, so the best match is always the first row.
      */
     private static function renderPalette(Chat $chat, Theme $theme): string
     {
@@ -689,17 +697,40 @@ final class Renderer
             return '';
         }
 
-        $matches = $chat->paletteMatches();
+        $results = $chat->paletteMatchResults();
         $selected = $palette->selectedIndex;
+        $grouped = $palette->query === '' && $palette->mode !== 'providers' && $palette->mode !== 'themes';
 
         $lines = ['🔍 ' . Sanitize::untrusted($palette->query) . '█', ''];
-        if ($matches === []) {
+        if ($results === []) {
             $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render('No matches');
         } else {
-            foreach ($matches as $index => $label) {
-                $lines[] = $index === $selected
-                    ? Style::new()->foreground($theme->userLabel)->bold()->render('▸ ' . $label)
-                    : Style::new()->foreground($theme->systemLabel)->render('  ' . $label);
+            $highlighter = new Highlighter();
+            // Underlined as well as recoloured: the selected row is already
+            // bold userLabel, so colour alone would make its matched run
+            // indistinguishable from the rest of the row.
+            $matchStyle = Style::new()->foreground($theme->userLabel)->bold()->underline();
+            $lastCategory = null;
+
+            foreach ($results as $index => $result) {
+                if ($grouped) {
+                    $category = $chat->paletteCategory($result->haystack);
+                    if ($category !== null && $category !== $lastCategory) {
+                        $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render($category);
+                        $lastCategory = $category;
+                    }
+                }
+
+                $rowStyle = $index === $selected
+                    ? Style::new()->foreground($theme->userLabel)->bold()
+                    : Style::new()->foreground($theme->systemLabel);
+                $reopen = self::sgrOpen($rowStyle);
+                $body = $highlighter->highlight(
+                    $result,
+                    static fn(string $run): string => $matchStyle->render($run) . $reopen,
+                );
+
+                $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . $body);
             }
         }
 
@@ -715,6 +746,23 @@ final class Renderer
             ->padding(1, 2)
             ->width(50)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The opening SGR sequence of a style, with no text and no trailing
+     * reset. Needed because {@see Style::render()} terminates every run with
+     * a full reset: a highlighted run nested inside a coloured palette row
+     * would otherwise strip the row's own colour off everything after it.
+     * Re-emitting this after each highlighted run restores the row style.
+     */
+    private static function sgrOpen(Style $style): string
+    {
+        $rendered = $style->render('');
+        $reset = "\x1b[0m";
+
+        return str_ends_with($rendered, $reset)
+            ? substr($rendered, 0, -strlen($reset))
+            : $rendered;
     }
 
     private static function renderInput(Chat $chat, Theme $theme): string
