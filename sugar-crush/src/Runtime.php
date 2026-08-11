@@ -155,10 +155,15 @@ final class Runtime
 
             // Echo the ORIGINAL tool-call id: the model correlates a result
             // to its request by this id, and the tool itself never sees it.
+            // imageBytes/imageProtocol thread an image-bearing ToolResult
+            // (e.g. Doctor's capability swatch) through to EngineBackend
+            // (W1.G2 reachability fix) instead of being dropped here.
             yield new ToolResultMessage(
                 $toolCall->id(),
                 $result->content(),
                 $result->isError(),
+                $result->imageBytes(),
+                $result->imageProtocol(),
             );
         }
     }

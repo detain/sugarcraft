@@ -154,6 +154,126 @@ final class BinSugarcrushWiringTest extends TestCase
     }
 
     /**
+     * W1.G2 reachability fix (reviewer-reported): the previous 'doctor'
+     * wiring only ever reached Chat's own registerTool()/beginToolCalls()/
+     * forkToolCalls() dispatch, which never fires in production -- every
+     * real completion goes through EngineBackend, which resolves tool
+     * calls internally against the Tool[] array Bootstrap::tools() builds.
+     * A real Bootstrap::tools($root) call must now include a Doctor tool,
+     * so the live LLM tool-calling schema actually advertises it.
+     */
+    public function testBootstrapToolsIncludesARealDoctorTool(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $this->assertArrayHasKey(\SugarCraft\Crush\Tools\BuiltIn\Doctor::class, $byClass);
+    }
+
+    /**
+     * Calling the real Doctor::execute() (the method
+     * SugarCraft\Crush\Runtime::executeToolCalls() calls for every 'doctor'
+     * ToolCall the live EngineBackend/Runtime/App loop resolves) must
+     * produce a genuinely image-bearing Tools\ToolResult.
+     */
+    public function testDoctorToolProducesAnImageBearingToolResult(): void
+    {
+        $result = (new \SugarCraft\Crush\Tools\BuiltIn\Doctor())->execute([]);
+
+        $this->assertInstanceOf(\SugarCraft\Crush\Tools\ToolResult::class, $result);
+        $this->assertTrue($result->hasImage());
+        $this->assertNotNull($result->imageBytes());
+        $this->assertStringStartsWith("\x89PNG", (string) $result->imageBytes());
+        $this->assertNotNull($result->imageProtocol());
+    }
+
+    /**
+     * End-to-end through the REAL production pipeline a model-issued
+     * "doctor" tool call takes: Chat::submit() -> EngineBackend::completeAsync()
+     * (pcntl_fork() when available, the same fork boundary every real
+     * bin/sugarcrush completion crosses) -> Runtime::run()/executeToolCalls()
+     * resolving the call against Bootstrap::tools($root)'s real Doctor
+     * instance -> EngineBackend::complete() threading the image onto the
+     * root Message -> Chat::update(AssistantMsg) appending it to history.
+     *
+     * Only the provider's HTTP layer is a stub (a ProviderInterface returning
+     * a canned tool_call then a canned answer, exactly like
+     * EngineBackendTest's own agentic-loop tests) -- unlike the fake
+     * reachability test this replaces, the assistant Message carrying the
+     * toolCalls is never hand-constructed; Chat drives the whole loop
+     * itself via a real submit()/backend round-trip.
+     */
+    public function testDoctorToolIsReachableEndToEndThroughARealChatTurn(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $provider = new class implements \SugarCraft\Crush\Providers\ProviderInterface {
+            public int $calls = 0;
+            public function name(): string { return 'stub-doctor'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(\SugarCraft\Crush\Providers\CompleteRequest $r): \SugarCraft\Crush\Providers\CompleteResponse
+            {
+                $this->calls++;
+
+                return $this->calls === 1
+                    ? new \SugarCraft\Crush\Providers\CompleteResponse(
+                        content: 'checking terminal capability',
+                        toolCalls: [new \SugarCraft\Crush\Tools\ToolCall('call_doctor_1', 'doctor', [])],
+                    )
+                    : new \SugarCraft\Crush\Providers\CompleteResponse(content: 'done checking');
+            }
+            public function completeStream(\SugarCraft\Crush\Providers\CompleteRequest $r): \Generator
+            {
+                yield new \SugarCraft\Crush\Providers\CompleteResponse(content: '');
+            }
+            public function embeddings(\SugarCraft\Crush\Providers\EmbeddingsRequest $r): \SugarCraft\Crush\Providers\EmbeddingsResponse
+            {
+                return new \SugarCraft\Crush\Providers\EmbeddingsResponse([]);
+            }
+        };
+
+        $backend = \SugarCraft\Crush\Backend\EngineBackend::new($provider, 'stub-doctor')
+            ->withTools(Bootstrap::tools($root));
+        $chat = new \SugarCraft\Crush\Chat(backend: $backend, mosaic: \SugarCraft\Crush\ToolResult::mosaic());
+
+        $inputBufRef = new \ReflectionMethod($chat, 'withInputBuf');
+        $inputBufRef->setAccessible(true);
+        $chat = $inputBufRef->invoke($chat, "check my terminal's image support");
+
+        [$afterSubmit, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\AsyncCmd::class, $asyncCmd);
+
+        $loop = \React\EventLoop\Loop::get();
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved, $loop): void {
+            $resolved = $msg;
+            $loop->stop();
+        });
+
+        if ($resolved === null) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
+
+        $this->assertInstanceOf(\SugarCraft\Crush\AssistantMsg::class, $resolved, 'doctor tool call did not complete within the test timeout');
+
+        [$final] = $afterSubmit->update($resolved);
+
+        $lastMessage = $final->history[array_key_last($final->history)];
+
+        $this->assertTrue($lastMessage->hasImage(), 'image captured by the real Doctor tool must survive EngineBackend + the completeAsync() fork boundary and reach Chat history');
+        $this->assertStringStartsWith("\x89PNG", (string) $lastMessage->imageBytes);
+        $this->assertNotNull($lastMessage->imageProtocol);
+    }
+
+    /**
      * @return array<class-string, object>
      */
     private function toolsByClass(): array

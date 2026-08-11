@@ -370,4 +370,28 @@ final class MessageTest extends TestCase
 
         $this->assertSame('12345', $message->toolCallId());
     }
+
+    /**
+     * W1.G2 reachability fix: imageBytes/imageProtocol thread an
+     * image-bearing Tools\ToolResult (e.g. Doctor's capability swatch)
+     * through Runtime::executeToolCalls() so EngineBackend::complete() can
+     * carry it onto the root Message.
+     */
+    public function testToolResultMessageImageFieldsDefaultToNull(): void
+    {
+        $message = new ToolResultMessage('call_123', 'Content');
+
+        $this->assertNull($message->imageBytes());
+        $this->assertNull($message->imageProtocol());
+        $this->assertFalse($message->hasImage());
+    }
+
+    public function testToolResultMessageCanCarryImageFields(): void
+    {
+        $message = new ToolResultMessage('call_123', 'Detected kitty', false, "\x89PNGfake", 'kitty');
+
+        $this->assertTrue($message->hasImage());
+        $this->assertSame("\x89PNGfake", $message->imageBytes());
+        $this->assertSame('kitty', $message->imageProtocol());
+    }
 }

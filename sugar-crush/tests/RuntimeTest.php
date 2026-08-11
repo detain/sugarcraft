@@ -321,6 +321,35 @@ final class RuntimeTest extends TestCase
         $this->assertFalse($results[0]->isError());
     }
 
+    /**
+     * W1.G2 reachability fix: an image-bearing Tools\ToolResult (e.g.
+     * Doctor's capability swatch) must survive executeToolCalls() onto the
+     * yielded ToolResultMessage instead of being silently dropped.
+     */
+    public function testExecuteToolCallsThreadsImageFieldsOntoToolResultMessage(): void
+    {
+        $tool = $this->createMock(Tool::class);
+        $tool->method('name')->willReturn('doctor');
+        $tool->method('description')->willReturn('doctor');
+        $tool->method('inputSchema')->willReturn([]);
+        $tool->method('execute')->willReturn(new ToolResult(
+            toolCallId: 'call_doctor',
+            content: 'Detected kitty',
+            imageBytes: "\x89PNGfake",
+            imageProtocol: 'kitty',
+        ));
+
+        $toolCall = new ToolCall('call_doctor', 'doctor', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$tool]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [[$toolCall], $app]));
+
+        $this->assertCount(1, $results);
+        $this->assertTrue($results[0]->hasImage());
+        $this->assertSame("\x89PNGfake", $results[0]->imageBytes());
+        $this->assertSame('kitty', $results[0]->imageProtocol());
+    }
+
     public function testExecuteToolCallsHandlesMultipleToolCalls(): void
     {
         $tool1 = $this->createMockTool('tool_one', 'Result 1');

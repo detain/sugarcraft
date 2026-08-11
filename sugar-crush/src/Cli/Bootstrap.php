@@ -15,7 +15,12 @@ use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
+use SugarCraft\Crush\Tools\BuiltIn\Doctor;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
@@ -57,6 +62,7 @@ final class Bootstrap
             sessionStore: self::sessionStore(),
             themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
             onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
+            mosaic: ToolResult::mosaic(),
         );
     }
 
@@ -104,7 +110,8 @@ final class Bootstrap
 
         return (new EngineBackend(new EchoProvider(), 'echo'))
             ->withTools(self::tools($root))
-            ->withHooks(self::hooks());
+            ->withHooks(self::hooks())
+            ->withSkillRegistry(self::skillRegistry($root));
     }
 
     /**
@@ -130,7 +137,8 @@ final class Bootstrap
 
         return (new EngineBackend($provider, (string) $model))
             ->withTools(self::tools($root))
-            ->withHooks(self::hooks());
+            ->withHooks(self::hooks())
+            ->withSkillRegistry(self::skillRegistry($root));
     }
 
     /**
@@ -230,6 +238,31 @@ final class Bootstrap
         file_put_contents(self::userConfigPath(), $json);
     }
 
+    /**
+     * Discover every skill reachable from $root and hand back the populated
+     * registry: built-in (src/Skills/BuiltIn), user (~/.sugar-crush/skills),
+     * project ({$root}/.sugar-crush/skills), and foreign imports from other
+     * coding CLIs' conventions — {$root}/.claude/skills, ~/.claude/skills,
+     * {$root}/.opencode/skills, ~/.config/opencode/skills (see {@see
+     * \SugarCraft\Crush\Skills\ForeignSkillDiscovery}).
+     *
+     * This is the missing link crush_feat.md section 10.5(1) needed: without
+     * it, SkillManager/SkillLoader/ForeignSkillDiscovery were only ever
+     * exercised by their own unit tests — nothing in `bin/sugarcrush` called
+     * them, so a skill dropped under any of those directories had zero
+     * observable effect on a real run. Called from both {@see backend()} and
+     * {@see backendFor()} so every provider path (env-driven, persisted, and
+     * explicit Ctrl+P selection) gets the same discovered {@see
+     * SkillRegistry} threaded into {@see EngineBackend::withSkillRegistry()}.
+     */
+    private static function skillRegistry(string $root): SkillRegistry
+    {
+        $registry = new SkillRegistry();
+        (new SkillManager(new SkillLoader(), $registry))->loadAll($root);
+
+        return $registry;
+    }
+
     private static function hooks(): HookManager
     {
         $hooks = new HookManager(new HookRegistry());
@@ -258,6 +291,7 @@ final class Bootstrap
             new Glob($root, instructionLoader: $loader),
             new Grep($root),
             new WebFetch(),
+            new Doctor(),
         ];
     }
 

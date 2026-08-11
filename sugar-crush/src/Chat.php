@@ -184,6 +184,18 @@ final class Chat implements Model
          */
         private readonly ?int $rows = null,
         private readonly ?int $cols = null,
+        /**
+         * The candy-mosaic probe-once capability instance (W1.G2/E2 - see
+         * {@see ToolResult::mosaic()}'s docblock), exposed here per
+         * crush_feat.md section 9's literal `new Chat(..., mosaic: $mosaic)`
+         * so a future renderer (E3) can read the SAME detected protocol an
+         * image-bearing {@see ToolResult} was produced against instead of
+         * re-probing the TTY independently. {@see
+         * \SugarCraft\Crush\Cli\Bootstrap::chat()} passes {@see
+         * ToolResult::mosaic()} here; null for a Chat built directly in a
+         * test that never needs it.
+         */
+        private readonly ?\SugarCraft\Mosaic\Mosaic $mosaic = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -507,6 +519,16 @@ final class Chat implements Model
      * real result (see {@see forkToolCalls()}'s docblock for why that can't
      * happen in the child that actually runs this).
      *
+     * A callback that already returns a {@see ToolResult} (e.g. one built
+     * via {@see ToolResult::okWithImage()}/{@see ToolResult::withImage()} -
+     * see W1.G2) is passed through as-is instead of being re-wrapped by
+     * {@see ToolResult::ok()}: re-wrapping would `json_encode()` the object
+     * (serializing its public properties, including raw `imageBytes`, into
+     * the text `result` string shown to the model/user) and silently drop
+     * every field ok() doesn't accept. The tool call's own `$toolCall->id`
+     * still wins over whatever id the callback set, matching ok()'s
+     * previous behaviour of always stamping the real id.
+     *
      * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
      *     output (only meaningful when $succeeded), succeeded]
      */
@@ -522,6 +544,18 @@ final class Chat implements Model
         try {
             $callback = $this->tools[$name];
             $raw = $callback($args);
+            if ($raw instanceof ToolResult) {
+                $result = $raw->id === $toolCall->id ? $raw : new ToolResult(
+                    $raw->name,
+                    $raw->result,
+                    $raw->error,
+                    $toolCall->id,
+                    $raw->imageBytes,
+                    $raw->imagePath,
+                    $raw->imageProtocol,
+                );
+                return [$result, $raw, true];
+            }
             $result = ToolResult::ok($name, is_string($raw) ? $raw : (json_encode($raw) ?: 'null'), $toolCall->id);
             return [$result, $raw, true];
         } catch (\Throwable $e) {
@@ -621,6 +655,13 @@ final class Chat implements Model
      * callbacks are documented as returning `mixed`, but anything that isn't
      * itself JSON-safe (a resource, a closure) can't survive any IPC
      * mechanism, forked or not, and isn't a realistic tool return value.
+     *
+     * `imageBytes` is base64-encoded before crossing this JSON-over-temp-file
+     * boundary - raw binary (e.g. PNG bytes) is not valid UTF-8 and
+     * `json_encode()` would fail/emit null for it otherwise, silently
+     * dropping every image-bearing {@see ToolResult} (see {@see
+     * ToolResult::okWithImage()}) once a call crosses the default
+     * pcntl_fork() path (see W1.G2 reachability fix).
      */
     private function storeToolResult(string $file, ToolCall $toolCall): void
     {
@@ -633,6 +674,9 @@ final class Chat implements Model
                 'result' => $result->result,
                 'error' => $result->error,
                 'id' => $result->id,
+                'imageBytes' => $result->imageBytes === null ? null : base64_encode($result->imageBytes),
+                'imagePath' => $result->imagePath,
+                'imageProtocol' => $result->imageProtocol,
             ],
             'raw' => json_decode(json_encode($raw) ?: 'null', true),
         ];
@@ -743,6 +787,9 @@ final class Chat implements Model
             (string) ($r['result'] ?? ''),
             $r['error'] ?? null,
             $r['id'] ?? $toolCall->id,
+            isset($r['imageBytes']) && is_string($r['imageBytes']) ? base64_decode($r['imageBytes'], true) ?: null : null,
+            isset($r['imagePath']) && is_string($r['imagePath']) ? $r['imagePath'] : null,
+            isset($r['imageProtocol']) && is_string($r['imageProtocol']) ? $r['imageProtocol'] : null,
         );
 
         if (($decoded['succeeded'] ?? false) === true && $this->onToolCall !== null) {
@@ -935,6 +982,15 @@ final class Chat implements Model
     }
 
     /**
+     * Get the shared candy-mosaic probe-once capability instance, if wired
+     * (see this class's `$mosaic` constructor docblock, W1.G2/E2).
+     */
+    public function mosaic(): ?\SugarCraft\Mosaic\Mosaic
+    {
+        return $this->mosaic;
+    }
+
+    /**
      * Timestamp of the last real user prompt submitted through submit(),
      * or null if none has been recorded yet on this instance.
      */
@@ -988,6 +1044,7 @@ final class Chat implements Model
             'lastEscapeAt' => $this->lastEscapeAt,
             'rows' => $this->rows,
             'cols' => $this->cols,
+            'mosaic' => $this->mosaic,
         ];
 
         return new self(...array_merge($constructorProps, $changes));

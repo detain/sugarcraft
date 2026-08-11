@@ -57,6 +57,38 @@ final class ChatTest extends TestCase
         $this->assertSame('hi ', $next->inputBuf);
     }
 
+    /**
+     * W1.G2/E2 fix (reviewer-reported): crush_feat.md section 9's E2
+     * literally specifies `new Chat(..., mosaic: $mosaic)` exposing the
+     * probe-once candy-mosaic capability instance through Chat's
+     * constructor, rather than leaving it a standalone static cache only
+     * SugarCraft\Crush\ToolResult can reach.
+     */
+    public function testMosaicDefaultsToNullWhenNotWired(): void
+    {
+        $chat = new Chat();
+
+        $this->assertNull($chat->mosaic());
+    }
+
+    public function testMosaicIsExposedWhenWiredThroughTheConstructor(): void
+    {
+        $mosaic = \SugarCraft\Mosaic\Mosaic::halfBlock();
+        $chat = new Chat(mosaic: $mosaic);
+
+        $this->assertSame($mosaic, $chat->mosaic());
+    }
+
+    public function testMosaicSurvivesMutateViaWithInputBuf(): void
+    {
+        $mosaic = \SugarCraft\Mosaic\Mosaic::halfBlock();
+        $chat = new Chat(mosaic: $mosaic);
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
+
+        $this->assertSame($mosaic, $next->mosaic());
+    }
+
     public function testEnterSubmitsAndSchedulesBackend(): void
     {
         $chat = new Chat(inputBuf: 'hello');
