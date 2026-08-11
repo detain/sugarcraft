@@ -74,13 +74,22 @@ final class CommandRegistryTest extends TestCase
     {
         $slashNames = self::names(CommandRegistry::slashCommands());
 
-        // These four have no "/name" branch in Chat::submit(), so advertising
+        // These three have no "/name" branch in Chat::submit(), so advertising
         // them in the "/" popup would offer a command that does nothing.
-        foreach (['new', 'model', 'docs', 'mcp'] as $paletteOnly) {
+        foreach (['new', 'model', 'docs'] as $paletteOnly) {
             $this->assertNotContains($paletteOnly, $slashNames);
         }
 
         $this->assertSame($slashNames, self::names(CommandRegistry::filter('')));
+    }
+
+    public function testMcpIsAdvertisedInTheSlashPopup(): void
+    {
+        // Regression: "mcp" used to be palette-only because dispatch was a
+        // bare "mcp auth …" string with no leading slash, leaving /mcp
+        // undiscoverable from the "/" popup.
+        $this->assertContains('mcp', self::names(CommandRegistry::slashCommands()));
+        $this->assertSame(['mcp'], self::names(CommandRegistry::filter('mcp')));
     }
 
     public function testLabelFallsBackToTheCommandName(): void
