@@ -21,6 +21,7 @@ use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandRegistry;
@@ -217,6 +218,45 @@ final class Chat implements Model
          * hands the engine backend.
          */
         private readonly ?HookManager $hooks = null,
+        /**
+         * The permission prompt currently blocking this turn, or null when
+         * nothing is waiting on the user (crush_feat.md §1 E2). Set by
+         * {@see requestPermission()}, cleared by {@see answerPermission()};
+         * {@see Renderer} reads it through {@see pendingPermission()}.
+         */
+        private readonly ?PermissionRequestMsg $pendingPermission = null,
+        /**
+         * The {@see Deferred} whose promise is the Cmd that keeps the turn
+         * suspended while $pendingPermission is showing. Answering resolves
+         * it, which is the whole "block on a UI decision" mechanism - the
+         * same Deferred object is shared by every `mutate()` clone in
+         * between, so the Chat instance that receives the reply settles the
+         * promise the Chat instance that raised the prompt handed out.
+         */
+        private readonly ?Deferred $permissionDeferred = null,
+        /**
+         * The gated batch parked while $pendingPermission is showing, in
+         * {@see gateToolCall()}'s return shape.
+         *
+         * Carried across the pause rather than re-gated on resume so the
+         * `PreToolUse` chain runs EXACTLY once per tool call: re-gating would
+         * fire every hook's side effects (AuditHook's log line, accumulated
+         * state) a second time, and would re-ask the question the user just
+         * answered.
+         *
+         * @var list<array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Crush\Hooks\HookResult}>
+         */
+        private readonly array $pendingPermissionJobs = [],
+        /**
+         * Tool names the user answered {@see PermissionReply::Always} for,
+         * as `[name => true]` - opencode's `approved: Rule[]`, per session
+         * and in memory only. Consulted by {@see gateToolCall()}, which
+         * turns an ASK for a granted tool straight into permission without
+         * prompting again.
+         *
+         * @var array<string, bool>
+         */
+        private readonly array $permissionGrants = [],
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -260,6 +300,12 @@ final class Chat implements Model
         if ($msg instanceof ToolResultsMsg) {
             return $this->finishToolCalls($msg);
         }
+        if ($msg instanceof PermissionRequestMsg) {
+            return $this->requestPermission($msg);
+        }
+        if ($msg instanceof PermissionReplyMsg) {
+            return $this->answerPermission($msg->reply);
+        }
         if ($msg instanceof BackendToolEventsMsg) {
             return $this->applyBackendToolEvent($msg);
         }
@@ -274,6 +320,15 @@ final class Chat implements Model
         }
         if ($msg->type === KeyType::Char && $msg->rune === "\x03" /* ^C */) {
             return [$this, Cmd::quit()];
+        }
+        // A blocking permission prompt owns the keyboard while it is up, and
+        // is checked ahead of BOTH the Escape arm and the inFlight
+        // blanket-swallow below: the turn is inFlight by definition while
+        // waiting on this answer, so without this arm every reply keystroke
+        // would be discarded and the prompt could never be answered, and
+        // Escape would abort the whole turn rather than refuse this one call.
+        if ($this->pendingPermission !== null) {
+            return $this->handlePermissionKey($msg);
         }
         // Escape is checked before the inFlight blanket-swallow below (like
         // Ctrl+C above) because its whole point while a request is running
@@ -464,9 +519,215 @@ final class Chat implements Model
      * handled by {@see finishToolCalls()} once the resulting
      * {@see ToolResultsMsg} arrives.
      *
+     * The `PreToolUse` chain runs FIRST, over the whole batch, before any
+     * placeholder is appended or any child forked (crush_feat.md §1 E2): a
+     * hook may answer {@see \SugarCraft\Crush\Hooks\HookResult::ask()}, in
+     * which case nothing about this turn may proceed until the user decides,
+     * and a "running" spinner for a call that has not been permitted yet
+     * would be a lie. The gated batch is then handed to
+     * {@see dispatchToolCalls()} - directly when nothing needs asking, or by
+     * {@see answerPermission()} once the answer arrives - so each call is
+     * gated exactly once either way.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function beginToolCalls(Message $message): array
+    {
+        $gated = array_map(
+            fn(ToolCall $call): array => $this->gateToolCall($call),
+            $message->toolCalls,
+        );
+
+        foreach ($gated as [$call, , , $ask]) {
+            if ($ask !== null) {
+                return $this->mutate(['pendingPermissionJobs' => $gated])->requestPermission(
+                    new PermissionRequestMsg($message, $call, $ask->message, $this->generation),
+                );
+            }
+        }
+
+        return $this->dispatchToolCalls($message, $gated);
+    }
+
+    /**
+     * Raise a blocking permission prompt and suspend the turn on it.
+     *
+     * The returned Cmd is a promise that is deliberately never settled here:
+     * it stays pending - and the turn with it - until
+     * {@see answerPermission()} resolves the same {@see Deferred}. That is
+     * the "schedule a Cmd that resolves once the user answers" half of
+     * crush_feat.md §1 E2, and it reuses the exact Deferred/Cmd::promise
+     * pattern {@see waitForToolChildrenAsync()} already uses for tool
+     * children.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function requestPermission(PermissionRequestMsg $msg): array
+    {
+        $deferred = new Deferred();
+
+        $next = $this->mutate([
+            'pendingPermission' => $msg,
+            'permissionDeferred' => $deferred,
+            'inFlight' => true,
+        ]);
+
+        return [$next, Cmd::promise(static fn(): PromiseInterface => $deferred->promise())];
+    }
+
+    /**
+     * Apply the user's answer to the prompt {@see requestPermission()} put up
+     * and release the suspended turn.
+     *
+     * Both permitting replies resume the SAME gated batch that was parked, so
+     * hooks are not re-run and the question is not re-asked; the only
+     * difference is that {@see PermissionReply::Always} also records a
+     * session grant so {@see gateToolCall()} stops asking about that tool.
+     * A rejection ends the turn with an honest transcript line instead of
+     * silently dropping it.
+     *
+     * An answer permits exactly the call it was asked about. A batch can
+     * carry several outstanding ASKs, so a permitting reply clears only the
+     * answered one (plus, for `Always`, the other queued asks for that same
+     * tool - that is what "always" means) and then re-suspends on the next
+     * one still outstanding. Dispatching the whole parked batch off one
+     * answer would run calls the user was never even shown.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function answerPermission(PermissionReply $reply): array
+    {
+        $request = $this->pendingPermission;
+        if ($request === null) {
+            return [$this, null];
+        }
+
+        $jobs = $this->pendingPermissionJobs;
+        $cleared = [
+            'pendingPermission' => null,
+            'permissionDeferred' => null,
+            'pendingPermissionJobs' => [],
+        ];
+
+        // Settle the waiting Cmd before anything else: whatever happens next
+        // returns its own Cmd, and a promise left pending here would keep the
+        // Program waiting on a decision that has already been made.
+        $this->permissionDeferred?->resolve(null);
+
+        if (!$reply->permits()) {
+            return [$this->mutate([
+                ...$cleared,
+                'inFlight' => false,
+                'inFlightCancellation' => null,
+                // The assistant message goes in too: it never reached
+                // history (dispatchToolCalls() appends it together with the
+                // placeholders, and this batch never got that far), and a
+                // transcript that shows the refusal without showing what was
+                // refused is worse than showing neither.
+                'history' => [
+                    ...$this->history,
+                    $request->assistantMessage,
+                    Message::system("_Permission denied: {$request->toolCall->name} was not run._"),
+                ],
+            ]), null];
+        }
+
+        $grants = $this->permissionGrants;
+        if ($reply === PermissionReply::Always) {
+            $grants[$request->toolCall->name] = true;
+            $cleared['permissionGrants'] = $grants;
+        }
+
+        // Drop the ASK the user just answered (and, under a fresh Always
+        // grant, this tool's other queued asks) - every other entry keeps its
+        // ASK, because consent for one call is not consent for another.
+        $jobs = array_map(
+            static function (array $job) use ($request, $grants): array {
+                if ($job[3] === null) {
+                    return $job;
+                }
+
+                $answered = $job[0] === $request->toolCall || ($grants[$job[0]->name] ?? false);
+
+                return $answered ? [$job[0], $job[1], $job[2], null] : $job;
+            },
+            $jobs,
+        );
+
+        foreach ($jobs as [$call, , , $ask]) {
+            if ($ask !== null) {
+                return $this->mutate([...$cleared, 'pendingPermissionJobs' => $jobs])->requestPermission(
+                    new PermissionRequestMsg($request->assistantMessage, $call, $ask->message, $this->generation),
+                );
+            }
+        }
+
+        return $this->mutate($cleared)->dispatchToolCalls($request->assistantMessage, $jobs);
+    }
+
+    /**
+     * Decide a permission prompt from a keystroke.
+     *
+     * Kept to the three answers {@see PermissionReply} defines, translated to
+     * a {@see PermissionReplyMsg} so the decision path is identical whether
+     * it came from a key, a palette action or a test. Any other key is
+     * ignored rather than guessed at - this prompt gates tool execution, so
+     * "the user pressed something" must never read as consent.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handlePermissionKey(KeyMsg $msg): array
+    {
+        $rune = strtolower($msg->rune ?? '');
+
+        $reply = match (true) {
+            $msg->type === KeyType::Escape => PermissionReply::Reject,
+            $msg->type === KeyType::Char && $rune === 'n' => PermissionReply::Reject,
+            $msg->type === KeyType::Char && $rune === 'y' => PermissionReply::Once,
+            $msg->type === KeyType::Char && $rune === 'a' => PermissionReply::Always,
+            default => null,
+        };
+
+        if ($reply === null) {
+            return [$this, null];
+        }
+
+        return $this->answerPermission($reply);
+    }
+
+    /**
+     * The prompt currently blocking this turn, if any.
+     *
+     * {@see Renderer} reads this to draw the modal; a null answer means no
+     * decision is outstanding.
+     */
+    public function pendingPermission(): ?PermissionRequestMsg
+    {
+        return $this->pendingPermission;
+    }
+
+    /**
+     * Tool names granted "always" for this session, as `[name => true]`.
+     *
+     * @return array<string, bool>
+     */
+    public function permissionGrants(): array
+    {
+        return $this->permissionGrants;
+    }
+
+    /**
+     * Show a "running" placeholder per call, fork the already-gated batch and
+     * schedule the Cmd that waits for the children.
+     *
+     * Split out of {@see beginToolCalls()} so the resume path
+     * ({@see answerPermission()}) re-enters here with the gated batch it
+     * parked, instead of re-entering the gate.
+     *
+     * @param list<array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Crush\Hooks\HookResult}> $gated
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function dispatchToolCalls(Message $message, array $gated): array
     {
         $placeholders = array_map(
             static fn(ToolCall $call): Message => Message::toolRunning($call),
@@ -482,7 +743,7 @@ final class Chat implements Model
             'generation' => $generation,
         ]);
 
-        $jobs = $this->forkToolCalls($message->toolCalls);
+        $jobs = $this->forkToolCalls($gated);
         $cmd = Cmd::promise(function () use ($jobs, $cancellation, $message, $generation): PromiseInterface {
             return $this->waitForToolChildrenAsync($jobs, $cancellation)->then(
                 static fn(array $results): Msg => new ToolResultsMsg($message, $results, $generation),
@@ -726,23 +987,37 @@ final class Chat implements Model
      * the parent, once {@see waitForToolChildrenAsync()} collects that
      * call's real result.
      *
-     * Hook gating (crush_feat.md §1 E1) runs HERE, in the parent, before any
-     * fork: a denied call must never reach a child at all, and a
+     * Hook gating (crush_feat.md §1 E1) runs in the parent, before any fork:
+     * a denied call must never reach a child at all, and a
      * {@see HookManager} whose hooks ran inside a forked child would have
      * every effect of that run (audit log, accumulated state) die with the
      * child's copy-on-write memory - the same reason $onToolCall is fired in
-     * the parent rather than in {@see invokeTool()}.
+     * the parent rather than in {@see invokeTool()}. The gate itself now runs
+     * one step earlier still, in {@see beginToolCalls()}, because an ASK
+     * decision has to suspend the batch before any of it is forked
+     * (crush_feat.md §1 E2) - this method receives the already-gated batch.
      *
-     * @param ToolCall[] $toolCalls
+     * @param list<array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Crush\Hooks\HookResult}> $gated
      * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult, hookContext: ?HookContext}>
      */
-    private function forkToolCalls(array $toolCalls): array
+    private function forkToolCalls(array $gated): array
     {
         $canFork = function_exists('pcntl_fork') && function_exists('pcntl_waitpid');
 
         $jobs = [];
-        foreach ($toolCalls as $toolCall) {
-            [$toolCall, $denied, $hookContext] = $this->gateToolCall($toolCall);
+        foreach ($gated as [$toolCall, $denied, $hookContext, $ask]) {
+            if ($ask !== null) {
+                // Reaching the fork boundary with an unanswered ASK means the
+                // batch was released without the user deciding on this call.
+                // Enforce the invariant here as well as in answerPermission()
+                // so a future caller cannot widen permission by accident: the
+                // call is reported as unapproved instead of being run.
+                $denied ??= ToolResult::error(
+                    $toolCall->name,
+                    "Permission required: {$toolCall->name} was not approved.",
+                    $toolCall->id,
+                );
+            }
 
             if ($denied !== null) {
                 // A denied call is never forked and never reaches its
@@ -794,15 +1069,23 @@ final class Chat implements Model
      * and `isAllowed()` is false for it too), and an unparseable
      * `modifiedInput` falls back to the original arguments.
      *
-     * @return array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext} [the call
-     *     to execute (arguments rewritten by a MODIFY hook), a pre-resolved
-     *     error result when the call was DENIED, the context to hand
-     *     `PostToolUse` once the call finishes (null when it will not run)]
+     * ASK is the one decision this method cannot settle: the hook defers to
+     * the user, so the call is neither run nor reported as denied here - it
+     * is handed back in slot 3 for {@see beginToolCalls()} to suspend the
+     * batch on (crush_feat.md §1 E2). A tool the user has already answered
+     * {@see PermissionReply::Always} for skips that: the ASK becomes plain
+     * permission, with its HookContext intact so `PostToolUse` still runs.
+     *
+     * @return array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Crush\Hooks\HookResult}
+     *     [the call to execute (arguments rewritten by a MODIFY hook), a
+     *     pre-resolved error result when the call was DENIED, the context to
+     *     hand `PostToolUse` once the call finishes (null when it will not
+     *     run), the unanswered ASK decision when one is outstanding]
      */
     private function gateToolCall(ToolCall $toolCall): array
     {
         if ($this->hooks === null || !isset($this->tools[$toolCall->name])) {
-            return [$toolCall, null, null];
+            return [$toolCall, null, null, null];
         }
 
         $context = new HookContext(
@@ -822,10 +1105,17 @@ final class Chat implements Model
 
         $hookResult = $this->hooks->preToolUse($context);
 
+        if ($hookResult->isAsk()) {
+            return ($this->permissionGrants[$toolCall->name] ?? false)
+                ? [$toolCall, null, $context, null]
+                : [$toolCall, null, $context, $hookResult];
+        }
+
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
             return [
                 $toolCall,
                 ToolResult::error($toolCall->name, "Hook denied: {$hookResult->message}", $toolCall->id),
+                null,
                 null,
             ];
         }
@@ -837,7 +1127,7 @@ final class Chat implements Model
             }
         }
 
-        return [$toolCall, null, $context];
+        return [$toolCall, null, $context, null];
     }
 
     /**
@@ -1306,6 +1596,10 @@ final class Chat implements Model
             'cols' => $this->cols,
             'mosaic' => $this->mosaic,
             'hooks' => $this->hooks,
+            'pendingPermission' => $this->pendingPermission,
+            'permissionDeferred' => $this->permissionDeferred,
+            'pendingPermissionJobs' => $this->pendingPermissionJobs,
+            'permissionGrants' => $this->permissionGrants,
         ];
 
         return new self(...array_merge($constructorProps, $changes));

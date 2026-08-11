@@ -1268,6 +1268,92 @@ final class RuntimeTest extends TestCase
         return $tool;
     }
 
+    // =========================================================================
+    // Blocking permission requests (crush_feat.md 1 E2) - HookResult::ask()
+    // =========================================================================
+
+    /**
+     * An ASK is a hook DEFERRING, not deciding. With nobody attached who can
+     * put the question to a user, the call must fail closed - and say why in
+     * those terms rather than reporting a denial the hook never made.
+     */
+    public function testAskWithNoApproverFailsClosedAndSaysPermissionWasRequired(): void
+    {
+        $tool = $this->createMockTool('ask_tool', 'must not run');
+        $this->hookRegistry->register($this->askHook('Delete production data?'));
+
+        $toolCall = new ToolCall('call_ask', 'ask_tool', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$tool]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [[$toolCall], $app]));
+
+        $this->assertCount(1, $results);
+        $this->assertTrue($results[0]->isError());
+        $this->assertStringContainsString('Permission required', $results[0]->content());
+        $this->assertStringContainsString('Delete production data?', $results[0]->content());
+    }
+
+    /**
+     * An approver answering yes settles the ASK into an ALLOW, so the tool
+     * runs exactly as an allowed call does. Fails against the old code, where
+     * an ASK fell into the deny branch with no way to answer it at all.
+     */
+    public function testApprovedAskRunsTheToolAndReportsTheRealResult(): void
+    {
+        $tool = $this->createMockTool('ask_tool', 'ran for real');
+        $this->hookRegistry->register($this->askHook('Run it?'));
+
+        $toolCall = new ToolCall('call_ask', 'ask_tool', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$tool]);
+
+        $asked = [];
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [$toolCall],
+            $app,
+            null,
+            function (ToolCall $call, HookResult $ask) use (&$asked): bool {
+                $asked[] = [$call->name(), $ask->message];
+
+                return true;
+            },
+        ]));
+
+        $this->assertSame([['ask_tool', 'Run it?']], $asked);
+        $this->assertFalse($results[0]->isError());
+        $this->assertSame('ran for real', $results[0]->content());
+    }
+
+    public function testRejectedAskBlocksTheToolWithTheHooksOwnQuestionAsTheReason(): void
+    {
+        $tool = $this->createMockTool('ask_tool', 'must not run');
+        $this->hookRegistry->register($this->askHook('Run it?'));
+
+        $toolCall = new ToolCall('call_ask', 'ask_tool', []);
+        $app = App::new($this->provider, 'gpt-4')->withTools([$tool]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [$toolCall],
+            $app,
+            null,
+            static fn(ToolCall $call, HookResult $ask): bool => false,
+        ]));
+
+        $this->assertTrue($results[0]->isError());
+        $this->assertStringContainsString('Run it?', $results[0]->content());
+    }
+
+    /** A PreToolUse hook that always defers to the user. */
+    private function askHook(string $question): HookInterface
+    {
+        return new class ($question) implements HookInterface {
+            public function __construct(private readonly string $question) {}
+            public function name(): string { return 'ask-hook'; }
+            public function event(): HookEvent { return HookEvent::PreToolUse; }
+            public function matcher(): string { return '.*'; }
+            public function execute(HookContext $context): HookResult { return HookResult::ask($this->question); }
+        };
+    }
+
     private function invokePrivateMethod(object $object, string $method, array $args = []): mixed
     {
         $reflection = new \ReflectionClass($object);

@@ -19,6 +19,7 @@ use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookResult;
 
 final class Runtime
 {
@@ -45,9 +46,19 @@ final class Runtime
      *                           assistant message survives back out of
      *                           {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}.
      *
+     * @param ?callable $onPermissionRequest Optional approver for a
+     *                           {@see HookResult::ask()}
+     *                           decision, signature
+     *                           `function(ToolCall $call, HookResult $ask): bool`
+     *                           returning true to permit the call. An ASK is a
+     *                           hook deferring to the user (crush_feat.md §1 E2),
+     *                           so it needs an owner with a UI; without one this
+     *                           Runtime fails the call closed rather than
+     *                           guessing. See {@see settleAsk()}.
+     *
      * @return \Generator yields CompleteResponse chunks
      */
-    public function run(App $app, ?callable $onEvent = null): \Generator
+    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null): \Generator
     {
         $messages = $this->buildMessages($app);
 
@@ -66,15 +77,15 @@ final class Runtime
         // collapsed by iterator_to_array(). Re-yielding lets this outer
         // generator hand out fresh sequential keys.
         $inner = $this->provider->supportsStreaming()
-            ? $this->runStreaming($request, $app, $onEvent)
-            : $this->runBatch($request, $app, $onEvent);
+            ? $this->runStreaming($request, $app, $onEvent, $onPermissionRequest)
+            : $this->runBatch($request, $app, $onEvent, $onPermissionRequest);
 
         foreach ($inner as $msg) {
             yield $msg;
         }
     }
 
-    private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null): \Generator
+    private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null): \Generator
     {
         $buffer = '';
         $toolCalls = [];
@@ -98,13 +109,13 @@ final class Runtime
         yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning);
 
         if ($toolCalls !== []) {
-            foreach ($this->executeToolCalls($toolCalls, $app, $onEvent) as $msg) {
+            foreach ($this->executeToolCalls($toolCalls, $app, $onEvent, $onPermissionRequest) as $msg) {
                 yield $msg;
             }
         }
     }
 
-    private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null): \Generator
+    private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null): \Generator
     {
         $response = $this->provider->complete($request);
 
@@ -115,7 +126,7 @@ final class Runtime
         );
 
         if ($response->toolCalls !== null && $response->toolCalls !== []) {
-            foreach ($this->executeToolCalls($response->toolCalls, $app, $onEvent) as $msg) {
+            foreach ($this->executeToolCalls($response->toolCalls, $app, $onEvent, $onPermissionRequest) as $msg) {
                 yield $msg;
             }
         }
@@ -127,9 +138,14 @@ final class Runtime
      *                                 {@see ToolStarted} and exactly one
      *                                 {@see ToolFinished}, including the
      *                                 unknown-tool and hook-denied branches.
+     * @param ?callable       $onPermissionRequest see {@see run()}.
      */
-    private function executeToolCalls(array $toolCalls, App $app, ?callable $onEvent = null): \Generator
-    {
+    private function executeToolCalls(
+        array $toolCalls,
+        App $app,
+        ?callable $onEvent = null,
+        ?callable $onPermissionRequest = null,
+    ): \Generator {
         foreach ($toolCalls as $toolCall) {
             $this->emit($onEvent, ToolStarted::fromCall($toolCall));
 
@@ -156,6 +172,15 @@ final class Runtime
             // result is "allowed but with rewritten input", so it must fall
             // through to execution (isAllowed() is false for MODIFY too).
             $hookResult = $this->hookManager->preToolUse($context);
+
+            // An ASK is not a verdict: it is the hook deferring to the user
+            // (crush_feat.md §1 E2). It must not resolve silently either way
+            // here — it is settled by whoever owns a UI that can put the
+            // question, and fails CLOSED when nobody does.
+            if ($hookResult->isAsk()) {
+                $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest);
+            }
+
             if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
                 yield $this->failure($toolCall, "Hook denied: {$hookResult->message}", $onEvent);
                 continue;
@@ -186,6 +211,33 @@ final class Runtime
                 $result->imageProtocol(),
             );
         }
+    }
+
+    /**
+     * Settle a {@see HookResult::ask()} into an
+     * ALLOW or a DENY by putting the question to $onPermissionRequest.
+     *
+     * Fails CLOSED when no approver is wired: an unanswered ASK is not
+     * permission (see {@see HookResult::permitsExecution()}),
+     * and a Runtime driven by a head-less caller must not run a call the hook
+     * chain explicitly refused to decide on its own. The denial says so in as
+     * many words rather than reporting it as a hook DENY, because the hook
+     * denied nothing — nobody was there to answer.
+     *
+     * @param ?callable $onPermissionRequest see {@see run()}
+     */
+    private function settleAsk(
+        ToolCall $toolCall,
+        HookResult $ask,
+        ?callable $onPermissionRequest,
+    ): HookResult {
+        if ($onPermissionRequest === null) {
+            return HookResult::deny(
+                "Permission required and no approver is attached to this run: {$ask->message}",
+            );
+        }
+
+        return $this->hookManager->resolveAsk($ask, (bool) $onPermissionRequest($toolCall, $ask));
     }
 
     /**
