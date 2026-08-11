@@ -104,7 +104,7 @@ final class BinSugarcrushWiringTest extends TestCase
     public function testReadEditGlobShareTheSameInstructionLoaderInstance(): void
     {
         // loadForPath() tracks "already injected this session" per loader
-        // instance (InstructionFileLoader::$injectedPaths) -- a shared
+        // instance (InstructionFileLoader::$emittedPaths) -- a shared
         // instance across the three tools is what makes the nested
         // CLAUDE.md/AGENTS.md dedup semantics apply CLI-wide instead of
         // once per tool.
@@ -116,6 +116,39 @@ final class BinSugarcrushWiringTest extends TestCase
 
         $this->assertSame($readLoader, $editLoader);
         $this->assertSame($editLoader, $globLoader);
+    }
+
+    /**
+     * W1.B3a: EngineBackend::withInstructionLoader() exists so the engine's
+     * loadRoot()/loadForced() reads and the tools' on-touch loadForPath()
+     * reads run against ONE loader. Both docblocks assert that invariant; a
+     * Bootstrap that built a second loader for the engine would still pass
+     * every "non-null" check above while silently splitting
+     * InstructionFileLoader::$emittedPaths in two, so the same-instance
+     * claim is asserted against a single real Bootstrap::backend() here.
+     */
+    public function testBackendSharesItsInstructionLoaderWithTheReadEditGlobTools(): void
+    {
+        $backend = Bootstrap::backend($this->tempDir . '/repo');
+
+        $backendLoader = $this->privateValue($backend, 'instructionLoader');
+        $this->assertInstanceOf(InstructionFileLoader::class, $backendLoader);
+
+        /** @var list<object> $tools */
+        $tools = $this->privateValue($backend, 'tools');
+        $byClass = [];
+        foreach ($tools as $tool) {
+            $byClass[$tool::class] = $tool;
+        }
+
+        foreach ([Read::class, Edit::class, Glob::class] as $class) {
+            $this->assertArrayHasKey($class, $byClass, "Expected {$class} among the backend's tools");
+            $this->assertSame(
+                $backendLoader,
+                $this->instructionLoaderOf($byClass[$class]),
+                "{$class} must share the backend's InstructionFileLoader instance",
+            );
+        }
     }
 
     /**
@@ -284,6 +317,14 @@ final class BinSugarcrushWiringTest extends TestCase
         }
 
         return $byClass;
+    }
+
+    private function privateValue(object $target, string $property): mixed
+    {
+        $ref = new \ReflectionProperty($target, $property);
+        $ref->setAccessible(true);
+
+        return $ref->getValue($target);
     }
 
     private function instructionLoaderOf(object $tool): ?InstructionFileLoader

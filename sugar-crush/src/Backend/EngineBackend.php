@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
@@ -61,6 +62,7 @@ final class EngineBackend implements Backend
         private readonly int $maxSteps = 8,
         private readonly bool $hooksDisabled = false,
         private readonly ?SkillRegistry $skillRegistry = null,
+        private readonly ?InstructionFileLoader $instructionLoader = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -73,7 +75,7 @@ final class EngineBackend implements Backend
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader);
     }
 
     /**
@@ -81,7 +83,7 @@ final class EngineBackend implements Backend
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader);
     }
 
     /**
@@ -96,13 +98,25 @@ final class EngineBackend implements Backend
      */
     public function withSkillRegistry(SkillRegistry $skillRegistry): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader);
+    }
+
+    /**
+     * Attach the session's shared {@see InstructionFileLoader} so it reaches
+     * {@see App::$instructionLoader} on every {@see complete()} call — the
+     * seam that makes a repo-root CLAUDE.md/AGENTS.md actually reach the
+     * model's system prompt on a real `bin/sugarcrush` run rather than only
+     * on an on-touch Read/Edit/Glob of that same directory.
+     */
+    public function withInstructionLoader(InstructionFileLoader $instructionLoader): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader);
     }
 
     /**
@@ -112,12 +126,12 @@ final class EngineBackend implements Backend
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader);
     }
 
     /**
@@ -141,7 +155,7 @@ final class EngineBackend implements Backend
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader);
     }
 
     public function complete(array $history, ?callable $onToken = null): Message
@@ -152,6 +166,7 @@ final class EngineBackend implements Backend
             ->withTools($this->tools)
             ->withEnabledSkills($this->skills)
             ->withAvailableSkills($this->skillRegistry ?? new SkillRegistry())
+            ->withInstructionLoader($this->instructionLoader)
             ->withMessages($this->toTypedMessages($history));
 
         $lastAssistant = null;

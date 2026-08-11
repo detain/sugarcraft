@@ -123,6 +123,81 @@ final class InstructionFileLoaderTest extends TestCase
         $this->assertCount(0, $contents);
     }
 
+    public function testForcedInstructionsRejectsRelativePatternTraversingOutOfRepo(): void
+    {
+        // "/"-prefixed patterns are rejected by an early str_starts_with()
+        // check, but a RELATIVE pattern full of ".." concatenates onto
+        // repoRoot and globs outside the repository -- and loadForced()
+        // output goes verbatim into the model's system prompt.
+        $this->touch($this->tempDir . '/secret.md', 'TOP SECRET FORCED CONTENT');
+
+        $loader = new InstructionFileLoader($this->repoRoot, ['../secret.md']);
+        $contents = $loader->loadForced();
+
+        $this->assertSame([], $contents);
+    }
+
+    // ─── memoization ───────────────────────────────────────────────
+
+    public function testLoadRootIsMemoizedForTheLifetimeOfTheLoader(): void
+    {
+        // buildSystemPrompt() calls loadRoot() once per agentic step, so the
+        // second call must not touch disk. Rewriting the file underneath and
+        // asserting the FIRST content comes back both proves memoization and
+        // pins the deliberate mid-session-staleness trade-off.
+        $this->touch($this->repoRoot . '/AGENTS.md', '# FIRST READ');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $first = $loader->loadRoot();
+
+        $this->touch($this->repoRoot . '/AGENTS.md', '# SECOND READ');
+        $second = $loader->loadRoot();
+
+        $this->assertSame($first, $second);
+        $this->assertStringContainsString('FIRST READ', $second[0]);
+        $this->assertStringNotContainsString('SECOND READ', $second[0]);
+    }
+
+    public function testLoadRootCachesTheEmptyResultInsteadOfRescanning(): void
+    {
+        // The no-root-files case caches [] -- a null-vs-empty confusion here
+        // would silently re-scan disk every step.
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $this->assertSame([], $loader->loadRoot());
+
+        $this->touch($this->repoRoot . '/CLAUDE.md', '# APPEARED LATER');
+
+        $this->assertSame([], $loader->loadRoot());
+    }
+
+    public function testLoadForcedIsMemoizedForTheLifetimeOfTheLoader(): void
+    {
+        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# FIRST FORCED');
+
+        $loader = new InstructionFileLoader($this->repoRoot, ['candy-*/CALIBER_LEARNINGS.md']);
+        $first = $loader->loadForced();
+
+        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# SECOND FORCED');
+        $second = $loader->loadForced();
+
+        $this->assertSame($first, $second);
+        $this->assertStringContainsString('FIRST FORCED', $second[0]);
+        $this->assertStringNotContainsString('SECOND FORCED', $second[0]);
+    }
+
+    public function testLoadForcedCachesTheEmptyPatternListResult(): void
+    {
+        // Exercises the `return $this->forcedCache = []` early-out branch --
+        // the shape Bootstrap builds today, since forcedInstructions is not
+        // sourced from user config until W1.B4.
+        $this->touch($this->repoRoot . '/candy-shine/CALIBER_LEARNINGS.md', '# NEVER FORCED');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+
+        $this->assertSame([], $loader->loadForced());
+        $this->assertSame([], $loader->loadForced());
+    }
+
     // ─── loadForPath() tests ───────────────────────────────────────
 
     public function testNestedFileInjectedOnFirstTouch(): void
@@ -328,6 +403,78 @@ final class InstructionFileLoaderTest extends TestCase
         $this->assertStringNotContainsString('TOP SECRET CONTENT LEAK', $contents[0]);
         $this->assertStringContainsString('import-blocked', $contents[0]);
         $this->assertStringContainsString('outside the repository root', $contents[0]);
+    }
+
+    // ─── de-duplication across emission routes ─────────────────────
+
+    public function testLoadRootDoesNotAlsoEmitAnAgentsMdAlreadyInlinedByClaudeMd(): void
+    {
+        // This repo's own root shape. CLAUDE.md inlines AGENTS.md via the
+        // import, so emitting AGENTS.md as a second document would put the
+        // same bytes in the context window twice on every turn.
+        $this->touch($this->repoRoot . '/CLAUDE.md', "# Root\n@./AGENTS.md\n");
+        $this->touch($this->repoRoot . '/AGENTS.md', 'AGENTS BODY MARKER');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+
+        $this->assertCount(1, $contents);
+        $this->assertSame(1, substr_count(implode("\n", $contents), 'AGENTS BODY MARKER'));
+    }
+
+    public function testLoadRootReplacesARepeatedImportWithASkipNote(): void
+    {
+        // Two references to the same file inside one document: the first is
+        // expanded, the second collapses to a note rather than a second copy.
+        $this->touch($this->repoRoot . '/shared.md', 'SHARED BODY MARKER');
+        $this->touch($this->repoRoot . '/CLAUDE.md', "One @shared.md\nTwo @shared.md\n");
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+
+        $this->assertSame(1, substr_count($contents[0], 'SHARED BODY MARKER'));
+        $this->assertStringContainsString('import-skipped', $contents[0]);
+        $this->assertStringContainsString('already', $contents[0]);
+    }
+
+    public function testLoadForcedSkipsAMatchAlreadyEmittedByLoadRoot(): void
+    {
+        // Runtime::buildSystemPrompt() drains loadRoot() before loadForced(),
+        // so root keeps the slot and the forced glob adds nothing.
+        $this->touch($this->repoRoot . '/AGENTS.md', 'ROOT AND FORCED MARKER');
+
+        $loader = new InstructionFileLoader($this->repoRoot, ['AGENTS.md']);
+
+        $this->assertCount(1, $loader->loadRoot());
+        $this->assertSame([], $loader->loadForced());
+    }
+
+    public function testLoadForPathSkipsANestedFileTheRootImportAlreadyInlined(): void
+    {
+        // Root CLAUDE.md pulls the nested file in up front; touching a file in
+        // that subtree later must not re-inject the identical content.
+        $this->touch($this->repoRoot . '/CLAUDE.md', 'Root @candy-shine/CLAUDE.md');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'NESTED BODY MARKER');
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+        $this->assertStringContainsString('NESTED BODY MARKER', $contents[0]);
+
+        $this->assertNull($loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php'));
+    }
+
+    public function testLoadRootHandlesSelfImportingFileWithoutRepeatingIt(): void
+    {
+        // A file importing itself would otherwise recurse to ImportResolver's
+        // depth cap, stamping four nested copies of its own body.
+        $this->touch($this->repoRoot . '/CLAUDE.md', "SELF BODY MARKER\n@./CLAUDE.md\n");
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+
+        $this->assertSame(1, substr_count($contents[0], 'SELF BODY MARKER'));
+        $this->assertStringContainsString('import-skipped', $contents[0]);
     }
 
     public function testLoadForPathBlocksNestedImportEscapingRepoRoot(): void

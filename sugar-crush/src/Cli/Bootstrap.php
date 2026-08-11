@@ -108,10 +108,13 @@ final class Bootstrap
             }
         }
 
+        $loader = self::instructionLoader($root);
+
         return (new EngineBackend(new EchoProvider(), 'echo'))
-            ->withTools(self::tools($root))
+            ->withTools(self::tools($root, $loader))
             ->withHooks(self::hooks())
-            ->withSkillRegistry(self::skillRegistry($root));
+            ->withSkillRegistry(self::skillRegistry($root))
+            ->withInstructionLoader($loader);
     }
 
     /**
@@ -135,10 +138,13 @@ final class Bootstrap
         $provider = $factory->create($factory->defaultConfig($providerName));
         $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
 
+        $loader = self::instructionLoader($root);
+
         return (new EngineBackend($provider, (string) $model))
-            ->withTools(self::tools($root))
+            ->withTools(self::tools($root, $loader))
             ->withHooks(self::hooks())
-            ->withSkillRegistry(self::skillRegistry($root));
+            ->withSkillRegistry(self::skillRegistry($root))
+            ->withInstructionLoader($loader);
     }
 
     /**
@@ -277,12 +283,16 @@ final class Bootstrap
      * (Read/Edit/Glob) so those files are actually reachable when a user
      * runs the real CLI binary.
      *
+     * @param InstructionFileLoader|null $loader Pass the caller's loader to
+     *        keep the engine's root-instruction reads and the tools' on-touch
+     *        reads on ONE instance (its dedup map is per-instance).
+     *
      * @return list<Tool>
      */
-    public static function tools(?string $root = null): array
+    public static function tools(?string $root = null, ?InstructionFileLoader $loader = null): array
     {
         $root ??= getcwd();
-        $loader = self::instructionLoader($root);
+        $loader ??= self::instructionLoader($root);
 
         return [
             new Bash($root),
@@ -295,6 +305,21 @@ final class Bootstrap
         ];
     }
 
+    /**
+     * The one session-lifetime {@see InstructionFileLoader} shared by the
+     * backend and the Read/Edit/Glob tools, so a root CLAUDE.md/AGENTS.md is
+     * read (and its `@import`s expanded) once per session rather than once
+     * per consumer.
+     *
+     * DEFERRED: the second constructor argument - the forced-instruction glob
+     * patterns {@see InstructionFileLoader::loadForced()} resolves - is not
+     * passed yet, so loadForced() is live on the call path from
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} but always returns
+     * an empty list in production. Sourcing those patterns from the
+     * "instructions" key of ~/.sugar-crush/config.json is W1.B4
+     * (crush_feat.md section 6 recommendation #4); until it lands, forced
+     * instructions are a working mechanism with no data source.
+     */
     public static function instructionLoader(?string $root = null): InstructionFileLoader
     {
         return new InstructionFileLoader($root ?? getcwd());

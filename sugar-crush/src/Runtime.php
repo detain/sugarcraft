@@ -191,9 +191,37 @@ final class Runtime
         return $messages;
     }
 
+    /**
+     * Assemble the system prompt for a turn.
+     *
+     * Root CLAUDE.md/AGENTS.md and the config-driven forced-instruction
+     * globs are folded in here because this is the only place a whole-session
+     * instruction can reach the model: InstructionFileLoader's on-touch
+     * loadForPath() path only fires once the agent happens to open a file in
+     * that subtree, so before this wiring a repo-root AGENTS.md had zero
+     * effect on a session that never touched the root directory.
+     *
+     * Each document is fenced in <project-instructions> so the model can tell
+     * project convention from the assistant's own base prompt.
+     */
     private function buildSystemPrompt(App $app): string
     {
         $base = 'You are SugarCrush, an AI coding assistant.';
+
+        if ($app->instructionLoader !== null) {
+            $docs = [
+                ...$app->instructionLoader->loadRoot(),
+                ...$app->instructionLoader->loadForced(),
+            ];
+
+            foreach ($docs as $doc) {
+                if (trim($doc) === '') {
+                    continue;
+                }
+
+                $base .= "\n\n<project-instructions>\n" . $doc . "\n</project-instructions>";
+            }
+        }
 
         if (!empty($app->enabledSkills)) {
             foreach ($app->enabledSkills as $skill) {

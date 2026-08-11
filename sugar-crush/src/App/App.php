@@ -8,6 +8,7 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
@@ -43,6 +44,7 @@ final class App
         public readonly AgentViewMode $agentViewMode,
         public readonly ?DateTimeImmutable $lastActivityAt = null,
         public readonly array $skillPickerOptions = [],
+        public readonly ?InstructionFileLoader $instructionLoader = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -64,6 +66,7 @@ final class App
             agentViewMode: AgentViewMode::List,
             lastActivityAt: null,
             skillPickerOptions: [],
+            instructionLoader: null,
         );
     }
 
@@ -149,6 +152,22 @@ final class App
     public function withSkillPickerOptions(array $v): self
     {
         return $this->mutate(skillPickerOptions: $v);
+    }
+
+    /**
+     * Attach the session's shared {@see InstructionFileLoader} so
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} can fold the
+     * repo-root CLAUDE.md/AGENTS.md and the config-driven forced-instruction
+     * globs into every system prompt.
+     *
+     * The loader is deliberately the SAME instance Read/Edit/Glob receive
+     * from {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}: loadForPath()'s
+     * once-per-session dedup map lives on the instance, so a second loader
+     * would give the on-touch path a different notion of "already injected".
+     */
+    public function withInstructionLoader(?InstructionFileLoader $v): self
+    {
+        return $this->mutate(instructionLoader: $v);
     }
 
     /**
@@ -407,6 +426,7 @@ final class App
             agentViewMode: array_key_exists('agentViewMode', $changes) ? $changes['agentViewMode'] : $this->agentViewMode,
             lastActivityAt: array_key_exists('lastActivityAt', $changes) ? $changes['lastActivityAt'] : $this->lastActivityAt,
             skillPickerOptions: array_key_exists('skillPickerOptions', $changes) ? $changes['skillPickerOptions'] : $this->skillPickerOptions,
+            instructionLoader: array_key_exists('instructionLoader', $changes) ? $changes['instructionLoader'] : $this->instructionLoader,
         );
     }
 }

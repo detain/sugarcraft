@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
@@ -37,6 +38,9 @@ final class RuntimeTest extends TestCase
     private HookManager $hookManager;
     private Runtime $runtime;
 
+    /** @var list<string> */
+    private array $tempRepos = [];
+
     protected function setUp(): void
     {
         $this->provider = $this->createMock(ProviderInterface::class);
@@ -46,6 +50,33 @@ final class RuntimeTest extends TestCase
         $this->hookManager = new HookManager($this->hookRegistry);
 
         $this->runtime = new Runtime($this->provider, $this->hookManager);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempRepos as $dir) {
+            $this->removeTree($dir);
+        }
+        $this->tempRepos = [];
+
+        parent::tearDown();
+    }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) ? $this->removeTree($path) : unlink($path);
+        }
+
+        rmdir($dir);
     }
 
     // =========================================================================
@@ -743,8 +774,196 @@ final class RuntimeTest extends TestCase
     }
 
     // =========================================================================
+    // buildSystemPrompt() root/forced instruction wiring
+    // =========================================================================
+
+    public function testBuildSystemPromptIncludesRootAgentsMdContent(): void
+    {
+        // The gap this closes: before the wiring, a repo-root AGENTS.md only
+        // ever reached the model if the agent happened to touch a file in
+        // that directory (loadForPath()); loadRoot() had no caller at all, so
+        // this assertion fails against the old buildSystemPrompt().
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/AGENTS.md', 'ROOT AGENTS CONVENTION TEXT');
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertStringContainsString('ROOT AGENTS CONVENTION TEXT', $result);
+        $this->assertStringContainsString('<project-instructions>', $result);
+        $this->assertStringContainsString('SugarCrush', $result);
+    }
+
+    public function testBuildSystemPromptIncludesRootClaudeMdWithExpandedImports(): void
+    {
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/CLAUDE.md', "# Root\n@./AGENTS.md\n");
+        file_put_contents($root . '/AGENTS.md', 'IMPORTED AGENTS BODY');
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertStringContainsString('IMPORTED AGENTS BODY', $result);
+        $this->assertStringNotContainsString('@./AGENTS.md', $result);
+    }
+
+    public function testBuildSystemPromptIncludesForcedInstructionGlobMatches(): void
+    {
+        $root = $this->makeTempRepo();
+        mkdir($root . '/candy-shine');
+        file_put_contents($root . '/candy-shine/CALIBER_LEARNINGS.md', 'FORCED LEARNINGS BODY');
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root, ['*/CALIBER_LEARNINGS.md']));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertStringContainsString('FORCED LEARNINGS BODY', $result);
+    }
+
+    public function testBuildSystemPromptOmitsProjectInstructionsWithoutLoader(): void
+    {
+        $app = App::new($this->provider, 'gpt-4');
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertStringNotContainsString('<project-instructions>', $result);
+    }
+
+    public function testBuildSystemPromptKeepsSkillContributionsAlongsideRootInstructions(): void
+    {
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/AGENTS.md', 'ROOT AGENTS CONVENTION TEXT');
+
+        $skill = new Skill(
+            name: 'TestSkill',
+            description: 'A test skill',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'low',
+            context: 'thread',
+            paths: [],
+            content: 'Skill content here',
+            sourcePath: '/test/SKILL.md',
+        );
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root))
+            ->withEnabledSkills([$skill]);
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertStringContainsString('ROOT AGENTS CONVENTION TEXT', $result);
+        $this->assertStringContainsString('## Skill: TestSkill', $result);
+    }
+
+    public function testBuildSystemPromptEmitsAtImportedRootFileOnlyOnce(): void
+    {
+        // Exactly this repo's own shape: root CLAUDE.md @-imports ./AGENTS.md.
+        // Without de-duplication AGENTS.md lands twice on every single turn --
+        // once inlined into the CLAUDE.md document by ImportResolver, once
+        // again as loadRoot()'s own second document.
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/CLAUDE.md', "# Root\n@./AGENTS.md\n");
+        file_put_contents($root . '/AGENTS.md', 'DISTINCTIVE AGENTS BODY MARKER');
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertSame(1, substr_count($result, 'DISTINCTIVE AGENTS BODY MARKER'));
+        // The import is expanded in place, not left as a literal reference.
+        $this->assertStringNotContainsString('@./AGENTS.md', $result);
+        $this->assertSame(1, substr_count($result, '<project-instructions>'));
+    }
+
+    public function testBuildSystemPromptEmitsForcedGlobMatchOfARootFileOnlyOnce(): void
+    {
+        // A forced pattern that happens to cover a root file must not buy a
+        // second copy of it either -- loadRoot() drains first, loadForced()
+        // sees the file as already emitted.
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/AGENTS.md', 'ROOT AND FORCED BODY MARKER');
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root, ['AGENTS.md']));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertSame(1, substr_count($result, 'ROOT AND FORCED BODY MARKER'));
+    }
+
+    public function testBuildSystemPromptSkipsWhitespaceOnlyInstructionFile(): void
+    {
+        // An empty (or whitespace-only) CLAUDE.md is common in a freshly
+        // scaffolded repo. Emitting it would spend tokens on a bare
+        // <project-instructions></project-instructions> wrapper around nothing.
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/CLAUDE.md', "   \n\t\n  ");
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertStringNotContainsString('<project-instructions>', $result);
+        $this->assertStringContainsString('SugarCrush', $result);
+    }
+
+    public function testBuildSystemPromptStillEmitsNonEmptyFileAlongsideAnEmptyOne(): void
+    {
+        // Guards the `continue` from turning into an early `break`/`return`:
+        // a blank CLAUDE.md must not suppress a populated AGENTS.md.
+        $root = $this->makeTempRepo();
+        file_put_contents($root . '/CLAUDE.md', "\n\n");
+        file_put_contents($root . '/AGENTS.md', 'NON EMPTY SIBLING BODY');
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withInstructionLoader(new InstructionFileLoader($root));
+
+        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+
+        $this->assertSame(1, substr_count($result, '<project-instructions>'));
+        $this->assertStringContainsString('NON EMPTY SIBLING BODY', $result);
+    }
+
+    public function testWithInstructionLoaderReturnsNewAppAndLeavesOriginalUntouched(): void
+    {
+        $loader = new InstructionFileLoader($this->makeTempRepo());
+        $app = App::new($this->provider, 'gpt-4');
+
+        $next = $app->withInstructionLoader($loader);
+
+        $this->assertNotSame($app, $next);
+        $this->assertNull($app->instructionLoader);
+        $this->assertSame($loader, $next->instructionLoader);
+        $this->assertNull($next->withInstructionLoader(null)->instructionLoader);
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
+
+    /**
+     * Fresh on-disk repo root for the instruction-loader tests; removed in
+     * tearDown() so each test sees only the files it wrote itself.
+     */
+    private function makeTempRepo(): string
+    {
+        $dir = sys_get_temp_dir() . '/crush-runtime-' . uniqid('', true);
+        mkdir($dir, 0o777, true);
+        $this->tempRepos[] = $dir;
+
+        return $dir;
+    }
 
     /**
      * Wrap fixture responses in a Generator. `completeStream()` is typed to
