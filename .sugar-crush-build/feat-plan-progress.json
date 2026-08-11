@@ -1,10 +1,10 @@
 {
     "W1": {
-        "status": "in_progress",
-        "note": "23 of 27 steps done and committed. Remaining: W1.B3b, W1.B3c, W1.B4, W1.D3 (Track B tail + Track D tail). See feat-wave-1-progress.json (canonical)."
+        "status": "done",
+        "note": "All 27 steps done and committed. Full suite green at 3653 tests / 9437 assertions / 0 failures / 0 errors."
     },
     "W2": {
-        "status": "not_started",
+        "status": "in_progress",
         "note": "Manifest re-scoped after Wave 1: W2.S14a (Mosaic into Chat's constructor) landed early in 8f794c19. Reasoning rendering in Renderer.php landed in 28c55a6f. Re-verify both before dispatching Wave 2 steps that touch them."
     },
     "W3": {
@@ -14,5 +14,5 @@
         "status": "not_started"
     },
     "baseline": "Tests: 3255, Assertions: 8379, Warnings: 11, Skipped: 1.",
-    "current": "Tests: 3614, Assertions: 9328, Warnings: 11, Skipped: 1. (0 failures, 0 errors)"
+    "current": "Tests: 3653, Assertions: 9437, Warnings: 11, Skipped: 1. (0 failures, 0 errors)"
 }
