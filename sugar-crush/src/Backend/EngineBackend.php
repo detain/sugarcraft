@@ -20,6 +20,7 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Skills\SkillRegistry;
 
 /**
  * Bridges the chat-shell {@see Backend} seam to the full agent engine —
@@ -59,6 +60,7 @@ final class EngineBackend implements Backend
         private readonly ?HookManager $hookManager = null,
         private readonly int $maxSteps = 8,
         private readonly bool $hooksDisabled = false,
+        private readonly ?SkillRegistry $skillRegistry = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -71,7 +73,7 @@ final class EngineBackend implements Backend
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry);
     }
 
     /**
@@ -79,13 +81,28 @@ final class EngineBackend implements Backend
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry);
+    }
+
+    /**
+     * Attach the discovered {@see SkillRegistry} (built-in + user + project +
+     * foreign-imported skills, see {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()})
+     * so it reaches {@see App::$availableSkills} on every {@see complete()}
+     * call — the seam {@see \SugarCraft\Crush\Cli\Bootstrap} uses to make
+     * skills discovered from ~/.claude/skills, {project}/.claude/skills,
+     * {project}/.opencode/skills, and ~/.config/opencode/skills (see {@see
+     * \SugarCraft\Crush\Skills\ForeignSkillDiscovery}) actually visible to a
+     * real `bin/sugarcrush` run instead of only to their own unit tests.
+     */
+    public function withSkillRegistry(SkillRegistry $skillRegistry): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry);
     }
 
     /**
@@ -95,12 +112,12 @@ final class EngineBackend implements Backend
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry);
     }
 
     /**
@@ -124,7 +141,7 @@ final class EngineBackend implements Backend
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry);
     }
 
     public function complete(array $history, ?callable $onToken = null): Message
@@ -134,9 +151,12 @@ final class EngineBackend implements Backend
         $app = App::new($this->provider, $this->model)
             ->withTools($this->tools)
             ->withEnabledSkills($this->skills)
+            ->withAvailableSkills($this->skillRegistry ?? new SkillRegistry())
             ->withMessages($this->toTypedMessages($history));
 
         $lastAssistant = null;
+        $lastImageBytes = null;
+        $lastImageProtocol = null;
 
         // Bounded agentic loop: keep running while the model asks for tools.
         // The Runtime resolves one assistant turn + its tool calls per run();
@@ -152,6 +172,14 @@ final class EngineBackend implements Backend
                     $assistant = $message;
                 } elseif ($message instanceof ToolResultMessage) {
                     $toolResults[] = $message;
+                    // Last image-bearing tool result of the whole turn wins -
+                    // W1.G2 reachability fix: this is the only point left
+                    // with access to the typed ToolResultMessage before only
+                    // the root Message survives back to Chat/Renderer.
+                    if ($message->hasImage()) {
+                        $lastImageBytes = $message->imageBytes();
+                        $lastImageProtocol = $message->imageProtocol();
+                    }
                 }
             }
 
@@ -175,7 +203,14 @@ final class EngineBackend implements Backend
             $onToken($content);
         }
 
-        return Message::assistant($content);
+        // Thread the reasoning ReasoningExtractor already split out (§12 D3)
+        // across the typed-Message -> root-Message seam instead of dropping
+        // it here - it's the last point in this call path that still has
+        // access to $lastAssistant before only the plain-string Message DTO
+        // survives back to Chat/Renderer. withImage() does the same for an
+        // image-bearing tool result (W1.G2 reachability fix).
+        return Message::assistant($content, reasoning: $lastAssistant?->reasoning())
+            ->withImage($lastImageBytes, $lastImageProtocol);
     }
 
     /**
@@ -328,7 +363,18 @@ final class EngineBackend implements Backend
     {
         try {
             $message = $this->complete($history, null);
-            $payload = serialize(['ok' => true, 'content' => $message->content]);
+            // imageBytes/imageProtocol survive this fork boundary too - PHP's
+            // serialize()/unserialize() (unlike JSON) round-trip arbitrary
+            // binary strings natively, so no base64 step is needed here the
+            // way Chat::storeToolResult()'s JSON-over-temp-file IPC needs one
+            // (W1.G2 reachability fix).
+            $payload = serialize([
+                'ok' => true,
+                'content' => $message->content,
+                'reasoning' => $message->reasoning,
+                'imageBytes' => $message->imageBytes,
+                'imageProtocol' => $message->imageProtocol,
+            ]);
         } catch (\Throwable $e) {
             $payload = serialize(['ok' => false, 'error' => $e->getMessage()]);
         }
@@ -365,7 +411,16 @@ final class EngineBackend implements Backend
             $onToken($content);
         }
 
-        $deferred->resolve(Message::assistant($content));
+        $reasoning = $data['reasoning'] ?? null;
+        $imageBytes = $data['imageBytes'] ?? null;
+        $imageProtocol = $data['imageProtocol'] ?? null;
+        $deferred->resolve(
+            Message::assistant($content, reasoning: is_string($reasoning) ? $reasoning : null)
+                ->withImage(
+                    is_string($imageBytes) ? $imageBytes : null,
+                    is_string($imageProtocol) ? $imageProtocol : null,
+                )
+        );
     }
 
     /**

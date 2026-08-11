@@ -124,4 +124,71 @@ final class MessageTest extends TestCase
         $call = new \SugarCraft\Crush\ToolCall('bash', []);
         $this->assertSame('bash()', Message::describeToolCall($call));
     }
+
+    public function testAssistantFactoryAcceptsOptionalReasoning(): void
+    {
+        $m = Message::assistant('answer', 12345, reasoning: 'thinking...');
+
+        $this->assertSame('thinking...', $m->reasoning);
+        $this->assertNull(Message::assistant('answer')->reasoning);
+    }
+
+    public function testWithReasoningReturnsNewInstanceWithReasoningSet(): void
+    {
+        $m = Message::assistant('answer');
+        $m2 = $m->withReasoning('because');
+
+        $this->assertNull($m->reasoning);
+        $this->assertSame('because', $m2->reasoning);
+        $this->assertNotSame($m, $m2);
+    }
+
+    public function testFluentWithersPreserveReasoning(): void
+    {
+        $m = Message::assistant('answer', reasoning: 'because')
+            ->attachFile('/tmp/f.txt')
+            ->withToolCalls([]);
+
+        $this->assertSame('because', $m->reasoning);
+    }
+
+    /**
+     * W1.G2 reachability fix: an image-bearing tool result (e.g. Doctor's
+     * capability swatch) is threaded onto the root Message at the
+     * EngineBackend conversion seam via withImage() -- mirroring
+     * withReasoning()'s role for the parallel `reasoning` field.
+     */
+    public function testImageFieldsDefaultToNullAndHasImageIsFalse(): void
+    {
+        $m = Message::assistant('answer');
+
+        $this->assertNull($m->imageBytes);
+        $this->assertNull($m->imageProtocol);
+        $this->assertFalse($m->hasImage());
+    }
+
+    public function testWithImageReturnsNewInstanceWithImageSet(): void
+    {
+        $m = Message::assistant('answer');
+        $m2 = $m->withImage("\x89PNGfake", 'kitty');
+
+        $this->assertFalse($m->hasImage());
+        $this->assertTrue($m2->hasImage());
+        $this->assertSame("\x89PNGfake", $m2->imageBytes);
+        $this->assertSame('kitty', $m2->imageProtocol);
+        $this->assertNotSame($m, $m2);
+    }
+
+    public function testFluentWithersPreserveImage(): void
+    {
+        $m = Message::assistant('answer')
+            ->withImage('bytes', 'sixel')
+            ->attachFile('/tmp/f.txt')
+            ->withToolCalls([])
+            ->withReasoning('because');
+
+        $this->assertTrue($m->hasImage());
+        $this->assertSame('bytes', $m->imageBytes);
+        $this->assertSame('sixel', $m->imageProtocol);
+    }
 }

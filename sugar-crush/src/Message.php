@@ -36,6 +36,32 @@ final class Message
          * message, including the finished result itself.
          */
         public readonly ?string $pendingToolCallId = null,
+        /**
+         * Model "thinking" text split out by {@see
+         * \SugarCraft\Crush\Providers\Concerns\ReasoningExtractor} (§12 D3),
+         * carried across the engine seam from {@see
+         * \SugarCraft\Crush\Messages\AssistantMessage::reasoning()} so
+         * {@see Renderer} can surface it instead of silently dropping it at
+         * the {@see \SugarCraft\Crush\Backend\EngineBackend} conversion
+         * boundary. Null on every non-assistant turn and on any assistant
+         * turn whose provider/parser didn't produce reasoning.
+         */
+        public readonly ?string $reasoning = null,
+        /**
+         * Image bytes carried across the {@see
+         * \SugarCraft\Crush\Backend\EngineBackend} conversion boundary from
+         * an image-bearing tool result (e.g. {@see
+         * \SugarCraft\Crush\Tools\BuiltIn\Doctor}'s capability swatch, see
+         * {@see \SugarCraft\Crush\Messages\ToolResultMessage}) - W1.G2
+         * reachability fix. Null on every message with no such tool result.
+         */
+        public readonly ?string $imageBytes = null,
+        /**
+         * The candy-mosaic protocol ({@see
+         * \SugarCraft\Mosaic\Mosaic::protocol()}) detected when
+         * $imageBytes was captured. Null whenever $imageBytes is null.
+         */
+        public readonly ?string $imageProtocol = null,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -43,9 +69,9 @@ final class Message
         return new self(Role::User, $content, $now ?? time());
     }
 
-    public static function assistant(string $content, ?int $now = null): self
+    public static function assistant(string $content, ?int $now = null, ?string $reasoning = null): self
     {
-        return new self(Role::Assistant, $content, $now ?? time());
+        return new self(Role::Assistant, $content, $now ?? time(), reasoning: $reasoning);
     }
 
     public static function system(string $content, ?int $now = null): self
@@ -106,6 +132,9 @@ final class Message
             toolCalls: $this->toolCalls,
             toolResults: $this->toolResults,
             pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
         );
     }
 
@@ -119,6 +148,9 @@ final class Message
             toolCalls: $this->toolCalls,
             toolResults: $this->toolResults,
             pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
         );
     }
 
@@ -137,6 +169,9 @@ final class Message
             toolCalls: $toolCalls,
             toolResults: $this->toolResults,
             pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
         );
     }
 
@@ -158,7 +193,66 @@ final class Message
             toolCalls: $this->toolCalls,
             toolResults: $toolResults,
             pendingToolCallId: null,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
         );
+    }
+
+    /**
+     * Attach (or clear, via null) the model's extracted reasoning/thinking
+     * text — see this class's $reasoning docblock. Used at the {@see
+     * \SugarCraft\Crush\Backend\EngineBackend} conversion seam so the value
+     * {@see \SugarCraft\Crush\Messages\AssistantMessage::reasoning()} already
+     * computed isn't thrown away when crossing into the root {@see Message}
+     * DTO the TUI actually renders.
+     */
+    public function withReasoning(?string $reasoning): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
+        );
+    }
+
+    /**
+     * Attach image bytes captured by a tool result during this turn (e.g.
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Doctor}'s capability swatch) -
+     * W1.G2 reachability fix. Used at the {@see
+     * \SugarCraft\Crush\Backend\EngineBackend} conversion seam, mirroring
+     * {@see withReasoning()}'s role for the parallel `reasoning` field.
+     */
+    public function withImage(?string $imageBytes, ?string $imageProtocol): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $imageBytes,
+            imageProtocol: $imageProtocol,
+        );
+    }
+
+    /**
+     * True when this message carries image bytes captured by a tool result
+     * during this turn - see $imageBytes's docblock.
+     */
+    public function hasImage(): bool
+    {
+        return $this->imageBytes !== null;
     }
 
     /**

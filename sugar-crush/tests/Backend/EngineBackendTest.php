@@ -62,6 +62,135 @@ final class EngineBackendTest extends TestCase
         $this->assertStringContainsString('> ping', $resolved->content);
     }
 
+    /**
+     * Regression for crush_feat.md §12 D3's final wiring gap: `complete()`
+     * used to build the root {@see Message} from `$lastAssistant->content()`
+     * only, silently dropping `$lastAssistant->reasoning()` even though
+     * {@see \SugarCraft\Crush\Runtime} already populates it correctly on
+     * every real completion.
+     */
+    public function testCompleteThreadsReasoningOntoTheRootMessage(): void
+    {
+        $backend = EngineBackend::new($this->reasoningProvider(), 'reasoner');
+
+        $reply = $backend->complete([Message::user('why?')]);
+
+        $this->assertSame('the answer', $reply->content);
+        $this->assertSame('thinking it through', $reply->reasoning);
+    }
+
+    /**
+     * Same regression as {@see testCompleteThreadsReasoningOntoTheRootMessage()}
+     * but through the forked {@see EngineBackend::completeAsync()} path,
+     * which serializes the child's result over a socket - reasoning has to
+     * survive that round-trip too, not just the in-process one.
+     */
+    public function testCompleteAsyncThreadsReasoningOntoTheRootMessage(): void
+    {
+        $backend = EngineBackend::new($this->reasoningProvider(), 'reasoner');
+
+        $resolved = $this->awaitPromise($backend->completeAsync([Message::user('why?')]));
+
+        $this->assertSame('the answer', $resolved->content);
+        $this->assertSame('thinking it through', $resolved->reasoning);
+    }
+
+    /**
+     * W1.G2 reachability fix: an image-bearing tool result (e.g. Doctor's
+     * capability swatch) produced by the real Runtime/App agentic loop must
+     * reach the root Message complete() returns, not be dropped alongside
+     * every other ToolResultMessage field.
+     */
+    public function testCompleteThreadsImageOntoTheRootMessage(): void
+    {
+        $backend = EngineBackend::new($this->imageThenAnswerProvider(), 'img')
+            ->withTools([$this->imageTool()]);
+
+        $reply = $backend->complete([Message::user('check image support')]);
+
+        $this->assertTrue($reply->hasImage());
+        $this->assertSame("\x89PNGfake", $reply->imageBytes);
+        $this->assertSame('kitty', $reply->imageProtocol);
+    }
+
+    /**
+     * Same as {@see testCompleteThreadsImageOntoTheRootMessage()} but
+     * through the forked completeAsync() path - the image has to survive
+     * the child's serialize()/unserialize() socket round-trip too.
+     */
+    public function testCompleteAsyncThreadsImageOntoTheRootMessage(): void
+    {
+        $backend = EngineBackend::new($this->imageThenAnswerProvider(), 'img')
+            ->withTools([$this->imageTool()]);
+
+        $resolved = $this->awaitPromise($backend->completeAsync([Message::user('check image support')]));
+
+        $this->assertTrue($resolved->hasImage());
+        $this->assertSame("\x89PNGfake", $resolved->imageBytes);
+        $this->assertSame('kitty', $resolved->imageProtocol);
+    }
+
+    private function imageThenAnswerProvider(): ProviderInterface
+    {
+        return new class implements ProviderInterface {
+            public int $calls = 0;
+            public function name(): string { return 'img'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                $this->calls++;
+
+                return $this->calls === 1
+                    ? new CompleteResponse(content: 'checking', toolCalls: [new ToolCall('call_1', 'doctor', [])])
+                    : new CompleteResponse(content: 'here is what I found');
+            }
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+    }
+
+    private function imageTool(): Tool
+    {
+        return new class implements Tool {
+            public function name(): string { return 'doctor'; }
+            public function description(): string { return 'test image tool'; }
+            public function inputSchema(): array { return []; }
+            public function execute(array $args): ToolResult
+            {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: 'kitty detected',
+                    imageBytes: "\x89PNGfake",
+                    imageProtocol: 'kitty',
+                );
+            }
+        };
+    }
+
+    private function reasoningProvider(): ProviderInterface
+    {
+        return new class implements ProviderInterface {
+            public function name(): string { return 'reasoner'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return false; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                return new CompleteResponse(content: 'the answer', reasoning: 'thinking it through');
+            }
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+    }
+
     public function testCompleteAsyncDoesNotBlockTheEventLoop(): void
     {
         // The whole point of the fork-based rewrite: while a completion is

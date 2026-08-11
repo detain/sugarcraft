@@ -211,6 +211,37 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('assistant', $out);
     }
 
+    /**
+     * Regression for crush_feat.md §12 D3's final sentence: "surface the
+     * result rendered dimmed/collapsed in the TUI". Prior to this fix,
+     * `Message` had no reasoning field at all, so `Renderer` had nothing to
+     * render even though the provider layer's `ReasoningExtractor` computed
+     * it on every real completion.
+     */
+    public function testRendersAssistantReasoningDimmedAndCollapsed(): void
+    {
+        $out = Renderer::render($this->chat([
+            Message::user('why is the sky blue?', 0),
+            Message::assistant('Rayleigh scattering.', 0, reasoning: "Let me think about light wavelengths.\nBlue scatters more."),
+        ]));
+
+        $this->assertStringContainsString('💭', $out);
+        $this->assertStringContainsString('Let me think about light wavelengths.', $out);
+        // Collapsed onto one line: the newline inside the reasoning text
+        // must not survive into the rendered block.
+        $this->assertStringNotContainsString("wavelengths.\nBlue", $out);
+        $this->assertStringContainsString('Rayleigh scattering.', $out);
+    }
+
+    public function testOmitsReasoningLineWhenProviderDidNotSplitAny(): void
+    {
+        $out = Renderer::render($this->chat([
+            Message::assistant('Rayleigh scattering.', 0),
+        ]));
+
+        $this->assertStringNotContainsString('💭', $out);
+    }
+
     public function testRendersSystemTurn(): void
     {
         $out = Renderer::render($this->chat([

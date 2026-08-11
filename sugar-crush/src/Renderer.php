@@ -355,11 +355,52 @@ final class Renderer
             }
             $blocks[] = match ($msg->role) {
                 Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . Sanitize::untrusted($msg->content),
-                Role::Assistant => Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant') . "\n" . trim($md->render($msg->content)),
+                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md),
                 Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . Sanitize::untrusted($msg->content)),
             };
         }
         return implode("\n\n", $blocks);
+    }
+
+    /**
+     * An assistant turn's label + (when present) its {@see Message::$reasoning}
+     * line + rendered Markdown body. §12 D3's final wiring step - the
+     * extractor already splits reasoning out at the provider layer and
+     * {@see \SugarCraft\Crush\Backend\EngineBackend} threads it onto the root
+     * {@see Message} DTO; this is where it actually reaches the user instead
+     * of being computed and discarded.
+     */
+    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md): string
+    {
+        $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
+        $body = trim($md->render($msg->content));
+
+        if ($msg->reasoning === null || trim($msg->reasoning) === '') {
+            return $label . "\n" . $body;
+        }
+
+        return $label . "\n" . self::renderReasoning($msg->reasoning, $theme) . "\n" . $body;
+    }
+
+    /**
+     * Dimmed, single-line, collapsed rendering of a model's extracted
+     * "thinking" text - per crush_feat.md §12 D3 ("surface the result
+     * rendered dimmed/collapsed in the TUI"). Collapsed to one flattened,
+     * truncated line rather than rendered in full: a MiniMax-M2.7 thinking
+     * trace can run to thousands of tokens, and showing it verbatim would
+     * push the actual answer off-screen turn after turn. Reasoning is raw
+     * model output that never passes through CandyShine's Markdown renderer,
+     * so - like every other untrusted turn in this method - it goes through
+     * {@see Sanitize::untrusted()} before display.
+     */
+    private static function renderReasoning(string $reasoning, Theme $theme): string
+    {
+        $flat = trim(preg_replace('/\s+/', ' ', Sanitize::untrusted($reasoning)) ?? '');
+        if (mb_strlen($flat) > 120) {
+            $flat = mb_substr($flat, 0, 120) . '…';
+        }
+
+        return Style::new()->foreground($theme->systemLabel)->faint()->render('💭 ' . $flat);
     }
 
     /**

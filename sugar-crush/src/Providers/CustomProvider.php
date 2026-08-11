@@ -11,11 +11,14 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 
 final readonly class CustomProvider implements ProviderInterface
 {
+    use ReasoningExtractor;
+
     public function __construct(
         private string $name,
         private string $baseUrl,
@@ -124,6 +127,14 @@ final readonly class CustomProvider implements ProviderInterface
             'messages' => $this->formatMessages($request->messages),
             'temperature' => $request->temperature ?? 0.7,
             'max_tokens' => $request->maxTokens ?? 4096,
+            // Pin the reasoning-splitting flag explicitly rather than relying
+            // on a self-hosted backend's default (see SglangProvider - a
+            // CustomProvider instance frequently points at the same class of
+            // OpenAI-compatible self-hosted server). A no-op for any parser
+            // that doesn't understand it, and a no-op for `minimax-append-think`
+            // specifically, which is exactly why extractReasoning()'s
+            // <think>-stripping fallback below still matters regardless.
+            'extra_body' => ['separate_reasoning' => true],
         ];
 
         if ($request->tools !== null && $this->supportsFunctionCalling) {
@@ -162,6 +173,7 @@ final readonly class CustomProvider implements ProviderInterface
             'temperature' => $request->temperature ?? 0.7,
             'max_tokens' => $request->maxTokens ?? 4096,
             'stream' => true,
+            'extra_body' => ['separate_reasoning' => true],
         ];
 
         if ($request->tools !== null && $this->supportsFunctionCalling) {
@@ -176,6 +188,15 @@ final readonly class CustomProvider implements ProviderInterface
 
             $stream = $response->getBody();
             $buffer = '';
+
+            // Accumulates delta.tool_calls[] fragments across chunks, keyed
+            // by the OpenAI stream's per-call `index`. Threaded as a local
+            // (not an instance property) because CustomProvider is a
+            // `final readonly class` per this repo's immutable-value-object
+            // convention - a readonly property can't be mutated chunk over
+            // chunk, so the buffer lives for the lifetime of this generator
+            // call only, exactly matching one completeStream() invocation.
+            $toolCallBuffer = [];
 
             while (!$stream->eof()) {
                 $chunk = $stream->read(8192);
@@ -194,7 +215,7 @@ final readonly class CustomProvider implements ProviderInterface
                             continue;
                         }
                         if (isset($data['choices'][0]['delta'])) {
-                            yield $this->parseChunk($data);
+                            yield $this->parseChunk($data, $toolCallBuffer);
                         }
                         if (isset($data['choices'][0]['finish_reason'])) {
                             // Stream ended
@@ -296,25 +317,93 @@ final readonly class CustomProvider implements ProviderInterface
             );
         }
 
+        [$reasoning, $content] = $this->extractReasoning($message);
+
         return new CompleteResponse(
-            content: $message['content'] ?? '',
-            reasoning: null,
+            content: $content,
+            reasoning: $reasoning,
             toolCalls: $toolCalls,
             tokensUsed: $data['usage']['total_tokens'] ?? 0,
             costUsd: 0.0,
         );
     }
 
-    private function parseChunk(array $data): CompleteResponse
+    /**
+     * Composes two independent per-chunk concerns: W1.A1 (§12 D2) tool-call
+     * fragment reassembly via {@see resolveStreamedToolCalls()}, and W1.A2
+     * (§12 D3) reasoning/content splitting via {@see extractReasoning()}.
+     * Kept as separate methods (rather than one inlined rewrite) so each
+     * plan step's logic stays a single, independently reviewable unit - see
+     * SglangProvider::parseChunk(), which mirrors this split byte-for-byte.
+     *
+     * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
+     */
+    private function parseChunk(array $data, array &$toolCallBuffer = []): CompleteResponse
     {
         $delta = $data['choices'][0]['delta'] ?? [];
+        $finishReason = $data['choices'][0]['finish_reason'] ?? null;
+
+        $toolCalls = $this->resolveStreamedToolCalls($delta, $finishReason, $toolCallBuffer);
+
+        // W1.A2 (§12 D3), applied per chunk here - see
+        // SglangProvider::parseChunk()'s docblock for the same per-chunk
+        // chunk-boundary caveat on Case 2 (<think> stripping), which applies
+        // identically here.
+        [$reasoning, $content] = $this->extractReasoning($delta);
 
         return new CompleteResponse(
-            content: $delta['content'] ?? '',
-            reasoning: null,
-            toolCalls: null,
+            content: $content,
+            reasoning: $reasoning,
+            toolCalls: $toolCalls,
             tokensUsed: 0,
             costUsd: 0.0,
         );
+    }
+
+    /**
+     * W1.A1 (§12 D2): mirrors the OpenAI streaming tool-call shape -
+     * `delta.tool_calls[]` arrives as successive fragments keyed by `index`,
+     * with `function.arguments` streamed as string pieces that only form
+     * valid JSON once the call is complete. Fragments accumulate into
+     * `$toolCallBuffer` (by reference, one buffer per completeStream() call
+     * - see the call site) until `finish_reason === 'tool_calls'`, at which
+     * point the buffered calls are assembled into ToolCall objects and the
+     * buffer is drained.
+     *
+     * Previously this always returned `toolCalls: null` - byte-for-byte the
+     * same bug as SglangProvider::parseChunk() - so a delta chunk carrying
+     * only `tool_calls` (no `content`) had its fragments read then
+     * discarded here every time - `completeStream()` could never deliver a
+     * tool call, only `complete()` (non-streaming) could.
+     *
+     * @param array<string, mixed> $delta
+     * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
+     * @return ?array<int, ToolCall>
+     */
+    private function resolveStreamedToolCalls(array $delta, ?string $finishReason, array &$toolCallBuffer): ?array
+    {
+        foreach ($delta['tool_calls'] ?? [] as $tc) {
+            $idx = $tc['index'] ?? 0;
+            $toolCallBuffer[$idx]['id'] ??= $tc['id'] ?? null;
+            $toolCallBuffer[$idx]['name'] ??= $tc['function']['name'] ?? null;
+            $toolCallBuffer[$idx]['arguments'] =
+                ($toolCallBuffer[$idx]['arguments'] ?? '') . ($tc['function']['arguments'] ?? '');
+        }
+
+        if ($finishReason !== 'tool_calls' || $toolCallBuffer === []) {
+            return null;
+        }
+
+        $toolCalls = array_map(
+            fn (array $tc): ToolCall => ToolCall::fromArray([
+                'id' => $tc['id'] ?? '',
+                'name' => $tc['name'] ?? '',
+                'arguments' => json_decode($tc['arguments'] ?? '{}', true) ?? [],
+            ]),
+            $toolCallBuffer
+        );
+        $toolCallBuffer = [];
+
+        return $toolCalls;
     }
 }

@@ -10,11 +10,14 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 
 final readonly class OpenAIProvider implements ProviderInterface
 {
+    use ReasoningExtractor;
+
     public function __construct(
         private ClientContract $client,
         private string $defaultModel = 'gpt-4o',
@@ -203,9 +206,22 @@ final readonly class OpenAIProvider implements ProviderInterface
             );
         }
 
+        // NOTE: `$data` comes from openai-php's `CreateResponse::toArray()`,
+        // whose `CreateResponseMessage` DTO only carries role/content/
+        // function_call/tool_calls (vendor/openai-php/client/src/Responses/
+        // Chat/CreateResponseMessage.php) - a `reasoning_content` field on
+        // the raw HTTP JSON is silently dropped before this method ever sees
+        // it. extractReasoning()'s Case 1 is therefore permanently inert
+        // here; only Case 2 (`<think>` markup left inline in `content`,
+        // which the DTO does preserve) can ever fire for this provider. That
+        // is a real limitation of routing through the typed SDK client
+        // rather than raw JSON (as SglangProvider/CustomProvider do) - fixing
+        // it would mean bypassing ClientContract entirely, out of scope here.
+        [$reasoning, $content] = $this->extractReasoning($message);
+
         return new CompleteResponse(
-            content: $message['content'] ?? '',
-            reasoning: null,
+            content: $content,
+            reasoning: $reasoning,
             toolCalls: $toolCalls,
             tokensUsed: $data['usage']['total_tokens'] ?? 0,
             costUsd: $this->calculateCost($data['usage'] ?? []),
@@ -220,14 +236,20 @@ final readonly class OpenAIProvider implements ProviderInterface
      *
      * Note: tokensUsed and costUsd are always 0 for streaming responses because
      * usage data is only available from the final chunk, not per-chunk.
+     *
+     * Same `reasoning_content`-dropping caveat as {@see parseResponse()}
+     * applies here via `CreateStreamedResponseDelta` - see that method's
+     * docblock.
      */
     private function parseChunk(mixed $chunk): CompleteResponse
     {
         $delta = $chunk->toArray()['choices'][0]['delta'] ?? [];
 
+        [$reasoning, $content] = $this->extractReasoning($delta);
+
         return new CompleteResponse(
-            content: $delta['content'] ?? '',
-            reasoning: null,
+            content: $content,
+            reasoning: $reasoning,
             toolCalls: null,
             tokensUsed: 0,
             costUsd: 0.0,
