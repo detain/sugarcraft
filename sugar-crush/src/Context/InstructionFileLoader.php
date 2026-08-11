@@ -13,6 +13,10 @@ namespace SugarCraft\Crush\Context;
  * - Forced instruction patterns from config are glob-resolved and loaded every session
  * - Per-path nested instruction files (CLAUDE.md, AGENTS.md in subdirectories)
  *   are loaded via loadForPath() and tracked internally to inject each file at most once
+ *
+ * `loadRoot()`/`loadForPath()` also expand `@path` import references via
+ * ImportResolver, mirroring Claude Code's CLAUDE.md/AGENTS.md import syntax
+ * (this repo's own root CLAUDE.md already uses `@./AGENTS.md`).
  */
 final class InstructionFileLoader
 {
@@ -21,14 +25,20 @@ final class InstructionFileLoader
      */
     private array $injectedPaths = [];
 
+    private readonly ImportResolver $importResolver;
+
     /**
      * @param string $repoRoot Absolute path to the repository root
      * @param string[] $forcedInstructions Glob patterns from config, force-loaded every session
+     * @param ImportResolver|null $importResolver Expander for `@path` references; defaults to ImportResolver::new()
      */
     public function __construct(
         private readonly string $repoRoot,
         private readonly array $forcedInstructions = [],
-    ) {}
+        ?ImportResolver $importResolver = null,
+    ) {
+        $this->importResolver = $importResolver ?? ImportResolver::new();
+    }
 
     /**
      * Load CLAUDE.md and AGENTS.md from the repo root.
@@ -48,7 +58,8 @@ final class InstructionFileLoader
         $contents = [];
         foreach ($rootFiles as $path) {
             if (is_file($path)) {
-                $contents[] = file_get_contents($path);
+                $raw = file_get_contents($path);
+                $contents[] = $raw === false ? '' : $this->expandImports($raw, dirname($path));
             }
         }
 
@@ -125,7 +136,8 @@ final class InstructionFileLoader
 
                 if (is_file($fullPath) && !isset($this->injectedPaths[$fullPath])) {
                     $this->injectedPaths[$fullPath] = true;
-                    return file_get_contents($fullPath);
+                    $raw = file_get_contents($fullPath);
+                    return $raw === false ? null : $this->expandImports($raw, dirname($fullPath));
                 }
             }
 
@@ -138,5 +150,35 @@ final class InstructionFileLoader
         }
 
         return null;
+    }
+
+    /**
+     * Expand `@path` import references in freshly-read instruction content.
+     *
+     * A boundary-check closure is handed straight into
+     * ImportResolver::expand(), which threads it through EVERY recursive
+     * expansion call (not just the references present in the outermost
+     * $content) -- so a reference that resolves outside $repoRoot is
+     * blocked and replaced with an inline warning note no matter how many
+     * @import hops deep it is found, mirroring Claude Code's approval-dialog
+     * concept for imports that leave the project (at minimum, sugar-crush
+     * has no interactive approval flow yet, so this is the "at minimum a
+     * warning-tagged note" fallback). In-repo references are left for
+     * ImportResolver to resolve and recurse into as normal.
+     */
+    private function expandImports(string $content, string $baseDir): string
+    {
+        $repoRoot = realpath($this->repoRoot) ?: rtrim($this->repoRoot, '/');
+
+        $boundaryCheck = static function (string $realPath, string $pathFragment) use ($repoRoot): ?string {
+            if ($realPath === $repoRoot || str_starts_with($realPath, $repoRoot . '/')) {
+                return null; // in-repo -- let ImportResolver expand it normally
+            }
+
+            return "<import-blocked reason=\"outside-repo-root\">Import '{$pathFragment}' resolves to"
+                . " '{$realPath}', outside the repository root, and was not followed.</import-blocked>";
+        };
+
+        return $this->importResolver->expand($content, $baseDir, 0, $boundaryCheck);
     }
 }

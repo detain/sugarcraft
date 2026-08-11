@@ -245,4 +245,104 @@ final class InstructionFileLoaderTest extends TestCase
 
         $this->assertNull($result);
     }
+
+    // ─── @-import wiring (ImportResolver) ──────────────────────────
+
+    public function testLoadRootExpandsAtImportReference(): void
+    {
+        // Mirrors this repo's own root CLAUDE.md, which uses "@./AGENTS.md".
+        // Against the pre-wiring code this reference is never expanded, so
+        // asserting the imported body is present fails on the old loader.
+        $this->touch($this->repoRoot . '/CLAUDE.md', "# Root\n@./AGENTS.md\n");
+        $this->touch($this->repoRoot . '/AGENTS.md', 'AGENTS BODY TEXT');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+
+        $this->assertStringContainsString('AGENTS BODY TEXT', $contents[0]);
+        $this->assertStringNotContainsString('@./AGENTS.md', $contents[0]);
+    }
+
+    public function testLoadRootBlocksImportEscapingRepoRoot(): void
+    {
+        // A reference that resolves outside repoRoot must never be followed
+        // silently -- a naive "just call ImportResolver::expand()" wiring
+        // would leak the secret file's content into the system prompt.
+        $this->touch($this->tempDir . '/secret.md', 'TOP SECRET CONTENT');
+        $this->touch($this->repoRoot . '/CLAUDE.md', 'See @../secret.md here.');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+
+        $this->assertStringNotContainsString('TOP SECRET CONTENT', $contents[0]);
+        $this->assertStringContainsString('import-blocked', $contents[0]);
+        $this->assertStringContainsString('outside the repository root', $contents[0]);
+    }
+
+    public function testLoadRootDoesNotBlockOrExpandFencedImportReference(): void
+    {
+        // A reference sitting in an example code fence must stay untouched --
+        // neither expanded nor rewritten into a warning tag.
+        $this->touch($this->tempDir . '/secret.md', 'TOP SECRET CONTENT');
+        $this->touch(
+            $this->repoRoot . '/CLAUDE.md',
+            "Example:\n```\nSee @../secret.md here.\n```\nEnd.",
+        );
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+
+        $this->assertStringContainsString('@../secret.md', $contents[0]);
+        $this->assertStringNotContainsString('import-blocked', $contents[0]);
+        $this->assertStringNotContainsString('TOP SECRET CONTENT', $contents[0]);
+    }
+
+    public function testLoadForPathExpandsNestedImportReference(): void
+    {
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'Nested @./LOCAL.md');
+        $this->touch($this->repoRoot . '/candy-shine/LOCAL.md', 'LOCAL IMPORTED BODY');
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+
+        $this->assertNotNull($result);
+        $this->assertStringContainsString('LOCAL IMPORTED BODY', $result);
+        $this->assertStringNotContainsString('@./LOCAL.md', $result);
+    }
+
+    public function testLoadRootBlocksTwoHopImportEscapingRepoRoot(): void
+    {
+        // First hop (@local.md) resolves INSIDE repoRoot and passes the
+        // boundary check; the escape only appears once ImportResolver
+        // recurses into local.md's own content. A boundary check that only
+        // scans the outermost $content (rather than being threaded through
+        // ImportResolver's recursion) would miss this and leak the secret.
+        $this->touch($this->tempDir . '/secret.md', 'TOP SECRET CONTENT LEAK');
+        $this->touch($this->repoRoot . '/local.md', 'Nested ref: @../secret.md');
+        $this->touch($this->repoRoot . '/CLAUDE.md', 'Root: @local.md');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $contents = $loader->loadRoot();
+
+        $this->assertStringNotContainsString('TOP SECRET CONTENT LEAK', $contents[0]);
+        $this->assertStringContainsString('import-blocked', $contents[0]);
+        $this->assertStringContainsString('outside the repository root', $contents[0]);
+    }
+
+    public function testLoadForPathBlocksNestedImportEscapingRepoRoot(): void
+    {
+        // From candy-shine/CLAUDE.md, "../../secret.md" resolves two levels
+        // up (past repoRoot) into $tempDir -- outside the repo boundary.
+        $this->touch($this->tempDir . '/secret.md', 'TOP SECRET CONTENT');
+        $this->touch($this->repoRoot . '/candy-shine/CLAUDE.md', 'Ref @../../secret.md');
+        $this->touch($this->repoRoot . '/candy-shine/src/Component.php', '<?php // component');
+
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $result = $loader->loadForPath($this->repoRoot . '/candy-shine/src/Component.php');
+
+        $this->assertNotNull($result);
+        $this->assertStringNotContainsString('TOP SECRET CONTENT', $result);
+        $this->assertStringContainsString('import-blocked', $result);
+    }
 }
