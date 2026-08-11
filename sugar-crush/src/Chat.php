@@ -10,10 +10,19 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMotionMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseReleaseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Agents\AgentManager;
@@ -30,6 +39,10 @@ use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\Zone;
+use SugarCraft\Mouse\ZoneClickTracker;
+use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
@@ -128,6 +141,35 @@ final class Chat implements Model
      * tab strip has nowhere to put more than that anyway.
      */
     private const TITLE_MAX_CHARS = 100;
+
+    /**
+     * How many palette rows the MRU list remembers. Small on purpose: the
+     * bias is only meant to keep the handful of rows a user actually cycles
+     * through near the top, not to permanently re-rank the whole palette.
+     */
+    private const PALETTE_MRU_LIMIT = 8;
+
+    /**
+     * Transcript lines moved per wheel notch (crush_feat.md §8 E4's literal
+     * `$delta = ... ? -3 : 3`). Three keeps a notch's worth of context
+     * overlapping between the old and new window instead of paging blind.
+     */
+    private const SCROLL_WHEEL_LINES = 3;
+
+    /**
+     * How far (Manhattan cells) the pointer may stray between press and
+     * release and still count as a click rather than a text selection
+     * (crush_feat.md §8 E8).
+     *
+     * One cell, not zero: a press and release one cell apart is a shaky
+     * hand on a two-cell-wide tab, while a deliberate selection sweep
+     * always crosses more ground than that. Zone bounds alone cannot make
+     * this call — a tool-call row or a palette row is one zone spanning the
+     * full width, so dragging across it to copy the text starts AND ends
+     * inside the same zone and {@see ZoneClickTracker} happily calls it a
+     * click.
+     */
+    private const CLICK_DRAG_TOLERANCE_CELLS = 1;
 
     /**
      * @param list<Message> $history
@@ -289,6 +331,54 @@ final class Chat implements Model
          * @var array<string, bool>
          */
         private readonly array $permissionGrants = [],
+        /**
+         * Tool-call ids whose output the user has explicitly expanded, keyed
+         * by id ({@see ToolResult::$id}), value always true - a collapsed
+         * call is simply absent rather than stored as false, so the map stays
+         * the size of what the user actually opened rather than growing one
+         * entry per tool call for the life of the session.
+         *
+         * {@see Renderer::renderToolResults()} hides a successful call's body
+         * unless its id is in here (crush_feat.md §1 E5's "hide-on-success by
+         * default"); Ctrl+O toggles it (see {@see toggleToolOutput()}).
+         *
+         * @var array<string, bool>
+         */
+        private readonly array $expanded = [],
+        /**
+         * Most-recently-used Ctrl+P palette rows, most recent FIRST, capped
+         * at {@see PALETTE_MRU_LIMIT} (crush_feat.md §4 E7). Only consulted
+         * by the empty-query root list ({@see paletteMatchResults()}), which
+         * floats recent rows to the top of their category - a typed query
+         * stays purely relevance-ranked so the matcher's score, not history,
+         * decides what the user is pointing at.
+         *
+         * In-memory for the life of the process: cross-session persistence
+         * would have to be written/read by Bootstrap the way `themeName` is,
+         * which is outside this step's file scope; the constructor param is
+         * how a seeded list would arrive once that lands.
+         *
+         * @var list<string>
+         */
+        private readonly array $paletteMru = [],
+        /**
+         * How many lines the transcript is scrolled back from the newest
+         * one (crush_feat.md §8 E4). 0 pins the view to the bottom, which
+         * is what every non-wheel path leaves it at.
+         *
+         * Measured from the BOTTOM rather than the top because that is the
+         * end {@see Renderer::render()} anchors to: it clips a too-tall
+         * frame to its tail so the input box and newest turn stay visible,
+         * and this offset just moves that window's start earlier.
+         *
+         * Clamped at both ends, in the two places that can know each bound:
+         * {@see withScrollOffset()} refuses to go below 0, and the upper
+         * bound is the painted frame's own overflow ({@see
+         * Renderer::maxScrollOffset()}), applied when a wheel event is
+         * handled and again by the renderer against the frame it is
+         * actually building.
+         */
+        private readonly int $scrollOffset = 0,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -359,6 +449,9 @@ final class Chat implements Model
             // $rows/$cols for why Renderer must read these instead of
             // querying terminal size itself.
             return [$this->mutate(['rows' => $msg->rows, 'cols' => $msg->cols]), null];
+        }
+        if ($msg instanceof MouseMsg) {
+            return $this->handleMouse($msg);
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -453,6 +546,13 @@ final class Chat implements Model
             // input buffer instead - same reasoning as Ctrl+A just below.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
                 => [$this->mutate(['palette' => PaletteState::root()]), null],
+            // Ctrl+O expands/collapses the most recent tool call's output
+            // (crush_feat.md §1 E5) - successful tool bodies are hidden by
+            // default, and this is the only way to see one. Checked before
+            // the generic Char arm below, or the literal "o" would be typed
+            // into the input buffer instead - same reasoning as Ctrl+P above.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
+                => $this->toggleLatestToolOutput(),
             // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
             // already uses for typed input (handleAgentsCommand()), giving
             // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
@@ -1406,6 +1506,429 @@ final class Chat implements Model
         return $view->images === [] ? $view->body : $view;
     }
 
+    /**
+     * How the terminal is asked to report mouse events (crush_feat.md §8 E1).
+     *
+     * `CellMotion` rather than `AllMotion`: hover-everywhere turns every
+     * pointer move into a MouseMotionMsg on the ReactPHP read loop, and
+     * nothing consumes hover yet.
+     *
+     * `SUGARCRUSH_DISABLE_MOUSE` turns tracking off completely. That escape
+     * hatch is not optional politeness — while SGR mouse tracking is active
+     * the terminal stops offering its own copy-on-select, which is the
+     * single most-repeated complaint across every tool surveyed in §8.
+     *
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` deliberately does NOT change the
+     * mode: wheel events are reported over the same tracking mode as
+     * clicks, so "keep scroll, drop clicks" can only be honoured above the
+     * protocol — by refusing to hit-test (see {@see zoneAt()}).
+     */
+    public static function mouseMode(): MouseMode
+    {
+        return self::envFlag('SUGARCRUSH_DISABLE_MOUSE') ? MouseMode::Off : MouseMode::CellMotion;
+    }
+
+    /**
+     * Whether click/drag hit-testing is live. False when either
+     * `SUGARCRUSH_DISABLE_MOUSE` (no tracking at all) or
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` (clicks off, wheel kept) is set.
+     */
+    public static function mouseClicksEnabled(): bool
+    {
+        return self::mouseMode() !== MouseMode::Off
+            && !self::envFlag('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
+    }
+
+    /**
+     * The marked zone under a reported pointer cell, or null when there is
+     * none — the one hit-test entry point every future click handler goes
+     * through, so `SUGARCRUSH_DISABLE_MOUSE_CLICKS` is enforced in exactly
+     * one place instead of at each call site.
+     *
+     * Reads the registry {@see Renderer::scanRoot()} filled on the last
+     * frame, because a click reports coordinates against what is currently
+     * painted, not against the frame being built.
+     */
+    public static function zoneAt(int $col, int $row): ?Zone
+    {
+        if (!self::mouseClicksEnabled()) {
+            return null;
+        }
+
+        return Renderer::scanner()->hit($col, $row);
+    }
+
+    /**
+     * Press/Release pairing state for click dispatch.
+     *
+     * Static for the same reason {@see Renderer::scanner()} is: a click spans
+     * two `update()` calls, and `Chat` is immutable — the press-half state
+     * would be discarded with the intermediate instance if it lived on a
+     * field, so no click could ever complete. One tracker per process
+     * mirrors the single global manager bubblezone (and candy-mouse) assumes.
+     */
+    private static ?ZoneClickTracker $clickTracker = null;
+
+    /**
+     * The shared Press+Release pairing state machine (candy-mouse's
+     * {@see ZoneClickTracker}), which is what makes a press on a tab followed
+     * by a release somewhere else — a drag, or a text selection started on
+     * the tab strip — dispatch nothing instead of switching sessions.
+     */
+    public static function clickTracker(): ZoneClickTracker
+    {
+        return self::$clickTracker ??= new ZoneClickTracker();
+    }
+
+    /**
+     * The in-flight left press as `[col, row, drift]` — where it landed and
+     * the furthest the pointer has strayed from it since (crush_feat.md
+     * §8 E8), or null when no press is pending.
+     *
+     * Static for the same reason {@see $clickTracker} is: the press half is
+     * recorded in one `update()` and read in a later one, and an immutable
+     * Chat throws the intermediate instance away. Only the left button ever
+     * reaches here — {@see handleMouse()} drops the others before this —
+     * so one slot is enough, unlike the tracker's per-button map.
+     *
+     * @var array{0:int,1:int,2:int}|null
+     */
+    private static ?array $pressGesture = null;
+
+    /**
+     * Fold a pointer position reported while a press is pending into that
+     * press's drift.
+     *
+     * Drift is the running MAXIMUM rather than the press→release delta
+     * alone, because a selection sweep that ends back where it started
+     * (drag right to highlight a line, drag back, release) has a delta of
+     * zero and would otherwise read as a click.
+     */
+    private static function recordPressDrift(int $col, int $row): void
+    {
+        if (self::$pressGesture === null) {
+            return;
+        }
+
+        [$pressCol, $pressRow, $drift] = self::$pressGesture;
+        $distance = abs($col - $pressCol) + abs($row - $pressRow);
+
+        self::$pressGesture = [$pressCol, $pressRow, max($drift, $distance)];
+    }
+
+    /**
+     * Click-to-switch session tab (crush_feat.md §8 E2), click-to-switch pane
+     * (§8 E3), click-to-expand a tool call (§8 E5), click-to-select a palette
+     * row (§8 E6), plus wheel-scroll of the transcript (§8 E4).
+     *
+     * Wheel events branch off FIRST and never reach the click tracker: they
+     * are the one gesture that survives `SUGARCRUSH_DISABLE_MOUSE_CLICKS`
+     * (see {@see mouseMode()}), and hit-testing them through
+     * {@see zoneAt()} — which is where that flag is enforced — would take
+     * scrolling down with clicks. candy-mouse's tracker ignores Scroll
+     * anyway. Only left press/release are fed to it; motion is still
+     * dropped rather than translated, since nothing consumes hover yet.
+     *
+     * The hit test uses the click's own coordinates against the zones
+     * {@see Renderer::scanRoot()} recorded for the frame currently on
+     * screen — see {@see zoneAt()}, which is also where
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` is enforced.
+     *
+     * A pair the tracker accepts is then re-checked against how far the
+     * pointer moved (§8 E8, {@see CLICK_DRAG_TOLERANCE_CELLS}): a drag
+     * within one wide zone is a text selection, not a click, and must
+     * dispatch nothing.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function handleMouse(MouseMsg $msg): array
+    {
+        if ($msg instanceof MouseWheelMsg) {
+            return $this->scrollTranscript($msg->button);
+        }
+
+        if ($msg->button !== MouseButton::Left) {
+            return [$this, null];
+        }
+
+        // Motion is still not translated into a candy-mouse event (nothing
+        // consumes hover), but with the button down it is the terminal
+        // narrating a drag, so it feeds §8 E8's drift before being dropped.
+        if ($msg instanceof MouseMotionMsg) {
+            self::recordPressDrift($msg->x, $msg->y);
+
+            return [$this, null];
+        }
+
+        $event = match (true) {
+            $msg instanceof MouseClickMsg   => MouseEvent::press($msg->x, $msg->y),
+            $msg instanceof MouseReleaseMsg => MouseEvent::release($msg->x, $msg->y),
+            default                         => null,
+        };
+        if ($event === null) {
+            return [$this, null];
+        }
+
+        if ($msg instanceof MouseClickMsg) {
+            self::$pressGesture = [$msg->x, $msg->y, 0];
+        } else {
+            self::recordPressDrift($msg->x, $msg->y);
+        }
+
+        $drift = self::$pressGesture[2] ?? 0;
+        if ($msg instanceof MouseReleaseMsg) {
+            // Cleared unconditionally, including on the releases the tracker
+            // rejects, so a press abandoned outside any zone cannot leave
+            // stale drift to poison the NEXT click.
+            self::$pressGesture = null;
+        }
+
+        $click = self::clickTracker()->track($event, self::zoneAt($msg->x, $msg->y));
+        if ($click === null) {
+            return [$this, null];
+        }
+
+        // §8 E8. The pair is clean by zone, but the pointer travelled far
+        // enough across it that the user was sweeping out a text selection,
+        // not pointing at a control — dispatch nothing so the terminal's own
+        // copy-on-select is what the gesture accomplishes.
+        if ($drift > self::CLICK_DRAG_TOLERANCE_CELLS) {
+            return [$this, null];
+        }
+
+        $zoneId = $click->zone->id;
+
+        $tabPrefix = Renderer::SESSION_TAB_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $tabPrefix)) {
+            return $this->selectSessionTab(substr($zoneId, strlen($tabPrefix)));
+        }
+
+        $panePrefix = Renderer::PANE_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $panePrefix)) {
+            return $this->selectPane(substr($zoneId, strlen($panePrefix)));
+        }
+
+        // §8 E5. The zone id carries the SAME key {@see $expanded} is keyed by
+        // (see {@see Renderer::recordToolCallZone()}), so the click lands on
+        // {@see toggleToolOutput()} - the one Ctrl+O already drives - rather
+        // than on a parallel click-only expansion state that could disagree
+        // with it. Unlike Ctrl+O, which can only name the LAST tool call
+        // (Chat has no history cursor to select an earlier one with), a click
+        // names the exact row the user pointed at, so this also reaches the
+        // older calls the keyboard cannot.
+        $toolPrefix = Renderer::TOOL_CALL_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $toolPrefix)) {
+            return [$this->toggleToolOutput(substr($zoneId, strlen($toolPrefix))), null];
+        }
+
+        $pickerPrefix = Renderer::PALETTE_ITEM_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $pickerPrefix)) {
+            return $this->selectPaletteItem(substr($zoneId, strlen($pickerPrefix)));
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * Click-to-select in the command palette / picker (crush_feat.md §8 E6).
+     *
+     * §8 E6 asks explicitly for the click to "dispatch the same Msg/Cmd the
+     * Enter key currently dispatches" rather than a parallel confirm path, so
+     * this only moves `selectedIndex` onto the clicked row and then hands off
+     * to {@see runSelectedPaletteAction()} — the exact method
+     * {@see handlePaletteKey()}'s Enter arm calls. Everything that hangs off a
+     * confirm (mode transitions into the providers/themes list, the §4 E7 MRU
+     * bump, `Cmd::quit()` for Exit) therefore behaves identically whether the
+     * row was chosen with the keyboard or the mouse.
+     *
+     * The index is re-checked against the CURRENT match list rather than
+     * trusted from the zone: zones describe the previously-painted frame, and
+     * a row that has since disappeared (an async reply landing, a
+     * re-filtered list) would otherwise confirm whatever action drifted into
+     * that slot. Out-of-range, or a click arriving after the palette closed,
+     * is a no-op — the safe answer for a stale click is to run nothing.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function selectPaletteItem(string $index): array
+    {
+        if ($this->palette === null || preg_match('/\A\d+\z/', $index) !== 1) {
+            return [$this, null];
+        }
+
+        $row = (int) $index;
+        if ($row >= count($this->paletteMatches())) {
+            return [$this, null];
+        }
+
+        return $this->mutate(['palette' => $this->palette->withSelectedIndex($row)])
+            ->runSelectedPaletteAction();
+    }
+
+    /**
+     * Wheel-scroll the chat transcript (crush_feat.md §8 E4).
+     *
+     * `WheelUp` moves BACK into history, so it raises the offset — §8 E4's
+     * sketch subtracts because its `$app->chatScrollOffset` counts from the
+     * top; this one counts from the bottom (see the constructor's
+     * `$scrollOffset` docblock for why that end is the anchor).
+     *
+     * The upper clamp comes from {@see Renderer::maxScrollOffset()}, the
+     * overflow of the frame currently on screen — the same "a mouse event
+     * is reported against what is painted, not against the frame being
+     * built" rule {@see zoneAt()} follows. A transcript that fits the
+     * window reports 0 and the wheel does nothing.
+     *
+     * §8 E4 gates this on `$app->pane === Pane::Chat`. There is no live
+     * pane state to gate on — see {@see selectPane()} for why `App::$pane`
+     * is not reachable from `bin/sugarcrush` — and the transcript is the
+     * only scrollable surface this path renders, so the wheel always
+     * addresses it.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function scrollTranscript(MouseButton $button): array
+    {
+        $delta = match ($button) {
+            MouseButton::WheelUp   => self::SCROLL_WHEEL_LINES,
+            MouseButton::WheelDown => -self::SCROLL_WHEEL_LINES,
+            default                => 0,
+        };
+        if ($delta === 0) {
+            return [$this, null];
+        }
+
+        // Both ends are clamped here, not just the top: without the max(0)
+        // a wheel-down at the bottom would compute -3, differ from the
+        // current 0, and hand back a fresh instance for a scroll that
+        // cannot happen - a new frame diffed for nothing on every notch.
+        $offset = max(0, min($this->scrollOffset + $delta, Renderer::maxScrollOffset()));
+        if ($offset === $this->scrollOffset) {
+            return [$this, null];
+        }
+
+        return [$this->withScrollOffset($offset), null];
+    }
+
+    /**
+     * How far back the transcript is scrolled, in lines from the newest
+     * one. 0 means pinned to the bottom. Read by {@see Renderer::render()}.
+     */
+    public function scrollOffset(): int
+    {
+        return $this->scrollOffset;
+    }
+
+    /**
+     * Scroll the transcript back $offset lines from the newest one.
+     *
+     * Negatives clamp to 0 — the bottom is the furthest the view can go
+     * forward, there is nothing below the newest line. The upper end is
+     * clamped by the caller against a real frame's overflow (see
+     * {@see scrollTranscript()}); a value beyond it stored anyway is
+     * harmless, since {@see Renderer::render()} re-clamps to whatever the
+     * frame it is drawing can actually offer.
+     */
+    public function withScrollOffset(int $offset): self
+    {
+        return $this->mutate(['scrollOffset' => max(0, $offset)]);
+    }
+
+    /**
+     * Make the clicked session current, if it is still a session.
+     *
+     * The id is re-checked against `listSessions()` rather than trusted from
+     * the zone: zones describe the PREVIOUS frame, so a session deleted (or a
+     * store swapped) between that frame and the click would otherwise leave
+     * `currentSessionId` pointing at a row that no longer exists — which
+     * {@see cycleSessionTab()} then treats as "current session not found" and
+     * refuses to cycle out of, stranding the user.
+     *
+     * Unlike {@see cycleSessionTab()} this does NOT require a non-null
+     * `currentSessionId` to start from — a click names its target absolutely,
+     * so it works on a freshly-launched process that has not selected a
+     * session yet (see that method's reachability note).
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function selectSessionTab(string $id): array
+    {
+        if ($id === '' || $id === $this->currentSessionId || $this->sessionStore === null) {
+            return [$this, null];
+        }
+
+        if (!in_array($id, array_column($this->sessionStore->listSessions(), 'id'), true)) {
+            return [$this, null];
+        }
+
+        return [$this->withCurrentSessionId($id), null];
+    }
+
+    /**
+     * Click-to-switch pane (crush_feat.md §8 E3).
+     *
+     * §8 E3 sketches `$app->withPane(Pane::from($name))`, but `App::$pane`
+     * belongs to the `App`/`Tui\Renderer` system that nothing constructs
+     * (`bin/sugarcrush` runs THIS model — see {@see Renderer}'s class
+     * docblock, and §5 E7, which recommends retiring that system outright).
+     * Jumping a pane field no live frame reads would be a switch the user
+     * can never see. So a pane click dispatches the same thing the keyboard
+     * already dispatches for that pane on the live path — E3's "just a
+     * direct jump instead of `next()`", against the surfaces that exist:
+     *
+     * - {@see Pane::Menu} → open the Ctrl+P palette. The palette IS this
+     *   path's menu surface; the status bar's "Ctrl+P menu" hint is the
+     *   region marked for it. A click is ignored while the palette is
+     *   already open: it captures keyboard input while up, so re-rooting it
+     *   from underneath would undo navigation the keyboard cannot.
+     * - {@see Pane::Agents} → the same `handleAgentsCommand('/agents')` the
+     *   Ctrl+A shortcut and the palette's SwitchAgent action already run.
+     *
+     * Every other case is honestly inert. Files/Tools/Skills/Settings/Help
+     * have NO live surface on this path at all (they are `Tui\Components\*`
+     * stubs keyed on `App`), and Chat/Input have no separate focus to move —
+     * every keystroke already goes to the input box. Nothing marks a zone
+     * for those panes, so this arm is only reached by a stale zone from a
+     * previous frame; answering it with an invented state change would be
+     * worse than answering it with nothing.
+     *
+     * @param string $name A {@see Pane} case value, as parsed off the zone id.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function selectPane(string $name): array
+    {
+        return match (Pane::tryFrom($name)) {
+            Pane::Menu => $this->palette !== null
+                ? [$this, null]
+                : [$this->mutate(['palette' => PaletteState::root()]), null],
+            Pane::Agents => $this->handleAgentsCommand('/agents'),
+            default => [$this, null],
+        };
+    }
+
+    /**
+     * Runtime options `bin/sugarcrush` starts the chat Program with. Exists
+     * so the mouse-mode decision above is made once, next to the state it
+     * governs, instead of being duplicated in the entrypoint script.
+     */
+    public static function programOptions(): ProgramOptions
+    {
+        return new ProgramOptions(useAltScreen: true, mouseMode: self::mouseMode());
+    }
+
+    /**
+     * Treats an unset, empty, or literal `0` value as "not set" so
+     * `SUGARCRUSH_DISABLE_MOUSE=0` reads as "leave the mouse on" rather than
+     * as any-value-means-true.
+     */
+    private static function envFlag(string $name): bool
+    {
+        $value = getenv($name);
+
+        return $value !== false && $value !== '' && $value !== '0';
+    }
+
     public function backend(): Backend
     {
         return $this->backend;
@@ -1628,6 +2151,105 @@ final class Chat implements Model
     }
 
     /**
+     * Tool-call ids whose output the user has expanded (crush_feat.md §1 E5).
+     * {@see Renderer::render()} reads this to decide which tool bodies to
+     * paint in full; ids absent from the map are collapsed.
+     *
+     * @return array<string, bool>
+     */
+    public function expanded(): array
+    {
+        return $this->expanded;
+    }
+
+    /**
+     * True when $id's tool output is currently expanded.
+     */
+    public function isToolOutputExpanded(string $id): bool
+    {
+        return ($this->expanded[$id] ?? false) === true;
+    }
+
+    /**
+     * Flip one tool call's collapsed/expanded state. Collapsing REMOVES the
+     * key rather than storing false - see the constructor's `$expanded`
+     * docblock for why the map only ever holds what the user opened.
+     *
+     * @return self A new Chat with $id's expansion state flipped
+     */
+    public function toggleToolOutput(string $id): self
+    {
+        $expanded = $this->expanded;
+        if (($expanded[$id] ?? false) === true) {
+            unset($expanded[$id]);
+        } else {
+            $expanded[$id] = true;
+        }
+
+        return $this->mutate(['expanded' => $expanded]);
+    }
+
+    /**
+     * Ctrl+O's target: every tool-call id carried by the most recent
+     * tool-result message in history, or [] when the conversation has none.
+     *
+     * Chat has no cursor or selection model over history - the transcript is
+     * a flat rendered string, not a navigable list - so "the last tool call"
+     * is the only unambiguous referent a single keystroke can name, and it is
+     * also the one a user pressing Ctrl+O right after a call almost always
+     * means. A per-result selector belongs with a real history cursor, which
+     * this item does not introduce.
+     *
+     * @return list<string>
+     */
+    private function latestToolResultIds(): array
+    {
+        foreach (array_reverse($this->history) as $msg) {
+            if ($msg->toolResults === []) {
+                continue;
+            }
+
+            $ids = [];
+            foreach ($msg->toolResults as $result) {
+                $ids[] = $result->id ?? $result->name;
+            }
+
+            return $ids;
+        }
+
+        return [];
+    }
+
+    /**
+     * Toggle every id {@see latestToolResultIds()} returns as one unit, so a
+     * batch of parallel tool calls opens and closes together instead of
+     * needing one keypress each. The batch follows the FIRST id's current
+     * state so a half-expanded batch converges rather than inverting into a
+     * different half-expanded batch.
+     *
+     * @return array{0: self, 1: null}
+     */
+    private function toggleLatestToolOutput(): array
+    {
+        $ids = $this->latestToolResultIds();
+        if ($ids === []) {
+            return [$this, null];
+        }
+
+        $expand = !$this->isToolOutputExpanded($ids[0]);
+        $expanded = $this->expanded;
+        foreach ($ids as $id) {
+            if ($expand) {
+                $expanded[$id] = true;
+            } else {
+                unset($expanded[$id]);
+            }
+        }
+
+        return [$this->mutate(['expanded' => $expanded]), null];
+    }
+
+    /**
      * Timestamp of the last real user prompt submitted through submit(),
      * or null if none has been recorded yet on this instance.
      */
@@ -1689,6 +2311,9 @@ final class Chat implements Model
             'permissionDeferred' => $this->permissionDeferred,
             'pendingPermissionJobs' => $this->pendingPermissionJobs,
             'permissionGrants' => $this->permissionGrants,
+            'expanded' => $this->expanded,
+            'paletteMru' => $this->paletteMru,
+            'scrollOffset' => $this->scrollOffset,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -3105,6 +3730,27 @@ final class Chat implements Model
      */
     public function paletteMatches(): array
     {
+        return array_map(
+            static fn(MatchResult $result): string => $result->haystack,
+            $this->paletteMatchResults(),
+        );
+    }
+
+    /**
+     * {@see paletteMatches()}'s rows with their matched-character indices
+     * kept, in the SAME order - the label list is just this list's haystacks
+     * (crush_feat.md §4 E3: the indices used to be discarded here, so
+     * {@see Renderer::renderPalette()} had nothing to highlight with and
+     * could only bold whole rows).
+     *
+     * An empty query yields index-less results (a {@see Highlighter} no-ops
+     * on those), MRU-biased and category-grouped per §4 E6/E7; a non-empty
+     * query yields the matcher's own relevance order, ungrouped.
+     *
+     * @return list<MatchResult>
+     */
+    public function paletteMatchResults(): array
+    {
         if ($this->palette === null) {
             return [];
         }
@@ -3112,12 +3758,83 @@ final class Chat implements Model
         $items = $this->paletteItemLabels();
         $query = $this->palette->query;
         if ($query === '' || $items === []) {
-            return $items;
+            if ($this->palette->mode !== 'providers' && $this->palette->mode !== 'themes') {
+                $items = $this->rankRootPaletteLabels($items);
+            }
+
+            return array_map(
+                static fn(string $label): MatchResult => new MatchResult($query, $label, 0, []),
+                $items,
+            );
         }
 
-        $results = (new SmithWatermanMatcher())->matchAll($query, $items);
+        return (new SmithWatermanMatcher())->matchAll($query, $items);
+    }
 
-        return array_map(static fn($result) => $result->haystack, $results);
+    /**
+     * The grouping label ("Session", "Model", …) the palette renders above a
+     * root row, or null for a row that has none (provider/theme names).
+     */
+    public function paletteCategory(string $label): ?string
+    {
+        return PaletteAction::byLabel($label)?->category();
+    }
+
+    /**
+     * Palette rows the user has run, most recent first (crush_feat.md §4 E7).
+     *
+     * @return list<string>
+     */
+    public function paletteMru(): array
+    {
+        return $this->paletteMru;
+    }
+
+    /**
+     * Order the root palette's full (unfiltered) row list: recently-used rows
+     * first, then declared registry order, and finally bucketed by category
+     * preserving that first-seen order so each category stays contiguous and
+     * {@see Renderer::renderPalette()} can emit one header per bucket without
+     * re-sorting - the renderer must not reorder rows, or `selectedIndex`
+     * would stop addressing the row the user sees highlighted.
+     *
+     * @param list<string> $labels
+     * @return list<string>
+     */
+    private function rankRootPaletteLabels(array $labels): array
+    {
+        $recency = array_flip($this->paletteMru);
+
+        // usort() is stable in PHP 8, so rows absent from the MRU keep their
+        // declared registry order behind the recent ones.
+        usort(
+            $labels,
+            static fn(string $a, string $b): int
+                => ($recency[$a] ?? PHP_INT_MAX) <=> ($recency[$b] ?? PHP_INT_MAX),
+        );
+
+        $buckets = [];
+        foreach ($labels as $label) {
+            $buckets[$this->paletteCategory($label) ?? ''][] = $label;
+        }
+
+        return $buckets === [] ? [] : array_merge(...array_values($buckets));
+    }
+
+    /**
+     * Record a palette row as just-used, moving it to the front of the MRU
+     * list (and dropping any older entry for the same row) so the list stays
+     * a recency order rather than a use-count histogram.
+     */
+    private function rememberPaletteUse(string $label): self
+    {
+        $mru = array_values(array_filter(
+            $this->paletteMru,
+            static fn(string $existing): bool => $existing !== $label,
+        ));
+        array_unshift($mru, $label);
+
+        return $this->mutate(['paletteMru' => array_slice($mru, 0, self::PALETTE_MRU_LIMIT)]);
     }
 
     /**
@@ -3195,7 +3912,11 @@ final class Chat implements Model
         return match ($this->palette->mode) {
             'providers' => $this->selectPaletteProvider($label),
             'themes' => $this->selectPaletteTheme($label),
-            default => $this->runRootPaletteAction($label),
+            // Recorded BEFORE dispatch (crush_feat.md §4 E7): several root
+            // actions return a Cmd/second-level palette rather than a plain
+            // copy of $this, so the MRU has to be folded into the instance
+            // the handler runs against, not bolted onto its result.
+            default => $this->rememberPaletteUse($label)->runRootPaletteAction($label),
         };
     }
 

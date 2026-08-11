@@ -32,6 +32,7 @@ use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\ToolResult;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Crush\Backend;
@@ -198,6 +199,85 @@ final class ChatTest extends TestCase
         $chat = new Chat(inputBuf: 'hello there world');
         [$next] = $chat->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
         $this->assertSame('hello there ', $next->inputBuf);
+    }
+
+    /**
+     * crush_feat.md §1 E5: tool output starts collapsed and Ctrl+O is the
+     * only way to open it, so the keystroke must NOT fall through to the
+     * generic Char arm and type a literal "o" into the input buffer.
+     */
+    public function testCtrlOTogglesTheLatestToolCallOutput(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        ]);
+        $chat = new Chat(history: [$toolMsg]);
+
+        $this->assertFalse($chat->isToolOutputExpanded('call_1'));
+
+        [$expanded, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertTrue($expanded->isToolOutputExpanded('call_1'));
+        $this->assertSame('', $expanded->inputBuf);
+        // Immutability: the original Chat is untouched.
+        $this->assertSame([], $chat->expanded());
+
+        [$collapsed] = $expanded->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertSame([], $collapsed->expanded());
+    }
+
+    /**
+     * A batch of parallel tool calls opens and closes as one unit - see
+     * Chat::toggleLatestToolOutput()'s docblock.
+     */
+    public function testCtrlOTogglesEveryResultInTheLatestToolBatch(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            ToolResult::ok('grep', 'a', 'call_1'),
+            ToolResult::ok('bash', 'b', 'call_2'),
+        ]);
+        $chat = new Chat(history: [Message::user('go'), $toolMsg]);
+
+        [$expanded] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertSame(['call_1' => true, 'call_2' => true], $expanded->expanded());
+    }
+
+    public function testCtrlOIsANoOpWhenNoToolCallHasRunYet(): void
+    {
+        $chat = new Chat(history: [Message::user('hi')]);
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame([], $next->expanded());
+        $this->assertSame('', $next->inputBuf);
+    }
+
+    public function testToggleToolOutputReturnsANewChatAndFlipsBothWays(): void
+    {
+        $chat = new Chat();
+
+        $expanded = $chat->toggleToolOutput('call_9');
+
+        $this->assertNotSame($chat, $expanded);
+        $this->assertSame(['call_9' => true], $expanded->expanded());
+        $this->assertTrue($expanded->isToolOutputExpanded('call_9'));
+        $this->assertSame([], $expanded->toggleToolOutput('call_9')->expanded());
+    }
+
+    /**
+     * The expansion map must survive every other with*()/mutate() call -
+     * a field missing from mutate()'s constructorProps silently resets on
+     * the next unrelated state change.
+     */
+    public function testExpandedMapSurvivesUnrelatedMutations(): void
+    {
+        $chat = (new Chat())->toggleToolOutput('call_1')->withStreaming(true)->withThemeName('light');
+
+        $this->assertSame(['call_1' => true], $chat->expanded());
     }
 
     public function testAltBackspaceDeletesLastWordFromInput(): void
@@ -2431,6 +2511,152 @@ final class ChatTest extends TestCase
 
         $this->assertNull($chat->hooks());
         $this->assertSame('total 0', $final->history[1]->content);
+    }
+
+    // =========================================================================
+    // crush_feat.md §4 E3/E6/E7: match indices, category grouping, MRU bias
+    // =========================================================================
+
+    /** Open palette, then type $query into it. */
+    private function paletteWithQuery(string $query): Chat
+    {
+        [$current] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        foreach (str_split($query) as $ch) {
+            [$current] = $current->update($ch === ' '
+                ? new KeyMsg(KeyType::Space, ' ')
+                : new KeyMsg(KeyType::Char, $ch));
+        }
+
+        return $current;
+    }
+
+    /**
+     * §4 E3: paletteMatches() used to map every MatchResult down to its
+     * haystack, throwing the matched indices away - Highlighter had nothing
+     * to work with. The sibling accessor keeps them.
+     */
+    public function testPaletteMatchResultsKeepMatchedIndicesForHighlighting(): void
+    {
+        $chat = $this->paletteWithQuery('them');
+
+        $results = $chat->paletteMatchResults();
+        $this->assertSame('Switch theme', $results[0]->haystack);
+        $this->assertNotSame([], $results[0]->matchedIndices);
+        // Every typed character landed, and on the "theme" run specifically.
+        $this->assertCount(4, $results[0]->matchedIndices);
+        $this->assertSame('t', mb_substr('Switch theme', $results[0]->matchedIndices[0], 1));
+    }
+
+    /** The label list stays exactly the haystacks of the result list. */
+    public function testPaletteMatchesMirrorsPaletteMatchResults(): void
+    {
+        $chat = $this->paletteWithQuery('s');
+
+        $this->assertSame(
+            array_map(static fn($r) => $r->haystack, $chat->paletteMatchResults()),
+            $chat->paletteMatches(),
+        );
+    }
+
+    /** An empty query yields index-less results, so highlighting no-ops. */
+    public function testEmptyQueryPaletteResultsCarryNoMatchedIndices(): void
+    {
+        [$opened] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        foreach ($opened->paletteMatchResults() as $result) {
+            $this->assertSame([], $result->matchedIndices);
+        }
+    }
+
+    /**
+     * §4 E6: every category occupies ONE contiguous run of rows, which is
+     * what lets the renderer emit a single header per bucket without
+     * reordering rows out from under `selectedIndex`.
+     */
+    public function testEmptyQueryPaletteGroupsRowsIntoContiguousCategories(): void
+    {
+        [$opened] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $seen = [];
+        $previous = null;
+        foreach ($opened->paletteMatches() as $label) {
+            $category = $opened->paletteCategory($label);
+            if ($category !== $previous) {
+                $this->assertNotContains($category, $seen, "category {$category} is split across the list");
+                $seen[] = $category;
+                $previous = $category;
+            }
+        }
+
+        $this->assertContains('Session', $seen);
+        $this->assertContains('App', $seen);
+    }
+
+    /** Second-level lists (theme/provider names) have no category to group by. */
+    public function testThemeRowsHaveNoPaletteCategory(): void
+    {
+        $chat = new Chat();
+        $this->assertNull($chat->paletteCategory('dracula'));
+    }
+
+    /**
+     * §4 E7: running a palette row records it, and it floats to the top of
+     * the next empty-query list.
+     */
+    public function testRunningAPaletteActionBiasesTheNextEmptyQueryList(): void
+    {
+        [$opened] = (new Chat())->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertSame([], $opened->paletteMru());
+        $this->assertNotSame('Exit', $opened->paletteMatches()[0]);
+
+        $exitIndex = array_search('Exit', $opened->paletteMatches(), true);
+        $current = $opened;
+        for ($i = 0; $i < $exitIndex; $i++) {
+            [$current] = $current->update(new KeyMsg(KeyType::Down, ''));
+        }
+        [$ran] = $current->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(['Exit'], $ran->paletteMru());
+
+        [$reopened] = $ran->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertSame('Exit', $reopened->paletteMatches()[0]);
+    }
+
+    /** Re-running a row moves it to the front instead of duplicating it. */
+    public function testPaletteMruDeduplicatesAndCapsItsLength(): void
+    {
+        $seeded = new Chat(
+            palette: \SugarCraft\Crush\Palette\PaletteState::root(),
+            paletteMru: ['Exit', 'a', 'b', 'c', 'd', 'e', 'f', 'g'],
+        );
+
+        [$ran] = $seeded->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('Exit', $ran->paletteMru()[0]);
+        $this->assertCount(8, $ran->paletteMru());
+        $this->assertSame(['Exit'], array_values(array_filter(
+            $ran->paletteMru(),
+            static fn(string $label): bool => $label === 'Exit',
+        )));
+    }
+
+    /**
+     * A typed query stays purely relevance-ranked - history must not
+     * outrank the matcher's own score.
+     */
+    public function testMruDoesNotReorderAQueriedPalette(): void
+    {
+        $seeded = new Chat(
+            palette: \SugarCraft\Crush\Palette\PaletteState::root(),
+            paletteMru: ['Exit'],
+        );
+
+        [$queried] = $seeded->update(new KeyMsg(KeyType::Char, 't'));
+        foreach (str_split('heme') as $ch) {
+            [$queried] = $queried->update(new KeyMsg(KeyType::Char, $ch));
+        }
+
+        $this->assertSame('Switch theme', $queried->paletteMatches()[0]);
     }
 
     // ---------------------------------------------------------------

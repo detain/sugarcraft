@@ -311,7 +311,104 @@ final class RendererTest extends TestCase
         $out = Renderer::render($this->chat(history: [Message::user('what is 6*7?'), $toolMsg]));
 
         $this->assertStringContainsString('tool: calculator', $out);
-        $this->assertStringContainsString('42', $out);
+        // §1 E5: a SUCCESSFUL body is hidden behind the affordance by
+        // default; the marker still has to be distinct from assistant text.
+        $this->assertStringContainsString('1 line hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * §1 E5 regression: before hide-on-success, every tool body was dumped
+     * inline forever - a 500-line Grep result pushed the conversation out of
+     * the viewport. Collapsed, only the affordance is printed.
+     */
+    public function testSuccessfulToolOutputIsHiddenByDefault(): void
+    {
+        $body = implode("\n", array_fill(0, 500, 'match in some/file.php'));
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Crush\ToolResult::ok('grep', $body, 'call_1'),
+        ]);
+
+        $out = Renderer::render($this->chat(history: [$toolMsg]));
+
+        $this->assertStringNotContainsString('match in some/file.php', $out);
+        $this->assertStringContainsString('500 lines hidden (ctrl+o)', $out);
+    }
+
+    public function testExpandedToolCallIdShowsTheFullSuccessBody(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Crush\ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        ]);
+
+        $chat = $this->chat(history: [$toolMsg])->toggleToolOutput('call_1');
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('alpha', $out);
+        $this->assertStringContainsString('beta', $out);
+        $this->assertStringNotContainsString('hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * An error body is the output the user actually wants, so it is never
+     * hidden - only clipped, with a trailer naming the escape hatch.
+     */
+    public function testCollapsedErrorOutputIsClippedNotHidden(): void
+    {
+        $body = implode("\n", array_map(static fn (int $i): string => "stderr line {$i}", range(1, 40)));
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Crush\ToolResult::error('bash', $body, 'call_1'),
+        ]);
+
+        $out = Renderer::render($this->chat(history: [$toolMsg]));
+
+        $this->assertStringContainsString('stderr line 1', $out);
+        $this->assertStringNotContainsString('stderr line 40', $out);
+        $this->assertStringContainsString('output truncated (ctrl+o to expand)', $out);
+    }
+
+    public function testCollapseToolOutputKeepsShortOutputVerbatim(): void
+    {
+        $this->assertSame(
+            ['output' => "a\nb", 'overflow' => false],
+            Renderer::collapseToolOutput("a\nb", 10, 100),
+        );
+    }
+
+    public function testCollapseToolOutputClipsOnTheLineBudget(): void
+    {
+        $collapsed = Renderer::collapseToolOutput("1\n2\n3\n4", 2, 1000);
+
+        $this->assertSame("1\n2", $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    /**
+     * One enormous line is still "1 line" - the character budget is what
+     * catches it, which is why both limits exist.
+     */
+    public function testCollapseToolOutputClipsOnTheCharBudget(): void
+    {
+        $collapsed = Renderer::collapseToolOutput(str_repeat('x', 5000), 10, 100);
+
+        $this->assertSame(str_repeat('x', 100), $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputCountsMultibyteCharactersNotBytes(): void
+    {
+        $collapsed = Renderer::collapseToolOutput(str_repeat('é', 10), 10, 4);
+
+        $this->assertSame('éééé', $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputHandlesEmptyAndDegenerateLimits(): void
+    {
+        $this->assertSame(['output' => '', 'overflow' => false], Renderer::collapseToolOutput('', 10, 100));
+
+        $collapsed = Renderer::collapseToolOutput("a\nb", 0, 0);
+        $this->assertSame('a', $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
     }
 
     public function testFailedToolResultShowsErrorMarker(): void
@@ -655,6 +752,134 @@ final class RendererTest extends TestCase
         // a rendered diff adds a second one.
         $this->assertSame(1, substr_count($out, '┌'));
         $this->assertSame(2, substr_count($withDiff, '┌'));
+    }
+
+    // =========================================================================
+    // crush_feat.md §4 E3/E6/E7: palette highlighting, grouping, MRU order
+    // =========================================================================
+
+    /**
+     * A visible line with the surrounding box-drawing frame and padding
+     * removed. Uses a /u regex rather than trim(): trim()'s character list
+     * is byte-based, so "│" and "▸" share a leading 0xE2 byte and trimming
+     * the former would eat the latter's first byte.
+     */
+    private static function stripBox(string $line): string
+    {
+        return (string) preg_replace('/^[\s│╭╮╰╯─]+|[\s│╭╮╰╯─]+$/u', '', $line);
+    }
+
+    /** An open palette, optionally with $query already typed into it. */
+    private function openPalette(string $query = ''): Chat
+    {
+        [$current] = $this->chat()->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        foreach (str_split($query) as $ch) {
+            [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
+        }
+
+        return $current;
+    }
+
+    /**
+     * §4 E3: the matched run carries its own SGR (bold + underline) inside
+     * the row, and the row still reads as plain text once ANSI is stripped.
+     */
+    public function testPaletteHighlightsTheMatchedRunOfATypedQuery(): void
+    {
+        $out = Renderer::render($this->openPalette('them'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains(preg_replace('/\x1b\[[0-9;]*m/', '', $line), 'Switch theme')) {
+                $row = $line;
+            }
+        }
+
+        $this->assertNotSame('', $row, 'the matching palette row was not rendered');
+        // "them" of "Switch theme" is wrapped in its own styled run; the "e"
+        // after it is NOT part of that run.
+        $this->assertMatchesRegularExpression('/\x1b\[[0-9;]*4[;m][^m]*m?them/', $row);
+        $this->assertStringContainsString('them', $row);
+        $this->assertStringContainsString(
+            'Switch theme',
+            preg_replace('/\x1b\[[0-9;]*m/', '', $row),
+        );
+    }
+
+    /**
+     * A highlighted run ends in a full SGR reset, so the row style has to be
+     * re-opened behind it - otherwise everything after the match renders in
+     * the terminal's default colour instead of the row's.
+     */
+    public function testPaletteReopensTheRowStyleAfterAHighlightedRun(): void
+    {
+        $out = Renderer::render($this->openPalette('them'));
+
+        $row = '';
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains(preg_replace('/\x1b\[[0-9;]*m/', '', $line), 'Switch theme')) {
+                $row = $line;
+            }
+        }
+
+        // …them<reset><row-style>e…  — a reset immediately followed by an SGR
+        // colour re-open, not by bare text.
+        $this->assertMatchesRegularExpression('/them\x1b\[0m(\x1b\[[0-9;]*m)+e/', $row);
+    }
+
+    /** §4 E6: the empty-query palette carries a header per category. */
+    public function testEmptyQueryPaletteRendersCategoryHeaders(): void
+    {
+        $lines = $this->visibleLines(Renderer::render($this->openPalette()));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertContains('Session', $trimmed);
+        $this->assertContains('Appearance', $trimmed);
+        // A header is a bare category name; the rows under it keep their
+        // "▸ "/"  " markers, so the label and its header never collide.
+        $this->assertContains('▸ New session', $trimmed);
+    }
+
+    /** A typed query is a flat relevance list — no headers to break the ranking. */
+    public function testQueriedPaletteOmitsCategoryHeaders(): void
+    {
+        $lines = $this->visibleLines(Renderer::render($this->openPalette('them')));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertNotContains('Appearance', $trimmed);
+        $this->assertContains('▸ Switch theme', $trimmed);
+    }
+
+    /** Theme/provider lists have no categories, so they render ungrouped. */
+    public function testThemeListPaletteRendersWithoutHeaders(): void
+    {
+        $chat = new Chat(palette: new \SugarCraft\Crush\Palette\PaletteState('themes', '', 0));
+
+        $lines = $this->visibleLines(Renderer::render($chat));
+        $trimmed = array_map(self::stripBox(...), $lines);
+
+        $this->assertContains('▸ dark', $trimmed);
+        $this->assertContains('dracula', $trimmed);
+        $this->assertNotContains('Appearance', $trimmed);
+    }
+
+    /** §4 E7: a recently-run row renders at the top of the reopened palette. */
+    public function testRecentlyUsedRowRendersFirst(): void
+    {
+        $chat = new Chat(
+            palette: \SugarCraft\Crush\Palette\PaletteState::root(),
+            paletteMru: ['Switch theme'],
+        );
+
+        $rows = [];
+        foreach ($this->visibleLines(Renderer::render($chat)) as $line) {
+            $trimmed = self::stripBox($line);
+            if (str_starts_with($trimmed, '▸ ') || in_array($trimmed, ['Switch session', 'Exit'], true)) {
+                $rows[] = $trimmed;
+            }
+        }
+
+        $this->assertSame('▸ Switch theme', $rows[0]);
     }
 
     // =========================================================================

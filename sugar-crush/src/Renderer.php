@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
@@ -11,6 +12,10 @@ use SugarCraft\Core\View;
 use SugarCraft\Mosaic\ImageLayer;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Sentinel;
+use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -20,6 +25,7 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
+use SugarCraft\Crush\Tui\Pane;
 
 /**
  * Pure view function for {@see Chat} — the renderer actually reached by a
@@ -239,6 +245,283 @@ final class Renderer
     ];
 
     /**
+     * Rows/characters {@see collapseToolOutput()} keeps of a tool body before
+     * it clips and prints an overflow trailer (crush_feat.md §1 E5). Both
+     * limits matter independently: a `Grep` result can be 400 short lines
+     * (blows the line budget) and a `Bash` result can be one 200KB line
+     * (blows the character budget while still being "1 line").
+     */
+    private const TOOL_OUTPUT_MAX_LINES = 10;
+
+    private const TOOL_OUTPUT_MAX_CHARS = 2000;
+
+    /**
+     * Zone-id prefix every session tab carries (crush_feat.md §8 E2). Public
+     * because {@see Chat::update()} parses it back off a click's zone id —
+     * one literal, defined next to the code that writes it, rather than the
+     * same string spelled out independently on both sides of the hit test.
+     */
+    public const SESSION_TAB_ZONE_PREFIX = 'tab:';
+
+    /**
+     * Zone-id prefix every clickable pane region carries (crush_feat.md §8
+     * E3). The suffix is always a {@see Pane} case's own `value`, so
+     * {@see Chat::update()} can turn a click straight back into the enum
+     * case rather than matching hand-spelled strings on both sides.
+     */
+    public const PANE_ZONE_PREFIX = 'pane:';
+
+    /**
+     * Zone-id prefix every clickable command-palette / picker row carries
+     * (crush_feat.md §8 E6, which names `picker-item:{$index}` literally).
+     * The suffix is the row's index into {@see Chat::paletteMatches()}, i.e.
+     * exactly what {@see \SugarCraft\Crush\Palette\PaletteState::$selectedIndex}
+     * holds, so a click can move the selection and then run the SAME confirm
+     * path Enter runs instead of a click-only duplicate of it.
+     */
+    public const PALETTE_ITEM_ZONE_PREFIX = 'picker-item:';
+
+    /**
+     * Zone-id prefix every clickable tool-call row carries (crush_feat.md §8
+     * E5). The suffix is the SAME key {@see Chat::expanded()} is keyed by
+     * (`ToolResult::$id`, falling back to its name), so a click can be handed
+     * straight to {@see Chat::toggleToolOutput()} — §8 E5's note is explicit
+     * that this reuses §1 E5's expanded map rather than introducing a second
+     * expansion mechanism.
+     */
+    public const TOOL_CALL_ZONE_PREFIX = 'toolcall:';
+
+    /**
+     * The zone-id charset {@see Mark::wrap()} accepts, duplicated here
+     * because Mark's own copy is private and it THROWS on a violation.
+     * Session ids arrive from disk (`SessionStore::listSessions()`), so an id
+     * carrying anything outside this set would take the whole TUI down from
+     * inside `view()`; {@see markSessionTab()} checks first and renders that
+     * tab unmarked (still visible, still keyboard-switchable) instead.
+     */
+    private const ZONE_ID_CHARSET = '/\A[A-Za-z0-9._:-]+\z/';
+
+    /**
+     * Zone registry the root scan pass writes into, shared across renders
+     * because a mouse event arrives *between* frames: the click handler has
+     * only the previously-painted frame's boxes to hit-test against.
+     * Mirrors bubblezone's single global manager.
+     */
+    private static ?Scanner $scanner = null;
+
+    /**
+     * Zone registry produced by the most recent {@see scanRoot()} pass.
+     * Hit-tested by {@see Chat::zoneAt()}.
+     */
+    public static function scanner(): Scanner
+    {
+        return self::$scanner ??= Scanner::new();
+    }
+
+    /**
+     * Tool-call rows the current frame wants clickable, collected while the
+     * transcript is built and consumed once the shell around it is drawn.
+     *
+     * This detour exists because the markers are NOT free to the layout.
+     * `Style::render()` measures every line to size the shell's border and
+     * pad the short ones, and a sentinel pair is ~29 codepoints of
+     * Private-Use text it happily counts as content: marking the label
+     * in-place (the way {@see markSessionTab()} can, being outside any box)
+     * widens the whole box by the marker length and leaves the marked row's
+     * right border ~29 columns short of every other row. Marking the row
+     * AFTER it has been measured and padded costs nothing and is what
+     * bubblezone recommends for width-sensitive containers.
+     *
+     * @var list<array{id: string, label: string}> in document order
+     */
+    private static array $toolCallZones = [];
+
+    /**
+     * Palette rows the current frame wants clickable, as the FULLY rendered
+     * box lines they became (border + padding + row), collected by
+     * {@see renderPalette()} and consumed by {@see markPaletteItems()} once
+     * the palette has been composited over the frame.
+     *
+     * The detour exists because the palette is an OVERLAY, and {@see Veil}
+     * measures it: `composite()` takes the widest foreground line as the
+     * box's width and centres by it, then clips each line to the room left
+     * on its row. A sentinel pair measures ~29 columns of Private-Use text,
+     * so a row marked before compositing makes Veil believe the box is 29
+     * columns wider than it is — the whole palette shifts ~15 columns left
+     * and every row is clipped short. Marking after the composite costs
+     * nothing and leaves the geometry Veil computed untouched.
+     *
+     * @var list<array{id: string, line: string}> in row order
+     */
+    private static array $paletteItemZones = [];
+
+    /**
+     * How many content lines the most recent frame had to drop off the top
+     * to fit the terminal — i.e. the largest {@see Chat::scrollOffset()}
+     * that still shows a full screen of transcript.
+     *
+     * Static for the same reason {@see $scanner} is: a wheel event arrives
+     * *between* frames, so the only content height it can be clamped
+     * against is the one already painted. {@see Chat} is immutable and
+     * would discard a per-instance copy of it anyway.
+     */
+    private static int $maxScrollOffset = 0;
+
+    /**
+     * Upper clamp for {@see Chat::scrollOffset()}, measured on the last
+     * rendered frame. 0 when the transcript fits the window (nothing to
+     * scroll) or when nothing has been rendered yet.
+     */
+    public static function maxScrollOffset(): int
+    {
+        return self::$maxScrollOffset;
+    }
+
+    /**
+     * The zone-scan pass, run exactly ONCE per frame and only at the root.
+     *
+     * candy-mouse (like bubblezone) records absolute bounding boxes as it
+     * walks the string, so scanning a sub-widget's output would register
+     * boxes relative to that widget's own origin rather than the terminal's
+     * — every nested scan would have to be thrown away and redone here
+     * anyway. Scanning after the last compositing step (including the
+     * palette overlay) is therefore both the cheapest and the only correct
+     * placement.
+     *
+     * The scan is skipped outright when `SUGARCRUSH_DISABLE_MOUSE` is set —
+     * with tracking off no mouse coordinates ever arrive, so keeping a stale
+     * zone registry around would be pure waste. Sentinel *stripping* is
+     * unconditional: the markers are Private-Use codepoints a terminal would
+     * paint as a replacement glyph, and candy-core's line diff counts them
+     * as content.
+     *
+     * Marker-free frames take a `str_contains()` fast path (~0.0004ms) and
+     * skip both the parse and the strip. That is not a micro-optimisation:
+     * {@see \SugarCraft\Mouse\Scan::parse()} walks the frame cluster by
+     * cluster through `grapheme_extract()`, which measures ~24ms on a
+     * full-screen frame — roughly doubling the cost of a keystroke repaint.
+     * {@see markSessionTab()} is currently the only caller of
+     * {@see \SugarCraft\Mouse\Mark::zone()}, and it only fires when the
+     * session tab strip is drawn at all (≥2 sessions on disk), so a
+     * single-session run still takes this branch on every frame.
+     *
+     * The scan is also non-fatal. `Scan::parse()` throws on malformed markup
+     * (duplicate/unclosed ids), and this runs inside `Chat::view()`, where an
+     * escaping exception kills the whole TUI. Degrading to "no zones this
+     * frame" costs at most an unclickable frame; the alternative is a crash.
+     * Untrusted text is sentinel-stripped on the way in (see
+     * {@see untrusted()}), so a throw here means OUR markup is wrong, not
+     * that a model injected something.
+     *
+     * @param string $frame The fully-composited root frame.
+     * @param int    $width Viewport width; zone end columns clamp to it.
+     */
+    public static function scanRoot(string $frame, int $width): string
+    {
+        if (!str_contains($frame, Sentinel::OPEN) && !str_contains($frame, Sentinel::CLOSE)) {
+            self::scanner()->clear();
+
+            return $frame;
+        }
+
+        if (Chat::mouseMode() === MouseMode::Off) {
+            self::scanner()->clear();
+        } else {
+            try {
+                self::scanner()->scan(self::maskImageMarkers($frame), $width);
+            } catch (\Throwable) {
+                self::scanner()->clear();
+            }
+        }
+
+        return self::stripZoneMarkers($frame);
+    }
+
+    /**
+     * Blank every Private-Use cell that is NOT part of a well-formed zone
+     * sentinel, for the scan copy only.
+     *
+     * The image overlay and the zone marker landed on the same codepoints:
+     * `ImageOverlay::MARKER_BASE` is U+E000 and an image's marker cell is
+     * `MARKER_BASE + id`, so the first picture {@see renderToolImage()} places
+     * in a frame emits a byte-identical copy of {@see Sentinel::OPEN} and the
+     * second emits {@see Sentinel::CLOSE}. Handed to the scanner verbatim,
+     * those stray sentinels parse as zone markup: measured, one image marker
+     * sitting between two marked regions makes the scan drop every zone after
+     * it — session tabs, tool rows, and the status bar's `pane:menu` all stop
+     * responding to clicks the moment a screenshot is on screen.
+     *
+     * Only the string the scanner reads is masked; the frame that goes to the
+     * terminal keeps its real markers, because `Program` still has to resolve
+     * them into paints. A marker is a single width-1 cell and is replaced by a
+     * single space, so every zone's column arithmetic is unchanged — which is
+     * the whole reason this is a mask rather than a strip.
+     *
+     * Sentinel triples are matched first in the alternation so genuine markup
+     * survives; anything else in the PUA block (an image marker, or a Nerd
+     * Font glyph in model output) becomes a space. A frame carrying invalid
+     * UTF-8 makes the `/u` match fail, and the unmasked frame is scanned
+     * instead — the pre-existing behaviour, and the caller already treats a
+     * throw from the scan as "no zones this frame".
+     */
+    private static function maskImageMarkers(string $frame): string
+    {
+        $masked = preg_replace_callback(
+            '/(\x{E000}\/?[A-Za-z0-9._:-]*\x{E001})|[\x{E000}-\x{F8FF}]/u',
+            static fn(array $m): string => ($m[1] ?? '') !== '' ? $m[1] : ' ',
+            $frame,
+        );
+
+        return $masked ?? $frame;
+    }
+
+    /**
+     * {@see Sanitize::untrusted()} plus zone-sentinel removal, for every
+     * string that originated outside this process (model replies, tool
+     * output, pasted keystrokes).
+     *
+     * The sentinel strip is the security half. `Sanitize::untrusted()` only
+     * removes ANSI/C0/C1/DEL; `U+E000`/`U+E001` are well-formed 3-byte UTF-8
+     * Private-Use codepoints, so they survive it untouched and would reach
+     * {@see scanRoot()}'s parser verbatim. A model reply — or any tool output
+     * echoed into a message: a file read, a web fetch, a shell command run in
+     * a hostile repo — could then either crash the render (duplicate ids make
+     * `Scan::parse()` throw) or, worse, register attacker-chosen boxes in the
+     * hit-test registry {@see Chat::zoneAt()} reads, hijacking clicks meant
+     * for real UI. Stripping at the boundary keeps the invariant that only
+     * {@see \SugarCraft\Mouse\Mark}-emitted markers ever reach the scan.
+     */
+    private static function untrusted(string $text): string
+    {
+        return self::stripSentinels(Sanitize::untrusted($text));
+    }
+
+    /**
+     * Remove bare zone sentinels, for content that must NOT go through
+     * {@see untrusted()} — assistant Markdown, which CandyShine renders into
+     * legitimate SGR that `Sanitize::untrusted()` would strip back out.
+     */
+    private static function stripSentinels(string $text): string
+    {
+        return str_replace([Sentinel::OPEN, Sentinel::CLOSE], '', $text);
+    }
+
+    /**
+     * Remove every `U+E000 <id> U+E001` open/close sentinel pair emitted by
+     * {@see \SugarCraft\Mouse\Mark}. Matched byte-wise against Mark's own id
+     * charset (plus the closing `/`) so a frame carrying invalid UTF-8 can
+     * never make the pattern fail open and leak markers to the terminal.
+     */
+    private static function stripZoneMarkers(string $frame): string
+    {
+        return (string) preg_replace(
+            '/\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81/',
+            '',
+            $frame
+        );
+    }
+
+    /**
      * The frame's text bytes only, discarding any pixel-graphics image layer
      * {@see renderView()} collected.
      *
@@ -272,10 +555,17 @@ final class Renderer
     {
         $theme = $chat->theme();
         $images = new ImageLayer();
+        // Both per-frame registries are cleared before the transcript is walked:
+        // their entries are positional to the frame being built, so a leftover
+        // row from the previous frame would be marked at the wrong place (or
+        // registered twice, which makes the zone scan throw).
+        self::$toolCallZones = [];
+        self::$paletteItemZones = [];
         $body = self::renderHistory(
             $chat->history,
             $theme,
             max(20, $chat->cols() - self::SHELL_CHROME_COLS),
+            $chat->expanded(),
             $images,
             $chat->mosaic(),
             // Row budget for a single picture: anything taller is clipped off
@@ -297,6 +587,7 @@ final class Renderer
             ->borderForeground($theme->border)
             ->padding(1, 2)
             ->render($body);
+        $shell = self::markToolCalls($shell);
 
         $content = $shell . "\n" . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
 
@@ -334,11 +625,25 @@ final class Renderer
         // knows (and never learns about a live resize either), which
         // reintroduces the exact row-collision this clipping is meant to
         // prevent even after clipping was added.
+        //
+        // Which $available-line window of $content is shown is the one thing
+        // the tail clip above leaves to the user: $chat->scrollOffset() is a
+        // distance in lines from the BOTTOM (0 = pinned to the newest line,
+        // the historical behaviour), so scrolling back moves the window's
+        // start earlier by exactly that many lines (crush_feat.md §8 E4).
+        // It is re-clamped against THIS frame's overflow rather than trusted:
+        // the offset was clamped against the frame that was on screen when
+        // the wheel turned, and the transcript can have shrunk since (/clear,
+        // a session switch, a resize), which would otherwise slice past the
+        // start of the content and show a short frame.
         $rows = $chat->rows();
         $available = max(1, $rows - 1);
         $contentLines = explode("\n", $content);
-        if (count($contentLines) > $available) {
-            $contentLines = array_slice($contentLines, -$available);
+        $overflow = max(0, count($contentLines) - $available);
+        self::$maxScrollOffset = $overflow;
+        if ($overflow > 0) {
+            $offset = max(0, min($chat->scrollOffset(), $overflow));
+            $contentLines = array_slice($contentLines, $overflow - $offset, $available);
         } else {
             while (count($contentLines) < $available) {
                 $contentLines[] = '';
@@ -371,9 +676,13 @@ final class Renderer
                 Position::CENTER,
                 Position::CENTER,
             );
+            // No-op unless the overlay was the palette: only renderPalette()
+            // records item zones, and a blocking permission prompt takes the
+            // slot before it is ever called.
+            $frame = self::markPaletteItems($frame);
         }
 
-        return new View($frame, images: $images->placements());
+        return new View(self::scanRoot($frame, $chat->cols()), images: $images->placements());
     }
 
     /**
@@ -384,12 +693,79 @@ final class Renderer
      */
     private static function renderStatusBar(Chat $chat): string
     {
+        // The "Ctrl+P menu" hint is the live path's only affordance for
+        // Pane::Menu (the palette is what the disconnected App system's
+        // MenuBar pane would have been), so it is the region that carries
+        // the `pane:menu` click zone — crush_feat.md §8 E3's "click the
+        // pane's title region to jump straight to it". While a request is in
+        // flight the hint is not drawn at all, so no zone is marked either.
         $processing = $chat->inFlight
             ? '⠴ thinking… · Esc Esc to cancel'
-            : 'Enter to send · Ctrl+P menu · /exit or ^C to quit';
+            : 'Enter to send · ' . self::markPane(Pane::Menu, 'Ctrl+P menu') . ' · /exit or ^C to quit';
         $percent = (int) round($chat->contextUsagePercent() * 100);
+        $bar = "{$percent}% context · {$processing}";
 
-        return "{$percent}% context · {$processing}";
+        // The bar is the frame's LAST line, so it is the one line that must
+        // never wrap: a wrapped bar makes the frame rows+1 physical rows tall,
+        // which is precisely the absolute-cursorTo row collision render()'s
+        // tail clip exists to prevent (renderDiff() guards the same
+        // one-logical-line-per-row invariant with Width::truncate). The scroll
+        // readout is therefore fitted to whatever room the bar leaves instead
+        // of being prepended unconditionally — the bar is already ~62 columns,
+        // and any transcript tall enough to scroll produces 2-3 digit offsets,
+        // so the long form alone pushes it past 80 columns.
+        //
+        // "Fitted" means picking a narrower form or dropping it — never
+        // truncating the assembled string. $bar carries markPane(Pane::Menu)'s
+        // sentinel PAIR, and a cut between them leaves an unmatched open
+        // marker, which makes Scan::parse() throw and costs the WHOLE frame
+        // its click zones (same failure mode markPaneHeader() documents). The
+        // sentinels are invisible on screen, so they come off before measuring.
+        $room = $chat->cols() - Width::of(self::stripZoneMarkers($bar));
+        foreach (self::scrollIndicators($chat) as $indicator) {
+            if (Width::of($indicator) <= $room) {
+                return $indicator . $bar;
+            }
+        }
+
+        return $bar;
+    }
+
+    /**
+     * "How far back am I?" readout, shown only while the transcript is
+     * scrolled off the bottom (crush_feat.md §8 E4's scrollbar-during-scroll).
+     *
+     * A fixed-height frame has no spare column for crush's real scrollbar
+     * gutter, and the frame is clipped to the terminal anyway, so the
+     * position is reported as text on the status bar the frame already
+     * reserves. It hides on the state that matters — being back at the
+     * newest line — rather than on a timer: the offset persists until the
+     * user scrolls back down, so a timed hide would blank the only clue
+     * that the newest output is off-screen while it still is.
+     *
+     * Reads {@see maxScrollOffset()} rather than recomputing: this runs
+     * inside {@see render()}, AFTER the window slice recorded this frame's
+     * own overflow.
+     *
+     * Returns the candidate forms widest-first so {@see renderStatusBar()} can
+     * take the most informative one the row still has room for; an empty list
+     * means "not scrolled, draw nothing".
+     *
+     * @return list<string>
+     */
+    private static function scrollIndicators(Chat $chat): array
+    {
+        $max = self::maxScrollOffset();
+        $offset = max(0, min($chat->scrollOffset(), $max));
+        if ($offset === 0) {
+            return [];
+        }
+
+        // The compact fallback keeps the number that actually matters — how
+        // far back the window is — when the full "of how many" readout would
+        // not fit. Losing the readout entirely on a narrow terminal would
+        // leave no clue at all that the newest output is off-screen.
+        return ["↑ {$offset}/{$max} scrolled · ", "↑{$offset} "];
     }
 
     /**
@@ -416,7 +792,11 @@ final class Renderer
         $cols = $chat->cols();
         $width = max(40, $cols - 4);
 
-        return AgentStatusBar::render($states)
+        // The status bar's first row is this pane's header, so it carries the
+        // `pane:agents` click zone (crush_feat.md §8 E3) — clicking it runs
+        // the same /agents dispatch Ctrl+A does. See {@see markPaneHeader()}
+        // for why the whole block is not marked.
+        return self::markPaneHeader(Pane::Agents, AgentStatusBar::render($states))
             . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS);
     }
 
@@ -466,25 +846,189 @@ final class Renderer
             $id = (string) ($row['id'] ?? '');
             $rawName = (string) ($row['name'] ?? '');
             $name = $rawName !== '' ? $rawName : $id;
-            $labels[] = ($id !== '' && $id === $current) ? "[{$name}]" : " {$name} ";
+            $label = ($id !== '' && $id === $current) ? "[{$name}]" : " {$name} ";
+            $labels[] = self::markSessionTab($id, $label);
         }
 
         return implode('|', $labels);
     }
 
     /**
-     * @param list<Message> $history
-     * @param int           $width  usable columns inside the shell's border +
-     *                              padding, so nested boxes (tool diffs) can
-     *                              truncate rather than wrap into a second row
-     * @param ImageLayer    $images this frame's pixel-graphics layer, threaded
-     *                              down to {@see renderToolImage()}
-     * @param Mosaic|null   $mosaic the probe-once terminal image capability off
-     *                              {@see Chat::mosaic()}; null disables images
-     * @param int           $imageRows tallest cell box a single tool image may
-     *                              be encoded at, see {@see renderToolImage()}
+     * Wrap one session tab label in a `tab:<id>` click zone (crush_feat.md
+     * §8 E2), so the cells it lands on can be turned back into the session
+     * they belong to by {@see Chat::update()}.
+     *
+     * Only the label is marked, never the `|` separators: a click on the gap
+     * between two tabs is ambiguous, and leaving it unmarked makes it a no-op
+     * rather than a coin flip.
+     *
+     * Marking is skipped entirely when clicks are off. That is not just an
+     * optimisation of a dead feature: with no marker anywhere in the frame,
+     * {@see scanRoot()} keeps its `str_contains()` fast path and skips the
+     * ~24ms grapheme walk, so disabling the mouse also buys back the render
+     * cost of supporting it.
      */
-    private static function renderHistory(array $history, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    private static function markSessionTab(string $id, string $label): string
+    {
+        $zoneId = self::SESSION_TAB_ZONE_PREFIX . $id;
+
+        if (
+            $id === ''
+            || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $id) !== 1
+            || strlen($zoneId) > Mark::MAX_ID_BYTES
+        ) {
+            return $label;
+        }
+
+        return Mark::zone($zoneId, $label);
+    }
+
+    /**
+     * Wrap one on-screen region in a `pane:<name>` click zone (crush_feat.md
+     * §8 E3), so a click on it can be turned back into the {@see Pane} it
+     * belongs to by {@see Chat::update()}.
+     *
+     * No id validation here, unlike {@see markSessionTab()}: a pane id is a
+     * `Pane` case's own `value` (a lowercase ASCII literal in the enum), not
+     * a string that arrived from disk, so it cannot fall outside
+     * {@see Mark}'s charset and make `Mark::wrap()` throw inside `view()`.
+     *
+     * Marking is skipped when clicks are off, for the reason spelled out on
+     * {@see markSessionTab()}: with no marker anywhere in the frame
+     * {@see scanRoot()} keeps its `str_contains()` fast path.
+     *
+     * @param string $content MUST be a single line — see {@see markPaneHeader()}.
+     */
+    private static function markPane(Pane $pane, string $content): string
+    {
+        if ($content === '' || !Chat::mouseClicksEnabled()) {
+            return $content;
+        }
+
+        return Mark::zone(self::PANE_ZONE_PREFIX . $pane->value, $content);
+    }
+
+    /**
+     * Remember that $label's row should become a `toolcall:<key>` click zone
+     * (crush_feat.md §8 E5). Called as the transcript is built; the actual
+     * {@see Mark::zone()} happens later in {@see markToolCalls()}, for the
+     * layout reason documented on {@see $toolCallZones}.
+     *
+     * $key is validated the way {@see markSessionTab()} validates a session
+     * id, and for the same reason: it is `ToolResult::$id`, which is whatever
+     * the provider (ultimately the model) put in the tool call, so an id
+     * carrying anything outside {@see Mark}'s charset would throw from inside
+     * `view()` and take the TUI down. An unmarkable row simply stays
+     * unclickable — Ctrl+O still expands it.
+     *
+     * A key already recorded this frame is skipped rather than recorded
+     * twice: duplicate ids make {@see \SugarCraft\Mouse\Scan::parse()} throw,
+     * and {@see scanRoot()} answers a throw by clearing the registry, which
+     * would cost the whole frame its zones. Keys collide when a result has no
+     * id and shares its name with an earlier one — those two rows already
+     * share a single expanded-state entry, so only one of them could have
+     * shown an independent result anyway.
+     */
+    private static function recordToolCallZone(string $key, string $label): void
+    {
+        $zoneId = self::TOOL_CALL_ZONE_PREFIX . $key;
+
+        if (
+            $key === ''
+            || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $key) !== 1
+            || strlen($zoneId) > Mark::MAX_ID_BYTES
+        ) {
+            return;
+        }
+
+        foreach (self::$toolCallZones as $zone) {
+            if ($zone['id'] === $key) {
+                return;
+            }
+        }
+
+        self::$toolCallZones[] = ['id' => $key, 'label' => $label];
+    }
+
+    /**
+     * Turn each row recorded by {@see recordToolCallZone()} into a click zone
+     * on the already-bordered, already-padded shell (crush_feat.md §8 E5).
+     *
+     * Rows are located by their label text rather than by index because the
+     * shell adds its own border/padding rows and a tool block is preceded by
+     * a variable number of transcript lines. Each shell row is claimed at
+     * most once and searching resumes from the row after the last claim, so
+     * two results that render an identical label (same tool, same status, no
+     * ids) map to the two rows in the order they were emitted instead of both
+     * resolving to the first one.
+     *
+     * The WHOLE row is wrapped, borders included: the label already spans
+     * most of it, and a click landing on the padding beside a tool row has no
+     * other meaning, so a generous target beats an exact one here. It stays a
+     * single-line zone, which is what keeps it clip-safe — see
+     * {@see markPaneHeader()} for what a multi-row zone does when
+     * {@see render()} slices the frame to the terminal's height.
+     */
+    private static function markToolCalls(string $shell): string
+    {
+        if (self::$toolCallZones === []) {
+            return $shell;
+        }
+
+        $lines = explode("\n", $shell);
+        $from  = 0;
+        foreach (self::$toolCallZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $zone['label'])) {
+                    $lines[$i] = Mark::zone(self::TOOL_CALL_ZONE_PREFIX . $zone['id'], $lines[$i]);
+                    $from      = $i + 1;
+
+                    break;
+                }
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Mark only the FIRST line of a multi-line block as the pane's zone —
+     * its header row, which is the "title/border region" §8 E3 asks for.
+     *
+     * Deliberately not the whole block. {@see render()} clips `$content` to
+     * the terminal's height by dropping leading LINES, so a zone spanning
+     * several rows can lose its opening sentinel while the closing one
+     * survives. That unmatched close makes {@see \SugarCraft\Mouse\Scan::parse()}
+     * throw, and {@see scanRoot()} answers a throw by clearing the registry
+     * — costing the WHOLE frame its zones, session tabs included. A
+     * single-line zone is clipped whole or not at all, so it can never
+     * desync.
+     */
+    private static function markPaneHeader(Pane $pane, string $block): string
+    {
+        $lines = explode("\n", $block);
+        $lines[0] = self::markPane($pane, $lines[0]);
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param list<Message>       $history
+     * @param int                 $width     usable columns inside the shell's border +
+     *                                       padding, so nested boxes (tool diffs) can
+     *                                       truncate rather than wrap into a second row
+     * @param array<string, bool> $expanded  {@see Chat::expanded()} - tool-call ids the
+     *                                       user has expanded, keyed by id
+     * @param ImageLayer          $images    this frame's pixel-graphics layer, threaded
+     *                                       down to {@see renderToolImage()}
+     * @param Mosaic|null         $mosaic    the probe-once terminal image capability off
+     *                                       {@see Chat::mosaic()}; null disables images
+     * @param int                 $imageRows tallest cell box a single tool image may
+     *                                       be encoded at, see {@see renderToolImage()}
+     */
+    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
@@ -501,7 +1045,7 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme, $width, $images, $mosaic, $imageRows);
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows);
 
                 continue;
             }
@@ -511,9 +1055,9 @@ final class Renderer
                 continue;
             }
             $blocks[] = match ($msg->role) {
-                Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . Sanitize::untrusted($msg->content),
+                Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . self::untrusted($msg->content),
                 Role::Assistant => self::renderAssistantTurn($msg, $theme, $md),
-                Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . Sanitize::untrusted($msg->content)),
+                Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . self::untrusted($msg->content)),
             };
         }
         return implode("\n\n", $blocks);
@@ -530,7 +1074,10 @@ final class Renderer
     private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md): string
     {
         $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
-        $body = trim($md->render($msg->content));
+        // Sentinels stripped BEFORE CandyShine, not after: the rendered output
+        // is legitimate SGR that untrusted() would destroy, but the model's
+        // raw text can still smuggle U+E000/U+E001 into the frame.
+        $body = trim($md->render(self::stripSentinels($msg->content)));
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $label . "\n" . $body;
@@ -552,7 +1099,7 @@ final class Renderer
      */
     private static function renderReasoning(string $reasoning, Theme $theme): string
     {
-        $flat = trim(preg_replace('/\s+/', ' ', Sanitize::untrusted($reasoning)) ?? '');
+        $flat = trim(preg_replace('/\s+/', ' ', self::untrusted($reasoning)) ?? '');
         if (mb_strlen($flat) > 120) {
             $flat = mb_substr($flat, 0, 120) . '…';
         }
@@ -578,17 +1125,43 @@ final class Renderer
      * `/doctor` built-in is a real producer) additionally gets the picture
      * itself painted below the marker, via {@see renderToolImage()}
      * (crush_feat.md §9 E3).
+     *
+     * Bodies are no longer dumped in full forever (crush_feat.md §1 E5). A
+     * SUCCESSFUL result is the case where the output is least likely to be
+     * worth screen space - the model already read it, and the user mostly
+     * needs to know the call happened - so its body is hidden entirely until
+     * the tool-call id appears in $expanded ({@see Chat::toggleToolOutput()},
+     * Ctrl+O). An ERROR body is never hidden, because that is precisely the
+     * output the user is looking for, but it is still clipped through
+     * {@see collapseToolOutput()} so a multi-megabyte stderr can't evict the
+     * conversation it belongs to. Expanding shows the body verbatim.
+     *
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderToolResults(Message $msg, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
         $lines = [];
         foreach ($msg->toolResults as $result) {
+            // The name is model-chosen, not ours: Chat::executeToolCall() copies
+            // it verbatim off the parsed tool call, so an unknown-tool reply can
+            // carry an OSC title-set or a screen-clear. Unlike assistant
+            // Markdown it has no legitimate SGR of its own, so it takes the full
+            // {@see untrusted()} scrub rather than only the sentinel strip.
             $status = $result->isError()
                 ? Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error')
                 : Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
-            $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . $result->name) . ' ' . $status;
-            $body = Sanitize::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
-            $block = $body === '' ? $label : $label . "\n" . $body;
+            $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
+            $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
+            $key = $result->id ?? $result->name;
+            $isExpanded = ($expanded[$key] ?? false) === true;
+            // §8 E5: the same key Ctrl+O toggles, so a click and the keystroke
+            // drive one expansion mechanism rather than two.
+            self::recordToolCallZone($key, $label);
+
+            $block = $label;
+            if ($body !== '') {
+                $block .= "\n" . self::renderToolBody($body, $result->isError(), $isExpanded, $theme);
+            }
 
             if ($result->hasDiff()) {
                 $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
@@ -708,6 +1281,80 @@ final class Renderer
     }
 
     /**
+     * One tool result's body under the collapse/expand policy documented on
+     * {@see renderToolResults()}: verbatim when expanded, a faint one-line
+     * "N lines hidden" affordance when a successful call is collapsed, and a
+     * {@see collapseToolOutput()}-clipped excerpt (plus trailer) when a failed
+     * call is collapsed.
+     */
+    private static function renderToolBody(string $body, bool $isError, bool $isExpanded, Theme $theme): string
+    {
+        if ($isExpanded) {
+            return $body;
+        }
+
+        if (!$isError) {
+            $count = substr_count($body, "\n") + 1;
+            $hint = "… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)';
+
+            return Style::new()->foreground($theme->systemLabel)->faint()->render($hint);
+        }
+
+        $collapsed = self::collapseToolOutput($body, self::TOOL_OUTPUT_MAX_LINES, self::TOOL_OUTPUT_MAX_CHARS);
+        if (!$collapsed['overflow']) {
+            return $collapsed['output'];
+        }
+
+        return $collapsed['output'] . "\n"
+            . Style::new()->foreground($theme->systemLabel)->faint()->render('… output truncated (ctrl+o to expand)');
+    }
+
+    /**
+     * Clip a tool's raw output to at most $maxLines lines AND $maxChars
+     * characters, reporting whether anything was dropped (crush_feat.md
+     * §1 E5).
+     *
+     * Deliberately a pure function over plain strings - no Theme, no Style,
+     * no Chat - so the clipping policy is unit-testable on its own and can be
+     * reused by any other surface that has to show tool output.
+     *
+     * The line budget is applied before the character budget so a result that
+     * is short in lines but enormous in one of them still gets clipped; both
+     * limits set `overflow`. Character counting is mb_*-based because tool
+     * output is arbitrary UTF-8 and a byte-wise cut could split a codepoint
+     * and put a lone continuation byte on the terminal wire.
+     *
+     * @param int $maxLines Maximum lines to keep; values below 1 are treated as 1
+     * @param int $maxChars Maximum characters to keep; values below 1 are treated as 1
+     *
+     * @return array{output: string, overflow: bool}
+     */
+    public static function collapseToolOutput(string $output, int $maxLines, int $maxChars): array
+    {
+        if ($output === '') {
+            return ['output' => '', 'overflow' => false];
+        }
+
+        $maxLines = max(1, $maxLines);
+        $maxChars = max(1, $maxChars);
+
+        $overflow = false;
+        $rows = preg_split('/\r\n|\r|\n/', $output) ?: [];
+        if (count($rows) > $maxLines) {
+            $rows = array_slice($rows, 0, $maxLines);
+            $overflow = true;
+        }
+
+        $clipped = implode("\n", $rows);
+        if (mb_strlen($clipped) > $maxChars) {
+            $clipped = mb_substr($clipped, 0, $maxChars);
+            $overflow = true;
+        }
+
+        return ['output' => $clipped, 'overflow' => $overflow];
+    }
+
+    /**
      * Paint a raw unified diff (`--- a/…` / `+++ b/…` / `@@ … @@` / ` `+`/`-`
      * lines, exactly what `diff -u` emits) as a bordered, colour-coded block.
      *
@@ -739,7 +1386,7 @@ final class Renderer
 
         $painted = [];
         foreach ($rows as $row) {
-            $text = Width::truncate(Sanitize::untrusted($row), $inner);
+            $text = Width::truncate(self::untrusted($row), $inner);
             $painted[] = self::styleDiffLine($text, $theme)->render($text);
         }
 
@@ -790,7 +1437,7 @@ final class Renderer
     {
         $spinner = Style::new()->foreground($theme->assistantLabel)->render('⠴');
 
-        return $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . $msg->content);
+        return $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . self::untrusted($msg->content));
     }
 
     /**
@@ -827,6 +1474,13 @@ final class Renderer
      * The Ctrl+P command palette's content, composited over the whole frame
      * by {@see render()} via {@see Veil}. Returns '' (nothing composited)
      * when the palette is closed - see {@see Chat::palette()}.
+     *
+     * Rows come from {@see Chat::paletteMatchResults()} rather than the bare
+     * label list so the matched characters can be highlighted through
+     * {@see Highlighter} (crush_feat.md §4 E3). With no query typed, the root
+     * list arrives category-grouped and MRU-biased and gets a faint header
+     * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
+     * list, headers omitted, so the best match is always the first row.
      */
     private static function renderPalette(Chat $chat, Theme $theme): string
     {
@@ -835,17 +1489,44 @@ final class Renderer
             return '';
         }
 
-        $matches = $chat->paletteMatches();
+        $results = $chat->paletteMatchResults();
         $selected = $palette->selectedIndex;
+        $grouped = $palette->query === '' && $palette->mode !== 'providers' && $palette->mode !== 'themes';
 
-        $lines = ['🔍 ' . Sanitize::untrusted($palette->query) . '█', ''];
-        if ($matches === []) {
+        $lines = ['🔍 ' . self::untrusted($palette->query) . '█', ''];
+        /** @var array<int, string> $rows row index => the content line it produced */
+        $rows = [];
+        if ($results === []) {
             $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render('No matches');
         } else {
-            foreach ($matches as $index => $label) {
-                $lines[] = $index === $selected
-                    ? Style::new()->foreground($theme->userLabel)->bold()->render('▸ ' . $label)
-                    : Style::new()->foreground($theme->systemLabel)->render('  ' . $label);
+            $highlighter = new Highlighter();
+            // Underlined as well as recoloured: the selected row is already
+            // bold userLabel, so colour alone would make its matched run
+            // indistinguishable from the rest of the row.
+            $matchStyle = Style::new()->foreground($theme->userLabel)->bold()->underline();
+            $lastCategory = null;
+
+            foreach ($results as $index => $result) {
+                if ($grouped) {
+                    $category = $chat->paletteCategory($result->haystack);
+                    if ($category !== null && $category !== $lastCategory) {
+                        $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render($category);
+                        $lastCategory = $category;
+                    }
+                }
+
+                $rowStyle = $index === $selected
+                    ? Style::new()->foreground($theme->userLabel)->bold()
+                    : Style::new()->foreground($theme->systemLabel);
+                $reopen = self::sgrOpen($rowStyle);
+                $body = $highlighter->highlight(
+                    $result,
+                    static fn(string $run): string => $matchStyle->render($run) . $reopen,
+                );
+
+                $row = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . $body);
+                $lines[] = $row;
+                $rows[$index] = $row;
             }
         }
 
@@ -855,12 +1536,115 @@ final class Renderer
             default => ' command palette ',
         };
 
-        return Style::new()
+        $box = Style::new()
             ->border(Border::rounded()->withTitle($title))
             ->borderForeground($theme->border)
             ->padding(1, 2)
             ->width(50)
             ->render(implode("\n", $lines));
+
+        self::recordPaletteItemZones($box, $rows);
+
+        return $box;
+    }
+
+    /**
+     * Remember which lines of the rendered palette box are clickable rows
+     * (crush_feat.md §8 E6), for {@see markPaletteItems()} to wrap once the
+     * box has been composited.
+     *
+     * A row is located by the content line it produced rather than by index,
+     * for the reason {@see markToolCalls()} gives: the box adds border and
+     * padding rows of its own, and the grouped root list interleaves faint
+     * category headers between the rows. Each box line is claimed at most
+     * once and the search resumes past the last claim, so two rows that
+     * render identical text still map to the two lines they were emitted on.
+     *
+     * The WHOLE box line is recorded, borders included: it is the exact
+     * substring `Veil::composite()` copies into the frame verbatim, which is
+     * what lets {@see markPaletteItems()} wrap only the palette's own cells
+     * instead of the full frame row (a click on the dimmed backdrop beside
+     * the palette must not select a row).
+     *
+     * @param array<int, string> $rows row index => the content line it produced
+     */
+    private static function recordPaletteItemZones(string $box, array $rows): void
+    {
+        if ($rows === [] || !Chat::mouseClicksEnabled()) {
+            return;
+        }
+
+        $lines = explode("\n", $box);
+        $from  = 0;
+        foreach ($rows as $id => $row) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $row)) {
+                    self::$paletteItemZones[] = ['id' => (string) $id, 'line' => $lines[$i]];
+                    $from                     = $i + 1;
+
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Turn each palette box line recorded by {@see recordPaletteItemZones()}
+     * into a `picker-item:<index>` click zone on the ALREADY-composited frame
+     * (crush_feat.md §8 E6) — see {@see $paletteItemZones} for why the mark
+     * cannot happen before the composite.
+     *
+     * Only the box line's own cells are wrapped, not the frame row it landed
+     * on, so the dimmed backdrop on either side of the palette stays inert.
+     * A row whose box line is not found verbatim (the palette was clipped
+     * because the terminal is narrower than the box) is simply left
+     * unclickable; the arrow keys still reach it.
+     */
+    private static function markPaletteItems(string $frame): string
+    {
+        if (self::$paletteItemZones === []) {
+            return $frame;
+        }
+
+        $lines = explode("\n", $frame);
+        $from  = 0;
+        foreach (self::$paletteItemZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                $at = strpos($lines[$i], $zone['line']);
+                if ($at === false) {
+                    continue;
+                }
+
+                $lines[$i] = substr_replace(
+                    $lines[$i],
+                    Mark::zone(self::PALETTE_ITEM_ZONE_PREFIX . $zone['id'], $zone['line']),
+                    $at,
+                    strlen($zone['line']),
+                );
+                $from = $i + 1;
+
+                break;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The opening SGR sequence of a style, with no text and no trailing
+     * reset. Needed because {@see Style::render()} terminates every run with
+     * a full reset: a highlighted run nested inside a coloured palette row
+     * would otherwise strip the row's own colour off everything after it.
+     * Re-emitting this after each highlighted run restores the row style.
+     */
+    private static function sgrOpen(Style $style): string
+    {
+        $rendered = $style->render('');
+        $reset = "\x1b[0m";
+
+        return str_ends_with($rendered, $reset)
+            ? substr($rendered, 0, -strlen($reset))
+            : $rendered;
     }
 
     /**
@@ -1006,7 +1790,7 @@ final class Renderer
         // The in-progress input buffer is untrusted keystroke data (e.g. a
         // bracketed-paste dump can smuggle ESC/C0/DEL). Strip it before it hits
         // the terminal so a paste can't inject control sequences at draw time.
-        $body = "> " . Sanitize::untrusted($chat->inputBuf) . $cursor;
+        $body = "> " . self::untrusted($chat->inputBuf) . $cursor;
         return Style::new()
             ->border(Border::normal())
             ->borderForeground($theme->border)
