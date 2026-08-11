@@ -16,8 +16,13 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\AssistantMsg;
+use SugarCraft\Crush\BackendToolEventsMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
+use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Role;
@@ -1914,5 +1919,256 @@ final class ChatTest extends TestCase
         [$final] = $afterPlaceholders->update($resolved);
 
         return [$afterPlaceholders, $final];
+    }
+
+    // ---------------------------------------------------------------
+    // Backend tool-lifecycle events (crush_feat.md §1 E1, W2.S1c)
+    // ---------------------------------------------------------------
+
+    public function testBackendToolEventsSurviveAsAQueuedMsgInsteadOfBeingDropped(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')),
+            ], Message::assistant('there is one file')),
+            inputBuf: 'list files',
+        );
+
+        // Against the pre-W2.S1c Chat this resolved to a plain AssistantMsg:
+        // the backend's $onEvent was never passed, so both tool events were
+        // dropped and the turn rendered as a bare "thinking…" spinner.
+        $resolved = $this->resolveBackendCmd($chat);
+        $this->assertInstanceOf(BackendToolEventsMsg::class, $resolved);
+        $this->assertCount(2, $resolved->events);
+        $this->assertSame('there is one file', $resolved->message->content);
+    }
+
+    public function testToolStartedRendersARunningPlaceholderBeforeTheResultArrives(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')),
+            ], Message::assistant('done')),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        [$running, $cmd] = $afterSubmit->update($this->resolveBackendCmd($chat));
+
+        $placeholder = $running->history[count($running->history) - 1];
+        $this->assertSame(Role::System, $placeholder->role);
+        $this->assertSame('call_1', $placeholder->pendingToolCallId);
+        $this->assertSame('bash(command: "ls")', $placeholder->content);
+        // The running state is a real, rendered frame - not folded away in the
+        // same update() as its result.
+        $this->assertStringContainsString('running: bash(command: "ls")', \SugarCraft\Crush\Renderer::render($running));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertInstanceOf(BackendToolEventsMsg::class, $cmd());
+    }
+
+    public function testToolFinishedReplacesThePlaceholderAndThenHandsOffTheReply(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt', durationMs: 12, diff: '--- a\n+++ b\n')),
+            ], Message::assistant('there is one file')),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $pending = array_filter($final->history, static fn(Message $m): bool => $m->pendingToolCallId !== null);
+        $this->assertSame([], $pending, 'the running placeholder was never replaced');
+
+        $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $result = $withResults[0]->toolResults[0];
+        $this->assertSame('bash', $result->name);
+        $this->assertSame('a.txt', $result->result);
+        $this->assertSame(12, $result->durationMs);
+        $this->assertSame('--- a\n+++ b\n', $result->diff);
+        $this->assertSame('a.txt', $withResults[0]->content);
+
+        // The turn's own reply still lands through the ordinary AssistantMsg
+        // arm, after the tool calls that produced it.
+        $last = $final->history[count($final->history) - 1];
+        $this->assertSame('there is one file', $last->content);
+        $this->assertFalse($final->inFlight);
+    }
+
+    public function testToolFinishedCorrelatesOnTheEventIdNotTheToolsInventedResultId(): void
+    {
+        // A tool never sees its own call id, so built-ins routinely return an
+        // invented one; only ToolFinished::$toolCallId carries the id the
+        // placeholder was keyed with.
+        $call = new EngineToolCall('call_1', 'read', ['path' => 'x']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('', 'contents')),
+            ], Message::assistant('read it')),
+            inputBuf: 'read x',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $this->assertSame(
+            [],
+            array_filter($final->history, static fn(Message $m): bool => $m->pendingToolCallId !== null),
+        );
+        // user turn + the replaced placeholder + the reply. A 4th entry would
+        // mean the result was appended alongside an orphaned placeholder.
+        $this->assertCount(3, $final->history, 'the result was appended instead of replacing the placeholder');
+    }
+
+    public function testFailedToolCallRendersAsAnErrorResult(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'boom']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'command not found', isError: true)),
+            ], Message::assistant('that failed')),
+            inputBuf: 'run boom',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $this->assertTrue($withResults[0]->toolResults[0]->isError());
+        $this->assertSame('command not found', $withResults[0]->toolResults[0]->error);
+        $this->assertSame('Tool error: command not found', $withResults[0]->content);
+    }
+
+    public function testTurnWithoutToolEventsStillResolvesToAPlainAssistantMsg(): void
+    {
+        $chat = new Chat(backend: new EchoBackend(), inputBuf: 'hello');
+        $this->assertInstanceOf(AssistantMsg::class, $this->resolveBackendCmd($chat));
+    }
+
+    public function testStaleBackendToolEventsAreDropped(): void
+    {
+        $chat = new Chat(history: [Message::user('hi')], generation: 7);
+        $msg = new BackendToolEventsMsg(
+            [ToolStarted::fromCall(new EngineToolCall('call_1', 'bash', []))],
+            Message::assistant('late'),
+            3,
+        );
+
+        [$next, $cmd] = $chat->update($msg);
+        $this->assertSame($chat, $next);
+        $this->assertNull($cmd);
+    }
+
+    public function testBackendFailureAfterToolCallsStillShowsWhatTheToolsDid(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend(
+                [ToolStarted::fromCall($call), ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt'))],
+                null,
+                new \RuntimeException('provider exploded'),
+            ),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $resolved = $this->resolveBackendCmd($chat);
+        $this->assertInstanceOf(BackendToolEventsMsg::class, $resolved);
+
+        $final = $this->drainBackendEvents($afterSubmit, $resolved);
+        $this->assertNotSame([], array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertStringContainsString('provider exploded', $final->history[count($final->history) - 1]->content);
+    }
+
+    /**
+     * A Backend that reports $events through the $onEvent seam and then either
+     * resolves with $reply or rejects with $failure.
+     *
+     * @param list<ToolStarted|ToolFinished> $events
+     */
+    private function eventEmittingBackend(array $events, ?Message $reply, ?\Throwable $failure = null): \SugarCraft\Crush\Backend
+    {
+        return new class ($events, $reply, $failure) implements \SugarCraft\Crush\Backend {
+            /** @param list<ToolStarted|ToolFinished> $events */
+            public function __construct(
+                private array $events,
+                private ?Message $reply,
+                private ?\Throwable $failure,
+            ) {}
+
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                foreach ($this->events as $event) {
+                    if ($onEvent !== null) {
+                        $onEvent($event);
+                    }
+                }
+                if ($this->failure !== null) {
+                    throw $this->failure;
+                }
+
+                return $this->reply ?? Message::assistant('');
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                return new Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $onEvent): void {
+                    try {
+                        $resolve($this->complete($history, $onToken, $onEvent));
+                    } catch (\Throwable $e) {
+                        $reject($e);
+                    }
+                });
+            }
+        };
+    }
+
+    /**
+     * Submit $chat's input buffer and run the scheduled backend Cmd to the Msg
+     * it resolves to (synchronous - every backend used here settles inline).
+     */
+    private function resolveBackendCmd(Chat $chat): mixed
+    {
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+
+        return $resolved;
+    }
+
+    /**
+     * Feed $msg into $chat and keep following the Cmd it returns until the
+     * event queue drains and the final AssistantMsg has been applied.
+     */
+    private function drainBackendEvents(Chat $chat, mixed $msg): Chat
+    {
+        $steps = 0;
+        while ($msg !== null) {
+            [$chat, $cmd] = $chat->update($msg);
+            if ($cmd === null || ++$steps > 20) {
+                break;
+            }
+            $msg = $cmd();
+        }
+
+        return $chat;
     }
 }
