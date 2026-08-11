@@ -84,4 +84,69 @@ final class BootstrapUserConfigTest extends TestCase
 
         $this->assertInstanceOf(\SugarCraft\Crush\Backend\EngineBackend::class, $backend);
     }
+
+    public function testForcedInstructionsIsEmptyWithoutConfiguredKey(): void
+    {
+        $this->assertSame([], Bootstrap::forcedInstructions());
+    }
+
+    public function testForcedInstructionsReadsTheInstructionsKey(): void
+    {
+        Bootstrap::writeUserConfig(['instructions' => ['docs/*.md', 'RULES.md']]);
+
+        $this->assertSame(['docs/*.md', 'RULES.md'], Bootstrap::forcedInstructions());
+    }
+
+    public function testForcedInstructionsDropsNonStringAndBlankEntries(): void
+    {
+        Bootstrap::writeUserConfig(['instructions' => ['docs/*.md', 42, '', '   ', null, ['nested'], 'RULES.md']]);
+
+        $this->assertSame(['docs/*.md', 'RULES.md'], Bootstrap::forcedInstructions());
+    }
+
+    public function testForcedInstructionsIgnoresANonArrayInstructionsValue(): void
+    {
+        Bootstrap::writeUserConfig(['instructions' => 'docs/*.md']);
+
+        $this->assertSame([], Bootstrap::forcedInstructions());
+    }
+
+    /**
+     * The regression this step exists for: before W1.B4, instructionLoader()
+     * built InstructionFileLoader with no patterns at all, so loadForced()
+     * was reachable from Runtime::buildSystemPrompt() but returned [] on
+     * every real run no matter what the user configured.
+     */
+    public function testInstructionLoaderResolvesConfiguredGlobsAgainstTheRepoRoot(): void
+    {
+        mkdir($this->tempDir . '/docs', 0700, true);
+        file_put_contents($this->tempDir . '/docs/house-style.md', 'Prefer tabs to spaces.');
+        Bootstrap::writeUserConfig(['instructions' => ['docs/*.md']]);
+
+        $forced = Bootstrap::instructionLoader($this->tempDir)->loadForced();
+
+        $this->assertSame(['Prefer tabs to spaces.'], $forced);
+    }
+
+    public function testInstructionLoaderLoadsNothingForcedWhenConfigIsEmpty(): void
+    {
+        mkdir($this->tempDir . '/docs', 0700, true);
+        file_put_contents($this->tempDir . '/docs/house-style.md', 'Prefer tabs to spaces.');
+
+        $this->assertSame([], Bootstrap::instructionLoader($this->tempDir)->loadForced());
+    }
+
+    /**
+     * loadForced()'s own containment guard still applies to config-sourced
+     * patterns - promoting them to real user config must not turn the
+     * config file into a read-anything primitive.
+     */
+    public function testConfiguredPatternsCannotEscapeTheRepoRoot(): void
+    {
+        file_put_contents($this->tempDir . '/outside.md', 'secret');
+        mkdir($this->tempDir . '/repo', 0700, true);
+        Bootstrap::writeUserConfig(['instructions' => ['../outside.md', '/etc/hostname']]);
+
+        $this->assertSame([], Bootstrap::instructionLoader($this->tempDir . '/repo')->loadForced());
+    }
 }
