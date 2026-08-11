@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Palette;
 
+use SugarCraft\Crush\Commands\CommandRegistry;
+use SugarCraft\Crush\Commands\CommandSpec;
+
 /**
- * The fixed set of actions the Ctrl+P command palette's "root" mode lists.
- * {@see \SugarCraft\Crush\Chat::runSelectedPaletteAction()} dispatches on
- * these; SwitchModel/SwitchTheme transition the palette into a second-level
- * list (provider names / theme names) rather than running an action
- * directly.
+ * The actions the Ctrl+P command palette's "root" mode can dispatch. {@see
+ * \SugarCraft\Crush\Chat::runSelectedPaletteAction()} dispatches on these;
+ * SwitchModel/SwitchTheme transition the palette into a second-level list
+ * (provider names / theme names) rather than running an action directly.
+ *
+ * This enum is a dispatch key only - it no longer owns an item list or any
+ * display text. Both live on the matching {@see CommandSpec} row in {@see
+ * CommandRegistry::all()}, the single registry the "/" popup reads too, so
+ * the two surfaces cannot drift apart the way they did when each kept its
+ * own hand-written list.
  */
 enum PaletteAction: string
 {
@@ -23,45 +31,57 @@ enum PaletteAction: string
     case SwitchAgent = 'switch_agent';
     case ToggleMcp = 'toggle_mcp';
 
+    /**
+     * This action's registry row. Throws rather than returning null: an
+     * action with no row would be listed by nothing and dispatchable by
+     * nothing, which is a wiring bug, not a runtime condition.
+     */
+    public function spec(): CommandSpec
+    {
+        $spec = CommandRegistry::forPaletteAction($this);
+        if ($spec === null) {
+            throw new \LogicException(sprintf(
+                'PaletteAction::%s has no CommandRegistry row - add one to CommandRegistry::all().',
+                $this->name,
+            ));
+        }
+
+        return $spec;
+    }
+
+    /** The palette row's display text. */
     public function label(): string
     {
-        return match ($this) {
-            self::NewSession => 'New session',
-            self::SwitchSession => 'Switch session',
-            self::SwitchModel => 'Switch model',
-            self::ShareSession => 'Share session',
-            self::OpenDocs => 'Open docs',
-            self::Exit => 'Exit',
-            self::SwitchTheme => 'Switch theme',
-            self::SwitchAgent => 'Switch agent',
-            self::ToggleMcp => 'Toggle MCPs',
-        };
+        return $this->spec()->label();
     }
 
+    /** The palette row's grouping label, e.g. "Session". */
     public function category(): string
     {
-        return match ($this) {
-            self::NewSession, self::SwitchSession, self::ShareSession => 'Session',
-            self::SwitchModel => 'Model',
-            self::SwitchTheme => 'Appearance',
-            self::SwitchAgent => 'Agents',
-            self::ToggleMcp => 'MCP',
-            self::OpenDocs, self::Exit => 'App',
-        };
+        return $this->spec()->category;
     }
 
+    /** The keybind that also triggers this action, if any. */
     public function shortcut(): ?string
     {
-        return match ($this) {
-            self::Exit => 'Ctrl+C',
-            default => null,
-        };
+        return $this->spec()->shortcut;
     }
 
-    /** @return list<self> */
+    /**
+     * The palette's root item list, derived from {@see CommandRegistry} in
+     * its declared order - NOT from self::cases(), so adding a palette entry
+     * means adding a registry row, and the "/" popup sees it too.
+     *
+     * @return list<self>
+     */
     public static function all(): array
     {
-        return self::cases();
+        $actions = [];
+        foreach (CommandRegistry::paletteEntries() as $spec) {
+            $actions[] = $spec->paletteAction;
+        }
+
+        return $actions;
     }
 
     public static function byLabel(string $label): ?self
