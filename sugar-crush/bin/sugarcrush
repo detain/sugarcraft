@@ -17,10 +17,27 @@ declare(strict_types=1);
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Crush\Cli\ArgvParser;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Cli\Help;
+use SugarCraft\Crush\Cli\NonInteractive;
+
+// Parse argv first and dispatch before ever touching Program/Bootstrap::chat()
+// — `--help` and `-p`/`run "<prompt>"` must never attach to the TTY or enter
+// the alt-screen (crush_feat.md section 2, Recommendation 1).
+$args = ArgvParser::parse($argv);
+
+if ($args->help) {
+    fwrite(STDOUT, Help::screen());
+    exit(0);
+}
+
+if ($args->prompt !== null) {
+    exit(NonInteractive::run($args, null, $args->outputFormat));
+}
 
 // All backend/tool/session-store/memory-store/instruction-loader wiring
 // lives in Bootstrap (R19) so it can be exercised by a test without
 // shelling out to this script and blocking on Program::run(). See
 // Bootstrap's class docblock for the reasoning.
-(new Program(Bootstrap::chat(), new ProgramOptions(useAltScreen: true)))->run();
+(new Program(Bootstrap::chat($args->root), new ProgramOptions(useAltScreen: true)))->run();
