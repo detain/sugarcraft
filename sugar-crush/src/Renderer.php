@@ -197,6 +197,16 @@ final class Renderer
     public const PANE_ZONE_PREFIX = 'pane:';
 
     /**
+     * Zone-id prefix every clickable command-palette / picker row carries
+     * (crush_feat.md §8 E6, which names `picker-item:{$index}` literally).
+     * The suffix is the row's index into {@see Chat::paletteMatches()}, i.e.
+     * exactly what {@see \SugarCraft\Crush\Palette\PaletteState::$selectedIndex}
+     * holds, so a click can move the selection and then run the SAME confirm
+     * path Enter runs instead of a click-only duplicate of it.
+     */
+    public const PALETTE_ITEM_ZONE_PREFIX = 'picker-item:';
+
+    /**
      * Zone-id prefix every clickable tool-call row carries (crush_feat.md §8
      * E5). The suffix is the SAME key {@see Chat::expanded()} is keyed by
      * (`ToolResult::$id`, falling back to its name), so a click can be handed
@@ -250,6 +260,25 @@ final class Renderer
      * @var list<array{id: string, label: string}> in document order
      */
     private static array $toolCallZones = [];
+
+    /**
+     * Palette rows the current frame wants clickable, as the FULLY rendered
+     * box lines they became (border + padding + row), collected by
+     * {@see renderPalette()} and consumed by {@see markPaletteItems()} once
+     * the palette has been composited over the frame.
+     *
+     * The detour exists because the palette is an OVERLAY, and {@see Veil}
+     * measures it: `composite()` takes the widest foreground line as the
+     * box's width and centres by it, then clips each line to the room left
+     * on its row. A sentinel pair measures ~29 columns of Private-Use text,
+     * so a row marked before compositing makes Veil believe the box is 29
+     * columns wider than it is — the whole palette shifts ~15 columns left
+     * and every row is clipped short. Marking after the composite costs
+     * nothing and leaves the geometry Veil computed untouched.
+     *
+     * @var list<array{id: string, line: string}> in row order
+     */
+    private static array $paletteItemZones = [];
 
     /**
      * How many content lines the most recent frame had to drop off the top
@@ -383,6 +412,7 @@ final class Renderer
     {
         $theme = $chat->theme();
         self::$toolCallZones = [];
+        self::$paletteItemZones = [];
         $body = self::renderHistory($chat->history, $theme, max(20, $chat->cols() - self::SHELL_CHROME_COLS), $chat->expanded());
         if ($chat->inFlight) {
             // Visible in the chat window itself, not just the status bar -
@@ -471,6 +501,7 @@ final class Renderer
             // since Chat already does its own diffing at a higher level in
             // view() and double-diffing isn't needed for correctness.
             $frame = Veil::new()->withBackdrop(50)->composite($palette, $frame, Position::CENTER, Position::CENTER);
+            $frame = self::markPaletteItems($frame);
         }
 
         return self::scanRoot($frame, $chat->cols());
@@ -1167,6 +1198,8 @@ final class Renderer
         $grouped = $palette->query === '' && $palette->mode !== 'providers' && $palette->mode !== 'themes';
 
         $lines = ['🔍 ' . self::untrusted($palette->query) . '█', ''];
+        /** @var array<int, string> $rows row index => the content line it produced */
+        $rows = [];
         if ($results === []) {
             $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render('No matches');
         } else {
@@ -1195,7 +1228,9 @@ final class Renderer
                     static fn(string $run): string => $matchStyle->render($run) . $reopen,
                 );
 
-                $lines[] = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . $body);
+                $row = $rowStyle->render(($index === $selected ? '▸ ' : '  ') . $body);
+                $lines[] = $row;
+                $rows[$index] = $row;
             }
         }
 
@@ -1205,12 +1240,98 @@ final class Renderer
             default => ' command palette ',
         };
 
-        return Style::new()
+        $box = Style::new()
             ->border(Border::rounded()->withTitle($title))
             ->borderForeground($theme->border)
             ->padding(1, 2)
             ->width(50)
             ->render(implode("\n", $lines));
+
+        self::recordPaletteItemZones($box, $rows);
+
+        return $box;
+    }
+
+    /**
+     * Remember which lines of the rendered palette box are clickable rows
+     * (crush_feat.md §8 E6), for {@see markPaletteItems()} to wrap once the
+     * box has been composited.
+     *
+     * A row is located by the content line it produced rather than by index,
+     * for the reason {@see markToolCalls()} gives: the box adds border and
+     * padding rows of its own, and the grouped root list interleaves faint
+     * category headers between the rows. Each box line is claimed at most
+     * once and the search resumes past the last claim, so two rows that
+     * render identical text still map to the two lines they were emitted on.
+     *
+     * The WHOLE box line is recorded, borders included: it is the exact
+     * substring `Veil::composite()` copies into the frame verbatim, which is
+     * what lets {@see markPaletteItems()} wrap only the palette's own cells
+     * instead of the full frame row (a click on the dimmed backdrop beside
+     * the palette must not select a row).
+     *
+     * @param array<int, string> $rows row index => the content line it produced
+     */
+    private static function recordPaletteItemZones(string $box, array $rows): void
+    {
+        if ($rows === [] || !Chat::mouseClicksEnabled()) {
+            return;
+        }
+
+        $lines = explode("\n", $box);
+        $from  = 0;
+        foreach ($rows as $id => $row) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $row)) {
+                    self::$paletteItemZones[] = ['id' => (string) $id, 'line' => $lines[$i]];
+                    $from                     = $i + 1;
+
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Turn each palette box line recorded by {@see recordPaletteItemZones()}
+     * into a `picker-item:<index>` click zone on the ALREADY-composited frame
+     * (crush_feat.md §8 E6) — see {@see $paletteItemZones} for why the mark
+     * cannot happen before the composite.
+     *
+     * Only the box line's own cells are wrapped, not the frame row it landed
+     * on, so the dimmed backdrop on either side of the palette stays inert.
+     * A row whose box line is not found verbatim (the palette was clipped
+     * because the terminal is narrower than the box) is simply left
+     * unclickable; the arrow keys still reach it.
+     */
+    private static function markPaletteItems(string $frame): string
+    {
+        if (self::$paletteItemZones === []) {
+            return $frame;
+        }
+
+        $lines = explode("\n", $frame);
+        $from  = 0;
+        foreach (self::$paletteItemZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                $at = strpos($lines[$i], $zone['line']);
+                if ($at === false) {
+                    continue;
+                }
+
+                $lines[$i] = substr_replace(
+                    $lines[$i],
+                    Mark::zone(self::PALETTE_ITEM_ZONE_PREFIX . $zone['id'], $zone['line']),
+                    $at,
+                    strlen($zone['line']),
+                );
+                $from = $i + 1;
+
+                break;
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     /**

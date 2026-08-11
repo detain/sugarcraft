@@ -1221,8 +1221,8 @@ final class Chat implements Model
 
     /**
      * Click-to-switch session tab (crush_feat.md §8 E2), click-to-switch pane
-     * (§8 E3), click-to-expand a tool call (§8 E5), plus wheel-scroll of the
-     * transcript (§8 E4).
+     * (§8 E3), click-to-expand a tool call (§8 E5), click-to-select a palette
+     * row (§8 E6), plus wheel-scroll of the transcript (§8 E4).
      *
      * Wheel events branch off FIRST and never reach the click tracker: they
      * are the one gesture that survives `SUGARCRUSH_DISABLE_MOUSE_CLICKS`
@@ -1288,7 +1288,48 @@ final class Chat implements Model
             return [$this->toggleToolOutput(substr($zoneId, strlen($toolPrefix))), null];
         }
 
+        $pickerPrefix = Renderer::PALETTE_ITEM_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $pickerPrefix)) {
+            return $this->selectPaletteItem(substr($zoneId, strlen($pickerPrefix)));
+        }
+
         return [$this, null];
+    }
+
+    /**
+     * Click-to-select in the command palette / picker (crush_feat.md §8 E6).
+     *
+     * §8 E6 asks explicitly for the click to "dispatch the same Msg/Cmd the
+     * Enter key currently dispatches" rather than a parallel confirm path, so
+     * this only moves `selectedIndex` onto the clicked row and then hands off
+     * to {@see runSelectedPaletteAction()} — the exact method
+     * {@see handlePaletteKey()}'s Enter arm calls. Everything that hangs off a
+     * confirm (mode transitions into the providers/themes list, the §4 E7 MRU
+     * bump, `Cmd::quit()` for Exit) therefore behaves identically whether the
+     * row was chosen with the keyboard or the mouse.
+     *
+     * The index is re-checked against the CURRENT match list rather than
+     * trusted from the zone: zones describe the previously-painted frame, and
+     * a row that has since disappeared (an async reply landing, a
+     * re-filtered list) would otherwise confirm whatever action drifted into
+     * that slot. Out-of-range, or a click arriving after the palette closed,
+     * is a no-op — the safe answer for a stale click is to run nothing.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function selectPaletteItem(string $index): array
+    {
+        if ($this->palette === null || preg_match('/\A\d+\z/', $index) !== 1) {
+            return [$this, null];
+        }
+
+        $row = (int) $index;
+        if ($row >= count($this->paletteMatches())) {
+            return [$this, null];
+        }
+
+        return $this->mutate(['palette' => $this->palette->withSelectedIndex($row)])
+            ->runSelectedPaletteAction();
     }
 
     /**
