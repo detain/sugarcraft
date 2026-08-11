@@ -8,6 +8,7 @@ use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Fuzzy\Highlighter;
@@ -179,6 +180,24 @@ final class Renderer
     private const TOOL_OUTPUT_MAX_CHARS = 2000;
 
     /**
+     * Zone-id prefix every session tab carries (crush_feat.md §8 E2). Public
+     * because {@see Chat::update()} parses it back off a click's zone id —
+     * one literal, defined next to the code that writes it, rather than the
+     * same string spelled out independently on both sides of the hit test.
+     */
+    public const SESSION_TAB_ZONE_PREFIX = 'tab:';
+
+    /**
+     * The zone-id charset {@see Mark::wrap()} accepts, duplicated here
+     * because Mark's own copy is private and it THROWS on a violation.
+     * Session ids arrive from disk (`SessionStore::listSessions()`), so an id
+     * carrying anything outside this set would take the whole TUI down from
+     * inside `view()`; {@see markSessionTab()} checks first and renders that
+     * tab unmarked (still visible, still keyboard-switchable) instead.
+     */
+    private const ZONE_ID_CHARSET = '/\A[A-Za-z0-9._:-]+\z/';
+
+    /**
      * Zone registry the root scan pass writes into, shared across renders
      * because a mouse event arrives *between* frames: the click handler has
      * only the previously-painted frame's boxes to hit-test against.
@@ -218,10 +237,10 @@ final class Renderer
      * {@see \SugarCraft\Mouse\Scan::parse()} walks the frame cluster by
      * cluster through `grapheme_extract()`, which measures ~24ms on a
      * full-screen frame — roughly doubling the cost of a keystroke repaint.
-     * Nothing in `src/` wraps a widget in {@see \SugarCraft\Mouse\Mark::zone()}
-     * yet (that is W2.S11b's job), so today EVERY frame takes this branch and
-     * the scan would otherwise be pure waste; once widgets are marked the
-     * sentinel is present and the full scan runs unchanged.
+     * {@see markSessionTab()} is currently the only caller of
+     * {@see \SugarCraft\Mouse\Mark::zone()}, and it only fires when the
+     * session tab strip is drawn at all (≥2 sessions on disk), so a
+     * single-session run still takes this branch on every frame.
      *
      * The scan is also non-fatal. `Scan::parse()` throws on malformed markup
      * (duplicate/unclosed ids), and this runs inside `Chat::view()`, where an
@@ -472,10 +491,42 @@ final class Renderer
             $id = (string) ($row['id'] ?? '');
             $rawName = (string) ($row['name'] ?? '');
             $name = $rawName !== '' ? $rawName : $id;
-            $labels[] = ($id !== '' && $id === $current) ? "[{$name}]" : " {$name} ";
+            $label = ($id !== '' && $id === $current) ? "[{$name}]" : " {$name} ";
+            $labels[] = self::markSessionTab($id, $label);
         }
 
         return implode('|', $labels);
+    }
+
+    /**
+     * Wrap one session tab label in a `tab:<id>` click zone (crush_feat.md
+     * §8 E2), so the cells it lands on can be turned back into the session
+     * they belong to by {@see Chat::update()}.
+     *
+     * Only the label is marked, never the `|` separators: a click on the gap
+     * between two tabs is ambiguous, and leaving it unmarked makes it a no-op
+     * rather than a coin flip.
+     *
+     * Marking is skipped entirely when clicks are off. That is not just an
+     * optimisation of a dead feature: with no marker anywhere in the frame,
+     * {@see scanRoot()} keeps its `str_contains()` fast path and skips the
+     * ~24ms grapheme walk, so disabling the mouse also buys back the render
+     * cost of supporting it.
+     */
+    private static function markSessionTab(string $id, string $label): string
+    {
+        $zoneId = self::SESSION_TAB_ZONE_PREFIX . $id;
+
+        if (
+            $id === ''
+            || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $id) !== 1
+            || strlen($zoneId) > Mark::MAX_ID_BYTES
+        ) {
+            return $label;
+        }
+
+        return Mark::zone($zoneId, $label);
     }
 
     /**

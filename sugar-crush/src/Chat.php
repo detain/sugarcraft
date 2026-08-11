@@ -10,10 +10,14 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\SessionPicker;
@@ -31,7 +35,9 @@ use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\Zone;
+use SugarCraft\Mouse\ZoneClickTracker;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
@@ -309,6 +315,9 @@ final class Chat implements Model
             // $rows/$cols for why Renderer must read these instead of
             // querying terminal size itself.
             return [$this->mutate(['rows' => $msg->rows, 'cols' => $msg->cols]), null];
+        }
+        if ($msg instanceof MouseMsg) {
+            return $this->handleMouse($msg);
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -1159,6 +1168,101 @@ final class Chat implements Model
         }
 
         return Renderer::scanner()->hit($col, $row);
+    }
+
+    /**
+     * Press/Release pairing state for click dispatch.
+     *
+     * Static for the same reason {@see Renderer::scanner()} is: a click spans
+     * two `update()` calls, and `Chat` is immutable — the press-half state
+     * would be discarded with the intermediate instance if it lived on a
+     * field, so no click could ever complete. One tracker per process
+     * mirrors the single global manager bubblezone (and candy-mouse) assumes.
+     */
+    private static ?ZoneClickTracker $clickTracker = null;
+
+    /**
+     * The shared Press+Release pairing state machine (candy-mouse's
+     * {@see ZoneClickTracker}), which is what makes a press on a tab followed
+     * by a release somewhere else — a drag, or a text selection started on
+     * the tab strip — dispatch nothing instead of switching sessions.
+     */
+    public static function clickTracker(): ZoneClickTracker
+    {
+        return self::$clickTracker ??= new ZoneClickTracker();
+    }
+
+    /**
+     * Click-to-switch session tab (crush_feat.md §8 E2).
+     *
+     * Only left press/release are fed to the tracker. Motion and wheel
+     * events are dropped here rather than translated: candy-mouse's tracker
+     * ignores Drag and Scroll anyway, and nothing else consumes them yet, so
+     * translating them would be building a consumer that does not exist.
+     *
+     * The hit test uses the click's own coordinates against the zones
+     * {@see Renderer::scanRoot()} recorded for the frame currently on
+     * screen — see {@see zoneAt()}, which is also where
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` is enforced.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function handleMouse(MouseMsg $msg): array
+    {
+        if ($msg->button !== MouseButton::Left) {
+            return [$this, null];
+        }
+
+        $event = match (true) {
+            $msg instanceof MouseClickMsg   => MouseEvent::press($msg->x, $msg->y),
+            $msg instanceof MouseReleaseMsg => MouseEvent::release($msg->x, $msg->y),
+            default                         => null,
+        };
+        if ($event === null) {
+            return [$this, null];
+        }
+
+        $click = self::clickTracker()->track($event, self::zoneAt($msg->x, $msg->y));
+        if ($click === null) {
+            return [$this, null];
+        }
+
+        $prefix = Renderer::SESSION_TAB_ZONE_PREFIX;
+        if (!str_starts_with($click->zone->id, $prefix)) {
+            return [$this, null];
+        }
+
+        return $this->selectSessionTab(substr($click->zone->id, strlen($prefix)));
+    }
+
+    /**
+     * Make the clicked session current, if it is still a session.
+     *
+     * The id is re-checked against `listSessions()` rather than trusted from
+     * the zone: zones describe the PREVIOUS frame, so a session deleted (or a
+     * store swapped) between that frame and the click would otherwise leave
+     * `currentSessionId` pointing at a row that no longer exists — which
+     * {@see cycleSessionTab()} then treats as "current session not found" and
+     * refuses to cycle out of, stranding the user.
+     *
+     * Unlike {@see cycleSessionTab()} this does NOT require a non-null
+     * `currentSessionId` to start from — a click names its target absolutely,
+     * so it works on a freshly-launched process that has not selected a
+     * session yet (see that method's reachability note).
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function selectSessionTab(string $id): array
+    {
+        if ($id === '' || $id === $this->currentSessionId || $this->sessionStore === null) {
+            return [$this, null];
+        }
+
+        if (!in_array($id, array_column($this->sessionStore->listSessions(), 'id'), true)) {
+            return [$this, null];
+        }
+
+        return [$this->withCurrentSessionId($id), null];
     }
 
     /**
