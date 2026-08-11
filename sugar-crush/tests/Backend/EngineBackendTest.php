@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
@@ -15,6 +18,7 @@ use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -468,6 +472,68 @@ final class EngineBackendTest extends TestCase
         $this->assertNotSame($base, $base->withTools([$this->clockTool()]));
         $this->assertNotSame($base, $base->withMaxSteps(2));
         $this->assertNotSame($base, $base->withoutHooks());
+    }
+
+    public function testWithInstructionLoaderAttachesTheLoaderWithoutMutatingTheOriginal(): void
+    {
+        $loader = new InstructionFileLoader(sys_get_temp_dir());
+        $base = EngineBackend::new(new EchoProvider(), 'echo');
+
+        $withLoader = $base->withInstructionLoader($loader);
+
+        $this->assertNotSame($base, $withLoader);
+        $this->assertNull($this->instructionLoaderOf($base));
+        $this->assertSame($loader, $this->instructionLoaderOf($withLoader));
+    }
+
+    /**
+     * Every sibling wither rebuilds the backend through `new self(...)` with
+     * nine positional arguments, and the ninth is the instruction loader that
+     * carries a repo-root CLAUDE.md/AGENTS.md into the system prompt. Dropping
+     * that argument from any one of them would silently return
+     * {@see \SugarCraft\Crush\Context\InstructionFileLoader::loadRoot()} to
+     * dead code with the rest of the suite still green - Bootstrap happens to
+     * call withInstructionLoader() LAST today, so no other test would notice.
+     * Pin the invariant across all of them here.
+     *
+     * @dataProvider witherProvider
+     * @param list<mixed> $args
+     */
+    public function testEveryWitherPreservesTheInstructionLoader(string $method, array $args): void
+    {
+        $loader = new InstructionFileLoader(sys_get_temp_dir());
+        $base = EngineBackend::new(new EchoProvider(), 'echo')->withInstructionLoader($loader);
+
+        $derived = $base->{$method}(...$args);
+
+        $this->assertNotSame($base, $derived, "{$method}() must return a new instance");
+        $this->assertSame(
+            $loader,
+            $this->instructionLoaderOf($derived),
+            "{$method}() must carry the instruction loader through to the new instance",
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string, list<mixed>}>
+     */
+    public static function witherProvider(): iterable
+    {
+        yield 'withTools' => ['withTools', [[]]];
+        yield 'withSkills' => ['withSkills', [[]]];
+        yield 'withSkillRegistry' => ['withSkillRegistry', [new SkillRegistry()]];
+        yield 'withHooks' => ['withHooks', [new HookManager(new HookRegistry())]];
+        yield 'withoutHooks' => ['withoutHooks', []];
+        yield 'withMaxSteps' => ['withMaxSteps', [3]];
+        yield 'withWorktreeRoot' => ['withWorktreeRoot', [sys_get_temp_dir()]];
+    }
+
+    private function instructionLoaderOf(EngineBackend $backend): ?InstructionFileLoader
+    {
+        $property = new \ReflectionProperty($backend, 'instructionLoader');
+        $property->setAccessible(true);
+
+        return $property->getValue($backend);
     }
 
     /**
