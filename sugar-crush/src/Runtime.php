@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Messages\Message;
@@ -17,9 +18,15 @@ use SugarCraft\Crush\Hooks\HookContext;
 
 final class Runtime
 {
+    /**
+     * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
+     *                                            one is captured lazily on first use and
+     *                                            reused for the life of this Runtime.
+     */
     public function __construct(
         private ProviderInterface $provider,
         private HookManager $hookManager,
+        private ?EnvironmentBlock $environmentBlock = null,
     ) {}
 
     /**
@@ -203,10 +210,16 @@ final class Runtime
      *
      * Each document is fenced in <project-instructions> so the model can tell
      * project convention from the assistant's own base prompt.
+     *
+     * The <env> block goes first, ahead of any project instruction, so the
+     * model knows where it is (cwd, git state, platform, model, date) before
+     * it reads conventions that talk about paths relative to that cwd.
      */
     private function buildSystemPrompt(App $app): string
     {
         $base = 'You are SugarCrush, an AI coding assistant.';
+
+        $base .= "\n\n" . $this->environmentSnapshot($app)->render();
 
         if ($app->instructionLoader !== null) {
             $docs = [
@@ -232,6 +245,21 @@ final class Runtime
         }
 
         return $base;
+    }
+
+    /**
+     * Resolve the environment snapshot folded into every system prompt.
+     *
+     * Memoized on the Runtime rather than re-captured per call: render()
+     * shells out to git three times, and buildSystemPrompt() runs once per
+     * step of the agentic loop. A snapshot is also the semantics the block
+     * documents — a point-in-time capture, not live-polled state — so the
+     * same instance must be reused once taken. An owner that already holds a
+     * session-wide snapshot injects it through the constructor instead.
+     */
+    private function environmentSnapshot(App $app): EnvironmentBlock
+    {
+        return $this->environmentBlock ??= EnvironmentBlock::capture((string) getcwd(), $app->model);
     }
 
     /**

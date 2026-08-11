@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Agents;
 
+use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Context\EnvironmentBlock;
 
 /**
  * Tests for Agent value object - represents a configured agent instance.
@@ -222,7 +224,7 @@ final class AgentTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // systemPrompt() - returns the prompt
+    // systemPrompt() - prompt plus the session environment block
     // -------------------------------------------------------------------------
 
     public function testSystemPrompt(): void
@@ -244,7 +246,7 @@ final class AgentTest extends TestCase
         $systemPrompt = $agent->systemPrompt();
 
         // Assert
-        $this->assertSame('You are a specialized test agent.', $systemPrompt);
+        $this->assertStringStartsWith("You are a specialized test agent.\n\n", $systemPrompt);
     }
 
     public function testSystemPromptEmpty(): void
@@ -255,7 +257,104 @@ final class AgentTest extends TestCase
         // Act
         $systemPrompt = $agent->systemPrompt();
 
-        // Assert
-        $this->assertSame('', $systemPrompt);
+        // Assert - no leading blank line is glued onto a promptless agent
+        $this->assertStringStartsWith('<env>', $systemPrompt);
+    }
+
+    /**
+     * The gap this closes: subagent prompts were a bare passthrough of
+     * $this->prompt, so a subagent had no idea which directory, branch,
+     * platform or model it was running under. Fails against the old
+     * systemPrompt().
+     */
+    public function testSystemPromptAppendsCapturedEnvironmentBlock(): void
+    {
+        $agent = Agent::fromArray(['prompt' => 'Do the thing.', 'model' => 'minimax-m2.7']);
+
+        $systemPrompt = $agent->systemPrompt();
+
+        $this->assertStringContainsString('<env>', $systemPrompt);
+        $this->assertStringContainsString('</env>', $systemPrompt);
+        $this->assertStringContainsString('Working directory: ' . getcwd(), $systemPrompt);
+        $this->assertStringContainsString('Model: minimax-m2.7', $systemPrompt);
+        $this->assertStringContainsString('Current date: ' . date('Y-m-d'), $systemPrompt);
+    }
+
+    public function testSystemPromptPrefersTheCallerSuppliedEnvironmentBlock(): void
+    {
+        $agent = Agent::fromArray(['prompt' => 'Do the thing.', 'model' => 'agent-model']);
+
+        $systemPrompt = $agent->systemPrompt(
+            new EnvironmentBlock('/session/cwd', 'session-model', new DateTimeImmutable('2026-03-04 05:06:07')),
+        );
+
+        $this->assertStringContainsString('Working directory: /session/cwd', $systemPrompt);
+        $this->assertStringContainsString('Model: session-model', $systemPrompt);
+        $this->assertStringContainsString('Current date: 2026-03-04', $systemPrompt);
+    }
+
+    public function testSystemPromptUsesTheAttachedEnvironmentBlock(): void
+    {
+        $agent = Agent::fromArray(['prompt' => 'Do the thing.'])
+            ->withEnvironment(new EnvironmentBlock('/attached/cwd', 'attached-model'));
+
+        $systemPrompt = $agent->systemPrompt();
+
+        $this->assertStringContainsString('Working directory: /attached/cwd', $systemPrompt);
+        $this->assertStringContainsString('Model: attached-model', $systemPrompt);
+    }
+
+    // -------------------------------------------------------------------------
+    // withEnvironment() - immutable builder
+    // -------------------------------------------------------------------------
+
+    public function testWithEnvironmentReturnsNewInstanceAndPreservesOtherFields(): void
+    {
+        $original = new Agent(
+            name: 'my-agent',
+            description: 'My agent description',
+            prompt: 'You are my agent.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: ['Read'],
+            skillNames: ['php-best-practices'],
+            hooks: ['pre_task'],
+            isActive: true,
+        );
+
+        $block = new EnvironmentBlock('/some/cwd', 'some-model');
+        $attached = $original->withEnvironment($block);
+
+        $this->assertNotSame($original, $attached);
+        $this->assertNull($original->environment);
+        $this->assertSame($block, $attached->environment);
+        $this->assertSame('my-agent', $attached->name);
+        $this->assertSame('My agent description', $attached->description);
+        $this->assertSame('You are my agent.', $attached->prompt);
+        $this->assertSame('claude-sonnet-4-6', $attached->model);
+        $this->assertSame('anthropic', $attached->provider);
+        $this->assertSame(['Read'], $attached->tools);
+        $this->assertSame(['php-best-practices'], $attached->skillNames);
+        $this->assertSame(['pre_task'], $attached->hooks);
+        $this->assertTrue($attached->isActive);
+    }
+
+    public function testWithNameAndWithActiveCarryTheEnvironmentBlockForward(): void
+    {
+        $block = new EnvironmentBlock('/some/cwd', 'some-model');
+        $agent = Agent::fromArray(['name' => 'a'])->withEnvironment($block);
+
+        $this->assertSame($block, $agent->withName('b')->environment);
+        $this->assertSame($block, $agent->withActive(true)->environment);
+    }
+
+    public function testToArrayOmitsTheEnvironmentSnapshot(): void
+    {
+        // A snapshot written into a persisted agent definition would outlive
+        // the session that captured it.
+        $agent = Agent::fromArray(['name' => 'a'])
+            ->withEnvironment(new EnvironmentBlock('/some/cwd', 'some-model'));
+
+        $this->assertArrayNotHasKey('environment', $agent->toArray());
     }
 }
