@@ -6,6 +6,8 @@ namespace SugarCraft\Crush;
 
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Messages\Message;
@@ -13,6 +15,8 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Tools\ToolCall;
+use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookContext;
 
@@ -32,9 +36,18 @@ final class Runtime
     /**
      * Run a completion and handle tool calls.
      *
+     * @param ?callable $onEvent Optional tool-lifecycle observer, signature
+     *                           `function(ToolStarted|ToolFinished $event): void`.
+     *                           Mirrors the `$onToken` plumbing the streaming
+     *                           text path already has: the engine's tool calls
+     *                           are otherwise invisible to whoever drives it
+     *                           (crush_feat.md §1 E1), because only the final
+     *                           assistant message survives back out of
+     *                           {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}.
+     *
      * @return \Generator yields CompleteResponse chunks
      */
-    public function run(App $app): \Generator
+    public function run(App $app, ?callable $onEvent = null): \Generator
     {
         $messages = $this->buildMessages($app);
 
@@ -53,15 +66,15 @@ final class Runtime
         // collapsed by iterator_to_array(). Re-yielding lets this outer
         // generator hand out fresh sequential keys.
         $inner = $this->provider->supportsStreaming()
-            ? $this->runStreaming($request, $app)
-            : $this->runBatch($request, $app);
+            ? $this->runStreaming($request, $app, $onEvent)
+            : $this->runBatch($request, $app, $onEvent);
 
         foreach ($inner as $msg) {
             yield $msg;
         }
     }
 
-    private function runStreaming(CompleteRequest $request, App $app): \Generator
+    private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null): \Generator
     {
         $buffer = '';
         $toolCalls = [];
@@ -85,13 +98,13 @@ final class Runtime
         yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning);
 
         if ($toolCalls !== []) {
-            foreach ($this->executeToolCalls($toolCalls, $app) as $msg) {
+            foreach ($this->executeToolCalls($toolCalls, $app, $onEvent) as $msg) {
                 yield $msg;
             }
         }
     }
 
-    private function runBatch(CompleteRequest $request, App $app): \Generator
+    private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null): \Generator
     {
         $response = $this->provider->complete($request);
 
@@ -102,7 +115,7 @@ final class Runtime
         );
 
         if ($response->toolCalls !== null && $response->toolCalls !== []) {
-            foreach ($this->executeToolCalls($response->toolCalls, $app) as $msg) {
+            foreach ($this->executeToolCalls($response->toolCalls, $app, $onEvent) as $msg) {
                 yield $msg;
             }
         }
@@ -110,18 +123,20 @@ final class Runtime
 
     /**
      * @param array<ToolCall> $toolCalls
+     * @param ?callable       $onEvent see {@see run()} — every call emits one
+     *                                 {@see ToolStarted} and exactly one
+     *                                 {@see ToolFinished}, including the
+     *                                 unknown-tool and hook-denied branches.
      */
-    private function executeToolCalls(array $toolCalls, App $app): \Generator
+    private function executeToolCalls(array $toolCalls, App $app, ?callable $onEvent = null): \Generator
     {
         foreach ($toolCalls as $toolCall) {
+            $this->emit($onEvent, ToolStarted::fromCall($toolCall));
+
             // Find the tool
             $tool = $this->findTool($toolCall->name(), $app);
             if ($tool === null) {
-                yield new ToolResultMessage(
-                    $toolCall->id(),
-                    "Tool not found: {$toolCall->name()}",
-                    isError: true,
-                );
+                yield $this->failure($toolCall, "Tool not found: {$toolCall->name()}", $onEvent);
                 continue;
             }
 
@@ -142,11 +157,7 @@ final class Runtime
             // through to execution (isAllowed() is false for MODIFY too).
             $hookResult = $this->hookManager->preToolUse($context);
             if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
-                yield new ToolResultMessage(
-                    $toolCall->id(),
-                    "Hook denied: {$hookResult->message}",
-                    isError: true,
-                );
+                yield $this->failure($toolCall, "Hook denied: {$hookResult->message}", $onEvent);
                 continue;
             }
 
@@ -160,6 +171,8 @@ final class Runtime
             // Post-hook observes the tool output.
             $this->hookManager->postToolUse($context->withToolOutput($result->content()));
 
+            $this->emit($onEvent, ToolFinished::fromResult($toolCall, $result));
+
             // Echo the ORIGINAL tool-call id: the model correlates a result
             // to its request by this id, and the tool itself never sees it.
             // imageBytes/imageProtocol thread an image-bearing ToolResult
@@ -172,6 +185,32 @@ final class Runtime
                 $result->imageBytes(),
                 $result->imageProtocol(),
             );
+        }
+    }
+
+    /**
+     * Terminate one tool call that never reached (or never survived) the tool
+     * itself — an unknown name, or a pre-hook DENY.
+     *
+     * The synthetic error {@see ToolResult} exists so {@see ToolFinished}
+     * always carries a result: a consumer rendering the running→done
+     * transition would otherwise need a third, result-less shape for exactly
+     * the two cases a user most wants explained.
+     */
+    private function failure(ToolCall $toolCall, string $message, ?callable $onEvent): ToolResultMessage
+    {
+        $this->emit($onEvent, ToolFinished::fromResult(
+            $toolCall,
+            new ToolResult(toolCallId: $toolCall->id(), content: $message, isError: true),
+        ));
+
+        return new ToolResultMessage($toolCall->id(), $message, isError: true);
+    }
+
+    private function emit(?callable $onEvent, ToolStarted|ToolFinished $event): void
+    {
+        if ($onEvent !== null) {
+            $onEvent($event);
         }
     }
 

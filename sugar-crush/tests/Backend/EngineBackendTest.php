@@ -9,6 +9,8 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
@@ -433,6 +435,135 @@ final class EngineBackendTest extends TestCase
         // answered after seeing the tool result.
         $this->assertSame(2, $provider->calls);
         $this->assertStringContainsString('NOON', $reply->content);
+    }
+
+    /**
+     * crush_feat.md §1 E1: before the $onEvent seam every tool call the bounded
+     * agentic loop made was swallowed inside complete() — only $lastAssistant's
+     * text escaped — so a caller had no way to observe them. This test fails
+     * against that older code because there was no third argument to pass.
+     */
+    public function testCompleteThreadsToolEventsToTheOnEventCallback(): void
+    {
+        $backend = EngineBackend::new($this->toolThenAnswerProvider(), 'tc')->withTools([$this->clockTool()]);
+
+        $events = [];
+        $reply = $backend->complete([Message::user('what time is it?')], null, function ($event) use (&$events): void {
+            $events[] = $event;
+        });
+
+        $this->assertStringContainsString('NOON', $reply->content);
+        $this->assertSame(
+            [ToolStarted::class, ToolFinished::class],
+            array_map(static fn ($e) => $e::class, $events),
+        );
+        $this->assertSame('c1', $events[0]->toolCallId);
+        $this->assertSame('clock', $events[0]->toolName);
+        $this->assertSame('c1', $events[1]->toolCallId);
+        $this->assertSame('NOON', $events[1]->result->content());
+        $this->assertFalse($events[1]->result->isError());
+    }
+
+    /**
+     * A hook DENY inside the loop is a tool-call outcome the caller must be
+     * able to see; it used to be entirely internal to the engine.
+     */
+    public function testCompleteReportsAHookDeniedToolCallAsAnErrorEvent(): void
+    {
+        $backend = EngineBackend::new($this->bashThenAnswerProvider(), 'bash')
+            ->withTools([$this->bashSpyTool()]);
+
+        $events = [];
+        $backend->complete([Message::user('nuke it')], null, function ($event) use (&$events): void {
+            $events[] = $event;
+        });
+
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(ToolFinished::class, $events[1]);
+        $this->assertTrue($events[1]->result->isError());
+        $this->assertStringContainsString('Hook denied', $events[1]->result->content());
+    }
+
+    public function testCompleteStillWorksWithoutAnOnEventCallback(): void
+    {
+        $backend = EngineBackend::new($this->toolThenAnswerProvider(), 'tc')->withTools([$this->clockTool()]);
+
+        $this->assertStringContainsString('NOON', $backend->complete([Message::user('time?')])->content);
+    }
+
+    /**
+     * completeAsync() runs the engine in a forked child, where invoking the
+     * caller's callback would write into a copy of its state and vanish — so
+     * the events ride back in the payload and are replayed in the PARENT.
+     */
+    public function testCompleteAsyncReplaysTheChildsToolEventsInTheParent(): void
+    {
+        $backend = EngineBackend::new($this->toolThenAnswerProvider(), 'tc')->withTools([$this->clockTool()]);
+
+        $events = [];
+        $reply = $this->awaitPromise($backend->completeAsync(
+            [Message::user('what time is it?')],
+            null,
+            null,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ));
+
+        $this->assertStringContainsString('NOON', $reply->content);
+        $this->assertSame(
+            [ToolStarted::class, ToolFinished::class],
+            array_map(static fn ($e) => $e::class, $events),
+        );
+        $this->assertSame('c1', $events[1]->toolCallId);
+        $this->assertSame('clock', $events[1]->toolName);
+        $this->assertSame('NOON', $events[1]->result->content());
+    }
+
+    /**
+     * The diff (W1.F1) and image bytes (W1.G2) a renderer needs must survive
+     * the fork's serialize/allowed_classes=false seam, not just the in-process
+     * call — they are the whole reason the event carries the ToolResult.
+     */
+    public function testCompleteAsyncPreservesDiffAndImagePayloadsAcrossTheFork(): void
+    {
+        $backend = EngineBackend::new($this->toolThenAnswerProvider(), 'tc')
+            ->withTools([$this->richClockTool()]);
+
+        $events = [];
+        $this->awaitPromise($backend->completeAsync(
+            [Message::user('what time is it?')],
+            null,
+            null,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ));
+
+        $finished = $events[1];
+        $this->assertInstanceOf(ToolFinished::class, $finished);
+        $this->assertSame("--- a/clock\n+++ b/clock\n", $finished->result->diff());
+        $this->assertSame("\x89PNG\x00raw", $finished->result->imageBytes());
+        $this->assertSame('kitty', $finished->result->imageProtocol());
+        $this->assertSame(7, $finished->result->durationMs());
+    }
+
+    /** An image/diff-bearing variant of {@see clockTool()}. */
+    private function richClockTool(): Tool
+    {
+        return new class implements Tool {
+            public function name(): string { return 'clock'; }
+            public function description(): string { return 'test tool'; }
+            public function inputSchema(): array { return []; }
+            public function execute(array $args): ToolResult
+            {
+                return new ToolResult(
+                    toolCallId: '',
+                    content: 'NOON',
+                    isError: false,
+                    durationMs: 7,
+                    imageBytes: "\x89PNG\x00raw",
+                    imageProtocol: 'kitty',
+                    diff: "--- a/clock\n+++ b/clock\n",
+                );
+            }
+        };
     }
 
     public function testMaxStepsGuardsAgainstRunawayToolLoops(): void

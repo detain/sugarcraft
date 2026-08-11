@@ -370,7 +370,7 @@ final class ChatTest extends TestCase
         $tokens = [];
         $chat = new Chat(
             backend: new class implements \SugarCraft\Crush\Backend {
-                public function complete(array $history, callable $onToken = null): Message
+                public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
                 {
                     if ($onToken !== null) {
                         $onToken('token1');
@@ -379,7 +379,7 @@ final class ChatTest extends TestCase
                     }
                     return \SugarCraft\Crush\Message::assistant('streaming reply');
                 }
-                public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): PromiseInterface
+                public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
                 {
                     return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
                         try {
@@ -409,11 +409,11 @@ final class ChatTest extends TestCase
         $callbackReceived = null;
         $chat = new Chat(
             backend: new class implements \SugarCraft\Crush\Backend {
-                public function complete(array $history, callable $onToken = null): Message
+                public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
                 {
                     return \SugarCraft\Crush\Message::assistant('reply');
                 }
-                public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): PromiseInterface
+                public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
                 {
                     return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
                         try {
