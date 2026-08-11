@@ -17,6 +17,11 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\McpAuthCommand;
@@ -196,6 +201,22 @@ final class Chat implements Model
          * test that never needs it.
          */
         private readonly ?\SugarCraft\Mosaic\Mosaic $mosaic = null,
+        /**
+         * Hook chain gating this Chat's OWN ({@see registerTool()}) tool
+         * calls, so `PreToolUse`/`PostToolUse` fire for a call no matter
+         * which of the two pipelines crush_feat.md §1 D describes dispatched
+         * it. Before this, {@see Runtime}'s engine pipeline ran every call
+         * through {@see HookManager} while the Chat-native pipeline called
+         * the registered closure with zero gating - so the same `rm -rf`
+         * argument was denied by {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}
+         * on one path and executed on the other.
+         *
+         * Null (the default) keeps the pre-gating behaviour for tests and
+         * embedders that never wire hooks; {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+         * passes the same built-in guard chain (`Bootstrap::hooks()`) it
+         * hands the engine backend.
+         */
+        private readonly ?HookManager $hooks = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -238,6 +259,9 @@ final class Chat implements Model
         }
         if ($msg instanceof ToolResultsMsg) {
             return $this->finishToolCalls($msg);
+        }
+        if ($msg instanceof BackendToolEventsMsg) {
+            return $this->applyBackendToolEvent($msg);
         }
         if ($msg instanceof WindowSizeMsg) {
             // The one authoritative size - see the constructor docblock on
@@ -513,6 +537,112 @@ final class Chat implements Model
     }
 
     /**
+     * Apply ONE queued backend tool-lifecycle event to history, then
+     * re-dispatch whatever is left of the queue.
+     *
+     * This is the consuming half of the `$onEvent` seam {@see Backend} threads
+     * through {@see Backend\EngineBackend}/{@see Runtime} (crush_feat.md §1 E1).
+     * Before it, an agentic backend could run several rounds of tool calls
+     * inside one `complete()` and the user saw nothing but a "thinking…"
+     * spinner: only the final Message escaped, so none of {@see Renderer}'s
+     * tool rendering ever fired for that pipeline.
+     *
+     * One event per `update()` (rather than folding the whole queue in a single
+     * pass) is what makes the *running* half visible: each returned Chat is
+     * rendered before the next event is applied, so an engine-dispatched call
+     * walks through the same placeholder-then-replace states
+     * {@see beginToolCalls()}/{@see finishToolCalls()} produce for a
+     * {@see registerTool()} one. Note this cannot make {@see
+     * Backend\EngineBackend}'s FORKED path retroactively live - it replays its
+     * queue when the child's payload lands - but the transcript states it
+     * produces are identical either way.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function applyBackendToolEvent(BackendToolEventsMsg $msg): array
+    {
+        if ($msg->generation !== null && $msg->generation !== $this->generation) {
+            return [$this, null];
+        }
+
+        $remaining = $msg->events;
+        $event = array_shift($remaining);
+
+        // Queue drained: hand the turn's reply to the ordinary AssistantMsg
+        // arm so tool calls the model asked for on TOP of the engine's own
+        // (Chat-native $tools) still get picked up by beginToolCalls().
+        if ($event === null) {
+            return [$this, Cmd::send(new AssistantMsg($msg->message, $msg->generation))];
+        }
+
+        $next = $event instanceof ToolStarted
+            ? $this->appendToolRunningPlaceholder($event)
+            : $this->replaceToolRunningPlaceholder($event);
+
+        return [$next, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+    }
+
+    /**
+     * Append the "running" placeholder for an engine-dispatched tool call -
+     * {@see beginToolCalls()}'s first half, driven by a {@see ToolStarted}
+     * instead of by a Message's own `$toolCalls`.
+     *
+     * The event's engine-side identity is converted through
+     * {@see ToolCall::fromEngineCall()} rather than by hand so the placeholder's
+     * `pendingToolCallId` keys exactly the way the rest of the Chat-side
+     * pipeline keys (W2.S1b).
+     */
+    private function appendToolRunningPlaceholder(ToolStarted $event): self
+    {
+        $call = ToolCall::fromEngineCall(
+            new EngineToolCall($event->toolCallId, $event->toolName, $event->arguments),
+        );
+
+        return $this->mutate(['history' => [...$this->history, Message::toolRunning($call)]]);
+    }
+
+    /**
+     * Replace an engine-dispatched call's placeholder with its real result -
+     * {@see finishToolCalls()}'s replace-by-id half, and deliberately building
+     * the same `Message::assistant(…)->withToolResults([…])` shape so
+     * {@see Renderer::renderToolResults()} renders both pipelines identically
+     * (including the W1.F1 diff and the image bytes that ride along on
+     * {@see ToolResult}).
+     *
+     * Correlation is on {@see ToolFinished::$toolCallId}, NOT on the adapted
+     * result's own `id`: a tool never sees its own call id, so built-ins
+     * routinely return an invented one and only the event carries the id the
+     * placeholder was keyed with (see {@see ToolFinished::fromResult()}).
+     *
+     * An unmatched result is appended rather than dropped - losing a tool's
+     * output entirely is worse than showing it without a preceding placeholder.
+     */
+    private function replaceToolRunningPlaceholder(ToolFinished $event): self
+    {
+        $result = ToolResult::fromEngineResult($event->result, $event->toolName);
+        $message = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
+            ->withToolResults([$result]);
+
+        $newHistory = [];
+        $replaced = false;
+        foreach ($this->history as $historyMessage) {
+            if (!$replaced && $historyMessage->pendingToolCallId === $event->toolCallId) {
+                $newHistory[] = $message;
+                $replaced = true;
+
+                continue;
+            }
+            $newHistory[] = $historyMessage;
+        }
+
+        if (!$replaced) {
+            $newHistory[] = $message;
+        }
+
+        return $this->mutate(['history' => $newHistory]);
+    }
+
+    /**
      * Look up and invoke the registered callback for a tool call, without
      * firing {@see $onToolCall} - the listener fires exactly once, in the
      * parent process, once {@see finishToolCalls()} collects this call's
@@ -596,8 +726,15 @@ final class Chat implements Model
      * the parent, once {@see waitForToolChildrenAsync()} collects that
      * call's real result.
      *
+     * Hook gating (crush_feat.md §1 E1) runs HERE, in the parent, before any
+     * fork: a denied call must never reach a child at all, and a
+     * {@see HookManager} whose hooks ran inside a forked child would have
+     * every effect of that run (audit log, accumulated state) die with the
+     * child's copy-on-write memory - the same reason $onToolCall is fired in
+     * the parent rather than in {@see invokeTool()}.
+     *
      * @param ToolCall[] $toolCalls
-     * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}>
+     * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult, hookContext: ?HookContext}>
      */
     private function forkToolCalls(array $toolCalls): array
     {
@@ -605,8 +742,21 @@ final class Chat implements Model
 
         $jobs = [];
         foreach ($toolCalls as $toolCall) {
+            [$toolCall, $denied, $hookContext] = $this->gateToolCall($toolCall);
+
+            if ($denied !== null) {
+                // A denied call is never forked and never reaches its
+                // callback, but still becomes a job carrying an honest error
+                // ToolResult under the ORIGINAL call id - so finishToolCalls()
+                // replaces beginToolCalls()'s "running" placeholder for it
+                // exactly as it does for an executed call, instead of leaving
+                // a spinner that never resolves.
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $denied, 'hookContext' => null];
+                continue;
+            }
+
             if (!$canFork) {
-                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall), 'hookContext' => $hookContext];
                 continue;
             }
 
@@ -616,7 +766,7 @@ final class Chat implements Model
             if ($pid === -1) {
                 // Fork failed for this call only - run it synchronously right
                 // here, same as the no-pcntl fallback.
-                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall)];
+                $jobs[] = ['toolCall' => $toolCall, 'file' => null, 'pid' => null, 'result' => $this->executeToolSynchronously($toolCall), 'hookContext' => $hookContext];
                 continue;
             }
 
@@ -625,10 +775,87 @@ final class Chat implements Model
                 \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
             }
 
-            $jobs[] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid, 'result' => null];
+            $jobs[] = ['toolCall' => $toolCall, 'file' => $file, 'pid' => $pid, 'result' => null, 'hookContext' => $hookContext];
         }
 
         return $jobs;
+    }
+
+    /**
+     * Run the `PreToolUse` hook chain for ONE Chat-native tool call and
+     * report what should happen to it.
+     *
+     * Deliberately a mirror of {@see Runtime::executeToolCalls()}'s gating,
+     * decision for decision, because the whole point of §1 E1 is that a
+     * given tool call is treated identically whichever pipeline dispatched
+     * it: an unknown tool is reported as unknown WITHOUT consulting hooks
+     * (Runtime resolves the tool first and only then builds a HookContext),
+     * only a true DENY blocks (a MODIFY is "allowed, with rewritten input",
+     * and `isAllowed()` is false for it too), and an unparseable
+     * `modifiedInput` falls back to the original arguments.
+     *
+     * @return array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext} [the call
+     *     to execute (arguments rewritten by a MODIFY hook), a pre-resolved
+     *     error result when the call was DENIED, the context to hand
+     *     `PostToolUse` once the call finishes (null when it will not run)]
+     */
+    private function gateToolCall(ToolCall $toolCall): array
+    {
+        if ($this->hooks === null || !isset($this->tools[$toolCall->name])) {
+            return [$toolCall, null, null];
+        }
+
+        $context = new HookContext(
+            sessionId: $this->currentSessionId ?? '',
+            toolName: $toolCall->name,
+            toolArgs: $toolCall->arguments,
+            toolInput: json_encode($toolCall->arguments) ?: '{}',
+            toolOutput: '',
+            // Chat has no model/provider identity to report: Backend's whole
+            // contract is complete(history), so neither ever reaches here.
+            // Left empty rather than guessed at - every hook that ships with
+            // sugar-crush gates on toolName/toolArgs/toolInput.
+            model: '',
+            provider: '',
+            projectRoot: getcwd() ?: '',
+        );
+
+        $hookResult = $this->hooks->preToolUse($context);
+
+        if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
+            return [
+                $toolCall,
+                ToolResult::error($toolCall->name, "Hook denied: {$hookResult->message}", $toolCall->id),
+                null,
+            ];
+        }
+
+        if ($hookResult->isModified()) {
+            $decoded = json_decode($hookResult->modifiedInput ?? '', true);
+            if (is_array($decoded)) {
+                $toolCall = new ToolCall($toolCall->name, $decoded, $toolCall->id);
+            }
+        }
+
+        return [$toolCall, null, $context];
+    }
+
+    /**
+     * Run the `PostToolUse` hook chain over a finished tool call's output,
+     * in the parent process, and return the result unchanged.
+     *
+     * Paired with {@see gateToolCall()}: `$context` is null exactly when the
+     * pre-hook never allowed the call (no hooks wired, unknown tool, or a
+     * DENY), which is also when {@see Runtime} skips its own postToolUse -
+     * a call that never ran has no output to observe.
+     */
+    private function applyPostToolUse(?HookContext $context, ToolResult $result): ToolResult
+    {
+        if ($context !== null && $this->hooks !== null) {
+            $this->hooks->postToolUse($context->withToolOutput($result->result));
+        }
+
+        return $result;
     }
 
     /**
@@ -704,14 +931,20 @@ final class Chat implements Model
      * Chat::update()) also lands here via $cancellation, same as it does
      * for the backend call.
      *
-     * @param list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult}> $jobs
+     * @param list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult, hookContext: ?HookContext}> $jobs
      * @return PromiseInterface<list<ToolResult>>
      */
     private function waitForToolChildrenAsync(array $jobs, CancellationToken $cancellation): PromiseInterface
     {
         $deferred = new Deferred();
 
-        $collect = fn(array $job): ToolResult => $job['result'] ?? $this->collectToolResult((string) $job['file'], $job['toolCall']);
+        // PostToolUse runs here, on the parent's side of the fork boundary,
+        // for the same reason PreToolUse runs before the fork - see
+        // forkToolCalls()'s docblock.
+        $collect = fn(array $job): ToolResult => $this->applyPostToolUse(
+            $job['hookContext'] ?? null,
+            $job['result'] ?? $this->collectToolResult((string) $job['file'], $job['toolCall']),
+        );
 
         $pendingIndexes = [];
         foreach ($jobs as $index => $job) {
@@ -997,6 +1230,27 @@ final class Chat implements Model
     }
 
     /**
+     * The hook chain gating this Chat's own tool calls, if wired (see the
+     * `$hooks` constructor docblock).
+     */
+    public function hooks(): ?HookManager
+    {
+        return $this->hooks;
+    }
+
+    /**
+     * Gate this Chat's {@see registerTool()} calls through `$hooks`, the
+     * same {@see HookManager} the engine pipeline already runs its calls
+     * through (crush_feat.md §1 E1).
+     *
+     * @return self A new Chat with the hook chain attached
+     */
+    public function withHooks(HookManager $hooks): self
+    {
+        return $this->mutate(['hooks' => $hooks]);
+    }
+
+    /**
      * Timestamp of the last real user prompt submitted through submit(),
      * or null if none has been recorded yet on this instance.
      */
@@ -1051,6 +1305,7 @@ final class Chat implements Model
             'rows' => $this->rows,
             'cols' => $this->cols,
             'mosaic' => $this->mosaic,
+            'hooks' => $this->hooks,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -1257,6 +1512,14 @@ final class Chat implements Model
      * $generation - the common tail {@see submit()} and the tool-call
      * pipeline (see {@see beginToolCalls()}/{@see ToolResultsMsg}) both
      * schedule once their turn's history is settled.
+     *
+     * Also the point where the backend's `$onEvent` tool-lifecycle seam is
+     * consumed (crush_feat.md §1 E1). The callback only QUEUES events: it runs
+     * inside the backend, where there is no dispatcher and no way to mutate an
+     * immutable Chat, so the queue rides out on the resolved Msg and
+     * {@see applyBackendToolEvent()} turns it into transcript states one event
+     * at a time. A turn that called no tools resolves to a plain
+     * {@see AssistantMsg} exactly as before.
      */
     private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation): \Closure
     {
@@ -1265,9 +1528,31 @@ final class Chat implements Model
         $onToken = $next->streaming ? $next->onToken : null;
 
         return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
-            return $backend->completeAsync($history, $onToken, $cancellation)->then(
-                static fn(Message $msg): ?Msg => new AssistantMsg($msg, $generation),
-                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_'), $generation),
+            /** @var list<ToolStarted|ToolFinished> $events */
+            $events = [];
+            $onEvent = static function (ToolStarted|ToolFinished $event) use (&$events): void {
+                $events[] = $event;
+            };
+
+            // Both handlers capture $events BY REFERENCE: the closures are
+            // built before the backend has run, so a by-value capture would
+            // freeze the queue while it is still empty.
+            return $backend->completeAsync($history, $onToken, $cancellation, $onEvent)->then(
+                static function (Message $msg) use (&$events, $generation): ?Msg {
+                    return $events === []
+                        ? new AssistantMsg($msg, $generation)
+                        : new BackendToolEventsMsg($events, $msg, $generation);
+                },
+                static function (\Throwable $e) use (&$events, $generation): ?Msg {
+                    // A turn that failed AFTER running tools still shows what
+                    // those tools did - otherwise the placeholders queued for
+                    // them would be the only trace and they never even render.
+                    $message = Message::assistant('_[error: ' . $e->getMessage() . ']_');
+
+                    return $events === []
+                        ? new AssistantMsg($message, $generation)
+                        : new BackendToolEventsMsg($events, $message, $generation);
+                },
             );
         });
     }

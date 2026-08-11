@@ -295,9 +295,23 @@ final class BinSugarcrushWiringTest extends TestCase
             $loop->cancelTimer($safety);
         }
 
-        $this->assertInstanceOf(\SugarCraft\Crush\AssistantMsg::class, $resolved, 'doctor tool call did not complete within the test timeout');
+        // Since W2.S1c a turn whose backend ran tools resolves to a
+        // BackendToolEventsMsg queue (the ToolStarted/ToolFinished pair for the
+        // doctor call) that hands off to the AssistantMsg once drained - so
+        // follow the Cmd chain instead of applying a single Msg.
+        $this->assertInstanceOf(
+            \SugarCraft\Crush\BackendToolEventsMsg::class,
+            $resolved,
+            'doctor tool call did not complete within the test timeout',
+        );
 
-        [$final] = $afterSubmit->update($resolved);
+        $final = $afterSubmit;
+        $msg = $resolved;
+        $steps = 0;
+        while ($msg !== null && $steps++ < 20) {
+            [$final, $nextCmd] = $final->update($msg);
+            $msg = $nextCmd === null ? null : $nextCmd();
+        }
 
         $lastMessage = $final->history[array_key_last($final->history)];
 

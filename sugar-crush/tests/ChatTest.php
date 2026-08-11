@@ -16,8 +16,19 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\AssistantMsg;
+use SugarCraft\Crush\BackendToolEventsMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookEvent;
+use SugarCraft\Crush\Hooks\HookInterface;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
+use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Role;
@@ -1914,5 +1925,504 @@ final class ChatTest extends TestCase
         [$final] = $afterPlaceholders->update($resolved);
 
         return [$afterPlaceholders, $final];
+    }
+
+    // ---------------------------------------------------------------
+    // Backend tool-lifecycle events (crush_feat.md §1 E1, W2.S1c)
+    // ---------------------------------------------------------------
+
+    public function testBackendToolEventsSurviveAsAQueuedMsgInsteadOfBeingDropped(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')),
+            ], Message::assistant('there is one file')),
+            inputBuf: 'list files',
+        );
+
+        // Against the pre-W2.S1c Chat this resolved to a plain AssistantMsg:
+        // the backend's $onEvent was never passed, so both tool events were
+        // dropped and the turn rendered as a bare "thinking…" spinner.
+        $resolved = $this->resolveBackendCmd($chat);
+        $this->assertInstanceOf(BackendToolEventsMsg::class, $resolved);
+        $this->assertCount(2, $resolved->events);
+        $this->assertSame('there is one file', $resolved->message->content);
+    }
+
+    public function testToolStartedRendersARunningPlaceholderBeforeTheResultArrives(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')),
+            ], Message::assistant('done')),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        [$running, $cmd] = $afterSubmit->update($this->resolveBackendCmd($chat));
+
+        $placeholder = $running->history[count($running->history) - 1];
+        $this->assertSame(Role::System, $placeholder->role);
+        $this->assertSame('call_1', $placeholder->pendingToolCallId);
+        $this->assertSame('bash(command: "ls")', $placeholder->content);
+        // The running state is a real, rendered frame - not folded away in the
+        // same update() as its result.
+        $this->assertStringContainsString('running: bash(command: "ls")', \SugarCraft\Crush\Renderer::render($running));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertInstanceOf(BackendToolEventsMsg::class, $cmd());
+    }
+
+    public function testToolFinishedReplacesThePlaceholderAndThenHandsOffTheReply(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt', durationMs: 12, diff: '--- a\n+++ b\n')),
+            ], Message::assistant('there is one file')),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $pending = array_filter($final->history, static fn(Message $m): bool => $m->pendingToolCallId !== null);
+        $this->assertSame([], $pending, 'the running placeholder was never replaced');
+
+        $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $result = $withResults[0]->toolResults[0];
+        $this->assertSame('bash', $result->name);
+        $this->assertSame('a.txt', $result->result);
+        $this->assertSame(12, $result->durationMs);
+        $this->assertSame('--- a\n+++ b\n', $result->diff);
+        $this->assertSame('a.txt', $withResults[0]->content);
+
+        // The turn's own reply still lands through the ordinary AssistantMsg
+        // arm, after the tool calls that produced it.
+        $last = $final->history[count($final->history) - 1];
+        $this->assertSame('there is one file', $last->content);
+        $this->assertFalse($final->inFlight);
+    }
+
+    public function testToolFinishedCorrelatesOnTheEventIdNotTheToolsInventedResultId(): void
+    {
+        // A tool never sees its own call id, so built-ins routinely return an
+        // invented one; only ToolFinished::$toolCallId carries the id the
+        // placeholder was keyed with.
+        $call = new EngineToolCall('call_1', 'read', ['path' => 'x']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('', 'contents')),
+            ], Message::assistant('read it')),
+            inputBuf: 'read x',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $this->assertSame(
+            [],
+            array_filter($final->history, static fn(Message $m): bool => $m->pendingToolCallId !== null),
+        );
+        // user turn + the replaced placeholder + the reply. A 4th entry would
+        // mean the result was appended alongside an orphaned placeholder.
+        $this->assertCount(3, $final->history, 'the result was appended instead of replacing the placeholder');
+    }
+
+    public function testFailedToolCallRendersAsAnErrorResult(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'boom']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'command not found', isError: true)),
+            ], Message::assistant('that failed')),
+            inputBuf: 'run boom',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $this->assertTrue($withResults[0]->toolResults[0]->isError());
+        $this->assertSame('command not found', $withResults[0]->toolResults[0]->error);
+        $this->assertSame('Tool error: command not found', $withResults[0]->content);
+    }
+
+    public function testTurnWithoutToolEventsStillResolvesToAPlainAssistantMsg(): void
+    {
+        $chat = new Chat(backend: new EchoBackend(), inputBuf: 'hello');
+        $this->assertInstanceOf(AssistantMsg::class, $this->resolveBackendCmd($chat));
+    }
+
+    public function testStaleBackendToolEventsAreDropped(): void
+    {
+        $chat = new Chat(history: [Message::user('hi')], generation: 7);
+        $msg = new BackendToolEventsMsg(
+            [ToolStarted::fromCall(new EngineToolCall('call_1', 'bash', []))],
+            Message::assistant('late'),
+            3,
+        );
+
+        [$next, $cmd] = $chat->update($msg);
+        $this->assertSame($chat, $next);
+        $this->assertNull($cmd);
+    }
+
+    public function testBackendFailureAfterToolCallsStillShowsWhatTheToolsDid(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend(
+                [ToolStarted::fromCall($call), ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt'))],
+                null,
+                new \RuntimeException('provider exploded'),
+            ),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $resolved = $this->resolveBackendCmd($chat);
+        $this->assertInstanceOf(BackendToolEventsMsg::class, $resolved);
+
+        $final = $this->drainBackendEvents($afterSubmit, $resolved);
+        $this->assertNotSame([], array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertStringContainsString('provider exploded', $final->history[count($final->history) - 1]->content);
+    }
+
+    /**
+     * A Backend that reports $events through the $onEvent seam and then either
+     * resolves with $reply or rejects with $failure.
+     *
+     * @param list<ToolStarted|ToolFinished> $events
+     */
+    private function eventEmittingBackend(array $events, ?Message $reply, ?\Throwable $failure = null): \SugarCraft\Crush\Backend
+    {
+        return new class ($events, $reply, $failure) implements \SugarCraft\Crush\Backend {
+            /** @param list<ToolStarted|ToolFinished> $events */
+            public function __construct(
+                private array $events,
+                private ?Message $reply,
+                private ?\Throwable $failure,
+            ) {}
+
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                foreach ($this->events as $event) {
+                    if ($onEvent !== null) {
+                        $onEvent($event);
+                    }
+                }
+                if ($this->failure !== null) {
+                    throw $this->failure;
+                }
+
+                return $this->reply ?? Message::assistant('');
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                return new Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $onEvent): void {
+                    try {
+                        $resolve($this->complete($history, $onToken, $onEvent));
+                    } catch (\Throwable $e) {
+                        $reject($e);
+                    }
+                });
+            }
+        };
+    }
+
+    /**
+     * Submit $chat's input buffer and run the scheduled backend Cmd to the Msg
+     * it resolves to (synchronous - every backend used here settles inline).
+     */
+    private function resolveBackendCmd(Chat $chat): mixed
+    {
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+
+        return $resolved;
+    }
+
+    /**
+     * Feed $msg into $chat and keep following the Cmd it returns until the
+     * event queue drains and the final AssistantMsg has been applied.
+     */
+    private function drainBackendEvents(Chat $chat, mixed $msg): Chat
+    {
+        $steps = 0;
+        while ($msg !== null) {
+            [$chat, $cmd] = $chat->update($msg);
+            if ($cmd === null || ++$steps > 20) {
+                break;
+            }
+            $msg = $cmd();
+        }
+
+        return $chat;
+    }
+
+    // ---------------------------------------------------------------
+    // Hook gating on the Chat-native tool path (crush_feat.md §1 E1, W2.S1d)
+    // ---------------------------------------------------------------
+
+    /**
+     * A hook that delegates to $handler, matching every tool name.
+     *
+     * The matcher is `.*`, not `*`: HookRegistry compiles matchers as
+     * regexes, and a bare `*` is invalid and would silently never match.
+     */
+    private function spyHook(HookEvent $event, \Closure $handler): HookInterface
+    {
+        return new class ($event, $handler) implements HookInterface {
+            public function __construct(
+                private readonly HookEvent $hookEvent,
+                private readonly \Closure $handler,
+            ) {}
+
+            public function name(): string
+            {
+                return 'spy-' . $this->hookEvent->value;
+            }
+
+            public function event(): HookEvent
+            {
+                return $this->hookEvent;
+            }
+
+            public function matcher(): string
+            {
+                return '.*';
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                return ($this->handler)($context);
+            }
+        };
+    }
+
+    private function hookManagerWith(HookInterface ...$hooks): HookManager
+    {
+        $manager = new HookManager(new HookRegistry());
+        foreach ($hooks as $hook) {
+            $manager->register($hook);
+        }
+
+        return $manager;
+    }
+
+    public function testWithHooksReturnsANewChatAndLeavesTheOriginalUngated(): void
+    {
+        $chat = new Chat();
+        $hooks = $this->hookManagerWith();
+
+        $gated = $chat->withHooks($hooks);
+
+        $this->assertNull($chat->hooks());
+        $this->assertSame($hooks, $gated->hooks());
+        $this->assertNotSame($chat, $gated);
+    }
+
+    /**
+     * The Chat-native (registerTool) pipeline used to invoke its callback
+     * with zero gating while the engine pipeline ran the very same call
+     * through HookManager - crush_feat.md §1 D's "two independent,
+     * non-unified tool-calling pipelines". Fails against the old Chat: no
+     * PreToolUse hook ever fired for a registerTool() call.
+     */
+    public function testChatNativeToolCallRunsThroughThePreToolUseHook(): void
+    {
+        $seen = [];
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static function (HookContext $context) use (&$seen): HookResult {
+                $seen[] = [$context->toolName, $context->toolArgs];
+
+                return HookResult::allow();
+            },
+        ));
+
+        $chat = (new Chat(history: [Message::user('list files')]))
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        // Recorded in THIS process: hooks run parent-side, before the fork.
+        $this->assertSame([['bash', ['cmd' => 'ls']]], $seen);
+        $this->assertStringContainsString('total 0', $final->history[2]->content);
+    }
+
+    /**
+     * A PreToolUse DENY must block the callback outright and still resolve
+     * the running placeholder - the ToolFinished half of the pair - with an
+     * honest error result rather than leaving a spinner forever.
+     */
+    public function testPreToolUseDenyBlocksTheToolAndStillResolvesThePlaceholder(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_hook_deny_' . bin2hex(random_bytes(8));
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static fn(HookContext $context): HookResult => HookResult::deny('rm -rf is not allowed'),
+        ));
+
+        $chat = (new Chat())
+            ->registerTool('bash', static function (array $args) use ($sentinel): string {
+                // Written from the forked child if the deny leaks through:
+                // an on-disk sentinel is the only side effect that survives
+                // the fork boundary back to this process.
+                file_put_contents($sentinel, 'ran');
+
+                return 'deleted everything';
+            })
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf /'], 'call_1');
+        [$afterPlaceholders, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertFileDoesNotExist($sentinel, 'a denied tool call still reached its callback');
+
+        $this->assertSame('call_1', $afterPlaceholders->history[1]->pendingToolCallId);
+        $this->assertNull($final->history[1]->pendingToolCallId);
+        $this->assertSame('Tool error: Hook denied: rm -rf is not allowed', $final->history[1]->content);
+        $this->assertTrue($final->history[1]->toolResults[0]->isError());
+        $this->assertSame('call_1', $final->history[1]->toolResults[0]->id);
+    }
+
+    /**
+     * PostToolUse has to observe the real output in the PARENT: run inside
+     * the forked child, every effect of the hook chain (audit trail,
+     * accumulated state) would die with that child's memory.
+     */
+    public function testPostToolUseHookObservesTheToolOutputInTheParentProcess(): void
+    {
+        $outputs = [];
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PostToolUse,
+            static function (HookContext $context) use (&$outputs): HookResult {
+                $outputs[] = $context->toolOutput;
+
+                return HookResult::allow();
+            },
+        ));
+
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame(['total 0'], $outputs);
+    }
+
+    /**
+     * A call that never ran has no output to observe - Runtime skips its own
+     * postToolUse on the deny branch, and so must Chat.
+     */
+    public function testDeniedToolCallSkipsThePostToolUseHook(): void
+    {
+        $postCalls = 0;
+        $hooks = $this->hookManagerWith(
+            $this->spyHook(HookEvent::PreToolUse, static fn(HookContext $c): HookResult => HookResult::deny('nope')),
+            $this->spyHook(HookEvent::PostToolUse, static function (HookContext $c) use (&$postCalls): HookResult {
+                ++$postCalls;
+
+                return HookResult::allow();
+            }),
+        );
+
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame(0, $postCalls);
+    }
+
+    /**
+     * MODIFY is "allowed, with rewritten input" on both pipelines - the
+     * rewritten arguments are what the callback must actually receive.
+     */
+    public function testModifyHookRewritesTheArgumentsBeforeTheToolRuns(): void
+    {
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static fn(HookContext $c): HookResult => HookResult::modify((string) json_encode(['cmd' => 'ls -la'])),
+        ));
+
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args): string => 'ran: ' . ($args['cmd'] ?? 'nothing'))
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf /'], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame('ran: ls -la', $final->history[1]->content);
+    }
+
+    /**
+     * Runtime resolves the tool first and only builds a HookContext once it
+     * has one, so an unknown name never reaches the hook chain. Chat matches
+     * that ordering rather than inventing a second convention.
+     */
+    public function testUnknownToolIsReportedWithoutConsultingTheHooks(): void
+    {
+        $preCalls = 0;
+        $hooks = $this->hookManagerWith($this->spyHook(
+            HookEvent::PreToolUse,
+            static function (HookContext $c) use (&$preCalls): HookResult {
+                ++$preCalls;
+
+                return HookResult::allow();
+            },
+        ));
+
+        // Some tool must be registered for update() to enter the tool path
+        // at all - just not the one the assistant asked for.
+        $chat = (new Chat())
+            ->registerTool('bash', static fn(array $args) => 'total 0')
+            ->withHooks($hooks);
+
+        $call = new \SugarCraft\Crush\ToolCall('nope', [], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertSame(0, $preCalls);
+        $this->assertSame('Tool error: Unknown tool: nope', $final->history[1]->content);
+    }
+
+    /**
+     * A Chat with no HookManager keeps its pre-gating behaviour exactly:
+     * embedders and tests that never wire hooks must be unaffected.
+     */
+    public function testToolCallsStillRunUngatedWhenNoHookManagerIsWired(): void
+    {
+        $chat = (new Chat())->registerTool('bash', static fn(array $args) => 'total 0');
+
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls'], 'call_1');
+        [, $final] = $this->runToolCallsToCompletion($chat, Message::assistant('running')->withToolCalls([$call]));
+
+        $this->assertNull($chat->hooks());
+        $this->assertSame('total 0', $final->history[1]->content);
     }
 }

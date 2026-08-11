@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
@@ -511,5 +513,147 @@ final class RendererTest extends TestCase
 
         $this->assertStringContainsString('New session', $out);
         $this->assertStringContainsString('Exit', $out);
+    }
+
+    // =========================================================================
+    // crush_feat.md §1 E3 (rendering half): Edit/Write diffs in the transcript
+    // =========================================================================
+
+    /** A Chat with a pinned viewport so width/height clipping is deterministic. */
+    private function sizedChat(array $history, int $cols = 80, int $rows = 40): Chat
+    {
+        return new Chat(history: $history, rows: $rows, cols: $cols);
+    }
+
+    private function editResult(string $diff): Message
+    {
+        return Message::assistant('')->withToolResults([
+            new \SugarCraft\Crush\ToolResult(
+                name: 'Edit',
+                result: 'File updated: src/App.php',
+                id: 'call_edit',
+                diff: $diff,
+            ),
+        ]);
+    }
+
+    /** @return list<string> visible (ANSI-stripped) lines of a rendered frame */
+    private function visibleLines(string $frame): array
+    {
+        return array_map(
+            static fn (string $line): string => (string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $line),
+            explode("\n", $frame),
+        );
+    }
+
+    /**
+     * The step-defining regression: before §1 E3's rendering half, a ToolResult
+     * carrying a unified diff rendered as "🔧 tool: Edit ✓ ok / File updated: …"
+     * and the diff was silently dropped. Every assertion below fails against
+     * that renderer.
+     */
+    public function testEditToolDiffIsRenderedInTheTranscript(): void
+    {
+        $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -1,3 +1,3 @@\n <?php\n-\$old = 1;\n+\$new = 2;\n";
+        $out = Renderer::render($this->sizedChat([Message::user('edit it'), $this->editResult($diff)]));
+
+        $this->assertStringContainsString('tool: Edit', $out);
+        $this->assertStringContainsString('@@ -1,3 +1,3 @@', $out);
+        $this->assertStringContainsString('-$old = 1;', $out);
+        $this->assertStringContainsString('+$new = 2;', $out);
+    }
+
+    /**
+     * Additions/removals are colour-coded, and the `---`/`+++` file headers
+     * must NOT be mistaken for a whole-file removal/addition.
+     */
+    public function testDiffMarkersAreColourCodedAndFileHeadersAreNot(): void
+    {
+        $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -1 +1 @@\n-gone\n+here\n";
+        $chat = $this->sizedChat([$this->editResult($diff)]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $added = Style::new()->foreground(Color::ansi(2))->render('+here');
+        $removed = Style::new()->foreground(Color::ansi(1))->render('-gone');
+        $header = Style::new()->foreground($theme->systemLabel)->bold()->render('--- a/src/App.php');
+
+        $this->assertStringContainsString($added, $out);
+        $this->assertStringContainsString($removed, $out);
+        $this->assertStringContainsString($header, $out);
+        $this->assertStringNotContainsString(
+            Style::new()->foreground(Color::ansi(1))->render('--- a/src/App.php'),
+            $out,
+        );
+    }
+
+    /**
+     * Render invariant: one logical line per physical row. A diff line wider
+     * than the viewport must be truncated, never wrapped -- candy-core's
+     * Renderer repaints by absolute row, so a wrapped line shifts every row
+     * below it.
+     */
+    public function testOverWideDiffLinesAreTruncatedToTheViewportWidth(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n+" . str_repeat('x', 400) . "\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)], cols: 80));
+
+        foreach ($this->visibleLines($out) as $line) {
+            $this->assertLessThanOrEqual(80, mb_strlen($line), 'over-wide row: ' . $line);
+        }
+    }
+
+    /**
+     * Render invariant: a huge diff must not evict the conversation it belongs
+     * to, so the block is capped and the remainder reported as a count.
+     */
+    public function testLongDiffIsClippedWithARemainingLineCount(): void
+    {
+        $body = '';
+        for ($i = 1; $i <= 40; $i++) {
+            $body .= "+line {$i}\n";
+        }
+        $diff = "--- a/x\n+++ b/x\n@@ -0,0 +1,40 @@\n" . $body;
+
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)], rows: 60));
+
+        $this->assertStringContainsString('+line 1', $out);
+        // 43 diff rows, capped at 24 -> 19 reported as remaining.
+        $this->assertStringContainsString('19 more diff lines', $out);
+        $this->assertStringNotContainsString('+line 40', $out);
+    }
+
+    /**
+     * Diff bodies are verbatim file contents. A raw ESC in an edited file
+     * would otherwise forge SGR straight onto the terminal wire.
+     */
+    public function testDiffContentIsSanitizedBeforeDisplay(): void
+    {
+        $diff = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n+payload\x1b[31mRED\x07\n";
+        $out = Renderer::render($this->sizedChat([$this->editResult($diff)]));
+
+        $this->assertStringContainsString('payloadRED', $out);
+        $this->assertStringNotContainsString("\x07", $out);
+    }
+
+    /** A result with no diff keeps the pre-E3 rendering exactly as it was. */
+    public function testToolResultWithoutADiffRendersNoDiffBox(): void
+    {
+        $out = Renderer::render($this->sizedChat([
+            Message::assistant('')->withToolResults([
+                \SugarCraft\Crush\ToolResult::ok('calculator', '42', 'call_1'),
+            ]),
+        ]));
+
+        $withDiff = Renderer::render($this->sizedChat([
+            $this->editResult("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n"),
+        ]));
+
+        $this->assertStringContainsString('tool: calculator', $out);
+        // The input box is the only Border::normal() box in a diff-free frame;
+        // a rendered diff adds a second one.
+        $this->assertSame(1, substr_count($out, '┌'));
+        $this->assertSame(2, substr_count($withDiff, '┌'));
     }
 }

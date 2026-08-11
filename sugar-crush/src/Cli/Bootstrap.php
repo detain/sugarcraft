@@ -63,6 +63,12 @@ final class Bootstrap
             themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
             onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
             mosaic: ToolResult::mosaic(),
+            // The same built-in guard chain backend()/backendFor() hand the
+            // engine backend. Without it, Chat's own registerTool() calls
+            // would still be the one unguarded tool path in the live binary
+            // (crush_feat.md §1 E1) - hooks that a call gets gated by on the
+            // engine pipeline would silently not apply on this one.
+            hooks: self::hooks(),
         );
     }
 
