@@ -656,4 +656,174 @@ final class RendererTest extends TestCase
         $this->assertSame(1, substr_count($out, '┌'));
         $this->assertSame(2, substr_count($withDiff, '┌'));
     }
+
+    // =========================================================================
+    // crush_feat.md §1 E2 (rendering half): the permission-prompt modal
+    // =========================================================================
+
+    /**
+     * Park a real blocking permission prompt on a Chat by dispatching the same
+     * Msg the ASK path dispatches, rather than hand-constructing the state.
+     */
+    private function chatAwaitingPermission(
+        string $prompt = 'Run rm -rf build/?',
+        array $arguments = ['description' => 'Delete the build directory'],
+    ): Chat {
+        [$blocked] = $this->sizedChat([Message::user('clean up')])->update(
+            new \SugarCraft\Crush\PermissionRequestMsg(
+                Message::assistant(''),
+                new \SugarCraft\Crush\ToolCall('Bash', $arguments, 'call_1'),
+                $prompt,
+            ),
+        );
+
+        return $blocked;
+    }
+
+    /**
+     * The step-defining regression: before this half of §1 E2 landed, a Chat
+     * could park a turn on `pendingPermission()` and the renderer drew nothing
+     * at all - the user saw a frozen "thinking…" frame with no question, no
+     * options and no way to know a keypress was expected. Every assertion here
+     * fails against that renderer.
+     */
+    public function testPermissionPromptIsRenderedAsAModal(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission());
+
+        $this->assertStringContainsString('permission required', $out);
+        $this->assertStringContainsString('Bash', $out);
+        $this->assertStringContainsString('Delete the build directory', $out);
+        $this->assertStringContainsString('Run rm -rf build/?', $out);
+    }
+
+    /** Exactly the keys Chat::handlePermissionKey() accepts, and no others. */
+    public function testPermissionPromptAdvertisesTheThreeAnswerKeys(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission());
+
+        $this->assertStringContainsString('allow once', $out);
+        $this->assertStringContainsString('allow always', $out);
+        $this->assertStringContainsString('reject', $out);
+        $this->assertStringContainsString('n / Esc', $out);
+    }
+
+    /** Nothing is composited while no prompt is blocking the turn. */
+    public function testNoPermissionModalWhenNoPromptIsPending(): void
+    {
+        $out = Renderer::render($this->sizedChat([Message::user('hi')]));
+
+        $this->assertStringNotContainsString('permission required', $out);
+    }
+
+    /**
+     * The prompt owns the keyboard in Chat::update(), so it must own the single
+     * overlay slot too - a palette drawn on top of a prompt would advertise
+     * keys that no longer do anything.
+     */
+    public function testPermissionModalTakesTheOverlaySlotFromAnOpenPalette(): void
+    {
+        [$opened] = $this->sizedChat([])->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertStringContainsString('New session', Renderer::render($opened));
+
+        [$blocked] = $opened->update(new \SugarCraft\Crush\PermissionRequestMsg(
+            Message::assistant(''),
+            new \SugarCraft\Crush\ToolCall('Bash', [], 'call_1'),
+            'Really?',
+        ));
+        $out = Renderer::render($blocked);
+
+        $this->assertStringContainsString('permission required', $out);
+        $this->assertStringNotContainsString('New session', $out);
+    }
+
+    /**
+     * A hook may hand back an arbitrarily long message; the modal must clip it
+     * rather than let its own answer keys get pushed off the viewport.
+     */
+    public function testLongPromptIsClippedWithACountOfTheHiddenLines(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission(implode("\n", array_fill(0, 30, 'why not'))));
+
+        $this->assertStringContainsString('more lines', $out);
+        $this->assertStringContainsString('allow once', $out);
+    }
+
+    /**
+     * No line of the modal may exceed its declared width: an over-wide row
+     * inside a bordered box breaks the border and the viewport row accounting
+     * render() does around it.
+     */
+    public function testLongUnbrokenArgumentTextIsWrappedNotOverflowed(): void
+    {
+        $blocked = $this->chatAwaitingPermission(
+            str_repeat('averylongunbrokentoken', 12),
+            ['command' => str_repeat('x', 400)],
+        );
+
+        foreach ($this->visibleLines(Renderer::render($blocked)) as $line) {
+            $this->assertLessThanOrEqual(80, mb_strlen($line));
+        }
+    }
+
+    /**
+     * Veil clips the overlay to the background's widest line, and a paused turn
+     * renders a narrow transcript - so without widening the backdrop first the
+     * modal loses its entire right-hand border exactly when it is shown.
+     */
+    public function testModalKeepsItsRightBorderOverANarrowTranscript(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission());
+
+        $this->assertStringContainsString('╮', $out);
+        $this->assertStringContainsString('╯', $out);
+    }
+
+    /** The modal never renders wider than the terminal it has to fit in. */
+    public function testModalShrinksToNarrowTerminals(): void
+    {
+        [$blocked] = $this->sizedChat([Message::user('hi')], cols: 40)->update(
+            new \SugarCraft\Crush\PermissionRequestMsg(
+                Message::assistant(''),
+                new \SugarCraft\Crush\ToolCall('Bash', ['description' => 'Delete the build directory'], 'call_1'),
+                'Run it?',
+            ),
+        );
+
+        $out = Renderer::render($blocked);
+        $this->assertStringContainsString('permission required', $out);
+
+        // Measured corner-to-corner, not as a whole line: the frame it is
+        // centred in can carry its own pre-existing overhang (the status bar
+        // is not truncated to $cols), which is not what this asserts.
+        $widths = [];
+        foreach ($this->visibleLines($out) as $line) {
+            if (!str_contains($line, '╭')) {
+                continue;
+            }
+            $start = mb_strpos($line, '╭');
+            $end = mb_strrpos($line, '╮');
+            if ($start !== false && $end !== false) {
+                $widths[] = $end - $start + 1;
+            }
+        }
+
+        $this->assertNotSame([], $widths);
+        foreach ($widths as $width) {
+            $this->assertLessThanOrEqual(40, $width);
+        }
+    }
+
+    /**
+     * Hook messages and tool arguments are model-authored text; an escape
+     * sequence smuggled through either must not reach the terminal from inside
+     * the dialog that is gating that very call.
+     */
+    public function testPromptTextIsSanitizedBeforeDisplay(): void
+    {
+        $out = Renderer::render($this->chatAwaitingPermission("danger\x1b[31mred", ['description' => "arg\x1b]0;pwn\x07"]));
+
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringNotContainsString("\x1b]0;", $out);
+    }
 }

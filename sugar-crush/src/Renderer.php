@@ -163,6 +163,41 @@ final class Renderer
      */
     private const SHELL_CHROME_COLS = 6;
 
+    /**
+     * Inner width of the permission modal, in cells. Wider than the palette's
+     * 50 because a prompt body is prose (a hook's question plus the tool
+     * call's own arguments), not a list of short command labels.
+     */
+    private const PERMISSION_MODAL_COLS = 60;
+
+    /**
+     * Rows of the hook's question {@see renderPermissionPrompt()} paints
+     * before it clips. A hook is free to hand back an arbitrarily long
+     * message (it can quote the whole command it objected to); an unbounded
+     * modal would grow past the viewport and push its own answer keys
+     * off-screen, leaving the user blocked on a prompt whose options they
+     * cannot see.
+     */
+    private const PERMISSION_PROMPT_MAX_ROWS = 8;
+
+    /**
+     * The answer keys {@see renderPermissionPrompt()} advertises, as
+     * `[keys, label]` pairs.
+     *
+     * Deliberately a table rather than a formatted string literal: it has to
+     * stay in lockstep with `Chat::handlePermissionKey()`'s match arms, and a
+     * list of the exact accepted keys is far easier to check against that
+     * match than prose is. Only the keys that map to a
+     * {@see \SugarCraft\Crush\Permissions\PermissionReply} are listed -
+     * every other key is ignored there, so advertising anything else would
+     * promise an answer that never arrives.
+     */
+    private const PERMISSION_OPTIONS = [
+        ['y', 'allow once'],
+        ['a', 'allow always (this session)'],
+        ['n / Esc', 'reject'],
+    ];
+
     public static function render(Chat $chat): string
     {
         $theme = $chat->theme();
@@ -232,13 +267,30 @@ final class Renderer
 
         $frame = implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
 
-        $palette = self::renderPalette($chat, $theme);
-        if ($palette !== '') {
+        // A blocking permission prompt takes the overlay slot away from the
+        // palette while it is up, because Chat::update() routes every
+        // keystroke to the prompt first: showing a palette the keyboard no
+        // longer drives would misrepresent what the next key does.
+        $overlay = self::renderPermissionPrompt($chat, $theme);
+        if ($overlay === '') {
+            $overlay = self::renderPalette($chat, $theme);
+        }
+        if ($overlay !== '') {
             // A fresh Veil per render call (rather than one persisted on
             // Chat) means its own frame-diffing never kicks in - fine here,
             // since Chat already does its own diffing at a higher level in
             // view() and double-diffing isn't needed for correctness.
-            $frame = Veil::new()->withBackdrop(50)->composite($palette, $frame, Position::CENTER, Position::CENTER);
+            // Veil clips the overlay to the background's widest line, and the
+            // frame's lines are only as wide as their own content - so a modal
+            // wider than the current transcript would lose its right border
+            // (most visibly mid-turn, which is exactly when a permission
+            // prompt appears). Widen the backdrop to fit first.
+            $frame = Veil::new()->withBackdrop(50)->composite(
+                $overlay,
+                self::padForOverlay($frame, $overlay, $chat->cols()),
+                Position::CENTER,
+                Position::CENTER,
+            );
         }
 
         return $frame;
@@ -611,6 +663,143 @@ final class Renderer
             ->padding(1, 2)
             ->width(50)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The blocking permission prompt's modal (crush_feat.md §1 E2, the
+     * rendering half), composited over the whole frame by {@see render()}
+     * through the same {@see Veil} mechanism the Ctrl+P palette already uses
+     * rather than a second overlay path. Returns '' (nothing composited)
+     * when no prompt is blocking the turn - see
+     * {@see Chat::pendingPermission()}.
+     *
+     * Shows three things, in the order a user needs them: what is being
+     * asked for (the tool call, through the same
+     * {@see Message::describeToolCall()} label the running placeholder and
+     * the finished marker use, so the same call reads identically in all
+     * three places), why it was stopped (the hook's own question), and how
+     * to answer it. The answer keys are spelled out because this modal is
+     * the ONLY place they appear - {@see renderStatusBar()}'s help text is
+     * about the normal input line, and while a prompt is up none of those
+     * keys do what it says.
+     *
+     * Everything shown here is untrusted: a hook's message and a tool call's
+     * arguments are both model-authored text, so both go through
+     * {@see Sanitize::untrusted()} before reaching the terminal - a prompt
+     * that could smuggle ESC sequences would let the very call being gated
+     * repaint the dialog asking about it.
+     */
+    private static function renderPermissionPrompt(Chat $chat, Theme $theme): string
+    {
+        $request = $chat->pendingPermission();
+        if ($request === null) {
+            return '';
+        }
+
+        $call = $request->toolCall;
+        // Never wider than the terminal: a modal that overflows $cols would be
+        // wrapped by the terminal itself, which breaks the one-line-per-row
+        // assumption render()'s viewport clipping is built on.
+        $inner = max(20, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::SHELL_CHROME_COLS));
+
+        $lines = [
+            Style::new()->foreground($theme->userLabel)->bold()
+                ->render('🔒 ' . Sanitize::untrusted($call->name)),
+            Style::new()->foreground($theme->assistantLabel)
+                ->render(self::wrapPermissionText(Message::describeToolCall($call), $inner)),
+        ];
+
+        $prompt = self::wrapPermissionText($request->prompt, $inner);
+        if ($prompt !== '') {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->render($prompt);
+        }
+
+        $lines[] = '';
+        foreach (self::PERMISSION_OPTIONS as [$keys, $label]) {
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
+                . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render($label);
+        }
+
+        return Style::new()
+            ->border(Border::rounded()->withTitle(' permission required '))
+            ->borderForeground($theme->border)
+            ->padding(1, 2)
+            ->width($inner)
+            ->render(implode("\n", $lines));
+    }
+
+    /**
+     * Right-pad `$frame`'s lines so an overlay of `$overlay`'s width composites
+     * onto it without being clipped, never past `$cols`.
+     *
+     * {@see Veil::composite()} derives its canvas from the background's widest
+     * line, so a frame whose content happens to be narrow silently truncates
+     * any wider overlay. Padding is applied only when an overlay is actually
+     * being composited, so a plain frame keeps its existing ragged-right shape
+     * (and the trailing-space-free output every other renderer test asserts on).
+     */
+    private static function padForOverlay(string $frame, string $overlay, int $cols): string
+    {
+        $lines = explode("\n", $frame);
+
+        $frameWidth = 0;
+        foreach ($lines as $line) {
+            $frameWidth = max($frameWidth, Width::string($line));
+        }
+
+        $overlayWidth = 0;
+        foreach (explode("\n", $overlay) as $line) {
+            $overlayWidth = max($overlayWidth, Width::string($line));
+        }
+
+        $target = min(max(1, $cols), max($frameWidth, $overlayWidth));
+        if ($target <= $frameWidth) {
+            return $frame;
+        }
+
+        foreach ($lines as $index => $line) {
+            $pad = $target - Width::string($line);
+            if ($pad > 0) {
+                $lines[$index] = $line . str_repeat(' ', $pad);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Sanitize, hard-wrap and clip free text for the permission modal.
+     *
+     * Wrapping happens here rather than being left to `Style::width()`
+     * because that pads short lines to the modal width but does not break
+     * long ones, and a single over-wide row inside a bordered box breaks the
+     * border and (per the fixed-viewport clipping in {@see render()}) the
+     * row accounting around it. `wordwrap()`'s cut flag is on so an unbroken
+     * token - a long path or a base64 blob in a tool argument - wraps
+     * instead of running off the edge.
+     */
+    private static function wrapPermissionText(string $text, int $cols): string
+    {
+        $clean = trim(Sanitize::untrusted($text));
+        if ($clean === '') {
+            return '';
+        }
+
+        $rows = [];
+        foreach (explode("\n", $clean) as $line) {
+            foreach (explode("\n", wordwrap($line, $cols, "\n", true)) as $wrapped) {
+                $rows[] = $wrapped;
+            }
+        }
+
+        if (count($rows) > self::PERMISSION_PROMPT_MAX_ROWS) {
+            $hidden = count($rows) - self::PERMISSION_PROMPT_MAX_ROWS;
+            $rows = array_slice($rows, 0, self::PERMISSION_PROMPT_MAX_ROWS);
+            $rows[] = "… {$hidden} more lines";
+        }
+
+        return implode("\n", $rows);
     }
 
     private static function renderInput(Chat $chat, Theme $theme): string
