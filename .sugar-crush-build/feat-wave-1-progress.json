@@ -1,40 +1,156 @@
 {
   "_canonical": "This is the ONE canonical Wave 1 tracking file (crush_feat_plan.md, 'Progress tracking'). feat-wave-W1-progress.json was a duplicate created by a drifting naming convention and has been deleted. Status here is derived from git log + a real full-suite run, never from an agent's self-report.",
   "baseline": "Tests: 3255, Assertions: 8379, Warnings: 11, Skipped: 1.",
-  "afterWave1Partial": "Tests: 3471, Assertions: 8944, Warnings: 11, Skipped: 1. (0 failures, 0 errors)",
+  "afterWave1Partial": "Tests: 3614, Assertions: 9328, Warnings: 11, Skipped: 1. (0 failures, 0 errors)",
   "runNotes": [
     "Run 1 (claude-code Workflow, 66 agents) attempted 16 of 27 steps; tracks halt at their first block, so 10 steps were never attempted.",
     "Design flaw in run 1: no commit between steps, so all 16 steps' work accumulated in one working tree and every reviewer flagged 'cannot isolate this step' as a traceability finding. Several BLOCKED verdicts are that artifact, not a code defect.",
     "Plan flaw surfaced by run 1: category 11 (Production Reachability) is a mandatory blocker, but Wave 1 file lists exclude Chat.php/Renderer.php/Bootstrap.php where production wiring lives. For any step whose spec says 'surface X to the user' the two rules are mutually unsatisfiable. Builders resolved it by following crush_feat.md (the spec) over crush_feat_plan.md (the decomposition).",
-    "Three genuine code defects found by reviewers were fixed before commit: ForeignSkillDiscovery precedence backwards vs its own test name and SkillLoader's documented convention; Edit's diff concatenated into content instead of a ToolResult field, plus a false-success return when old_string was absent; ReasoningExtractor's !empty() treating a literal '0' as absent."
+    "Three genuine code defects found by reviewers were fixed before commit: ForeignSkillDiscovery precedence backwards vs its own test name and SkillLoader's documented convention; Edit's diff concatenated into content instead of a ToolResult field, plus a false-success return when old_string was absent; ReasoningExtractor's !empty() treating a literal '0' as absent.",
+    "Run 3 (worktrees): 3 tracks concurrent, each in its own git worktree on its own branch, committing per step. Zero cross-track contamination and all three merged into master with no conflicts -- the file-disjointness analysis held. Track A completed all 4 steps clean.",
+    "Harness flaw in run 3: any FINDINGS verdict counted as non-PASS, so W1.B3a blocked after 3 cycles despite ZERO blocking findings (all low/info) and a green suite -- a step that only accumulates nits can never converge. Both blocked steps' real defects were fixed by hand and committed. A future run should let a reviewer PASS with recorded minor findings."
   ],
   "steps": {
-    "W1.A1": {"status": "done", "reviewCycles": 1, "commit": "28c55a6f"},
-    "W1.A2": {"status": "done", "reviewCycles": 3, "commit": "28c55a6f", "note": "Reviewer verdict was BLOCKED purely on shared-tree traceability + scope (Renderer/Message/EngineBackend outside the manifest row). Kept: §12 D3's spec explicitly requires the TUI half the plan row omitted. Its low-severity empty('0') finding was fixed."},
-    "W1.A3": {"status": "not_started", "reviewCycles": 0},
-    "W1.A4": {"status": "not_started", "reviewCycles": 0},
-    "W1.A5": {"status": "not_started", "reviewCycles": 0},
-    "W1.A6": {"status": "not_started", "reviewCycles": 0},
-    "W1.B1": {"status": "done", "reviewCycles": 1, "commit": "313cdab6"},
-    "W1.B2a": {"status": "done", "reviewCycles": 2, "commit": "313cdab6"},
-    "W1.B2b": {"status": "done", "reviewCycles": 3, "commit": "313cdab6", "note": "Disclosed gap kept honestly: only loadForPath()'s expansion has a live production call path. loadRoot() gets its caller in W1.B3a, which was never attempted this run."},
-    "W1.B3a": {"status": "not_started", "reviewCycles": 0},
-    "W1.B3b": {"status": "not_started", "reviewCycles": 0},
-    "W1.B3c": {"status": "not_started", "reviewCycles": 0},
-    "W1.B4": {"status": "not_started", "reviewCycles": 0},
-    "W1.C1a": {"status": "done", "reviewCycles": 1, "commit": "1b67d39c"},
-    "W1.C1b": {"status": "done", "reviewCycles": 1, "commit": "1b67d39c"},
-    "W1.C2": {"status": "done", "reviewCycles": 3, "commit": "1b67d39c", "note": "Builder self-amended its own row in crush_feat_plan.md to widen scope to SkillRegistry.php. Amendment kept -- registerFromManifest() hardcoded paths: [], silently breaking path-based auto-scoping -- but flagged: an agent editing the plan to justify its own scope is exactly the drift Lesson 1/2 warn about."},
-    "W1.D1": {"status": "done", "reviewCycles": 1, "commit": "1b67d39c"},
-    "W1.D2a": {"status": "done", "reviewCycles": 3, "commit": "1b67d39c", "note": "Reviewer's category-11 blocker is correct but premature: ForeignSkillDiscovery's production wiring is W3.S8 (AppBuilder), not a Wave 1 step. Its real finding -- backwards project/home precedence -- was fixed."},
-    "W1.D2b": {"status": "not_started", "reviewCycles": 0},
-    "W1.D3": {"status": "not_started", "reviewCycles": 0},
-    "W1.E1a": {"status": "done", "reviewCycles": 1, "commit": "9b1020c0"},
-    "W1.E1b": {"status": "done", "reviewCycles": 2, "commit": "9b1020c0"},
-    "W1.E2": {"status": "done", "reviewCycles": 3, "commit": "9b1020c0", "note": "Both findings were low severity (a stale line-number citation and an untested default-parameter branch)."},
-    "W1.E3": {"status": "done", "reviewCycles": 0, "commit": "9b1020c0", "note": "Never dispatched as its own step -- W1.E2's builder wired bin/sugarcrush as part of its work. Verified present in the diff: --help and -p now dispatch before Program/Bootstrap::chat(), fixing the blocking-TUI bug."},
-    "W1.F1": {"status": "done", "reviewCycles": 3, "commit": "f01eb4f8", "note": "Both real findings fixed: diff moved onto a ToolResult field; no-op edit now returns an honest error instead of false success. Two tests that locked in the false success were re-pointed at the contract."},
-    "W1.G1": {"status": "done", "reviewCycles": 2, "commit": "8f794c19"},
-    "W1.G2": {"status": "done", "reviewCycles": 3, "commit": "8f794c19", "note": "Reviewer's dead-code blocker was real and is resolved -- but by a fix agent inventing a Doctor built-in tool to manufacture a call path. Kept because §9 E4 specs /doctor and §9's own PR sequencing puts it with E1+E2. Two genuine bugs fixed en route: base64 across the fork/JSON IPC seam, and ToolResult passthrough instead of ok() re-wrapping."}
+    "W1.A1": {
+      "status": "done",
+      "reviewCycles": 1,
+      "commit": "28c55a6f"
+    },
+    "W1.A2": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "28c55a6f",
+      "note": "Reviewer verdict was BLOCKED purely on shared-tree traceability + scope (Renderer/Message/EngineBackend outside the manifest row). Kept: \u00a712 D3's spec explicitly requires the TUI half the plan row omitted. Its low-severity empty('0') finding was fixed."
+    },
+    "W1.A3": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "8396ac78"
+    },
+    "W1.A4": {
+      "status": "done",
+      "reviewCycles": 2,
+      "commit": "41ddcc08"
+    },
+    "W1.A5": {
+      "status": "done",
+      "reviewCycles": 2,
+      "commit": "53db567f"
+    },
+    "W1.A6": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "04b470fe"
+    },
+    "W1.B1": {
+      "status": "done",
+      "reviewCycles": 1,
+      "commit": "313cdab6"
+    },
+    "W1.B2a": {
+      "status": "done",
+      "reviewCycles": 2,
+      "commit": "313cdab6"
+    },
+    "W1.B2b": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "313cdab6",
+      "note": "Disclosed gap kept honestly: only loadForPath()'s expansion has a live production call path. loadRoot() gets its caller in W1.B3a, which was never attempted this run."
+    },
+    "W1.B3a": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "6b2f4f75",
+      "note": "Reviewer returned BLOCKED after 3 cycles but found no blocker -- all findings low/info. Fixed by hand: root AGENTS.md was injected twice on any repo whose CLAUDE.md @-imports it (this repo exactly), wasting context every turn; deduplicated via a realpath-keyed emitted-set in InstructionFileLoader. Also added the missing empty-document-guard test."
+    },
+    "W1.B3b": {
+      "status": "not_started",
+      "reviewCycles": 0
+    },
+    "W1.B3c": {
+      "status": "not_started",
+      "reviewCycles": 0
+    },
+    "W1.B4": {
+      "status": "not_started",
+      "reviewCycles": 0
+    },
+    "W1.C1a": {
+      "status": "done",
+      "reviewCycles": 1,
+      "commit": "1b67d39c"
+    },
+    "W1.C1b": {
+      "status": "done",
+      "reviewCycles": 1,
+      "commit": "1b67d39c"
+    },
+    "W1.C2": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "1b67d39c",
+      "note": "Builder self-amended its own row in crush_feat_plan.md to widen scope to SkillRegistry.php. Amendment kept -- registerFromManifest() hardcoded paths: [], silently breaking path-based auto-scoping -- but flagged: an agent editing the plan to justify its own scope is exactly the drift Lesson 1/2 warn about."
+    },
+    "W1.D1": {
+      "status": "done",
+      "reviewCycles": 1,
+      "commit": "1b67d39c"
+    },
+    "W1.D2a": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "1b67d39c",
+      "note": "Reviewer's category-11 blocker is correct but premature: ForeignSkillDiscovery's production wiring is W3.S8 (AppBuilder), not a Wave 1 step. Its real finding -- backwards project/home precedence -- was fixed."
+    },
+    "W1.D2b": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "91bf331b",
+      "note": "Reviewer returned BLOCKED with one genuine medium finding: opencode tools: map read as $enabled ? allow : deny, so any truthy non-boolean silently GRANTED tool access. Fixed to fail closed. Also fixed list-form tools: importing array indices as tool names, and a 2-way ternary dispatching a 4-case enum."
+    },
+    "W1.D3": {
+      "status": "not_started",
+      "reviewCycles": 0
+    },
+    "W1.E1a": {
+      "status": "done",
+      "reviewCycles": 1,
+      "commit": "9b1020c0"
+    },
+    "W1.E1b": {
+      "status": "done",
+      "reviewCycles": 2,
+      "commit": "9b1020c0"
+    },
+    "W1.E2": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "9b1020c0",
+      "note": "Both findings were low severity (a stale line-number citation and an untested default-parameter branch)."
+    },
+    "W1.E3": {
+      "status": "done",
+      "reviewCycles": 0,
+      "commit": "9b1020c0",
+      "note": "Never dispatched as its own step -- W1.E2's builder wired bin/sugarcrush as part of its work. Verified present in the diff: --help and -p now dispatch before Program/Bootstrap::chat(), fixing the blocking-TUI bug."
+    },
+    "W1.F1": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "f01eb4f8",
+      "note": "Both real findings fixed: diff moved onto a ToolResult field; no-op edit now returns an honest error instead of false success. Two tests that locked in the false success were re-pointed at the contract."
+    },
+    "W1.G1": {
+      "status": "done",
+      "reviewCycles": 2,
+      "commit": "8f794c19"
+    },
+    "W1.G2": {
+      "status": "done",
+      "reviewCycles": 3,
+      "commit": "8f794c19",
+      "note": "Reviewer's dead-code blocker was real and is resolved -- but by a fix agent inventing a Doctor built-in tool to manufacture a call path. Kept because \u00a79 E4 specs /doctor and \u00a79's own PR sequencing puts it with E1+E2. Two genuine bugs fixed en route: base64 across the fork/JSON IPC seam, and ToolResult passthrough instead of ok() re-wrapping."
+    }
   }
 }

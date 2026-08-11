@@ -1,7 +1,7 @@
 {
     "W1": {
         "status": "in_progress",
-        "note": "17 of 27 steps done and committed (28c55a6f, 313cdab6, 1b67d39c, f01eb4f8, 9b1020c0, 8f794c19). 10 remain: W1.A3-A6, W1.B3a-B3c, W1.B4, W1.D2b, W1.D3. See feat-wave-1-progress.json (canonical)."
+        "note": "23 of 27 steps done and committed. Remaining: W1.B3b, W1.B3c, W1.B4, W1.D3 (Track B tail + Track D tail). See feat-wave-1-progress.json (canonical)."
     },
     "W2": {
         "status": "not_started",
@@ -14,5 +14,5 @@
         "status": "not_started"
     },
     "baseline": "Tests: 3255, Assertions: 8379, Warnings: 11, Skipped: 1.",
-    "current": "Tests: 3471, Assertions: 8944, Warnings: 11, Skipped: 1. (0 failures, 0 errors)"
+    "current": "Tests: 3614, Assertions: 9328, Warnings: 11, Skipped: 1. (0 failures, 0 errors)"
 }
