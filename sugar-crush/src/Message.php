@@ -100,12 +100,37 @@ final class Message
     }
 
     /**
-     * Human-readable one-liner for a tool invocation, e.g.
-     * `bash(command: "ls -la")` - used both for the running placeholder and
-     * (via Renderer) the finished marker's label.
+     * Longest single argument value (or model-authored description) rendered
+     * into a tool-call one-liner before it is elided. The label is drawn on a
+     * single terminal row, so an unbounded value would push the row past the
+     * viewport width.
+     */
+    private const DESCRIPTION_MAX = 80;
+
+    /**
+     * Human-readable one-liner for a tool invocation.
+     *
+     * crush_feat.md §3 E2: the same model turn that emits a tool call also
+     * emits a `description` argument (every built-in tool's `inputSchema()`
+     * marks it required), so no extra LLM round-trip is needed to get a
+     * Claude-Code-Bash-style "List files in current directory" label. That
+     * model-authored summary wins when present; otherwise this falls back to
+     * the mechanical `bash(command: "ls -la")` argument dump so older
+     * backends/models that don't populate it don't regress.
+     *
+     * Used both for the running placeholder and (via Renderer) the finished
+     * marker's label.
      */
     public static function describeToolCall(ToolCall $call): string
     {
+        $described = $call->arguments['description'] ?? null;
+        if (is_string($described)) {
+            $described = self::singleLine($described);
+            if ($described !== '') {
+                return $described;
+            }
+        }
+
         if ($call->arguments === []) {
             return $call->name . '()';
         }
@@ -113,13 +138,39 @@ final class Message
         $parts = [];
         foreach ($call->arguments as $key => $value) {
             $rendered = is_string($value) ? $value : (json_encode($value) ?: '');
-            if (mb_strlen($rendered) > 80) {
-                $rendered = mb_substr($rendered, 0, 80) . '…';
+            if (mb_strlen($rendered) > self::DESCRIPTION_MAX) {
+                $rendered = mb_substr($rendered, 0, self::DESCRIPTION_MAX) . '…';
             }
             $parts[] = is_int($key) ? $rendered : "{$key}: " . json_encode($rendered);
         }
 
         return $call->name . '(' . implode(', ', $parts) . ')';
+    }
+
+    /**
+     * Flatten model-controlled text into one bounded, control-byte-free line.
+     *
+     * A tool call's arguments come straight from the model, and the resulting
+     * label is written into a single row of the TUI frame: a newline would
+     * desynchronise the renderer's line accounting and a raw ESC would let the
+     * model inject its own SGR/cursor sequences into the chrome.
+     */
+    private static function singleLine(string $text): string
+    {
+        // \p{C} covers C0/C1 controls (incl. ESC, CR, LF, TAB) plus unassigned
+        // and format code points such as bidi overrides.
+        $flattened = preg_replace('/[\p{C}\s]+/u', ' ', $text);
+        if ($flattened === null) {
+            // Invalid UTF-8 makes the /u pattern bail; strip byte-wise instead
+            // so malformed input can never smuggle control bytes into a frame.
+            $flattened = preg_replace('/[[:cntrl:]\s]+/', ' ', $text) ?? '';
+        }
+        $flattened = trim($flattened);
+        if (mb_strlen($flattened) > self::DESCRIPTION_MAX) {
+            $flattened = mb_substr($flattened, 0, self::DESCRIPTION_MAX) . '…';
+        }
+
+        return $flattened;
     }
 
     public function attachFile(string $path): self
