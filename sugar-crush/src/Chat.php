@@ -553,6 +553,8 @@ final class Chat implements Model
                     $raw->imageBytes,
                     $raw->imagePath,
                     $raw->imageProtocol,
+                    $raw->diff,
+                    $raw->durationMs,
                 );
                 return [$result, $raw, true];
             }
@@ -677,6 +679,8 @@ final class Chat implements Model
                 'imageBytes' => $result->imageBytes === null ? null : base64_encode($result->imageBytes),
                 'imagePath' => $result->imagePath,
                 'imageProtocol' => $result->imageProtocol,
+                'diff' => $result->diff,
+                'durationMs' => $result->durationMs,
             ],
             'raw' => json_decode(json_encode($raw) ?: 'null', true),
         ];
@@ -790,6 +794,8 @@ final class Chat implements Model
             isset($r['imageBytes']) && is_string($r['imageBytes']) ? base64_decode($r['imageBytes'], true) ?: null : null,
             isset($r['imagePath']) && is_string($r['imagePath']) ? $r['imagePath'] : null,
             isset($r['imageProtocol']) && is_string($r['imageProtocol']) ? $r['imageProtocol'] : null,
+            isset($r['diff']) && is_string($r['diff']) ? $r['diff'] : null,
+            isset($r['durationMs']) && is_int($r['durationMs']) ? $r['durationMs'] : null,
         );
 
         if (($decoded['succeeded'] ?? false) === true && $this->onToolCall !== null) {

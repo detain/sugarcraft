@@ -605,6 +605,38 @@ final class ChatTest extends TestCase
         $this->assertSame('echo', $next->history[2]->toolResults[0]->name);
     }
 
+    /**
+     * W2.S1b: ToolResult's reconciled $diff/$durationMs (the fields that
+     * previously existed only on the engine-side Tools\ToolResult) have to
+     * survive Chat's pcntl_fork()/JSON-temp-file seam, or a diff computed by
+     * a tool would be silently dropped before Renderer ever sees it - the
+     * same class of loss the base64 image fix (W1.G2) closed.
+     */
+    public function testDiffAndDurationSurviveTheForkedToolResultSeam(): void
+    {
+        $toolCall = new \SugarCraft\Crush\ToolCall('edit', ['path' => 'a.php'], 'call_diff_1');
+        $message = Message::assistant('Editing...')->withToolCalls([$toolCall]);
+        $diff = "--- a/a.php\n+++ b/a.php\n@@ -1 +1 @@\n-x\n+y\n";
+
+        $chat = (new Chat(
+            history: [Message::user('edit a.php')],
+            inFlight: true,
+        ))->registerTool('edit', static fn(array $args) => new \SugarCraft\Crush\ToolResult(
+            name: 'edit',
+            result: 'File updated: a.php',
+            id: 'call_diff_1',
+            diff: $diff,
+            durationMs: 5,
+        ));
+
+        [, $next] = $this->runToolCallsToCompletion($chat, $message);
+
+        $result = $next->history[2]->toolResults[0];
+        $this->assertSame($diff, $result->diff);
+        $this->assertTrue($result->hasDiff());
+        $this->assertSame(5, $result->durationMs);
+    }
+
     public function testUnknownToolReturnsError(): void
     {
         $toolCall = new \SugarCraft\Crush\ToolCall('unknown_tool', []);

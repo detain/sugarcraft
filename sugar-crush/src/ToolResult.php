@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Mosaic\Mosaic;
 
 /**
@@ -24,6 +25,22 @@ use SugarCraft\Mosaic\Mosaic;
  * bridge the two (e.g. surfacing a tool-produced image back into the user
  * message history), convert at that boundary rather than collapsing these
  * two differently-shaped representations into one.
+ *
+ * This is the Chat/Renderer-side half of the two type pairs crush_feat.md
+ * §1 D flags as "a maintenance hazard independent of the rendering gap".
+ * {@see EngineToolResult} (`Tools\ToolResult`) is the canonical pair -- it
+ * is what the {@see Tools\Tool} interface returns, what {@see Runtime}
+ * collects and what {@see \SugarCraft\Crush\Events\ToolFinished} carries --
+ * while this type is what {@see Message}'s `$toolResults` and {@see
+ * Renderer} render. The two are reconciled by the lossless {@see
+ * toEngineResult()}/{@see fromEngineResult()} adapters rather than by
+ * rewriting every consumer of either pair at once (crush_feat.md §1 E1).
+ * For those adapters to be genuinely lossless this type carries the two
+ * fields only the engine side had -- `$diff` (W1.F1, the unified diff
+ * crush_feat.md §1 E3 wants rendered, which otherwise could not reach
+ * {@see Renderer} at all since the renderer only ever sees THIS type) and
+ * `$durationMs` -- exactly as the engine side already carries the image
+ * fields that started life only here.
  */
 final class ToolResult
 {
@@ -56,6 +73,10 @@ final class ToolResult
      * @param string|null $imagePath Filesystem path the image was captured from/saved to, if any
      * @param string|null $imageProtocol The candy-mosaic protocol ({@see Mosaic::protocol()}) detected
      *                                   at capture time -- 'kitty'|'sixel'|'iterm2'|'halfblock'|'quarterblock'|'chafa'
+     * @param string|null $diff Raw unified diff produced by an edit-shaped tool, kept OFF $result
+     *                          so a renderer can hand it straight to a diff viewer instead of
+     *                          string-scanning free text (mirrors {@see EngineToolResult::diff()})
+     * @param int|null $durationMs Wall-clock execution time, if the dispatching pipeline measured it
      */
     public function __construct(
         public readonly string $name,
@@ -65,6 +86,8 @@ final class ToolResult
         public readonly ?string $imageBytes = null,
         public readonly ?string $imagePath = null,
         public readonly ?string $imageProtocol = null,
+        public readonly ?string $diff = null,
+        public readonly ?int $durationMs = null,
     ) {}
 
     /**
@@ -121,6 +144,8 @@ final class ToolResult
             imageBytes: $imageBytes,
             imagePath: $imagePath,
             imageProtocol: self::probeMosaic()->protocol(),
+            diff: $this->diff,
+            durationMs: $this->durationMs,
         );
     }
 
@@ -130,6 +155,67 @@ final class ToolResult
     public function hasImage(): bool
     {
         return $this->imageBytes !== null;
+    }
+
+    /**
+     * True when this result carries a unified diff for a renderer to show
+     * (crush_feat.md §1 E3) instead of only a "File updated: …" one-liner.
+     */
+    public function hasDiff(): bool
+    {
+        return $this->diff !== null;
+    }
+
+    /**
+     * Adapt this Chat-side result to the canonical engine-side
+     * {@see EngineToolResult} the {@see Tools\Tool} interface, {@see Runtime}
+     * and {@see \SugarCraft\Crush\Events\ToolFinished} speak (crush_feat.md
+     * §1 E1).
+     *
+     * The engine pair carries one `content` string plus an `isError` flag
+     * where this pair splits `$result`/`$error`, so the collapse is the same
+     * `$this->error ?? $this->result` {@see toWire()} has always used for the
+     * provider wire-shape. `toolCallId` is non-nullable engine-side and falls
+     * back to the tool name, matching {@see ToolCall::toEngineCall()} so a
+     * call and its result still key identically across the seam.
+     */
+    public function toEngineResult(): EngineToolResult
+    {
+        return new EngineToolResult(
+            toolCallId: $this->id ?? $this->name,
+            content: $this->error ?? $this->result,
+            isError: $this->isError(),
+            durationMs: $this->durationMs,
+            imageBytes: $this->imageBytes,
+            imagePath: $this->imagePath,
+            imageProtocol: $this->imageProtocol,
+            diff: $this->diff,
+        );
+    }
+
+    /**
+     * Adapt a canonical engine-side {@see EngineToolResult} into the
+     * Chat/Renderer-side shape. Inverse of {@see toEngineResult()}.
+     *
+     * $name must be supplied by the caller because the engine pair keys
+     * purely by `toolCallId` and carries no tool name -- the dispatching
+     * side always has the matching {@see ToolCall}, and inventing a name
+     * here (e.g. reusing the id) would put a call id in front of the user
+     * wherever {@see Renderer} prints `tool: <name>`.
+     */
+    public static function fromEngineResult(EngineToolResult $result, string $name): self
+    {
+        return new self(
+            $name,
+            $result->isError() ? '' : $result->content(),
+            $result->isError() ? $result->content() : null,
+            $result->toolCallId(),
+            $result->imageBytes(),
+            $result->imagePath(),
+            $result->imageProtocol(),
+            $result->diff(),
+            $result->durationMs(),
+        );
     }
 
     /**
