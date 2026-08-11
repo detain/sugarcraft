@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Skills\SkillSource;
 
 /**
  * Represents a named, configurable agent preset used for delegation and
  * session spawning. Contains all tuning parameters for an agent's behaviour.
+ *
+ * `$source` records which tool's convention the definition was read from, so a
+ * preset imported by {@see ForeignAgentPresetRegistry} from `.claude/agents/`
+ * or `.opencode/agents/` can be badged as foreign; presets written for
+ * sugar-crush itself keep the SkillSource::Native default.
  */
 final class AgentPreset
 {
@@ -28,5 +34,6 @@ final class AgentPreset
         public readonly ?Isolation $isolation = null,
         public readonly ?string $color = null,
         public readonly ?string $initialPrompt = null,
+        public readonly SkillSource $source = SkillSource::Native,
     ) {}
 }
