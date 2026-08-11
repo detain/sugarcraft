@@ -7,6 +7,10 @@ namespace SugarCraft\Crush;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\View;
+use SugarCraft\Mosaic\ImageLayer;
+use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -164,6 +168,42 @@ final class Renderer
     private const SHELL_CHROME_COLS = 6;
 
     /**
+     * Cell width a tool-result image ({@see renderToolImage()}) is scaled to
+     * before its height is derived from the source aspect ratio. Literally
+     * crush_feat.md §9 E3's `$w = 40`: wide enough for a screenshot to be
+     * legible, narrow enough that it still fits inside the chat shell on an
+     * 80-column terminal without pushing the transcript off-screen.
+     */
+    private const IMAGE_COLS = 40;
+
+    /**
+     * Distinct encoded pictures {@see $imageCache} keeps before it starts
+     * evicting the least recently used one. A handful is enough to cover every
+     * image still on screen (the transcript is tail-clipped to one viewport)
+     * while keeping the retained blob bytes bounded in a session that scrolls
+     * hundreds of screenshots past.
+     */
+    private const IMAGE_CACHE_MAX = 8;
+
+    /**
+     * Encoded pictures, keyed by source bytes + cell box + protocol, in
+     * least-recently-used-first order.
+     *
+     * `Program::renderFrame()` calls `Chat::view()` on EVERY dirty frame - each
+     * keystroke, each streaming chunk, each spinner tick - so without this an
+     * image-bearing tool result would re-decode its bytes through ext-gd and
+     * re-encode the picture on every one of those frames, for every image still
+     * in the transcript. That is single-digit milliseconds for half-block but
+     * hundreds of milliseconds for Sixel, i.e. exactly the pixel-graphics
+     * protocols this feature exists to enable would be the ones that make the
+     * TUI unusable. The output is a pure function of the key, so memoizing it
+     * is safe.
+     *
+     * @var array<string, array{ok: bool, body: string}>
+     */
+    private static array $imageCache = [];
+
+    /**
      * Inner width of the permission modal, in cells. Wider than the palette's
      * 50 because a prompt body is prose (a hook's question plus the tool
      * call's own arguments), not a list of short command labels.
@@ -198,10 +238,50 @@ final class Renderer
         ['n / Esc', 'reject'],
     ];
 
+    /**
+     * The frame's text bytes only, discarding any pixel-graphics image layer
+     * {@see renderView()} collected.
+     *
+     * Kept as the entry point for every caller that only wants the literal
+     * frame (tests, and anything composing the frame into something else):
+     * an image layer is meaningless without a {@see \SugarCraft\Core\Program}
+     * to paint it, and a plain string is what candy-core's `Model::view()`
+     * contract calls the simple case.
+     */
     public static function render(Chat $chat): string
     {
+        return self::renderView($chat)->body;
+    }
+
+    /**
+     * The full frame plus the pixel-graphics layer for any image-bearing tool
+     * result in the transcript (crush_feat.md §9 E3).
+     *
+     * Sixel/Kitty/iTerm2 blobs are not text and cannot be diffed by
+     * candy-core's line renderer, so — exactly as `sugar-gallery`'s
+     * `PosterCard` does — each blob is registered with a per-frame
+     * {@see ImageLayer}, which hands back a marker block to sit in the text
+     * frame, and the collected {@see ImageLayer::placements()} ride out on the
+     * {@see View}. `Program::renderFrame()` resolves those markers to screen
+     * positions and paints the blobs on top of the text frame, so nothing
+     * beyond returning them is needed here. A fresh layer per call is required:
+     * ids are positional to THIS frame, and a reused layer would keep painting
+     * images whose markers have since scrolled out of the transcript.
+     */
+    public static function renderView(Chat $chat): View
+    {
         $theme = $chat->theme();
-        $body = self::renderHistory($chat->history, $theme, max(20, $chat->cols() - self::SHELL_CHROME_COLS));
+        $images = new ImageLayer();
+        $body = self::renderHistory(
+            $chat->history,
+            $theme,
+            max(20, $chat->cols() - self::SHELL_CHROME_COLS),
+            $images,
+            $chat->mosaic(),
+            // Row budget for a single picture: anything taller is clipped off
+            // the frame's tail anyway, so encoding it would be pure waste.
+            max(1, $chat->rows() - 2),
+        );
         if ($chat->inFlight) {
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
@@ -293,7 +373,7 @@ final class Renderer
             );
         }
 
-        return $frame;
+        return new View($frame, images: $images->placements());
     }
 
     /**
@@ -394,11 +474,17 @@ final class Renderer
 
     /**
      * @param list<Message> $history
-     * @param int           $width usable columns inside the shell's border +
-     *                             padding, so nested boxes (tool diffs) can
-     *                             truncate rather than wrap into a second row
+     * @param int           $width  usable columns inside the shell's border +
+     *                              padding, so nested boxes (tool diffs) can
+     *                              truncate rather than wrap into a second row
+     * @param ImageLayer    $images this frame's pixel-graphics layer, threaded
+     *                              down to {@see renderToolImage()}
+     * @param Mosaic|null   $mosaic the probe-once terminal image capability off
+     *                              {@see Chat::mosaic()}; null disables images
+     * @param int           $imageRows tallest cell box a single tool image may
+     *                              be encoded at, see {@see renderToolImage()}
      */
-    private static function renderHistory(array $history, Theme $theme, int $width): string
+    private static function renderHistory(array $history, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
@@ -415,7 +501,7 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme, $width);
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $images, $mosaic, $imageRows);
 
                 continue;
             }
@@ -487,8 +573,13 @@ final class Renderer
      * §1 E3. The diff is consumed verbatim from the result; it is never
      * recomputed here, because the renderer has neither the pre-edit file
      * contents nor any business touching the filesystem.
+     *
+     * A result carrying image bytes ({@see ToolResult::hasImage()} - the
+     * `/doctor` built-in is a real producer) additionally gets the picture
+     * itself painted below the marker, via {@see renderToolImage()}
+     * (crush_feat.md §9 E3).
      */
-    private static function renderToolResults(Message $msg, Theme $theme, int $width): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
         $lines = [];
         foreach ($msg->toolResults as $result) {
@@ -503,10 +594,117 @@ final class Renderer
                 $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
             }
 
+            if ($result->hasImage()) {
+                $picture = self::renderToolImage($result, $theme, $width, $images, $mosaic, $imageRows);
+                if ($picture !== '') {
+                    $block .= "\n" . $picture;
+                }
+            }
+
             $lines[] = $block;
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * Paint one image-bearing {@see ToolResult}'s bytes at the terminal's best
+     * available protocol (crush_feat.md §9 E3), following the exact pattern
+     * `sugar-gallery/src/PosterCard.php` proves out.
+     *
+     * Two shapes come back out of candy-mosaic and they are composed
+     * differently: an inline renderer (half-block / quarter-block / ASCII)
+     * emits ordinary styled cells that go straight into the frame, while a
+     * pixel-graphics renderer (Sixel / Kitty / iTerm2) emits an out-of-band
+     * escape blob that would corrupt the line-diff if it were concatenated -
+     * that one is handed to {@see ImageLayer::place()}, which parks the bytes
+     * on the layer and returns a same-sized marker block to occupy the frame
+     * instead. {@see Mosaic::isInline()} is the switch; the fallback ladder
+     * behind it (Kitty > iTerm2 > Sixel > chafa > half-block) is
+     * {@see Mosaic::auto()}'s job, already decided before this call.
+     *
+     * Returns '' when no {@see Mosaic} is wired - a {@see Chat} built without
+     * one (any direct `new Chat(...)`, as opposed to `Cli\Bootstrap::chat()`)
+     * has no probed capability, and guessing a protocol for an unprobed
+     * terminal would spray raw escape bytes at a terminal that cannot decode
+     * them. The result's own text still renders; only the picture is skipped.
+     *
+     * Decoding is wrapped because `view()` runs on every frame and must never
+     * throw: bytes reach here straight from a tool (possibly truncated, a
+     * non-image, or a format this build of ext-gd cannot decode), and a
+     * corrupt screenshot must cost one line of the transcript, not the
+     * session.
+     *
+     * Both the decode and the encode are memoized in {@see $imageCache} because
+     * this runs on every frame; only the (cheap) {@see ImageLayer::place()}
+     * registration is redone per frame, since placement ids are positional to
+     * the frame being built.
+     *
+     * @param int $imageRows tallest box to encode at. The height derived from
+     *                       the aspect ratio is clamped to it so one tall source
+     *                       (a full-page screenshot is easily 100+ cells high)
+     *                       cannot blow up the encode cost for rows that
+     *                       {@see renderView()}'s tail-clipping then discards.
+     */
+    private static function renderToolImage(ToolResult $result, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    {
+        if ($mosaic === null) {
+            return '';
+        }
+
+        $bytes = (string) $result->imageBytes;
+        $cols = max(8, min(self::IMAGE_COLS, $width));
+        $rows = self::imageRows($bytes, $cols, $imageRows);
+        $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol();
+
+        if (isset(self::$imageCache[$key])) {
+            $hit = self::$imageCache[$key];
+            // Re-insert so eviction drops the picture that scrolled away, not
+            // the one being repainted every frame.
+            unset(self::$imageCache[$key]);
+            self::$imageCache[$key] = $hit;
+        } else {
+            try {
+                $hit = ['ok' => true, 'body' => $mosaic->render(ImageSource::fromString($bytes), $cols, $rows)];
+            } catch (\Throwable $e) {
+                $hit = ['ok' => false, 'body' => Style::new()->foreground($theme->systemLabel)->faint()
+                    ->render('🖼 image unavailable: ' . Sanitize::untrusted($e->getMessage()))];
+            }
+
+            self::$imageCache[$key] = $hit;
+            if (\count(self::$imageCache) > self::IMAGE_CACHE_MAX) {
+                array_shift(self::$imageCache);
+            }
+        }
+
+        if (!$hit['ok']) {
+            return $hit['body'];
+        }
+
+        return $mosaic->isInline() ? $hit['body'] : $images->place($hit['body'], $cols, $rows);
+    }
+
+    /**
+     * Cell height for an image of $bytes drawn $cols wide, clamped to $budget.
+     *
+     * Split out of {@see renderToolImage()} so the cheap header-only dimension
+     * probe stays outside that method's cache lookup - the height is part of
+     * the cache key, so it has to be known before the key is built, and
+     * `getimagesizefromstring()` reads the header only rather than decoding the
+     * whole bitmap the way {@see ImageSource::fromString()} does.
+     *
+     * Falls back to a square box when the header is unreadable: the real
+     * decode is about to fail anyway, and this only has to produce a stable
+     * cache key for that failure.
+     */
+    private static function imageRows(string $bytes, int $cols, int $budget): int
+    {
+        $size = @getimagesizefromstring($bytes);
+        $aspect = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? $size[0] / $size[1] : 1.0;
+
+        // Cells are about twice as tall as they are wide, so the /2 is what
+        // keeps a square image square rather than doubled in height.
+        return max(1, min((int) round($cols / $aspect / 2), $budget));
     }
 
     /**

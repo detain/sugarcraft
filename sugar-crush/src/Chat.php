@@ -1345,10 +1345,20 @@ final class Chat implements Model
      * (e.g. the status bar) once a conversation grew past a single frame.
      * Program's Renderer already does correct, safe diffing on real text;
      * doing it a second time here was redundant at best.
+     *
+     * Returns a {@see \SugarCraft\Core\View} instead of that bare string only
+     * when the frame carries images - see {@see Renderer::renderView()}.
      */
-    public function view(): string
+    public function view(): string|\SugarCraft\Core\View
     {
-        return Renderer::render($this);
+        $view = Renderer::renderView($this);
+
+        // The View wrapper exists only to carry the pixel-graphics layer an
+        // image-bearing tool result puts on it (crush_feat.md §9 E3); Program
+        // auto-wraps a plain string for every other frame, and returning the
+        // literal frame keeps view() substitutable for its own body wherever
+        // no image is on screen - which is every frame of a text-only session.
+        return $view->images === [] ? $view->body : $view;
     }
 
     public function backend(): Backend
