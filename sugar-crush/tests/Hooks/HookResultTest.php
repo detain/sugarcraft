@@ -195,6 +195,71 @@ final class HookResultTest extends TestCase
     }
 
     // =========================================================================
+    // Factory Method Tests - ASK
+    // =========================================================================
+
+    public function testAsk(): void
+    {
+        $message = 'Run `rm -rf /tmp/build`?';
+
+        $result = HookResult::ask($message);
+
+        $this->assertSame(HookResult::ASK, $result->action);
+        $this->assertSame($message, $result->message);
+        $this->assertNull($result->modifiedInput);
+    }
+
+    public function testAskIsDistinctFromTheOtherThreeActions(): void
+    {
+        $result = HookResult::ask('Proceed?');
+
+        $this->assertTrue($result->isAsk());
+        $this->assertFalse($result->isAllowed());
+        $this->assertFalse($result->isDenied());
+        $this->assertFalse($result->isModified());
+    }
+
+    public function testIsAskReturnsFalseForOtherActions(): void
+    {
+        $this->assertFalse(HookResult::allow()->isAsk());
+        $this->assertFalse(HookResult::deny('nope')->isAsk());
+        $this->assertFalse(HookResult::modify('changed')->isAsk());
+    }
+
+    // =========================================================================
+    // Fail-Closed Gate Tests - permitsExecution
+    // =========================================================================
+
+    public function testPermitsExecutionForAllowAndModify(): void
+    {
+        $this->assertTrue(HookResult::allow()->permitsExecution());
+        $this->assertTrue(HookResult::modify('changed')->permitsExecution());
+    }
+
+    public function testPermitsExecutionIsFalseForDeny(): void
+    {
+        $this->assertFalse(HookResult::deny('Security policy violation')->permitsExecution());
+    }
+
+    public function testAskDoesNotPermitExecution(): void
+    {
+        // An unanswered question is not permission: the tool must not run
+        // while the prompt is outstanding.
+        $this->assertFalse(HookResult::ask('Proceed?')->permitsExecution());
+    }
+
+    public function testUnrecognisedActionDoesNotPermitExecution(): void
+    {
+        // Regression guard for the fail-open shape: a gate written as
+        // "!isDenied()" would have permitted this, since a malformed or
+        // future action is neither deny nor allow.
+        $result = new HookResult('quarantine', 'unknown verdict');
+
+        $this->assertFalse($result->permitsExecution());
+        $this->assertFalse($result->isDenied());
+    }
+
+    // =========================================================================
     // Immutability Tests
     // =========================================================================
 

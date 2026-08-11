@@ -125,6 +125,79 @@ final class MessageTest extends TestCase
         $this->assertSame('bash()', Message::describeToolCall($call));
     }
 
+    /**
+     * crush_feat.md §3 E2: the model-authored `description` argument is the
+     * label, not the mechanical argument dump. Fails against the old code,
+     * which rendered `bash(command: "ls -la", description: "...")`.
+     */
+    public function testDescribeToolCallPrefersTheModelAuthoredDescription(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', [
+            'command' => 'ls -la',
+            'description' => 'List files in current directory',
+        ]);
+
+        $this->assertSame('List files in current directory', Message::describeToolCall($call));
+    }
+
+    public function testDescribeToolCallFallsBackWhenDescriptionIsMissingOrUnusable(): void
+    {
+        $noDescription = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls -la']);
+        $this->assertSame('bash(command: "ls -la")', Message::describeToolCall($noDescription));
+
+        // Blank / whitespace-only is as useless as absent, so fall back too.
+        $blank = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls -la', 'description' => "  \n "]);
+        $this->assertStringStartsWith('bash(command: "ls -la"', Message::describeToolCall($blank));
+
+        // A non-string description is not a label; the dump still describes it.
+        $wrongType = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls', 'description' => ['nope']]);
+        $this->assertStringStartsWith('bash(command: "ls"', Message::describeToolCall($wrongType));
+    }
+
+    /**
+     * Tool arguments are model-controlled and the label lands on a single row
+     * of the frame, so newlines and raw ESC bytes must never survive.
+     */
+    public function testDescribeToolCallFlattensControlBytesToASingleLine(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', [
+            'command' => 'ls',
+            'description' => "List files\n\x1b[31mred\x1b[0m\tnow",
+        ]);
+
+        $described = Message::describeToolCall($call);
+
+        $this->assertSame('List files [31mred [0m now', $described);
+        $this->assertStringNotContainsString("\n", $described);
+        $this->assertStringNotContainsString("\x1b", $described);
+    }
+
+    public function testDescribeToolCallElidesAnOverlongDescription(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', [
+            'command' => 'ls',
+            'description' => str_repeat('x', 200),
+        ]);
+
+        $described = Message::describeToolCall($call);
+
+        $this->assertSame(str_repeat('x', 80) . '…', $described);
+        $this->assertSame(81, mb_strlen($described));
+    }
+
+    public function testToolRunningUsesTheModelAuthoredDescriptionAsItsContent(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', [
+            'command' => 'ls -la',
+            'description' => 'List files in current directory',
+        ], 'call_1');
+
+        $m = Message::toolRunning($call);
+
+        $this->assertSame('List files in current directory', $m->content);
+        $this->assertSame('call_1', $m->pendingToolCallId);
+    }
+
     public function testAssistantFactoryAcceptsOptionalReasoning(): void
     {
         $m = Message::assistant('answer', 12345, reasoning: 'thinking...');

@@ -212,6 +212,42 @@ final class BuiltInToolTest extends TestCase
         $this->assertContains('url', $schema['required']);
     }
 
+    /**
+     * crush_feat.md §3 E2: every built-in tool marks a human-readable
+     * `description` required, so a compliant backend always emits the label
+     * {@see \SugarCraft\Crush\Message::describeToolCall()} prefers - no extra
+     * LLM call needed. Fails against the old schemas, which had no such field.
+     *
+     * @return list<array{0:Tool}>
+     */
+    public static function describableToolProvider(): array
+    {
+        return [
+            'read' => [new Read()],
+            'bash' => [new Bash()],
+            'edit' => [new Edit()],
+            'grep' => [new Grep()],
+            'glob' => [new Glob()],
+            'webfetch' => [new WebFetch()],
+        ];
+    }
+
+    /**
+     * @dataProvider describableToolProvider
+     */
+    public function testInputSchemaRequiresAHumanReadableDescription(Tool $tool): void
+    {
+        $schema = $tool->inputSchema();
+
+        $this->assertArrayHasKey('description', $schema['properties']);
+        $this->assertSame('string', $schema['properties']['description']['type']);
+        $this->assertStringContainsString(
+            'active voice',
+            $schema['properties']['description']['description'],
+        );
+        $this->assertContains('description', $schema['required']);
+    }
+
     public function testDoctorToolInputSchemaHasNoRequiredFields(): void
     {
         $tool = new Doctor();

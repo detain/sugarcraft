@@ -275,8 +275,116 @@ YAML);
     }
 
     // =========================================================================
+    // ask() Passthrough Tests
+    // =========================================================================
+
+    public function testPreToolUsePassesAskThrough(): void
+    {
+        $this->manager->register($this->createAskHook('confirm-bash', 'Bash', 'Run this command?'));
+
+        $result = $this->manager->preToolUse($this->createContext('Bash', 'rm -rf /tmp/x'));
+
+        $this->assertTrue($result->isAsk());
+        $this->assertSame('Run this command?', $result->message);
+        // The gate must not read an unanswered question as permission.
+        $this->assertFalse($result->permitsExecution());
+    }
+
+    // =========================================================================
+    // resolveAsk Tests
+    // =========================================================================
+
+    public function testResolveAskApproved(): void
+    {
+        $ask = HookResult::ask('Run this command?');
+
+        $result = $this->manager->resolveAsk($ask, true);
+
+        $this->assertTrue($result->isAllowed());
+        $this->assertTrue($result->permitsExecution());
+        $this->assertSame('Run this command?', $result->message);
+    }
+
+    public function testResolveAskRejected(): void
+    {
+        $ask = HookResult::ask('Run this command?');
+
+        $result = $this->manager->resolveAsk($ask, false);
+
+        $this->assertTrue($result->isDenied());
+        $this->assertFalse($result->permitsExecution());
+    }
+
+    public function testResolveAskRejectedWithFeedbackReplacesMessage(): void
+    {
+        $ask = HookResult::ask('Run this command?');
+
+        $result = $this->manager->resolveAsk($ask, false, 'Use the test fixture path instead.');
+
+        $this->assertTrue($result->isDenied());
+        $this->assertSame('Use the test fixture path instead.', $result->message);
+    }
+
+    public function testResolveAskApprovedWithFeedbackReplacesMessage(): void
+    {
+        $ask = HookResult::ask('Run this command?');
+
+        $result = $this->manager->resolveAsk($ask, true, 'Approved for this session.');
+
+        $this->assertTrue($result->isAllowed());
+        $this->assertSame('Approved for this session.', $result->message);
+    }
+
+    public function testResolveAskRejectsAnAlreadySettledDeny(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Cannot resolve a 'deny' hook result");
+
+        // Resolving a settled decision would be a DENY→ALLOW path.
+        $this->manager->resolveAsk(HookResult::deny('Protected file'), true);
+    }
+
+    public function testResolveAskRejectsAnAlreadySettledAllow(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->manager->resolveAsk(HookResult::allow(), false);
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
+
+    private function createAskHook(string $name, string $matcher, string $question): \SugarCraft\Crush\Hooks\HookInterface
+    {
+        return new class($name, $matcher, $question) implements \SugarCraft\Crush\Hooks\HookInterface {
+            public function __construct(
+                private string $name,
+                private string $matcher,
+                private string $question,
+            ) {}
+
+            public function name(): string
+            {
+                return $this->name;
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return $this->matcher;
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                return HookResult::ask($this->question);
+            }
+        };
+    }
 
     private function createContext(string $toolName, string $toolInput): HookContext
     {

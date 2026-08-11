@@ -36,8 +36,12 @@ final readonly class Read implements Tool
         'type' => 'object',
         'properties' => [
             'file_path' => ['type' => 'string', 'description' => 'Path to file to read'],
+            'description' => [
+                'type' => 'string',
+                'description' => 'Clear, concise 5-10 word description in active voice of why this file is being read (e.g. "Inspect the chat model constructor", not "reads a file").',
+            ],
         ],
-        'required' => ['file_path'],
+        'required' => ['file_path', 'description'],
         ];
     }
 

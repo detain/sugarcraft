@@ -17,7 +17,13 @@ final class SkillsPane
         if ($a->skillPickerOptions !== []) {
             $lines = [];
             foreach ($a->skillPickerOptions as $skill) {
-                $lines[] = Style::new()
+                // Provenance badge precedes the name so an imported .claude/
+                // or .opencode/ skill is distinguishable from native content.
+                $badge = $skill->source->badge();
+                $badgePrefix = $badge === ''
+                    ? ''
+                    : Style::new()->foreground($skill->source->color())->render($badge . ' ');
+                $lines[] = $badgePrefix . Style::new()
                     ->foreground(Color::hex('#00ffaa'))
                     ->render('▸ ' . $skill->name . ' — ' . $skill->description);
             }
