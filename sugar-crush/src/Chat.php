@@ -16,6 +16,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
@@ -139,6 +140,21 @@ final class Chat implements Model
      * overlapping between the old and new window instead of paging blind.
      */
     private const SCROLL_WHEEL_LINES = 3;
+
+    /**
+     * How far (Manhattan cells) the pointer may stray between press and
+     * release and still count as a click rather than a text selection
+     * (crush_feat.md §8 E8).
+     *
+     * One cell, not zero: a press and release one cell apart is a shaky
+     * hand on a two-cell-wide tab, while a deliberate selection sweep
+     * always crosses more ground than that. Zone bounds alone cannot make
+     * this call — a tool-call row or a palette row is one zone spanning the
+     * full width, so dragging across it to copy the text starts AND ends
+     * inside the same zone and {@see ZoneClickTracker} happily calls it a
+     * click.
+     */
+    private const CLICK_DRAG_TOLERANCE_CELLS = 1;
 
     /**
      * @param list<Message> $history
@@ -1220,6 +1236,42 @@ final class Chat implements Model
     }
 
     /**
+     * The in-flight left press as `[col, row, drift]` — where it landed and
+     * the furthest the pointer has strayed from it since (crush_feat.md
+     * §8 E8), or null when no press is pending.
+     *
+     * Static for the same reason {@see $clickTracker} is: the press half is
+     * recorded in one `update()` and read in a later one, and an immutable
+     * Chat throws the intermediate instance away. Only the left button ever
+     * reaches here — {@see handleMouse()} drops the others before this —
+     * so one slot is enough, unlike the tracker's per-button map.
+     *
+     * @var array{0:int,1:int,2:int}|null
+     */
+    private static ?array $pressGesture = null;
+
+    /**
+     * Fold a pointer position reported while a press is pending into that
+     * press's drift.
+     *
+     * Drift is the running MAXIMUM rather than the press→release delta
+     * alone, because a selection sweep that ends back where it started
+     * (drag right to highlight a line, drag back, release) has a delta of
+     * zero and would otherwise read as a click.
+     */
+    private static function recordPressDrift(int $col, int $row): void
+    {
+        if (self::$pressGesture === null) {
+            return;
+        }
+
+        [$pressCol, $pressRow, $drift] = self::$pressGesture;
+        $distance = abs($col - $pressCol) + abs($row - $pressRow);
+
+        self::$pressGesture = [$pressCol, $pressRow, max($drift, $distance)];
+    }
+
+    /**
      * Click-to-switch session tab (crush_feat.md §8 E2), click-to-switch pane
      * (§8 E3), click-to-expand a tool call (§8 E5), click-to-select a palette
      * row (§8 E6), plus wheel-scroll of the transcript (§8 E4).
@@ -1237,6 +1289,11 @@ final class Chat implements Model
      * screen — see {@see zoneAt()}, which is also where
      * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` is enforced.
      *
+     * A pair the tracker accepts is then re-checked against how far the
+     * pointer moved (§8 E8, {@see CLICK_DRAG_TOLERANCE_CELLS}): a drag
+     * within one wide zone is a text selection, not a click, and must
+     * dispatch nothing.
+     *
      * @return array{0:self,1:?\Closure}
      */
     private function handleMouse(MouseMsg $msg): array
@@ -1249,6 +1306,15 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // Motion is still not translated into a candy-mouse event (nothing
+        // consumes hover), but with the button down it is the terminal
+        // narrating a drag, so it feeds §8 E8's drift before being dropped.
+        if ($msg instanceof MouseMotionMsg) {
+            self::recordPressDrift($msg->x, $msg->y);
+
+            return [$this, null];
+        }
+
         $event = match (true) {
             $msg instanceof MouseClickMsg   => MouseEvent::press($msg->x, $msg->y),
             $msg instanceof MouseReleaseMsg => MouseEvent::release($msg->x, $msg->y),
@@ -1258,8 +1324,30 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        if ($msg instanceof MouseClickMsg) {
+            self::$pressGesture = [$msg->x, $msg->y, 0];
+        } else {
+            self::recordPressDrift($msg->x, $msg->y);
+        }
+
+        $drift = self::$pressGesture[2] ?? 0;
+        if ($msg instanceof MouseReleaseMsg) {
+            // Cleared unconditionally, including on the releases the tracker
+            // rejects, so a press abandoned outside any zone cannot leave
+            // stale drift to poison the NEXT click.
+            self::$pressGesture = null;
+        }
+
         $click = self::clickTracker()->track($event, self::zoneAt($msg->x, $msg->y));
         if ($click === null) {
+            return [$this, null];
+        }
+
+        // §8 E8. The pair is clean by zone, but the pointer travelled far
+        // enough across it that the user was sweeping out a text selection,
+        // not pointing at a control — dispatch nothing so the terminal's own
+        // copy-on-select is what the gesture accomplishes.
+        if ($drift > self::CLICK_DRAG_TOLERANCE_CELLS) {
             return [$this, null];
         }
 

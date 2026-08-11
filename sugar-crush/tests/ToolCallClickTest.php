@@ -206,7 +206,9 @@ final class ToolCallClickTest extends TestCase
         self::assertNull($pressCmd);
         self::assertFalse($afterPress->isToolOutputExpanded('call_1'), 'press alone must not expand');
 
-        [$afterRelease, $releaseCmd] = $afterPress->update($this->release($zone->endCol, $zone->startRow));
+        // Released on the press cell, not the row's far edge: sweeping to
+        // endCol is a text selection under section 8 E8, not a click.
+        [$afterRelease, $releaseCmd] = $afterPress->update($this->release($zone->startCol, $zone->startRow));
 
         self::assertNull($releaseCmd);
         self::assertTrue($afterRelease->isToolOutputExpanded('call_1'));

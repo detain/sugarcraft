@@ -210,7 +210,9 @@ final class PaletteClickTest extends TestCase
         self::assertNull($pressCmd);
         self::assertSame('root', $afterPress->palette()?->mode, 'press alone must not confirm');
 
-        [$after, $cmd] = $afterPress->update($this->release($zone->endCol, $zone->startRow));
+        // Released on the press cell, not the row's far edge: sweeping to
+        // endCol is a text selection under section 8 E8, not a click.
+        [$after, $cmd] = $afterPress->update($this->release($zone->startCol, $zone->startRow));
 
         self::assertNull($cmd);
         self::assertSame('themes', $after->palette()?->mode);

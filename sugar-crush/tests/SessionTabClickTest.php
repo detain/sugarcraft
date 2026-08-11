@@ -154,7 +154,9 @@ final class SessionTabClickTest extends TestCase
         self::assertInstanceOf(Zone::class, $zone);
 
         [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
-        [$chat] = $chat->update($this->release($zone->endCol, $zone->startRow));
+        // Released on the press cell: a sweep to endCol is a text selection
+        // under section 8 E8, not a click.
+        [$chat] = $chat->update($this->release($zone->startCol, $zone->startRow));
 
         self::assertSame('session-b', $chat->currentSessionId());
     }

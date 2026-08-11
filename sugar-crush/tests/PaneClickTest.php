@@ -145,7 +145,9 @@ final class PaneClickTest extends TestCase
         self::assertNull($pressCmd);
         self::assertNull($afterPress->palette(), 'press alone must not open the palette');
 
-        [$afterRelease, $releaseCmd] = $afterPress->update($this->release($zone->endCol, $zone->startRow));
+        // Released on the press cell, not the zone's far edge: sweeping to
+        // endCol is a text selection under section 8 E8, not a click.
+        [$afterRelease, $releaseCmd] = $afterPress->update($this->release($zone->startCol, $zone->startRow));
 
         self::assertNull($releaseCmd);
         self::assertInstanceOf(PaletteState::class, $afterRelease->palette());
