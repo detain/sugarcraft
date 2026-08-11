@@ -21,6 +21,7 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
+use SugarCraft\Crush\Tui\Pane;
 
 /**
  * Pure view function for {@see Chat} — the renderer actually reached by a
@@ -186,6 +187,14 @@ final class Renderer
      * same string spelled out independently on both sides of the hit test.
      */
     public const SESSION_TAB_ZONE_PREFIX = 'tab:';
+
+    /**
+     * Zone-id prefix every clickable pane region carries (crush_feat.md §8
+     * E3). The suffix is always a {@see Pane} case's own `value`, so
+     * {@see Chat::update()} can turn a click straight back into the enum
+     * case rather than matching hand-spelled strings on both sides.
+     */
+    public const PANE_ZONE_PREFIX = 'pane:';
 
     /**
      * The zone-id charset {@see Mark::wrap()} accepts, duplicated here
@@ -409,9 +418,15 @@ final class Renderer
      */
     private static function renderStatusBar(Chat $chat): string
     {
+        // The "Ctrl+P menu" hint is the live path's only affordance for
+        // Pane::Menu (the palette is what the disconnected App system's
+        // MenuBar pane would have been), so it is the region that carries
+        // the `pane:menu` click zone — crush_feat.md §8 E3's "click the
+        // pane's title region to jump straight to it". While a request is in
+        // flight the hint is not drawn at all, so no zone is marked either.
         $processing = $chat->inFlight
             ? '⠴ thinking… · Esc Esc to cancel'
-            : 'Enter to send · Ctrl+P menu · /exit or ^C to quit';
+            : 'Enter to send · ' . self::markPane(Pane::Menu, 'Ctrl+P menu') . ' · /exit or ^C to quit';
         $percent = (int) round($chat->contextUsagePercent() * 100);
 
         return "{$percent}% context · {$processing}";
@@ -441,7 +456,11 @@ final class Renderer
         $cols = $chat->cols();
         $width = max(40, $cols - 4);
 
-        return AgentStatusBar::render($states)
+        // The status bar's first row is this pane's header, so it carries the
+        // `pane:agents` click zone (crush_feat.md §8 E3) — clicking it runs
+        // the same /agents dispatch Ctrl+A does. See {@see markPaneHeader()}
+        // for why the whole block is not marked.
+        return self::markPaneHeader(Pane::Agents, AgentStatusBar::render($states))
             . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS);
     }
 
@@ -527,6 +546,52 @@ final class Renderer
         }
 
         return Mark::zone($zoneId, $label);
+    }
+
+    /**
+     * Wrap one on-screen region in a `pane:<name>` click zone (crush_feat.md
+     * §8 E3), so a click on it can be turned back into the {@see Pane} it
+     * belongs to by {@see Chat::update()}.
+     *
+     * No id validation here, unlike {@see markSessionTab()}: a pane id is a
+     * `Pane` case's own `value` (a lowercase ASCII literal in the enum), not
+     * a string that arrived from disk, so it cannot fall outside
+     * {@see Mark}'s charset and make `Mark::wrap()` throw inside `view()`.
+     *
+     * Marking is skipped when clicks are off, for the reason spelled out on
+     * {@see markSessionTab()}: with no marker anywhere in the frame
+     * {@see scanRoot()} keeps its `str_contains()` fast path.
+     *
+     * @param string $content MUST be a single line — see {@see markPaneHeader()}.
+     */
+    private static function markPane(Pane $pane, string $content): string
+    {
+        if ($content === '' || !Chat::mouseClicksEnabled()) {
+            return $content;
+        }
+
+        return Mark::zone(self::PANE_ZONE_PREFIX . $pane->value, $content);
+    }
+
+    /**
+     * Mark only the FIRST line of a multi-line block as the pane's zone —
+     * its header row, which is the "title/border region" §8 E3 asks for.
+     *
+     * Deliberately not the whole block. {@see render()} clips `$content` to
+     * the terminal's height by dropping leading LINES, so a zone spanning
+     * several rows can lose its opening sentinel while the closing one
+     * survives. That unmatched close makes {@see \SugarCraft\Mouse\Scan::parse()}
+     * throw, and {@see scanRoot()} answers a throw by clearing the registry
+     * — costing the WHOLE frame its zones, session tabs included. A
+     * single-line zone is clipped whole or not at all, so it can never
+     * desync.
+     */
+    private static function markPaneHeader(Pane $pane, string $block): string
+    {
+        $lines = explode("\n", $block);
+        $lines[0] = self::markPane($pane, $lines[0]);
+
+        return implode("\n", $lines);
     }
 
     /**

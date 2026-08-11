@@ -20,6 +20,7 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Agents\AgentManager;
@@ -1227,12 +1228,19 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        $prefix = Renderer::SESSION_TAB_ZONE_PREFIX;
-        if (!str_starts_with($click->zone->id, $prefix)) {
-            return [$this, null];
+        $zoneId = $click->zone->id;
+
+        $tabPrefix = Renderer::SESSION_TAB_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $tabPrefix)) {
+            return $this->selectSessionTab(substr($zoneId, strlen($tabPrefix)));
         }
 
-        return $this->selectSessionTab(substr($click->zone->id, strlen($prefix)));
+        $panePrefix = Renderer::PANE_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $panePrefix)) {
+            return $this->selectPane(substr($zoneId, strlen($panePrefix)));
+        }
+
+        return [$this, null];
     }
 
     /**
@@ -1263,6 +1271,49 @@ final class Chat implements Model
         }
 
         return [$this->withCurrentSessionId($id), null];
+    }
+
+    /**
+     * Click-to-switch pane (crush_feat.md §8 E3).
+     *
+     * §8 E3 sketches `$app->withPane(Pane::from($name))`, but `App::$pane`
+     * belongs to the `App`/`Tui\Renderer` system that nothing constructs
+     * (`bin/sugarcrush` runs THIS model — see {@see Renderer}'s class
+     * docblock, and §5 E7, which recommends retiring that system outright).
+     * Jumping a pane field no live frame reads would be a switch the user
+     * can never see. So a pane click dispatches the same thing the keyboard
+     * already dispatches for that pane on the live path — E3's "just a
+     * direct jump instead of `next()`", against the surfaces that exist:
+     *
+     * - {@see Pane::Menu} → open the Ctrl+P palette. The palette IS this
+     *   path's menu surface; the status bar's "Ctrl+P menu" hint is the
+     *   region marked for it. A click is ignored while the palette is
+     *   already open: it captures keyboard input while up, so re-rooting it
+     *   from underneath would undo navigation the keyboard cannot.
+     * - {@see Pane::Agents} → the same `handleAgentsCommand('/agents')` the
+     *   Ctrl+A shortcut and the palette's SwitchAgent action already run.
+     *
+     * Every other case is honestly inert. Files/Tools/Skills/Settings/Help
+     * have NO live surface on this path at all (they are `Tui\Components\*`
+     * stubs keyed on `App`), and Chat/Input have no separate focus to move —
+     * every keystroke already goes to the input box. Nothing marks a zone
+     * for those panes, so this arm is only reached by a stale zone from a
+     * previous frame; answering it with an invented state change would be
+     * worse than answering it with nothing.
+     *
+     * @param string $name A {@see Pane} case value, as parsed off the zone id.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function selectPane(string $name): array
+    {
+        return match (Pane::tryFrom($name)) {
+            Pane::Menu => $this->palette !== null
+                ? [$this, null]
+                : [$this->mutate(['palette' => PaletteState::root()]), null],
+            Pane::Agents => $this->handleAgentsCommand('/agents'),
+            default => [$this, null],
+        };
     }
 
     /**
