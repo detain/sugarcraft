@@ -217,6 +217,20 @@ final class Chat implements Model
          * hands the engine backend.
          */
         private readonly ?HookManager $hooks = null,
+        /**
+         * Tool-call ids whose output the user has explicitly expanded, keyed
+         * by id ({@see ToolResult::$id}), value always true - a collapsed
+         * call is simply absent rather than stored as false, so the map stays
+         * the size of what the user actually opened rather than growing one
+         * entry per tool call for the life of the session.
+         *
+         * {@see Renderer::renderToolResults()} hides a successful call's body
+         * unless its id is in here (crush_feat.md §1 E5's "hide-on-success by
+         * default"); Ctrl+O toggles it (see {@see toggleToolOutput()}).
+         *
+         * @var array<string, bool>
+         */
+        private readonly array $expanded = [],
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -353,6 +367,13 @@ final class Chat implements Model
             // input buffer instead - same reasoning as Ctrl+A just below.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
                 => [$this->mutate(['palette' => PaletteState::root()]), null],
+            // Ctrl+O expands/collapses the most recent tool call's output
+            // (crush_feat.md §1 E5) - successful tool bodies are hidden by
+            // default, and this is the only way to see one. Checked before
+            // the generic Char arm below, or the literal "o" would be typed
+            // into the input buffer instead - same reasoning as Ctrl+P above.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
+                => $this->toggleLatestToolOutput(),
             // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
             // already uses for typed input (handleAgentsCommand()), giving
             // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
@@ -1251,6 +1272,105 @@ final class Chat implements Model
     }
 
     /**
+     * Tool-call ids whose output the user has expanded (crush_feat.md §1 E5).
+     * {@see Renderer::render()} reads this to decide which tool bodies to
+     * paint in full; ids absent from the map are collapsed.
+     *
+     * @return array<string, bool>
+     */
+    public function expanded(): array
+    {
+        return $this->expanded;
+    }
+
+    /**
+     * True when $id's tool output is currently expanded.
+     */
+    public function isToolOutputExpanded(string $id): bool
+    {
+        return ($this->expanded[$id] ?? false) === true;
+    }
+
+    /**
+     * Flip one tool call's collapsed/expanded state. Collapsing REMOVES the
+     * key rather than storing false - see the constructor's `$expanded`
+     * docblock for why the map only ever holds what the user opened.
+     *
+     * @return self A new Chat with $id's expansion state flipped
+     */
+    public function toggleToolOutput(string $id): self
+    {
+        $expanded = $this->expanded;
+        if (($expanded[$id] ?? false) === true) {
+            unset($expanded[$id]);
+        } else {
+            $expanded[$id] = true;
+        }
+
+        return $this->mutate(['expanded' => $expanded]);
+    }
+
+    /**
+     * Ctrl+O's target: every tool-call id carried by the most recent
+     * tool-result message in history, or [] when the conversation has none.
+     *
+     * Chat has no cursor or selection model over history - the transcript is
+     * a flat rendered string, not a navigable list - so "the last tool call"
+     * is the only unambiguous referent a single keystroke can name, and it is
+     * also the one a user pressing Ctrl+O right after a call almost always
+     * means. A per-result selector belongs with a real history cursor, which
+     * this item does not introduce.
+     *
+     * @return list<string>
+     */
+    private function latestToolResultIds(): array
+    {
+        foreach (array_reverse($this->history) as $msg) {
+            if ($msg->toolResults === []) {
+                continue;
+            }
+
+            $ids = [];
+            foreach ($msg->toolResults as $result) {
+                $ids[] = $result->id ?? $result->name;
+            }
+
+            return $ids;
+        }
+
+        return [];
+    }
+
+    /**
+     * Toggle every id {@see latestToolResultIds()} returns as one unit, so a
+     * batch of parallel tool calls opens and closes together instead of
+     * needing one keypress each. The batch follows the FIRST id's current
+     * state so a half-expanded batch converges rather than inverting into a
+     * different half-expanded batch.
+     *
+     * @return array{0: self, 1: null}
+     */
+    private function toggleLatestToolOutput(): array
+    {
+        $ids = $this->latestToolResultIds();
+        if ($ids === []) {
+            return [$this, null];
+        }
+
+        $expand = !$this->isToolOutputExpanded($ids[0]);
+        $expanded = $this->expanded;
+        foreach ($ids as $id) {
+            if ($expand) {
+                $expanded[$id] = true;
+            } else {
+                unset($expanded[$id]);
+            }
+        }
+
+        return [$this->mutate(['expanded' => $expanded]), null];
+    }
+
+    /**
      * Timestamp of the last real user prompt submitted through submit(),
      * or null if none has been recorded yet on this instance.
      */
@@ -1306,6 +1426,7 @@ final class Chat implements Model
             'cols' => $this->cols,
             'mosaic' => $this->mosaic,
             'hooks' => $this->hooks,
+            'expanded' => $this->expanded,
         ];
 
         return new self(...array_merge($constructorProps, $changes));

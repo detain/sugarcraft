@@ -311,7 +311,104 @@ final class RendererTest extends TestCase
         $out = Renderer::render($this->chat(history: [Message::user('what is 6*7?'), $toolMsg]));
 
         $this->assertStringContainsString('tool: calculator', $out);
-        $this->assertStringContainsString('42', $out);
+        // §1 E5: a SUCCESSFUL body is hidden behind the affordance by
+        // default; the marker still has to be distinct from assistant text.
+        $this->assertStringContainsString('1 line hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * §1 E5 regression: before hide-on-success, every tool body was dumped
+     * inline forever - a 500-line Grep result pushed the conversation out of
+     * the viewport. Collapsed, only the affordance is printed.
+     */
+    public function testSuccessfulToolOutputIsHiddenByDefault(): void
+    {
+        $body = implode("\n", array_fill(0, 500, 'match in some/file.php'));
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Crush\ToolResult::ok('grep', $body, 'call_1'),
+        ]);
+
+        $out = Renderer::render($this->chat(history: [$toolMsg]));
+
+        $this->assertStringNotContainsString('match in some/file.php', $out);
+        $this->assertStringContainsString('500 lines hidden (ctrl+o)', $out);
+    }
+
+    public function testExpandedToolCallIdShowsTheFullSuccessBody(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Crush\ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        ]);
+
+        $chat = $this->chat(history: [$toolMsg])->toggleToolOutput('call_1');
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('alpha', $out);
+        $this->assertStringContainsString('beta', $out);
+        $this->assertStringNotContainsString('hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * An error body is the output the user actually wants, so it is never
+     * hidden - only clipped, with a trailer naming the escape hatch.
+     */
+    public function testCollapsedErrorOutputIsClippedNotHidden(): void
+    {
+        $body = implode("\n", array_map(static fn (int $i): string => "stderr line {$i}", range(1, 40)));
+        $toolMsg = Message::assistant('')->withToolResults([
+            \SugarCraft\Crush\ToolResult::error('bash', $body, 'call_1'),
+        ]);
+
+        $out = Renderer::render($this->chat(history: [$toolMsg]));
+
+        $this->assertStringContainsString('stderr line 1', $out);
+        $this->assertStringNotContainsString('stderr line 40', $out);
+        $this->assertStringContainsString('output truncated (ctrl+o to expand)', $out);
+    }
+
+    public function testCollapseToolOutputKeepsShortOutputVerbatim(): void
+    {
+        $this->assertSame(
+            ['output' => "a\nb", 'overflow' => false],
+            Renderer::collapseToolOutput("a\nb", 10, 100),
+        );
+    }
+
+    public function testCollapseToolOutputClipsOnTheLineBudget(): void
+    {
+        $collapsed = Renderer::collapseToolOutput("1\n2\n3\n4", 2, 1000);
+
+        $this->assertSame("1\n2", $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    /**
+     * One enormous line is still "1 line" - the character budget is what
+     * catches it, which is why both limits exist.
+     */
+    public function testCollapseToolOutputClipsOnTheCharBudget(): void
+    {
+        $collapsed = Renderer::collapseToolOutput(str_repeat('x', 5000), 10, 100);
+
+        $this->assertSame(str_repeat('x', 100), $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputCountsMultibyteCharactersNotBytes(): void
+    {
+        $collapsed = Renderer::collapseToolOutput(str_repeat('é', 10), 10, 4);
+
+        $this->assertSame('éééé', $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
+    }
+
+    public function testCollapseToolOutputHandlesEmptyAndDegenerateLimits(): void
+    {
+        $this->assertSame(['output' => '', 'overflow' => false], Renderer::collapseToolOutput('', 10, 100));
+
+        $collapsed = Renderer::collapseToolOutput("a\nb", 0, 0);
+        $this->assertSame('a', $collapsed['output']);
+        $this->assertTrue($collapsed['overflow']);
     }
 
     public function testFailedToolResultShowsErrorMarker(): void

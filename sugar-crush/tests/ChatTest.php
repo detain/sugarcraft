@@ -32,6 +32,7 @@ use SugarCraft\Crush\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\ToolResult;
 use PHPUnit\Framework\TestCase;
 
 final class ChatTest extends TestCase
@@ -191,6 +192,85 @@ final class ChatTest extends TestCase
         $chat = new Chat(inputBuf: 'hello there world');
         [$next] = $chat->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
         $this->assertSame('hello there ', $next->inputBuf);
+    }
+
+    /**
+     * crush_feat.md §1 E5: tool output starts collapsed and Ctrl+O is the
+     * only way to open it, so the keystroke must NOT fall through to the
+     * generic Char arm and type a literal "o" into the input buffer.
+     */
+    public function testCtrlOTogglesTheLatestToolCallOutput(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        ]);
+        $chat = new Chat(history: [$toolMsg]);
+
+        $this->assertFalse($chat->isToolOutputExpanded('call_1'));
+
+        [$expanded, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertTrue($expanded->isToolOutputExpanded('call_1'));
+        $this->assertSame('', $expanded->inputBuf);
+        // Immutability: the original Chat is untouched.
+        $this->assertSame([], $chat->expanded());
+
+        [$collapsed] = $expanded->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertSame([], $collapsed->expanded());
+    }
+
+    /**
+     * A batch of parallel tool calls opens and closes as one unit - see
+     * Chat::toggleLatestToolOutput()'s docblock.
+     */
+    public function testCtrlOTogglesEveryResultInTheLatestToolBatch(): void
+    {
+        $toolMsg = Message::assistant('')->withToolResults([
+            ToolResult::ok('grep', 'a', 'call_1'),
+            ToolResult::ok('bash', 'b', 'call_2'),
+        ]);
+        $chat = new Chat(history: [Message::user('go'), $toolMsg]);
+
+        [$expanded] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertSame(['call_1' => true, 'call_2' => true], $expanded->expanded());
+    }
+
+    public function testCtrlOIsANoOpWhenNoToolCallHasRunYet(): void
+    {
+        $chat = new Chat(history: [Message::user('hi')]);
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame([], $next->expanded());
+        $this->assertSame('', $next->inputBuf);
+    }
+
+    public function testToggleToolOutputReturnsANewChatAndFlipsBothWays(): void
+    {
+        $chat = new Chat();
+
+        $expanded = $chat->toggleToolOutput('call_9');
+
+        $this->assertNotSame($chat, $expanded);
+        $this->assertSame(['call_9' => true], $expanded->expanded());
+        $this->assertTrue($expanded->isToolOutputExpanded('call_9'));
+        $this->assertSame([], $expanded->toggleToolOutput('call_9')->expanded());
+    }
+
+    /**
+     * The expansion map must survive every other with*()/mutate() call -
+     * a field missing from mutate()'s constructorProps silently resets on
+     * the next unrelated state change.
+     */
+    public function testExpandedMapSurvivesUnrelatedMutations(): void
+    {
+        $chat = (new Chat())->toggleToolOutput('call_1')->withStreaming(true)->withThemeName('light');
+
+        $this->assertSame(['call_1' => true], $chat->expanded());
     }
 
     public function testAltBackspaceDeletesLastWordFromInput(): void

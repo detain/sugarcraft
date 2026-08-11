@@ -163,10 +163,21 @@ final class Renderer
      */
     private const SHELL_CHROME_COLS = 6;
 
+    /**
+     * Rows/characters {@see collapseToolOutput()} keeps of a tool body before
+     * it clips and prints an overflow trailer (crush_feat.md §1 E5). Both
+     * limits matter independently: a `Grep` result can be 400 short lines
+     * (blows the line budget) and a `Bash` result can be one 200KB line
+     * (blows the character budget while still being "1 line").
+     */
+    private const TOOL_OUTPUT_MAX_LINES = 10;
+
+    private const TOOL_OUTPUT_MAX_CHARS = 2000;
+
     public static function render(Chat $chat): string
     {
         $theme = $chat->theme();
-        $body = self::renderHistory($chat->history, $theme, max(20, $chat->cols() - self::SHELL_CHROME_COLS));
+        $body = self::renderHistory($chat->history, $theme, max(20, $chat->cols() - self::SHELL_CHROME_COLS), $chat->expanded());
         if ($chat->inFlight) {
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
@@ -341,12 +352,14 @@ final class Renderer
     }
 
     /**
-     * @param list<Message> $history
-     * @param int           $width usable columns inside the shell's border +
-     *                             padding, so nested boxes (tool diffs) can
-     *                             truncate rather than wrap into a second row
+     * @param list<Message>       $history
+     * @param int                 $width    usable columns inside the shell's border +
+     *                                      padding, so nested boxes (tool diffs) can
+     *                                      truncate rather than wrap into a second row
+     * @param array<string, bool> $expanded {@see Chat::expanded()} - tool-call ids the
+     *                                      user has expanded, keyed by id
      */
-    private static function renderHistory(array $history, Theme $theme, int $width): string
+    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded = []): string
     {
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
@@ -363,7 +376,7 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme, $width);
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded);
 
                 continue;
             }
@@ -435,8 +448,20 @@ final class Renderer
      * §1 E3. The diff is consumed verbatim from the result; it is never
      * recomputed here, because the renderer has neither the pre-edit file
      * contents nor any business touching the filesystem.
+     *
+     * Bodies are no longer dumped in full forever (crush_feat.md §1 E5). A
+     * SUCCESSFUL result is the case where the output is least likely to be
+     * worth screen space - the model already read it, and the user mostly
+     * needs to know the call happened - so its body is hidden entirely until
+     * the tool-call id appears in $expanded ({@see Chat::toggleToolOutput()},
+     * Ctrl+O). An ERROR body is never hidden, because that is precisely the
+     * output the user is looking for, but it is still clipped through
+     * {@see collapseToolOutput()} so a multi-megabyte stderr can't evict the
+     * conversation it belongs to. Expanding shows the body verbatim.
+     *
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderToolResults(Message $msg, Theme $theme, int $width): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded = []): string
     {
         $lines = [];
         foreach ($msg->toolResults as $result) {
@@ -445,7 +470,12 @@ final class Renderer
                 : Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
             $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . $result->name) . ' ' . $status;
             $body = Sanitize::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
-            $block = $body === '' ? $label : $label . "\n" . $body;
+            $isExpanded = ($expanded[$result->id ?? $result->name] ?? false) === true;
+
+            $block = $label;
+            if ($body !== '') {
+                $block .= "\n" . self::renderToolBody($body, $result->isError(), $isExpanded, $theme);
+            }
 
             if ($result->hasDiff()) {
                 $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
@@ -455,6 +485,80 @@ final class Renderer
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * One tool result's body under the collapse/expand policy documented on
+     * {@see renderToolResults()}: verbatim when expanded, a faint one-line
+     * "N lines hidden" affordance when a successful call is collapsed, and a
+     * {@see collapseToolOutput()}-clipped excerpt (plus trailer) when a failed
+     * call is collapsed.
+     */
+    private static function renderToolBody(string $body, bool $isError, bool $isExpanded, Theme $theme): string
+    {
+        if ($isExpanded) {
+            return $body;
+        }
+
+        if (!$isError) {
+            $count = substr_count($body, "\n") + 1;
+            $hint = "… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)';
+
+            return Style::new()->foreground($theme->systemLabel)->faint()->render($hint);
+        }
+
+        $collapsed = self::collapseToolOutput($body, self::TOOL_OUTPUT_MAX_LINES, self::TOOL_OUTPUT_MAX_CHARS);
+        if (!$collapsed['overflow']) {
+            return $collapsed['output'];
+        }
+
+        return $collapsed['output'] . "\n"
+            . Style::new()->foreground($theme->systemLabel)->faint()->render('… output truncated (ctrl+o to expand)');
+    }
+
+    /**
+     * Clip a tool's raw output to at most $maxLines lines AND $maxChars
+     * characters, reporting whether anything was dropped (crush_feat.md
+     * §1 E5).
+     *
+     * Deliberately a pure function over plain strings - no Theme, no Style,
+     * no Chat - so the clipping policy is unit-testable on its own and can be
+     * reused by any other surface that has to show tool output.
+     *
+     * The line budget is applied before the character budget so a result that
+     * is short in lines but enormous in one of them still gets clipped; both
+     * limits set `overflow`. Character counting is mb_*-based because tool
+     * output is arbitrary UTF-8 and a byte-wise cut could split a codepoint
+     * and put a lone continuation byte on the terminal wire.
+     *
+     * @param int $maxLines Maximum lines to keep; values below 1 are treated as 1
+     * @param int $maxChars Maximum characters to keep; values below 1 are treated as 1
+     *
+     * @return array{output: string, overflow: bool}
+     */
+    public static function collapseToolOutput(string $output, int $maxLines, int $maxChars): array
+    {
+        if ($output === '') {
+            return ['output' => '', 'overflow' => false];
+        }
+
+        $maxLines = max(1, $maxLines);
+        $maxChars = max(1, $maxChars);
+
+        $overflow = false;
+        $rows = preg_split('/\r\n|\r|\n/', $output) ?: [];
+        if (count($rows) > $maxLines) {
+            $rows = array_slice($rows, 0, $maxLines);
+            $overflow = true;
+        }
+
+        $clipped = implode("\n", $rows);
+        if (mb_strlen($clipped) > $maxChars) {
+            $clipped = mb_substr($clipped, 0, $maxChars);
+            $overflow = true;
+        }
+
+        return ['output' => $clipped, 'overflow' => $overflow];
     }
 
     /**
