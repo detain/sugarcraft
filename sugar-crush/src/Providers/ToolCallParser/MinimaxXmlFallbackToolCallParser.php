@@ -203,14 +203,16 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
      * loop instead of returning an isError ToolResult. int/float/bool/null are
      * exactly the ambiguous cases, so they lose the coin toss.
      *
-     * KNOWN GAP: the correct disambiguation needs the invoked tool's declared
-     * JSON-Schema type, which this class cannot see - {@see parse()} is handed
-     * only the response message. Threading the active tool list through is
-     * W1.A6's job (§12 D6, `ProviderFactory::createSglang()`); until that lands
-     * a genuinely number/boolean-typed parameter reaches the tool as its string
-     * form. That same step is what first makes this parser reachable at all,
-     * and the confirmed live deployment passes `--tool-call-parser minimax-m2`,
-     * so nothing in production reads these values today.
+     * KNOWN GAP, still open: the correct disambiguation needs the invoked
+     * tool's declared JSON-Schema type, which this class cannot see -
+     * {@see parse()} is handed only the response message - so a genuinely
+     * number/boolean-typed parameter reaches the tool as its string form.
+     * W1.A6 (§12 D6, `ProviderFactory::createSglang()`) has since made this
+     * parser reachable, selectable via the `toolCallParser` config key, but D6
+     * scopes that step to parser SELECTION only; threading the active tool
+     * list through remains unscheduled. It stays latent in practice because
+     * the confirmed live deployment passes `--tool-call-parser minimax-m2`, so
+     * this parser's XML branch is never entered there.
      */
     private function coerceValue(string $raw): mixed
     {

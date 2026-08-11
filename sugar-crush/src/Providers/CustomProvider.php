@@ -298,6 +298,18 @@ final readonly class CustomProvider implements ProviderInterface
         }, $tools);
     }
 
+    /**
+     * KNOWN GAP, still open: §12 D6 extracted this `tool_calls[]` walk into
+     * {@see ToolCallParser\ToolCallParserInterface}, but W1.A6 converted only
+     * {@see SglangProvider::parseResponse()} onto it. This provider and
+     * {@see OpenAIProvider} still carry their own byte-identical copies, so
+     * the duplication D6 exists to remove survives in two of three providers.
+     * Moving them over - and relocating the truncation-aware
+     * `decodeToolArguments()`/`malformedArgumentsWarning()` decoder into the
+     * `ToolCallParser` namespace so all three share it rather than reaching it
+     * through {@see SglangProvider::argumentDecoder()}'s static seam - is a
+     * follow-up outside W1.A6's file scope and is unscheduled.
+     */
     private function parseResponse(array $data): CompleteResponse
     {
         $choice = $data['choices'][0] ?? [];

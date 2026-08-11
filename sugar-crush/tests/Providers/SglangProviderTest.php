@@ -19,6 +19,8 @@ use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 
@@ -138,15 +140,118 @@ final class SglangProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // 8. contextWindow() returns 128000
+    // 8. contextWindow() returns 196608
     // -------------------------------------------------------------------------
 
-    public function testContextWindowReturns128000(): void
+    /**
+     * W1.A6 (§12 D8): the window must be the deployment's real
+     * `--context-length 196608`, not the 128,000 that was hardcoded here.
+     * Asserted as an exact value (and explicitly NOT the old one) because the
+     * whole point of D8 is that the previous figure silently truncated history
+     * ~68k tokens early.
+     */
+    public function testContextWindowReturns196608(): void
     {
         $client = $this->createMock(Client::class);
         $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $client);
 
-        $this->assertSame(128_000, $provider->contextWindow());
+        $this->assertSame(196_608, $provider->contextWindow());
+        $this->assertNotSame(128_000, $provider->contextWindow());
+    }
+
+    // -------------------------------------------------------------------------
+    // 8b. W1.A6 (§12 D6) - pluggable tool-call parser
+    // -------------------------------------------------------------------------
+
+    /**
+     * The injected parser must be the one that decodes the response, not a
+     * hardcoded `tool_calls[]` walk. Driven with a message that carries NO
+     * `tool_calls` key at all, so a provider still walking that array inline
+     * could only return null.
+     */
+    public function testCompleteDelegatesToolCallDecodingToTheInjectedParser(): void
+    {
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], json_encode([
+            'choices' => [['message' => ['content' => 'no tool_calls key here']]],
+            'usage' => ['total_tokens' => 3],
+        ])));
+
+        $parser = new class implements \SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface {
+            public function parse(array $message): ?array
+            {
+                return [ToolCall::fromArray(['id' => 'stub_1', 'name' => 'stubbed', 'arguments' => []])];
+            }
+        };
+
+        $provider = new SglangProvider(
+            'https://api.example.com',
+            'MiniMax-M2.7',
+            null,
+            $httpClient,
+            $parser,
+        );
+
+        $result = $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hello')],
+        ));
+
+        $this->assertIsArray($result->toolCalls);
+        $this->assertCount(1, $result->toolCalls);
+        $this->assertSame('stubbed', $result->toolCalls[0]->name());
+    }
+
+    public function testOpenAiCompatibleForwardsTheToolCallParserToTheProvider(): void
+    {
+        $parser = new MinimaxXmlFallbackToolCallParser(new OpenAiArrayToolCallParser());
+
+        $provider = SglangProvider::openAiCompatible(
+            'https://api.example.com',
+            'MiniMax-M2.7',
+            null,
+            $parser,
+        );
+
+        $prop = (new \ReflectionClass(SglangProvider::class))->getProperty('toolCallParser');
+        $prop->setAccessible(true);
+
+        $this->assertSame($parser, $prop->getValue($provider));
+    }
+
+    /**
+     * argumentDecoder() exists so a parser built before any provider instance
+     * (i.e. by ProviderFactory) keeps the §12 D5 truncation-aware decoding.
+     */
+    public function testArgumentDecoderDecodesAJsonArgumentsPayload(): void
+    {
+        $decoder = SglangProvider::argumentDecoder();
+
+        $this->assertSame(['city' => 'Tokyo'], $decoder('{"city":"Tokyo"}', 'get_weather'));
+    }
+
+    /**
+     * A payload cut short by the MiniMax `</parameter>` bug decodes to no
+     * arguments - the point of D5 is that it is *reported*, not that it
+     * somehow decodes; the reporting itself is asserted in
+     * SglangProviderTruncationGuardTest.
+     */
+    public function testArgumentDecoderYieldsNoArgumentsForATruncatedPayload(): void
+    {
+        $decoder = SglangProvider::argumentDecoder();
+
+        // Diverted to a temp file so the (intentional) warning does not spray
+        // the test runner's stderr - the assertion here is about the RETURN
+        // value; the warning text itself is asserted elsewhere.
+        $log = tempnam(sys_get_temp_dir(), 'sglang_log_');
+        $previous = ini_set('error_log', $log);
+
+        try {
+            $this->assertSame([], $decoder('{"path":"/tmp/a.php","content":"<x', 'write_file'));
+        } finally {
+            ini_set('error_log', $previous === false ? '' : $previous);
+            @unlink($log);
+        }
     }
 
     // -------------------------------------------------------------------------

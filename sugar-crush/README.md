@@ -100,6 +100,15 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 | Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
 | Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
 
+The `sglang` type accepts an optional `toolCallParser` key: `'openai'` (the
+default — read the server's parsed `tool_calls[]` array) or
+`'minimax-xml-fallback'` (same, but when the array is absent, recover MiniMax's
+raw `<tool_call>` XML out of the message content). Switch it only if your SGLang
+deployment was launched *without* `--tool-call-parser`, which leaves the model's
+tool-call XML unparsed in the content. Note this currently applies to the batch
+`complete()` path only — the streaming path reassembles tool calls itself and
+does not yet consult the setting.
+
 ## The agent loop
 
 `EngineBackend` bridges the chat-shell `Backend` seam to the engine. Each user turn runs a **bounded agentic loop**: call the provider through the `Runtime`, execute any tool calls through the hook gate, feed the results back, and repeat until the model answers without calling tools — or a `maxSteps` ceiling is hit.

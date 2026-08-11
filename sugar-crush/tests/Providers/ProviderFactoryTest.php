@@ -13,6 +13,9 @@ use SugarCraft\Crush\Providers\OpenAIProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Crush\Providers\VertexProvider;
 
 /**
@@ -762,5 +765,199 @@ final class ProviderFactoryTest extends TestCase
         $prop->setAccessible(true);
 
         return $prop->getValue($provider);
+    }
+
+    // -------------------------------------------------------------------------
+    // createSglang() - W1.A6 (§12 D6) tool-call-parser selection
+    // -------------------------------------------------------------------------
+
+    /**
+     * §12 D6's documented default: a config with no `toolCallParser` key gets
+     * the OpenAI-array strategy, matching the confirmed live deployment (which
+     * does pass `--tool-call-parser minimax-m2`, so the server has already
+     * decoded the call by the time it reaches us).
+     */
+    public function testCreateSglangDefaultsToTheOpenAiArrayToolCallParser(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+        ]);
+
+        $this->assertInstanceOf(
+            OpenAiArrayToolCallParser::class,
+            $this->toolCallParserOf($provider),
+        );
+    }
+
+    public function testCreateSglangHonoursAnExplicitOpenaiToolCallParserName(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+            'toolCallParser' => 'openai',
+        ]);
+
+        $this->assertInstanceOf(
+            OpenAiArrayToolCallParser::class,
+            $this->toolCallParserOf($provider),
+        );
+    }
+
+    public function testCreateSglangSelectsTheMinimaxXmlFallbackParserFromConfig(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+            'toolCallParser' => 'minimax-xml-fallback',
+        ]);
+
+        $this->assertInstanceOf(
+            MinimaxXmlFallbackToolCallParser::class,
+            $this->toolCallParserOf($provider),
+        );
+    }
+
+    /**
+     * The behavioural half of §12 D6, and the case that fails outright against
+     * the pre-W1.A6 factory: before this step nothing ever constructed either
+     * parser class, so a `toolCallParser` key was ignored and a deployment
+     * launched WITHOUT `--tool-call-parser` - which delivers the call as
+     * literal XML in `content`, with no `tool_calls` array - lost the call
+     * entirely. Driving the factory-built parser directly proves the recovery
+     * path is wired, not merely that a class of the right type was stored.
+     */
+    public function testFactoryBuiltMinimaxFallbackParserRecoversAnXmlOnlyToolCall(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+            'toolCallParser' => 'minimax-xml-fallback',
+        ]);
+
+        $calls = $this->toolCallParserOf($provider)->parse([
+            'content' => '<minimax:tool_call><invoke name="read_file">'
+                . '<parameter name="path">/etc/hosts</parameter>'
+                . '</invoke></minimax:tool_call>',
+        ]);
+
+        $this->assertIsArray($calls);
+        $this->assertCount(1, $calls);
+        $this->assertSame('read_file', $calls[0]->name());
+        $this->assertSame(['path' => '/etc/hosts'], $calls[0]->arguments());
+    }
+
+    /**
+     * The default parser must still be handed SglangProvider's own
+     * truncation-aware argument decoder (§12 D5) - selecting a parser from
+     * config must not quietly cost the truncation diagnostics.
+     *
+     * Asserted behaviourally rather than by type: OpenAiArrayToolCallParser
+     * falls back to a plain closure when handed null, so
+     * `assertInstanceOf(\Closure::class, ...)` on the injected decoder passes
+     * either way and would not catch a regression to
+     * `OpenAiArrayToolCallParser::new()`. Driving a truncated payload through
+     * and demanding the warning does.
+     */
+    public function testFactoryBuiltParserUsesSglangsTruncationAwareArgumentDecoder(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+        ]);
+
+        $logFile = sys_get_temp_dir() . '/factory-parser-decoder-' . uniqid('', true) . '.log';
+        $previous = ini_get('error_log');
+        ini_set('error_log', $logFile);
+
+        try {
+            $calls = $this->toolCallParserOf($provider)->parse([
+                'tool_calls' => [[
+                    'id' => 'call_trunc',
+                    'function' => [
+                        'name' => 'write_file',
+                        // The §12 D5 signature: the value stops the instant the
+                        // model emitted a literal '</parameter>' inside it.
+                        'arguments' => '{"content":"<x</parameter>',
+                    ],
+                ]],
+            ]);
+            $log = is_file($logFile) ? (string) file_get_contents($logFile) : '';
+        } finally {
+            ini_set('error_log', $previous === false ? '' : $previous);
+            @unlink($logFile);
+        }
+
+        $this->assertIsArray($calls);
+        $this->assertCount(1, $calls);
+        $this->assertSame([], $calls[0]->arguments());
+        $this->assertStringContainsString('possible MiniMax XML-delimiter truncation', $log);
+        $this->assertStringContainsString('write_file', $log);
+    }
+
+    /**
+     * `''` is not an operator typo, so it must not hit the throw: it is what
+     * ProviderFactory::resolveEnvVars() produces for a
+     * `${SUGARCRUSH_TOOL_CALL_PARSER}` placeholder whose variable is unset,
+     * i.e. the key being absent.
+     */
+    public function testCreateSglangTreatsAnEmptyToolCallParserNameAsUnset(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+            'toolCallParser' => '',
+        ]);
+
+        $this->assertInstanceOf(
+            OpenAiArrayToolCallParser::class,
+            $this->toolCallParserOf($provider),
+        );
+    }
+
+    /**
+     * A typo'd parser name must throw, not silently fall back to the default:
+     * an operator who wrote `minimax-xml` would otherwise believe the fallback
+     * is armed when it is not.
+     */
+    public function testCreateSglangThrowsOnAnUnknownToolCallParserName(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown toolCallParser: minimax-xml');
+
+        $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'MiniMax-M2.7',
+            'toolCallParser' => 'minimax-xml',
+        ]);
+    }
+
+    public function testDefaultConfigSglangDeclaresTheOpenaiToolCallParser(): void
+    {
+        $config = $this->factory->defaultConfig('sglang');
+
+        $this->assertArrayHasKey('toolCallParser', $config);
+        $this->assertSame('openai', $config['toolCallParser']);
+    }
+
+    /**
+     * Reads the tool-call parser the factory injected into a SglangProvider.
+     */
+    private function toolCallParserOf(ProviderInterface $provider): ToolCallParserInterface
+    {
+        $this->assertInstanceOf(SglangProvider::class, $provider);
+
+        $parser = $this->sglangPropertyOf($provider, 'toolCallParser');
+
+        $this->assertInstanceOf(ToolCallParserInterface::class, $parser);
+
+        return $parser;
     }
 }

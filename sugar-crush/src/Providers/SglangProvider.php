@@ -12,6 +12,8 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
+use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
+use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 
@@ -36,17 +38,30 @@ final readonly class SglangProvider implements ProviderInterface
      */
     private const WARNING_EXCERPT_LIMIT = 240;
 
+    /**
+     * @param ToolCallParserInterface|null $toolCallParser W1.A6 (§12 D6): the
+     *        client-side mirror of SGLang's own `--tool-call-parser` flag.
+     *        Left null the provider uses {@see OpenAiArrayToolCallParser} over
+     *        {@see argumentDecoder()}, which is the correct strategy for any
+     *        server actually launched with that flag - including the confirmed
+     *        live deployment. A deployment missing it wants
+     *        {@see \SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser}
+     *        instead, which {@see ProviderFactory::createSglang()} selects from
+     *        the `toolCallParser` config key.
+     */
     public function __construct(
         private string $baseUrl,
         private string $model,
         private ?string $apiKey,
         private Client $httpClient,
+        private ?ToolCallParserInterface $toolCallParser = null,
     ) {}
 
     public static function openAiCompatible(
         string $baseUrl,
         string $model = 'MiniMax-M2.7',
         ?string $apiKey = null,
+        ?ToolCallParserInterface $toolCallParser = null,
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -67,7 +82,26 @@ final readonly class SglangProvider implements ProviderInterface
             'headers' => $headers,
         ]);
 
-        return new self($baseUrl, $model, $apiKey, $client);
+        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser);
+    }
+
+    /**
+     * W1.A6 (§12 D6): the truncation-aware `function.arguments` decoder, handed
+     * out so a parser built *outside* this class still reports the §12 D5
+     * MiniMax `</parameter>` truncation instead of silently degrading to no
+     * arguments.
+     *
+     * {@see ProviderFactory::createSglang()} has to construct the parser before
+     * the provider exists, so it cannot borrow a bound instance method - hence
+     * a static seam rather than an accessor on a built provider. The decoding
+     * itself reads no instance state, so nothing is lost by exposing it.
+     *
+     * @return \Closure(mixed, string): array<string, mixed>
+     */
+    public static function argumentDecoder(): \Closure
+    {
+        return static fn (mixed $raw, string $toolName): array
+            => self::decodeToolArguments($raw, $toolName);
     }
 
     public function name(): string
@@ -102,9 +136,26 @@ final readonly class SglangProvider implements ProviderInterface
         return true;
     }
 
+    /**
+     * W1.A6 (§12 D8): 196,608 tokens, not the 128,000 hardcoded here before.
+     *
+     * The figure is not a guess at "what MiniMax-M2.7 supports" - it is the
+     * `--context-length 196608` the confirmed skynet2 SGLang launch command
+     * actually pins (§12), i.e. the exact point the server starts rejecting or
+     * evicting. It replaces a hardcoded 128,000 that was ~68k short.
+     *
+     * KNOWN GAP, disclosed rather than overstated: nothing in sugar-crush
+     * reads `contextWindow()` today. A repo-wide search finds it only on the
+     * provider implementations, {@see ProviderInterface} and provider unit
+     * tests - `EngineBackend`, `App`, `Runtime` and `AgentManager` never call
+     * it. The context-window-budget logic §12 D8 describes does not exist
+     * yet, so nothing observable changes from this correction: it makes the
+     * reported ceiling right ahead of the consumer rather than fixing a
+     * truncation happening now.
+     */
     public function contextWindow(): int
     {
-        return 128_000;  // Varies by model
+        return 196_608;
     }
 
     public function costPer1kTokens(string $model, string $direction): float
@@ -359,34 +410,31 @@ final readonly class SglangProvider implements ProviderInterface
         }, $tools);
     }
 
+    /**
+     * W1.A6 (§12 D6): tool-call decoding now runs through the injected
+     * {@see ToolCallParserInterface} instead of the `tool_calls[]` walk that
+     * used to be inlined byte-identically here, in `CustomProvider` and in
+     * `OpenAIProvider`. Behaviour for a server-parsed response is unchanged -
+     * the default strategy IS that extracted walk - and
+     * {@see ProviderFactory::createSglang()} now picks the strategy from the
+     * `toolCallParser` config key.
+     *
+     * KNOWN GAP, still open: this is the batch `complete()` path only.
+     * {@see supportsStreaming()} returns true, so the production consumers
+     * ({@see \SugarCraft\Crush\Runtime}, {@see \SugarCraft\Crush\Agents\AgentManager})
+     * route this provider through `completeStream()` instead, and that path's
+     * `parseChunk()`/`resolveStreamedToolCalls()` reassembly builds its own
+     * tool calls without consulting the injected parser. Switching
+     * `toolCallParser` therefore does not yet affect the live streaming chat
+     * loop; threading it through belongs to §12 D2, not D6, and is
+     * unscheduled.
+     */
     private function parseResponse(array $data): CompleteResponse
     {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
 
-        $toolCalls = null;
-        if (isset($message['tool_calls'])) {
-            $toolCalls = array_map(
-                function (array $tc): ToolCall {
-                    // Resolved once so the name used for the ToolCall and the
-                    // name used to label a truncation warning cannot disagree:
-                    // reading it unguarded here would raise an undefined-key
-                    // warning and then a TypeError on ToolCall's `string $name`
-                    // before decodeToolArguments() ever got to report anything.
-                    $name = (string) ($tc['function']['name'] ?? '');
-
-                    return ToolCall::fromArray([
-                        'id' => $tc['id'],
-                        'name' => $name,
-                        'arguments' => $this->decodeToolArguments(
-                            $tc['function']['arguments'] ?? '',
-                            $name,
-                        ),
-                    ]);
-                },
-                $message['tool_calls']
-            );
-        }
+        $toolCalls = $this->resolvedToolCallParser()->parse($message);
 
         [$reasoning, $content] = $this->extractReasoning($message);
 
@@ -397,6 +445,25 @@ final readonly class SglangProvider implements ProviderInterface
             tokensUsed: $data['usage']['total_tokens'] ?? 0,
             costUsd: 0.0,
         );
+    }
+
+    /**
+     * The configured parser, or the default OpenAI-array strategy.
+     *
+     * Named distinctly from the `$toolCallParser` property on purpose: a
+     * resolver called `toolCallParser()` would differ from the nullable raw
+     * property by only a pair of parentheses, so a later reader adding a
+     * second read could silently reintroduce the null case this method exists
+     * to remove.
+     *
+     * Rebuilt per call rather than memoised because this is a
+     * `final readonly class` - a lazily-populated property is not expressible
+     * here - and the default is a two-object allocation against a network
+     * round-trip, so the cost is noise.
+     */
+    private function resolvedToolCallParser(): ToolCallParserInterface
+    {
+        return $this->toolCallParser ?? OpenAiArrayToolCallParser::new(self::argumentDecoder());
     }
 
     /**
@@ -475,7 +542,7 @@ final readonly class SglangProvider implements ProviderInterface
                 // victim of the two - the fragments were concatenated here, so
                 // a payload that stops mid-value is exactly what the bug looks
                 // like from the client side.
-                'arguments' => $this->decodeToolArguments(
+                'arguments' => self::decodeToolArguments(
                     $tc['arguments'] ?? '',
                     (string) ($tc['name'] ?? ''),
                 ),
@@ -505,9 +572,12 @@ final readonly class SglangProvider implements ProviderInterface
      *                          some OpenAI-compatible servers pre-decode it
      * @param  string $toolName names the offending call in the warning; the
      *                          arguments alone rarely identify it
+     * Static because it reads no instance state and {@see argumentDecoder()}
+     * must hand it to a parser built before any provider instance exists.
+     *
      * @return array<mixed>
      */
-    private function decodeToolArguments(mixed $raw, string $toolName): array
+    private static function decodeToolArguments(mixed $raw, string $toolName): array
     {
         if (is_array($raw)) {
             return $raw;
@@ -537,13 +607,13 @@ final readonly class SglangProvider implements ProviderInterface
                 . 'defaulting to no arguments. Raw payload: %s',
                 $toolName,
                 get_debug_type($decoded),
-                $this->excerpt($raw),
+                self::excerpt($raw),
             ));
 
             return [];
         }
 
-        error_log($this->malformedArgumentsWarning($toolName, $raw));
+        error_log(self::malformedArgumentsWarning($toolName, $raw));
 
         return [];
     }
@@ -558,7 +628,7 @@ final readonly class SglangProvider implements ProviderInterface
      * malformed yet structurally closed is some other bug and is reported as
      * plain invalid JSON, so the two never get confused in a log trawl.
      */
-    private function malformedArgumentsWarning(string $toolName, string $raw): string
+    private static function malformedArgumentsWarning(string $toolName, string $raw): string
     {
         $trimmed = rtrim($raw);
         $structurallyClosed = str_ends_with($trimmed, '}') || str_ends_with($trimmed, ']');
@@ -569,7 +639,7 @@ final readonly class SglangProvider implements ProviderInterface
                 . 'defaulting to no arguments. Raw payload: %s',
                 $toolName,
                 json_last_error_msg(),
-                $this->excerpt($raw),
+                self::excerpt($raw),
             );
         }
 
@@ -584,7 +654,7 @@ final readonly class SglangProvider implements ProviderInterface
                 ? sprintf(', and contain the literal "%s"', self::XML_PARAM_CLOSE_TAG)
                 : '',
             self::XML_PARAM_CLOSE_TAG,
-            $this->excerpt($raw),
+            self::excerpt($raw),
         );
     }
 
@@ -644,7 +714,7 @@ final readonly class SglangProvider implements ProviderInterface
      * Elides a long payload head+tail rather than head-only: the tail is where
      * a truncated payload stops, which is the whole diagnostic signal here.
      */
-    private function excerpt(string $raw): string
+    private static function excerpt(string $raw): string
     {
         if (strlen($raw) <= self::WARNING_EXCERPT_LIMIT) {
             return $raw;
