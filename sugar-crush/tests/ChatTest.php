@@ -38,6 +38,8 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\SessionTitledMsg;
+use SugarCraft\Crush\PermissionReplyMsg;
+use SugarCraft\Crush\Permissions\PermissionReply;
 
 final class ChatTest extends TestCase
 {
@@ -2749,5 +2751,340 @@ final class ChatTest extends TestCase
         $this->assertCount(2, $next->history);
         // No argv means McpAuthCommand's "list" default, never an error.
         $this->assertStringNotContainsString('Unknown sub-command', $next->history[1]->content);
+    }
+
+    // ---------------------------------------------------------------
+    // Blocking permission requests (crush_feat.md 1 E2, W2.S3b)
+    // ---------------------------------------------------------------
+
+    /** A PreToolUse hook that always defers to the user, counting its runs. */
+    private function askHook(string $question, ?int &$calls = null): HookInterface
+    {
+        $calls = 0;
+
+        return $this->spyHook(
+            HookEvent::PreToolUse,
+            static function (HookContext $context) use ($question, &$calls): HookResult {
+                ++$calls;
+
+                return HookResult::ask($question);
+            },
+        );
+    }
+
+    /**
+     * A Chat whose only tool records that it ran by writing $sentinel - the
+     * one side effect that survives the fork boundary back to this process.
+     */
+    private function chatAwaitingPermission(string $sentinel, HookInterface $hook): Chat
+    {
+        return (new Chat())
+            ->registerTool('bash', static function (array $args) use ($sentinel): string {
+                file_put_contents($sentinel, 'ran');
+
+                return 'total 0';
+            })
+            ->withHooks($this->hookManagerWith($hook));
+    }
+
+    private function askingToolCall(): Message
+    {
+        return Message::assistant('running')->withToolCalls([
+            new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'rm -rf /'], 'call_1'),
+        ]);
+    }
+
+    /** Await a dispatched tool batch and fold its results back into $model. */
+    private function awaitToolResults(Chat $model, \Closure $cmd): Chat
+    {
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+
+        $loop = \React\EventLoop\Loop::get();
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved, $loop): void {
+            $resolved = $msg;
+            $loop->stop();
+        });
+
+        if ($resolved === null) {
+            $safety = $loop->addTimer(10.0, static function () use ($loop): void { $loop->stop(); });
+            $loop->run();
+            $loop->cancelTimer($safety);
+        }
+
+        $this->assertInstanceOf(\SugarCraft\Crush\ToolResultsMsg::class, $resolved, 'tool execution did not complete within the test timeout');
+
+        [$final] = $model->update($resolved);
+
+        return $final;
+    }
+
+    /**
+     * An ASK is the hook deferring to the user, not denying. Against the old
+     * code it fell into the deny branch and the call was reported as "Hook
+     * denied" with nobody ever asked; now the whole batch suspends, nothing
+     * is forked, and not even a "running" placeholder is shown - a spinner
+     * for a call that has not been permitted would be a lie.
+     */
+    public function testAskHookSuspendsTheTurnInsteadOfRunningOrDenyingTheCall(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Really run rm -rf /?'));
+
+        [$suspended, $cmd] = $chat->update(new AssistantMsg($this->askingToolCall()));
+
+        $this->assertNotNull($suspended->pendingPermission());
+        $this->assertSame('Really run rm -rf /?', $suspended->pendingPermission()->prompt);
+        $this->assertSame('bash', $suspended->pendingPermission()->toolCall->name);
+        $this->assertTrue($suspended->inFlight);
+        $this->assertSame([], $suspended->history);
+        $this->assertFileDoesNotExist($sentinel, 'a tool call awaiting permission was executed anyway');
+        $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    /**
+     * The scheduled Cmd is the block: its promise stays pending for as long
+     * as the prompt is up, and settles the moment the user answers.
+     */
+    public function testTheSuspendingCmdStaysPendingUntilTheUserAnswers(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
+
+        [$suspended, $cmd] = $chat->update(new AssistantMsg($this->askingToolCall()));
+
+        $settled = false;
+        $cmd()->promise->then(function () use (&$settled): void { $settled = true; });
+        $this->assertFalse($settled, 'the turn was not actually blocked on the decision');
+
+        $suspended->update(new PermissionReplyMsg(PermissionReply::Reject));
+
+        $this->assertTrue($settled);
+    }
+
+    /**
+     * A "once" reply resumes the SAME gated batch, so the hook chain runs
+     * exactly once per call - re-gating on resume would re-fire every hook's
+     * side effects and re-ask the question just answered.
+     */
+    public function testOnceReplyRunsTheToolAndGatesItExactlyOnce(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $calls = 0;
+        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?', $calls));
+
+        [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
+        [$resumed, $resumeCmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Once));
+
+        $this->assertNull($resumed->pendingPermission());
+        $this->assertSame([], $resumed->permissionGrants(), 'a once reply must not grant anything beyond this call');
+        $this->assertSame('call_1', $resumed->history[1]->pendingToolCallId, 'the running placeholder appears only once permitted');
+        $this->assertInstanceOf(\Closure::class, $resumeCmd);
+
+        $final = $this->awaitToolResults($resumed, $resumeCmd);
+
+        $this->assertSame('total 0', $final->history[1]->content);
+        $this->assertSame(1, $calls, 'the PreToolUse chain ran a second time on resume');
+    }
+
+    /**
+     * "Always" is the only reply that outlives the call it answers: the tool
+     * is granted for the rest of the session, so a later ASK for the same
+     * tool resolves without prompting again (opencode's `approved: Rule[]`).
+     */
+    public function testAlwaysReplyGrantsTheToolForTheRestOfTheSession(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $calls = 0;
+        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?', $calls));
+
+        [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
+        [$granted, $resumeCmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Always));
+
+        $this->assertSame(['bash' => true], $granted->permissionGrants());
+
+        $afterFirst = $this->awaitToolResults($granted, $resumeCmd);
+        $this->assertSame('total 0', $afterFirst->history[1]->content);
+
+        // Second turn, same tool, same asking hook: no prompt this time.
+        [$secondTurn, $secondCmd] = $afterFirst->update(new AssistantMsg($this->askingToolCall()));
+
+        $this->assertNull($secondTurn->pendingPermission(), 'an always-granted tool asked again');
+        $this->assertInstanceOf(\Closure::class, $secondCmd);
+
+        $final = $this->awaitToolResults($secondTurn, $secondCmd);
+        $this->assertSame('total 0', $final->history[count($final->history) - 1]->content);
+    }
+
+    /**
+     * A rejection ends the turn honestly: the tool never runs, the turn stops
+     * being in flight, and the transcript shows both what was proposed and
+     * that it was refused.
+     */
+    public function testRejectReplyRefusesTheCallAndEndsTheTurn(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
+
+        [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
+        [$rejected, $cmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Reject));
+
+        $this->assertNull($cmd);
+        $this->assertNull($rejected->pendingPermission());
+        $this->assertFalse($rejected->inFlight);
+        $this->assertFileDoesNotExist($sentinel, 'a refused tool call ran anyway');
+        $this->assertSame('running', $rejected->history[0]->content);
+        $this->assertSame('_Permission denied: bash was not run._', $rejected->history[1]->content);
+    }
+
+    /**
+     * The prompt owns the keyboard while it is up: the turn is inFlight by
+     * definition, so without its own arm every reply keystroke would hit the
+     * inFlight blanket-swallow and the prompt could never be answered.
+     *
+     * @dataProvider permissionKeyProvider
+     */
+    public function testPermissionKeysDecideThePrompt(KeyMsg $key, PermissionReply $expected): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
+
+        [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
+        [$answered] = $suspended->update($key);
+
+        $this->assertNull($answered->pendingPermission());
+        $this->assertSame(
+            $expected === PermissionReply::Always ? ['bash' => true] : [],
+            $answered->permissionGrants(),
+        );
+        $this->assertSame($expected === PermissionReply::Reject, !$answered->inFlight);
+    }
+
+    public static function permissionKeyProvider(): array
+    {
+        return [
+            'y approves once' => [new KeyMsg(KeyType::Char, 'y'), PermissionReply::Once],
+            'a approves always' => [new KeyMsg(KeyType::Char, 'a'), PermissionReply::Always],
+            'n refuses' => [new KeyMsg(KeyType::Char, 'n'), PermissionReply::Reject],
+            'escape refuses' => [new KeyMsg(KeyType::Escape, ''), PermissionReply::Reject],
+        ];
+    }
+
+    /**
+     * This prompt gates tool execution, so "the user pressed something" must
+     * never read as consent: an unmapped key leaves the prompt exactly as it
+     * was.
+     */
+    public function testUnmappedKeyLeavesThePermissionPromptUp(): void
+    {
+        $sentinel = sys_get_temp_dir() . '/sc_perm_' . bin2hex(random_bytes(8));
+        $chat = $this->chatAwaitingPermission($sentinel, $this->askHook('Run it?'));
+
+        [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
+        [$unchanged, $cmd] = $suspended->update(new KeyMsg(KeyType::Char, 'q'));
+
+        $this->assertSame($suspended, $unchanged);
+        $this->assertNull($cmd);
+        $this->assertNotNull($unchanged->pendingPermission());
+    }
+
+    /**
+     * A Chat with two asking tools, each recording that it ran by writing its
+     * own sentinel - so a call released by somebody else's answer is visible.
+     */
+    private function chatAwaitingTwoPermissions(string $alphaSentinel, string $betaSentinel): Chat
+    {
+        return (new Chat())
+            ->registerTool('alpha', static function (array $args) use ($alphaSentinel): string {
+                file_put_contents($alphaSentinel, 'ran');
+
+                return 'alpha ok';
+            })
+            ->registerTool('beta', static function (array $args) use ($betaSentinel): string {
+                file_put_contents($betaSentinel, 'ran');
+
+                return 'beta ok';
+            })
+            ->withHooks($this->hookManagerWith($this->askHook('Approve?')));
+    }
+
+    private function twoAskingToolCalls(): Message
+    {
+        return Message::assistant('running')->withToolCalls([
+            new \SugarCraft\Crush\ToolCall('alpha', [], 'call_a'),
+            new \SugarCraft\Crush\ToolCall('beta', [], 'call_b'),
+        ]);
+    }
+
+    /**
+     * Consent for one call is not consent for the batch. Against the old code
+     * the answer for `alpha` dispatched the whole parked batch, so `beta` ran
+     * on the strength of an approval the user gave for a different call and
+     * was never even shown - the exact fail-open this prompt exists to stop.
+     */
+    public function testAnsweringOneAskDoesNotReleaseTheOtherCallsInTheBatch(): void
+    {
+        $alpha = sys_get_temp_dir() . '/sc_perm_a_' . bin2hex(random_bytes(8));
+        $beta = sys_get_temp_dir() . '/sc_perm_b_' . bin2hex(random_bytes(8));
+        $chat = $this->chatAwaitingTwoPermissions($alpha, $beta);
+
+        [$suspended] = $chat->update(new AssistantMsg($this->twoAskingToolCalls()));
+        $this->assertSame('alpha', $suspended->pendingPermission()->toolCall->name);
+
+        [$afterFirst, $cmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Once));
+
+        $this->assertNotNull($afterFirst->pendingPermission(), 'the second ask was dropped instead of being raised');
+        $this->assertSame('beta', $afterFirst->pendingPermission()->toolCall->name);
+        $this->assertSame([], $afterFirst->history, 'the batch was dispatched with an ask outstanding');
+        $this->assertFileDoesNotExist($beta, 'a call nobody approved was executed');
+        $this->assertFileDoesNotExist($alpha, 'the batch ran before every call was decided');
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        // Answering the last outstanding ask releases the whole batch.
+        [$resumed, $resumeCmd] = $afterFirst->update(new PermissionReplyMsg(PermissionReply::Once));
+
+        $this->assertNull($resumed->pendingPermission());
+
+        $final = $this->awaitToolResults($resumed, $resumeCmd);
+
+        $this->assertFileExists($alpha);
+        $this->assertFileExists($beta);
+        $this->assertSame('alpha ok', $final->history[1]->content);
+        $this->assertSame('beta ok', $final->history[2]->content);
+    }
+
+    /**
+     * "Always" is scoped to the tool it was answered for: it clears that
+     * tool's queued asks and nothing else, so a different tool in the same
+     * batch still has to be decided on its own.
+     */
+    public function testAlwaysForOneToolDoesNotReleaseAnAskForAnother(): void
+    {
+        $alpha = sys_get_temp_dir() . '/sc_perm_a_' . bin2hex(random_bytes(8));
+        $beta = sys_get_temp_dir() . '/sc_perm_b_' . bin2hex(random_bytes(8));
+        $chat = $this->chatAwaitingTwoPermissions($alpha, $beta);
+
+        [$suspended] = $chat->update(new AssistantMsg($this->twoAskingToolCalls()));
+        [$granted, $cmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Always));
+
+        $this->assertSame(['alpha' => true], $granted->permissionGrants());
+        $this->assertNotNull($granted->pendingPermission(), 'an always for alpha released beta');
+        $this->assertSame('beta', $granted->pendingPermission()->toolCall->name);
+        $this->assertSame([], $granted->history);
+        $this->assertFileDoesNotExist($beta);
+        $this->assertFileDoesNotExist($alpha);
+        $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    public function testPermissionReplyWithNothingPendingIsANoOp(): void
+    {
+        $chat = new Chat();
+
+        [$same, $cmd] = $chat->update(new PermissionReplyMsg(PermissionReply::Always));
+
+        $this->assertSame($chat, $same);
+        $this->assertNull($cmd);
+        $this->assertSame([], $same->permissionGrants());
     }
 }

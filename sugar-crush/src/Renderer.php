@@ -7,6 +7,10 @@ namespace SugarCraft\Crush;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\View;
+use SugarCraft\Mosaic\ImageLayer;
+use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -163,10 +167,121 @@ final class Renderer
      */
     private const SHELL_CHROME_COLS = 6;
 
+    /**
+     * Cell width a tool-result image ({@see renderToolImage()}) is scaled to
+     * before its height is derived from the source aspect ratio. Literally
+     * crush_feat.md §9 E3's `$w = 40`: wide enough for a screenshot to be
+     * legible, narrow enough that it still fits inside the chat shell on an
+     * 80-column terminal without pushing the transcript off-screen.
+     */
+    private const IMAGE_COLS = 40;
+
+    /**
+     * Distinct encoded pictures {@see $imageCache} keeps before it starts
+     * evicting the least recently used one. A handful is enough to cover every
+     * image still on screen (the transcript is tail-clipped to one viewport)
+     * while keeping the retained blob bytes bounded in a session that scrolls
+     * hundreds of screenshots past.
+     */
+    private const IMAGE_CACHE_MAX = 8;
+
+    /**
+     * Encoded pictures, keyed by source bytes + cell box + protocol, in
+     * least-recently-used-first order.
+     *
+     * `Program::renderFrame()` calls `Chat::view()` on EVERY dirty frame - each
+     * keystroke, each streaming chunk, each spinner tick - so without this an
+     * image-bearing tool result would re-decode its bytes through ext-gd and
+     * re-encode the picture on every one of those frames, for every image still
+     * in the transcript. That is single-digit milliseconds for half-block but
+     * hundreds of milliseconds for Sixel, i.e. exactly the pixel-graphics
+     * protocols this feature exists to enable would be the ones that make the
+     * TUI unusable. The output is a pure function of the key, so memoizing it
+     * is safe.
+     *
+     * @var array<string, array{ok: bool, body: string}>
+     */
+    private static array $imageCache = [];
+
+    /**
+     * Inner width of the permission modal, in cells. Wider than the palette's
+     * 50 because a prompt body is prose (a hook's question plus the tool
+     * call's own arguments), not a list of short command labels.
+     */
+    private const PERMISSION_MODAL_COLS = 60;
+
+    /**
+     * Rows of the hook's question {@see renderPermissionPrompt()} paints
+     * before it clips. A hook is free to hand back an arbitrarily long
+     * message (it can quote the whole command it objected to); an unbounded
+     * modal would grow past the viewport and push its own answer keys
+     * off-screen, leaving the user blocked on a prompt whose options they
+     * cannot see.
+     */
+    private const PERMISSION_PROMPT_MAX_ROWS = 8;
+
+    /**
+     * The answer keys {@see renderPermissionPrompt()} advertises, as
+     * `[keys, label]` pairs.
+     *
+     * Deliberately a table rather than a formatted string literal: it has to
+     * stay in lockstep with `Chat::handlePermissionKey()`'s match arms, and a
+     * list of the exact accepted keys is far easier to check against that
+     * match than prose is. Only the keys that map to a
+     * {@see \SugarCraft\Crush\Permissions\PermissionReply} are listed -
+     * every other key is ignored there, so advertising anything else would
+     * promise an answer that never arrives.
+     */
+    private const PERMISSION_OPTIONS = [
+        ['y', 'allow once'],
+        ['a', 'allow always (this session)'],
+        ['n / Esc', 'reject'],
+    ];
+
+    /**
+     * The frame's text bytes only, discarding any pixel-graphics image layer
+     * {@see renderView()} collected.
+     *
+     * Kept as the entry point for every caller that only wants the literal
+     * frame (tests, and anything composing the frame into something else):
+     * an image layer is meaningless without a {@see \SugarCraft\Core\Program}
+     * to paint it, and a plain string is what candy-core's `Model::view()`
+     * contract calls the simple case.
+     */
     public static function render(Chat $chat): string
     {
+        return self::renderView($chat)->body;
+    }
+
+    /**
+     * The full frame plus the pixel-graphics layer for any image-bearing tool
+     * result in the transcript (crush_feat.md §9 E3).
+     *
+     * Sixel/Kitty/iTerm2 blobs are not text and cannot be diffed by
+     * candy-core's line renderer, so — exactly as `sugar-gallery`'s
+     * `PosterCard` does — each blob is registered with a per-frame
+     * {@see ImageLayer}, which hands back a marker block to sit in the text
+     * frame, and the collected {@see ImageLayer::placements()} ride out on the
+     * {@see View}. `Program::renderFrame()` resolves those markers to screen
+     * positions and paints the blobs on top of the text frame, so nothing
+     * beyond returning them is needed here. A fresh layer per call is required:
+     * ids are positional to THIS frame, and a reused layer would keep painting
+     * images whose markers have since scrolled out of the transcript.
+     */
+    public static function renderView(Chat $chat): View
+    {
         $theme = $chat->theme();
-        $body = self::renderHistory($chat->history, $theme, max(20, $chat->cols() - self::SHELL_CHROME_COLS));
+        $images = new ImageLayer();
+        $body = self::renderHistory(
+            $chat->history,
+            $theme,
+            max(20, $chat->cols() - self::SHELL_CHROME_COLS),
+            $images,
+            $chat->mosaic(),
+            // Row budget for a single picture: anything taller is clipped off
+            // the frame's tail anyway, so encoding it would be pure waste.
+            max(1, $chat->rows() - 2),
+        );
         if ($chat->inFlight) {
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
@@ -232,16 +347,33 @@ final class Renderer
 
         $frame = implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
 
-        $palette = self::renderPalette($chat, $theme);
-        if ($palette !== '') {
+        // A blocking permission prompt takes the overlay slot away from the
+        // palette while it is up, because Chat::update() routes every
+        // keystroke to the prompt first: showing a palette the keyboard no
+        // longer drives would misrepresent what the next key does.
+        $overlay = self::renderPermissionPrompt($chat, $theme);
+        if ($overlay === '') {
+            $overlay = self::renderPalette($chat, $theme);
+        }
+        if ($overlay !== '') {
             // A fresh Veil per render call (rather than one persisted on
             // Chat) means its own frame-diffing never kicks in - fine here,
             // since Chat already does its own diffing at a higher level in
             // view() and double-diffing isn't needed for correctness.
-            $frame = Veil::new()->withBackdrop(50)->composite($palette, $frame, Position::CENTER, Position::CENTER);
+            // Veil clips the overlay to the background's widest line, and the
+            // frame's lines are only as wide as their own content - so a modal
+            // wider than the current transcript would lose its right border
+            // (most visibly mid-turn, which is exactly when a permission
+            // prompt appears). Widen the backdrop to fit first.
+            $frame = Veil::new()->withBackdrop(50)->composite(
+                $overlay,
+                self::padForOverlay($frame, $overlay, $chat->cols()),
+                Position::CENTER,
+                Position::CENTER,
+            );
         }
 
-        return $frame;
+        return new View($frame, images: $images->placements());
     }
 
     /**
@@ -342,11 +474,17 @@ final class Renderer
 
     /**
      * @param list<Message> $history
-     * @param int           $width usable columns inside the shell's border +
-     *                             padding, so nested boxes (tool diffs) can
-     *                             truncate rather than wrap into a second row
+     * @param int           $width  usable columns inside the shell's border +
+     *                              padding, so nested boxes (tool diffs) can
+     *                              truncate rather than wrap into a second row
+     * @param ImageLayer    $images this frame's pixel-graphics layer, threaded
+     *                              down to {@see renderToolImage()}
+     * @param Mosaic|null   $mosaic the probe-once terminal image capability off
+     *                              {@see Chat::mosaic()}; null disables images
+     * @param int           $imageRows tallest cell box a single tool image may
+     *                              be encoded at, see {@see renderToolImage()}
      */
-    private static function renderHistory(array $history, Theme $theme, int $width): string
+    private static function renderHistory(array $history, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
@@ -363,7 +501,7 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme, $width);
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $images, $mosaic, $imageRows);
 
                 continue;
             }
@@ -435,8 +573,13 @@ final class Renderer
      * §1 E3. The diff is consumed verbatim from the result; it is never
      * recomputed here, because the renderer has neither the pre-edit file
      * contents nor any business touching the filesystem.
+     *
+     * A result carrying image bytes ({@see ToolResult::hasImage()} - the
+     * `/doctor` built-in is a real producer) additionally gets the picture
+     * itself painted below the marker, via {@see renderToolImage()}
+     * (crush_feat.md §9 E3).
      */
-    private static function renderToolResults(Message $msg, Theme $theme, int $width): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
         $lines = [];
         foreach ($msg->toolResults as $result) {
@@ -451,10 +594,117 @@ final class Renderer
                 $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
             }
 
+            if ($result->hasImage()) {
+                $picture = self::renderToolImage($result, $theme, $width, $images, $mosaic, $imageRows);
+                if ($picture !== '') {
+                    $block .= "\n" . $picture;
+                }
+            }
+
             $lines[] = $block;
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * Paint one image-bearing {@see ToolResult}'s bytes at the terminal's best
+     * available protocol (crush_feat.md §9 E3), following the exact pattern
+     * `sugar-gallery/src/PosterCard.php` proves out.
+     *
+     * Two shapes come back out of candy-mosaic and they are composed
+     * differently: an inline renderer (half-block / quarter-block / ASCII)
+     * emits ordinary styled cells that go straight into the frame, while a
+     * pixel-graphics renderer (Sixel / Kitty / iTerm2) emits an out-of-band
+     * escape blob that would corrupt the line-diff if it were concatenated -
+     * that one is handed to {@see ImageLayer::place()}, which parks the bytes
+     * on the layer and returns a same-sized marker block to occupy the frame
+     * instead. {@see Mosaic::isInline()} is the switch; the fallback ladder
+     * behind it (Kitty > iTerm2 > Sixel > chafa > half-block) is
+     * {@see Mosaic::auto()}'s job, already decided before this call.
+     *
+     * Returns '' when no {@see Mosaic} is wired - a {@see Chat} built without
+     * one (any direct `new Chat(...)`, as opposed to `Cli\Bootstrap::chat()`)
+     * has no probed capability, and guessing a protocol for an unprobed
+     * terminal would spray raw escape bytes at a terminal that cannot decode
+     * them. The result's own text still renders; only the picture is skipped.
+     *
+     * Decoding is wrapped because `view()` runs on every frame and must never
+     * throw: bytes reach here straight from a tool (possibly truncated, a
+     * non-image, or a format this build of ext-gd cannot decode), and a
+     * corrupt screenshot must cost one line of the transcript, not the
+     * session.
+     *
+     * Both the decode and the encode are memoized in {@see $imageCache} because
+     * this runs on every frame; only the (cheap) {@see ImageLayer::place()}
+     * registration is redone per frame, since placement ids are positional to
+     * the frame being built.
+     *
+     * @param int $imageRows tallest box to encode at. The height derived from
+     *                       the aspect ratio is clamped to it so one tall source
+     *                       (a full-page screenshot is easily 100+ cells high)
+     *                       cannot blow up the encode cost for rows that
+     *                       {@see renderView()}'s tail-clipping then discards.
+     */
+    private static function renderToolImage(ToolResult $result, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    {
+        if ($mosaic === null) {
+            return '';
+        }
+
+        $bytes = (string) $result->imageBytes;
+        $cols = max(8, min(self::IMAGE_COLS, $width));
+        $rows = self::imageRows($bytes, $cols, $imageRows);
+        $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol();
+
+        if (isset(self::$imageCache[$key])) {
+            $hit = self::$imageCache[$key];
+            // Re-insert so eviction drops the picture that scrolled away, not
+            // the one being repainted every frame.
+            unset(self::$imageCache[$key]);
+            self::$imageCache[$key] = $hit;
+        } else {
+            try {
+                $hit = ['ok' => true, 'body' => $mosaic->render(ImageSource::fromString($bytes), $cols, $rows)];
+            } catch (\Throwable $e) {
+                $hit = ['ok' => false, 'body' => Style::new()->foreground($theme->systemLabel)->faint()
+                    ->render('🖼 image unavailable: ' . Sanitize::untrusted($e->getMessage()))];
+            }
+
+            self::$imageCache[$key] = $hit;
+            if (\count(self::$imageCache) > self::IMAGE_CACHE_MAX) {
+                array_shift(self::$imageCache);
+            }
+        }
+
+        if (!$hit['ok']) {
+            return $hit['body'];
+        }
+
+        return $mosaic->isInline() ? $hit['body'] : $images->place($hit['body'], $cols, $rows);
+    }
+
+    /**
+     * Cell height for an image of $bytes drawn $cols wide, clamped to $budget.
+     *
+     * Split out of {@see renderToolImage()} so the cheap header-only dimension
+     * probe stays outside that method's cache lookup - the height is part of
+     * the cache key, so it has to be known before the key is built, and
+     * `getimagesizefromstring()` reads the header only rather than decoding the
+     * whole bitmap the way {@see ImageSource::fromString()} does.
+     *
+     * Falls back to a square box when the header is unreadable: the real
+     * decode is about to fail anyway, and this only has to produce a stable
+     * cache key for that failure.
+     */
+    private static function imageRows(string $bytes, int $cols, int $budget): int
+    {
+        $size = @getimagesizefromstring($bytes);
+        $aspect = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? $size[0] / $size[1] : 1.0;
+
+        // Cells are about twice as tall as they are wide, so the /2 is what
+        // keeps a square image square rather than doubled in height.
+        return max(1, min((int) round($cols / $aspect / 2), $budget));
     }
 
     /**
@@ -611,6 +861,143 @@ final class Renderer
             ->padding(1, 2)
             ->width(50)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The blocking permission prompt's modal (crush_feat.md §1 E2, the
+     * rendering half), composited over the whole frame by {@see render()}
+     * through the same {@see Veil} mechanism the Ctrl+P palette already uses
+     * rather than a second overlay path. Returns '' (nothing composited)
+     * when no prompt is blocking the turn - see
+     * {@see Chat::pendingPermission()}.
+     *
+     * Shows three things, in the order a user needs them: what is being
+     * asked for (the tool call, through the same
+     * {@see Message::describeToolCall()} label the running placeholder and
+     * the finished marker use, so the same call reads identically in all
+     * three places), why it was stopped (the hook's own question), and how
+     * to answer it. The answer keys are spelled out because this modal is
+     * the ONLY place they appear - {@see renderStatusBar()}'s help text is
+     * about the normal input line, and while a prompt is up none of those
+     * keys do what it says.
+     *
+     * Everything shown here is untrusted: a hook's message and a tool call's
+     * arguments are both model-authored text, so both go through
+     * {@see Sanitize::untrusted()} before reaching the terminal - a prompt
+     * that could smuggle ESC sequences would let the very call being gated
+     * repaint the dialog asking about it.
+     */
+    private static function renderPermissionPrompt(Chat $chat, Theme $theme): string
+    {
+        $request = $chat->pendingPermission();
+        if ($request === null) {
+            return '';
+        }
+
+        $call = $request->toolCall;
+        // Never wider than the terminal: a modal that overflows $cols would be
+        // wrapped by the terminal itself, which breaks the one-line-per-row
+        // assumption render()'s viewport clipping is built on.
+        $inner = max(20, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::SHELL_CHROME_COLS));
+
+        $lines = [
+            Style::new()->foreground($theme->userLabel)->bold()
+                ->render('🔒 ' . Sanitize::untrusted($call->name)),
+            Style::new()->foreground($theme->assistantLabel)
+                ->render(self::wrapPermissionText(Message::describeToolCall($call), $inner)),
+        ];
+
+        $prompt = self::wrapPermissionText($request->prompt, $inner);
+        if ($prompt !== '') {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->render($prompt);
+        }
+
+        $lines[] = '';
+        foreach (self::PERMISSION_OPTIONS as [$keys, $label]) {
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
+                . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render($label);
+        }
+
+        return Style::new()
+            ->border(Border::rounded()->withTitle(' permission required '))
+            ->borderForeground($theme->border)
+            ->padding(1, 2)
+            ->width($inner)
+            ->render(implode("\n", $lines));
+    }
+
+    /**
+     * Right-pad `$frame`'s lines so an overlay of `$overlay`'s width composites
+     * onto it without being clipped, never past `$cols`.
+     *
+     * {@see Veil::composite()} derives its canvas from the background's widest
+     * line, so a frame whose content happens to be narrow silently truncates
+     * any wider overlay. Padding is applied only when an overlay is actually
+     * being composited, so a plain frame keeps its existing ragged-right shape
+     * (and the trailing-space-free output every other renderer test asserts on).
+     */
+    private static function padForOverlay(string $frame, string $overlay, int $cols): string
+    {
+        $lines = explode("\n", $frame);
+
+        $frameWidth = 0;
+        foreach ($lines as $line) {
+            $frameWidth = max($frameWidth, Width::string($line));
+        }
+
+        $overlayWidth = 0;
+        foreach (explode("\n", $overlay) as $line) {
+            $overlayWidth = max($overlayWidth, Width::string($line));
+        }
+
+        $target = min(max(1, $cols), max($frameWidth, $overlayWidth));
+        if ($target <= $frameWidth) {
+            return $frame;
+        }
+
+        foreach ($lines as $index => $line) {
+            $pad = $target - Width::string($line);
+            if ($pad > 0) {
+                $lines[$index] = $line . str_repeat(' ', $pad);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Sanitize, hard-wrap and clip free text for the permission modal.
+     *
+     * Wrapping happens here rather than being left to `Style::width()`
+     * because that pads short lines to the modal width but does not break
+     * long ones, and a single over-wide row inside a bordered box breaks the
+     * border and (per the fixed-viewport clipping in {@see render()}) the
+     * row accounting around it. `wordwrap()`'s cut flag is on so an unbroken
+     * token - a long path or a base64 blob in a tool argument - wraps
+     * instead of running off the edge.
+     */
+    private static function wrapPermissionText(string $text, int $cols): string
+    {
+        $clean = trim(Sanitize::untrusted($text));
+        if ($clean === '') {
+            return '';
+        }
+
+        $rows = [];
+        foreach (explode("\n", $clean) as $line) {
+            foreach (explode("\n", wordwrap($line, $cols, "\n", true)) as $wrapped) {
+                $rows[] = $wrapped;
+            }
+        }
+
+        if (count($rows) > self::PERMISSION_PROMPT_MAX_ROWS) {
+            $hidden = count($rows) - self::PERMISSION_PROMPT_MAX_ROWS;
+            $rows = array_slice($rows, 0, self::PERMISSION_PROMPT_MAX_ROWS);
+            $rows[] = "… {$hidden} more lines";
+        }
+
+        return implode("\n", $rows);
     }
 
     private static function renderInput(Chat $chat, Theme $theme): string
