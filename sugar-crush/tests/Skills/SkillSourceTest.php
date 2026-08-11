@@ -39,6 +39,29 @@ final class SkillSourceTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // color()
+    // -------------------------------------------------------------------------
+
+    public function testEachSourceHasItsOwnBadgeColor(): void
+    {
+        // The badge is meant to be scannable without reading it, so no two
+        // sources may share a hue.
+        $rgb = array_map(
+            static fn(SkillSource $s): string => $s->color()->r . ',' . $s->color()->g . ',' . $s->color()->b,
+            SkillSource::cases()
+        );
+
+        $this->assertCount(count(SkillSource::cases()), array_unique($rgb));
+    }
+
+    public function testClaudeColorIsAmber(): void
+    {
+        $c = SkillSource::Claude->color();
+
+        $this->assertSame([255, 184, 108], [$c->r, $c->g, $c->b]);
+    }
+
+    // -------------------------------------------------------------------------
     // enum shape — backed values used for (de)serialization
     // -------------------------------------------------------------------------
 

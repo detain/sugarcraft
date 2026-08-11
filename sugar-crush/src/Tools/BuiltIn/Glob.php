@@ -32,8 +32,12 @@ final readonly class Glob implements Tool
         'properties' => [
             'pattern' => ['type' => 'string', 'description' => 'The glob pattern to match (e.g., **/*.php)'],
             'path' => ['type' => 'string', 'description' => 'Base directory path'],
+            'description' => [
+                'type' => 'string',
+                'description' => 'Clear, concise 5-10 word description in active voice of what this search looks for (e.g. "Find every provider test file", not "globs *.php").',
+            ],
         ],
-        'required' => ['pattern', 'path'],
+        'required' => ['pattern', 'path', 'description'],
         ];
     }
 

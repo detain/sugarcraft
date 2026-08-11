@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Skills;
 
+use SugarCraft\Core\Util\Color;
+
 /**
  * Where a Skill/AgentPreset definition was discovered on disk. Surfaced in
  * the palette/menu as a provenance badge so a user importing a foreign
@@ -27,6 +29,21 @@ enum SkillSource: string
             self::Claude => '[claude]',
             self::Opencode => '[opencode]',
             self::AgentSkillsSpec => '[spec]',
+        };
+    }
+
+    /**
+     * Colour the provenance badge is painted in. Each foreign source gets a
+     * distinct hue so the badge is scannable at a glance without reading it;
+     * Native's value is never used because its badge() is empty.
+     */
+    public function color(): Color
+    {
+        return match ($this) {
+            self::Native => Color::hex('#7d6e98'),
+            self::Claude => Color::hex('#ffb86c'),
+            self::Opencode => Color::hex('#8be9fd'),
+            self::AgentSkillsSpec => Color::hex('#bd93f9'),
         };
     }
 }

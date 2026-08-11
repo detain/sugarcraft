@@ -43,8 +43,12 @@ final readonly class WebFetch implements Tool
         'type' => 'object',
         'properties' => [
             'url' => ['type' => 'string', 'description' => 'The URL to fetch'],
+            'description' => [
+                'type' => 'string',
+                'description' => 'Clear, concise 5-10 word description in active voice of what this fetch is for (e.g. "Check the upstream release notes", not "fetches a URL").',
+            ],
         ],
-        'required' => ['url'],
+        'required' => ['url', 'description'],
         ];
     }
 

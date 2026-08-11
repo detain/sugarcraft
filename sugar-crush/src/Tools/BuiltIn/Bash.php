@@ -48,8 +48,12 @@ final readonly class Bash implements Tool
         'type' => 'object',
         'properties' => [
             'command' => ['type' => 'string', 'description' => 'The bash command to execute'],
+            'description' => [
+                'type' => 'string',
+                'description' => 'Clear, concise 5-10 word description in active voice of what this command does (e.g. "List files in current directory", not "runs ls").',
+            ],
         ],
-        'required' => ['command'],
+        'required' => ['command', 'description'],
         ];
     }
 

@@ -30,8 +30,12 @@ final readonly class Grep implements Tool
             'pattern' => ['type' => 'string', 'description' => 'The regex pattern to search for'],
             'path' => ['type' => 'string', 'description' => 'Directory path to search in'],
             'include' => ['type' => 'string', 'description' => 'File pattern to match (e.g., *.php)'],
+            'description' => [
+                'type' => 'string',
+                'description' => 'Clear, concise 5-10 word description in active voice of what this search looks for (e.g. "Locate callers of describeToolCall", not "greps a regex").',
+            ],
         ],
-        'required' => ['pattern', 'path'],
+        'required' => ['pattern', 'path', 'description'],
         ];
     }
 
