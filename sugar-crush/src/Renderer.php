@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -147,10 +149,24 @@ final class Renderer
     /** Maximum rows AgentViewPane renders before clipping (see AgentViewPane::render()). */
     private const AGENT_VIEW_MAX_ROWS = 10;
 
+    /**
+     * Maximum diff rows {@see renderDiff()} paints before it clips and prints
+     * an "N more lines" trailer. A single Edit can rewrite hundreds of lines;
+     * without a cap the diff alone would fill the viewport and evict the whole
+     * transcript once {@see render()}'s tail-clipping runs.
+     */
+    private const DIFF_MAX_ROWS = 24;
+
+    /**
+     * Columns the shell's border + padding(1, 2) consume, subtracted before
+     * anything inside it is truncated to width.
+     */
+    private const SHELL_CHROME_COLS = 6;
+
     public static function render(Chat $chat): string
     {
         $theme = $chat->theme();
-        $body = self::renderHistory($chat->history, $theme);
+        $body = self::renderHistory($chat->history, $theme, max(20, $chat->cols() - self::SHELL_CHROME_COLS));
         if ($chat->inFlight) {
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
@@ -326,8 +342,11 @@ final class Renderer
 
     /**
      * @param list<Message> $history
+     * @param int           $width usable columns inside the shell's border +
+     *                             padding, so nested boxes (tool diffs) can
+     *                             truncate rather than wrap into a second row
      */
-    private static function renderHistory(array $history, Theme $theme): string
+    private static function renderHistory(array $history, Theme $theme, int $width): string
     {
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
@@ -344,7 +363,7 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme);
+                $blocks[] = self::renderToolResults($msg, $theme, $width);
 
                 continue;
             }
@@ -409,8 +428,15 @@ final class Renderer
      * assistant bubble {@see renderHistory()} uses for real replies -
      * otherwise a tool call is visually indistinguishable from the model's
      * own words, which is exactly what made tool execution look silent.
+     *
+     * A result that carries a unified diff ({@see ToolResult::hasDiff()} -
+     * `Edit`/`Write` produce one, see `Tools\BuiltIn\Edit::unifiedDiff()`)
+     * additionally gets that diff painted below the marker, per crush_feat.md
+     * §1 E3. The diff is consumed verbatim from the result; it is never
+     * recomputed here, because the renderer has neither the pre-edit file
+     * contents nor any business touching the filesystem.
      */
-    private static function renderToolResults(Message $msg, Theme $theme): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width): string
     {
         $lines = [];
         foreach ($msg->toolResults as $result) {
@@ -419,10 +445,88 @@ final class Renderer
                 : Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
             $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . $result->name) . ' ' . $status;
             $body = Sanitize::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
-            $lines[] = $body === '' ? $label : $label . "\n" . $body;
+            $block = $body === '' ? $label : $label . "\n" . $body;
+
+            if ($result->hasDiff()) {
+                $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
+            }
+
+            $lines[] = $block;
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * Paint a raw unified diff (`--- a/…` / `+++ b/…` / `@@ … @@` / ` `+`/`-`
+     * lines, exactly what `diff -u` emits) as a bordered, colour-coded block.
+     *
+     * Additions/removals are coloured with bare ANSI green/red rather than a
+     * {@see Theme} field: every theme in the palette agrees on what "added"
+     * and "removed" look like, and the diff has to stay readable even under
+     * the `ansi` theme, which has no room for two more accent colours.
+     *
+     * Every line is {@see Sanitize::untrusted()}-stripped before display -
+     * diff bodies are verbatim file contents, so an edited file containing a
+     * raw ESC would otherwise forge SGR straight onto the terminal wire - then
+     * hard-truncated to $width so the frame keeps its one-logical-line-per-row
+     * invariant (candy-core's Renderer repaints by absolute row; a wrapped
+     * line silently shifts every row below it). The row count is capped at
+     * {@see self::DIFF_MAX_ROWS} with a trailer for the same reason
+     * {@see render()} tail-clips: a 400-line diff must not evict the
+     * conversation it belongs to.
+     */
+    private static function renderDiff(string $diff, Theme $theme, int $width): string
+    {
+        // Border (2 cols) + padding(0, 1) (2 cols) sit outside the text.
+        $inner = max(8, $width - 4);
+
+        $rows = preg_split('/\r\n|\r|\n/', rtrim($diff, "\r\n")) ?: [];
+        $overflow = count($rows) - self::DIFF_MAX_ROWS;
+        if ($overflow > 0) {
+            $rows = array_slice($rows, 0, self::DIFF_MAX_ROWS);
+        }
+
+        $painted = [];
+        foreach ($rows as $row) {
+            $text = Width::truncate(Sanitize::untrusted($row), $inner);
+            $painted[] = self::styleDiffLine($text, $theme)->render($text);
+        }
+
+        if ($overflow > 0) {
+            $trailer = Width::truncate("… {$overflow} more diff line" . ($overflow === 1 ? '' : 's'), $inner);
+            $painted[] = Style::new()->foreground($theme->systemLabel)->faint()->render($trailer);
+        }
+
+        return Style::new()
+            ->border(Border::normal())
+            ->borderForeground($theme->border)
+            ->padding(0, 1)
+            ->render(implode("\n", $painted));
+    }
+
+    /**
+     * Pick the {@see Style} for one unified-diff line from its marker column.
+     * The `---`/`+++` file headers are matched before the bare `-`/`+` markers
+     * they start with, otherwise a diff's own header would render as a giant
+     * removal followed by a giant addition.
+     */
+    private static function styleDiffLine(string $line, Theme $theme): Style
+    {
+        if (str_starts_with($line, '--- ') || str_starts_with($line, '+++ ')) {
+            return Style::new()->foreground($theme->systemLabel)->bold();
+        }
+        if (str_starts_with($line, '@@')) {
+            return Style::new()->foreground(Color::ansi(6));
+        }
+        if (str_starts_with($line, '+')) {
+            return Style::new()->foreground(Color::ansi(2));
+        }
+        if (str_starts_with($line, '-')) {
+            return Style::new()->foreground(Color::ansi(1));
+        }
+
+        return Style::new()->foreground($theme->systemLabel)->faint();
     }
 
     /**
