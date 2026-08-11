@@ -110,6 +110,20 @@ final class Chat implements Model
     private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
 
     /**
+     * One-shot prompt for the background title call. Deliberately terse:
+     * opencode's title agent sends barely more than "Generate a title for
+     * this conversation" and a cheap model does worse, not better, with an
+     * elaborate system prompt.
+     */
+    private const TITLE_PROMPT = 'Generate a session title in 4-8 words summarising this conversation. Reply with the title only: one line, no quotes, no trailing punctuation.';
+
+    /**
+     * Longest auto-title we keep. Matches opencode's own 100-char cap; a
+     * tab strip has nowhere to put more than that anyway.
+     */
+    private const TITLE_MAX_CHARS = 100;
+
+    /**
      * @param list<Message> $history
      * @param array<string, callable> $tools Map of tool name => callable(array $arguments): mixed
      * @param callable|null $onToolCall Optional callback called when tools are invoked
@@ -196,6 +210,24 @@ final class Chat implements Model
          * test that never needs it.
          */
         private readonly ?\SugarCraft\Mosaic\Mosaic $mosaic = null,
+        /**
+         * Name of the current session, once it has one — set by the user's
+         * `/rename`, or by the background auto-title call (see
+         * {@see scheduleTitleGeneration()}). Non-null is the "already
+         * named, don't auto-title" latch; the store's `name` column is the
+         * durable copy, this is the in-memory mirror the UI reads.
+         */
+        private readonly ?string $currentSessionName = null,
+        /**
+         * Dedicated cheap/small-model Backend for the one-shot session
+         * title call. opencode's #20269 was a main-model parameter leaking
+         * into the small-model title request through a shared request
+         * builder and silently breaking titling; keeping the title call on
+         * its OWN Backend instance means it can never inherit the main
+         * conversation's model or params. Null falls back to the main
+         * backend as a last resort (same order opencode uses).
+         */
+        private readonly ?Backend $titleBackend = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -238,6 +270,19 @@ final class Chat implements Model
         }
         if ($msg instanceof ToolResultsMsg) {
             return $this->finishToolCalls($msg);
+        }
+        if ($msg instanceof SessionTitledMsg) {
+            // The title call is fire-and-forget: by the time it lands the
+            // user may have switched sessions, and a title belonging to a
+            // session we are no longer on must not overwrite this one's.
+            if ($msg->sessionId !== $this->currentSessionId) {
+                return [$this, null];
+            }
+            $title = self::sanitizeSessionTitle($msg->title);
+            if ($title === '') {
+                return [$this, null];
+            }
+            return [$this->mutate(['currentSessionName' => $title]), null];
         }
         if ($msg instanceof WindowSizeMsg) {
             // The one authoritative size - see the constructor docblock on
@@ -903,6 +948,38 @@ final class Chat implements Model
     }
 
     /**
+     * Name of the current session, or null while it is still unnamed.
+     *
+     * Populated by `/rename` and by the background auto-title call
+     * ({@see scheduleTitleGeneration()}); the UI reads this rather than
+     * hitting the session store on every frame.
+     */
+    public function currentSessionName(): ?string
+    {
+        return $this->currentSessionName;
+    }
+
+    /**
+     * Create a new Chat with an explicit session name. Passing null clears
+     * the name, which re-arms the one-shot auto-title.
+     */
+    public function withCurrentSessionName(?string $currentSessionName): self
+    {
+        return $this->mutate(['currentSessionName' => $currentSessionName]);
+    }
+
+    /**
+     * Create a new Chat with an explicit small-model Backend used only for
+     * the background session-title call. See the constructor's
+     * `$titleBackend` docblock for why it is deliberately a separate
+     * instance from the conversation backend.
+     */
+    public function withTitleBackend(?Backend $titleBackend): self
+    {
+        return $this->mutate(['titleBackend' => $titleBackend]);
+    }
+
+    /**
      * Backward-compatible alias for pool().
      *
      * @deprecated Use pool() instead. This alias exists to ease migration.
@@ -1051,6 +1128,8 @@ final class Chat implements Model
             'rows' => $this->rows,
             'cols' => $this->cols,
             'mosaic' => $this->mosaic,
+            'currentSessionName' => $this->currentSessionName,
+            'titleBackend' => $this->titleBackend,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -1248,7 +1327,101 @@ final class Chat implements Model
             }
         }
 
-        return [$next, $this->scheduleBackendCompletion($next, $cancellation, $generation)];
+        $completion = $this->scheduleBackendCompletion($next, $cancellation, $generation);
+        $titleCmd = $this->scheduleTitleGeneration($next);
+
+        // Batched, not sequenced: the title call must never delay the reply
+        // the user is actually waiting on. Only wrap when there IS a title
+        // Cmd so the common (unnamed-store-less) path keeps returning the
+        // completion Cmd itself.
+        return [$next, $titleCmd === null ? $completion : Cmd::batch($completion, $titleCmd)];
+    }
+
+    /**
+     * Build the fire-and-forget Cmd that asks a small model to name the
+     * session, or null when this turn shouldn't trigger one.
+     *
+     * Fires at most once per session, on the first real user turn, and
+     * only when there is a store to persist into and no name yet (manual
+     * `/rename` or a prior auto-title both latch `currentSessionName`).
+     * Mirrors opencode's `ensureTitle()` gating.
+     *
+     * The request is built here and nowhere else, on its own Backend, with
+     * no `$onToken`/`$onEvent`/cancellation threaded through: opencode's
+     * #20269 was a main-turn parameter leaking into this cheap side-call
+     * via a shared builder and silently killing titling.
+     *
+     * Failure is silent by design — a session that stays unnamed is a
+     * non-event, and surfacing a title-generation error mid-turn is worse
+     * than no title.
+     */
+    private function scheduleTitleGeneration(self $next): ?\Closure
+    {
+        $store = $this->sessionStore;
+        $sessionId = $next->currentSessionId;
+        if ($store === null || $sessionId === null || $next->currentSessionName !== null) {
+            return null;
+        }
+
+        $userTurns = 0;
+        foreach ($next->history as $message) {
+            if ($message->role === Role::User) {
+                ++$userTurns;
+            }
+        }
+        if ($userTurns !== 1) {
+            return null;
+        }
+
+        $backend = $next->titleBackend ?? $next->backend;
+        $titlePrompt = [Message::system(self::TITLE_PROMPT), ...$next->history];
+
+        return Cmd::promise(static function () use ($backend, $titlePrompt, $sessionId, $store): PromiseInterface {
+            return $backend->completeAsync($titlePrompt)->then(
+                static function (Message $msg) use ($store, $sessionId): ?Msg {
+                    $title = self::sanitizeSessionTitle($msg->content);
+                    if ($title === '') {
+                        return null;
+                    }
+                    try {
+                        $store->renameSession($sessionId, $title);
+                    } catch (\Throwable) {
+                        return null;
+                    }
+                    return new SessionTitledMsg($sessionId, $title);
+                },
+                static fn(\Throwable $e): ?Msg => null,
+            );
+        });
+    }
+
+    /**
+     * Reduce raw model output to something safe to persist and to paint
+     * into a one-line-per-tab strip.
+     *
+     * A title is untrusted text from a model: left alone it can carry an
+     * ESC sequence that repaints the chrome around the tab, or embedded
+     * newlines that blow the strip's single-row layout apart. Reasoning
+     * models additionally prefix a `<think>` block that is not the answer.
+     */
+    private static function sanitizeSessionTitle(string $raw): string
+    {
+        $text = preg_replace('#<think>.*?</think>#is', '', $raw) ?? $raw;
+        // OSC (…BEL or ST terminated) before CSI, so an OSC payload
+        // containing bracket bytes isn't shredded into visible garbage.
+        $text = preg_replace('/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)?/', '', $text) ?? $text;
+        $text = preg_replace('/\x1b[@-_][0-?]*[ -\/]*[@-~]?/', '', $text) ?? $text;
+        // Everything else in C0 except the newlines the line split needs.
+        $text = preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $text) ?? $text;
+
+        foreach (preg_split('/\r\n|\r|\n/', $text) ?: [] as $line) {
+            $line = trim($line);
+            if ($line !== '') {
+                return trim(mb_substr($line, 0, self::TITLE_MAX_CHARS));
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1796,7 +1969,11 @@ final class Chat implements Model
 
         try {
             $this->sessionStore->renameSession($this->currentSessionId, $newName);
-            $response = "Session renamed to '{$newName}'";
+            // Latch the name in-memory too: it is what suppresses the
+            // background auto-title (see scheduleTitleGeneration()) from
+            // later overwriting a name the user chose by hand.
+            return $this->mutate(['currentSessionName' => $newName])
+                ->sessionResponse($inputText, "Session renamed to '{$newName}'");
         } catch (\InvalidArgumentException $e) {
             $response = "Error: {$e->getMessage()}";
         } catch (\Throwable $e) {

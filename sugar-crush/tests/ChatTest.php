@@ -7,8 +7,13 @@ namespace SugarCraft\Crush\Tests;
 use React\Promise\Promise;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Backend\CancellationToken;
+use SugarCraft\Crush\Session\SessionStore;
+use SugarCraft\Crush\SessionTitledMsg;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentPoolConfig;
@@ -1914,5 +1919,269 @@ final class ChatTest extends TestCase
         [$final] = $afterPlaceholders->update($resolved);
 
         return [$afterPlaceholders, $final];
+    }
+
+    // ---------------------------------------------------------------
+    // Auto-generated session titles (crush_feat.md section 3 E1)
+    // ---------------------------------------------------------------
+
+    /** A store with one session already created, ready to be auto-titled. */
+    private function titleStore(string $sessionId): SessionStore
+    {
+        $store = new SessionStore(':memory:');
+        $store->createSession($sessionId, 'sugarcrush', 'test-model');
+        return $store;
+    }
+
+    /** A stand-in "small model" backend that answers with $reply. */
+    private function titleBackend(string $reply): Backend
+    {
+        return new class ($reply) implements Backend {
+            public function __construct(private readonly string $reply) {}
+
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                return Message::assistant($this->reply);
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                return \React\Promise\resolve(Message::assistant($this->reply));
+            }
+        };
+    }
+
+    /** Drive a Cmd built by Cmd::promise() and return the Msg it resolves to. */
+    private function resolveAsyncCmd(\Closure $cmd): mixed
+    {
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+        return $resolved;
+    }
+
+    public function testSubmitBatchesTitleGenerationAlongsideTheCompletion(): void
+    {
+        $chat = new Chat(
+            inputBuf: 'how do I port a Go TUI to PHP?',
+            backend: new EchoBackend(),
+            sessionStore: $this->titleStore('sess-batch'),
+            currentSessionId: 'sess-batch',
+            titleBackend: $this->titleBackend('Porting a Go TUI to PHP'),
+        );
+
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        // Batched, not sequenced - the title call must not gate the reply.
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        $this->assertCount(2, $batch->cmds);
+    }
+
+    public function testTitleGenerationPersistsTheTitleAndAnnouncesIt(): void
+    {
+        $store = $this->titleStore('sess-persist');
+        $chat = new Chat(
+            inputBuf: 'explain the event loop',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'sess-persist',
+            titleBackend: $this->titleBackend("  Explaining the ReactPHP event loop\n(extra chatter)  "),
+        );
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+
+        $titled = $this->resolveAsyncCmd($batch->cmds[1]);
+        $this->assertInstanceOf(SessionTitledMsg::class, $titled);
+        $this->assertSame('Explaining the ReactPHP event loop', $titled->title);
+
+        // Before E1 nothing ever called renameSession automatically.
+        $this->assertSame('Explaining the ReactPHP event loop', $store->getSession('sess-persist')['name']);
+
+        [$named] = $next->update($titled);
+        $this->assertSame('Explaining the ReactPHP event loop', $named->currentSessionName());
+    }
+
+    public function testTitleGenerationIsSkippedWithoutASessionStore(): void
+    {
+        $chat = new Chat(inputBuf: 'ping', backend: new EchoBackend());
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        // No store to persist into - the plain completion Cmd, unwrapped.
+        $this->assertInstanceOf(AsyncCmd::class, $cmd());
+    }
+
+    public function testTitleGenerationFiresOnlyOnTheFirstUserTurn(): void
+    {
+        $store = $this->titleStore('sess-once');
+        $chat = new Chat(
+            history: [Message::user('first'), Message::assistant('reply')],
+            inputBuf: 'second',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'sess-once',
+            titleBackend: $this->titleBackend('Should Not Fire'),
+        );
+
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(AsyncCmd::class, $cmd());
+        $this->assertNull($store->getSession('sess-once')['name']);
+    }
+
+    public function testTitleGenerationIsSkippedWhenTheSessionIsAlreadyNamed(): void
+    {
+        $chat = new Chat(
+            inputBuf: 'hello',
+            backend: new EchoBackend(),
+            sessionStore: $this->titleStore('sess-named'),
+            currentSessionId: 'sess-named',
+            titleBackend: $this->titleBackend('Should Not Fire'),
+            currentSessionName: 'hand-picked',
+        );
+
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(AsyncCmd::class, $cmd());
+    }
+
+    public function testRenameCommandLatchesTheNameSoAutoTitlingStaysOff(): void
+    {
+        $store = $this->titleStore('sess-rename');
+        $chat = new Chat(
+            inputBuf: '/rename my session',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'sess-rename',
+            titleBackend: $this->titleBackend('Should Not Fire'),
+        );
+
+        [$renamed] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame('my session', $renamed->currentSessionName());
+
+        [$typed] = $renamed->update(new KeyMsg(KeyType::Char, 'x'));
+        [, $cmd] = $typed->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(AsyncCmd::class, $cmd());
+        $this->assertSame('my session', $store->getSession('sess-rename')['name']);
+    }
+
+    public function testTitleGenerationFailureIsSilent(): void
+    {
+        $store = $this->titleStore('sess-fail');
+        $failing = new class implements Backend {
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                throw new \RuntimeException('small model unavailable');
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                return \React\Promise\reject(new \RuntimeException('small model unavailable'));
+            }
+        };
+
+        $chat = new Chat(
+            inputBuf: 'hello',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'sess-fail',
+            titleBackend: $failing,
+        );
+
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+
+        $this->assertNull($this->resolveAsyncCmd($batch->cmds[1]));
+        $this->assertNull($store->getSession('sess-fail')['name']);
+    }
+
+    public function testAnEmptyGeneratedTitleIsNeverPersisted(): void
+    {
+        $store = $this->titleStore('sess-empty');
+        $chat = new Chat(
+            inputBuf: 'hello',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'sess-empty',
+            titleBackend: $this->titleBackend("<think>thinking hard</think>\n   \n"),
+        );
+
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+
+        $this->assertNull($this->resolveAsyncCmd($batch->cmds[1]));
+        $this->assertNull($store->getSession('sess-empty')['name']);
+    }
+
+    public function testGeneratedTitleDropsReasoningBlocksAndIsTruncated(): void
+    {
+        $store = $this->titleStore('sess-think');
+        $long = str_repeat('a', 200);
+        $chat = new Chat(
+            inputBuf: 'hello',
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'sess-think',
+            titleBackend: $this->titleBackend("<think>let me pick something</think>{$long}"),
+        );
+
+        [, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $titled = $this->resolveAsyncCmd($cmd()->cmds[1]);
+
+        $this->assertInstanceOf(SessionTitledMsg::class, $titled);
+        $this->assertSame(str_repeat('a', 100), $titled->title);
+    }
+
+    public function testSessionTitledMsgIsSanitizedBeforeItReachesTheTabStrip(): void
+    {
+        $chat = new Chat(
+            sessionStore: $this->titleStore('sess-sanitize'),
+            currentSessionId: 'sess-sanitize',
+        );
+
+        // Untrusted model text: an SGR sequence that would recolour the
+        // chrome around the tab, plus a second line that would break the
+        // strip's one-row-per-tab layout.
+        [$next] = $chat->update(new SessionTitledMsg(
+            'sess-sanitize',
+            "\x1b[31mRed\x1b[0m title\nsecond line",
+        ));
+
+        $this->assertSame('Red title', $next->currentSessionName());
+    }
+
+    public function testSessionTitledMsgForADifferentSessionIsIgnored(): void
+    {
+        $chat = new Chat(
+            sessionStore: $this->titleStore('sess-current'),
+            currentSessionId: 'sess-current',
+        );
+
+        [$next, $cmd] = $chat->update(new SessionTitledMsg('sess-other', 'Someone Else'));
+
+        $this->assertSame($chat, $next);
+        $this->assertNull($cmd);
+        $this->assertNull($next->currentSessionName());
+    }
+
+    public function testWithCurrentSessionNameAndTitleBackendAreImmutable(): void
+    {
+        $chat = new Chat();
+        $this->assertNull($chat->currentSessionName());
+
+        $named = $chat->withCurrentSessionName('picked');
+        $this->assertNotSame($chat, $named);
+        $this->assertSame('picked', $named->currentSessionName());
+        $this->assertNull($chat->currentSessionName());
+        $this->assertNull($named->withCurrentSessionName(null)->currentSessionName());
+
+        $withBackend = $chat->withTitleBackend($this->titleBackend('x'));
+        $this->assertNotSame($chat, $withBackend);
     }
 }
