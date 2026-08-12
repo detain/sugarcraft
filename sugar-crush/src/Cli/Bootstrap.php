@@ -27,6 +27,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
+use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\Tool;
 
@@ -120,11 +121,16 @@ final class Bootstrap
         $chat = self::chat($root);
         [$provider, $model] = self::shellProvider();
 
+        // ONE registry for the shell's Skills pane and the Skill tool in its
+        // displayed tool list: scanning twice would show the user a roster
+        // that the tool could disagree with.
+        $skills = self::skillRegistry($root);
+
         return App::new($provider, $model)
             ->withChat($chat)
             ->withSessionId($chat->currentSessionId())
-            ->withTools(self::tools($root))
-            ->withAvailableSkills(self::skillRegistry($root));
+            ->withTools(self::tools($root, null, $skills))
+            ->withAvailableSkills($skills);
     }
 
     /**
@@ -205,11 +211,12 @@ final class Bootstrap
         }
 
         $loader = self::instructionLoader($root);
+        $skills = self::skillRegistry($root);
 
         return (new EngineBackend(new EchoProvider(), 'echo'))
-            ->withTools(self::tools($root, $loader))
+            ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks())
-            ->withSkillRegistry(self::skillRegistry($root))
+            ->withSkillRegistry($skills)
             ->withInstructionLoader($loader);
     }
 
@@ -235,11 +242,12 @@ final class Bootstrap
         $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
 
         $loader = self::instructionLoader($root);
+        $skills = self::skillRegistry($root);
 
         return (new EngineBackend($provider, (string) $model))
-            ->withTools(self::tools($root, $loader))
+            ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks())
-            ->withSkillRegistry(self::skillRegistry($root))
+            ->withSkillRegistry($skills)
             ->withInstructionLoader($loader);
     }
 
@@ -362,7 +370,17 @@ final class Bootstrap
     private static function skillRegistry(string $root): SkillRegistry
     {
         $registry = new SkillRegistry();
-        (new SkillManager(new SkillLoader(), $registry))->loadAll($root);
+        $manager = new SkillManager(new SkillLoader(), $registry);
+        $manager->loadAll($root);
+
+        // section 7 E1's disableFromConfig() step: a user who does not want a
+        // discovered skill offered to the model needs somewhere to say so,
+        // and the persisted user config is the only per-user settings file
+        // the CLI already reads. Absent key => nothing disabled.
+        $disabled = self::readUserConfig()['disabledSkills'] ?? [];
+        if (is_array($disabled)) {
+            $manager->disableFromConfig(array_values(array_filter($disabled, 'is_string')));
+        }
 
         return $registry;
     }
@@ -384,13 +402,20 @@ final class Bootstrap
      * @param InstructionFileLoader|null $loader Pass the caller's loader to
      *        keep the engine's root-instruction reads and the tools' on-touch
      *        reads on ONE instance (its dedup map is per-instance).
+     * @param SkillRegistry|null $skills The registry the model-facing {@see
+     *        SkillTool} resolves names against. Pass the caller's registry so
+     *        the tool, {@see EngineBackend::withSkillRegistry()} and the shell
+     *        pane all read ONE instance — two independently scanned
+     *        registries would let a skill disabled on one still be invocable
+     *        through the other. Defaults to a fresh scan of $root.
      *
      * @return list<Tool>
      */
-    public static function tools(?string $root = null, ?InstructionFileLoader $loader = null): array
+    public static function tools(?string $root = null, ?InstructionFileLoader $loader = null, ?SkillRegistry $skills = null): array
     {
         $root ??= getcwd();
         $loader ??= self::instructionLoader($root);
+        $skills ??= self::skillRegistry($root);
 
         return [
             new Bash($root),
@@ -400,6 +425,11 @@ final class Bootstrap
             new Grep($root),
             new WebFetch(),
             new Doctor(),
+            // Level-2 of the progressive-disclosure design: the system prompt
+            // carries only each skill's name+description, and the model pulls
+            // a full SKILL.md body through this tool only when it decides one
+            // is relevant (crush_feat.md section 7 E1/E2).
+            new SkillTool($skills, new SkillLoader()),
         ];
     }
 

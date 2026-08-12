@@ -14,8 +14,9 @@ namespace SugarCraft\Crush\Skills;
  * This is the LEVEL-1 component only (metadata listing). The actual Skill tool
  * that loads skill body on-demand (Level-2) is a separate concern (W1.C1b).
  *
- * NOTE: This service is wired into AppBuilder in Wave 3 (W3.S8). It is NOT yet
- * reachable from bin/sugarcrush until that step lands.
+ * Live since W3.S8: {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()}
+ * appends this listing for App::$availableSkills on every turn, and
+ * Bootstrap populates that registry for the real CLI.
  */
 final readonly class SkillMatcher
 {

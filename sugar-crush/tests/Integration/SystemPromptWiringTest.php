@@ -16,6 +16,9 @@ use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -197,6 +200,60 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertStringContainsString('CHAT TURN INTEGRATION MARKER', $answer);
         $this->assertStringContainsString('<env>', $answer);
         $this->assertStringContainsString('Model: echo-sysprompt', $answer);
+    }
+
+    /**
+     * W3.S8 (crush_feat.md section 7 E1/E2): a populated skill registry is
+     * only half the wiring — the model needs the Level-1 listing in its
+     * system prompt, or the `Skill` tool is one it has no reason to call.
+     * Asserted on the request a provider is actually handed, for the same
+     * reason as the tests above: `SkillMatcher` was unit-tested and had no
+     * production caller at all before this step.
+     */
+    public function testDiscoveredSkillsAreListedInTheProviderSystemPrompt(): void
+    {
+        $registry = $this->registryWithProjectSkill('sysprompt-marker-skill', 'Marker skill for the system-prompt listing.');
+
+        $provider = $this->capturingProvider(false);
+        $this->backend($provider)->withSkillRegistry($registry)->complete([Message::user('hello')]);
+
+        $prompt = $this->soleSystemPrompt($provider);
+        $this->assertStringContainsString('Available skills (invoke via Skill tool):', $prompt);
+        $this->assertStringContainsString(
+            '- sysprompt-marker-skill: Marker skill for the system-prompt listing.',
+            $prompt,
+        );
+    }
+
+    /**
+     * A session that discovered nothing must be byte-identical to before the
+     * listing existed — an empty registry may not leave a dangling header.
+     */
+    public function testAnEmptyRegistryAddsNothingToTheSystemPrompt(): void
+    {
+        $provider = $this->completeOneTurn();
+
+        $this->assertStringNotContainsString('Available skills', $this->soleSystemPrompt($provider));
+    }
+
+    /**
+     * Discover one project-scoped SKILL.md written under this test's temp
+     * root, the same way `Bootstrap::skillRegistry()` does (that method is
+     * private, so the SkillManager pair it uses is constructed here).
+     */
+    private function registryWithProjectSkill(string $name, string $description): SkillRegistry
+    {
+        $dir = $this->tempDir . '/.sugar-crush/skills/' . $name;
+        mkdir($dir, 0755, true);
+        file_put_contents(
+            $dir . '/SKILL.md',
+            "---\ndescription: {$description}\nuser-invocable: true\ndisable-model-invocation: false\n---\n# {$name}\n\nBody.\n",
+        );
+
+        $registry = new SkillRegistry();
+        (new SkillManager(new SkillLoader(), $registry))->loadAll($this->tempDir);
+
+        return $registry;
     }
 
     /**

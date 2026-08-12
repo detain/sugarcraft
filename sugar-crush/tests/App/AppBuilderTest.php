@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\App\AppBuilder;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tui\Pane;
 
 /**
@@ -515,6 +516,172 @@ final class AppBuilderTest extends TestCase
         $this->expectExceptionMessage('provider is required');
 
         $builder->build();
+    }
+
+    // =========================================================================
+    // Skill wiring Tests (crush_feat.md section 7 E1)
+    // =========================================================================
+
+    /**
+     * The section 7 E1 defect: build() populated every other field but never
+     * called withAvailableSkills(), so the App every skill-driven code path
+     * reads was handed the empty default registry. Fails against the old
+     * build().
+     */
+    public function testBuildPopulatesAvailableSkillsFromTheProjectRoot(): void
+    {
+        $root = $this->projectWithSkill('builder-marker-skill', 'Marker skill for the AppBuilder wiring test.');
+
+        $app = (new AppBuilder())
+            ->withProvider($this->provider)
+            ->withProjectRoot($root)
+            ->build();
+
+        $skill = $app->availableSkills->get('builder-marker-skill');
+        $this->assertNotNull($skill);
+        $this->assertSame('Marker skill for the AppBuilder wiring test.', $skill->description);
+    }
+
+    /**
+     * Discovery must reach the shipped BuiltIn/ roster too, not only the
+     * project directory — those 12 skills were the ones section 7 D reports
+     * as never loaded into a live session.
+     */
+    public function testBuildAlsoDiscoversTheShippedBuiltInSkills(): void
+    {
+        $app = (new AppBuilder())
+            ->withProvider($this->provider)
+            ->withProjectRoot($this->projectWithSkill('other-skill', 'Unrelated.'))
+            ->build();
+
+        $this->assertNotNull($app->availableSkills->get('security-audit'));
+    }
+
+    public function testBuildWithoutSkillWiringLeavesTheRegistryEmpty(): void
+    {
+        $app = (new AppBuilder())->withProvider($this->provider)->build();
+
+        $this->assertSame([], $app->availableSkills->all());
+    }
+
+    public function testWithAvailableSkillsReturnsANewBuilderAndIsUsedByBuild(): void
+    {
+        $registry = new SkillRegistry();
+        $builder = new AppBuilder();
+        $builder2 = $builder->withAvailableSkills($registry);
+
+        $this->assertNotSame($builder, $builder2);
+        $this->assertSame(
+            $registry,
+            $builder2->withProvider($this->provider)->build()->availableSkills,
+        );
+    }
+
+    /**
+     * An injected registry is authoritative: re-scanning $projectRoot on top
+     * of it would re-register skills a caller had deliberately filtered out.
+     */
+    public function testInjectedRegistryTakesPrecedenceOverProjectRoot(): void
+    {
+        $registry = new SkillRegistry();
+
+        $app = (new AppBuilder())
+            ->withProvider($this->provider)
+            ->withAvailableSkills($registry)
+            ->withProjectRoot($this->projectWithSkill('ignored-skill', 'Should not be scanned.'))
+            ->build();
+
+        $this->assertSame($registry, $app->availableSkills);
+        $this->assertSame([], $app->availableSkills->all());
+    }
+
+    public function testWithProjectRootReturnsANewBuilderAndLeavesTheOriginalUnset(): void
+    {
+        $builder = new AppBuilder();
+        $builder2 = $builder->withProjectRoot('/tmp');
+
+        $reflection = new \ReflectionClass(AppBuilder::class);
+        $rootProp = $reflection->getProperty('projectRoot');
+        $rootProp->setAccessible(true);
+
+        $this->assertNull($rootProp->getValue($builder));
+        $this->assertSame('/tmp', $rootProp->getValue($builder2));
+    }
+
+    public function testWithDisabledSkillsSuppressesADiscoveredSkill(): void
+    {
+        $root = $this->projectWithSkill('disabled-marker-skill', 'Marker skill that config turns off.');
+
+        $app = (new AppBuilder())
+            ->withProvider($this->provider)
+            ->withProjectRoot($root)
+            ->withDisabledSkills(['disabled-marker-skill'])
+            ->build();
+
+        $this->assertTrue($app->availableSkills->isDisabled('disabled-marker-skill'));
+        $this->assertNull($app->availableSkills->get('disabled-marker-skill'));
+    }
+
+    public function testWithDisabledSkillsReturnsANewBuilder(): void
+    {
+        $builder = new AppBuilder();
+        $builder2 = $builder->withDisabledSkills(['a']);
+
+        $reflection = new \ReflectionClass(AppBuilder::class);
+        $prop = $reflection->getProperty('disabledSkills');
+        $prop->setAccessible(true);
+
+        $this->assertSame([], $prop->getValue($builder));
+        $this->assertSame(['a'], $prop->getValue($builder2));
+    }
+
+    /**
+     * Create a throwaway project root carrying one project-scoped SKILL.md,
+     * in the layout SkillDiscovery looks for ({root}/.sugar-crush/skills).
+     */
+    private function projectWithSkill(string $name, string $description): string
+    {
+        $root = sys_get_temp_dir() . '/sugarcrush_appbuilder_' . uniqid('', true);
+        $dir = $root . '/.sugar-crush/skills/' . $name;
+        mkdir($dir, 0755, true);
+        file_put_contents(
+            $dir . '/SKILL.md',
+            "---\ndescription: {$description}\nuser-invocable: true\ndisable-model-invocation: false\n---\n# {$name}\n\nBody.\n",
+        );
+        $this->tempRoots[] = $root;
+
+        return $root;
+    }
+
+    /** @var list<string> */
+    private array $tempRoots = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempRoots as $root) {
+            $this->removeDirectory($root);
+        }
+        $this->tempRoots = [];
+
+        parent::tearDown();
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $dir . '/' . $entry;
+            is_dir($path) ? $this->removeDirectory($path) : @unlink($path);
+        }
+
+        @rmdir($dir);
     }
 
     // =========================================================================

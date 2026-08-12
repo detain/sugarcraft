@@ -17,6 +17,7 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Skills\SkillMatcher;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookResult;
@@ -340,6 +341,15 @@ final class Runtime
                 }
             }
         }
+
+        // Level-1 metadata for every DISCOVERED skill (name + description
+        // only), distinct from the full bodies the explicitly-enabled skills
+        // above contribute. Without this listing the Skill tool is a tool the
+        // model has no reason to call, so a populated registry would still be
+        // un-auto-triggerable (crush_feat.md section 7 E1/E2 Strategy A).
+        // Empty registry => empty string, so nothing changes for a session
+        // that discovered no skills.
+        $base .= (new SkillMatcher())->listForPrompt($app->availableSkills);
 
         return $base;
     }

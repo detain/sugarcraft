@@ -320,6 +320,113 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->assertNotNull($lastMessage->imageProtocol);
     }
 
+    // =========================================================================
+    // Skills subsystem wiring (crush_feat.md section 7 E1)
+    // =========================================================================
+
+    /**
+     * section 7 D's finding: `bin/sugarcrush` contained zero references to
+     * Skill, so the whole BuiltIn/ roster plus anything a user dropped under
+     * .sugar-crush/skills was invisible to a real run. Bootstrap::app() is
+     * the binary's entry point (bin/sugarcrush -> Bootstrap::app() -> App),
+     * so the registry it hands the App must actually carry the on-disk skill.
+     */
+    public function testBootstrapAppPopulatesAvailableSkillsFromDisk(): void
+    {
+        $this->writeProjectSkill('bin-wiring-marker', 'Marker skill for the bin wiring test.');
+
+        $app = Bootstrap::app($this->tempDir . '/repo');
+
+        $this->assertNotNull($app->availableSkills->get('bin-wiring-marker'));
+        $this->assertNotNull($app->availableSkills->get('security-audit'));
+    }
+
+    /**
+     * Populating the registry is only half of "auto-triggerable": the model
+     * reaches a skill through the `Skill` tool, which is resolved out of the
+     * Tool[] EngineBackend/Runtime hold, so Bootstrap::tools() has to ship it.
+     */
+    public function testBootstrapToolsIncludesTheModelFacingSkillTool(): void
+    {
+        $byClass = $this->toolsByClass();
+
+        $this->assertArrayHasKey(\SugarCraft\Crush\Tools\BuiltIn\SkillTool::class, $byClass);
+        $this->assertSame('Skill', $byClass[\SugarCraft\Crush\Tools\BuiltIn\SkillTool::class]->name());
+    }
+
+    /**
+     * The shell's Skills pane and the model's Skill tool must read ONE
+     * registry instance — two independent scans could disagree about which
+     * skills exist or which are disabled.
+     */
+    public function testSkillToolSharesTheAppsRegistryInstance(): void
+    {
+        $app = Bootstrap::app($this->tempDir . '/repo');
+
+        $skillTool = null;
+        foreach ($app->tools as $tool) {
+            if ($tool instanceof \SugarCraft\Crush\Tools\BuiltIn\SkillTool) {
+                $skillTool = $tool;
+            }
+        }
+
+        $this->assertNotNull($skillTool);
+        $this->assertSame($app->availableSkills, $this->privateValue($skillTool, 'registry'));
+    }
+
+    /**
+     * End of the chain: the tool Bootstrap built must return the on-disk
+     * SKILL.md body when the model invokes it by name.
+     */
+    public function testSkillToolInvocationReturnsTheOnDiskSkillBody(): void
+    {
+        $this->writeProjectSkill('bin-invoke-marker', 'Marker skill invoked through the tool.');
+
+        $tool = $this->skillToolFromBootstrap();
+        $result = $tool->execute(['name' => 'bin-invoke-marker']);
+
+        $this->assertFalse($result->isError());
+        $this->assertStringContainsString('BIN INVOKE MARKER BODY', $result->content());
+    }
+
+    /**
+     * section 7 E1's `disableFromConfig()` step: a name listed under
+     * `disabledSkills` in the persisted user config must be unreachable
+     * through the tool, not merely hidden from the picker.
+     */
+    public function testDisabledSkillsInUserConfigAreNotInvocable(): void
+    {
+        $this->writeProjectSkill('bin-disabled-marker', 'Marker skill turned off by config.');
+        mkdir($this->tempDir . '/home/.sugar-crush', 0700, true);
+        file_put_contents(
+            $this->tempDir . '/home/.sugar-crush/config.json',
+            json_encode(['disabledSkills' => ['bin-disabled-marker']]),
+        );
+
+        $result = $this->skillToolFromBootstrap()->execute(['name' => 'bin-disabled-marker']);
+
+        $this->assertTrue($result->isError());
+    }
+
+    private function skillToolFromBootstrap(): \SugarCraft\Crush\Tools\BuiltIn\SkillTool
+    {
+        $tool = $this->toolsByClass()[\SugarCraft\Crush\Tools\BuiltIn\SkillTool::class] ?? null;
+        $this->assertInstanceOf(\SugarCraft\Crush\Tools\BuiltIn\SkillTool::class, $tool);
+
+        return $tool;
+    }
+
+    private function writeProjectSkill(string $name, string $description): void
+    {
+        $dir = $this->tempDir . '/repo/.sugar-crush/skills/' . $name;
+        mkdir($dir, 0755, true);
+        file_put_contents(
+            $dir . '/SKILL.md',
+            "---\ndescription: {$description}\nuser-invocable: true\ndisable-model-invocation: false\n---\n"
+            . "# {$name}\n\nBIN INVOKE MARKER BODY\n",
+        );
+    }
+
     /**
      * @return array<class-string, object>
      */
