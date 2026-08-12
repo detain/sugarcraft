@@ -447,6 +447,18 @@ final class Chat implements Model
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
         $this->agentManager = $agentManager;
+        // Chat is the only place that holds BOTH collaborators, so it is where
+        // the engine learns which manager its parallel-stage sub-agents should
+        // register with -- without this link a /workflow run's agents would
+        // still bypass the manager the renderer reads telemetry from
+        // (crush_feat.md section 5 E6). Idempotent across mutate(), and an
+        // engine that was constructed with its own manager keeps it.
+        if ($agentManager !== null
+            && $workflowEngine instanceof WorkflowEngine
+            && $workflowEngine->agentManager() === null
+        ) {
+            $workflowEngine->setAgentManager($agentManager);
+        }
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
@@ -2224,6 +2236,16 @@ final class Chat implements Model
      * Otherwise, if $agentPoolConfig was set via withAgentPoolConfig(), a pool is
      * built from that config. If neither is set, throws \RuntimeException.
      *
+     * The resolved pool is then driven THROUGH {@see AgentManager::executeAll()}
+     * whenever an AgentManager is configured, rather than being iterated
+     * directly. The manager registers each SubAgent and mirrors the pool's
+     * per-result usage back onto it, which is the only thing that makes
+     * {@see AgentManager::elapsedSeconds()}/tokensUsed()/costUsd() -- and so
+     * Renderer::agentDisplayState()'s status line -- observe real work instead
+     * of zeros (crush_feat.md section 5 E6). Dispatch stays single-pass: the
+     * manager accumulates with `+=`, so the pool must never also be iterated
+     * for the same SubAgent instances or usage would be counted twice.
+     *
      * @param \SugarCraft\Crush\Agents\SubAgent[] $agents
      * @return \Generator<AgentResult>
      * @throws \RuntimeException When no pool or config is available
@@ -2247,6 +2269,10 @@ final class Chat implements Model
                 maxConcurrent: $this->agentPoolConfig->maxConcurrent,
                 executor: $executor,
             ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
+        }
+
+        if ($this->agentManager !== null) {
+            return $this->agentManager->executeAll($agents, $request, $pool);
         }
 
         return $pool->executeAll($agents, $request);

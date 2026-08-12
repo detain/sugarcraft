@@ -364,13 +364,22 @@ final class AgentManager
     /**
      * Execute multiple sub-agents in parallel via AgentWorkerPool.
      *
+     * `$pool` lets a caller that already owns a call-scoped pool route through
+     * this manager without losing that pool's settings: Chat builds one from
+     * its AgentPoolConfig and WorkflowEngine builds one per parallel stage
+     * from the workflow's maxConcurrent/stopOnFirstFailure. Before those two
+     * call sites were routed here they called AgentWorkerPool::executeAll()
+     * directly, so no SubAgent was ever registered and the telemetry
+     * accessors above reported zeros for real work (crush_feat.md 5E item 6).
+     * Omit it to fall back to the manager's own pool.
+     *
      * @param SubAgent[] $agents
      * @return \Generator<AgentResult>
      * @see P1.S10 for wiring AgentWorkerPool into Chat; callers migrating from Agent[] must now pass SubAgent[]
      */
-    public function executeAll(array $agents, CompleteRequest $request): \Generator
+    public function executeAll(array $agents, CompleteRequest $request, ?AgentWorkerPool $pool = null): \Generator
     {
-        $pool = $this->workerPool ?? new AgentWorkerPool();
+        $pool ??= $this->workerPool ?? new AgentWorkerPool();
 
         // Register each sub-agent so it is trackable via getSubAgent().
         foreach ($agents as $agent) {

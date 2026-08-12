@@ -3783,4 +3783,223 @@ final class ChatTest extends TestCase
         $this->assertNotNull($sized->sessionPicker());
         $this->assertSame(2, $sized->sessionPicker()?->count());
     }
+
+    // -------------------------------------------------------------------------
+    // W3.F2 - sub-agent execution routed through AgentManager (crush_feat 5 E6)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executor stub whose AgentResult carries real usage numbers AND the
+     * sub-agent's own id -- AgentManager mirrors usage back by matching
+     * $result->agentId against its registry, so a stub that invents an id
+     * would silently exercise nothing.
+     */
+    private function telemetryExecutor(int $tokens, float $cost, int $startTs, int $endTs): ExecutorInterface
+    {
+        return new class ($tokens, $cost, $startTs, $endTs) implements ExecutorInterface {
+            public function __construct(
+                private readonly int $tokens,
+                private readonly float $cost,
+                private readonly int $startTs,
+                private readonly int $endTs,
+            ) {}
+
+            public function execute(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                return new AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'done',
+                    error: null,
+                    tokensUsed: $this->tokens,
+                    costUsd: $this->cost,
+                    startedAt: new \DateTimeImmutable('@' . $this->startTs),
+                    completedAt: new \DateTimeImmutable('@' . $this->endTs),
+                );
+            }
+
+            public function executeStream(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+            public function cancelAll(): void {}
+        };
+    }
+
+    private function newAgentManager(): AgentManager
+    {
+        return new AgentManager(
+            $this->createMock(\SugarCraft\Crush\Providers\ProviderInterface::class),
+            new \SugarCraft\Crush\Skills\SkillRegistry(),
+        );
+    }
+
+    public function testExecuteAgentsRegistersSubAgentsWithTheAgentManager(): void
+    {
+        $manager = $this->newAgentManager();
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $this->telemetryExecutor(1200, 0.42, 1000, 1007));
+        $chat = (new Chat(agentManager: $manager))->withWorkerPool($pool);
+
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'telemetry-agent',
+            agent: new Agent(
+                name: 'TelemetryAgent',
+                description: 'Agent for telemetry-routing test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'do the thing',
+        );
+
+        $collected = iterator_to_array($chat->executeAgents([$subAgent], new CompleteRequest(
+            model: 'test-model',
+            messages: [],
+        )), false);
+
+        // Existing behaviour is unchanged: same results, same order.
+        $this->assertCount(1, $collected);
+        $this->assertSame('telemetry-agent', $collected[0]->agentId);
+        $this->assertTrue($collected[0]->isSuccess());
+        $this->assertSame('done', $collected[0]->output);
+
+        // Before W3.F2 the pool was iterated directly, so the manager never
+        // saw the sub-agent and every telemetry accessor answered zero.
+        $this->assertSame($subAgent, $manager->getSubAgent('telemetry-agent'));
+        $this->assertSame(1200, $manager->tokensUsed('TelemetryAgent'));
+        $this->assertSame(0.42, $manager->costUsd('TelemetryAgent'));
+        $this->assertSame(7, $manager->elapsedSeconds('TelemetryAgent'));
+    }
+
+    public function testExecuteAgentsCountsUsageOnceNotTwice(): void
+    {
+        $manager = $this->newAgentManager();
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $this->telemetryExecutor(500, 0.05, 2000, 2003));
+        $chat = (new Chat(agentManager: $manager))->withWorkerPool($pool);
+
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'single-count-agent',
+            agent: new Agent(
+                name: 'SingleCountAgent',
+                description: 'Agent for double-count guard test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'do the thing',
+        );
+
+        iterator_to_array($chat->executeAgents([$subAgent], new CompleteRequest(
+            model: 'test-model',
+            messages: [],
+        )), false);
+
+        // AgentManager accumulates with `+=`, so routing must dispatch through
+        // exactly one of manager/pool -- never both for the same instances.
+        $this->assertSame(500, $manager->tokensUsed('SingleCountAgent'));
+        $this->assertSame(0.05, $manager->costUsd('SingleCountAgent'));
+    }
+
+    public function testExecuteAgentsWithoutAgentManagerStillDispatchesThroughThePool(): void
+    {
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $this->telemetryExecutor(10, 0.01, 3000, 3001));
+        $chat = (new Chat())->withWorkerPool($pool);
+
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'no-manager-agent',
+            agent: new Agent(
+                name: 'NoManagerAgent',
+                description: 'Agent for manager-less dispatch test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'do the thing',
+        );
+
+        $collected = iterator_to_array($chat->executeAgents([$subAgent], new CompleteRequest(
+            model: 'test-model',
+            messages: [],
+        )), false);
+
+        $this->assertCount(1, $collected);
+        $this->assertSame('no-manager-agent', $collected[0]->agentId);
+        $this->assertTrue($collected[0]->isSuccess());
+    }
+
+    public function testConstructorLinksWorkflowEngineToTheAgentManager(): void
+    {
+        $manager = $this->newAgentManager();
+        $engine = new \SugarCraft\Crush\Workflows\WorkflowEngine();
+
+        $chat = new Chat(workflowEngine: $engine, agentManager: $manager);
+        $this->assertSame($manager, $engine->agentManager());
+
+        // The link must survive mutate()'s constructor re-entry.
+        $chat->withStreaming(true);
+        $this->assertSame($manager, $engine->agentManager());
+    }
+
+    public function testConstructorDoesNotOverrideAnEnginesOwnAgentManager(): void
+    {
+        $ownManager = $this->newAgentManager();
+        $chatManager = $this->newAgentManager();
+        $engine = new \SugarCraft\Crush\Workflows\WorkflowEngine(
+            new \SugarCraft\Crush\Workflows\WorkflowRegistry(),
+            new AgentWorkerPool(),
+            $ownManager,
+        );
+
+        new Chat(workflowEngine: $engine, agentManager: $chatManager);
+
+        $this->assertSame($ownManager, $engine->agentManager());
+    }
+
+    public function testWorkflowParallelStageRegistersSubAgentsWithTheAgentManager(): void
+    {
+        $manager = $this->newAgentManager();
+        $registry = new \SugarCraft\Crush\Workflows\WorkflowRegistry();
+        $engine = new \SugarCraft\Crush\Workflows\WorkflowEngine(
+            $registry,
+            new AgentWorkerPool(5, $this->telemetryExecutor(100, 0.02, 4000, 4005)),
+        );
+
+        // Chat is what hands the engine the manager the renderer reads.
+        new Chat(workflowEngine: $engine, agentManager: $manager);
+
+        $workflow = (new \SugarCraft\Crush\Workflows\WorkflowBuilder())
+            ->name('telemetry-parallel')
+            ->description('Parallel stage telemetry routing')
+            ->maxConcurrent(2)
+            ->parallel('fan-out', [
+                \SugarCraft\Crush\Workflows\Tasks::agent('coder')->prompt('Task 1'),
+                \SugarCraft\Crush\Workflows\Tasks::agent('coder')->prompt('Task 2'),
+            ])
+            ->build();
+        $registry->register($workflow);
+
+        $result = $engine->run('telemetry-parallel', []);
+
+        $this->assertTrue($result->isSuccess());
+        // Before W3.F2 executeParallelStage() iterated its stage pool directly,
+        // so no workflow sub-agent ever reached the manager.
+        $this->assertCount(2, $manager->subAgentsOf('coder'));
+        $this->assertSame(200, $manager->tokensUsed('coder'));
+        $this->assertSame(0.04, $manager->costUsd('coder'));
+        $this->assertSame(5, $manager->elapsedSeconds('coder'));
+    }
 }
