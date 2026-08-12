@@ -351,6 +351,92 @@ final class SubAgentTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // elapsedSeconds() -- crush_feat.md §5 E6
+    // -------------------------------------------------------------------------
+
+    public function testElapsedSecondsIsZeroBeforeExecutionStarts(): void
+    {
+        $subAgent = new SubAgent(
+            id: 'elapsed_pending',
+            agent: $this->createAgent(),
+            task: 'Not started yet',
+        );
+
+        $this->assertNull($subAgent->startedAt);
+        $this->assertSame(0, $subAgent->elapsedSeconds());
+    }
+
+    public function testElapsedSecondsMeasuresFromStartNotCreation(): void
+    {
+        // createdAt is 10 minutes before startedAt: queue time must not be
+        // counted as work time.
+        $subAgent = new SubAgent(
+            id: 'elapsed_queued',
+            agent: $this->createAgent(),
+            task: 'Queued a while',
+            createdAt: new \DateTimeImmutable('2024-01-15T10:00:00Z'),
+        );
+
+        $subAgent->startedAt = new \DateTimeImmutable('2024-01-15T10:10:00Z');
+        $subAgent->completedAt = new \DateTimeImmutable('2024-01-15T10:10:20Z');
+
+        $this->assertSame(20, $subAgent->elapsedSeconds());
+    }
+
+    public function testElapsedSecondsCountsAgainstNowWhileRunning(): void
+    {
+        $subAgent = new SubAgent(
+            id: 'elapsed_running',
+            agent: $this->createAgent(),
+            task: 'Still going',
+        );
+
+        $subAgent->status = SubAgent::STATUS_STREAMING;
+        $subAgent->startedAt = (new \DateTimeImmutable())->modify('-45 seconds');
+
+        $this->assertGreaterThanOrEqual(45, $subAgent->elapsedSeconds());
+    }
+
+    public function testElapsedSecondsFreezesOnceTerminal(): void
+    {
+        $subAgent = new SubAgent(
+            id: 'elapsed_stopped',
+            agent: $this->createAgent(),
+            task: 'Killed mid-flight',
+        );
+
+        $subAgent->status = SubAgent::STATUS_STOPPED;
+        $subAgent->startedAt = (new \DateTimeImmutable())->modify('-2400 seconds');
+        $subAgent->completedAt = (new \DateTimeImmutable())->modify('-2390 seconds');
+
+        // A sub-agent that died 40 minutes ago must report the 10s it actually
+        // worked, not an ever-growing wall-clock figure.
+        $this->assertSame(10, $subAgent->elapsedSeconds());
+        $this->assertSame(10, $subAgent->elapsedSeconds());
+    }
+
+    public function testTelemetryFieldsAppearInToArray(): void
+    {
+        $subAgent = new SubAgent(
+            id: 'elapsed_array',
+            agent: $this->createAgent(),
+            task: 'Telemetry',
+        );
+
+        $subAgent->startedAt = new \DateTimeImmutable('2024-01-15T10:00:00Z');
+        $subAgent->completedAt = new \DateTimeImmutable('2024-01-15T10:00:05Z');
+        $subAgent->tokensUsed = 77;
+        $subAgent->costUsd = 1.25;
+
+        $array = $subAgent->toArray();
+
+        $this->assertSame('2024-01-15T10:00:00+00:00', $array['started_at']);
+        $this->assertSame(5, $array['elapsed_seconds']);
+        $this->assertSame(77, $array['tokens_used']);
+        $this->assertSame(1.25, $array['cost_usd']);
+    }
+
+    // -------------------------------------------------------------------------
     // Helper methods
     // -------------------------------------------------------------------------
 

@@ -160,6 +160,87 @@ final class AgentManager
     }
 
     /**
+     * Every sub-agent spawned from a given registered agent.
+     *
+     * The live agent view renders one row per registered {@see Agent}, but
+     * telemetry only exists on the {@see SubAgent}s that agent spawned, so
+     * the per-agent accessors below all roll up through this.
+     *
+     * @return array<SubAgent>
+     */
+    public function subAgentsOf(string $agentName): array
+    {
+        return array_values(array_filter(
+            $this->subAgents,
+            fn(SubAgent $subAgent) => $subAgent->agent->name === $agentName,
+        ));
+    }
+
+    /**
+     * Wall-clock seconds the named agent has been working, spanning from the
+     * earliest sub-agent start to the latest activity.
+     *
+     * The span (rather than a sum of per-sub-agent elapsed times) is what the
+     * status line wants: sub-agents run concurrently via
+     * {@see AgentWorkerPool}, so summing them would report several minutes of
+     * "elapsed" for an agent that has been busy for thirty seconds.
+     * Returns 0 when the agent has no started sub-agents.
+     */
+    public function elapsedSeconds(string $agentName): int
+    {
+        $started = array_filter(
+            $this->subAgentsOf($agentName),
+            fn(SubAgent $subAgent) => $subAgent->startedAt !== null,
+        );
+
+        if ($started === []) {
+            return 0;
+        }
+
+        $earliest = null;
+        $latest = null;
+        foreach ($started as $subAgent) {
+            /** @var \DateTimeImmutable $startedAt */
+            $startedAt = $subAgent->startedAt;
+            $begin = $startedAt->getTimestamp();
+            // A still-running sub-agent pins the end of the span to now, so
+            // the display ticks up instead of freezing at the last completion.
+            $end = $subAgent->completedAt?->getTimestamp() ?? time();
+
+            $earliest = $earliest === null ? $begin : min($earliest, $begin);
+            $latest = $latest === null ? $end : max($latest, $end);
+        }
+
+        return max(0, (int) $latest - (int) $earliest);
+    }
+
+    /**
+     * Tokens consumed across every sub-agent spawned from the named agent.
+     *
+     * Note: no renderer reads this yet. The status line still shows hardcoded
+     * zeros until W3.S5b swaps Renderer::agentDisplayState() onto these
+     * accessors — the numbers here are real, the display is not yet wired.
+     */
+    public function tokensUsed(string $agentName): int
+    {
+        return array_sum(array_map(
+            fn(SubAgent $subAgent) => $subAgent->tokensUsed,
+            $this->subAgentsOf($agentName),
+        ));
+    }
+
+    /**
+     * Dollar cost accrued across every sub-agent spawned from the named agent.
+     */
+    public function costUsd(string $agentName): float
+    {
+        return array_sum(array_map(
+            fn(SubAgent $subAgent) => $subAgent->costUsd,
+            $this->subAgentsOf($agentName),
+        ));
+    }
+
+    /**
      * Execute a subagent task.
      *
      * @throws \RuntimeException When subagent is not found
@@ -173,6 +254,9 @@ final class AgentManager
 
         try {
             $subAgent->status = SubAgent::STATUS_RUNNING;
+            // Stamped here, not in the constructor: createdAt already records
+            // creation, and elapsed telemetry must exclude queue time.
+            $subAgent->startedAt = new \DateTimeImmutable();
 
             // Build system prompt from agent config
             $systemPrompt = $subAgent->agent->systemPrompt();
@@ -203,6 +287,12 @@ final class AgentManager
                         $this->evaluateToolCalls($response->toolCalls, $subAgent);
                     }
 
+                    // Accumulated per chunk so a mid-flight sub-agent already
+                    // reports real usage; providers report per-chunk deltas,
+                    // hence += rather than assignment.
+                    $subAgent->tokensUsed += $response->tokensUsed;
+                    $subAgent->costUsd += $response->costUsd;
+
                     $subAgent->output .= $response->content;
                     yield $subAgent;
                 }
@@ -215,6 +305,8 @@ final class AgentManager
                 }
 
                 $subAgent->output = $response->content;
+                $subAgent->tokensUsed += $response->tokensUsed;
+                $subAgent->costUsd += $response->costUsd;
             }
 
             $subAgent->status = SubAgent::STATUS_COMPLETE;
@@ -222,6 +314,10 @@ final class AgentManager
         } catch (\Throwable $e) {
             $subAgent->status = SubAgent::STATUS_FAILED;
             $subAgent->error = $e->getMessage();
+            // Failure is terminal too: without stamping the end of the span,
+            // elapsedSeconds() would keep counting against wall-clock forever
+            // and render a dead sub-agent as still working.
+            $subAgent->completedAt ??= new \DateTimeImmutable();
             throw $e;
         }
     }
@@ -285,7 +381,22 @@ final class AgentManager
             $this->subAgents[$agent->id] = $agent;
         }
 
-        yield from $pool->executeAll($agents, $request);
+        foreach ($pool->executeAll($agents, $request) as $result) {
+            $subAgent = $this->subAgents[$result->agentId] ?? null;
+            if ($subAgent !== null) {
+                // The pool executes out-of-process, so the SubAgent object held
+                // here never sees the streaming loop that executeSubAgent() uses
+                // to accumulate usage. Mirroring AgentResult's numbers back is
+                // what keeps the telemetry accessors truthful on this path --
+                // which is the only path Chat/WorkflowEngine actually take.
+                $subAgent->startedAt ??= $result->startedAt;
+                $subAgent->completedAt = $result->completedAt ?? $subAgent->completedAt;
+                $subAgent->tokensUsed += $result->tokensUsed;
+                $subAgent->costUsd += $result->costUsd;
+            }
+
+            yield $result;
+        }
     }
 
     /**
@@ -299,6 +410,9 @@ final class AgentManager
         }
 
         $subAgent->status = SubAgent::STATUS_STOPPED;
+        // Stopping ends the work span; leaving completedAt null would make
+        // elapsedSeconds() tick up forever for an agent the user killed.
+        $subAgent->completedAt ??= new \DateTimeImmutable();
     }
 
     /**
