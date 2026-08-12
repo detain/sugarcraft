@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tui\AgentViewMode;
@@ -49,6 +51,16 @@ final class KeyboardHandlerTest extends TestCase
         $this->provider = $this->createMock(ProviderInterface::class);
         $this->handler = new KeyboardHandler();
         // Reset MenuBar static state
+        $this->resetMenuBarState();
+    }
+
+    /**
+     * MenuBar::$activeMenu is process-global static state, so a test that
+     * opens a menu would otherwise leak an "a menu is open" world into every
+     * later test class (and make the shell claim keys that belong to Chat).
+     */
+    protected function tearDown(): void
+    {
         $this->resetMenuBarState();
     }
 
@@ -901,5 +913,195 @@ final class KeyboardHandlerTest extends TestCase
         $reflection = new ReflectionClass(QuitAgentViewCmd::class);
         $this->assertTrue($reflection->isFinal(), 'QuitAgentViewCmd must be final');
         $this->assertTrue($reflection->isReadOnly(), 'QuitAgentViewCmd must be readonly');
+    }
+
+    // =========================================================================
+    // KeyboardHandler::handleKeyMsg() -- the KeyMsg bridge (crush_feat.md
+    // section 5 E7, merge branch). Claimed keys are the shell's; unclaimed
+    // keys return null so App::update() can fall through to Chat.
+    // =========================================================================
+
+    /**
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testPlainTabIsClaimedAndCyclesPanes(): void
+    {
+        $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Tab), $this->createApp(Pane::Chat));
+
+        $this->assertNotNull($handled);
+        $this->assertSame(Pane::Input, $handled[0]->pane);
+        $this->assertNull($handled[1]);
+    }
+
+    /**
+     * Ctrl+Tab / Ctrl+Shift+Tab are Chat's session cycling (section 5 E2).
+     * Claiming them for the pane cycler would make the binding unreachable
+     * the moment the shell hosts the chat.
+     *
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testCtrlTabIsLeftToChat(): void
+    {
+        $app = $this->createApp(Pane::Chat);
+
+        $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Tab, ctrl: true), $app));
+        $this->assertNull(
+            $this->handler->handleKeyMsg(new KeyMsg(KeyType::Tab, ctrl: true, shift: true), $app),
+        );
+    }
+
+    /**
+     * The regression this whole bridge exists to prevent: before it, the
+     * only entry point answered EVERY key with [App, null], so a typed
+     * letter looked handled and never reached the chat input.
+     *
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testTypedTextIsNeverClaimedInTheChatPane(): void
+    {
+        $app = $this->createApp(Pane::Chat);
+
+        foreach (['c', 'r', 's', 'q', 'h', 'j', 'k', 'l', 'o'] as $rune) {
+            $this->assertNull(
+                $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune), $app),
+                "typing '{$rune}' in the chat pane must fall through to Chat",
+            );
+        }
+
+        $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Enter), $app));
+        $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Up), $app));
+        $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Backspace), $app));
+    }
+
+    /**
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testChatOwnedCtrlChordsAreNeverClaimed(): void
+    {
+        $app = $this->createApp(Pane::Chat);
+
+        // p = palette, o = expand tool output, a = /agents, w = word delete,
+        // c = quit. See KeyboardHandler::CHAT_CTRL_RUNES.
+        foreach (['p', 'o', 'a', 'w', 'c'] as $rune) {
+            $this->assertNull(
+                $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: true), $app),
+                "ctrl+{$rune} belongs to Chat",
+            );
+        }
+
+        // Most terminals deliver Ctrl+C as a bare \x03 rune with no flag.
+        $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, "\x03"), $app));
+    }
+
+    /**
+     * Even inside the agent view, where the shell otherwise owns the
+     * keyboard, the content model keeps its own chords.
+     *
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testChatOwnedChordsSurviveTheAgentsPane(): void
+    {
+        $app = $this->createApp(Pane::Agents);
+
+        $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'p', ctrl: true), $app));
+        $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Tab, ctrl: true), $app));
+    }
+
+    /**
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testShellCtrlChordsAreClaimed(): void
+    {
+        $app = $this->createApp(Pane::Chat);
+
+        $expected = [
+            'n' => NewSessionCmd::class,
+            'g' => GroupInputCmd::class,
+            'k' => CommandPaletteCmd::class,
+            's' => SourceSkillCmd::class,
+        ];
+
+        foreach ($expected as $rune => $cmdClass) {
+            $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: true), $app);
+            $this->assertNotNull($handled, "ctrl+{$rune} must be claimed by the shell");
+            $this->assertInstanceOf($cmdClass, $handled[1]);
+        }
+
+        $settings = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, ',', ctrl: true), $app);
+        $this->assertNotNull($settings);
+        $this->assertSame(Pane::Settings, $settings[0]->pane);
+    }
+
+    /**
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testAgentsPaneClaimsItsQuickActionKeys(): void
+    {
+        $app = $this->createApp(Pane::Agents)->withSelectedAgentIndex(2);
+
+        $cancel = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'c'), $app);
+        $this->assertNotNull($cancel);
+        $this->assertInstanceOf(CancelAgentCmd::class, $cancel[1]);
+
+        $resume = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'r'), $app);
+        $this->assertNotNull($resume);
+        $this->assertInstanceOf(ResumeAgentCmd::class, $resume[1]);
+
+        $stop = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 's'), $app);
+        $this->assertNotNull($stop);
+        $this->assertInstanceOf(StopAllAgentsCmd::class, $stop[1]);
+
+        $quit = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'q'), $app);
+        $this->assertNotNull($quit);
+        $this->assertInstanceOf(QuitAgentViewCmd::class, $quit[1]);
+        $this->assertSame(Pane::Chat, $quit[0]->pane);
+    }
+
+    /**
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testAgentsPaneClaimsListNavigation(): void
+    {
+        $app = $this->createApp(Pane::Agents);
+
+        $down = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Down), $app);
+        $this->assertNotNull($down);
+        $this->assertSame(0, $down[0]->selectedAgentIndex);
+
+        $again = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Down), $down[0]);
+        $this->assertNotNull($again);
+        $this->assertSame(1, $again[0]->selectedAgentIndex);
+    }
+
+    /**
+     * Escape means "cancel the running turn" / "close the palette" to Chat,
+     * so the shell only claims it when it has a pane to return FROM.
+     *
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testEscapeIsClaimedOnlyOutsideTheChatPane(): void
+    {
+        $this->assertNull(
+            $this->handler->handleKeyMsg(new KeyMsg(KeyType::Escape), $this->createApp(Pane::Chat)),
+        );
+
+        $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Escape), $this->createApp(Pane::Settings));
+        $this->assertNotNull($handled);
+        $this->assertSame(Pane::Chat, $handled[0]->pane);
+    }
+
+    /**
+     * @see KeyboardHandler::handleKeyMsg()
+     */
+    public function testAnOpenMenuOwnsTheKeyboard(): void
+    {
+        $reflection = new ReflectionClass(MenuBar::class);
+        $property = $reflection->getProperty('activeMenu');
+        $property->setAccessible(true);
+        $property->setValue(null, 1);
+
+        // A plain letter that would otherwise be typed into the chat input.
+        $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'z'), $this->createApp(Pane::Chat));
+        $this->assertNotNull($handled, 'an open menu claims every non-Chat-owned key');
     }
 }

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\App;
 
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg as CoreMsg;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\View;
@@ -24,6 +25,7 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tui\AgentViewMode;
+use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use DateTimeImmutable;
@@ -375,10 +377,14 @@ final class App implements Model
      * `Msg` now extends the core marker, so every existing caller still
      * type-checks.
      *
-     * Agent-view transitions (list/peek/attach) are shell-level too but do
-     * not arrive as a Msg: {@see \SugarCraft\Crush\Tui\KeyboardHandler}
-     * applies them to the App directly. Routing that handler ahead of this
-     * delegation is W3.M3's step, not this one.
+     * Keypresses are the third case, because agent-view transitions
+     * (list/peek/attach) and pane focus are shell-level but never arrive as a
+     * Msg — {@see KeyboardHandler} applies them to the App directly. A
+     * {@see KeyMsg} therefore goes to {@see dispatchKey()} FIRST, and falls
+     * through to the hosted chat untouched whenever the shell does not claim
+     * it. That fallthrough is load-bearing: the palette, the "/" menu,
+     * Ctrl+O, Escape-to-cancel, history recall and the mouse chain all live
+     * on `Chat`, and a shell that answered every key would swallow them.
      *
      * Element 1 is always `null` or a `\Closure` — never this namespace's
      * {@see Cmd}. See {@see dispatch()} for why, and for where the engine's
@@ -397,8 +403,52 @@ final class App implements Model
             $msg instanceof StatusMsg,
             $msg instanceof OpenSkillPickerMsg,
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
+            $msg instanceof KeyMsg => $this->handleKey($msg),
             default => $this->delegateToChat($msg),
         };
+    }
+
+    /**
+     * Offer a keypress to the pane shell, falling through to the hosted chat.
+     *
+     * The shell's {@see \SugarCraft\Crush\Tui\Commands\KeyCmd} is dropped here for the same reason
+     * {@see withoutEngineCmd()} drops the engine's: it is a declarative
+     * instruction object, not the `Closure(): ?Msg` candy-core's
+     * `Program::scheduleCmd()` accepts. {@see dispatchKey()} is the entry
+     * point that still reports it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleKey(KeyMsg $msg): array
+    {
+        $handled = $this->dispatchKey($msg);
+
+        if ($handled === null) {
+            return $this->delegateToChat($msg);
+        }
+
+        return [$handled[0], null];
+    }
+
+    /**
+     * Apply a keypress through {@see KeyboardHandler}, reporting the shell's
+     * own {@see \SugarCraft\Crush\Tui\Commands\KeyCmd}.
+     *
+     * Returns null — not `[$this, null]` — when the shell does not claim the
+     * key, so callers can tell "the shell handled it and nothing changed"
+     * apart from "this key is not the shell's". {@see update()} relies on
+     * that distinction to route unclaimed keys into {@see Chat}.
+     *
+     * Disclosure: the returned Cmd is inert today. Nothing in `src/` or
+     * `bin/` consumes a `Cmd` object yet (see {@see userInvocableSkills()});
+     * this method exists so a future driver has one place to read them from,
+     * and so tests can assert which command a shell key produces.
+     *
+     * @return array{0: self, 1: ?object}|null
+     */
+    public function dispatchKey(KeyMsg $msg): ?array
+    {
+        return (new KeyboardHandler())->handleKeyMsg($msg, $this);
     }
 
     /**

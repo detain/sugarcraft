@@ -24,6 +24,8 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
+use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
+use SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 
@@ -420,5 +422,102 @@ final class AppModelTest extends TestCase
         $view = $app->view();
 
         return $view instanceof View ? $view->body : $view;
+    }
+
+    // =====================================================================
+    // update(): shell keys first, every other key straight to Chat
+    // (crush_feat.md section 5 E7, merge branch -- W3.M2)
+    // =====================================================================
+
+    public function testShellClaimedKeyNeverReachesTheHostedChat(): void
+    {
+        $chat = new Chat();
+        $app = $this->app()->withChat($chat);
+
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Tab));
+
+        $this->assertSame(Pane::Input, $next->pane);
+        $this->assertNull($cmd);
+        // Tab must not have been typed into, or otherwise seen by, the chat.
+        $this->assertSame($chat, $next->chat);
+        $this->assertSame('', $next->chat->inputBuf);
+    }
+
+    public function testUnclaimedKeyStillReachesTheHostedChat(): void
+    {
+        $app = $this->app()->withChat(new Chat());
+
+        // 's' is a shell quick-action inside the agent view; in the chat pane
+        // it is just a letter, and swallowing it here is exactly the failure
+        // the fallthrough exists to prevent.
+        [$next] = $app->update(new KeyMsg(KeyType::Char, 's'));
+
+        $this->assertSame('s', $next->chat->inputBuf);
+        $this->assertSame(Pane::Chat, $next->pane);
+    }
+
+    public function testChatOwnedChordBeatsTheShellBinding(): void
+    {
+        $app = $this->app()->withChat(new Chat());
+
+        // Ctrl+P is KeyboardHandler's ProviderSelectCmd AND Chat's command
+        // palette. Chat wins: the palette is the live, working binding.
+        [$chatOnly] = $app->chat->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        [$next] = $app->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+
+        $this->assertNotSame($app->chat, $next->chat, 'ctrl+p must have opened the palette');
+        $this->assertEquals($chatOnly, $next->chat);
+        $this->assertSame('', $next->chat->inputBuf, 'ctrl+p must not type a literal "p"');
+        $this->assertSame(Pane::Chat, $next->pane);
+    }
+
+    public function testAgentViewKeysDriveTheShellNotTheChat(): void
+    {
+        $chat = new Chat();
+        $app = $this->app()->withChat($chat)->withPane(Pane::Agents);
+
+        [$next] = $app->update(new KeyMsg(KeyType::Char, 'q'));
+
+        $this->assertSame(Pane::Chat, $next->pane);
+        $this->assertSame($chat, $next->chat);
+        $this->assertSame('', $next->chat->inputBuf);
+    }
+
+    public function testKeyRoutingWorksWithoutAHostedChat(): void
+    {
+        $app = $this->app();
+
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame($app, $next);
+        $this->assertNull($cmd);
+
+        [$shell] = $app->update(new KeyMsg(KeyType::Tab));
+        $this->assertSame(Pane::Input, $shell->pane);
+    }
+
+    public function testDispatchKeyReportsTheShellCmdAndNullForUnclaimedKeys(): void
+    {
+        $app = $this->app();
+
+        $handled = $app->dispatchKey(new KeyMsg(KeyType::Char, 'n', ctrl: true));
+        $this->assertNotNull($handled);
+        $this->assertInstanceOf(NewSessionCmd::class, $handled[1]);
+
+        $quit = $app->withPane(Pane::Agents)->dispatchKey(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($quit);
+        $this->assertInstanceOf(QuitAgentViewCmd::class, $quit[1]);
+
+        // Unclaimed: the caller must be able to tell this apart from a
+        // claimed no-op, or it cannot know to fall through to Chat.
+        $this->assertNull($app->dispatchKey(new KeyMsg(KeyType::Char, 'x')));
+    }
+
+    public function testShellKeyCmdIsNotForwardedToTheProgram(): void
+    {
+        // A KeyCmd is not a Closure(): ?Msg, so Program::scheduleCmd() would
+        // TypeError on it -- update() must drop it. See App::handleKey().
+        [, $cmd] = $this->app()->withChat(new Chat())->update(new KeyMsg(KeyType::Char, 'n', ctrl: true));
+
+        $this->assertNull($cmd);
     }
 }
