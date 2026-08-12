@@ -57,14 +57,14 @@ final class McpAuthCommand
             echo "\n";
             echo "  No MCP servers registered.\n";
             echo "\n";
-            echo "  Run \033[33mmcp auth add <server>\033[0m to register a server.\n";
+            echo "  Run `mcp auth add` *<server>* to register a server.\n";
             echo "\n";
 
             return 0;
         }
 
         echo "\n";
-        echo "  \033[1mMCP Servers\033[0m\n";
+        echo "  **MCP Servers**\n";
         echo "  " . str_repeat("─", 60) . "\n";
 
         foreach ($servers as $serverUrl => $status) {
@@ -118,10 +118,10 @@ final class McpAuthCommand
 
         if ($registrationUrl === null || $tokenUrl === null) {
             echo "\n";
-            echo "  \033[33m!\033[0m OAuth endpoints could not be discovered for \033[36m{$serverUrl}\033[0m.\n";
+            echo "  ! OAuth endpoints could not be discovered for `{$serverUrl}`.\n";
             echo "\n";
             echo "  Please provide them explicitly:\n";
-            echo "    \033[33mmcp auth add {$serverUrl} <registration-url> <token-url>\033[0m\n";
+            echo "    `mcp auth add {$serverUrl}` *<registration-url>* *<token-url>*\n";
             echo "\n";
 
             return 1;
@@ -154,14 +154,14 @@ final class McpAuthCommand
             $oauth->saveAuth($serverUrl, $entry);
 
             echo "\n";
-            echo "  \033[32m✓\033[0m Successfully registered \033[36m{$serverUrl}\033[0m\n";
-            echo "  Client ID: \033[33m{$registered['clientId']}\033[0m\n";
+            echo "  ✓ Successfully registered `{$serverUrl}`\n";
+            echo "  Client ID: `{$registered['clientId']}`\n";
             echo "\n";
 
             return 0;
         } catch (\Throwable $e) {
             echo "\n";
-            echo "  \033[31m✗\033[0m Registration failed: {$e->getMessage()}\n";
+            echo "  ✗ Registration failed: {$e->getMessage()}\n";
             echo "\n";
 
             return 1;
@@ -183,7 +183,7 @@ final class McpAuthCommand
 
         if (!$this->authStore->hasServer($serverUrl)) {
             echo "\n";
-            echo "  \033[33m!\033[0m No credentials found for \033[36m{$serverUrl}\033[0m.\n";
+            echo "  ! No credentials found for `{$serverUrl}`.\n";
             echo "\n";
 
             return 1;
@@ -192,7 +192,7 @@ final class McpAuthCommand
         $this->authStore->removeServer($serverUrl);
 
         echo "\n";
-        echo "  \033[32m✓\033[0m Removed credentials for \033[36m{$serverUrl}\033[0m\n";
+        echo "  ✓ Removed credentials for `{$serverUrl}`\n";
         echo "\n";
 
         return 0;
@@ -245,11 +245,11 @@ final class McpAuthCommand
     private function formatStatus(string $label): string
     {
         return match ($label) {
-            'active' => "\033[32m● active\033[0m",
-            'expired' => "\033[31m○ expired\033[0m",
-            'expiring soon' => "\033[33m● expiring soon\033[0m",
-            'no credentials' => "\033[90m○ no credentials\033[0m",
-            default => "\033[90m{$label}\033[0m",
+            'active' => '**● active**',
+            'expired' => '**○ expired**',
+            'expiring soon' => '**● expiring soon**',
+            'no credentials' => "○ no credentials",
+            default => "{$label}",
         };
     }
 
@@ -259,7 +259,7 @@ final class McpAuthCommand
     private function printError(string $message): int
     {
         echo "\n";
-        echo "  \033[31m✗\033[0m {$message}\n";
+        echo "  ✗ {$message}\n";
         echo "\n";
         echo "  Usage:\n";
         echo "    mcp auth list                    — list registered servers\n";

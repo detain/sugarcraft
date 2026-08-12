@@ -456,7 +456,14 @@ final class Chat implements Model
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === "\x03" /* ^C */) {
+        // BOTH encodings of Ctrl+C. candy-core's InputReader normalizes every
+        // control byte 0x01-0x1a into (Char, chr(0x60 + code), ctrl: true), so
+        // the real terminal delivers ^C as rune 'c' WITH the ctrl flag and
+        // never as the raw "\x03" this used to test for alone -- which meant
+        // Ctrl+C could not quit the app on the live path at all. The raw rune
+        // is still accepted for callers that synthesize a KeyMsg directly.
+        if ($msg->type === KeyType::Char
+            && ($msg->rune === "\x03" || ($msg->ctrl && $msg->rune === 'c'))) {
             return [$this, Cmd::quit()];
         }
         // A blocking permission prompt owns the keyboard while it is up, and

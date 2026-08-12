@@ -162,7 +162,7 @@ final class ShareCommand
     private function printNotImplemented(string $reason): void
     {
         echo "\n";
-        echo "  \033[33m!\033[0m /share is not yet implemented. No data was uploaded.\n";
+        echo "  ! `/share` is not yet implemented. No data was uploaded.\n";
         echo "  ({$reason})\n";
         echo "\n";
     }
@@ -173,7 +173,7 @@ final class ShareCommand
     private function printError(string $message): void
     {
         echo "\n";
-        echo "  \033[31m✗\033[0m {$message}\n";
+        echo "  ✗ {$message}\n";
         echo "\n";
         echo "  Usage: /share [format] [expiry]\n";
         echo "\n";
