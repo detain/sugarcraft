@@ -436,7 +436,7 @@ final class AppModelTest extends TestCase
 
         [$next, $cmd] = $app->update(new KeyMsg(KeyType::Tab));
 
-        $this->assertSame(Pane::Input, $next->pane);
+        $this->assertSame(Pane::Files, $next->pane);
         $this->assertNull($cmd);
         // Tab must not have been typed into, or otherwise seen by, the chat.
         $this->assertSame($chat, $next->chat);
@@ -492,7 +492,7 @@ final class AppModelTest extends TestCase
         $this->assertNull($cmd);
 
         [$shell] = $app->update(new KeyMsg(KeyType::Tab));
-        $this->assertSame(Pane::Input, $shell->pane);
+        $this->assertSame(Pane::Files, $shell->pane);
     }
 
     public function testDispatchKeyReportsTheShellCmdAndNullForUnclaimedKeys(): void

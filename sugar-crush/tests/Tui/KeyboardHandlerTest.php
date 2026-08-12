@@ -90,7 +90,7 @@ final class KeyboardHandlerTest extends TestCase
         $app = $this->createApp(Pane::Chat);
         [$nextApp, $cmd] = $this->handler->handle('tab', $app);
 
-        $this->assertSame(Pane::Input, $nextApp->pane);
+        $this->assertSame(Pane::Files, $nextApp->pane);
         $this->assertNull($cmd);
     }
 
@@ -99,38 +99,15 @@ final class KeyboardHandlerTest extends TestCase
      */
     public function testTabCyclesThroughAllPanes(): void
     {
-        // Chat -> Input
+        // Exactly the panes the tab strip advertises, in strip order. Tab
+        // used to walk Input/Settings/Help too -- panes absent from the strip
+        // with no renderer behind them.
         $app = $this->createApp(Pane::Chat);
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Input, $app->pane);
 
-        // Input -> Files
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Files, $app->pane);
-
-        // Files -> Tools
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Tools, $app->pane);
-
-        // Tools -> Skills
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Skills, $app->pane);
-
-        // Skills -> Agents
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Agents, $app->pane);
-
-        // Agents -> Settings
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Settings, $app->pane);
-
-        // Settings -> Help
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Help, $app->pane);
-
-        // Help -> Chat (cycle complete)
-        [$app] = $this->handler->handle('tab', $app);
-        $this->assertSame(Pane::Chat, $app->pane);
+        foreach ([Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Chat] as $expected) {
+            [$app] = $this->handler->handle('tab', $app);
+            $this->assertSame($expected, $app->pane);
+        }
     }
 
     /**
@@ -929,7 +906,7 @@ final class KeyboardHandlerTest extends TestCase
         $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Tab), $this->createApp(Pane::Chat));
 
         $this->assertNotNull($handled);
-        $this->assertSame(Pane::Input, $handled[0]->pane);
+        $this->assertSame(Pane::Files, $handled[0]->pane);
         $this->assertNull($handled[1]);
     }
 

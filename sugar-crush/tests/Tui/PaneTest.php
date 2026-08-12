@@ -40,19 +40,30 @@ final class PaneTest extends TestCase
     }
 
     /**
-     * @testdox next() cycles correctly from each pane
-     * Cycle: Chat → Input → Files → Tools → Skills → Agents → Settings → Help → Chat
+     * @testdox next() cycles exactly the panes the tab strip advertises
+     * Cycle: Chat → Files → Tools → Skills → Agents → Chat
+     *
+     * This once walked all eight cases, so Tab stopped on Input, Settings
+     * and Help — none of which appear in MenuBar::PANE_TABS and none of
+     * which has a renderer, stranding the user on a pane the UI never
+     * offered and that draws nothing.
      */
     public function testNextCyclesCorrectly(): void
     {
-        $this->assertSame(Pane::Input, Pane::Chat->next());
-        $this->assertSame(Pane::Files, Pane::Input->next());
+        $this->assertSame(Pane::Files, Pane::Chat->next());
         $this->assertSame(Pane::Tools, Pane::Files->next());
         $this->assertSame(Pane::Skills, Pane::Tools->next());
         $this->assertSame(Pane::Agents, Pane::Skills->next());
-        $this->assertSame(Pane::Settings, Pane::Agents->next());
-        $this->assertSame(Pane::Help, Pane::Settings->next());
+        $this->assertSame(Pane::Chat, Pane::Agents->next());
+    }
+
+    /** Panes outside the strip are not somewhere Tab can leave you. */
+    public function testNonTabPanesReturnToChat(): void
+    {
+        $this->assertSame(Pane::Chat, Pane::Input->next());
+        $this->assertSame(Pane::Chat, Pane::Settings->next());
         $this->assertSame(Pane::Chat, Pane::Help->next());
+        $this->assertSame(Pane::Chat, Pane::Menu->next());
     }
 
     /**
@@ -62,8 +73,8 @@ final class PaneTest extends TestCase
     {
         $pane = Pane::Chat;
 
-        // 8 transitions to complete a full cycle back to Chat
-        for ($i = 0; $i < 8; $i++) {
+        // 5 transitions: one per advertised tab
+        for ($i = 0; $i < 5; $i++) {
             $pane = $pane->next();
         }
 

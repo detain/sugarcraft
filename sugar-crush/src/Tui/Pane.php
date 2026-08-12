@@ -32,16 +32,20 @@ enum Pane: string
      */
     public function next(): self
     {
+        // Cycles exactly the panes the bar advertises as tabs
+        // (MenuBar::PANE_TABS), and nothing else. Tab used to walk all eight
+        // cases, so it stopped on Input, Settings and Help -- none of which
+        // appear in the tab strip and none of which has a renderer, leaving
+        // the user on a pane the UI never offered and that draws nothing.
+        // Those cases still exist for their own uses; they are just not
+        // somewhere Tab can strand you.
         return match ($this) {
-            self::Chat => self::Input,
-            self::Input => self::Files,
+            self::Chat => self::Files,
             self::Files => self::Tools,
             self::Tools => self::Skills,
             self::Skills => self::Agents,
-            self::Agents => self::Settings,
-            self::Settings => self::Help,
-            self::Help => self::Chat,
-            self::Menu => self::Chat,
+            self::Agents => self::Chat,
+            self::Input, self::Settings, self::Help, self::Menu => self::Chat,
         };
     }
 
