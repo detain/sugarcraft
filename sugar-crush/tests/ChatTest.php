@@ -3643,4 +3643,144 @@ final class ChatTest extends TestCase
         // Dropped by mutate() and every poll re-announces every session.
         $this->assertSame(['s1' => 'running'], $sized->backgroundStatuses());
     }
+
+    // ---------------------------------------------------------------
+    // Live session picker (crush_feat.md section 5 E8)
+    // ---------------------------------------------------------------
+
+    /** A store carrying two named sessions, ready to be picked between. */
+    private function pickerStore(): SessionStore
+    {
+        $store = new SessionStore(':memory:');
+        $store->createSession('sess-a', 'sugarcrush', 'test-model', null, 'Alpha');
+        $store->createSession('sess-b', 'sugarcrush', 'test-model', null, 'Beta');
+
+        return $store;
+    }
+
+    /** A Chat with the picker already open over {@see pickerStore()}. */
+    private function chatWithOpenPicker(): Chat
+    {
+        $chat = new Chat(
+            sessionStore: $this->pickerStore(),
+            currentSessionId: 'sess-a',
+        );
+
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        self::assertNotNull($opened->sessionPicker(), 'Ctrl+R did not open the picker');
+
+        return $opened;
+    }
+
+    public function testCtrlROpensTheSessionPicker(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        $this->assertSame(2, $opened->sessionPicker()?->count());
+        // The chord must not also type an "r" into the input box.
+        $this->assertSame('', $opened->inputBuf);
+    }
+
+    public function testCtrlRIsANoOpWithoutASessionStore(): void
+    {
+        [$next] = (new Chat())->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+
+        $this->assertNull($next->sessionPicker());
+    }
+
+    public function testCtrlRIsANoOpWhenTheStoreHasNoSessions(): void
+    {
+        $chat = new Chat(sessionStore: new SessionStore(':memory:'));
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+
+        $this->assertNull($next->sessionPicker(), 'an empty picker modal is worse than none');
+    }
+
+    public function testArrowKeysNavigateTheOpenPicker(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$down] = $opened->update(new KeyMsg(KeyType::Down, ''));
+
+        $this->assertSame(1, $down->sessionPicker()?->selectedIndex());
+        $this->assertSame('', $down->inputBuf);
+
+        [$up] = $down->update(new KeyMsg(KeyType::Up, ''));
+
+        $this->assertSame(0, $up->sessionPicker()?->selectedIndex());
+    }
+
+    public function testEnterResumesTheHighlightedSessionAndClosesThePicker(): void
+    {
+        // Browse to whichever row is NOT the current session, so the assert
+        // below proves a real switch rather than a re-select of sess-a.
+        // listSessions()'s ordering decides which index that is.
+        $down = $this->chatWithOpenPicker();
+        for ($i = 0; $i < 2 && $down->sessionPicker()?->selectedSession()['sessionId'] === 'sess-a'; $i++) {
+            [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
+        }
+
+        $selected = $down->sessionPicker()?->selectedSession();
+        $this->assertIsArray($selected);
+        $resumedId = $selected['sessionId'];
+        $this->assertSame('sess-b', $resumedId);
+
+        [$resumed, $cmd] = $down->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertNull($resumed->sessionPicker());
+        $this->assertSame($resumedId, $resumed->currentSessionId());
+        $this->assertNotSame('sess-a', $resumed->currentSessionId());
+        $this->assertSame('Beta', $resumed->currentSessionName());
+        // The stored name is latched so the auto-titler leaves it alone.
+        $this->assertNotNull($resumed->currentSessionName());
+        $this->assertStringContainsString(
+            'Resumed session',
+            $resumed->history[count($resumed->history) - 1]->content,
+        );
+    }
+
+    public function testSpacePreviewsWithoutClosingThePicker(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$previewed] = $opened->update(new KeyMsg(KeyType::Space, ''));
+
+        $this->assertNotNull($previewed->sessionPicker());
+        // Space must not leak into the input box the user cannot see.
+        $this->assertSame('', $previewed->inputBuf);
+    }
+
+    public function testEscapeClosesThePickerInsteadOfCancellingTheTurn(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$closed] = $opened->update(new KeyMsg(KeyType::Escape, ''));
+
+        $this->assertNull($closed->sessionPicker());
+        $this->assertSame($opened->currentSessionId(), $closed->currentSessionId());
+    }
+
+    public function testUnboundKeysAreSwallowedWhileThePickerIsOpen(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$typed] = $opened->update(new KeyMsg(KeyType::Char, 'z'));
+
+        $this->assertSame('', $typed->inputBuf, 'a hidden input box must not collect keystrokes');
+        $this->assertNotNull($typed->sessionPicker());
+    }
+
+    public function testOpenPickerSurvivesUnrelatedStateTransitions(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        // mutate() rebuilds Chat from its constructorProps map on EVERY
+        // transition - a field missing from that map is silently dropped.
+        [$sized] = $opened->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+
+        $this->assertNotNull($sized->sessionPicker());
+        $this->assertSame(2, $sized->sessionPicker()?->count());
+    }
 }

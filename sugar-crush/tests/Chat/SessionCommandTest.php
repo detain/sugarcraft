@@ -180,11 +180,12 @@ final class SessionCommandTest extends TestCase
     }
 
     // =========================================================================
-    // /sessions command (R20): constructs + renders the real SessionPicker
-    // against SessionStore::listSessions().
+    // /sessions command (section 5 E8): opens the LIVE SessionPicker overlay
+    // built from SessionStore::listSessions(), instead of folding the
+    // picker's first frame into a chat message.
     // =========================================================================
 
-    public function testSessionsCommandRendersRealSessionPicker(): void
+    public function testSessionsCommandOpensLiveSessionPicker(): void
     {
         $this->sessionStore->createSession('session-a', 'openai', 'gpt-4', null, 'Alpha');
         $this->sessionStore->createSession('session-b', 'openai', 'gpt-4', null, 'Beta');
@@ -202,14 +203,47 @@ final class SessionCommandTest extends TestCase
         $this->assertFalse($next->inFlight);
         $lastMsg = $next->history[count($next->history) - 1];
         $this->assertSame(Role::Assistant, $lastMsg->role);
+        $this->assertStringContainsString('Session picker open', $lastMsg->content);
 
-        // Distinctive SessionPicker markup (its own title/controls text),
-        // not a hand-rolled list — proves SessionPicker::new()->render()
-        // actually ran against the real SessionStore rows.
-        $this->assertStringContainsString('session picker', $lastMsg->content);
-        $this->assertStringContainsString('Alpha', $lastMsg->content);
-        $this->assertStringContainsString('Beta', $lastMsg->content);
-        $this->assertStringContainsString('resume', $lastMsg->content);
+        // The picker is now PERSISTED on the model (E8's whole point) and
+        // was built from the real SessionStore rows.
+        $picker = $next->sessionPicker();
+        $this->assertNotNull($picker);
+        $this->assertSame(2, $picker->count());
+        $rendered = $picker->render(80, 24);
+        $this->assertStringContainsString('Alpha', $rendered);
+        $this->assertStringContainsString('Beta', $rendered);
+    }
+
+    // A session name is model output on the live path (auto-titling writes
+    // it), and the picker's frame reaches the screen without a second strip
+    // — so a smuggled zone sentinel would register attacker-chosen hit boxes.
+    public function testSessionPickerStripsZoneSentinelsFromStoredNames(): void
+    {
+        $this->sessionStore->createSession(
+            'session-a',
+            'openai',
+            'gpt-4',
+            "\xEE\x80\x80" . 'evil' . "\xEE\x80\x81" . 'prompt',
+            "Al\xEE\x80\x80pha\x1b[31m",
+        );
+
+        $chat = new Chat(
+            history: [],
+            inputBuf: '/sessions',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'session-a',
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $picker = $next->sessionPicker();
+        $this->assertNotNull($picker);
+        $rendered = $picker->render(80, 24);
+        $this->assertStringNotContainsString("\xEE\x80\x80", $rendered);
+        $this->assertStringNotContainsString("\xEE\x80\x81", $rendered);
+        $this->assertStringContainsString('Alpha', $rendered);
     }
 
     public function testSessionsCommandNotConfigured(): void
