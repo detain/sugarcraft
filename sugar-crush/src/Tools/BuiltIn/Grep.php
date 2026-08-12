@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Grep implements Tool
 {
+    use CapturesProcessOutput;
+
     public function __construct(
         private ?string $root = null,
     ) {}
@@ -77,12 +80,15 @@ final readonly class Grep implements Tool
             $cmd .= ' --include=' . escapeshellarg($include);
         }
         $cmd .= ' ' . escapeshellarg($pattern) . ' ' . escapeshellarg($path);
-        exec($cmd, $output, $exitCode);
+        // See Bash::execute() -- exec() leaks the child's stderr onto the
+        // terminal underneath the TUI. grep exits 1 for "no matches", which
+        // is a normal outcome rather than an error.
+        $run = $this->runCaptured($cmd);
 
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: implode("\n", $output),
-            isError: $exitCode !== 0,
+            content: $this->mergeCapturedOutput($run),
+            isError: $run['exitCode'] > 1,
         );
     }
 }

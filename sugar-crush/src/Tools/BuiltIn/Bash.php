@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
+use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -29,6 +30,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  */
 final readonly class Bash implements Tool
 {
+    use CapturesProcessOutput;
+
     public function __construct(
         private ?string $root = null,
         private ?AgentPathJail $worktreeJail = null,
@@ -72,11 +75,16 @@ final readonly class Bash implements Tool
         } else {
             $cmd = "bash -c " . escapeshellarg($command);
         }
-        exec($cmd, $output, $exitCode);
+        // runCaptured(), not exec(): exec() leaves the child's stderr
+        // attached to the real terminal, so a command that writes there
+        // paints outside the TUI frame -- and the model never sees the
+        // reason a command failed.
+        $run = $this->runCaptured($cmd);
+
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: implode("\n", $output),
-            isError: $exitCode !== 0,
+            content: $this->mergeCapturedOutput($run),
+            isError: $run['exitCode'] !== 0,
         );
     }
 }
