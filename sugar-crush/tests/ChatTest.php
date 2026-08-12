@@ -2190,6 +2190,188 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('provider exploded', $final->history[count($final->history) - 1]->content);
     }
 
+    // ---------------------------------------------------------------
+    // Live tool-event pump (crush_feat.md §1 E1, F.PROGRESS)
+    // ---------------------------------------------------------------
+
+    public function testToolEventsReachTheTranscriptWhileTheTurnIsStillRunning(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $backend = $this->pendingEventBackend();
+        $chat = new Chat(backend: $backend, inputBuf: 'list files');
+
+        [$afterSubmit, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $cmd();
+        $this->assertNotNull($backend->emit, 'the backend never received the $onEvent seam');
+
+        // The provider has NOT answered yet: before the live pump, an event
+        // reported here sat in a closure-local array that nothing could reach
+        // until the turn's promise settled, so the user watched a bare
+        // "thinking…" spinner for the whole of a multi-round tool turn.
+        ($backend->emit)(ToolStarted::fromCall($call));
+        $this->assertTrue($afterSubmit->inFlight);
+
+        [$running, $more] = $afterSubmit->update(new \SugarCraft\Crush\ToolEventPumpMsg());
+        $placeholder = $running->history[count($running->history) - 1];
+        $this->assertSame('call_1', $placeholder->pendingToolCallId);
+        $this->assertStringContainsString('running: bash(command: "ls")', \SugarCraft\Crush\Renderer::render($running));
+        $this->assertNull($more, 'nothing else was queued, so the pump should not re-schedule');
+
+        ($backend->emit)(ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')));
+        [$done] = $running->update(new \SugarCraft\Crush\ToolEventPumpMsg());
+
+        $this->assertSame([], array_filter($done->history, static fn (Message $m): bool => $m->pendingToolCallId !== null));
+        $withResults = array_values(array_filter($done->history, static fn (Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $this->assertSame('a.txt', $withResults[0]->toolResults[0]->result);
+        // Still mid-turn: the reply has not arrived and must not be faked.
+        $this->assertTrue($done->inFlight);
+    }
+
+    public function testSubscriptionsDeclareTheToolEventPumpWhileATurnIsInFlight(): void
+    {
+        $subs = (new Chat(inFlight: true))->subscriptions();
+
+        $this->assertNotNull($subs);
+        $this->assertTrue($subs->has('crush.tool-event-poll'));
+
+        $sub = $subs->all()[0];
+        $this->assertSame(\SugarCraft\Core\Kind::Tick, $sub->kind);
+        $this->assertSame(0.1, $sub->params['seconds']);
+        $this->assertInstanceOf(\SugarCraft\Crush\ToolEventPumpMsg::class, ($sub->produce)());
+    }
+
+    public function testToolEventPumpSubscriptionIsDroppedOnceTheInboxIsEmptyAndTheTurnIsOver(): void
+    {
+        // An unconditional 10Hz timer would repaint an idle chat forever.
+        $this->assertNull((new Chat())->subscriptions());
+
+        // A leftover event with no turn behind it still gets a wake-up -
+        // otherwise it would sit in the inbox until the next submit.
+        $idle = new Chat();
+        $idle->enqueueToolEvent(ToolStarted::fromCall(new EngineToolCall('call_1', 'bash', [])));
+        $subs = $idle->subscriptions();
+        $this->assertNotNull($subs);
+        $this->assertTrue($subs->has('crush.tool-event-poll'));
+    }
+
+    public function testToolEventPumpAppliesOneEventPerUpdateAndReSchedulesForTheRest(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(history: [Message::user('list files')]);
+        $chat->enqueueToolEvent(ToolStarted::fromCall($call));
+        $chat->enqueueToolEvent(ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')));
+
+        [$running, $cmd] = $chat->update(new \SugarCraft\Crush\ToolEventPumpMsg());
+        // One event per update() is what makes the running state a rendered
+        // frame rather than a state the transcript skips straight past.
+        $this->assertSame('call_1', $running->history[count($running->history) - 1]->pendingToolCallId);
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertInstanceOf(\SugarCraft\Crush\ToolEventPumpMsg::class, $cmd());
+
+        [$done, $noMore] = $running->update($cmd());
+        $this->assertSame([], array_filter($done->history, static fn (Message $m): bool => $m->pendingToolCallId !== null));
+        $this->assertNull($noMore);
+        $this->assertSame([], $done->liveToolEvents());
+    }
+
+    public function testToolEventInboxSurvivesMutateSoALaterCloneSeesTheEvent(): void
+    {
+        $chat = new Chat();
+        $chat->enqueueToolEvent(ToolStarted::fromCall(new EngineToolCall('call_1', 'bash', ['command' => 'ls'])));
+
+        // Every field must be threaded through mutate()'s constructorProps map
+        // or it is silently dropped - for the inbox that means the event the
+        // backend appended vanishes the moment the user presses a key.
+        [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertCount(1, $typed->liveToolEvents());
+
+        [$running] = $typed->update(new \SugarCraft\Crush\ToolEventPumpMsg());
+        $this->assertSame('call_1', $running->history[count($running->history) - 1]->pendingToolCallId);
+    }
+
+    public function testStaleQueuedToolEventsAreDroppedButStillDrained(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $chat = new Chat(generation: 7);
+        // An aborted turn's backend can keep reporting for a while.
+        $chat->enqueueToolEvent(ToolStarted::fromCall($call), 3);
+        $chat->enqueueToolEvent(ToolStarted::fromCall($call), 7);
+
+        [$skipped, $cmd] = $chat->update(new \SugarCraft\Crush\ToolEventPumpMsg());
+        $this->assertSame([], $skipped->history, 'a stale event was applied to the live transcript');
+        $this->assertInstanceOf(\Closure::class, $cmd, 'skipping must not strand the events behind it');
+
+        [$applied] = $skipped->update($cmd());
+        $this->assertCount(1, $applied->history);
+    }
+
+    public function testLivePumpedEventsAreNotReplayedWhenTheTurnResolves(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls']);
+        $backend = $this->pendingEventBackend();
+        $chat = new Chat(backend: $backend, inputBuf: 'list files');
+
+        [$afterSubmit, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+
+        ($backend->emit)(ToolStarted::fromCall($call));
+        ($backend->emit)(ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')));
+        $drained = $this->drainBackendEvents($afterSubmit, new \SugarCraft\Crush\ToolEventPumpMsg());
+
+        $backend->deferred->resolve(Message::assistant('there is one file'));
+
+        // Both consumers share ONE inbox and drain it destructively, so a
+        // turn whose events were already shown resolves to a plain
+        // AssistantMsg instead of replaying them under the reply.
+        $this->assertInstanceOf(AssistantMsg::class, $resolved);
+
+        [$final] = $drained->update($resolved);
+        $this->assertCount(
+            1,
+            array_filter($final->history, static fn (Message $m): bool => $m->toolResults !== []),
+            'the tool call was rendered twice',
+        );
+        $this->assertSame('there is one file', $final->history[count($final->history) - 1]->content);
+    }
+
+    /**
+     * A Backend that hands its `$onEvent` seam back to the test (as `$emit`)
+     * and does not settle until the test resolves `$deferred` - the shape of a
+     * real provider turn, where tool events fire long before the reply.
+     */
+    private function pendingEventBackend(): Backend
+    {
+        return new class implements Backend {
+            public ?\Closure $emit = null;
+
+            public \React\Promise\Deferred $deferred;
+
+            public function __construct()
+            {
+                $this->deferred = new \React\Promise\Deferred();
+            }
+
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                return Message::assistant('');
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                $this->emit = $onEvent === null ? null : \Closure::fromCallable($onEvent);
+
+                return $this->deferred->promise();
+            }
+        };
+    }
+
     /**
      * A Backend that reports $events through the $onEvent seam and then either
      * resolves with $reply or rejects with $failure.

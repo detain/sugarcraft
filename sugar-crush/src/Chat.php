@@ -87,6 +87,29 @@ final class Chat implements Model
 {
     private readonly Backend $backend;
 
+    /**
+     * The live tool-event inbox: the ONE deliberately mutable object on this
+     * otherwise immutable model (crush_feat.md §1 E1).
+     *
+     * {@see Backend::completeAsync()}'s `$onEvent` callback fires deep inside
+     * the backend while the turn is still running — for
+     * {@see Backend\EngineBackend} on a ReactPHP readable-stream edge, one
+     * frame per tool call. There is no dispatcher reachable from there and no
+     * way to hand a new Chat back to `Program`, so the callback appends here
+     * and {@see subscriptions()}'s poll wakes `update()` to drain it. Sharing
+     * one instance across every `mutate()` clone is the whole point: an event
+     * appended against the Chat that scheduled the turn has to be visible to
+     * the Chat that is on screen ten keystrokes later.
+     *
+     * Entries are `[generation, event]` pairs so a queue still being filled by
+     * an aborted turn's backend can be dropped rather than applied on top of
+     * whatever the user did since — same staleness contract as
+     * {@see AssistantMsg::$generation}.
+     *
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished}>
+     */
+    private readonly \ArrayObject $liveToolEvents;
+
     /** @var WorkflowEngineInterface|null Optional workflow engine for /workflow command */
     private readonly ?WorkflowEngineInterface $workflowEngine;
 
@@ -189,6 +212,26 @@ final class Chat implements Model
      * enough that a mostly-idle TUI is not repainting on a hot timer.
      */
     private const BACKGROUND_POLL_SECONDS = 2.0;
+
+    /**
+     * Reconciliation id of the live tool-event poll subscription
+     * (crush_feat.md §1 E1). Stable across rebuilds for the same reason
+     * {@see BACKGROUND_POLL_SUBSCRIPTION} is.
+     */
+    private const TOOL_EVENT_POLL_SUBSCRIPTION = 'crush.tool-event-poll';
+
+    /**
+     * How often the live tool-event pump wakes (seconds) while a turn is in
+     * flight.
+     *
+     * Only the LATENCY of noticing a newly queued event, not the drain rate:
+     * once woken, {@see pumpLiveToolEvents()} re-sends itself a
+     * {@see ToolEventPumpMsg} per event, so a burst of ten events drains at
+     * Cmd speed rather than one per tick. A tenth of a second reads as
+     * instant to a human and still leaves the loop idle 99% of a turn spent
+     * waiting on the provider.
+     */
+    private const TOOL_EVENT_POLL_SECONDS = 0.1;
 
     /**
      * @param list<Message> $history
@@ -443,7 +486,18 @@ final class Chat implements Model
          * a dispatch arm the other's routing block already claimed.
          */
         private readonly ?SessionPicker $sessionPicker = null,
+        /**
+         * The shared live tool-event inbox - see the {@see $liveToolEvents}
+         * property docblock for why it is mutable and why every `mutate()`
+         * clone must be handed the SAME instance. Defaulting to null (and
+         * allocating here) keeps every existing embedder/test constructor
+         * call working unchanged.
+         *
+         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished}>|null
+         */
+        ?\ArrayObject $liveToolEvents = null,
     ) {
+        $this->liveToolEvents = $liveToolEvents ?? new \ArrayObject();
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
         $this->agentManager = $agentManager;
@@ -506,6 +560,9 @@ final class Chat implements Model
         }
         if ($msg instanceof BackendToolEventsMsg) {
             return $this->applyBackendToolEvent($msg);
+        }
+        if ($msg instanceof ToolEventPumpMsg) {
+            return $this->pumpLiveToolEvents();
         }
         if ($msg instanceof SessionTitledMsg) {
             // The title call is fire-and-forget: by the time it lands the
@@ -1128,6 +1185,87 @@ final class Chat implements Model
             : $this->replaceToolRunningPlaceholder($event);
 
         return [$next, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+    }
+
+    /**
+     * Append a tool-lifecycle event to the live inbox
+     * ({@see $liveToolEvents}).
+     *
+     * The one mutating public method on this immutable model, and the seam a
+     * {@see Backend}'s `$onEvent` callback writes through: the callback runs
+     * inside the backend, where the Chat instance it could return has nowhere
+     * to go. {@see subscriptions()} polls for what lands here and
+     * {@see pumpLiveToolEvents()} turns it into transcript state.
+     *
+     * @param int|null $generation Turn this event belongs to; entries stamped
+     *                             with a generation other than the one current
+     *                             at drain time are dropped (an aborted turn's
+     *                             backend can keep reporting for a while).
+     *                             Null stamps the Chat's current generation,
+     *                             which is what a caller with no turn of its
+     *                             own (a test, an embedder) wants.
+     */
+    public function enqueueToolEvent(ToolStarted|ToolFinished $event, ?int $generation = null): void
+    {
+        $this->liveToolEvents[] = [$generation ?? $this->generation, $event];
+    }
+
+    /**
+     * Tool-lifecycle events queued by the backend but not yet folded into the
+     * transcript, oldest first.
+     *
+     * @return list<ToolStarted|ToolFinished>
+     */
+    public function liveToolEvents(): array
+    {
+        $events = [];
+        foreach ($this->liveToolEvents as [, $event]) {
+            $events[] = $event;
+        }
+
+        return $events;
+    }
+
+    /**
+     * Drain ONE entry from the live inbox and fold it into the transcript,
+     * re-scheduling itself while anything is left (crush_feat.md §1 E1).
+     *
+     * One event per `update()` for the same reason
+     * {@see applyBackendToolEvent()} does it: each returned Chat is rendered
+     * before the next event is applied, which is what makes an
+     * engine-dispatched call visibly walk from *running* to *done* instead of
+     * appearing already-finished. Now that {@see Backend\EngineBackend}
+     * streams each event the moment it fires rather than replaying the batch
+     * at the end of the turn, that walk happens WHILE the tools run.
+     *
+     * Stale entries are skipped rather than applied, and skipping still
+     * re-schedules, so a queue full of an aborted turn's events empties
+     * instead of blocking the ones behind it.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function pumpLiveToolEvents(): array
+    {
+        $pending = $this->liveToolEvents->getArrayCopy();
+        $entry = array_shift($pending);
+        $this->liveToolEvents->exchangeArray(array_values($pending));
+
+        if ($entry === null) {
+            return [$this, null];
+        }
+
+        [$generation, $event] = $entry;
+        $more = count($this->liveToolEvents) > 0 ? Cmd::send(new ToolEventPumpMsg()) : null;
+
+        if ($generation !== $this->generation) {
+            return [$this, $more];
+        }
+
+        $next = $event instanceof ToolStarted
+            ? $this->appendToolRunningPlaceholder($event)
+            : $this->replaceToolRunningPlaceholder($event);
+
+        return [$next, $more];
     }
 
     /**
@@ -2661,6 +2799,10 @@ final class Chat implements Model
             'backgroundSupervisor' => $this->backgroundSupervisor,
             'backgroundStatuses' => $this->backgroundStatuses,
             'sessionPicker' => $this->sessionPicker,
+            // Passed by object identity on purpose: an event the backend
+            // appends to the turn's inbox has to reach whichever clone is on
+            // screen when the pump next runs.
+            'liveToolEvents' => $this->liveToolEvents,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -2991,27 +3133,31 @@ final class Chat implements Model
         $history = $next->history;
         $onToken = $next->streaming ? $next->onToken : null;
 
-        return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation): PromiseInterface {
-            /** @var list<ToolStarted|ToolFinished> $events */
-            $events = [];
-            $onEvent = static function (ToolStarted|ToolFinished $event) use (&$events): void {
-                $events[] = $event;
+        $inbox = $next->liveToolEvents;
+
+        return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation, $inbox): PromiseInterface {
+            $onEvent = static function (ToolStarted|ToolFinished $event) use ($inbox, $generation): void {
+                $inbox[] = [$generation, $event];
             };
 
-            // Both handlers capture $events BY REFERENCE: the closures are
-            // built before the backend has run, so a by-value capture would
-            // freeze the queue while it is still empty.
+            // Both handlers share the inbox with the LIVE pump
+            // ({@see Chat::pumpLiveToolEvents()}), and both drain it
+            // destructively - so an event is applied exactly once no matter
+            // which of the two got to it first.
             return $backend->completeAsync($history, $onToken, $cancellation, $onEvent)->then(
-                static function (Message $msg) use (&$events, $generation): ?Msg {
+                static function (Message $msg) use ($inbox, $generation): ?Msg {
+                    $events = self::drainToolEventInbox($inbox, $generation);
+
                     return $events === []
                         ? new AssistantMsg($msg, $generation)
                         : new BackendToolEventsMsg($events, $msg, $generation);
                 },
-                static function (\Throwable $e) use (&$events, $generation): ?Msg {
+                static function (\Throwable $e) use ($inbox, $generation): ?Msg {
                     // A turn that failed AFTER running tools still shows what
                     // those tools did - otherwise the placeholders queued for
                     // them would be the only trace and they never even render.
                     $message = Message::assistant('_[error: ' . $e->getMessage() . ']_');
+                    $events = self::drainToolEventInbox($inbox, $generation);
 
                     return $events === []
                         ? new AssistantMsg($message, $generation)
@@ -3019,6 +3165,31 @@ final class Chat implements Model
                 },
             );
         });
+    }
+
+    /**
+     * Take everything this turn queued but the live pump never got to, and
+     * leave the inbox empty.
+     *
+     * Called once per turn, when the backend's promise settles. Events
+     * belonging to some OTHER generation are discarded rather than returned:
+     * they can only be an aborted turn's, and the resolving turn's
+     * {@see BackendToolEventsMsg} would carry them under the wrong stamp.
+     *
+     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished}> $inbox
+     * @return list<ToolStarted|ToolFinished>
+     */
+    private static function drainToolEventInbox(\ArrayObject $inbox, int $generation): array
+    {
+        $events = [];
+        foreach ($inbox as [$eventGeneration, $event]) {
+            if ($eventGeneration === $generation) {
+                $events[] = $event;
+            }
+        }
+        $inbox->exchangeArray([]);
+
+        return $events;
     }
 
     /**
@@ -4798,29 +4969,50 @@ final class Chat implements Model
      * Declare the recurring work this model needs the runtime to drive
      * (crush_feat.md section 5 E4).
      *
-     * Today that is exactly one thing: waking up often enough to run
-     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::tick()}, which
-     * is what flips a session whose heartbeats have stopped to `Stalled`
-     * and back again. Before this returned anything, that method had no
-     * caller on the live path at all.
+     * Two things:
+     *
+     *   - waking up often enough to run
+     *     {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::tick()},
+     *     which is what flips a session whose heartbeats have stopped to
+     *     `Stalled` and back again. Before this returned anything, that
+     *     method had no caller on the live path at all.
+     *   - while a turn is in flight, draining the live tool-event inbox
+     *     ({@see $liveToolEvents}) so engine-dispatched tool calls appear in
+     *     the transcript as they start and finish rather than all at once
+     *     when the turn ends (crush_feat.md §1 E1). This is the wake-up half
+     *     of that mechanism: the backend appends off-loop with no way to
+     *     dispatch a Msg, so something has to come back and look.
      *
      * Returns null - not an empty Subscriptions - whenever there is nothing
      * to poll. `Program` reconciles the set every cycle, so a subscription
      * declared unconditionally would keep a timer waking the event loop (and
-     * re-rendering) forever in the overwhelmingly common case of a user who
-     * has never run `/bg`.
+     * re-rendering) forever in the overwhelmingly common case of an idle chat
+     * whose user has never run `/bg`. For the same reason the tool-event tick
+     * is dropped the moment the turn ends: outside a turn nothing can append
+     * to the inbox, and anything still in it is drained by the resolving
+     * turn's {@see BackendToolEventsMsg}.
      */
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
-        if ($this->backgroundSupervisor === null || !$this->backgroundSupervisor->hasActiveSessions()) {
-            return null;
+        $subscriptions = null;
+
+        if ($this->backgroundSupervisor !== null && $this->backgroundSupervisor->hasActiveSessions()) {
+            $subscriptions = (new \SugarCraft\Core\Subscriptions())->withTick(
+                self::BACKGROUND_POLL_SUBSCRIPTION,
+                self::BACKGROUND_POLL_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(),
+            );
         }
 
-        return (new \SugarCraft\Core\Subscriptions())->withTick(
-            self::BACKGROUND_POLL_SUBSCRIPTION,
-            self::BACKGROUND_POLL_SECONDS,
-            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(),
-        );
+        if ($this->inFlight || count($this->liveToolEvents) > 0) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::TOOL_EVENT_POLL_SUBSCRIPTION,
+                self::TOOL_EVENT_POLL_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new ToolEventPumpMsg(),
+            );
+        }
+
+        return $subscriptions;
     }
 
     /**
