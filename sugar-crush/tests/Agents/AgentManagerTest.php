@@ -7,6 +7,10 @@ namespace SugarCraft\Crush\Tests\Agents;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Agents\AgentResult;
+use SugarCraft\Crush\Agents\AgentStatus;
+use SugarCraft\Crush\Agents\AgentWorkerPool;
+use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Agents\Team;
 use SugarCraft\Crush\Agents\TeamConfig;
@@ -335,6 +339,217 @@ final class AgentManagerTest extends TestCase
         foreach ($this->agentManager->executeSubAgent('nonexistent-id') as $_) {
             // No-op
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Live telemetry: subAgentsOf() / elapsedSeconds() / tokensUsed() / costUsd()
+    // crush_feat.md §5 E6 -- the render site previously hardcoded 0, 0, 0.0
+    // because no per-agent telemetry accessor existed at all.
+    // -------------------------------------------------------------------------
+
+    public function testTelemetryAccessorsAreZeroForUnknownAgent(): void
+    {
+        $this->assertSame([], $this->agentManager->subAgentsOf('nobody'));
+        $this->assertSame(0, $this->agentManager->elapsedSeconds('nobody'));
+        $this->assertSame(0, $this->agentManager->tokensUsed('nobody'));
+        $this->assertSame(0.0, $this->agentManager->costUsd('nobody'));
+    }
+
+    public function testSubAgentsOfFiltersByOwningAgent(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'alpha'));
+        $this->agentManager->register($this->createAgent(name: 'beta'));
+
+        $first = $this->agentManager->createSubAgent('alpha', 'task one');
+        $second = $this->agentManager->createSubAgent('alpha', 'task two');
+        $this->agentManager->createSubAgent('beta', 'other task');
+
+        $owned = $this->agentManager->subAgentsOf('alpha');
+
+        $this->assertCount(2, $owned);
+        $this->assertSame([$first, $second], $owned);
+    }
+
+    public function testElapsedSecondsIsZeroWhileSubAgentIsStillPending(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'idle-agent'));
+        $this->agentManager->createSubAgent('idle-agent', 'never started');
+
+        $this->assertSame(0, $this->agentManager->elapsedSeconds('idle-agent'));
+    }
+
+    public function testElapsedSecondsSpansEarliestStartToLatestCompletion(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'span-agent'));
+
+        $first = $this->agentManager->createSubAgent('span-agent', 'task one');
+        $first->startedAt = new \DateTimeImmutable('2024-01-15T10:00:00Z');
+        $first->completedAt = new \DateTimeImmutable('2024-01-15T10:00:30Z');
+
+        $second = $this->agentManager->createSubAgent('span-agent', 'task two');
+        $second->startedAt = new \DateTimeImmutable('2024-01-15T10:00:10Z');
+        $second->completedAt = new \DateTimeImmutable('2024-01-15T10:01:15Z');
+
+        // Span, not sum: the two ran concurrently for 30s+65s of individual
+        // elapsed time but the agent was only busy for 75 wall-clock seconds.
+        $this->assertSame(75, $this->agentManager->elapsedSeconds('span-agent'));
+    }
+
+    public function testElapsedSecondsKeepsCountingWhileASubAgentIsStillRunning(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'running-agent'));
+
+        $subAgent = $this->agentManager->createSubAgent('running-agent', 'long task');
+        $subAgent->status = SubAgent::STATUS_STREAMING;
+        $subAgent->startedAt = (new \DateTimeImmutable())->modify('-90 seconds');
+
+        $this->assertGreaterThanOrEqual(90, $this->agentManager->elapsedSeconds('running-agent'));
+    }
+
+    public function testTokensAndCostSumAcrossSubAgents(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'sum-agent'));
+
+        $first = $this->agentManager->createSubAgent('sum-agent', 'task one');
+        $first->tokensUsed = 120;
+        $first->costUsd = 0.25;
+
+        $second = $this->agentManager->createSubAgent('sum-agent', 'task two');
+        $second->tokensUsed = 30;
+        $second->costUsd = 0.05;
+
+        $this->assertSame(150, $this->agentManager->tokensUsed('sum-agent'));
+        $this->assertEqualsWithDelta(0.30, $this->agentManager->costUsd('sum-agent'), 0.0001);
+    }
+
+    public function testExecuteSubAgentStampsStartedAtAndAccumulatesStreamingUsage(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'telemetry-agent'));
+        $subAgent = $this->agentManager->createSubAgent('telemetry-agent', 'Stream usage');
+
+        $this->assertNull($subAgent->startedAt);
+
+        $this->provider->method('supportsStreaming')->willReturn(true);
+        $this->provider->method('completeStream')->willReturn((function (): \Generator {
+            yield new CompleteResponse(content: 'a', tokensUsed: 10, costUsd: 0.01);
+            yield new CompleteResponse(content: 'b', tokensUsed: 5, costUsd: 0.02);
+        })());
+
+        $seenMidFlight = [];
+        foreach ($this->agentManager->executeSubAgent($subAgent->id) as $result) {
+            $seenMidFlight[] = $result->tokensUsed;
+        }
+
+        // Would be [0, 0] / 0 / 0.0 against the pre-E6 code, which never
+        // touched usage at all.
+        $this->assertSame([10, 15], $seenMidFlight);
+        $this->assertInstanceOf(\DateTimeImmutable::class, $subAgent->startedAt);
+        $this->assertSame(15, $this->agentManager->tokensUsed('telemetry-agent'));
+        $this->assertEqualsWithDelta(0.03, $this->agentManager->costUsd('telemetry-agent'), 0.0001);
+    }
+
+    public function testExecuteSubAgentRecordsUsageOnTheNonStreamingPath(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'blocking-agent'));
+        $subAgent = $this->agentManager->createSubAgent('blocking-agent', 'One shot');
+
+        $this->provider->method('supportsStreaming')->willReturn(false);
+        $this->provider->method('complete')->willReturn(
+            new CompleteResponse(content: 'done', tokensUsed: 42, costUsd: 0.5),
+        );
+
+        iterator_to_array($this->agentManager->executeSubAgent($subAgent->id));
+
+        $this->assertSame(42, $subAgent->tokensUsed);
+        $this->assertSame(42, $this->agentManager->tokensUsed('blocking-agent'));
+        $this->assertEqualsWithDelta(0.5, $this->agentManager->costUsd('blocking-agent'), 0.0001);
+        $this->assertInstanceOf(\DateTimeImmutable::class, $subAgent->startedAt);
+    }
+
+    public function testExecuteAllMirrorsPoolTelemetryOntoTheRegisteredSubAgents(): void
+    {
+        // executeAll() via AgentWorkerPool is the path Chat/WorkflowEngine take,
+        // so telemetry has to survive it -- not just executeSubAgent().
+        $executor = new class implements ExecutorInterface {
+            public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                return new AgentResult(
+                    agentId: $agent->id,
+                    status: AgentStatus::Completed,
+                    output: 'pool output',
+                    tokensUsed: 200,
+                    costUsd: 0.75,
+                    startedAt: new \DateTimeImmutable('2024-01-15T10:00:00Z'),
+                    completedAt: new \DateTimeImmutable('2024-01-15T10:00:40Z'),
+                );
+            }
+
+            public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+
+            public function cancelAll(): void {}
+        };
+
+        $manager = new AgentManager(
+            $this->provider,
+            $this->skillRegistry,
+            new AgentWorkerPool(2, $executor),
+        );
+        $manager->register($this->createAgent(name: 'pool-agent'));
+        $subAgent = $manager->createSubAgent('pool-agent', 'pooled task');
+
+        $results = iterator_to_array($manager->executeAll(
+            [$subAgent],
+            new CompleteRequest(model: 'test-model', messages: []),
+        ));
+
+        $this->assertCount(1, $results);
+        $this->assertSame(200, $manager->tokensUsed('pool-agent'));
+        $this->assertEqualsWithDelta(0.75, $manager->costUsd('pool-agent'), 0.0001);
+        $this->assertSame(40, $manager->elapsedSeconds('pool-agent'));
+    }
+
+    public function testStoppingASubAgentFreezesElapsedSeconds(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'stop-agent'));
+        $subAgent = $this->agentManager->createSubAgent('stop-agent', 'long task');
+        $subAgent->status = SubAgent::STATUS_RUNNING;
+        $subAgent->startedAt = (new \DateTimeImmutable())->modify('-120 seconds');
+
+        $this->agentManager->stopSubAgent($subAgent->id);
+
+        $frozen = $subAgent->elapsedSeconds();
+        $this->assertNotNull($subAgent->completedAt);
+        $this->assertGreaterThanOrEqual(120, $frozen);
+        // Without the completedAt stamp this would keep climbing forever.
+        $this->assertSame($frozen, $subAgent->elapsedSeconds());
+        $this->assertSame($frozen, $this->agentManager->elapsedSeconds('stop-agent'));
+    }
+
+    public function testFailedSubAgentFreezesElapsedSeconds(): void
+    {
+        $this->agentManager->register($this->createAgent(name: 'fail-agent'));
+        $subAgent = $this->agentManager->createSubAgent('fail-agent', 'doomed task');
+
+        $this->provider->method('supportsStreaming')->willReturn(false);
+        $this->provider->method('complete')->willThrowException(new \RuntimeException('provider down'));
+
+        try {
+            iterator_to_array($this->agentManager->executeSubAgent($subAgent->id));
+            $this->fail('executeSubAgent() should rethrow the provider failure');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('provider down', $e->getMessage());
+        }
+
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertNotNull($subAgent->completedAt);
+
+        $frozen = $this->agentManager->elapsedSeconds('fail-agent');
+        $this->assertSame($frozen, $this->agentManager->elapsedSeconds('fail-agent'));
     }
 
     public function testExecuteSubAgentSuccessNonStreaming(): void
