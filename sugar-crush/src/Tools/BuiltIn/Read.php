@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
@@ -14,12 +15,19 @@ final readonly class Read implements Tool
 {
     private const DEFAULT_MAX_BYTES = 1024 * 1024;
 
+    /**
+     * $skillNudge turns a skill's `paths:` frontmatter into a live signal
+     * (crush_feat.md section 7 E4): reading a file a skill scopes itself to
+     * announces that skill once, the way Claude Code loads skills on first
+     * read inside a scoped subdirectory. Null keeps the tool standalone.
+     */
     public function __construct(
         private ?string $root = null,
         private int $maxBytes = self::DEFAULT_MAX_BYTES,
         private ?AgentPathJail $worktreeJail = null,
         private ?InstructionFileLoader $instructionLoader = null,
         private array $sessionCache = [],
+        private ?SkillPathNudge $skillNudge = null,
     ) {}
 
     public function name(): string
@@ -96,6 +104,13 @@ final readonly class Read implements Tool
             $nestedContent = $this->instructionLoader?->loadForPath($path);
             if ($nestedContent !== null) {
                 $content = $nestedContent . "\n" . $content;
+            }
+
+            // Appended, not prepended: the file the model asked for stays the
+            // head of the result and the reminder trails it.
+            $nudge = $this->skillNudge?->forPath($path);
+            if ($nudge !== null) {
+                $content .= "\n\n" . $nudge;
             }
 
             return new ToolResult(

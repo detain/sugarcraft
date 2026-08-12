@@ -19,6 +19,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
@@ -417,11 +418,17 @@ final class Bootstrap
         $loader ??= self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
 
+        // ONE tracker across Read/Edit/Glob: the "announce a path-scoped skill
+        // the first time we touch a file it covers" rule is only correct if all
+        // three share the announced-set. Three trackers would re-announce the
+        // same skill once per tool (crush_feat.md section 7 E4).
+        $nudge = SkillPathNudge::new($skills);
+
         return [
             new Bash($root),
-            new Read($root, instructionLoader: $loader),
-            new Edit($root, instructionLoader: $loader),
-            new Glob($root, instructionLoader: $loader),
+            new Read($root, instructionLoader: $loader, skillNudge: $nudge),
+            new Edit($root, instructionLoader: $loader, skillNudge: $nudge),
+            new Glob($root, instructionLoader: $loader, skillNudge: $nudge),
             new Grep($root),
             new WebFetch(),
             new Doctor(),
