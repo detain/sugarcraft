@@ -5,16 +5,24 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Glob implements Tool
 {
+    /**
+     * $skillNudge turns a skill's `paths:` frontmatter into a live signal
+     * (crush_feat.md section 7 E4): the whole match list is scoped in ONE
+     * call, so a 500-file glob costs one in-memory pass, not one per file.
+     * Null keeps the tool standalone.
+     */
     public function __construct(
         private ?string $root = null,
         private ?InstructionFileLoader $instructionLoader = null,
         private array $sessionCache = [],
+        private ?SkillPathNudge $skillNudge = null,
     ) {}
 
     public function name(): string
@@ -83,6 +91,11 @@ final readonly class Glob implements Tool
                 $output .= $nestedContent . "\n";
             }
             $output .= $file . "\n";
+        }
+
+        $nudge = $this->skillNudge?->forPaths(array_values($files ?: []));
+        if ($nudge !== null) {
+            $output .= "\n" . $nudge;
         }
 
         return new ToolResult(

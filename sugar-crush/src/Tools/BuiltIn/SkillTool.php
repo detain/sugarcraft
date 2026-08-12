@@ -22,11 +22,9 @@ use SugarCraft\Crush\Tools\ToolResult;
  * on every session start (the defect the progressive-loading design in
  * SkillLoader exists to avoid).
  *
- * NOTE: like SkillMatcher, this tool is not yet wired into
- * Bootstrap::tools()/EngineBackend — that requires the Skills subsystem to
- * actually be populated in production (crush_feat.md section 7.E1, tracked
- * as its own step). Until that wiring lands, this class is reachable only
- * by direct construction (as the tests below do), not from bin/sugarcrush.
+ * Live since W3.S8: {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} appends
+ * this tool to every engine tool list, over the same SkillRegistry it hands
+ * EngineBackend, so a real bin/sugarcrush session can invoke it.
  */
 final readonly class SkillTool implements Tool
 {

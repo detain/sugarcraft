@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
@@ -26,12 +27,18 @@ final readonly class Edit implements Tool
      */
     private const MAX_LCS_CELLS = 250_000;
 
+    /**
+     * $skillNudge turns a skill's `paths:` frontmatter into a live signal
+     * (crush_feat.md section 7 E4): editing a file a skill scopes itself to
+     * announces that skill once. Null keeps the tool standalone.
+     */
     public function __construct(
         private ?string $root = null,
         private int $maxBytes = self::DEFAULT_MAX_BYTES,
         private ?AgentPathJail $worktreeJail = null,
         private ?InstructionFileLoader $instructionLoader = null,
         private array $sessionCache = [],
+        private ?SkillPathNudge $skillNudge = null,
     ) {}
 
     public function name(): string
@@ -168,6 +175,13 @@ final readonly class Edit implements Tool
         $message = "File updated: $path";
         if ($nestedContent !== null) {
             $message = $nestedContent . "\n\n" . $message;
+        }
+
+        // Fired only after the write landed -- a rejected or failed edit did
+        // not actually touch the path, so it must not burn the one-shot nudge.
+        $nudge = $this->skillNudge?->forPath($path);
+        if ($nudge !== null) {
+            $message .= "\n\n" . $nudge;
         }
 
         return new ToolResult(

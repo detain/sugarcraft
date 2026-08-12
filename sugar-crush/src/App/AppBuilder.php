@@ -6,6 +6,9 @@ namespace SugarCraft\Crush\App;
 
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tui\Pane;
 
@@ -37,6 +40,9 @@ final class AppBuilder
     private array $contextFiles = [];
     private array $enabledSkills = [];
     private array $activeHooks = [];
+    private ?SkillRegistry $availableSkills = null;
+    private ?string $projectRoot = null;
+    private array $disabledSkills = [];
 
     public function withProvider(ProviderInterface $provider): self
     {
@@ -115,6 +121,53 @@ final class AppBuilder
         return $clone;
     }
 
+    /**
+     * Hand the builder an already-populated skill registry.
+     *
+     * Takes precedence over {@see withProjectRoot()}: a caller that already
+     * discovered skills once (the CLI does, for the engine backend) must be
+     * able to pass THAT instance in rather than paying for a second
+     * filesystem scan and ending up with two registries whose disabled sets
+     * can drift apart.
+     */
+    public function withAvailableSkills(SkillRegistry $availableSkills): self
+    {
+        $clone = clone $this;
+        $clone->availableSkills = $availableSkills;
+        return $clone;
+    }
+
+    /**
+     * Root the built App's skill discovery at $projectRoot.
+     *
+     * Without this (and without {@see withAvailableSkills()}) build() has no
+     * directory to scan, so the App gets the empty default registry — which
+     * is exactly the production defect crush_feat.md section 7 E1 reports:
+     * every skill-driven code path (picker, findSkillsForTask(), fork
+     * dispatch) reads App::$availableSkills, and nothing ever filled it.
+     */
+    public function withProjectRoot(string $projectRoot): self
+    {
+        $clone = clone $this;
+        $clone->projectRoot = $projectRoot;
+        return $clone;
+    }
+
+    /**
+     * Names to mark disabled on the built registry (section 7 E1's
+     * `disableFromConfig($config->disabledSkills)` step), applied after
+     * discovery so a config entry can suppress a skill that was found on
+     * disk.
+     *
+     * @param array<string> $disabledSkills
+     */
+    public function withDisabledSkills(array $disabledSkills): self
+    {
+        $clone = clone $this;
+        $clone->disabledSkills = $disabledSkills;
+        return $clone;
+    }
+
     public function build(): App
     {
         if ($this->provider === null) {
@@ -125,6 +178,7 @@ final class AppBuilder
         // factory + with*() chain so availableSkills gets its default
         // SkillRegistry and the immutable contract is preserved.
         return App::new($this->provider, $this->model)
+            ->withAvailableSkills($this->skillRegistry())
             ->withMessages($this->messages)
             ->withTools($this->tools)
             ->withPane($this->pane)
@@ -134,5 +188,28 @@ final class AppBuilder
             ->withContextFiles($this->contextFiles)
             ->withEnabledSkills($this->enabledSkills)
             ->withActiveHooks($this->activeHooks);
+    }
+
+    /**
+     * Resolve the registry the built App sees: the injected one when given,
+     * otherwise a fresh registry filled by SkillManager from $projectRoot.
+     *
+     * SkillManager is used even for an injected registry so the disabled-set
+     * step goes through the same API in both cases.
+     */
+    private function skillRegistry(): SkillRegistry
+    {
+        $registry = $this->availableSkills ?? new SkillRegistry();
+        $manager = new SkillManager(new SkillLoader(), $registry);
+
+        // An injected registry is already loaded; re-running loadAll() on it
+        // would re-register every skill and undo any caller-side filtering.
+        if ($this->availableSkills === null && $this->projectRoot !== null) {
+            $manager->loadAll($this->projectRoot);
+        }
+
+        $manager->disableFromConfig($this->disabledSkills);
+
+        return $registry;
     }
 }
