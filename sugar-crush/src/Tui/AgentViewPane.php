@@ -25,9 +25,8 @@ use SugarCraft\Sprinkles\Style;
  *
  * The selected-agent highlight uses a dark background inversion so it is
  * legible regardless of the terminal colour scheme.  Arrow-key navigation
- * is handled by the caller (the live `Chat` key routing; the App-keyed
- * `Tui\KeyboardHandler` that used to do it was retired in W3.S6a as
- * unreachable); this class only renders the selection state passed in.
+ * is handled by the caller (KeyboardHandler / App state); this class only
+ * renders the current selection state passed in.
  *
  * Mirrors charmbracelet/crush agent view list design.
  */

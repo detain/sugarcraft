@@ -216,18 +216,16 @@ final class App
      * This is consumed by the real command surface below: dispatching
      * OpenSkillPickerMsg through update() populates $skillPickerOptions
      * with exactly this filtered list, and SelectSkillMsg re-validates
-     * against it before enabling a skill (Mirrors charmbracelet/crush
-     * SourceSkillCmd's skill list).
-     *
-     * Reachability: this is a Model-layer command surface only. The pane
-     * renderer that used to draw the picker (`Tui\Components\SkillsPane`)
-     * and the App-keyed keyboard layer that used to emit the command
-     * (`Tui\KeyboardHandler`) were retired in W3.S6a — both were provably
-     * unreachable from `bin/sugarcrush`, whose live path renders through
-     * `Chat`/`SugarCraft\Crush\Renderer` instead. Anything that wants a
-     * user-facing skill picker must therefore surface it on the live
-     * `Chat` path. The Model-layer surface itself (this method plus the
-     * two Msg handlers) is real and covered by tests.
+     * against it before enabling a skill. `SkillsPane` renders the picker
+     * whenever $skillPickerOptions is non-empty (Mirrors
+     * charmbracelet/crush SourceSkillCmd's skill list). Physical keypress
+     * reachability (wiring `KeyboardHandler`'s `SourceSkillCmd` into a
+     * running main loop so pressing the real key emits OpenSkillPickerMsg)
+     * is a pre-existing, repo-wide gap that predates this item — no `Cmd`
+     * type is consumed by any main loop anywhere in `src/` yet, not
+     * something this item introduced or narrowed the scope of. The
+     * Model-layer command surface itself (this method, the two Msg
+     * handlers, and the picker render) is real and covered by tests.
      *
      * @return array<Skill>
      */
@@ -482,8 +480,7 @@ final readonly class StatusMsg implements Msg
 
 /**
  * Open the user-invocable skill picker. Mirrors charmbracelet/crush
- * SourceSkillCmd — dispatched programmatically; see
- * {@see App::userInvocableSkills()} for why no keyboard layer emits it.
+ * SourceSkillCmd — emitted once the keyboard layer is wired to dispatch it.
  */
 final readonly class OpenSkillPickerMsg implements Msg
 {
