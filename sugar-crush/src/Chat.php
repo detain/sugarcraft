@@ -1560,6 +1560,14 @@ final class Chat implements Model
      * Reads the registry {@see Renderer::scanRoot()} filled on the last
      * frame, because a click reports coordinates against what is currently
      * painted, not against the frame being built.
+     *
+     * `$col`/`$row` are terminal-absolute (that is what the SGR mouse report
+     * carries), while the registry's boxes are relative to the frame that was
+     * scanned. Those two agree only when this `Chat` painted the whole screen;
+     * when the pane shell hosts it the frame is drawn inside a box, below a
+     * menu bar and beside a sidebar, so {@see Renderer::zoneOrigin()} — which
+     * the shell declares after compositing — is subtracted first. Standalone
+     * it is `[0, 0]` and this is the old arithmetic exactly.
      */
     public static function zoneAt(int $col, int $row): ?Zone
     {
@@ -1567,7 +1575,9 @@ final class Chat implements Model
             return null;
         }
 
-        return Renderer::scanner()->hit($col, $row);
+        [$originCol, $originRow] = Renderer::zoneOrigin();
+
+        return Renderer::scanner()->hit($col - $originCol, $row - $originRow);
     }
 
     /**

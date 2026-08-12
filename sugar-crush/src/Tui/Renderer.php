@@ -14,6 +14,7 @@ use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Tui\Components\ChatPane;
 use SugarCraft\Crush\Tui\Components\InputPane;
 use SugarCraft\Crush\Tui\Components\SkillsPane;
@@ -31,9 +32,9 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
  * It renders the SHELL only — menu bar, sidebars, input line, status bar —
  * and the chat pane it lays out delegates to the live
  * {@see \SugarCraft\Crush\Renderer} against the App's hosted `Chat`, so
- * transcript content has exactly one implementation. Booting `bin/sugarcrush`
- * onto this shell is W3.M4's step; until then nothing constructs an App with
- * a hosted chat in production.
+ * transcript content has exactly one implementation. `bin/sugarcrush` now
+ * boots this shell: {@see \SugarCraft\Crush\Cli\Bootstrap::app()} is the
+ * production constructor of an App with a hosted chat.
  */
 final class Renderer
 {
@@ -207,6 +208,13 @@ final class Renderer
      *    frame's very first line. The bar now takes `$cols` and sheds menu
      *    names to fit; {@see clipWidth()} is the backstop for anything else
      *    that mis-sizes itself.
+     * 4. The hosted chat's mouse zones are re-based onto the terminal before
+     *    this returns. `Chat` scans its OWN frame for click zones, and here
+     *    that frame is a sub-frame inside the chat pane's box; mouse reports
+     *    stay terminal-absolute, so the offset has to be handed back or every
+     *    hosted click hit-tests against the wrong cell. It is computed from
+     *    the same measurements the layout above already made, after the row
+     *    clip, because that clip can slide the whole frame up.
      */
     public static function renderView(App $a, ?int $cols = null, ?int $rows = null): View
     {
@@ -263,7 +271,21 @@ final class Renderer
             $parts[] = $bottom;
         }
 
-        $frame = self::clipWidth(self::clipTail(implode("\n", $parts), $rows), $cols);
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+
+        // The composite is final, so the hosted chat's zone registry — recorded
+        // against the chat's own body, one nesting level down — can be told
+        // where that body ended up on the terminal. Rows lost to the tail clip
+        // are subtracted because clipTail drops from the TOP, sliding
+        // everything below it up by that many rows.
+        LiveRenderer::setZoneOrigin(
+            self::blockWidth($leftPane) + ChatPane::BODY_COL_INSET,
+            self::lineCount($menuBar)
+                + ($notice === '' ? 0 : self::lineCount($notice))
+                + ChatPane::BODY_ROW_INSET
+                - (self::lineCount($joined) - self::lineCount($frame)),
+        );
 
         return new View($frame, images: $images);
     }

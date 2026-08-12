@@ -44,11 +44,25 @@ use SugarCraft\Crush\Renderer as LiveRenderer;
  */
 final class ChatPane
 {
+    /**
+     * Columns between the pane's left edge and its body's first cell: the
+     * left border, then the left padding.
+     *
+     * Public because the shell needs it to translate mouse coordinates: the
+     * hosted chat records its click zones against its own body, and
+     * {@see \SugarCraft\Crush\Renderer::setZoneOrigin()} wants the body's
+     * position on the terminal.
+     */
+    public const BODY_COL_INSET = 2;
+
+    /** Rows between the pane's top edge and its body's first row: the top border. */
+    public const BODY_ROW_INSET = 1;
+
     /** Border columns (2) + horizontal padding (2) the box spends around its content. */
-    private const CHROME_COLS = 4;
+    private const CHROME_COLS = self::BODY_COL_INSET * 2;
 
     /** Top + bottom border rows the box spends around its content. */
-    private const CHROME_ROWS = 2;
+    private const CHROME_ROWS = self::BODY_ROW_INSET * 2;
 
     /**
      * The pane's text bytes only.
@@ -77,6 +91,13 @@ final class ChatPane
      * resolved against the FINAL composed frame by
      * {@see \SugarCraft\Core\ImageOverlay::resolve()}, which derives each
      * paint's row/column from where the marker actually ended up.
+     *
+     * Mouse ZONES do, and the reasoning above does not carry over to them:
+     * they are frozen at scan time, in the coordinate space of the body string
+     * built here. {@see \SugarCraft\Crush\Tui\Renderer} is what closes that
+     * gap — it knows where this pane landed and declares the body's origin via
+     * {@see LiveRenderer::setZoneOrigin()} once the composite is final (hence
+     * {@see BODY_COL_INSET}/{@see BODY_ROW_INSET} being public).
      *
      * @return array{0: string, 1: array<int, \SugarCraft\Core\ImagePlacement>}
      */

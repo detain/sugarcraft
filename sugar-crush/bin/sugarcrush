@@ -40,7 +40,16 @@ if ($args->prompt !== null) {
 // lives in Bootstrap (R19) so it can be exercised by a test without
 // shelling out to this script and blocking on Program::run(). See
 // Bootstrap's class docblock for the reasoning.
+//
+// The root Model is Bootstrap::app() — the App pane shell HOSTING the Chat
+// that Bootstrap::chat() builds, not the bare Chat (crush_feat.md §5 E7,
+// merge branch). This line is what makes the shell reachable at all: the
+// menu bar, pane focus, KeyboardHandler's agent-view keys and the session
+// tab strip had no production constructor before it. Chat itself is
+// unchanged and still runnable standalone.
+//
 // Options come from Chat::programOptions() so mouse mode (and its
 // SUGARCRUSH_DISABLE_MOUSE escape hatch) is decided next to the state that
-// uses it — see crush_feat.md section 8 E1.
-(new Program(Bootstrap::chat($args->root), Chat::programOptions()))->run();
+// uses it — see crush_feat.md section 8 E1. They belong to the hosted
+// content model, which is what reads the mouse events.
+(new Program(Bootstrap::app($args->root), Chat::programOptions()))->run();

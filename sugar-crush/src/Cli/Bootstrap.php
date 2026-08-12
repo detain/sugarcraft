@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Cli;
 
+use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CommandBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
@@ -14,6 +15,7 @@ use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
+use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
@@ -79,6 +81,85 @@ final class Bootstrap
             // engine pipeline would silently not apply on this one.
             hooks: self::hooks(),
         );
+    }
+
+    /**
+     * Build the pane shell the CLI binary runs interactively: an {@see App}
+     * hosting the very {@see chat()} model this class already builds
+     * (crush_feat.md §5 E7, the MERGE branch).
+     *
+     * §5 E7 gave two ways out of sugar-crush's two-parallel-UI-systems drift
+     * risk — delete the `App`/`Pane` layer, or move the app onto it — and
+     * conditioned the delete on there being no plan to switch. There is one,
+     * and this method is the last link in it: until now nothing in `src/` or
+     * `bin/` ever constructed an `App` with a hosted `Chat`, so the shell
+     * (menu bar, pane focus, {@see \SugarCraft\Crush\Tui\KeyboardHandler}'s
+     * agent-view keys, session tabs) was unreachable from a real run in
+     * exactly the "built but never wired" way §5D describes.
+     *
+     * The `Chat` is taken WHOLE from {@see chat()} rather than rebuilt: it
+     * already carries the seeded session row, the title backend, the memory
+     * store and the guard chain, and seeding it twice would create a second
+     * session row per launch. The App is the frame around it and copies no
+     * state out of it — {@see App::withSessionId()} is the one exception, and
+     * it is read back off the hosted chat rather than re-derived, so the two
+     * can never disagree.
+     *
+     * The shell's own panes are populated here for the same reason the whole
+     * step exists: an empty Tools/Skills sidebar in a freshly-wired shell is
+     * the failure mode being fixed, not a neutral default. These are the
+     * shell's DISPLAY copies — the engine's authoritative tool list and skill
+     * registry live inside the hosted chat's backend, which builds its own;
+     * handing both the same instances would mean reshaping {@see backend()}'s
+     * internals, which this step does not touch.
+     */
+    public static function app(?string $root = null): App
+    {
+        $root ??= getcwd();
+
+        $chat = self::chat($root);
+        [$provider, $model] = self::shellProvider();
+
+        return App::new($provider, $model)
+            ->withChat($chat)
+            ->withSessionId($chat->currentSessionId())
+            ->withTools(self::tools($root))
+            ->withAvailableSkills(self::skillRegistry($root));
+    }
+
+    /**
+     * The provider/model pair the shell displays, as real objects.
+     *
+     * {@see App} needs a {@see ProviderInterface}, not the {@see Backend} the
+     * hosted chat runs on — in the hosted arrangement it is a label source
+     * (the status bar's provider name) rather than something the shell ever
+     * calls. It is therefore built from the same selection {@see
+     * selectedProviderLabel()} reports, and falls back to the offline
+     * {@see EchoProvider} whenever this run has no provider or the provider
+     * cannot be constructed: {@see backend()} has already warned on stderr in
+     * that case, and refusing to launch the TUI over an unusable label would
+     * be a worse outcome than showing "echo".
+     *
+     * @return array{0: ProviderInterface, 1: string}
+     */
+    private static function shellProvider(): array
+    {
+        [$name, $model] = self::selectedProviderLabel();
+        $providerName = self::selectedProviderName();
+
+        if ($providerName !== null) {
+            try {
+                $factory = new ProviderFactory();
+                $config = $factory->defaultConfig($providerName);
+                $config['model'] = $model;
+
+                return [$factory->create($config), $model];
+            } catch (\Throwable) {
+                // fall through to Echo, same degradation backend() applies
+            }
+        }
+
+        return [new EchoProvider(), $name === 'command' ? $model : 'echo'];
     }
 
     /**
