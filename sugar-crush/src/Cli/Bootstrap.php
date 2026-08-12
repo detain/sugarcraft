@@ -56,10 +56,19 @@ final class Bootstrap
     {
         $userConfig = self::readUserConfig();
 
+        // ONE store instance, seeded before the Chat is built: seedSession()
+        // is what makes /sessions, the tab strip, /branch and the auto-title
+        // call reachable at all on a real run (crush_feat.md §5 E1).
+        $sessionStore = self::sessionStore();
+        [$sessionId, $sessionName] = self::seedSession($sessionStore, ...self::selectedProviderLabel());
+
         return new Chat(
             backend: self::backend($root),
             memoryStore: self::memoryStore(),
-            sessionStore: self::sessionStore(),
+            sessionStore: $sessionStore,
+            currentSessionId: $sessionId,
+            currentSessionName: $sessionName,
+            titleBackend: self::titleBackend(),
             themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
             onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
             mosaic: ToolResult::mosaic(),
@@ -382,6 +391,169 @@ final class Bootstrap
     public static function sessionStore(): EnhancedSessionStore
     {
         return new EnhancedSessionStore(self::configDir() . '/session.db');
+    }
+
+    /**
+     * Give the CLI a real session row to run against, resuming the most
+     * recent one when the store already has sessions and creating one when
+     * it does not (crush_feat.md §5 E1's sketch).
+     *
+     * This is the capstone gap that whole feature area was blocked on: no
+     * production path — not this method's caller, not `Chat::init()`, not
+     * any `bin/` entry point — ever called {@see
+     * \SugarCraft\Crush\Session\SessionStore::createSession()}, so on a real
+     * run `listSessions()` returned `[]` for the whole process lifetime.
+     * Everything keyed off `currentSessionId` was therefore dead in
+     * production while passing its own unit tests: `/sessions` rendered an
+     * empty picker, `Renderer::renderSessionTabStrip()` self-suppressed
+     * below two rows, `Chat::cycleSessionTab()` early-returned, `/branch`
+     * had nothing to fork, and `Chat::scheduleTitleGeneration()` bailed on
+     * its `currentSessionId === null` guard so the auto-title call could
+     * never fire.
+     *
+     * Resume-most-recent (rather than always creating) is what §5 E1
+     * sketches, and it is also what makes the run's `/rewind` checkpoints
+     * survive a restart. The existing row's `name` is handed back with it
+     * so the caller can latch `Chat::currentSessionName()`: without that,
+     * a resumed-but-already-titled session would look unnamed to
+     * `scheduleTitleGeneration()` and get re-titled — and the store's name
+     * overwritten — on the first turn of every subsequent launch.
+     *
+     * @param string $provider Provider name to record on a newly created
+     *        row (see {@see selectedProviderLabel()}); ignored when an
+     *        existing session is resumed.
+     * @param string $model Model name to record alongside it.
+     *
+     * @return array{0: string, 1: ?string} session id, and its existing
+     *         name when resuming a named session (null otherwise)
+     */
+    public static function seedSession(
+        \SugarCraft\Crush\Session\SessionStore|EnhancedSessionStore $store,
+        string $provider = 'sugarcrush',
+        string $model = 'unknown',
+    ): array {
+        $row = $store->listSessions(1)[0] ?? null;
+        if (is_array($row) && is_string($row['id'] ?? null) && $row['id'] !== '') {
+            $name = $row['name'] ?? null;
+
+            return [$row['id'], is_string($name) && $name !== '' ? $name : null];
+        }
+
+        $sessionId = bin2hex(random_bytes(8));
+        $store->createSession($sessionId, $provider, $model);
+
+        return [$sessionId, null];
+    }
+
+    /**
+     * The provider/model pair to stamp on a session row this process
+     * creates, mirroring {@see backend()}'s own selection order.
+     *
+     * These are labels, not a second backend selection: they record what
+     * the run *asked* for. If a requested provider turns out to be
+     * unconstructable, {@see backend()} warns on stderr and degrades to
+     * Echo while this row still names the requested provider — recording
+     * the request is more useful than recording the fallback, and the
+     * store has no column for both. The `$SUGARCRUSH_BACKEND_CMD` and
+     * default paths have no provider name at all, so they are labelled
+     * honestly as such rather than given an invented one.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function selectedProviderLabel(): array
+    {
+        $name = self::selectedProviderName();
+        if ($name === null) {
+            $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
+
+            return $cmd !== false && $cmd !== '' ? ['command', 'unknown'] : ['echo', 'echo'];
+        }
+
+        $model = getenv('SUGARCRUSH_MODEL');
+        if ($model === false || $model === '') {
+            try {
+                $configured = (new ProviderFactory())->defaultConfig($name)['model'] ?? null;
+            } catch (\Throwable) {
+                $configured = null;
+            }
+            $model = is_string($configured) && $configured !== '' ? $configured : 'unknown';
+        }
+
+        return [$name, $model];
+    }
+
+    /**
+     * The provider name this run selected, or null when the run is not on
+     * a provider at all (`$SUGARCRUSH_BACKEND_CMD`'s shell-out, or the
+     * offline Echo default). Same precedence {@see backend()} applies:
+     * `$SUGARCRUSH_PROVIDER`, then the name persisted by a previous Ctrl+P
+     * "Switch model".
+     */
+    private static function selectedProviderName(): ?string
+    {
+        $env = getenv('SUGARCRUSH_PROVIDER');
+        if ($env !== false && $env !== '') {
+            return $env;
+        }
+
+        $cmd = getenv('SUGARCRUSH_BACKEND_CMD');
+        if ($cmd !== false && $cmd !== '') {
+            return null;
+        }
+
+        $persisted = self::readUserConfig()['provider'] ?? null;
+
+        return is_string($persisted) && $persisted !== '' ? $persisted : null;
+    }
+
+    /**
+     * A deliberately cheap Backend for {@see Chat}'s one-shot session-title
+     * call, or null when this run has no provider to build one from.
+     *
+     * Chat falls back to the MAIN conversation backend when this is null —
+     * which on the provider paths means naming a session costs a second
+     * full tool-capable agent turn, complete with the tool schemas, skill
+     * registry and root CLAUDE.md/AGENTS.md instruction preamble, for a
+     * request whose entire output is a handful of words. This backend is
+     * the same provider with none of that attached: no tools, no hooks, no
+     * skill registry, no instruction loader, so the title request carries
+     * only the title prompt and the transcript.
+     *
+     * The model is `$SUGARCRUSH_TITLE_MODEL`, else a `titleModel` key in
+     * ~/.sugar-crush/config.json, else the provider's own default — and
+     * deliberately NOT `$SUGARCRUSH_MODEL`, which names the big
+     * conversation model. Null on any construction failure: an unnamed
+     * session is a non-event (same silent-failure stance {@see
+     * \SugarCraft\Crush\Chat::scheduleTitleGeneration()} takes), and
+     * `backend()` has already warned about an unusable provider.
+     */
+    public static function titleBackend(): ?Backend
+    {
+        $providerName = self::selectedProviderName();
+        if ($providerName === null) {
+            return null;
+        }
+
+        try {
+            $factory = new ProviderFactory();
+            $config = $factory->defaultConfig($providerName);
+
+            $model = getenv('SUGARCRUSH_TITLE_MODEL');
+            if ($model === false || $model === '') {
+                $configured = self::readUserConfig()['titleModel'] ?? null;
+                $model = is_string($configured) && $configured !== ''
+                    ? $configured
+                    : (string) ($config['model'] ?? '');
+            }
+            if ($model === '') {
+                return null;
+            }
+            $config['model'] = $model;
+
+            return new EngineBackend($factory->create($config), $model);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
