@@ -16,9 +16,12 @@ use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
+use SugarCraft\Crush\Providers\Concerns\ToolSchema;
 
 final readonly class SglangProvider implements ProviderInterface
 {
+    use ToolSchema;
+
     use ReasoningExtractor;
 
     /**
@@ -404,7 +407,7 @@ final readonly class SglangProvider implements ProviderInterface
                 'function' => [
                     'name' => $tool->name(),
                     'description' => $tool->description(),
-                    'parameters' => $tool->inputSchema(),
+                    'parameters' => $this->normalizeToolSchema($tool->inputSchema()),
                 ],
             ];
         }, $tools);

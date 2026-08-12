@@ -144,7 +144,16 @@ final class BuiltInToolTest extends TestCase
         $this->assertArrayHasKey('type', $schema);
         $this->assertSame('object', $schema['type']);
         $this->assertArrayHasKey('properties', $schema);
-        $this->assertIsArray($schema['properties']);
+        // NOT assertIsArray(): JSON Schema requires `properties` to be an
+        // OBJECT, and a PHP empty array encodes as the JSON array `[]`. A
+        // strict server (SGLang) rejects the entire chat/completions request
+        // over one such tool, so the agent could not send any message at all.
+        // Assert the wire shape, which is the contract that actually binds.
+        $this->assertStringStartsWith(
+            '{',
+            (string) json_encode($schema['properties']),
+            'properties must encode as a JSON object, not an array',
+        );
         $this->assertArrayHasKey('required', $schema);
         $this->assertIsArray($schema['required']);
     }

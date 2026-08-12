@@ -13,9 +13,12 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
+use SugarCraft\Crush\Providers\Concerns\ToolSchema;
 
 final readonly class OpenAIProvider implements ProviderInterface
 {
+    use ToolSchema;
+
     use ReasoningExtractor;
 
     public function __construct(
@@ -180,7 +183,7 @@ final readonly class OpenAIProvider implements ProviderInterface
                 'function' => [
                     'name' => $tool->name(),
                     'description' => $tool->description(),
-                    'parameters' => $tool->inputSchema(),
+                    'parameters' => $this->normalizeToolSchema($tool->inputSchema()),
                 ],
             ];
         }, $tools);

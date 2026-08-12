@@ -55,7 +55,14 @@ final class Doctor implements Tool
     {
         return [
             'type' => 'object',
-            'properties' => [],
+            // stdClass, not []: this tool takes no parameters, and PHP renders
+            // an empty array as the JSON array `[]` where JSON Schema demands
+            // the object `{}`. A strict server (SGLang) rejects the whole
+            // chat/completions request over it, not just this tool, which left
+            // the agent unable to send any message at all.
+            // {@see \SugarCraft\Crush\Providers\Concerns\ToolSchema} repeats
+            // the correction at the wire boundary for tools written later.
+            'properties' => new \stdClass(),
             'required' => [],
         ];
     }
