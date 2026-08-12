@@ -172,6 +172,23 @@ final class Chat implements Model
     private const CLICK_DRAG_TOLERANCE_CELLS = 1;
 
     /**
+     * Reconciliation id of the background-session poll subscription
+     * (crush_feat.md section 5 E4). Stable across rebuilds so `Program`
+     * recognises the timer it already started instead of restarting it on
+     * every update cycle.
+     */
+    private const BACKGROUND_POLL_SUBSCRIPTION = 'crush.background-poll';
+
+    /**
+     * How often the poll pump wakes (seconds).
+     *
+     * Two, per the spec sketch: `BackgroundSupervisor::HEARTBEAT_TIMEOUT_SECS`
+     * is 15, so this is fast enough to report a stall promptly and slow
+     * enough that a mostly-idle TUI is not repainting on a hot timer.
+     */
+    private const BACKGROUND_POLL_SECONDS = 2.0;
+
+    /**
      * @param list<Message> $history
      * @param array<string, callable> $tools Map of tool name => callable(array $arguments): mixed
      * @param callable|null $onToolCall Optional callback called when tools are invoked
@@ -392,6 +409,21 @@ final class Chat implements Model
          * other optional collaborators on this class use.
          */
         private readonly ?\SugarCraft\Crush\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
+        /**
+         * Last status this Chat reported for each background session, keyed
+         * by session id (crush_feat.md section 5 E4).
+         *
+         * The poll pump is edge-triggered, not level-triggered: a session
+         * sitting at `running` for ten minutes must not append a transcript
+         * line every two seconds. This map is the "last-known" side of that
+         * diff, and lives on the model rather than on the supervisor because
+         * it is a property of what the USER has already been told, not of
+         * the session itself - a second embedder watching the same
+         * supervisor has its own notion of what it has shown.
+         *
+         * @var array<string, string> session id => BackgroundSessionStatus::value
+         */
+        private readonly array $backgroundStatuses = [],
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -468,6 +500,9 @@ final class Chat implements Model
                     : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status.");
 
             return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)]]), null];
+        }
+        if ($msg instanceof BackgroundTickMsg) {
+            return $this->pumpBackgroundSessions();
         }
         if ($msg instanceof WindowSizeMsg) {
             // The one authoritative size - see the constructor docblock on
@@ -2527,6 +2562,7 @@ final class Chat implements Model
             'paletteMru' => $this->paletteMru,
             'scrollOffset' => $this->scrollOffset,
             'backgroundSupervisor' => $this->backgroundSupervisor,
+            'backgroundStatuses' => $this->backgroundStatuses,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -4490,9 +4526,104 @@ final class Chat implements Model
         return '';
     }
 
+    /**
+     * Declare the recurring work this model needs the runtime to drive
+     * (crush_feat.md section 5 E4).
+     *
+     * Today that is exactly one thing: waking up often enough to run
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::tick()}, which
+     * is what flips a session whose heartbeats have stopped to `Stalled`
+     * and back again. Before this returned anything, that method had no
+     * caller on the live path at all.
+     *
+     * Returns null - not an empty Subscriptions - whenever there is nothing
+     * to poll. `Program` reconciles the set every cycle, so a subscription
+     * declared unconditionally would keep a timer waking the event loop (and
+     * re-rendering) forever in the overwhelmingly common case of a user who
+     * has never run `/bg`.
+     */
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
-        return null;
+        if ($this->backgroundSupervisor === null || !$this->backgroundSupervisor->hasActiveSessions()) {
+            return null;
+        }
+
+        return (new \SugarCraft\Core\Subscriptions())->withTick(
+            self::BACKGROUND_POLL_SUBSCRIPTION,
+            self::BACKGROUND_POLL_SECONDS,
+            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(),
+        );
+    }
+
+    /**
+     * Last status reported to the user for each background session, keyed by
+     * session id.
+     *
+     * @return array<string, string>
+     */
+    public function backgroundStatuses(): array
+    {
+        return $this->backgroundStatuses;
+    }
+
+    /**
+     * Run one poll of {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor}
+     * and announce whatever changed since the previous poll.
+     *
+     * Terminal sessions drop out of `getActiveSessions()`, so a session that
+     * finished between two ticks would otherwise vanish without ever being
+     * reported as finished - the previously-seen ids are therefore re-read
+     * individually to catch that last transition.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function pumpBackgroundSessions(): array
+    {
+        $supervisor = $this->backgroundSupervisor;
+        if ($supervisor === null) {
+            return [$this, null];
+        }
+
+        $supervisor->tick();
+
+        $statuses = [];
+        foreach ($supervisor->getActiveSessions() as $id => $session) {
+            $statuses[$id] = $session->status->value;
+        }
+        foreach (array_keys($this->backgroundStatuses) as $id) {
+            if (isset($statuses[$id])) {
+                continue;
+            }
+            $session = $supervisor->getSession($id);
+            if ($session !== null) {
+                $statuses[$id] = $session->status->value;
+            }
+        }
+
+        $notices = [];
+        foreach ($statuses as $id => $status) {
+            if (($this->backgroundStatuses[$id] ?? null) === $status) {
+                continue;
+            }
+            $name = $supervisor->getSession($id)?->name ?? $id;
+            $notices[] = Message::system(sprintf(
+                "Background session %s ('%s') is now %s.",
+                $id,
+                $name,
+                $status,
+            ));
+        }
+
+        if ($notices === [] && $statuses === $this->backgroundStatuses) {
+            // Nothing moved - returning $this keeps the renderer's diff empty
+            // instead of repainting the transcript twice a second.
+            return [$this, null];
+        }
+
+        return [$this->mutate([
+            'history' => [...$this->history, ...$notices],
+            'backgroundStatuses' => $statuses,
+        ]), null];
     }
 
     /**

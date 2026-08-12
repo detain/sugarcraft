@@ -40,6 +40,9 @@ use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\SessionTitledMsg;
 use SugarCraft\Crush\BackgroundSessionSpawnedMsg;
+use SugarCraft\Crush\BackgroundTickMsg;
+use SugarCraft\Crush\Sessions\BackgroundSession;
+use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Permissions\PermissionReply;
@@ -3514,5 +3517,130 @@ final class ChatTest extends TestCase
         [$sized] = $typed->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
 
         $this->assertSame($supervisor, $sized->backgroundSupervisor());
+    }
+
+    // =====================================================================
+    // subscriptions() poll pump — crush_feat.md section 5 E4
+    // =====================================================================
+
+    /** Build a background session without going near a real fork/socket. */
+    private function bgSession(string $id, BackgroundSessionStatus $status): BackgroundSession
+    {
+        $agent = new Agent(
+            name: 'bg-agent',
+            description: 'Background agent',
+            prompt: '',
+            model: 'test-model',
+            provider: 'test',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+
+        return (new BackgroundSession(
+            id: $id,
+            name: "Session {$id}",
+            agent: $agent,
+            task: 'test task',
+            workingDirectory: '/tmp',
+        ))->withStatus($status);
+    }
+
+    /** @return list<string> */
+    private function historyContents(Chat $chat): array
+    {
+        return array_map(static fn (Message $m): string => $m->content, $chat->history);
+    }
+
+    public function testSubscriptionsStayNullWhenThereIsNothingToPoll(): void
+    {
+        // An unconditional timer would wake the event loop (and repaint)
+        // forever for the vast majority of runs that never touch /bg.
+        $this->assertNull((new Chat())->subscriptions());
+
+        $idle = new Chat(backgroundSupervisor: new BackgroundSupervisor());
+        $this->assertNull($idle->subscriptions());
+
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s-done', BackgroundSessionStatus::Completed));
+        $this->assertNull((new Chat(backgroundSupervisor: $supervisor))->subscriptions());
+    }
+
+    public function testSubscriptionsDeclareATickWhileASessionIsActive(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+
+        $subs = (new Chat(backgroundSupervisor: $supervisor))->subscriptions();
+
+        $this->assertNotNull($subs);
+        $this->assertTrue($subs->has('crush.background-poll'));
+
+        $sub = $subs->all()[0];
+        $this->assertSame(\SugarCraft\Core\Kind::Tick, $sub->kind);
+        $this->assertSame(2.0, $sub->params['seconds']);
+        $this->assertInstanceOf(BackgroundTickMsg::class, ($sub->produce)());
+    }
+
+    public function testTickAnnouncesEachSessionStatusOnceAndRecordsIt(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+
+        [$first, $cmd] = $chat->update(new BackgroundTickMsg());
+
+        $this->assertNull($cmd);
+        $this->assertSame(['s1' => 'running'], $first->backgroundStatuses());
+        $this->assertCount(1, $this->historyContents($first));
+        $this->assertStringContainsString("Background session s1 ('Session s1') is now running.", $this->historyContents($first)[0]);
+        $this->assertSame(Role::System, $first->history[0]->role);
+
+        // Level-triggered would re-append the same line every two seconds.
+        [$second, $secondCmd] = $first->update(new BackgroundTickMsg());
+        $this->assertNull($secondCmd);
+        $this->assertSame($first, $second);
+    }
+
+    public function testTickReportsASessionThatReachedATerminalState(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+
+        [$running] = $chat->update(new BackgroundTickMsg());
+
+        // A finished session drops out of getActiveSessions(), so without the
+        // re-read of previously-seen ids it would vanish silently instead of
+        // ever being reported as done.
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Completed));
+        [$done] = $running->update(new BackgroundTickMsg());
+
+        $this->assertSame(['s1' => 'completed'], $done->backgroundStatuses());
+        $this->assertStringContainsString("Background session s1 ('Session s1') is now completed.", $this->historyContents($done)[1]);
+    }
+
+    public function testTickWithoutASupervisorIsANoOp(): void
+    {
+        $chat = new Chat();
+
+        [$next, $cmd] = $chat->update(new BackgroundTickMsg());
+
+        $this->assertSame($chat, $next);
+        $this->assertNull($cmd);
+    }
+
+    public function testRecordedBackgroundStatusesSurviveStateTransitions(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+
+        [$polled] = (new Chat(backgroundSupervisor: $supervisor))->update(new BackgroundTickMsg());
+        [$typed] = $polled->update(new KeyMsg(KeyType::Char, 'x'));
+        [$sized] = $typed->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+
+        // Dropped by mutate() and every poll re-announces every session.
+        $this->assertSame(['s1' => 'running'], $sized->backgroundStatuses());
     }
 }
