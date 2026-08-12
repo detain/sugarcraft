@@ -44,13 +44,24 @@ use SugarCraft\Crush\Tools\ToolResult;
 final class EngineBackend implements Backend
 {
     /**
-     * Hard wall-clock ceiling on a forked completion child in
-     * {@see completeAsync()} - a hung provider (or a tool stuck in the
-     * agentic loop) is SIGKILLed and reported as a timeout rather than
-     * blocking that turn forever. Generous: up to {@see $maxSteps} model
-     * round-trips can legitimately take a while.
+     * IDLE ceiling on a forked completion child in {@see completeAsync()} -
+     * how long the parent will wait for the NEXT frame from the child, not
+     * for the whole turn. It used to be a single wall-clock timer started
+     * once for the entire fork, which SIGKILLed any turn whose legitimate
+     * multi-step tool work ran past it ("Provider request timed out after
+     * 120s" mid-flight, crush_feat.md §1 E1). Now every frame the child
+     * streams resets it, so a turn that is making visible progress stays
+     * alive indefinitely while a genuinely hung provider still dies.
      */
     private const COMPLETE_TIMEOUT_SECONDS = 120;
+
+    /**
+     * Upper bound on a single length-prefixed frame from the child. A frame
+     * legitimately carries raw image bytes, so it has to be generous - but a
+     * corrupt/truncated header must never make the parent try to buffer an
+     * arbitrary length before it notices the stream is garbage.
+     */
+    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
     /**
      * @param array<int, \SugarCraft\Crush\Tools\Tool>   $tools
@@ -259,6 +270,14 @@ final class EngineBackend implements Backend
      * {@see \SugarCraft\Crush\Chat::executeToolsParallel()}'s R14b fork fix,
      * extended here to cross the ReactPHP loop boundary rather than just
      * fanning out sibling tool calls.
+     *
+     * The child does not batch: it writes each {@see ToolStarted}/{@see
+     * ToolFinished} as its own length-prefixed frame the moment the event
+     * fires, and the final result as the last frame. The parent drains
+     * whatever whole frames have arrived on every readable edge and hands
+     * each event straight to $onEvent, so a turn running eight rounds of
+     * tools renders them as they happen instead of showing nothing but a
+     * "thinking" spinner until the very end (crush_feat.md §1 E1).
      */
     public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
@@ -299,48 +318,85 @@ final class EngineBackend implements Backend
         $loop = Loop::get();
         $buffer = '';
         $settled = false;
+        $result = null;
 
         // $timeoutTimer/$cancelTimer are assigned below, AFTER $teardown is
         // built (each timer's own callback needs to call $teardown) - they're
         // captured by reference here specifically so $teardown still sees
         // the real TimerInterface once addTimer()/addPeriodicTimer() below
-        // assign into these same variables.
+        // assign into these same variables. $timeoutTimer is additionally
+        // REPLACED on every frame by $resetTimeout, which is the whole point
+        // of the idle-timeout change.
         $timeoutTimer = null;
         $cancelTimer = null;
 
-        // Shared teardown for every way this can end (success, timeout,
+        // Shared teardown for the failure ways this can end (timeout,
         // cancellation): stop watching the socket, cancel BOTH timers
         // (critical for $cancelTimer, a periodic timer that would otherwise
-        // keep polling forever after settling via a different path), and
-        // reap the child so it never zombies. $rejectMessage is null on the
-        // success path (the caller settles $deferred itself via
-        // settleFromChildPayload(), after doing its own equivalent cleanup).
-        $teardown = function (?string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer): void {
+        // keep polling forever after settling via a different path), kill and
+        // reap the child so it never zombies.
+        $teardown = function (string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer): void {
             if ($settled) {
                 return;
             }
             $settled = true;
             $loop->removeReadStream($parentSocket);
-            fclose($parentSocket);
+            if (is_resource($parentSocket)) {
+                fclose($parentSocket);
+            }
             if ($timeoutTimer !== null) {
                 $loop->cancelTimer($timeoutTimer);
             }
             if ($cancelTimer !== null) {
                 $loop->cancelTimer($cancelTimer);
             }
-            if ($rejectMessage !== null && function_exists('posix_kill')) {
+            if (function_exists('posix_kill')) {
                 posix_kill($pid, SIGKILL);
             }
             $status = 0;
             pcntl_waitpid($pid, $status);
-            if ($rejectMessage !== null) {
-                $deferred->reject(new \RuntimeException($rejectMessage));
-            }
+            $deferred->reject(new \RuntimeException($rejectMessage));
         };
 
-        $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, function () use ($teardown): void {
-            $teardown('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's');
-        });
+        // The success path: the child either delivered its result frame or
+        // hung up. Same cleanup as $teardown minus the kill (the child is
+        // already on its way out), then settle from whatever result frame
+        // arrived - a child that died before writing one is still a failure.
+        $finalize = function () use (&$settled, &$result, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $loop->removeReadStream($parentSocket);
+            if (is_resource($parentSocket)) {
+                fclose($parentSocket);
+            }
+            if ($timeoutTimer !== null) {
+                $loop->cancelTimer($timeoutTimer);
+            }
+            if ($cancelTimer !== null) {
+                $loop->cancelTimer($cancelTimer);
+            }
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+            $this->settleFromResultFrame($result, $deferred, $onToken);
+        };
+
+        // Restart the idle clock. Called once up front and again for every
+        // frame the child streams, so the ceiling measures silence rather
+        // than total turn length.
+        $resetTimeout = function () use (&$settled, $loop, &$timeoutTimer, $teardown): void {
+            if ($settled) {
+                return;
+            }
+            if ($timeoutTimer !== null) {
+                $loop->cancelTimer($timeoutTimer);
+            }
+            $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, static function () use ($teardown): void {
+                $teardown('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's without progress');
+            });
+        };
+        $resetTimeout();
 
         // Escape-Escape abort (see Chat::update()'s Escape handling): the
         // cancellation flag can flip at any point after this call returns,
@@ -352,29 +408,34 @@ final class EngineBackend implements Backend
             }
         });
 
-        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$settled, $deferred, $loop, $pid, $onToken, $onEvent, &$timeoutTimer, &$cancelTimer): void {
+        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$result, $onEvent, $finalize, $resetTimeout): void {
             $chunk = fread($stream, 65536);
             if ($chunk === '' || $chunk === false) {
-                $loop->removeReadStream($stream);
-                fclose($stream);
-                if ($timeoutTimer !== null) {
-                    $loop->cancelTimer($timeoutTimer);
-                }
-                if ($cancelTimer !== null) {
-                    $loop->cancelTimer($cancelTimer);
-                }
-                if ($settled) {
-                    return;
-                }
-                $settled = true;
-
-                $status = 0;
-                pcntl_waitpid($pid, $status);
-                $this->settleFromChildPayload($buffer, $deferred, $onToken, $onEvent);
+                $finalize();
 
                 return;
             }
+
             $buffer .= $chunk;
+            foreach (self::drainFrames($buffer) as $frame) {
+                // Progress of any kind pushes the idle deadline out.
+                $resetTimeout();
+
+                if (($frame['kind'] ?? null) === 'result') {
+                    $result = $frame;
+                    // The result frame is the last one by construction, so
+                    // settle now rather than waiting for the child's EOF -
+                    // one less round-trip of latency on every turn.
+                    $finalize();
+
+                    return;
+                }
+
+                $event = self::decodeEvent($frame);
+                if ($event !== null && $onEvent !== null) {
+                    $onEvent($event);
+                }
+            }
         });
 
         return $deferred->promise();
@@ -382,58 +443,128 @@ final class EngineBackend implements Backend
 
     /**
      * The forked child's half of {@see completeAsync()}: run the real
-     * (blocking) engine loop in isolation, write its outcome back over the
-     * socket as a single serialized payload, and exit. Never returns.
+     * (blocking) engine loop in isolation, streaming each tool event back
+     * over the socket as its own frame as it fires and the outcome as the
+     * final frame, then exit. Never returns.
      *
      * @param array<int, Message> $history
      */
     private function runCompleteInChild($childSocket, array $history): never
     {
         try {
-            // Tool events are COLLECTED here, not delivered: this is a forked
-            // child, so invoking the caller's callback in-process would write
-            // into a copy of its state and vanish on exit. They ride back in
-            // the payload and the parent replays them (see
-            // settleFromChildPayload()) - end-of-turn rather than live, the
-            // same latency $onToken's one-shot-at-the-end delivery already has
-            // on this path.
-            $events = [];
-            $message = $this->complete($history, null, static function (ToolStarted|ToolFinished $event) use (&$events): void {
-                $events[] = self::encodeEvent($event);
+            // This is a forked child, so invoking the caller's callback
+            // in-process would write into a copy of its state and vanish on
+            // exit - the event has to cross the socket. It goes out
+            // IMMEDIATELY rather than into an end-of-turn batch, because the
+            // batch is exactly what made a multi-tool turn look like a silent
+            // "thinking" spinner (and what made the parent's single
+            // wall-clock timer kill turns that were in fact making progress).
+            $message = $this->complete($history, null, static function (ToolStarted|ToolFinished $event) use ($childSocket): void {
+                self::writeFrame($childSocket, self::encodeEvent($event));
             });
             // imageBytes/imageProtocol survive this fork boundary too - PHP's
             // serialize()/unserialize() (unlike JSON) round-trip arbitrary
             // binary strings natively, so no base64 step is needed here the
             // way Chat::storeToolResult()'s JSON-over-temp-file IPC needs one
             // (W1.G2 reachability fix).
-            $payload = serialize([
+            $payload = [
+                'kind' => 'result',
                 'ok' => true,
                 'content' => $message->content,
                 'reasoning' => $message->reasoning,
                 'imageBytes' => $message->imageBytes,
                 'imageProtocol' => $message->imageProtocol,
-                'events' => $events,
-            ]);
+            ];
         } catch (\Throwable $e) {
-            $payload = serialize(['ok' => false, 'error' => $e->getMessage()]);
+            $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
         }
 
-        fwrite($childSocket, $payload);
+        self::writeFrame($childSocket, $payload);
         fclose($childSocket);
         \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
     }
 
     /**
-     * Decode the forked child's payload and settle $deferred - resolving
-     * with the real content (firing $onToken once, matching {@see complete()}'s
-     * own one-shot-at-the-end semantics) or rejecting with its error message.
-     * A missing/undecodable payload (child crashed before writing anything)
-     * is reported as a failure rather than silently resolving empty.
+     * Write one length-prefixed frame to the child's end of the socket.
+     *
+     * The 4-byte big-endian prefix is what lets the parent tell frames apart
+     * in a byte stream that has no other structure: a serialized payload can
+     * contain any byte, so there is no delimiter to scan for, and a single
+     * fwrite() is not guaranteed to be atomic or complete - hence the loop.
+     * A dead parent (fwrite failing or making no progress) ends the write
+     * rather than spinning; the child is about to exit anyway.
+     *
+     * @param resource             $socket
+     * @param array<string, mixed> $frame
      */
-    private function settleFromChildPayload(string $buffer, Deferred $deferred, ?callable $onToken, ?callable $onEvent = null): void
+    private static function writeFrame($socket, array $frame): void
     {
-        $data = $buffer !== '' ? @unserialize($buffer, ['allowed_classes' => false]) : false;
-        if (!is_array($data)) {
+        $body = serialize($frame);
+        $out = pack('N', strlen($body)) . $body;
+        $total = strlen($out);
+
+        for ($written = 0; $written < $total;) {
+            $n = @fwrite($socket, substr($out, $written));
+            if ($n === false || $n === 0) {
+                return;
+            }
+            $written += $n;
+        }
+    }
+
+    /**
+     * Pull every COMPLETE frame out of the parent's read buffer, leaving any
+     * trailing partial frame in $buffer for the next readable edge - a frame
+     * can and does span two reads once a tool result carries image bytes.
+     *
+     * A frame whose declared length is nonsensical means the stream is no
+     * longer parseable, so the buffer is dropped rather than misinterpreted;
+     * the turn then fails via the missing-result path instead of resolving
+     * with garbage.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function drainFrames(string &$buffer): array
+    {
+        $frames = [];
+
+        while (strlen($buffer) >= 4) {
+            $header = unpack('N', substr($buffer, 0, 4));
+            $length = is_array($header) ? (int) ($header[1] ?? 0) : 0;
+            if ($length <= 0 || $length > self::MAX_FRAME_BYTES) {
+                $buffer = '';
+                break;
+            }
+            if (strlen($buffer) < 4 + $length) {
+                break;
+            }
+
+            $body = substr($buffer, 4, $length);
+            $buffer = substr($buffer, 4 + $length);
+
+            // allowed_classes => false: a hostile/corrupt payload must never
+            // be able to instantiate anything (see encodeEvent()).
+            $decoded = @unserialize($body, ['allowed_classes' => false]);
+            if (is_array($decoded)) {
+                $frames[] = $decoded;
+            }
+        }
+
+        return $frames;
+    }
+
+    /**
+     * Settle $deferred from the child's final result frame - resolving with
+     * the real content (firing $onToken once, matching {@see complete()}'s
+     * own one-shot-at-the-end semantics) or rejecting with its error message.
+     * A null frame (child crashed before writing one) is reported as a
+     * failure rather than silently resolving empty.
+     *
+     * @param ?array<string, mixed> $data
+     */
+    private function settleFromResultFrame(?array $data, Deferred $deferred, ?callable $onToken): void
+    {
+        if ($data === null) {
             $deferred->reject(new \RuntimeException('Provider worker process exited without a result'));
 
             return;
@@ -443,18 +574,6 @@ final class EngineBackend implements Backend
             $deferred->reject(new \RuntimeException((string) ($data['error'] ?? 'Provider worker process failed')));
 
             return;
-        }
-
-        // Tool events first: they all happened before the answer text they
-        // led to, so replaying them after $onToken would hand a consumer a
-        // finished turn followed by the tool calls that produced it.
-        if ($onEvent !== null && is_array($data['events'] ?? null)) {
-            foreach ($data['events'] as $encoded) {
-                $event = is_array($encoded) ? self::decodeEvent($encoded) : null;
-                if ($event !== null) {
-                    $onEvent($event);
-                }
-            }
         }
 
         $content = (string) ($data['content'] ?? '');

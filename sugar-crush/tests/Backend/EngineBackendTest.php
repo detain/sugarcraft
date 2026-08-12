@@ -544,6 +544,222 @@ final class EngineBackendTest extends TestCase
         $this->assertSame(7, $finished->result->durationMs());
     }
 
+    /**
+     * The defect §1 E1 describes: the child used to buffer every tool event
+     * and write ONE payload at the very end, so a turn running real
+     * multi-step tool work showed nothing but a "thinking" spinner until it
+     * finished (and its 120s ceiling was a single wall-clock timer for the
+     * whole turn rather than an idle one).
+     *
+     * The proof is a handshake, not a stopwatch: the child's SECOND provider
+     * call blocks until the parent creates a gate file, and the parent only
+     * creates it from inside the $onEvent callback. If events are delivered
+     * live the child is unblocked and answers "NOON"; with the old
+     * end-of-turn batching the parent cannot possibly have seen the event
+     * yet, the gate never opens, and the child reports the timeout instead.
+     */
+    public function testCompleteAsyncDeliversToolEventsWhileTheChildIsStillWorking(): void
+    {
+        $gate = sys_get_temp_dir() . '/crush-live-events-' . bin2hex(random_bytes(6));
+        $backend = EngineBackend::new($this->gatedToolThenAnswerProvider($gate), 'tc')
+            ->withTools([$this->clockTool()]);
+
+        $seen = [];
+        try {
+            $reply = $this->awaitPromise($backend->completeAsync(
+                [Message::user('what time is it?')],
+                null,
+                null,
+                function ($event) use (&$seen, $gate): void {
+                    $seen[] = $event;
+                    if ($event instanceof ToolFinished) {
+                        touch($gate);
+                    }
+                },
+            ));
+        } finally {
+            @unlink($gate);
+        }
+
+        $this->assertStringContainsString(
+            'NOON',
+            $reply->content,
+            'the child never saw the gate open - tool events did not reach the parent until the turn was already over',
+        );
+        $this->assertSame(
+            [ToolStarted::class, ToolFinished::class],
+            array_map(static fn ($e) => $e::class, $seen),
+        );
+    }
+
+    /**
+     * A frame can and does span two reads: the parent reads 64KB at a time,
+     * and one image-bearing tool result is bigger than that on its own. This
+     * drives a ~256KB event payload through the real fork, so a framing
+     * implementation that assumed one read == one frame would hand the
+     * consumer a corrupt (or missing) event.
+     */
+    public function testCompleteAsyncReassemblesAToolEventSplitAcrossReads(): void
+    {
+        $bytes = str_repeat("\x89PNG\x00\xff", 45000); // ~270KB, >> the 64KB read size
+        $backend = EngineBackend::new($this->toolThenAnswerProvider(), 'tc')
+            ->withTools([$this->bulkyTool($bytes)]);
+
+        $events = [];
+        $reply = $this->awaitPromise($backend->completeAsync(
+            [Message::user('what time is it?')],
+            null,
+            null,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ));
+
+        $this->assertStringContainsString('NOON', $reply->content);
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(ToolFinished::class, $events[1]);
+        $this->assertSame($bytes, $events[1]->result->imageBytes());
+    }
+
+    /**
+     * Frame reassembly in isolation: bytes handed over one at a time must
+     * yield nothing until a frame is whole, then exactly that frame, and the
+     * unconsumed tail must stay in the buffer for the next readable edge.
+     */
+    public function testDrainFramesYieldsOnlyWholeFramesAndKeepsThePartialTail(): void
+    {
+        $drain = new \ReflectionMethod(EngineBackend::class, 'drainFrames');
+        $body = serialize(['kind' => 'started', 'id' => 'c1', 'name' => 'clock', 'arguments' => []]);
+        $wire = pack('N', strlen($body)) . $body;
+
+        $buffer = '';
+        $collected = [];
+        // Feed the wire bytes one at a time, plus a truncated second frame.
+        foreach (str_split($wire . substr($wire, 0, 5), 1) as $byte) {
+            $buffer .= $byte;
+            foreach ($drain->invokeArgs(null, [&$buffer]) as $frame) {
+                $collected[] = $frame;
+            }
+        }
+
+        $this->assertCount(1, $collected);
+        $this->assertSame('started', $collected[0]['kind']);
+        $this->assertSame('c1', $collected[0]['id']);
+        $this->assertSame(5, strlen($buffer), 'the partial frame must stay buffered for the next read');
+    }
+
+    /**
+     * A nonsensical declared length means the stream is no longer parseable;
+     * the buffer is dropped rather than misinterpreted, so the turn fails via
+     * the missing-result path instead of resolving with garbage.
+     */
+    public function testDrainFramesDiscardsAnImpossiblyLongFrame(): void
+    {
+        $drain = new \ReflectionMethod(EngineBackend::class, 'drainFrames');
+        $buffer = pack('N', 0x7fffffff) . 'nonsense';
+
+        $frames = $drain->invokeArgs(null, [&$buffer]);
+
+        $this->assertSame([], $frames);
+        $this->assertSame('', $buffer);
+    }
+
+    /**
+     * The second half of the §1 E1 defect: COMPLETE_TIMEOUT_SECONDS used to be
+     * armed exactly once for the whole forked turn, so real multi-step tool
+     * work got SIGKILLed mid-flight. It is now an IDLE ceiling - re-armed on
+     * every frame - which cannot be exercised in a unit test without waiting
+     * out the real 120s, so pin the wiring instead: the timer must only ever
+     * be created by the reset helper, and that helper must be reachable from
+     * the socket's read handler.
+     */
+    public function testTheCompletionTimeoutIsReArmedOnEveryFrame(): void
+    {
+        $source = $this->methodSource(new \ReflectionMethod(EngineBackend::class, 'completeAsync'));
+
+        $this->assertSame(
+            1,
+            substr_count($source, 'addTimer(self::COMPLETE_TIMEOUT_SECONDS'),
+            'the completion timeout must be armed in exactly one place (the reset helper)',
+        );
+        [, $readHandler] = explode('addReadStream(', $source, 2);
+        $this->assertStringContainsString(
+            '$resetTimeout()',
+            $readHandler,
+            'the read handler must re-arm the timeout, or the ceiling is per-turn again',
+        );
+    }
+
+    private function methodSource(\ReflectionMethod $method): string
+    {
+        $lines = file((string) $method->getFileName(), FILE_IGNORE_NEW_LINES);
+        $start = (int) $method->getStartLine() - 1;
+
+        return implode("\n", array_slice((array) $lines, $start, (int) $method->getEndLine() - $start));
+    }
+
+    /**
+     * Requests a tool on the first turn, then blocks the second turn until
+     * $gate exists - the handshake
+     * {@see testCompleteAsyncDeliversToolEventsWhileTheChildIsStillWorking()}
+     * uses to prove the parent saw the tool event mid-turn.
+     */
+    private function gatedToolThenAnswerProvider(string $gate): ProviderInterface
+    {
+        return new class($gate) implements ProviderInterface {
+            public int $calls = 0;
+            public function __construct(private string $gate) {}
+            public function name(): string { return 'gated'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                $this->calls++;
+                if ($this->calls === 1) {
+                    return new CompleteResponse(content: 'checking', toolCalls: [new ToolCall('c1', 'clock', [])]);
+                }
+
+                // Bounded so a regression fails the assertion instead of
+                // hanging the suite.
+                $deadline = microtime(true) + 3.0;
+                while (microtime(true) < $deadline) {
+                    clearstatcache(true, $this->gate);
+                    if (file_exists($this->gate)) {
+                        return new CompleteResponse(content: 'The time is NOON.');
+                    }
+                    usleep(5000);
+                }
+
+                return new CompleteResponse(content: 'gate never opened');
+            }
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+    }
+
+    /** A clock tool whose result carries a payload far larger than one read. */
+    private function bulkyTool(string $bytes): Tool
+    {
+        return new class($bytes) implements Tool {
+            public function __construct(private string $bytes) {}
+            public function name(): string { return 'clock'; }
+            public function description(): string { return 'test tool'; }
+            public function inputSchema(): array { return []; }
+            public function execute(array $args): ToolResult
+            {
+                return new ToolResult(
+                    toolCallId: '',
+                    content: 'NOON',
+                    isError: false,
+                    imageBytes: $this->bytes,
+                    imageProtocol: 'kitty',
+                );
+            }
+        };
+    }
+
     /** An image/diff-bearing variant of {@see clockTool()}. */
     private function richClockTool(): Tool
     {
