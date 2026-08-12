@@ -22,6 +22,7 @@ use SugarCraft\Sprinkles\Style;
 use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
@@ -362,6 +363,22 @@ final class Renderer
     public static function zoneOrigin(): array
     {
         return self::$zoneOrigin;
+    }
+
+    /**
+     * Drop the click-zone registry and reset the origin.
+     *
+     * For a shell frame that does NOT contain this renderer's output at all —
+     * the full-pane agent dashboard (crush_feat.md §5 E5) is the first one.
+     * {@see scanRoot()} only clears the registry when it runs, so a frame that
+     * never calls it would leave the PREVIOUS frame's boxes hit-testable
+     * underneath content that never drew them, and a click would fire whatever
+     * action last occupied that cell.
+     */
+    public static function clearZones(): void
+    {
+        self::scanner()->clear();
+        self::$zoneOrigin = [0, 0];
     }
 
     /**
@@ -842,9 +859,13 @@ final class Renderer
     /**
      * Render the agent status line + agent list pane, or '' when Chat has
      * no AgentManager or the manager has no active agents. See the "R20
-     * wiring decision" note on this class's docblock for why the fields
-     * beyond name/status/operation are 0 rather than fabricated, and why
-     * AgentOutputPane / the split-pane renderer are not called here.
+     * wiring decision" note on this class's docblock for why AgentOutputPane
+     * / the split-pane renderer are not called here; the elapsed/token/cost
+     * columns are real as of W3.S5b — see {@see agentDisplayState()}.
+     *
+     * This is the in-transcript strip. The full-pane dashboard the same data
+     * feeds is {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane},
+     * reached through the shell's `Pane::Agents`.
      */
     private static function renderAgentView(Chat $chat): string
     {
@@ -858,7 +879,10 @@ final class Renderer
             return '';
         }
 
-        $states = array_map(self::agentDisplayState(...), $agents);
+        $states = array_map(
+            static fn(Agent $agent): AgentDisplayState => self::agentDisplayState($agent, $manager),
+            $agents,
+        );
 
         $cols = $chat->cols();
         $width = max(40, $cols - 4);
@@ -873,20 +897,25 @@ final class Renderer
 
     /**
      * Map a real registered {@see Agent} to the display-state shape
-     * AgentStatusBar/AgentViewPane render. elapsedSeconds/tokensUsed/costUsd
-     * are 0 — Chat's AgentManager/AgentWorkerPool accessors expose no
-     * per-agent live telemetry to source real values from (see class
-     * docblock); reporting 0 is honest, not fabricated.
+     * AgentStatusBar/AgentViewPane render.
+     *
+     * W3.S5b: elapsedSeconds/tokensUsed/costUsd are now read off
+     * {@see AgentManager}'s real per-agent telemetry (added by W3.F2, which
+     * stamps `startedAt` and accumulates tokens/cost per streamed chunk in
+     * `executeSubAgent()`), replacing the literal `0, 0, 0.0` this method
+     * previously reported. They still read 0 for an agent that has never
+     * spawned a sub-agent — that is a genuine "no work done yet", not a
+     * placeholder.
      */
-    private static function agentDisplayState(Agent $agent): AgentDisplayState
+    private static function agentDisplayState(Agent $agent, AgentManager $manager): AgentDisplayState
     {
         return AgentDisplayState::new(
             name: $agent->name,
             status: $agent->isActive ? 'working' : 'stopped',
             operation: $agent->description,
-            elapsedSeconds: 0,
-            tokensUsed: 0,
-            costUsd: 0.0,
+            elapsedSeconds: $manager->elapsedSeconds($agent->name),
+            tokensUsed: $manager->tokensUsed($agent->name),
+            costUsd: $manager->costUsd($agent->name),
         );
     }
 

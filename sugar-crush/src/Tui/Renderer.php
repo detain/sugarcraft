@@ -18,6 +18,7 @@ use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Tui\Components\ChatPane;
 use SugarCraft\Crush\Tui\Components\InputPane;
 use SugarCraft\Crush\Tui\Components\SkillsPane;
+use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
 use SugarCraft\Crush\Tui\Components\AgentsPane;
 use SugarCraft\Crush\Tui\Components\FilesPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
@@ -242,6 +243,14 @@ final class Renderer
             + ($bottom === '' ? 0 : self::lineCount($bottom));
         $paneRows = max(3, $rows - $chrome);
 
+        // Pane::Agents is a FULL-pane view (crush_feat.md §5 E5): the whole
+        // content band becomes the dashboard, no sidebars and no chat column.
+        // A dashboard squeezed into a quarter-width sidebar cannot show the
+        // status/operation/elapsed/usage columns it exists to show.
+        if ($a->pane === Pane::Agents) {
+            return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         $leftPane = self::leftSidebar($a, $cols, $paneRows);
         $rightPane = self::rightSidebar($a, $cols, $paneRows);
 
@@ -288,6 +297,52 @@ final class Renderer
         );
 
         return new View($frame, images: $images);
+    }
+
+    /**
+     * The {@see Pane::Agents} frame: shell chrome around the full-width
+     * {@see AgentDashboardPane}.
+     *
+     * Shares {@see renderView()}'s clipping discipline exactly — the frame is
+     * held to `$rows` and every line to `$cols`, for the reasons enumerated on
+     * that method.
+     *
+     * The hosted chat's click zones are DROPPED here rather than re-based.
+     * `Chat` records zones by scanning its own frame, and this frame does not
+     * contain that frame: leaving the registry populated would leave the
+     * previous chat frame's boxes hit-testable underneath a dashboard that
+     * never drew them, so a click on an agent row would fire whatever chat
+     * action last occupied that cell. No zones is the honest state — the
+     * dashboard is keyboard-driven (Alt+1..9, Space, Enter, q).
+     */
+    private static function renderAgentDashboard(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $dashboard = self::clipHead(
+            AgentDashboardPane::render($a, $cols, $paneRows),
+            $paneRows,
+        );
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $dashboard;
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $frame = self::clipWidth(self::clipTail(implode("\n", $parts), $rows), $cols);
+
+        LiveRenderer::clearZones();
+
+        return new View($frame);
     }
 
     /**
@@ -385,6 +440,13 @@ final class Renderer
         return FilesPane::render($a, $width, $rows);
     }
 
+    /**
+     * Note on {@see AgentsPane}: its `Pane::Agents` arm below is no longer
+     * taken, because {@see renderView()} now diverts that pane to the
+     * full-width {@see AgentDashboardPane} before any sidebar is built. It is
+     * kept, not removed — it is the sidebar-sized agents widget, and the arm
+     * is the seam a future side-by-side layout re-enters through.
+     */
     private static function rightSidebar(App $a, int $cols, int $rows): string
     {
         $width = (int) floor($cols / 4);
