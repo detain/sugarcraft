@@ -189,6 +189,43 @@ final class RewindCommandTest extends TestCase
         $this->assertSame('', $next->inputBuf);
     }
 
+    /**
+     * crush_feat.md §1 E7, end to end: a checkpoint taken while a tool call
+     * was still running (the auto-save in {@see Chat::update()} fires per
+     * prompt, so this is the ordinary case for a crash mid-call) used to
+     * restore its `Message::toolRunning()` placeholder as a plain bubble -
+     * losing the dead call's id entirely. Rewinding now yields a real
+     * interrupted result under that id.
+     */
+    public function testRewindHealsACheckpointTakenMidToolCall(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+
+        $this->sessionStore->saveCheckpoint('test-session', [
+            'messages' => [
+                ['role' => 'user', 'content' => 'run it'],
+                ['role' => 'system', 'content' => 'bash(cmd: "sleep 900")', 'pendingToolCallId' => 'call_9'],
+            ],
+            'inputBuf' => '',
+            'agentContext' => ['currentSessionId' => 'test-session'],
+        ]);
+        $chat = new Chat(
+            history: [Message::user('run it')],
+            inputBuf: '/rewind',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+
+        [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $healed = $next->history[1];
+        $this->assertNull($healed->pendingToolCallId, 'a restored placeholder kept spinning');
+        $this->assertCount(1, $healed->toolResults);
+        $this->assertSame('call_9', $healed->toolResults[0]->id);
+        $this->assertTrue(Chat::isInterruptedResult($healed->toolResults[0]));
+    }
+
     public function testRewindMultipleStepsBack(): void
     {
         $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');

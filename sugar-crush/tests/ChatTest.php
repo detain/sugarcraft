@@ -3162,6 +3162,16 @@ final class ChatTest extends TestCase
         $this->assertFileDoesNotExist($sentinel, 'a refused tool call ran anyway');
         $this->assertSame('running', $rejected->history[0]->content);
         $this->assertSame('_Permission denied: bash was not run._', $rejected->history[1]->content);
+
+        // crush_feat.md §1 E7: the refusal must also exist as a RESULT under
+        // the refused call's own id. history[0] carries the tool_use block, so
+        // without this the next request goes out with a tool_use that has no
+        // matching tool_result - and the renderer has nothing to strike through.
+        $denied = $rejected->history[2]->toolResults;
+        $this->assertCount(1, $denied);
+        $this->assertSame('bash', $denied[0]->name);
+        $this->assertTrue(Chat::isDeniedResult($denied[0]), 'refusal not classified as denied');
+        $this->assertSame($this->askingToolCall()->toolCalls[0]->id, $denied[0]->id);
     }
 
     /**

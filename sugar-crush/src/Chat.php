@@ -773,6 +773,18 @@ final class Chat implements Model
                     ...$this->history,
                     $request->assistantMessage,
                     Message::system("_Permission denied: {$request->toolCall->name} was not run._"),
+                    // The refusal also has to exist as a RESULT, not only as
+                    // a system note (crush_feat.md §1 E7): the assistant
+                    // message above carries the tool call, so leaving it
+                    // unanswered puts a tool_use block on the next request's
+                    // wire with no matching tool_result. It doubles as the
+                    // producer for the struck-through denied row
+                    // {@see Renderer::renderToolResults()} draws.
+                    Message::assistant('')->withToolResults([ToolResult::error(
+                        $request->toolCall->name,
+                        "Permission denied: {$request->toolCall->name} was not run.",
+                        $request->toolCall->id,
+                    )]),
                 ],
             ]), null];
         }
@@ -2190,6 +2202,121 @@ final class Chat implements Model
     }
 
     /**
+     * Error-message prefixes that mark a {@see ToolResult} as REFUSED rather
+     * than merely failed (crush_feat.md §1 E7).
+     *
+     * Refusal is carried in the error text rather than in a dedicated flag
+     * because every refusal producer already writes one of these three
+     * sentences and they are the only text a result's error can start with
+     * that means "this never ran": {@see answerPermission()} (the user
+     * rejected the prompt), {@see forkToolCalls()} (an ASK reached the fork
+     * boundary unanswered) and the hook gate in both {@see finishToolCalls()}
+     * and {@see \SugarCraft\Crush\Runtime::execute()} - the latter reaching
+     * here through {@see ToolResult::fromEngineResult()}, so an engine-path
+     * denial renders identically to a Chat-path one.
+     *
+     * @var list<string>
+     */
+    public const DENIED_ERROR_PREFIXES = [
+        'Permission denied:',
+        'Permission required:',
+        'Hook denied:',
+    ];
+
+    /**
+     * Verbatim error text {@see reviveCheckpointMessage()} writes onto a tool
+     * call that was still running when the process that started it went away
+     * - crush_feat.md §1 E7's literal "Tool call interrupted by restart".
+     * Also the marker {@see isInterruptedResult()} matches on, so the
+     * renderer can draw it as its own state rather than as a plain failure.
+     */
+    public const INTERRUPTED_TOOL_CALL = 'Tool call interrupted by restart';
+
+    /**
+     * True when $result is a refusal - a call the user or a hook stopped -
+     * rather than a call that ran and failed.
+     *
+     * crush_feat.md §1 E7 wants a refusal drawn as its own visual state
+     * (struck through), not just another red error line, and §1's opencode
+     * survey (line 111) is explicit that "denied" is "a distinct visual
+     * state, not just an error color". {@see Renderer::renderToolResults()}
+     * is the consumer; the classification lives here, next to the code that
+     * writes those errors, so the renderer never has to guess.
+     */
+    public static function isDeniedResult(ToolResult $result): bool
+    {
+        $error = $result->error;
+        if ($error === null) {
+            return false;
+        }
+
+        foreach (self::DENIED_ERROR_PREFIXES as $prefix) {
+            if (str_starts_with($error, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * True when $result stands in for a tool call that never finished
+     * because the process running it went away - see
+     * {@see reviveCheckpointMessage()}. Distinct from
+     * {@see isDeniedResult()}: nobody refused this call, it simply lost its
+     * runner, and the two deserve different words on screen.
+     */
+    public static function isInterruptedResult(ToolResult $result): bool
+    {
+        return $result->error === self::INTERRUPTED_TOOL_CALL;
+    }
+
+    /**
+     * Rebuild one checkpointed history row into a {@see Message}, healing a
+     * checkpoint that was taken while a tool call was still in flight
+     * (crush_feat.md §1 E7).
+     *
+     * A row with a non-null `pendingToolCallId` is a {@see
+     * Message::toolRunning()} placeholder whose call died with the previous
+     * process. Replaying it verbatim would restore a spinner nothing can ever
+     * resolve, AND would put a `tool_use` block on the next request's wire
+     * with no matching `tool_result` - which providers reject outright. So it
+     * is replaced by a synthetic assistant turn carrying a refusal-shaped
+     * result under the SAME call id, exactly as the spec sketches: the
+     * transcript stays honest about what happened and the wire stays
+     * well-formed.
+     *
+     * The synthetic result is named from the row's `content` - a placeholder
+     * stores {@see Message::describeToolCall()}'s human one-liner there and
+     * carries no separate tool name - because {@see Renderer} prints that
+     * value after "🔧 tool:", and the alternative (the opaque call id) would
+     * put a wire identifier in front of the user.
+     *
+     * @param array<string, mixed> $row one raw checkpoint message, as
+     *                                  {@see \SugarCraft\Crush\Session\EnhancedSessionStore::saveCheckpoint()}
+     *                                  serialised it
+     */
+    public static function reviveCheckpointMessage(array $row): Message
+    {
+        $content = \is_string($row['content'] ?? null) ? $row['content'] : '';
+        $pendingId = $row['pendingToolCallId'] ?? null;
+
+        if (\is_string($pendingId) && $pendingId !== '') {
+            return Message::assistant(self::INTERRUPTED_TOOL_CALL)
+                ->withToolResults([ToolResult::error(
+                    $content !== '' ? $content : $pendingId,
+                    self::INTERRUPTED_TOOL_CALL,
+                    $pendingId,
+                )]);
+        }
+
+        return match ($row['role'] ?? '') {
+            'assistant' => Message::assistant($content),
+            default     => Message::user($content),
+        };
+    }
+
+    /**
      * Ctrl+O's target: every tool-call id carried by the most recent
      * tool-result message in history, or [] when the conversation has none.
      *
@@ -3254,12 +3381,13 @@ final class Chat implements Model
 
             // Extract state data
             $messages = $state['state_data']['messages'] ?? $state['messages'] ?? [];
-            // Convert raw arrays to Message objects before passing to Chat constructor
-            $messages = array_map(fn(array $msg): Message => match($msg['role'] ?? '') {
-                'user' => Message::user($msg['content'] ?? ''),
-                'assistant' => Message::assistant($msg['content'] ?? ''),
-                default => Message::user($msg['content'] ?? ''),
-            }, $messages);
+            // Convert raw arrays to Message objects before passing to Chat
+            // constructor, healing any placeholder whose tool call died with
+            // the checkpointing process (crush_feat.md §1 E7).
+            $messages = array_map(
+                static fn(array $msg): Message => self::reviveCheckpointMessage($msg),
+                $messages,
+            );
             $inputBuf = $state['state_data']['inputBuf'] ?? $state['inputBuf'] ?? '';
 
             // Build response

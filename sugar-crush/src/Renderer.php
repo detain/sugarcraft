@@ -1136,6 +1136,14 @@ final class Renderer
      * {@see collapseToolOutput()} so a multi-megabyte stderr can't evict the
      * conversation it belongs to. Expanding shows the body verbatim.
      *
+     * A result that never ran gets its own visual state rather than the
+     * generic error one (crush_feat.md §1 E7): both a refusal
+     * ({@see Chat::isDeniedResult()} - the user rejected the prompt, or a
+     * hook/permission gate stopped it) and a restart-orphaned call
+     * ({@see Chat::isInterruptedResult()}) draw the icon+name row STRUCK
+     * THROUGH. The body is left un-struck because for these two states the
+     * body is the reason, which is exactly what the user needs to read.
+     *
      * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
     private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
@@ -1147,10 +1155,18 @@ final class Renderer
             // carry an OSC title-set or a screen-clear. Unlike assistant
             // Markdown it has no legitimate SGR of its own, so it takes the full
             // {@see untrusted()} scrub rather than only the sentinel strip.
-            $status = $result->isError()
-                ? Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error')
-                : Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
-            $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
+            // A refused or interrupted call is not just a failed one: it never
+            // ran, so its whole icon+text row is struck through rather than
+            // merely recoloured (crush_feat.md §1 E7).
+            $denied = Chat::isDeniedResult($result);
+            $stopped = $denied || Chat::isInterruptedResult($result);
+            $status = match (true) {
+                $denied            => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ denied'),
+                $stopped           => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ interrupted'),
+                $result->isError() => Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error'),
+                default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
+            };
+            $label = Style::new()->foreground($theme->systemLabel)->faint()->strikethrough($stopped)->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
             $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
             $key = $result->id ?? $result->name;
             $isExpanded = ($expanded[$key] ?? false) === true;
