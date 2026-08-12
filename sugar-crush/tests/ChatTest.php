@@ -39,6 +39,8 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\SessionTitledMsg;
+use SugarCraft\Crush\BackgroundSessionSpawnedMsg;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Permissions\PermissionReply;
 
@@ -906,7 +908,7 @@ final class ChatTest extends TestCase
 
         [$narrowed] = $chat->update(new KeyMsg(KeyType::Char, 'b'));
         $names = array_map(static fn($spec) => $spec->name, $narrowed->slashMenuMatches());
-        $this->assertSame(['branch'], $names);
+        $this->assertSame(['bg', 'branch'], $names);
     }
 
     public function testSlashMenuHiddenOnceArgumentsStart(): void
@@ -3322,5 +3324,195 @@ final class ChatTest extends TestCase
         $this->assertSame($chat, $same);
         $this->assertNull($cmd);
         $this->assertSame([], $same->permissionGrants());
+    }
+
+    // ---------------------------------------------------------------
+    // /bg + /fork background sessions (crush_feat.md section 5 E3)
+    // ---------------------------------------------------------------
+
+    /** Type $line at the prompt one key at a time, then send it. */
+    private function submitLine(Chat $chat, string $line): array
+    {
+        foreach (preg_split('//u', $line, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+            [$chat] = $chat->update(
+                $char === ' ' ? new KeyMsg(KeyType::Space, '') : new KeyMsg(KeyType::Char, $char),
+            );
+        }
+
+        // Enter while the "/" popup is showing completes the highlighted row
+        // rather than submitting, so a bare "/bg" needs a second Enter.
+        if ($chat->slashMenuMatches() !== []) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        }
+
+        return $chat->update(new KeyMsg(KeyType::Enter, ''));
+    }
+
+    /** The last assistant reply in $chat's transcript. */
+    private function lastAssistantContent(Chat $chat): string
+    {
+        for ($i = count($chat->history) - 1; $i >= 0; $i--) {
+            if ($chat->history[$i]->role === Role::Assistant) {
+                return $chat->history[$i]->content;
+            }
+        }
+
+        return '';
+    }
+
+    public function testSlashMenuListsTheBackgroundCommands(): void
+    {
+        // Before E3 neither command existed on either surface, so typing
+        // "/bg" matched nothing at all.
+        $names = array_map(
+            static fn($spec): string => $spec->name,
+            (new Chat(inputBuf: '/bg'))->slashMenuMatches(),
+        );
+        $this->assertContains('bg', $names);
+
+        $forkNames = array_map(
+            static fn($spec): string => $spec->name,
+            (new Chat(inputBuf: '/fork'))->slashMenuMatches(),
+        );
+        $this->assertContains('fork', $forkNames);
+    }
+
+    public function testBackgroundCommandWithoutASupervisorDegradesGracefully(): void
+    {
+        [$next, $cmd] = $this->submitLine(new Chat(), '/bg run the tests');
+
+        $this->assertNull($cmd);
+        $this->assertStringContainsString('Background sessions not configured', $this->lastAssistantContent($next));
+    }
+
+    public function testBackgroundCommandWithoutATaskShowsUsage(): void
+    {
+        $chat = new Chat(backgroundSupervisor: new BackgroundSupervisor());
+
+        [$next, $cmd] = $this->submitLine($chat, '/bg');
+
+        $this->assertNull($cmd);
+        $this->assertSame('Usage: /bg <task>', $this->lastAssistantContent($next));
+    }
+
+    public function testBackgroundCommandFreesThePromptAndDefersTheSpawn(): void
+    {
+        $chat = new Chat(backgroundSupervisor: new BackgroundSupervisor());
+
+        [$next, $cmd] = $this->submitLine($chat, '/bg port the renderer');
+
+        // The spawn blocks on a socket handshake, so it must live in the Cmd
+        // and not in update(): the prompt is free the moment Enter lands.
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertSame('', $next->inputBuf);
+        $this->assertFalse($next->inFlight);
+        $this->assertCount(1, $next->history);
+        $this->assertSame('/bg port the renderer', $next->history[0]->content);
+        $this->assertSame(Role::User, $next->history[0]->role);
+    }
+
+    public function testBackgroundCommandSpawnsARealSupervisedSession(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+
+        [$next, $cmd] = $this->submitLine($chat, '/bg summarise the diff');
+        $spawned = $this->resolveAsyncCmd($cmd);
+
+        $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
+        $this->assertNull($spawned->error);
+        $this->assertNotNull($spawned->sessionId);
+        $this->assertSame('summarise the diff', $spawned->name);
+        $this->assertTrue($supervisor->hasActiveSessions());
+
+        [$reported] = $next->update($spawned);
+        $this->assertStringContainsString("Backgrounded as {$spawned->sessionId}", $this->lastAssistantContent($reported));
+
+        @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.sock');
+        @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer');
+    }
+
+    public function testFailedSpawnIsReportedInTheTranscript(): void
+    {
+        $failed = new BackgroundSessionSpawnedMsg('/bg', 'Port the renderer', null, 'Failed to spawn session process');
+
+        [$next] = (new Chat())->update($failed);
+
+        $this->assertStringContainsString('Could not start background session', $this->lastAssistantContent($next));
+        $this->assertStringContainsString('Failed to spawn session process', $this->lastAssistantContent($next));
+    }
+
+    public function testForkCommandClonesTheTranscriptAndLeavesTheUserOnIt(): void
+    {
+        $store = $this->titleStore('sess-fork');
+        $chat = new Chat(
+            sessionStore: $store,
+            currentSessionId: 'sess-fork',
+            backgroundSupervisor: new BackgroundSupervisor(),
+        );
+
+        [$next, $cmd] = $this->submitLine($chat, '/fork try the async path');
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        // /branch MOVES the user onto the copy; /fork must not.
+        $this->assertSame('sess-fork', $next->currentSessionId());
+        $this->assertCount(2, $store->listSessions());
+    }
+
+    public function testForkCommandRequiresASessionToClone(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+
+        [$noStore, $noStoreCmd] = $this->submitLine(
+            new Chat(backgroundSupervisor: $supervisor),
+            '/fork keep going',
+        );
+        $this->assertNull($noStoreCmd);
+        $this->assertStringContainsString('Session store not configured', $this->lastAssistantContent($noStore));
+
+        [$noSession, $noSessionCmd] = $this->submitLine(
+            new Chat(sessionStore: $this->titleStore('sess-other'), backgroundSupervisor: $supervisor),
+            '/fork keep going',
+        );
+        $this->assertNull($noSessionCmd);
+        $this->assertStringContainsString('No active session', $this->lastAssistantContent($noSession));
+    }
+
+    public function testForkCommandWithoutAPromptShowsUsage(): void
+    {
+        $chat = new Chat(
+            sessionStore: $this->titleStore('sess-fork-usage'),
+            currentSessionId: 'sess-fork-usage',
+            backgroundSupervisor: new BackgroundSupervisor(),
+        );
+
+        [$next, $cmd] = $this->submitLine($chat, '/fork');
+
+        $this->assertNull($cmd);
+        $this->assertSame('Usage: /fork <prompt>', $this->lastAssistantContent($next));
+        // A usage error must not leave a stray clone behind.
+        $this->assertCount(1, $chat->sessionStore()->listSessions());
+    }
+
+    public function testForkNoticeIsWordedAsAFork(): void
+    {
+        $spawned = new BackgroundSessionSpawnedMsg('/fork', 'Try the async path', 'sess-bg-1');
+
+        [$next] = (new Chat())->update($spawned);
+
+        $this->assertStringContainsString('Forked into background session sess-bg-1', $this->lastAssistantContent($next));
+    }
+
+    public function testSupervisorSurvivesStateTransitions(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $chat = (new Chat())->withBackgroundSupervisor($supervisor);
+
+        // Every mutate() must carry the supervisor through, or the sessions
+        // an earlier clone spawned become unreachable.
+        [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'x'));
+        [$sized] = $typed->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+
+        $this->assertSame($supervisor, $sized->backgroundSupervisor());
     }
 }

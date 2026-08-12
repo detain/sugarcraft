@@ -379,6 +379,19 @@ final class Chat implements Model
          * actually building.
          */
         private readonly int $scrollOffset = 0,
+        /**
+         * Supervisor the `/bg` and `/fork` commands dispatch onto
+         * (crush_feat.md section 5 E3). Before this, `BackgroundSupervisor`
+         * had no caller anywhere in the codebase: the fork+daemonize,
+         * heartbeat and reconnect machinery was fully built and fully
+         * unit-tested but unreachable from chat, so a user could not
+         * background a task at all.
+         *
+         * Null (the default) keeps every existing embedder/test working and
+         * makes `/bg` answer with the same "<thing> not configured" line the
+         * other optional collaborators on this class use.
+         */
+        private readonly ?\SugarCraft\Crush\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
@@ -443,6 +456,18 @@ final class Chat implements Model
                 return [$this, null];
             }
             return [$this->mutate(['currentSessionName' => $title]), null];
+        }
+        if ($msg instanceof BackgroundSessionSpawnedMsg) {
+            // Unlike the title call above this is NOT session-scoped: the
+            // user asked for it out loud with a slash command, so the answer
+            // belongs in whatever transcript is in front of them now.
+            $notice = $msg->error !== null
+                ? "Could not start background session '{$msg->name}': {$msg->error}"
+                : ($msg->command === '/fork'
+                    ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status."
+                    : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status.");
+
+            return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)]]), null];
         }
         if ($msg instanceof WindowSizeMsg) {
             // The one authoritative size - see the constructor docblock on
@@ -2014,6 +2039,28 @@ final class Chat implements Model
     }
 
     /**
+     * The background-session supervisor `/bg` and `/fork` dispatch onto, if set.
+     */
+    public function backgroundSupervisor(): ?\SugarCraft\Crush\Sessions\BackgroundSupervisor
+    {
+        return $this->backgroundSupervisor;
+    }
+
+    /**
+     * Attach the supervisor `/bg` and `/fork` spawn onto.
+     *
+     * The supervisor is deliberately NOT immutable-cloned here: it owns live
+     * child processes and open sockets, so every `mutate()` clone of this
+     * Chat must keep pointing at the SAME instance or the sessions a previous
+     * clone spawned become unreachable (the same reasoning as
+     * {@see \SugarCraft\Crush\Backend\CancellationToken}).
+     */
+    public function withBackgroundSupervisor(?\SugarCraft\Crush\Sessions\BackgroundSupervisor $supervisor): self
+    {
+        return $this->mutate(['backgroundSupervisor' => $supervisor]);
+    }
+
+    /**
      * Get the memory store, if set.
      */
     public function memoryStore(): ?MemoryStore
@@ -2479,6 +2526,7 @@ final class Chat implements Model
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
             'scrollOffset' => $this->scrollOffset,
+            'backgroundSupervisor' => $this->backgroundSupervisor,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -2588,6 +2636,18 @@ final class Chat implements Model
         // Handle /memory commands locally
         if (str_starts_with($text, '/memory')) {
             return $this->handleMemoryCommand($text);
+        }
+
+        // Handle /bg (and its /background spelling) - dispatch a task onto
+        // BackgroundSupervisor (crush_feat.md section 5 E3). Checked before
+        // /branch only for readability; the two prefixes cannot collide.
+        if (str_starts_with($text, '/bg') || str_starts_with($text, '/background')) {
+            return $this->handleBackgroundCommand($text);
+        }
+
+        // Handle /fork command (clone this conversation into a background session)
+        if (str_starts_with($text, '/fork')) {
+            return $this->handleForkCommand($text);
         }
 
         // Handle /branch command (fork current session)
@@ -3320,6 +3380,199 @@ final class Chat implements Model
         ]);
 
         return [$next, null];
+    }
+
+    /**
+     * Handle /bg (alias /background) — dispatch a task onto
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor} and hand the
+     * prompt straight back (crush_feat.md section 5 E3).
+     *
+     * Claude Code's `/background` with no argument backgrounds the LIVE
+     * conversation; that has no counterpart here, because `spawnSession()`
+     * hands the child a task string, not a transcript, so an argument-less
+     * `/bg` is answered with usage rather than silently backgrounding
+     * something else.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleBackgroundCommand(string $inputText): array
+    {
+        if ($this->backgroundSupervisor === null) {
+            return $this->sessionResponse($inputText, 'Background sessions not configured. Set a BackgroundSupervisor to use /bg and /fork.');
+        }
+
+        $task = self::commandArgument($inputText);
+        if ($task === '') {
+            return $this->sessionResponse($inputText, 'Usage: /bg <task>');
+        }
+
+        $name = self::backgroundSessionName($task);
+
+        return $this->backgroundDispatch(
+            $inputText,
+            $this->scheduleBackgroundSpawn('/bg', $name, $task, null),
+        );
+    }
+
+    /**
+     * Handle /fork — clone this conversation and run $prompt against the
+     * clone in a background session.
+     *
+     * The transcript copy is {@see SessionStore::forkSession()}, the same
+     * call `/branch` makes, but `currentSessionId` deliberately stays put:
+     * `/branch` MOVES the user onto the new branch, whereas `/fork` leaves
+     * them where they are and sends the copy away to work (Claude Code's
+     * split between the two). The forked id rides along as a tag so the
+     * background session can be traced back to the transcript it came from.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleForkCommand(string $inputText): array
+    {
+        if ($this->backgroundSupervisor === null) {
+            return $this->sessionResponse($inputText, 'Background sessions not configured. Set a BackgroundSupervisor to use /bg and /fork.');
+        }
+
+        $prompt = self::commandArgument($inputText);
+        if ($prompt === '') {
+            return $this->sessionResponse($inputText, 'Usage: /fork <prompt>');
+        }
+
+        if ($this->sessionStore === null) {
+            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /fork.');
+        }
+
+        if ($this->currentSessionId === null) {
+            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
+        }
+
+        try {
+            $forkedSessionId = $this->sessionStore->forkSession($this->currentSessionId);
+        } catch (\Throwable $e) {
+            return $this->sessionResponse($inputText, "Error: {$e->getMessage()}");
+        }
+
+        $name = self::backgroundSessionName($prompt);
+
+        return $this->backgroundDispatch(
+            $inputText,
+            $this->scheduleBackgroundSpawn('/fork', $name, $prompt, $forkedSessionId),
+        );
+    }
+
+    /**
+     * Common tail of `/bg` and `/fork`: record the command, free the prompt,
+     * and let $cmd report the outcome later.
+     *
+     * No assistant line is written here on purpose - the only honest thing to
+     * say at this point is "asked to spawn", and the real answer (session id,
+     * or the reason there isn't one) arrives as a
+     * {@see BackgroundSessionSpawnedMsg}.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function backgroundDispatch(string $inputText, \Closure $cmd): array
+    {
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
+        return [$next, $cmd];
+    }
+
+    /**
+     * Build the Cmd that actually spawns the background session.
+     *
+     * `spawnSession()` proc_opens a daemon and then blocks on a socket
+     * accept (up to 5s) waiting for it to connect. Running that inside
+     * `update()` would stall the event loop - no repaint, no keystrokes -
+     * for the whole handshake, which is precisely the thing `/bg` exists to
+     * avoid, so it runs off-turn like every other side effect on this class
+     * ({@see scheduleTitleGeneration()}).
+     *
+     * A failed spawn resolves rather than rejects: a rejection would surface
+     * as candy-core's generic `ExceptionMsg` and lose the command context the
+     * transcript line needs.
+     *
+     * @param string      $command         '/bg' or '/fork', echoed back in the transcript line.
+     * @param string|null $forkedSessionId Transcript clone this session continues, tagged onto it; null for a plain /bg.
+     */
+    private function scheduleBackgroundSpawn(string $command, string $name, string $task, ?string $forkedSessionId): \Closure
+    {
+        $supervisor = $this->backgroundSupervisor;
+        // A registered "default" agent first, then whatever IS registered,
+        // then a synthesised stand-in: Bootstrap::chat() does not pass an
+        // AgentManager at all today, and refusing to background anything
+        // until it does would leave this command as unreachable as the
+        // supervisor it drives.
+        $agent = $this->agentManager?->get('default')
+            ?? ($this->agentManager?->all()[0] ?? null)
+            ?? self::defaultBackgroundAgent();
+        $workingDirectory = getcwd() ?: '.';
+        $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
+
+        return Cmd::promise(static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags): PromiseInterface {
+            try {
+                $session = $supervisor->spawnSession(
+                    name: $name,
+                    agent: $agent,
+                    task: $task,
+                    workingDirectory: $workingDirectory,
+                    tags: $tags,
+                );
+
+                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, $session->id));
+            } catch (\Throwable $e) {
+                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, null, $e->getMessage()));
+            }
+        });
+    }
+
+    /**
+     * The stand-in agent a background session runs as when no AgentManager
+     * is wired. Named "default" so a later, real registration replaces it
+     * transparently.
+     */
+    private static function defaultBackgroundAgent(): \SugarCraft\Crush\Agents\Agent
+    {
+        return new \SugarCraft\Crush\Agents\Agent(
+            name: 'default',
+            description: 'Background session agent',
+            prompt: '',
+            model: 'unknown',
+            provider: 'unknown',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+    }
+
+    /**
+     * Everything after the leading "/command" token, trimmed; '' when the
+     * command was typed bare.
+     */
+    private static function commandArgument(string $inputText): string
+    {
+        $parts = preg_split('/\s+/', trim($inputText), 2) ?: [];
+
+        return isset($parts[1]) ? trim($parts[1]) : '';
+    }
+
+    /**
+     * A one-line, control-character-free session name derived from the task.
+     *
+     * Reuses {@see sanitizeSessionTitle()} because a task string is typed by
+     * the user and can carry pasted ESC sequences or newlines, and the name
+     * ends up in a status list rendered one row per session.
+     */
+    private static function backgroundSessionName(string $task): string
+    {
+        $name = self::sanitizeSessionTitle($task);
+
+        return $name === '' ? 'Background task' : $name;
     }
 
     /**
