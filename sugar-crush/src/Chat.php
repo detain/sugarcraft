@@ -466,6 +466,17 @@ final class Chat implements Model
             && ($msg->rune === "\x03" || ($msg->ctrl && $msg->rune === 'c'))) {
             return [$this, Cmd::quit()];
         }
+
+        // Page Up/Down scroll the transcript a screenful at a time -- the
+        // keyboard equivalent of the wheel, which was the only way to move
+        // through history. A page is the visible rows less two so a couple of
+        // lines of context carry over between screens, the same overlap the
+        // three-line wheel notch keeps.
+        if ($msg->type === KeyType::PageUp || $msg->type === KeyType::PageDown) {
+            $page = max(1, $this->rows - 2);
+
+            return $this->scrollBy($msg->type === KeyType::PageUp ? $page : -$page);
+        }
         // A blocking permission prompt owns the keyboard while it is up, and
         // is checked ahead of BOTH the Escape arm and the inFlight
         // blanket-swallow below: the turn is inFlight by definition while
@@ -1846,11 +1857,24 @@ final class Chat implements Model
      */
     private function scrollTranscript(MouseButton $button): array
     {
-        $delta = match ($button) {
+        return $this->scrollBy(match ($button) {
             MouseButton::WheelUp   => self::SCROLL_WHEEL_LINES,
             MouseButton::WheelDown => -self::SCROLL_WHEEL_LINES,
             default                => 0,
-        };
+        });
+    }
+
+    /**
+     * Scroll the transcript by $delta lines (positive scrolls BACK through
+     * history, matching the wheel-up direction).
+     *
+     * Shared by the wheel and by Page Up/Page Down, which move a screenful
+     * instead of a notch — the keyboard equivalent the wheel already had.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function scrollBy(int $delta): array
+    {
         if ($delta === 0) {
             return [$this, null];
         }
