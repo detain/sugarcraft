@@ -1051,4 +1051,114 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString("\x1b[31m", $out);
         $this->assertStringNotContainsString("\x1b]0;", $out);
     }
+
+    // =========================================================================
+    // crush_feat.md §1 E7: denied / interrupted tool-call visual states
+    // =========================================================================
+
+    /** One tool-result turn, so a whole frame can be rendered around it. */
+    private function resultMessage(\SugarCraft\Crush\ToolResult $result): Message
+    {
+        return Message::assistant('')->withToolResults([$result]);
+    }
+
+    /**
+     * The step-defining regression: a refused call used to render with the
+     * exact same "✗ error" row as a call that ran and failed, so nothing on
+     * screen distinguished "the tool blew up" from "the tool never ran". It
+     * now takes the struck-through row §1 E7 asks for - a distinct visual
+     * state, not just a colour.
+     */
+    public function testDeniedToolCallRowIsStruckThrough(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::error('bash', 'Permission denied: bash was not run.', 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->faint()->strikethrough()->render('🔧 tool: bash'),
+            $out,
+        );
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ denied'),
+            $out,
+        );
+        $this->assertStringNotContainsString('✗ error', $out);
+        // The reason is the point of the row, so it stays readable.
+        $this->assertStringContainsString('Permission denied: bash was not run.', $out);
+    }
+
+    /**
+     * A restart-orphaned call ({@see Chat::reviveCheckpointMessage()}) is also
+     * "never ran", so it takes the same strikethrough with its own word.
+     */
+    public function testInterruptedToolCallRowIsStruckThroughAndNamedDistinctly(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::error('bash', Chat::INTERRUPTED_TOOL_CALL, 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ interrupted'),
+            $out,
+        );
+        $this->assertStringNotContainsString('⊘ denied', $out);
+    }
+
+    /**
+     * The counterpart guard: a call that genuinely ran and failed keeps the
+     * plain error row, un-struck, or the new state would mean nothing.
+     */
+    public function testAGenuineFailureKeepsThePlainErrorRow(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::error('bash', 'exit status 1', 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash'),
+            $out,
+        );
+        $this->assertStringContainsString('✗ error', $out);
+        $this->assertStringNotContainsString('⊘', $out);
+    }
+
+    /**
+     * A successful call is untouched by any of this - no strikethrough, no
+     * refusal glyph.
+     */
+    public function testSuccessfulToolCallIsUnaffected(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'total 0', 'call_1'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('✓ ok', $out);
+        $this->assertStringNotContainsString('⊘', $out);
+    }
+
+    /**
+     * The new glyph must stay OUT of the Unicode private-use block: {@see
+     * Renderer::maskImageMarkers()} masks U+E000-U+F8FF out of the copy the
+     * mouse {@see \SugarCraft\Mouse\Scanner} reads, so a PUA glyph here would
+     * silently shift click zones.
+     */
+    public function testTheRefusalGlyphIsNotInThePrivateUseBlock(): void
+    {
+        $code = mb_ord('⊘');
+
+        $this->assertIsInt($code);
+        $this->assertTrue($code < 0xE000 || $code > 0xF8FF, 'refusal glyph collides with the marker block');
+    }
 }
