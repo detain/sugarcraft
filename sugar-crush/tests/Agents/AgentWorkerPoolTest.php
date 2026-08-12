@@ -794,4 +794,111 @@ final class AgentWorkerPoolTest extends TestCase
         $this->assertCount(1, $results);
         $this->assertArrayHasKey('nan-cost-agent', $results);
     }
+
+    // -------------------------------------------------------------------------
+    // W3.F1: per-instance IPC directory — result files must not be shared
+    // between pool instances (or between processes) that use the same agent id.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Against the old fixed sys_get_temp_dir().'/sc_pool_<id>.result' path,
+     * both pools resolved the SAME file, so pool B saw (and could clobber)
+     * pool A's result — the collision that produced the intermittent
+     * FanOutResearchTest failure when sibling worktrees ran their suites at
+     * the same time.
+     */
+    public function testTwoPoolsUsingTheSameAgentIdDoNotObserveEachOthersResults(): void
+    {
+        $agentId = 'colliding-agent';
+
+        $poolA = new AgentWorkerPool();
+        $poolB = new AgentWorkerPool();
+
+        $storeResult = new \ReflectionMethod(AgentWorkerPool::class, 'storeResult');
+        $storeResult->setAccessible(true);
+        $hasResult = new \ReflectionMethod(AgentWorkerPool::class, 'hasResult');
+        $hasResult->setAccessible(true);
+        $extractResult = new \ReflectionMethod(AgentWorkerPool::class, 'extractResult');
+        $extractResult->setAccessible(true);
+
+        $storeResult->invoke($poolA, $agentId, new AgentResult(
+            agentId: $agentId,
+            status: AgentStatus::Completed,
+            output: 'result belonging to pool A',
+        ));
+
+        $this->assertFalse(
+            $hasResult->invoke($poolB, $agentId),
+            'A second pool must not see the first pool\'s result file for the same agent id.',
+        );
+        $this->assertNull(
+            $extractResult->invoke($poolB, $agentId),
+            'A second pool must not be able to consume (and delete) the first pool\'s result.',
+        );
+
+        // Pool A's own result survived pool B's probe intact.
+        $this->assertTrue($hasResult->invoke($poolA, $agentId));
+        $recovered = $extractResult->invoke($poolA, $agentId);
+        $this->assertNotNull($recovered);
+        $this->assertSame('result belonging to pool A', $recovered->output);
+
+        // Pool B storing under the same id must likewise not disturb pool A.
+        $storeResult->invoke($poolB, $agentId, new AgentResult(
+            agentId: $agentId,
+            status: AgentStatus::Failed,
+            output: 'result belonging to pool B',
+        ));
+        $this->assertFalse($hasResult->invoke($poolA, $agentId));
+        $poolBResult = $extractResult->invoke($poolB, $agentId);
+        $this->assertNotNull($poolBResult);
+        $this->assertSame('result belonging to pool B', $poolBResult->output);
+    }
+
+    /**
+     * The IPC directory must be private (0700) and unpredictably named — the
+     * old path was a fixed, world-writable-directory filename, i.e. a symlink
+     * pre-creation target.
+     */
+    public function testResultDirectoryIsPrivateToTheProcessAndCleanedUpOnDestruct(): void
+    {
+        $pool = new AgentWorkerPool();
+
+        $dirProp = new \ReflectionProperty(AgentWorkerPool::class, 'resultDir');
+        $dirProp->setAccessible(true);
+        $dir = $dirProp->getValue($pool);
+        $this->assertIsString($dir);
+
+        $storeResult = new \ReflectionMethod(AgentWorkerPool::class, 'storeResult');
+        $storeResult->setAccessible(true);
+        $storeResult->invoke($pool, 'perm-check', new AgentResult(
+            agentId: 'perm-check',
+            status: AgentStatus::Completed,
+            output: 'ok',
+        ));
+
+        $this->assertDirectoryExists($dir);
+        $this->assertSame('0700', substr(sprintf('%o', fileperms($dir)), -4));
+        $this->assertStringContainsString((string) getmypid(), basename($dir));
+
+        // Destructing the owning pool removes the directory and any result
+        // files still inside it, so the pool does not leak temp state.
+        unset($pool);
+        $this->assertDirectoryDoesNotExist($dir);
+    }
+
+    /**
+     * withStopOnFirstFailure() clones the pool; the clone must get its own IPC
+     * directory, otherwise the two instances share result files again and the
+     * first one destructed deletes the other's.
+     */
+    public function testCloneGetsItsOwnResultDirectory(): void
+    {
+        $original = new AgentWorkerPool(maxConcurrent: 2);
+        $clone = $original->withStopOnFirstFailure(true);
+
+        $dirProp = new \ReflectionProperty(AgentWorkerPool::class, 'resultDir');
+        $dirProp->setAccessible(true);
+
+        $this->assertNotSame($dirProp->getValue($original), $dirProp->getValue($clone));
+    }
 }
