@@ -193,6 +193,50 @@ final class InputReaderTest extends TestCase
         $this->assertInstanceOf(BlurMsg::class, $msgs[0]);
     }
 
+    // ---- modified Tab (CSI ... I) -----------------------------------------
+
+    public function testCtrlTab(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[1;5I");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+        $this->assertFalse($msgs[0]->shift);
+        $this->assertFalse($msgs[0]->alt);
+    }
+
+    public function testCtrlShiftTab(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[1;6I");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+        $this->assertTrue($msgs[0]->shift);
+    }
+
+    /** Modified Tab must not cannibalise the parameterless focus-in report. */
+    public function testFocusInStillDecodedAfterModifiedTabSupport(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[I\x1b[1;5I");
+        $this->assertCount(2, $msgs);
+        $this->assertInstanceOf(FocusGainedMsg::class, $msgs[0]);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[1]);
+        $this->assertSame(KeyType::Tab, $msgs[1]->type);
+    }
+
+    public function testModifiedTabSplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1b[1;"));
+        $msgs = $r->parse('6I');
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+        $this->assertTrue($msgs[0]->shift);
+    }
+
     // ---- mouse (SGR encoded) ---------------------------------------------
 
     public function testMouseLeftPress(): void
