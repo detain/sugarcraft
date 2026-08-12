@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Tui\Commands\CancelAgentCmd;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
@@ -26,7 +28,140 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
 final class KeyboardHandler
 {
     /**
+     * Ctrl+<rune> chords the SHELL answers. Deliberately excludes every chord
+     * the live {@see \SugarCraft\Crush\Chat} already binds — see
+     * {@see chatOwns()}.
+     */
+    private const SHELL_CTRL_RUNES = ['n', 'g', 'k', 's', ','];
+
+    /**
+     * Ctrl+<rune> chords the CONTENT model owns outright. The shell never
+     * claims these, in any pane, so merging the two layers cannot silently
+     * steal a binding a `bin/sugarcrush` user already has:
+     *
+     * - `p` — Chat's command palette. KeyboardHandler's own Ctrl+P
+     *   (`ProviderSelectCmd`) loses: the palette is the live, user-facing,
+     *   tested binding and `ProviderSelectCmd` is inert (see
+     *   {@see handleKeyMsg()}), so claiming it would trade a working feature
+     *   for a no-op.
+     * - `o` — Chat's collapse/expand of the latest tool output (§1 E5); the
+     *   only way to read a hidden tool body. The shell binds nothing to it.
+     * - `a` — Chat's `/agents` dispatch. KeyboardHandler's Ctrl+A (focus
+     *   `Pane::Agents`) loses for the same reason as Ctrl+P: the Chat arm
+     *   was built (R20) precisely as the reachable equivalent of this
+     *   shortcut, and the Agents pane is still one plain Tab away.
+     * - `w` — Chat's word-delete while typing.
+     * - `c` — Chat quits on it. Note most terminals deliver Ctrl+C as the
+     *   raw `\x03` rune with no ctrl flag, which {@see chatOwns()} also
+     *   covers explicitly.
+     */
+    private const CHAT_CTRL_RUNES = ['p', 'o', 'a', 'w', 'c'];
+
+    /**
+     * Decide whether the pane SHELL claims this keypress, and if so apply it.
+     *
+     * This is the {@see KeyMsg} bridge that lets {@see App::update()} host the
+     * live {@see \SugarCraft\Crush\Chat} (crush_feat.md §5 E7, the merge
+     * branch): the shell answers its own keys — menu, pane switch, the agent
+     * view's c/r/s/q and arrows — and returns **null** for everything else so
+     * the App can hand the untouched `KeyMsg` to `Chat::update()`. Returning
+     * `[$app, null]` for an unclaimed key (which {@see handle()} does, having
+     * no way to say "not mine") would swallow the palette, the "/" menu,
+     * Ctrl+O, history recall and every other live binding.
+     *
+     * Claim rules, in order:
+     * 1. Never claim a {@see chatOwns()} binding — content wins outright.
+     * 2. An open menu owns the keyboard.
+     * 3. `Pane::Agents` owns the keyboard: it is a full-pane agent view where
+     *    c/r/s/q are commands, not text, and `q` is how the user leaves.
+     * 4. Unmodified Tab cycles panes. Ctrl+Tab is excluded by rule 1 — that
+     *    is Chat's session cycling (§5 E2).
+     * 5. Escape returns to the chat pane, but only when the shell has
+     *    somewhere to return FROM. In `Pane::Chat` it belongs to Chat, whose
+     *    Escape cancels an in-flight turn and closes the palette.
+     * 6. The {@see SHELL_CTRL_RUNES} chords.
+     *
+     * Disclosure: the {@see KeyCmd} in element 1 is still inert. No main loop
+     * consumes any `Cmd` object in `src/` yet — the pre-existing, repo-wide
+     * gap documented on {@see App::userInvocableSkills()} — so a claimed
+     * Ctrl+K produces a `CommandPaletteCmd` nobody runs. Claiming is still
+     * strictly better than falling through, which would type a literal "k"
+     * into the chat input; wiring a Cmd driver is a later step.
+     *
+     * @return array{0: App, 1: ?object}|null [newApp, command], or null when
+     *         the key is not the shell's and must fall through to Chat.
+     *         Element 1 is a {@see KeyCmd} except on the menu path, which
+     *         surfaces {@see \SugarCraft\Crush\Tui\Components\MenuSelectedMsg}.
+     */
+    public function handleKeyMsg(KeyMsg $msg, App $app): ?array
+    {
+        if (!$this->claims($msg, $app)) {
+            return null;
+        }
+
+        return $this->handle($msg->string(), $app);
+    }
+
+    /**
+     * @see handleKeyMsg() for the rule list this implements.
+     */
+    private function claims(KeyMsg $msg, App $app): bool
+    {
+        if (self::chatOwns($msg)) {
+            return false;
+        }
+
+        if (MenuBar::getActiveMenu() > 0) {
+            return true;
+        }
+
+        if ($app->pane === Pane::Agents) {
+            return true;
+        }
+
+        if ($msg->type === KeyType::Tab && !$msg->ctrl && !$msg->alt && !$msg->shift) {
+            return true;
+        }
+
+        if ($msg->type === KeyType::Escape && $app->pane !== Pane::Chat) {
+            return true;
+        }
+
+        return $msg->type === KeyType::Char
+            && $msg->ctrl
+            && in_array($msg->rune, self::SHELL_CTRL_RUNES, true);
+    }
+
+    /**
+     * Bindings the live {@see \SugarCraft\Crush\Chat} owns in every pane.
+     *
+     * @see CHAT_CTRL_RUNES for the per-chord rationale.
+     */
+    private static function chatOwns(KeyMsg $msg): bool
+    {
+        // Session cycling (crush_feat.md §5 E2). Shift only picks the
+        // direction, so both Ctrl+Tab and Ctrl+Shift+Tab belong to Chat.
+        if ($msg->type === KeyType::Tab && $msg->ctrl) {
+            return true;
+        }
+
+        if ($msg->type !== KeyType::Char) {
+            return false;
+        }
+
+        if ($msg->rune === "\x03") {
+            return true;
+        }
+
+        return $msg->ctrl && in_array($msg->rune, self::CHAT_CTRL_RUNES, true);
+    }
+
+    /**
      * Process a keypress and return updated App and optional command.
+     *
+     * Takes the string key label the pane layer has always used. The live
+     * path speaks {@see KeyMsg}; {@see handleKeyMsg()} is the bridge, and is
+     * what decides whether a key reaches here at all.
      *
      * @return array{0: App, 1: ?KeyCmd} [newApp, command]
      */

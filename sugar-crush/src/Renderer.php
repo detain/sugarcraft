@@ -319,6 +319,49 @@ final class Renderer
     }
 
     /**
+     * Where the scanned frame's top-left cell sits on the TERMINAL, as
+     * `[col, row]` deltas (0-based; `[0, 0]` when this renderer's frame IS
+     * the root frame).
+     *
+     * {@see scanRoot()} records zones in the coordinate space of the string it
+     * scanned, and when a shell hosts this renderer that string is a SUB-frame:
+     * {@see \SugarCraft\Crush\Tui\Components\ChatPane} draws it inside a box and
+     * {@see \SugarCraft\Crush\Tui\Renderer} composes that box behind a menu bar
+     * and beside a sidebar. `MouseMsg` x/y stay terminal-absolute, so without
+     * this delta every hosted click hit-tests against the wrong cell — clicks on
+     * real targets do nothing and clicks on blank chrome fire actions the user
+     * never asked for.
+     *
+     * Applied at hit-test time ({@see Chat::zoneAt()}) rather than baked into
+     * the recorded boxes because the shell only knows the final delta AFTER it
+     * has composed the frame — the frame it composes from this renderer's
+     * output.
+     *
+     * @var array{0: int, 1: int}
+     */
+    private static array $zoneOrigin = [0, 0];
+
+    /**
+     * Declare where the frame {@see scanRoot()} just scanned ended up on the
+     * terminal, in 0-based column/row deltas.
+     *
+     * Called once per frame by the shell compositor, after the composite is
+     * final. {@see scanRoot()} resets the origin to `[0, 0]` at the start of
+     * every scan, so a standalone `Chat` — and a frame the shell stops hosting
+     * — can never inherit a stale offset.
+     */
+    public static function setZoneOrigin(int $col, int $row): void
+    {
+        self::$zoneOrigin = [$col, $row];
+    }
+
+    /** @return array{0: int, 1: int} @see setZoneOrigin() */
+    public static function zoneOrigin(): array
+    {
+        return self::$zoneOrigin;
+    }
+
+    /**
      * Tool-call rows the current frame wants clickable, collected while the
      * transcript is built and consumed once the shell around it is drawn.
      *
@@ -388,6 +431,18 @@ final class Renderer
      * palette overlay) is therefore both the cheapest and the only correct
      * placement.
      *
+     * "Root" is this renderer's own frame, which is the terminal's root only
+     * while `Chat` runs standalone. When the pane shell hosts it the frame is
+     * a sub-frame, and re-scanning the composed shell frame instead is not an
+     * option: the markers are ~29 Private-Use cells that
+     * `Style::render()`/`Layout::joinHorizontal()`/{@see
+     * \SugarCraft\Crush\Tui\Renderer} would all measure as content, breaking
+     * the pane box the same way marking a tool row in place breaks it (see
+     * {@see $toolCallZones}). So the scan stays here and the shell declares
+     * the sub-frame's terminal position through {@see setZoneOrigin()}, which
+     * {@see Chat::zoneAt()} subtracts before hit-testing. The origin is reset
+     * here, on every frame, so the standalone path is always `[0, 0]`.
+     *
      * The scan is skipped outright when `SUGARCRUSH_DISABLE_MOUSE` is set —
      * with tracking off no mouse coordinates ever arrive, so keeping a stale
      * zone registry around would be pure waste. Sentinel *stripping* is
@@ -418,6 +473,10 @@ final class Renderer
      */
     public static function scanRoot(string $frame, int $width): string
     {
+        // Every recorded box below is relative to THIS frame; a host that
+        // composes it elsewhere re-declares the offset after compositing.
+        self::$zoneOrigin = [0, 0];
+
         if (!str_contains($frame, Sentinel::OPEN) && !str_contains($frame, Sentinel::CLOSE)) {
             self::scanner()->clear();
 
