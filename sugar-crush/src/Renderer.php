@@ -335,7 +335,10 @@ final class Renderer
      * Applied at hit-test time ({@see Chat::zoneAt()}) rather than baked into
      * the recorded boxes because the shell only knows the final delta AFTER it
      * has composed the frame — the frame it composes from this renderer's
-     * output.
+     * output. That makes it every mouse consumer's job to rebase, not just the
+     * hit-test's: `Chat` also translates the event it hands
+     * {@see \SugarCraft\Mouse\ZoneClickTracker}, which pairs a release with its
+     * press by re-testing the recorded box against that event.
      *
      * @var array{0: int, 1: int}
      */

@@ -1575,9 +1575,30 @@ final class Chat implements Model
             return null;
         }
 
+        [$col, $row] = self::zoneSpace($col, $row);
+
+        return Renderer::scanner()->hit($col, $row);
+    }
+
+    /**
+     * A terminal-absolute pointer cell rebased into the coordinate space the
+     * zone registry recorded, by subtracting {@see Renderer::zoneOrigin()}.
+     *
+     * Every comparison against a recorded {@see Zone} has to go through here,
+     * not just the hit-test: candy-mouse's {@see ZoneClickTracker} pairs a
+     * press with its release by re-testing the PRESS's stored box against the
+     * release event ({@see Zone::inBounds()}), so handing it an absolute event
+     * while the box is pane-local rejects every click inside a hosted pane as
+     * "released on a different zone" — the click resolves and then goes
+     * nowhere. Standalone the origin is `[0, 0]` and this is the identity.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private static function zoneSpace(int $col, int $row): array
+    {
         [$originCol, $originRow] = Renderer::zoneOrigin();
 
-        return Renderer::scanner()->hit($col - $originCol, $row - $originRow);
+        return [$col - $originCol, $row - $originRow];
     }
 
     /**
@@ -1682,9 +1703,16 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // Built in the registry's coordinate space, not the terminal's: the
+        // tracker re-tests the recorded box against this event to pair the
+        // release with its press (see {@see zoneSpace()}). Drift below stays
+        // absolute — it is only ever compared with itself, and a translation
+        // cannot change a distance.
+        [$zoneCol, $zoneRow] = self::zoneSpace($msg->x, $msg->y);
+
         $event = match (true) {
-            $msg instanceof MouseClickMsg   => MouseEvent::press($msg->x, $msg->y),
-            $msg instanceof MouseReleaseMsg => MouseEvent::release($msg->x, $msg->y),
+            $msg instanceof MouseClickMsg   => MouseEvent::press($zoneCol, $zoneRow),
+            $msg instanceof MouseReleaseMsg => MouseEvent::release($zoneCol, $zoneRow),
             default                         => null,
         };
         if ($event === null) {
