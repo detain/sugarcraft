@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Workflows;
 
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentResult;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
@@ -56,7 +57,29 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public function __construct(
         private readonly WorkflowRegistry $registry = new WorkflowRegistry(),
         private readonly AgentWorkerPool $pool = new AgentWorkerPool(),
+        private ?AgentManager $agentManager = null,
     ) {}
+
+    /**
+     * Attach the AgentManager that parallel-stage sub-agents register with.
+     *
+     * Not a `with*()` wither: WorkflowEngine is a mutable service (it caches
+     * results in $resultsByName), and the manager is injected late by Chat --
+     * which receives both collaborators independently -- rather than at
+     * construction. Mirrors {@see AgentManager::setTeamManager()}.
+     */
+    public function setAgentManager(AgentManager $agentManager): void
+    {
+        $this->agentManager = $agentManager;
+    }
+
+    /**
+     * The AgentManager parallel stages route through, or null when none is set.
+     */
+    public function agentManager(): ?AgentManager
+    {
+        return $this->agentManager;
+    }
 
     /**
      * Load a workflow from the registry and execute it with the given context.
@@ -872,9 +895,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $pool = $pool->withStopOnFirstFailure(true);
         }
 
+        // Route the stage pool through the AgentManager when one is attached:
+        // the manager registers each SubAgent and mirrors per-result usage back
+        // onto it, which is what makes its elapsed/token/cost accessors (and so
+        // the live agent status line) report real work for workflow-spawned
+        // agents instead of zeros (crush_feat.md section 5 E6). Exactly one of
+        // the two paths runs -- the manager accumulates with `+=`, so iterating
+        // the pool as well would double-count this stage's usage.
+        $results = $this->agentManager !== null
+            ? $this->agentManager->executeAll($subAgents, $defaultRequest, $pool)
+            : $pool->executeAll($subAgents, $defaultRequest);
+
         // Collect all results from the generator
         $agentResults = [];
-        foreach ($pool->executeAll($subAgents, $defaultRequest) as $agentResult) {
+        foreach ($results as $agentResult) {
             $agentResults[] = $agentResult;
         }
 

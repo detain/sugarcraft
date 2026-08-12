@@ -106,6 +106,8 @@ final class CommandRegistry
             CommandSpec::new('branch', 'Fork the current session into a new branch', 'Session'),
             CommandSpec::new('rename', 'Rename the current session', 'Session', argumentHint: '<name>'),
             CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session'),
+            CommandSpec::new('bg', 'Run a task in a background session', 'Session', argumentHint: '<task>'),
+            CommandSpec::new('fork', 'Clone this conversation into a background session', 'Session', argumentHint: '<prompt>'),
         ];
     }
 

@@ -22,6 +22,7 @@ use SugarCraft\Sprinkles\Style;
 use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
@@ -362,6 +363,22 @@ final class Renderer
     public static function zoneOrigin(): array
     {
         return self::$zoneOrigin;
+    }
+
+    /**
+     * Drop the click-zone registry and reset the origin.
+     *
+     * For a shell frame that does NOT contain this renderer's output at all —
+     * the full-pane agent dashboard (crush_feat.md §5 E5) is the first one.
+     * {@see scanRoot()} only clears the registry when it runs, so a frame that
+     * never calls it would leave the PREVIOUS frame's boxes hit-testable
+     * underneath content that never drew them, and a click would fire whatever
+     * action last occupied that cell.
+     */
+    public static function clearZones(): void
+    {
+        self::scanner()->clear();
+        self::$zoneOrigin = [0, 0];
     }
 
     /**
@@ -720,6 +737,13 @@ final class Renderer
         // longer drives would misrepresent what the next key does.
         $overlay = self::renderPermissionPrompt($chat, $theme);
         if ($overlay === '') {
+            // The session picker sits between the prompt and the palette for
+            // the same reason: Chat::update() routes keys permission →
+            // picker → palette, and the overlay on screen has to be the one
+            // the keyboard is actually driving.
+            $overlay = self::renderSessionPicker($chat);
+        }
+        if ($overlay === '') {
             $overlay = self::renderPalette($chat, $theme);
         }
         if ($overlay !== '') {
@@ -732,11 +756,13 @@ final class Renderer
             // wider than the current transcript would lose its right border
             // (most visibly mid-turn, which is exactly when a permission
             // prompt appears). Widen the backdrop to fit first.
+            $backdrop = self::padForOverlay($frame, $overlay, $chat->cols());
             $frame = Veil::new()->withBackdrop(50)->composite(
                 $overlay,
-                self::padForOverlay($frame, $overlay, $chat->cols()),
+                $backdrop,
                 Position::CENTER,
                 Position::CENTER,
+                self::overlayLeftShift($backdrop, $overlay, $chat->cols()),
             );
             // No-op unless the overlay was the palette: only renderPalette()
             // records item zones, and a blocking permission prompt takes the
@@ -833,9 +859,13 @@ final class Renderer
     /**
      * Render the agent status line + agent list pane, or '' when Chat has
      * no AgentManager or the manager has no active agents. See the "R20
-     * wiring decision" note on this class's docblock for why the fields
-     * beyond name/status/operation are 0 rather than fabricated, and why
-     * AgentOutputPane / the split-pane renderer are not called here.
+     * wiring decision" note on this class's docblock for why AgentOutputPane
+     * / the split-pane renderer are not called here; the elapsed/token/cost
+     * columns are real as of W3.S5b — see {@see agentDisplayState()}.
+     *
+     * This is the in-transcript strip. The full-pane dashboard the same data
+     * feeds is {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane},
+     * reached through the shell's `Pane::Agents`.
      */
     private static function renderAgentView(Chat $chat): string
     {
@@ -849,7 +879,10 @@ final class Renderer
             return '';
         }
 
-        $states = array_map(self::agentDisplayState(...), $agents);
+        $states = array_map(
+            static fn(Agent $agent): AgentDisplayState => self::agentDisplayState($agent, $manager),
+            $agents,
+        );
 
         $cols = $chat->cols();
         $width = max(40, $cols - 4);
@@ -864,20 +897,25 @@ final class Renderer
 
     /**
      * Map a real registered {@see Agent} to the display-state shape
-     * AgentStatusBar/AgentViewPane render. elapsedSeconds/tokensUsed/costUsd
-     * are 0 — Chat's AgentManager/AgentWorkerPool accessors expose no
-     * per-agent live telemetry to source real values from (see class
-     * docblock); reporting 0 is honest, not fabricated.
+     * AgentStatusBar/AgentViewPane render.
+     *
+     * W3.S5b: elapsedSeconds/tokensUsed/costUsd are now read off
+     * {@see AgentManager}'s real per-agent telemetry (added by W3.F2, which
+     * stamps `startedAt` and accumulates tokens/cost per streamed chunk in
+     * `executeSubAgent()`), replacing the literal `0, 0, 0.0` this method
+     * previously reported. They still read 0 for an agent that has never
+     * spawned a sub-agent — that is a genuine "no work done yet", not a
+     * placeholder.
      */
-    private static function agentDisplayState(Agent $agent): AgentDisplayState
+    private static function agentDisplayState(Agent $agent, AgentManager $manager): AgentDisplayState
     {
         return AgentDisplayState::new(
             name: $agent->name,
             status: $agent->isActive ? 'working' : 'stopped',
             operation: $agent->description,
-            elapsedSeconds: 0,
-            tokensUsed: 0,
-            costUsd: 0.0,
+            elapsedSeconds: $manager->elapsedSeconds($agent->name),
+            tokensUsed: $manager->tokensUsed($agent->name),
+            costUsd: $manager->costUsd($agent->name),
         );
     }
 
@@ -1549,6 +1587,42 @@ final class Renderer
     }
 
     /**
+     * The live session picker's content, composited over the whole frame by
+     * {@see render()} via {@see Veil} (crush_feat.md section 5 E8). Returns
+     * '' (nothing composited) when the picker is closed - see
+     * {@see Chat::sessionPicker()}.
+     *
+     * Sized against the same budget every other renderer here uses
+     * ({@see SHELL_CHROME_COLS}), because under the live App/ChatPane shell
+     * the picker is drawn inside a border + padding(1, 2) that the raw
+     * terminal width knows nothing about. A further 4 columns come off for
+     * {@see \SugarCraft\Crush\Tui\SessionPicker::render()}'s own
+     * `border()->padding(0, 1)`, which wraps AROUND the width it is handed -
+     * without that subtraction the composited frame is wider than the
+     * terminal, and the diff renderer paints one logical line per physical
+     * row, so a wrapped row collides with the next one exactly like the
+     * overflow {@see render()}'s tail clip exists to prevent. The lower
+     * bounds keep the picker's separator `str_repeat()` calls non-negative on
+     * a very small terminal.
+     *
+     * No zone marking here (unlike {@see markPaletteItems()}): the picker is
+     * keyboard-driven only, and its rows carry no click ids.
+     */
+    private static function renderSessionPicker(Chat $chat): string
+    {
+        $picker = $chat->sessionPicker();
+        if ($picker === null) {
+            return '';
+        }
+
+        $inner = max(20, $chat->cols() - self::SHELL_CHROME_COLS);
+        $width = max(20, min($inner - 4, 76));
+        $height = max(8, $chat->rows() - 4);
+
+        return $picker->render($width, $height);
+    }
+
+    /**
      * The Ctrl+P command palette's content, composited over the whole frame
      * by {@see render()} via {@see Veil}. Returns '' (nothing composited)
      * when the palette is closed - see {@see Chat::palette()}.
@@ -1826,6 +1900,38 @@ final class Renderer
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Columns to shift a centred overlay LEFT so its right edge cannot land
+     * past column `$cols`. Never positive: an overlay that already fits stays
+     * exactly where {@see Veil::composite()} centred it.
+     *
+     * Veil centres against `Width::string()` of the backdrop, and at this
+     * point the frame still carries the zone sentinels {@see scanRoot()} only
+     * strips later. Those sentinel cells count as columns, so a frame whose
+     * visible width is 62 measures 84 whenever the status bar advertises its
+     * `pane:menu` zone, and Veil centres the overlay as though the terminal
+     * were that wide - pushing the right edge off-screen. An over-wide row is
+     * exactly the absolute-cursorTo row collision {@see render()}'s tail clip
+     * exists to prevent (the diff renderer paints one logical line per
+     * physical row), so the centre is clamped rather than trusted.
+     */
+    private static function overlayLeftShift(string $backdrop, string $overlay, int $cols): int
+    {
+        $backdropWidth = 0;
+        foreach (explode("\n", $backdrop) as $line) {
+            $backdropWidth = max($backdropWidth, Width::string($line));
+        }
+
+        $overlayWidth = 0;
+        foreach (explode("\n", $overlay) as $line) {
+            $overlayWidth = max($overlayWidth, Width::string($line));
+        }
+
+        $centred = Position::CENTER->xOffset($overlayWidth, $backdropWidth);
+
+        return min(0, max(0, $cols - $overlayWidth) - $centred);
     }
 
     /**

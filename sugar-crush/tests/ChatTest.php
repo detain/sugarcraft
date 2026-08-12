@@ -39,6 +39,11 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\SessionTitledMsg;
+use SugarCraft\Crush\BackgroundSessionSpawnedMsg;
+use SugarCraft\Crush\BackgroundTickMsg;
+use SugarCraft\Crush\Sessions\BackgroundSession;
+use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\PermissionReplyMsg;
 use SugarCraft\Crush\Permissions\PermissionReply;
 
@@ -906,7 +911,7 @@ final class ChatTest extends TestCase
 
         [$narrowed] = $chat->update(new KeyMsg(KeyType::Char, 'b'));
         $names = array_map(static fn($spec) => $spec->name, $narrowed->slashMenuMatches());
-        $this->assertSame(['branch'], $names);
+        $this->assertSame(['bg', 'branch'], $names);
     }
 
     public function testSlashMenuHiddenOnceArgumentsStart(): void
@@ -3322,5 +3327,679 @@ final class ChatTest extends TestCase
         $this->assertSame($chat, $same);
         $this->assertNull($cmd);
         $this->assertSame([], $same->permissionGrants());
+    }
+
+    // ---------------------------------------------------------------
+    // /bg + /fork background sessions (crush_feat.md section 5 E3)
+    // ---------------------------------------------------------------
+
+    /** Type $line at the prompt one key at a time, then send it. */
+    private function submitLine(Chat $chat, string $line): array
+    {
+        foreach (preg_split('//u', $line, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+            [$chat] = $chat->update(
+                $char === ' ' ? new KeyMsg(KeyType::Space, '') : new KeyMsg(KeyType::Char, $char),
+            );
+        }
+
+        // Enter while the "/" popup is showing completes the highlighted row
+        // rather than submitting, so a bare "/bg" needs a second Enter.
+        if ($chat->slashMenuMatches() !== []) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        }
+
+        return $chat->update(new KeyMsg(KeyType::Enter, ''));
+    }
+
+    /** The last assistant reply in $chat's transcript. */
+    private function lastAssistantContent(Chat $chat): string
+    {
+        for ($i = count($chat->history) - 1; $i >= 0; $i--) {
+            if ($chat->history[$i]->role === Role::Assistant) {
+                return $chat->history[$i]->content;
+            }
+        }
+
+        return '';
+    }
+
+    public function testSlashMenuListsTheBackgroundCommands(): void
+    {
+        // Before E3 neither command existed on either surface, so typing
+        // "/bg" matched nothing at all.
+        $names = array_map(
+            static fn($spec): string => $spec->name,
+            (new Chat(inputBuf: '/bg'))->slashMenuMatches(),
+        );
+        $this->assertContains('bg', $names);
+
+        $forkNames = array_map(
+            static fn($spec): string => $spec->name,
+            (new Chat(inputBuf: '/fork'))->slashMenuMatches(),
+        );
+        $this->assertContains('fork', $forkNames);
+    }
+
+    public function testBackgroundCommandWithoutASupervisorDegradesGracefully(): void
+    {
+        [$next, $cmd] = $this->submitLine(new Chat(), '/bg run the tests');
+
+        $this->assertNull($cmd);
+        $this->assertStringContainsString('Background sessions not configured', $this->lastAssistantContent($next));
+    }
+
+    public function testBackgroundCommandWithoutATaskShowsUsage(): void
+    {
+        $chat = new Chat(backgroundSupervisor: new BackgroundSupervisor());
+
+        [$next, $cmd] = $this->submitLine($chat, '/bg');
+
+        $this->assertNull($cmd);
+        $this->assertSame('Usage: /bg <task>', $this->lastAssistantContent($next));
+    }
+
+    public function testBackgroundCommandFreesThePromptAndDefersTheSpawn(): void
+    {
+        $chat = new Chat(backgroundSupervisor: new BackgroundSupervisor());
+
+        [$next, $cmd] = $this->submitLine($chat, '/bg port the renderer');
+
+        // The spawn blocks on a socket handshake, so it must live in the Cmd
+        // and not in update(): the prompt is free the moment Enter lands.
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertSame('', $next->inputBuf);
+        $this->assertFalse($next->inFlight);
+        $this->assertCount(1, $next->history);
+        $this->assertSame('/bg port the renderer', $next->history[0]->content);
+        $this->assertSame(Role::User, $next->history[0]->role);
+    }
+
+    public function testBackgroundCommandSpawnsARealSupervisedSession(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+
+        [$next, $cmd] = $this->submitLine($chat, '/bg summarise the diff');
+        $spawned = $this->resolveAsyncCmd($cmd);
+
+        $this->assertInstanceOf(BackgroundSessionSpawnedMsg::class, $spawned);
+        $this->assertNull($spawned->error);
+        $this->assertNotNull($spawned->sessionId);
+        $this->assertSame('summarise the diff', $spawned->name);
+        $this->assertTrue($supervisor->hasActiveSessions());
+
+        [$reported] = $next->update($spawned);
+        $this->assertStringContainsString("Backgrounded as {$spawned->sessionId}", $this->lastAssistantContent($reported));
+
+        @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.sock');
+        @unlink(sys_get_temp_dir() . '/sugar_crush_' . $spawned->sessionId . '.buffer');
+    }
+
+    public function testFailedSpawnIsReportedInTheTranscript(): void
+    {
+        $failed = new BackgroundSessionSpawnedMsg('/bg', 'Port the renderer', null, 'Failed to spawn session process');
+
+        [$next] = (new Chat())->update($failed);
+
+        $this->assertStringContainsString('Could not start background session', $this->lastAssistantContent($next));
+        $this->assertStringContainsString('Failed to spawn session process', $this->lastAssistantContent($next));
+    }
+
+    public function testForkCommandClonesTheTranscriptAndLeavesTheUserOnIt(): void
+    {
+        $store = $this->titleStore('sess-fork');
+        $chat = new Chat(
+            sessionStore: $store,
+            currentSessionId: 'sess-fork',
+            backgroundSupervisor: new BackgroundSupervisor(),
+        );
+
+        [$next, $cmd] = $this->submitLine($chat, '/fork try the async path');
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        // /branch MOVES the user onto the copy; /fork must not.
+        $this->assertSame('sess-fork', $next->currentSessionId());
+        $this->assertCount(2, $store->listSessions());
+    }
+
+    public function testForkCommandRequiresASessionToClone(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+
+        [$noStore, $noStoreCmd] = $this->submitLine(
+            new Chat(backgroundSupervisor: $supervisor),
+            '/fork keep going',
+        );
+        $this->assertNull($noStoreCmd);
+        $this->assertStringContainsString('Session store not configured', $this->lastAssistantContent($noStore));
+
+        [$noSession, $noSessionCmd] = $this->submitLine(
+            new Chat(sessionStore: $this->titleStore('sess-other'), backgroundSupervisor: $supervisor),
+            '/fork keep going',
+        );
+        $this->assertNull($noSessionCmd);
+        $this->assertStringContainsString('No active session', $this->lastAssistantContent($noSession));
+    }
+
+    public function testForkCommandWithoutAPromptShowsUsage(): void
+    {
+        $chat = new Chat(
+            sessionStore: $this->titleStore('sess-fork-usage'),
+            currentSessionId: 'sess-fork-usage',
+            backgroundSupervisor: new BackgroundSupervisor(),
+        );
+
+        [$next, $cmd] = $this->submitLine($chat, '/fork');
+
+        $this->assertNull($cmd);
+        $this->assertSame('Usage: /fork <prompt>', $this->lastAssistantContent($next));
+        // A usage error must not leave a stray clone behind.
+        $this->assertCount(1, $chat->sessionStore()->listSessions());
+    }
+
+    public function testForkNoticeIsWordedAsAFork(): void
+    {
+        $spawned = new BackgroundSessionSpawnedMsg('/fork', 'Try the async path', 'sess-bg-1');
+
+        [$next] = (new Chat())->update($spawned);
+
+        $this->assertStringContainsString('Forked into background session sess-bg-1', $this->lastAssistantContent($next));
+    }
+
+    public function testSupervisorSurvivesStateTransitions(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $chat = (new Chat())->withBackgroundSupervisor($supervisor);
+
+        // Every mutate() must carry the supervisor through, or the sessions
+        // an earlier clone spawned become unreachable.
+        [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'x'));
+        [$sized] = $typed->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+
+        $this->assertSame($supervisor, $sized->backgroundSupervisor());
+    }
+
+    // =====================================================================
+    // subscriptions() poll pump — crush_feat.md section 5 E4
+    // =====================================================================
+
+    /** Build a background session without going near a real fork/socket. */
+    private function bgSession(string $id, BackgroundSessionStatus $status): BackgroundSession
+    {
+        $agent = new Agent(
+            name: 'bg-agent',
+            description: 'Background agent',
+            prompt: '',
+            model: 'test-model',
+            provider: 'test',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+
+        return (new BackgroundSession(
+            id: $id,
+            name: "Session {$id}",
+            agent: $agent,
+            task: 'test task',
+            workingDirectory: '/tmp',
+        ))->withStatus($status);
+    }
+
+    /** @return list<string> */
+    private function historyContents(Chat $chat): array
+    {
+        return array_map(static fn (Message $m): string => $m->content, $chat->history);
+    }
+
+    public function testSubscriptionsStayNullWhenThereIsNothingToPoll(): void
+    {
+        // An unconditional timer would wake the event loop (and repaint)
+        // forever for the vast majority of runs that never touch /bg.
+        $this->assertNull((new Chat())->subscriptions());
+
+        $idle = new Chat(backgroundSupervisor: new BackgroundSupervisor());
+        $this->assertNull($idle->subscriptions());
+
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s-done', BackgroundSessionStatus::Completed));
+        $this->assertNull((new Chat(backgroundSupervisor: $supervisor))->subscriptions());
+    }
+
+    public function testSubscriptionsDeclareATickWhileASessionIsActive(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+
+        $subs = (new Chat(backgroundSupervisor: $supervisor))->subscriptions();
+
+        $this->assertNotNull($subs);
+        $this->assertTrue($subs->has('crush.background-poll'));
+
+        $sub = $subs->all()[0];
+        $this->assertSame(\SugarCraft\Core\Kind::Tick, $sub->kind);
+        $this->assertSame(2.0, $sub->params['seconds']);
+        $this->assertInstanceOf(BackgroundTickMsg::class, ($sub->produce)());
+    }
+
+    public function testTickAnnouncesEachSessionStatusOnceAndRecordsIt(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+
+        [$first, $cmd] = $chat->update(new BackgroundTickMsg());
+
+        $this->assertNull($cmd);
+        $this->assertSame(['s1' => 'running'], $first->backgroundStatuses());
+        $this->assertCount(1, $this->historyContents($first));
+        $this->assertStringContainsString("Background session s1 ('Session s1') is now running.", $this->historyContents($first)[0]);
+        $this->assertSame(Role::System, $first->history[0]->role);
+
+        // Level-triggered would re-append the same line every two seconds.
+        [$second, $secondCmd] = $first->update(new BackgroundTickMsg());
+        $this->assertNull($secondCmd);
+        $this->assertSame($first, $second);
+    }
+
+    public function testTickReportsASessionThatReachedATerminalState(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+        $chat = new Chat(backgroundSupervisor: $supervisor);
+
+        [$running] = $chat->update(new BackgroundTickMsg());
+
+        // A finished session drops out of getActiveSessions(), so without the
+        // re-read of previously-seen ids it would vanish silently instead of
+        // ever being reported as done.
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Completed));
+        [$done] = $running->update(new BackgroundTickMsg());
+
+        $this->assertSame(['s1' => 'completed'], $done->backgroundStatuses());
+        $this->assertStringContainsString("Background session s1 ('Session s1') is now completed.", $this->historyContents($done)[1]);
+    }
+
+    public function testTickWithoutASupervisorIsANoOp(): void
+    {
+        $chat = new Chat();
+
+        [$next, $cmd] = $chat->update(new BackgroundTickMsg());
+
+        $this->assertSame($chat, $next);
+        $this->assertNull($cmd);
+    }
+
+    public function testRecordedBackgroundStatusesSurviveStateTransitions(): void
+    {
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession($this->bgSession('s1', BackgroundSessionStatus::Running));
+
+        [$polled] = (new Chat(backgroundSupervisor: $supervisor))->update(new BackgroundTickMsg());
+        [$typed] = $polled->update(new KeyMsg(KeyType::Char, 'x'));
+        [$sized] = $typed->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+
+        // Dropped by mutate() and every poll re-announces every session.
+        $this->assertSame(['s1' => 'running'], $sized->backgroundStatuses());
+    }
+
+    // ---------------------------------------------------------------
+    // Live session picker (crush_feat.md section 5 E8)
+    // ---------------------------------------------------------------
+
+    /** A store carrying two named sessions, ready to be picked between. */
+    private function pickerStore(): SessionStore
+    {
+        $store = new SessionStore(':memory:');
+        $store->createSession('sess-a', 'sugarcrush', 'test-model', null, 'Alpha');
+        $store->createSession('sess-b', 'sugarcrush', 'test-model', null, 'Beta');
+
+        return $store;
+    }
+
+    /** A Chat with the picker already open over {@see pickerStore()}. */
+    private function chatWithOpenPicker(): Chat
+    {
+        $chat = new Chat(
+            sessionStore: $this->pickerStore(),
+            currentSessionId: 'sess-a',
+        );
+
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        self::assertNotNull($opened->sessionPicker(), 'Ctrl+R did not open the picker');
+
+        return $opened;
+    }
+
+    public function testCtrlROpensTheSessionPicker(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        $this->assertSame(2, $opened->sessionPicker()?->count());
+        // The chord must not also type an "r" into the input box.
+        $this->assertSame('', $opened->inputBuf);
+    }
+
+    public function testCtrlRIsANoOpWithoutASessionStore(): void
+    {
+        [$next] = (new Chat())->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+
+        $this->assertNull($next->sessionPicker());
+    }
+
+    public function testCtrlRIsANoOpWhenTheStoreHasNoSessions(): void
+    {
+        $chat = new Chat(sessionStore: new SessionStore(':memory:'));
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+
+        $this->assertNull($next->sessionPicker(), 'an empty picker modal is worse than none');
+    }
+
+    public function testArrowKeysNavigateTheOpenPicker(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$down] = $opened->update(new KeyMsg(KeyType::Down, ''));
+
+        $this->assertSame(1, $down->sessionPicker()?->selectedIndex());
+        $this->assertSame('', $down->inputBuf);
+
+        [$up] = $down->update(new KeyMsg(KeyType::Up, ''));
+
+        $this->assertSame(0, $up->sessionPicker()?->selectedIndex());
+    }
+
+    public function testEnterResumesTheHighlightedSessionAndClosesThePicker(): void
+    {
+        // Browse to whichever row is NOT the current session, so the assert
+        // below proves a real switch rather than a re-select of sess-a.
+        // listSessions()'s ordering decides which index that is.
+        $down = $this->chatWithOpenPicker();
+        for ($i = 0; $i < 2 && $down->sessionPicker()?->selectedSession()['sessionId'] === 'sess-a'; $i++) {
+            [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
+        }
+
+        $selected = $down->sessionPicker()?->selectedSession();
+        $this->assertIsArray($selected);
+        $resumedId = $selected['sessionId'];
+        $this->assertSame('sess-b', $resumedId);
+
+        [$resumed, $cmd] = $down->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertNull($resumed->sessionPicker());
+        $this->assertSame($resumedId, $resumed->currentSessionId());
+        $this->assertNotSame('sess-a', $resumed->currentSessionId());
+        $this->assertSame('Beta', $resumed->currentSessionName());
+        // The stored name is latched so the auto-titler leaves it alone.
+        $this->assertNotNull($resumed->currentSessionName());
+        $this->assertStringContainsString(
+            'Resumed session',
+            $resumed->history[count($resumed->history) - 1]->content,
+        );
+    }
+
+    public function testSpacePreviewsWithoutClosingThePicker(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$previewed] = $opened->update(new KeyMsg(KeyType::Space, ''));
+
+        $this->assertNotNull($previewed->sessionPicker());
+        // Space must not leak into the input box the user cannot see.
+        $this->assertSame('', $previewed->inputBuf);
+    }
+
+    public function testEscapeClosesThePickerInsteadOfCancellingTheTurn(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$closed] = $opened->update(new KeyMsg(KeyType::Escape, ''));
+
+        $this->assertNull($closed->sessionPicker());
+        $this->assertSame($opened->currentSessionId(), $closed->currentSessionId());
+    }
+
+    public function testUnboundKeysAreSwallowedWhileThePickerIsOpen(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        [$typed] = $opened->update(new KeyMsg(KeyType::Char, 'z'));
+
+        $this->assertSame('', $typed->inputBuf, 'a hidden input box must not collect keystrokes');
+        $this->assertNotNull($typed->sessionPicker());
+    }
+
+    public function testOpenPickerSurvivesUnrelatedStateTransitions(): void
+    {
+        $opened = $this->chatWithOpenPicker();
+
+        // mutate() rebuilds Chat from its constructorProps map on EVERY
+        // transition - a field missing from that map is silently dropped.
+        [$sized] = $opened->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+
+        $this->assertNotNull($sized->sessionPicker());
+        $this->assertSame(2, $sized->sessionPicker()?->count());
+    }
+
+    // -------------------------------------------------------------------------
+    // W3.F2 - sub-agent execution routed through AgentManager (crush_feat 5 E6)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executor stub whose AgentResult carries real usage numbers AND the
+     * sub-agent's own id -- AgentManager mirrors usage back by matching
+     * $result->agentId against its registry, so a stub that invents an id
+     * would silently exercise nothing.
+     */
+    private function telemetryExecutor(int $tokens, float $cost, int $startTs, int $endTs): ExecutorInterface
+    {
+        return new class ($tokens, $cost, $startTs, $endTs) implements ExecutorInterface {
+            public function __construct(
+                private readonly int $tokens,
+                private readonly float $cost,
+                private readonly int $startTs,
+                private readonly int $endTs,
+            ) {}
+
+            public function execute(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                return new AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'done',
+                    error: null,
+                    tokensUsed: $this->tokens,
+                    costUsd: $this->cost,
+                    startedAt: new \DateTimeImmutable('@' . $this->startTs),
+                    completedAt: new \DateTimeImmutable('@' . $this->endTs),
+                );
+            }
+
+            public function executeStream(\SugarCraft\Crush\Agents\SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+            public function cancelAll(): void {}
+        };
+    }
+
+    private function newAgentManager(): AgentManager
+    {
+        return new AgentManager(
+            $this->createMock(\SugarCraft\Crush\Providers\ProviderInterface::class),
+            new \SugarCraft\Crush\Skills\SkillRegistry(),
+        );
+    }
+
+    public function testExecuteAgentsRegistersSubAgentsWithTheAgentManager(): void
+    {
+        $manager = $this->newAgentManager();
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $this->telemetryExecutor(1200, 0.42, 1000, 1007));
+        $chat = (new Chat(agentManager: $manager))->withWorkerPool($pool);
+
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'telemetry-agent',
+            agent: new Agent(
+                name: 'TelemetryAgent',
+                description: 'Agent for telemetry-routing test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'do the thing',
+        );
+
+        $collected = iterator_to_array($chat->executeAgents([$subAgent], new CompleteRequest(
+            model: 'test-model',
+            messages: [],
+        )), false);
+
+        // Existing behaviour is unchanged: same results, same order.
+        $this->assertCount(1, $collected);
+        $this->assertSame('telemetry-agent', $collected[0]->agentId);
+        $this->assertTrue($collected[0]->isSuccess());
+        $this->assertSame('done', $collected[0]->output);
+
+        // Before W3.F2 the pool was iterated directly, so the manager never
+        // saw the sub-agent and every telemetry accessor answered zero.
+        $this->assertSame($subAgent, $manager->getSubAgent('telemetry-agent'));
+        $this->assertSame(1200, $manager->tokensUsed('TelemetryAgent'));
+        $this->assertSame(0.42, $manager->costUsd('TelemetryAgent'));
+        $this->assertSame(7, $manager->elapsedSeconds('TelemetryAgent'));
+    }
+
+    public function testExecuteAgentsCountsUsageOnceNotTwice(): void
+    {
+        $manager = $this->newAgentManager();
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $this->telemetryExecutor(500, 0.05, 2000, 2003));
+        $chat = (new Chat(agentManager: $manager))->withWorkerPool($pool);
+
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'single-count-agent',
+            agent: new Agent(
+                name: 'SingleCountAgent',
+                description: 'Agent for double-count guard test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'do the thing',
+        );
+
+        iterator_to_array($chat->executeAgents([$subAgent], new CompleteRequest(
+            model: 'test-model',
+            messages: [],
+        )), false);
+
+        // AgentManager accumulates with `+=`, so routing must dispatch through
+        // exactly one of manager/pool -- never both for the same instances.
+        $this->assertSame(500, $manager->tokensUsed('SingleCountAgent'));
+        $this->assertSame(0.05, $manager->costUsd('SingleCountAgent'));
+    }
+
+    public function testExecuteAgentsWithoutAgentManagerStillDispatchesThroughThePool(): void
+    {
+        $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $this->telemetryExecutor(10, 0.01, 3000, 3001));
+        $chat = (new Chat())->withWorkerPool($pool);
+
+        $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
+            id: 'no-manager-agent',
+            agent: new Agent(
+                name: 'NoManagerAgent',
+                description: 'Agent for manager-less dispatch test',
+                prompt: 'You are a test agent.',
+                model: 'test-model',
+                provider: 'test',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+            task: 'do the thing',
+        );
+
+        $collected = iterator_to_array($chat->executeAgents([$subAgent], new CompleteRequest(
+            model: 'test-model',
+            messages: [],
+        )), false);
+
+        $this->assertCount(1, $collected);
+        $this->assertSame('no-manager-agent', $collected[0]->agentId);
+        $this->assertTrue($collected[0]->isSuccess());
+    }
+
+    public function testConstructorLinksWorkflowEngineToTheAgentManager(): void
+    {
+        $manager = $this->newAgentManager();
+        $engine = new \SugarCraft\Crush\Workflows\WorkflowEngine();
+
+        $chat = new Chat(workflowEngine: $engine, agentManager: $manager);
+        $this->assertSame($manager, $engine->agentManager());
+
+        // The link must survive mutate()'s constructor re-entry.
+        $chat->withStreaming(true);
+        $this->assertSame($manager, $engine->agentManager());
+    }
+
+    public function testConstructorDoesNotOverrideAnEnginesOwnAgentManager(): void
+    {
+        $ownManager = $this->newAgentManager();
+        $chatManager = $this->newAgentManager();
+        $engine = new \SugarCraft\Crush\Workflows\WorkflowEngine(
+            new \SugarCraft\Crush\Workflows\WorkflowRegistry(),
+            new AgentWorkerPool(),
+            $ownManager,
+        );
+
+        new Chat(workflowEngine: $engine, agentManager: $chatManager);
+
+        $this->assertSame($ownManager, $engine->agentManager());
+    }
+
+    public function testWorkflowParallelStageRegistersSubAgentsWithTheAgentManager(): void
+    {
+        $manager = $this->newAgentManager();
+        $registry = new \SugarCraft\Crush\Workflows\WorkflowRegistry();
+        $engine = new \SugarCraft\Crush\Workflows\WorkflowEngine(
+            $registry,
+            new AgentWorkerPool(5, $this->telemetryExecutor(100, 0.02, 4000, 4005)),
+        );
+
+        // Chat is what hands the engine the manager the renderer reads.
+        new Chat(workflowEngine: $engine, agentManager: $manager);
+
+        $workflow = (new \SugarCraft\Crush\Workflows\WorkflowBuilder())
+            ->name('telemetry-parallel')
+            ->description('Parallel stage telemetry routing')
+            ->maxConcurrent(2)
+            ->parallel('fan-out', [
+                \SugarCraft\Crush\Workflows\Tasks::agent('coder')->prompt('Task 1'),
+                \SugarCraft\Crush\Workflows\Tasks::agent('coder')->prompt('Task 2'),
+            ])
+            ->build();
+        $registry->register($workflow);
+
+        $result = $engine->run('telemetry-parallel', []);
+
+        $this->assertTrue($result->isSuccess());
+        // Before W3.F2 executeParallelStage() iterated its stage pool directly,
+        // so no workflow sub-agent ever reached the manager.
+        $this->assertCount(2, $manager->subAgentsOf('coder'));
+        $this->assertSame(200, $manager->tokensUsed('coder'));
+        $this->assertSame(0.04, $manager->costUsd('coder'));
+        $this->assertSame(5, $manager->elapsedSeconds('coder'));
     }
 }

@@ -21,6 +21,7 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
@@ -40,6 +41,7 @@ use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 use SugarCraft\Mouse\ZoneClickTracker;
 use SugarCraft\Fuzzy\MatchResult;
@@ -170,6 +172,23 @@ final class Chat implements Model
      * click.
      */
     private const CLICK_DRAG_TOLERANCE_CELLS = 1;
+
+    /**
+     * Reconciliation id of the background-session poll subscription
+     * (crush_feat.md section 5 E4). Stable across rebuilds so `Program`
+     * recognises the timer it already started instead of restarting it on
+     * every update cycle.
+     */
+    private const BACKGROUND_POLL_SUBSCRIPTION = 'crush.background-poll';
+
+    /**
+     * How often the poll pump wakes (seconds).
+     *
+     * Two, per the spec sketch: `BackgroundSupervisor::HEARTBEAT_TIMEOUT_SECS`
+     * is 15, so this is fast enough to report a stall promptly and slow
+     * enough that a mostly-idle TUI is not repainting on a hot timer.
+     */
+    private const BACKGROUND_POLL_SECONDS = 2.0;
 
     /**
      * @param list<Message> $history
@@ -379,10 +398,67 @@ final class Chat implements Model
          * actually building.
          */
         private readonly int $scrollOffset = 0,
+        /**
+         * Supervisor the `/bg` and `/fork` commands dispatch onto
+         * (crush_feat.md section 5 E3). Before this, `BackgroundSupervisor`
+         * had no caller anywhere in the codebase: the fork+daemonize,
+         * heartbeat and reconnect machinery was fully built and fully
+         * unit-tested but unreachable from chat, so a user could not
+         * background a task at all.
+         *
+         * Null (the default) keeps every existing embedder/test working and
+         * makes `/bg` answer with the same "<thing> not configured" line the
+         * other optional collaborators on this class use.
+         */
+        private readonly ?\SugarCraft\Crush\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
+        /**
+         * Last status this Chat reported for each background session, keyed
+         * by session id (crush_feat.md section 5 E4).
+         *
+         * The poll pump is edge-triggered, not level-triggered: a session
+         * sitting at `running` for ten minutes must not append a transcript
+         * line every two seconds. This map is the "last-known" side of that
+         * diff, and lives on the model rather than on the supervisor because
+         * it is a property of what the USER has already been told, not of
+         * the session itself - a second embedder watching the same
+         * supervisor has its own notion of what it has shown.
+         *
+         * @var array<string, string> session id => BackgroundSessionStatus::value
+         */
+        private readonly array $backgroundStatuses = [],
+        /**
+         * The live session picker overlay, or null when it is closed
+         * (crush_feat.md section 5 E8).
+         *
+         * Persisted on the model rather than rebuilt per keystroke because
+         * the picker owns navigation state (selected row, branch filter):
+         * before this field existed, `/sessions` rendered the picker's FIRST
+         * frame into a chat message, so ↑/↓ had nothing to move and the
+         * widget's whole keyboard surface was unreachable from
+         * `bin/sugarcrush`.
+         *
+         * Modal precedence mirrors {@see $palette}: a blocking permission
+         * prompt still owns the keyboard ahead of both, and only one of
+         * picker/palette can be open at a time because each is opened from
+         * a dispatch arm the other's routing block already claimed.
+         */
+        private readonly ?SessionPicker $sessionPicker = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
         $this->workflowEngine = $workflowEngine;
         $this->agentManager = $agentManager;
+        // Chat is the only place that holds BOTH collaborators, so it is where
+        // the engine learns which manager its parallel-stage sub-agents should
+        // register with -- without this link a /workflow run's agents would
+        // still bypass the manager the renderer reads telemetry from
+        // (crush_feat.md section 5 E6). Idempotent across mutate(), and an
+        // engine that was constructed with its own manager keeps it.
+        if ($agentManager !== null
+            && $workflowEngine instanceof WorkflowEngine
+            && $workflowEngine->agentManager() === null
+        ) {
+            $workflowEngine->setAgentManager($agentManager);
+        }
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
@@ -444,6 +520,21 @@ final class Chat implements Model
             }
             return [$this->mutate(['currentSessionName' => $title]), null];
         }
+        if ($msg instanceof BackgroundSessionSpawnedMsg) {
+            // Unlike the title call above this is NOT session-scoped: the
+            // user asked for it out loud with a slash command, so the answer
+            // belongs in whatever transcript is in front of them now.
+            $notice = $msg->error !== null
+                ? "Could not start background session '{$msg->name}': {$msg->error}"
+                : ($msg->command === '/fork'
+                    ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status."
+                    : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status.");
+
+            return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)]]), null];
+        }
+        if ($msg instanceof BackgroundTickMsg) {
+            return $this->pumpBackgroundSessions();
+        }
         if ($msg instanceof WindowSizeMsg) {
             // The one authoritative size - see the constructor docblock on
             // $rows/$cols for why Renderer must read these instead of
@@ -497,7 +588,10 @@ final class Chat implements Model
         // its existing, more specific meaning there - see
         // handlePaletteKey()'s own Escape arm, reached below once this `if`
         // doesn't match.
-        if ($msg->type === KeyType::Escape && $this->palette === null) {
+        // The session picker is excluded for the same reason the palette is:
+        // Escape closes the overlay there (see handleSessionPickerKey()),
+        // which is more specific than "cancel the in-flight turn".
+        if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null) {
             if (!$this->inFlight) {
                 return [$this->mutate(['lastEscapeAt' => null]), null];
             }
@@ -532,6 +626,15 @@ final class Chat implements Model
         // "/" popup - see handlePaletteKey()'s docblock.
         if ($this->palette !== null) {
             return $this->handlePaletteKey($msg);
+        }
+
+        // Same rule for the session picker overlay (crush_feat.md section 5
+        // E8): while it is up every keystroke browses/resumes rather than
+        // reaching inputBuf. Checked after the palette so the two modals
+        // have a fixed, documented precedence even though they cannot both
+        // be open.
+        if ($this->sessionPicker !== null) {
+            return $this->handleSessionPickerKey($msg);
         }
 
         return match (true) {
@@ -571,6 +674,15 @@ final class Chat implements Model
             // into the input buffer instead - same reasoning as Ctrl+P above.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
                 => $this->toggleLatestToolOutput(),
+            // Ctrl+R opens the live session picker (crush_feat.md section 5
+            // E8). NOT the Ctrl+O that section suggests: §1 E5 already bound
+            // Ctrl+O to tool-output expansion above, and that is the only
+            // way to read a hidden tool body. `r` is claimed by neither
+            // KeyboardHandler::CHAT_CTRL_RUNES nor its SHELL_CTRL_RUNES, so
+            // the pane shell falls it straight through to here, and it
+            // mirrors Claude Code's `--resume` picker mnemonic.
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'r'
+                => [$this->mutate(['sessionPicker' => $this->buildSessionPicker()]), null],
             // R20: Ctrl+A re-runs the exact same /agents dispatch submit()
             // already uses for typed input (handleAgentsCommand()), giving
             // KeyboardHandler's Ctrl+A shortcut (Pane::Agents in the
@@ -2045,6 +2157,28 @@ final class Chat implements Model
     }
 
     /**
+     * The background-session supervisor `/bg` and `/fork` dispatch onto, if set.
+     */
+    public function backgroundSupervisor(): ?\SugarCraft\Crush\Sessions\BackgroundSupervisor
+    {
+        return $this->backgroundSupervisor;
+    }
+
+    /**
+     * Attach the supervisor `/bg` and `/fork` spawn onto.
+     *
+     * The supervisor is deliberately NOT immutable-cloned here: it owns live
+     * child processes and open sockets, so every `mutate()` clone of this
+     * Chat must keep pointing at the SAME instance or the sessions a previous
+     * clone spawned become unreachable (the same reasoning as
+     * {@see \SugarCraft\Crush\Backend\CancellationToken}).
+     */
+    public function withBackgroundSupervisor(?\SugarCraft\Crush\Sessions\BackgroundSupervisor $supervisor): self
+    {
+        return $this->mutate(['backgroundSupervisor' => $supervisor]);
+    }
+
+    /**
      * Get the memory store, if set.
      */
     public function memoryStore(): ?MemoryStore
@@ -2133,6 +2267,16 @@ final class Chat implements Model
      * Otherwise, if $agentPoolConfig was set via withAgentPoolConfig(), a pool is
      * built from that config. If neither is set, throws \RuntimeException.
      *
+     * The resolved pool is then driven THROUGH {@see AgentManager::executeAll()}
+     * whenever an AgentManager is configured, rather than being iterated
+     * directly. The manager registers each SubAgent and mirrors the pool's
+     * per-result usage back onto it, which is the only thing that makes
+     * {@see AgentManager::elapsedSeconds()}/tokensUsed()/costUsd() -- and so
+     * Renderer::agentDisplayState()'s status line -- observe real work instead
+     * of zeros (crush_feat.md section 5 E6). Dispatch stays single-pass: the
+     * manager accumulates with `+=`, so the pool must never also be iterated
+     * for the same SubAgent instances or usage would be counted twice.
+     *
      * @param \SugarCraft\Crush\Agents\SubAgent[] $agents
      * @return \Generator<AgentResult>
      * @throws \RuntimeException When no pool or config is available
@@ -2156,6 +2300,10 @@ final class Chat implements Model
                 maxConcurrent: $this->agentPoolConfig->maxConcurrent,
                 executor: $executor,
             ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
+        }
+
+        if ($this->agentManager !== null) {
+            return $this->agentManager->executeAll($agents, $request, $pool);
         }
 
         return $pool->executeAll($agents, $request);
@@ -2510,6 +2658,9 @@ final class Chat implements Model
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
             'scrollOffset' => $this->scrollOffset,
+            'backgroundSupervisor' => $this->backgroundSupervisor,
+            'backgroundStatuses' => $this->backgroundStatuses,
+            'sessionPicker' => $this->sessionPicker,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -2619,6 +2770,18 @@ final class Chat implements Model
         // Handle /memory commands locally
         if (str_starts_with($text, '/memory')) {
             return $this->handleMemoryCommand($text);
+        }
+
+        // Handle /bg (and its /background spelling) - dispatch a task onto
+        // BackgroundSupervisor (crush_feat.md section 5 E3). Checked before
+        // /branch only for readability; the two prefixes cannot collide.
+        if (str_starts_with($text, '/bg') || str_starts_with($text, '/background')) {
+            return $this->handleBackgroundCommand($text);
+        }
+
+        // Handle /fork command (clone this conversation into a background session)
+        if (str_starts_with($text, '/fork')) {
+            return $this->handleForkCommand($text);
         }
 
         // Handle /branch command (fork current session)
@@ -3237,32 +3400,22 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /sessions command — list all sessions via the real
-     * {@see SessionPicker}.
+     * Handle /sessions command — OPEN the live {@see SessionPicker} overlay
+     * (crush_feat.md section 5 E8).
      *
-     * Unlike /branch, /rename, and /rewind (which each act on the *current*
-     * session), /sessions builds SessionPicker from every row
-     * {@see SessionStore::listSessions()} actually returns and renders it
-     * exactly as the interactive picker would — this is the concrete,
-     * testable proof that R19's real `SessionStore` wiring is reachable for
-     * more than checkpoint/branch bookkeeping. The rendered picker text is
-     * folded into an assistant turn (same shape every other local command in
-     * this file uses via `sessionResponse()`/`*Response()`), rather than
-     * SessionPicker's own keyboard navigation being wired live — that would
-     * need Chat to persist a `SessionPicker` instance across turns, widening
-     * this file's constructor/`mutate()` surface well beyond this item's
-     * "KeyMsg dispatch site / new /sessions command site" scope.
+     * Until E8 this folded the picker's first frame into an assistant turn,
+     * so the widget's ↑/↓/Enter/Space/Ctrl+B keyboard surface was rendered
+     * but unreachable — a screenshot of a picker, not a picker. It now
+     * latches a real instance on {@see $sessionPicker}; {@see update()}
+     * routes every subsequent keystroke into it via
+     * {@see handleSessionPickerKey()} and {@see Renderer::render()}
+     * composites it through the same {@see \SugarCraft\Veil\Veil} slot the
+     * Ctrl+P palette uses.
      *
-     * R20.fix disclosure: in a real `bin/sugarcrush` run this will render
-     * `SessionPicker::new([])` (an empty picker), not a populated list —
-     * no production path (`Bootstrap::chat()`, `Chat::init()`, or any other
-     * `src/`/`bin/` call site) ever calls
-     * `SessionStore::createSession()`/`EnhancedSessionStore::createSession()`,
-     * so `listSessions()` has no rows to return until that separate,
-     * out-of-scope wiring lands. `SessionCommandTest` covers this method by
-     * calling `createSession()` on the store directly, which is why the test
-     * passes today despite this being unreachable with real data. See the
-     * matching note on `Renderer::renderSessionTabStrip()`'s class docblock.
+     * The assistant line is deliberately a one-line hint rather than the
+     * rendered picker: the overlay is what the user is looking at, and
+     * duplicating it into the scrollback would leave a stale copy behind
+     * once the selection moves.
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -3272,16 +3425,60 @@ final class Chat implements Model
             return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /sessions.');
         }
 
+        $picker = $this->buildSessionPicker();
+        if ($picker === null) {
+            return $this->sessionResponse($inputText, 'No sessions recorded yet.');
+        }
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText), Message::assistant(
+                'Session picker open — ↑/↓ browse, ↵ resume, space preview, esc close.',
+            )],
+            'inputBuf' => '',
+            'inFlight' => false,
+            'sessionPicker' => $picker,
+        ]);
+
+        return [$next, null];
+    }
+
+    /**
+     * Build a {@see SessionPicker} over every row
+     * {@see SessionStore::listSessions()} currently returns, or null when
+     * there is no store or no session to pick.
+     *
+     * Null (rather than an empty picker) is what keeps Ctrl+R from opening
+     * a modal the user cannot do anything with; both call sites treat it as
+     * "don't open".
+     *
+     * The row text is scrubbed here, at the boundary, because the picker's
+     * own output reaches the screen verbatim: {@see Renderer} composites the
+     * widget's already-styled frame and cannot re-sanitize it without
+     * destroying SessionPicker's legitimate SGR. Session names are model
+     * output on the live path ({@see scheduleTitleGeneration()} auto-titles
+     * via the backend), so they must not be trusted — see
+     * {@see sanitizeSessionField()}.
+     */
+    private function buildSessionPicker(): ?SessionPicker
+    {
+        if ($this->sessionStore === null) {
+            return null;
+        }
+
         $rows = $this->sessionStore->listSessions();
+        if ($rows === []) {
+            return null;
+        }
+
         $sessions = array_map(
             static function (array $row): array {
                 $id = (string) ($row['id'] ?? '');
-                $name = (string) ($row['name'] ?? '');
+                $name = self::sanitizeSessionField((string) ($row['name'] ?? ''));
 
                 return [
                     'sessionId' => $id,
                     'sessionName' => $name !== '' ? $name : $id,
-                    'summary' => (string) ($row['system_prompt'] ?? ''),
+                    'summary' => self::sanitizeSessionField((string) ($row['system_prompt'] ?? '')),
                     'gitBranch' => null,
                     'lastActivity' => (string) ($row['updated_at'] ?? ''),
                 ];
@@ -3289,11 +3486,147 @@ final class Chat implements Model
             $rows,
         );
 
-        $picker = SessionPicker::new($sessions);
-        $size = TuiRenderer::getTerminalSize();
-        $response = $picker->render($size['cols'], $size['rows']);
+        return SessionPicker::new($sessions);
+    }
 
-        return $this->sessionResponse($inputText, $response);
+    /**
+     * Neutralize one stored session string before it is painted into the
+     * picker overlay.
+     *
+     * The same pair {@see Renderer}'s own `untrusted()` composes:
+     * `Sanitize::untrusted()` for ANSI/C0/C1/DEL, then a Private-Use-Area
+     * strip. The second half is the security half — `U+E000`/`U+E001` are
+     * well-formed UTF-8 that `Sanitize::untrusted()` leaves alone, and
+     * {@see sanitizeSessionTitle()} does not remove either, so a
+     * model-chosen title could otherwise smuggle {@see \SugarCraft\Mouse\Mark}
+     * zone sentinels into the frame and register attacker-chosen hit boxes
+     * in the registry {@see zoneAt()} reads. The whole U+E000–U+F8FF block
+     * goes, not just the two sentinel codepoints: nothing in it is
+     * meaningful in a session name, and a narrower strip would have to be
+     * revisited every time Mark's marker encoding grows.
+     *
+     * The `/u` pattern refuses to run on invalid UTF-8 (returns null), which
+     * would fail open on exactly the malformed input an attacker controls,
+     * so the null branch still removes the two sentinel byte sequences
+     * verbatim rather than handing the text back untouched.
+     */
+    private static function sanitizeSessionField(string $text): string
+    {
+        $text = Sanitize::untrusted($text);
+
+        return preg_replace('/[\x{E000}-\x{F8FF}]/u', '', $text)
+            ?? str_replace([Sentinel::OPEN, Sentinel::CLOSE], '', $text);
+    }
+
+    /**
+     * Route one keystroke into the open session picker (crush_feat.md
+     * section 5 E8).
+     *
+     * Translates the {@see KeyMsg} into the key names
+     * {@see SessionPicker::handleKey()} already understands and acts on the
+     * action it reports back:
+     *
+     * - `browse` — keep the navigated picker.
+     * - `resume` — switch {@see currentSessionId()} to the highlighted row
+     *   and close the overlay.
+     * - `preview` — no state change: the picker's own footer already shows
+     *   the selected session's summary, so Space is a deliberate no-op that
+     *   simply leaves the overlay up.
+     * - `close` / `null` — Escape closes; anything the widget does not bind
+     *   is swallowed rather than falling through to `inputBuf`, so a stray
+     *   letter cannot type into a chat box the user cannot see.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleSessionPickerKey(KeyMsg $msg): array
+    {
+        $picker = $this->sessionPicker;
+        if ($picker === null) {
+            return [$this, null];
+        }
+
+        [$next, $action] = $picker->handleKey(self::sessionPickerKeyName($msg));
+
+        return match ($action) {
+            'browse' => [$this->mutate(['sessionPicker' => $next]), null],
+            'resume' => $this->resumeSelectedSession($next),
+            'preview' => [$this->mutate(['sessionPicker' => $next]), null],
+            'close' => [$this->mutate(['sessionPicker' => null]), null],
+            default => [$this, null],
+        };
+    }
+
+    /**
+     * Map a {@see KeyMsg} onto the key name
+     * {@see SessionPicker::handleKey()} matches against.
+     *
+     * Only the widget's own bindings are translated; everything else
+     * becomes a name it does not bind, which it answers with a null action.
+     */
+    private static function sessionPickerKeyName(KeyMsg $msg): string
+    {
+        return match (true) {
+            $msg->type === KeyType::Up => 'up',
+            $msg->type === KeyType::Down => 'down',
+            $msg->type === KeyType::Enter => 'enter',
+            $msg->type === KeyType::Space => ' ',
+            $msg->type === KeyType::Escape => 'escape',
+            $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'b' => 'ctrl+b',
+            // j/k only when unmodified - Ctrl+K is a shell chord.
+            $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt => $msg->rune,
+            default => '',
+        };
+    }
+
+    /**
+     * Adopt the picker's highlighted row as the current session and close
+     * the overlay.
+     *
+     * `currentSessionName` is re-read from the store rather than taken from
+     * the picker row, whose `sessionName` falls back to the raw id for
+     * display: latching that id would look like a user-set title and
+     * suppress the auto-titling pass in
+     * {@see scheduleTitleGeneration()}, which skips any Chat that already
+     * has a `currentSessionName`.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function resumeSelectedSession(SessionPicker $picker): array
+    {
+        $selected = $picker->selectedSession();
+        if ($selected === null || $this->sessionStore === null) {
+            return [$this->mutate(['sessionPicker' => null]), null];
+        }
+
+        $sessionId = $selected['sessionId'];
+        $name = null;
+        foreach ($this->sessionStore->listSessions() as $row) {
+            if ((string) ($row['id'] ?? '') === $sessionId) {
+                $stored = (string) ($row['name'] ?? '');
+                $name = $stored !== '' ? $stored : null;
+                break;
+            }
+        }
+
+        return [$this->mutate([
+            'sessionPicker' => null,
+            'currentSessionId' => $sessionId,
+            'currentSessionName' => $name,
+            'history' => [...$this->history, Message::system(
+                '_Resumed session ' . ($name ?? $sessionId) . '._',
+            )],
+        ]), null];
+    }
+
+    /**
+     * The open session picker overlay, or null when it is closed.
+     *
+     * {@see Renderer::render()} reads this to decide whether to composite
+     * the picker over the frame.
+     */
+    public function sessionPicker(): ?SessionPicker
+    {
+        return $this->sessionPicker;
     }
 
     /**
@@ -3351,6 +3684,199 @@ final class Chat implements Model
         ]);
 
         return [$next, null];
+    }
+
+    /**
+     * Handle /bg (alias /background) — dispatch a task onto
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor} and hand the
+     * prompt straight back (crush_feat.md section 5 E3).
+     *
+     * Claude Code's `/background` with no argument backgrounds the LIVE
+     * conversation; that has no counterpart here, because `spawnSession()`
+     * hands the child a task string, not a transcript, so an argument-less
+     * `/bg` is answered with usage rather than silently backgrounding
+     * something else.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleBackgroundCommand(string $inputText): array
+    {
+        if ($this->backgroundSupervisor === null) {
+            return $this->sessionResponse($inputText, 'Background sessions not configured. Set a BackgroundSupervisor to use /bg and /fork.');
+        }
+
+        $task = self::commandArgument($inputText);
+        if ($task === '') {
+            return $this->sessionResponse($inputText, 'Usage: /bg <task>');
+        }
+
+        $name = self::backgroundSessionName($task);
+
+        return $this->backgroundDispatch(
+            $inputText,
+            $this->scheduleBackgroundSpawn('/bg', $name, $task, null),
+        );
+    }
+
+    /**
+     * Handle /fork — clone this conversation and run $prompt against the
+     * clone in a background session.
+     *
+     * The transcript copy is {@see SessionStore::forkSession()}, the same
+     * call `/branch` makes, but `currentSessionId` deliberately stays put:
+     * `/branch` MOVES the user onto the new branch, whereas `/fork` leaves
+     * them where they are and sends the copy away to work (Claude Code's
+     * split between the two). The forked id rides along as a tag so the
+     * background session can be traced back to the transcript it came from.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleForkCommand(string $inputText): array
+    {
+        if ($this->backgroundSupervisor === null) {
+            return $this->sessionResponse($inputText, 'Background sessions not configured. Set a BackgroundSupervisor to use /bg and /fork.');
+        }
+
+        $prompt = self::commandArgument($inputText);
+        if ($prompt === '') {
+            return $this->sessionResponse($inputText, 'Usage: /fork <prompt>');
+        }
+
+        if ($this->sessionStore === null) {
+            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /fork.');
+        }
+
+        if ($this->currentSessionId === null) {
+            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
+        }
+
+        try {
+            $forkedSessionId = $this->sessionStore->forkSession($this->currentSessionId);
+        } catch (\Throwable $e) {
+            return $this->sessionResponse($inputText, "Error: {$e->getMessage()}");
+        }
+
+        $name = self::backgroundSessionName($prompt);
+
+        return $this->backgroundDispatch(
+            $inputText,
+            $this->scheduleBackgroundSpawn('/fork', $name, $prompt, $forkedSessionId),
+        );
+    }
+
+    /**
+     * Common tail of `/bg` and `/fork`: record the command, free the prompt,
+     * and let $cmd report the outcome later.
+     *
+     * No assistant line is written here on purpose - the only honest thing to
+     * say at this point is "asked to spawn", and the real answer (session id,
+     * or the reason there isn't one) arrives as a
+     * {@see BackgroundSessionSpawnedMsg}.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function backgroundDispatch(string $inputText, \Closure $cmd): array
+    {
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
+        return [$next, $cmd];
+    }
+
+    /**
+     * Build the Cmd that actually spawns the background session.
+     *
+     * `spawnSession()` proc_opens a daemon and then blocks on a socket
+     * accept (up to 5s) waiting for it to connect. Running that inside
+     * `update()` would stall the event loop - no repaint, no keystrokes -
+     * for the whole handshake, which is precisely the thing `/bg` exists to
+     * avoid, so it runs off-turn like every other side effect on this class
+     * ({@see scheduleTitleGeneration()}).
+     *
+     * A failed spawn resolves rather than rejects: a rejection would surface
+     * as candy-core's generic `ExceptionMsg` and lose the command context the
+     * transcript line needs.
+     *
+     * @param string      $command         '/bg' or '/fork', echoed back in the transcript line.
+     * @param string|null $forkedSessionId Transcript clone this session continues, tagged onto it; null for a plain /bg.
+     */
+    private function scheduleBackgroundSpawn(string $command, string $name, string $task, ?string $forkedSessionId): \Closure
+    {
+        $supervisor = $this->backgroundSupervisor;
+        // A registered "default" agent first, then whatever IS registered,
+        // then a synthesised stand-in: Bootstrap::chat() does not pass an
+        // AgentManager at all today, and refusing to background anything
+        // until it does would leave this command as unreachable as the
+        // supervisor it drives.
+        $agent = $this->agentManager?->get('default')
+            ?? ($this->agentManager?->all()[0] ?? null)
+            ?? self::defaultBackgroundAgent();
+        $workingDirectory = getcwd() ?: '.';
+        $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
+
+        return Cmd::promise(static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags): PromiseInterface {
+            try {
+                $session = $supervisor->spawnSession(
+                    name: $name,
+                    agent: $agent,
+                    task: $task,
+                    workingDirectory: $workingDirectory,
+                    tags: $tags,
+                );
+
+                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, $session->id));
+            } catch (\Throwable $e) {
+                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, null, $e->getMessage()));
+            }
+        });
+    }
+
+    /**
+     * The stand-in agent a background session runs as when no AgentManager
+     * is wired. Named "default" so a later, real registration replaces it
+     * transparently.
+     */
+    private static function defaultBackgroundAgent(): \SugarCraft\Crush\Agents\Agent
+    {
+        return new \SugarCraft\Crush\Agents\Agent(
+            name: 'default',
+            description: 'Background session agent',
+            prompt: '',
+            model: 'unknown',
+            provider: 'unknown',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+    }
+
+    /**
+     * Everything after the leading "/command" token, trimmed; '' when the
+     * command was typed bare.
+     */
+    private static function commandArgument(string $inputText): string
+    {
+        $parts = preg_split('/\s+/', trim($inputText), 2) ?: [];
+
+        return isset($parts[1]) ? trim($parts[1]) : '';
+    }
+
+    /**
+     * A one-line, control-character-free session name derived from the task.
+     *
+     * Reuses {@see sanitizeSessionTitle()} because a task string is typed by
+     * the user and can carry pasted ESC sequences or newlines, and the name
+     * ends up in a status list rendered one row per session.
+     */
+    private static function backgroundSessionName(string $task): string
+    {
+        $name = self::sanitizeSessionTitle($task);
+
+        return $name === '' ? 'Background task' : $name;
     }
 
     /**
@@ -4268,9 +4794,104 @@ final class Chat implements Model
         return '';
     }
 
+    /**
+     * Declare the recurring work this model needs the runtime to drive
+     * (crush_feat.md section 5 E4).
+     *
+     * Today that is exactly one thing: waking up often enough to run
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::tick()}, which
+     * is what flips a session whose heartbeats have stopped to `Stalled`
+     * and back again. Before this returned anything, that method had no
+     * caller on the live path at all.
+     *
+     * Returns null - not an empty Subscriptions - whenever there is nothing
+     * to poll. `Program` reconciles the set every cycle, so a subscription
+     * declared unconditionally would keep a timer waking the event loop (and
+     * re-rendering) forever in the overwhelmingly common case of a user who
+     * has never run `/bg`.
+     */
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
-        return null;
+        if ($this->backgroundSupervisor === null || !$this->backgroundSupervisor->hasActiveSessions()) {
+            return null;
+        }
+
+        return (new \SugarCraft\Core\Subscriptions())->withTick(
+            self::BACKGROUND_POLL_SUBSCRIPTION,
+            self::BACKGROUND_POLL_SECONDS,
+            static fn (): \SugarCraft\Core\Msg => new BackgroundTickMsg(),
+        );
+    }
+
+    /**
+     * Last status reported to the user for each background session, keyed by
+     * session id.
+     *
+     * @return array<string, string>
+     */
+    public function backgroundStatuses(): array
+    {
+        return $this->backgroundStatuses;
+    }
+
+    /**
+     * Run one poll of {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor}
+     * and announce whatever changed since the previous poll.
+     *
+     * Terminal sessions drop out of `getActiveSessions()`, so a session that
+     * finished between two ticks would otherwise vanish without ever being
+     * reported as finished - the previously-seen ids are therefore re-read
+     * individually to catch that last transition.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function pumpBackgroundSessions(): array
+    {
+        $supervisor = $this->backgroundSupervisor;
+        if ($supervisor === null) {
+            return [$this, null];
+        }
+
+        $supervisor->tick();
+
+        $statuses = [];
+        foreach ($supervisor->getActiveSessions() as $id => $session) {
+            $statuses[$id] = $session->status->value;
+        }
+        foreach (array_keys($this->backgroundStatuses) as $id) {
+            if (isset($statuses[$id])) {
+                continue;
+            }
+            $session = $supervisor->getSession($id);
+            if ($session !== null) {
+                $statuses[$id] = $session->status->value;
+            }
+        }
+
+        $notices = [];
+        foreach ($statuses as $id => $status) {
+            if (($this->backgroundStatuses[$id] ?? null) === $status) {
+                continue;
+            }
+            $name = $supervisor->getSession($id)?->name ?? $id;
+            $notices[] = Message::system(sprintf(
+                "Background session %s ('%s') is now %s.",
+                $id,
+                $name,
+                $status,
+            ));
+        }
+
+        if ($notices === [] && $statuses === $this->backgroundStatuses) {
+            // Nothing moved - returning $this keeps the renderer's diff empty
+            // instead of repainting the transcript twice a second.
+            return [$this, null];
+        }
+
+        return [$this->mutate([
+            'history' => [...$this->history, ...$notices],
+            'backgroundStatuses' => $statuses,
+        ]), null];
     }
 
     /**

@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
@@ -1160,5 +1161,86 @@ final class RendererTest extends TestCase
 
         $this->assertIsInt($code);
         $this->assertTrue($code < 0xE000 || $code > 0xF8FF, 'refusal glyph collides with the marker block');
+    }
+
+    // ---------------------------------------------------------------
+    // Live session picker overlay (crush_feat.md section 5 E8)
+    // ---------------------------------------------------------------
+
+    private function pickerChat(int $cols = 100): Chat
+    {
+        $store = new SessionStore(':memory:');
+        $store->createSession('sess-a', 'sugarcrush', 'test-model', null, 'Alpha');
+        $store->createSession('sess-b', 'sugarcrush', 'test-model', null, 'Beta');
+
+        $chat = new Chat(
+            history: [Message::user('hello')],
+            sessionStore: $store,
+            currentSessionId: 'sess-a',
+            rows: 24,
+            cols: $cols,
+        );
+
+        [$opened] = $chat->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        self::assertNotNull($opened->sessionPicker());
+
+        return $opened;
+    }
+
+    public function testOpenSessionPickerIsCompositedOverTheFrame(): void
+    {
+        $out = (string) Renderer::render($this->pickerChat());
+
+        $this->assertStringContainsString('session picker', $out);
+        $this->assertStringContainsString('Alpha', $out);
+        $this->assertStringContainsString('Beta', $out);
+        $this->assertStringContainsString('esc close', $out);
+    }
+
+    /**
+     * The picker is the widest overlay the renderer composites, so it is the
+     * one that exposes both halves of the width budget: its own
+     * border + padding(0, 1) wraps AROUND the width it is handed, and Veil
+     * centres it against a backdrop still measured WITH its zone sentinels.
+     * Get either wrong and a row runs past the terminal, which the diff
+     * renderer (one logical line per physical row) turns into the
+     * absolute-cursorTo row collision that Renderer::render()'s tail clip
+     * exists to prevent.
+     *
+     * @dataProvider pickerTerminalWidths
+     */
+    public function testOpenSessionPickerNeverPaintsPastTheTerminalWidth(int $cols): void
+    {
+        $chat = $this->pickerChat($cols);
+
+        $out = (string) Renderer::render($chat);
+
+        foreach (explode("\n", $out) as $index => $line) {
+            $this->assertLessThanOrEqual(
+                $cols,
+                Width::string($line),
+                "line {$index} overflows a {$cols}-column terminal",
+            );
+        }
+    }
+
+    /** @return array<string, array{int}> */
+    public static function pickerTerminalWidths(): array
+    {
+        return [
+            '70 columns' => [70],
+            '76 columns' => [76],
+            '80x24 canonical' => [80],
+            '100 columns' => [100],
+        ];
+    }
+
+    public function testClosedSessionPickerCompositesNothing(): void
+    {
+        [$closed] = $this->pickerChat()->update(new KeyMsg(KeyType::Escape, ''));
+
+        $out = (string) Renderer::render($closed);
+
+        $this->assertStringNotContainsString('session picker', $out);
     }
 }

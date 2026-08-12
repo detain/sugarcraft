@@ -18,6 +18,7 @@ use SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd;
 use SugarCraft\Crush\Tui\Commands\ResumeAgentCmd;
 use SugarCraft\Crush\Tui\Commands\SourceSkillCmd;
 use SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd;
+use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 
 /**
@@ -252,6 +253,21 @@ final class KeyboardHandler
             return $this->handleAgentAttachKey($key, $app);
         }
 
+        // Alt+1..9 — jump straight to slot N of the dashboard (crush_feat.md
+        // §5 E5). The slot→agent mapping is AgentDashboardPane's, not a second
+        // ordering invented here, so the number the user presses is the number
+        // printed on the row. Deliberately below the Attach dispatch: while
+        // attached, every key belongs to the agent.
+        $slot = self::jumpSlot($key);
+        if ($slot !== null) {
+            $index = AgentDashboardPane::indexForSlot($app, $slot);
+
+            // An empty slot is still CLAIMED (a no-op, not null): falling
+            // through would hand a bare "1" to the chat input the dashboard
+            // is covering.
+            return $index < 0 ? [$app, null] : [$app->withSelectedAgentIndex($index), null];
+        }
+
         // Quick action keys (c, r, s, q) work in List/Peek agent view modes.
         if ($key === 'c' && $app->selectedAgentIndex >= 0) {
             return [$app, new CancelAgentCmd($app->selectedAgentIndex)];
@@ -284,6 +300,21 @@ final class KeyboardHandler
     }
 
     /**
+     * The 1-based dashboard slot an `Alt+<digit>` chord addresses, or null
+     * when the key is not such a chord.
+     *
+     * `alt+0` is deliberately not a slot: slots are labelled 1..9 on screen.
+     */
+    private static function jumpSlot(string $key): ?int
+    {
+        if (preg_match('/\Aalt\+([1-9])\z/', $key, $m) !== 1) {
+            return null;
+        }
+
+        return (int) $m[1];
+    }
+
+    /**
      * Handle keys in agent list view mode.
      *
      * @return array{0: App, 1: ?KeyCmd}|null
@@ -292,6 +323,15 @@ final class KeyboardHandler
     {
         // Enter - switch to peek view (if an agent is selected)
         if ($key === 'enter' && $app->selectedAgentIndex >= 0) {
+            return [$app->withAgentViewMode(AgentViewMode::Peek), null];
+        }
+
+        // Space - the non-committing peek (crush_feat.md §5 E5): look at what
+        // the selected worker is blocked on without leaving the dashboard.
+        // Both spellings are matched because candy-core reports the key as
+        // KeyType::Space ("space") but a Char " " reaches here from any
+        // decoder that does not special-case it.
+        if (($key === 'space' || $key === ' ') && $app->selectedAgentIndex >= 0) {
             return [$app->withAgentViewMode(AgentViewMode::Peek), null];
         }
 
