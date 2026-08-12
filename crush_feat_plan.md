@@ -731,8 +731,21 @@ Wave 2's `Chat.php` changes must be fully landed before this Wave starts — the
 | W3.S4 | Real `subscriptions()` heartbeat/poll pump | `src/Chat.php`, `tests/ChatTest.php` | W3.S3 | §5 E4 |
 | W3.S5a | Fix `agentDisplayState()`'s hardcoded zeros | `src/Agents/AgentManager.php`, `src/Agents/SubAgent.php` (`startedAt`/token-counter accessors), `tests/Agents/AgentManagerTest.php` | W3.S4 | §5 E6 |
 | W3.S5b | `AgentDashboardPane` component | `src/Tui/Components/AgentDashboardPane.php` (new), `src/Renderer.php`, `tests/Tui/Components/AgentDashboardPaneTest.php` | W3.S5a | §5 E5 |
-| W3.S6a | Retire (or migrate) the dead `App`/`Tui\Renderer` engine files | `src/App/App.php`, `src/Tui/Renderer.php` | — (file-disjoint from S1-S5; safe to run concurrently with them once Wave 2 is complete) | §5 E7 (the decision criteria — read this before starting, since it decides delete-vs-migrate) |
-| W3.S6b | Retire (or migrate) the dead `AgentsPane`/`ChatPane`/`ToolsPane` component files | `src/Tui/Components/AgentsPane.php`, `src/Tui/Components/ChatPane.php`, `src/Tui/Components/ToolsPane.php` | W3.S6a (must know the parent system's fate first) | §5 E7; also §1 E6 (`ToolsPane` specifically) |
+| ~~W3.S6a~~ | ~~Retire (or migrate) the dead `App`/`Tui\Renderer` engine files~~ **SUPERSEDED — DO NOT RUN. See the W3.M* migration rows below.** An attempt at this step deleted 3,504 lines (all of `Tui/Components/`, `Tui/Commands/`, `KeyboardHandler`, `SkillsPane`) and was reverted in `e995acf6`. | — | — | §5 E7 |
+| ~~W3.S6b~~ | ~~Retire the pane component files~~ **SUPERSEDED — DO NOT RUN.** These files are being migrated ONTO, not retired. | — | — | §5 E7 |
+
+> **W3.S6a/S6b were the wrong branch of §5 E7's conditional, and the plan's "dead code" framing was factually wrong. Read this before touching anything under `src/App/` or `src/Tui/`.**
+>
+> The `App`/`Pane`/`KeyboardHandler` system is **newer**, not dead: it was created 2026-06-03 in `candy-crush`'s Phase 1-3 and came across when candy-crush was absorbed into sugar-crush. `src/Chat.php` + `src/Renderer.php` are **older** (2026-05-02) and are what `bin/sugarcrush` still boots. The pane system was never switched on — which is the *same* "built but never wired" pattern `crush_feat.md`'s executive summary identifies as this whole project's dominant finding. The response to built-but-unwired is to WIRE it, exactly as `W3.S1` did for sessions. Deleting it is not on the table.
+>
+> The two are **complementary halves, not duplicates**: the pane system is the SHELL (pane layout, `MenuBar`, `KeyboardHandler`'s agent-view keys `c`/`r`/`s`/`q`, session tabs, agent view modes) and has none of the content rendering; `src/Renderer.php` is the CONTENT (tool results, diffs, permission modal, images, collapse/expand, slash menu, palette, mouse zones) and carries every feature Waves 1-2 built. §5 E7's delete branch was explicitly conditioned on there being no plan to move onto the pane shell. There now is one, so the **merge** branch applies.
+>
+> Decision: **full shell adoption.** `App` becomes the root `Model` and HOSTS `Chat` as a field; `ChatPane` delegates its body to the live `src/Renderer.php`; `KeyboardHandler`'s shell keys run first and fall through to `Chat`'s own arms. Nothing built is discarded on either side.
+
+| W3.M1 | Make `App` a candy-core `Model` hosting `Chat`; `ChatPane` delegates to the live `Renderer` | `src/App/App.php`, `src/Tui/Renderer.php`, `src/Tui/Components/ChatPane.php`, `tests/App/AppModelTest.php` | Wave 2 complete | §5 E7 (the MERGE branch) |
+| W3.M2 | Merge `KeyboardHandler`'s shell keys into `App::update()`, falling through to `Chat` | `src/App/App.php`, `src/Tui/KeyboardHandler.php`, `tests/Tui/KeyboardHandlerTest.php` | W3.M1 | §5 E7, §5 E2 |
+| W3.M3 | `Bootstrap::app()`; `bin/sugarcrush` boots the pane shell | `src/Cli/Bootstrap.php`, `bin/sugarcrush`, `tests/Cli/BootstrapTest.php` | W3.M2 | §5 E7 |
+| W3.M4 | Wire the remaining panes to real data (`SkillsPane` incl. W2.S15 badges, `FilesPane`, `ToolsPane`, `MenuBar`) | `src/Tui/Components/*.php` | W3.M3 | §5 E7; §1 E6 (`ToolsPane`); §10 10.5 (`SkillsPane`) |
 | W3.S7 | Live session picker (`Ctrl+O`, persisted across turns) | `src/Chat.php`, `src/Tui/SessionPicker.php` | W3.S1 | §5 E8 |
 | W3.S8 | Skills subsystem `AppBuilder` wiring (the capstone fix for the recurring "never populated" pattern) | `src/App/AppBuilder.php`, `tests/App/AppBuilderTest.php` | W1.C1a, W1.C1b, W1.C2 | §7 E1 |
 | W3.S9 | Skills `paths`-based auto-scoping wired into the live tool-touch path | `src/Tools/BuiltIn/Read.php`, `Edit.php`, `Glob.php` (post-execution skill-match nudge) | W3.S8 | §7 E4 |
