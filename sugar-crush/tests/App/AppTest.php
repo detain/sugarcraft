@@ -257,7 +257,10 @@ final class AppTest extends TestCase
         $app = App::new($this->provider, 'gpt-4');
         $msg = new UserInputMsg('Hello, world!');
 
-        [$nextApp, $cmd] = $app->update($msg);
+        // The engine's Cmd lives on dispatch(), not on the Model-contract
+        // update() (whose second element must be null|Closure or candy-core's
+        // Program::scheduleCmd() TypeErrors) - see App::dispatch().
+        [$nextApp, $cmd] = $app->dispatch($msg);
 
         // App state updated with new user message
         $this->assertCount(1, $nextApp->messages);
@@ -267,6 +270,11 @@ final class AppTest extends TestCase
         // Returns RunCompletionCmd
         $this->assertInstanceOf(RunCompletionCmd::class, $cmd);
         $this->assertInstanceOf(Message::class, $cmd->userMessage);
+
+        // …and the same message still reaches the same arm through update().
+        [$viaUpdate, $modelCmd] = $app->update($msg);
+        $this->assertCount(1, $viaUpdate->messages);
+        $this->assertNull($modelCmd);
     }
 
     public function testUpdateHandlesSelectPaneMsg(): void

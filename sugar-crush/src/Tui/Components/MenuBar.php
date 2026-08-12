@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Tui\Pane;
@@ -36,20 +37,40 @@ final class MenuBar
 
     private static int $activeMenu = 0;
 
-    public static function render(App $a): string
+    /**
+     * @param int|null $cols Width the bar has to fit in. Null renders the full
+     *                       bar, which is what a caller measuring the bar on
+     *                       its own wants; the shell frame passes the terminal
+     *                       width because it must not emit an over-wide line.
+     */
+    public static function render(App $a, ?int $cols = null): string
     {
+        $tabs = self::paneTabs($a);
+
+        // The tab strip and the "Currently:" indicator are how the shell is
+        // navigated, so when the terminal cannot hold the whole bar it is the
+        // MENU NAMES that give way — dropped from the right, rarest-used
+        // first — instead of the navigational tail being cut off the end.
+        $budget = $cols === null ? null : $cols - Width::string($tabs) - 1;
+
         $output = ' ';
+        $width = 1;
         $menuIndex = 1;
         foreach (self::MENUS as $name => $items) {
+            $cost = Width::string($name) + 3;
+            if ($budget !== null && $width + $cost > $budget) {
+                break;
+            }
             $isActive = self::$activeMenu === $menuIndex;
             $color = $isActive ? Color::hex('#00ffaa') : Color::hex('#fde68a');
             $output .= Style::new()->foreground($color)->bold()->render($name);
             $output .= '   ';
+            $width += $cost;
             $menuIndex++;
         }
         $output .= ' ';
 
-        return $output . self::paneTabs($a);
+        return $output . $tabs;
     }
 
     /**

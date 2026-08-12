@@ -1,0 +1,424 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tests\App;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\View;
+use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\App\ErrorMsg;
+use SugarCraft\Crush\App\OpenSkillPickerMsg;
+use SugarCraft\Crush\App\SelectPaneMsg;
+use SugarCraft\Crush\App\SelectSkillMsg;
+use SugarCraft\Crush\App\StatusMsg;
+use SugarCraft\Crush\App\ToolResultMsg;
+use SugarCraft\Crush\App\UserInputMsg;
+use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Renderer;
+use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+
+/**
+ * App as the pane shell's root Model, hosting a Chat
+ * (crush_feat.md §5 E7, merge branch — W3.M1).
+ *
+ * @see App::init()
+ * @see App::update()
+ * @see App::view()
+ * @see App::subscriptions()
+ * @see App::withChat()
+ * @see \SugarCraft\Crush\Tui\Components\ChatPane::render()
+ */
+final class AppModelTest extends TestCase
+{
+    private ProviderInterface $provider;
+
+    protected function setUp(): void
+    {
+        $this->provider = $this->createMock(ProviderInterface::class);
+        $this->provider->method('name')->willReturn('stub');
+        TuiRenderer::setSize(200, 60);
+    }
+
+    protected function tearDown(): void
+    {
+        TuiRenderer::resetSizeCache();
+    }
+
+    private function app(): App
+    {
+        return App::new($this->provider, 'test-model');
+    }
+
+    // =====================================================================
+    // Model contract
+    // =====================================================================
+
+    public function testAppIsACoreModel(): void
+    {
+        $this->assertInstanceOf(Model::class, $this->app());
+    }
+
+    public function testChatDefaultsToNullAndIsThreadedThroughMutate(): void
+    {
+        $app = $this->app();
+        $this->assertNull($app->chat);
+
+        $chat = new Chat();
+        $withChat = $app->withChat($chat);
+        $this->assertSame($chat, $withChat->chat);
+        $this->assertNull($app->chat, 'withChat() must not mutate the receiver');
+
+        // The regression this guards: a field missing from mutate()'s
+        // constructorProps map is silently dropped on the NEXT transition,
+        // not on the wither itself.
+        $afterOtherWither = $withChat->withPane(Pane::Skills)->withStatus('x')->withModel('m2');
+        $this->assertSame($chat, $afterOtherWither->chat);
+    }
+
+    public function testInitDelegatesToHostedChatAndIsNullWithoutOne(): void
+    {
+        $this->assertNull($this->app()->init());
+
+        $chat = new Chat();
+        $this->assertSame($chat->init(), $this->app()->withChat($chat)->init());
+    }
+
+    public function testSubscriptionsDelegateToHostedChat(): void
+    {
+        $this->assertNull($this->app()->subscriptions());
+
+        $chat = new Chat();
+        $this->assertSame(
+            $chat->subscriptions(),
+            $this->app()->withChat($chat)->subscriptions(),
+        );
+    }
+
+    // =====================================================================
+    // update(): shell messages first, everything else to Chat
+    // =====================================================================
+
+    public function testShellMessagesAreHandledBeforeDelegation(): void
+    {
+        $chat = new Chat();
+        $app = $this->app()->withChat($chat);
+
+        [$next, $cmd] = $app->update(new SelectPaneMsg(Pane::Agents));
+
+        $this->assertInstanceOf(App::class, $next);
+        $this->assertSame(Pane::Agents, $next->pane);
+        $this->assertNull($cmd);
+        // The chat must not have seen a shell message at all.
+        $this->assertSame($chat, $next->chat);
+    }
+
+    public function testStatusMessageStillHandledByShell(): void
+    {
+        [$next] = $this->app()->withChat(new Chat())->update(new StatusMsg('working'));
+
+        $this->assertSame('working', $next->status);
+    }
+
+    public function testUnknownMessageIsDelegatedToChatAndFoldedBack(): void
+    {
+        $chat = new Chat();
+        $app = $this->app()->withChat($chat);
+
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Char, 'h'));
+
+        $this->assertInstanceOf(App::class, $next);
+        $this->assertNotSame($chat, $next->chat);
+        $this->assertSame('h', $next->chat->inputBuf);
+        $this->assertNull($cmd);
+        // Everything else about the shell is untouched by delegation.
+        $this->assertSame($app->pane, $next->pane);
+        $this->assertSame($app->provider, $next->provider);
+    }
+
+    public function testDelegationPassesTheChatCmdStraightThrough(): void
+    {
+        $chat = new Chat([], 'hello');
+        $app = $this->app()->withChat($chat);
+
+        [$chatOnly, $chatCmd] = $chat->update(new KeyMsg(KeyType::Enter));
+        [$next, $appCmd] = $app->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertNotNull($chatCmd, 'submitting a draft must produce a Cmd');
+        $this->assertInstanceOf(\Closure::class, $appCmd);
+        $this->assertSame($chatOnly->inputBuf, $next->chat->inputBuf);
+        $this->assertSame($chatOnly->inFlight, $next->chat->inFlight);
+    }
+
+    public function testDelegationWithoutAHostedChatIsInert(): void
+    {
+        $app = $this->app();
+
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Char, 'h'));
+
+        $this->assertSame($app, $next);
+        $this->assertNull($cmd);
+    }
+
+    public function testNoOpChatUpdateKeepsTheSameAppInstance(): void
+    {
+        $chat = new Chat();
+        $app = $this->app()->withChat($chat);
+
+        // An anonymous Msg neither the shell nor Chat handles: Chat answers
+        // with itself, so the App identity must not churn either.
+        $msg = new class implements Msg {};
+        [$next, $cmd] = $app->update($msg);
+
+        $this->assertSame($app, $next);
+        $this->assertNull($cmd);
+    }
+
+    // =====================================================================
+    // view(): the shell frames the LIVE renderer's content
+    // =====================================================================
+
+    public function testViewRendersTheShellChrome(): void
+    {
+        $view = $this->app()->view();
+
+        $this->assertInstanceOf(View::class, $view);
+        $this->assertSame(TuiRenderer::render($this->app()), $view->body);
+        $this->assertStringContainsString('Switch Pane', $view->body);
+    }
+
+    public function testChatPaneBodyComesFromTheLiveRenderer(): void
+    {
+        $chat = new Chat([Message::assistant('unmistakable-live-renderer-marker', 0)]);
+        $frame = $this->frame($this->app()->withChat($chat));
+
+        $this->assertStringContainsString('unmistakable-live-renderer-marker', $frame);
+
+        // The discriminator against the OLD ChatPane, which built its own
+        // "[ShortName] role: content" line: the live renderer wraps every
+        // turn in a ROUNDED box (U+256D), a glyph the shell's own panes
+        // (Border::normal(), U+250C) never emit. Against the pre-W3.M1
+        // ChatPane this assertion fails outright.
+        $this->assertStringContainsString("\u{256D}", $frame);
+        $this->assertStringNotContainsString('[Message]', $frame);
+    }
+
+    public function testChatlessAppStillRendersItsOwnMessageList(): void
+    {
+        $frame = $this->frame($this->app());
+
+        // No hosted chat -> the pane falls back to the App message list,
+        // which the engine-state App (Runtime/EngineBackend) still populates.
+        $this->assertStringContainsString('Welcome to SugarCrush!', $frame);
+    }
+
+    /**
+     * The width half of the render invariant. It must be checked at the NARROW
+     * sizes too: the menu bar is fixed-width chrome that only happens to fit a
+     * 200-column terminal, so a single wide case cannot catch the overflow.
+     *
+     * @dataProvider terminalSizes
+     */
+    public function testShellFrameHasNoOverWideLines(int $cols, int $rows): void
+    {
+        $app = $this->sized($this->app()->withChat(new Chat()), $cols, $rows);
+
+        foreach (explode("\n", $this->frame($app)) as $i => $line) {
+            $this->assertLessThanOrEqual(
+                $cols,
+                Width::string($line),
+                "shell frame line {$i} overflows the {$cols}x{$rows} terminal",
+            );
+        }
+    }
+
+    /** @dataProvider terminalSizes */
+    public function testChatlessShellFrameHasNoOverWideLines(int $cols, int $rows): void
+    {
+        $app = $this->sized($this->app(), $cols, $rows);
+
+        foreach (explode("\n", $this->frame($app)) as $i => $line) {
+            $this->assertLessThanOrEqual(
+                $cols,
+                Width::string($line),
+                "shell frame line {$i} overflows the {$cols}x{$rows} terminal",
+            );
+        }
+    }
+
+    /**
+     * The hard render invariant: candy-core's Renderer repaints with an
+     * ABSOLUTE cursorTo(), so anything past the last row is clamped onto it and
+     * distinct logical rows collide. A hosted Chat renders a full-screen frame
+     * of its own, which is exactly how the shell used to end up at rows+7.
+     *
+     * @dataProvider terminalSizes
+     */
+    public function testHostedShellFrameIsClippedToTheTerminalHeight(int $cols, int $rows): void
+    {
+        $app = $this->sized($this->app()->withChat(new Chat()), $cols, $rows);
+
+        $this->assertLessThanOrEqual(
+            $rows,
+            substr_count($this->frame($app), "\n") + 1,
+            "shell frame is taller than the {$cols}x{$rows} terminal",
+        );
+    }
+
+    /** @dataProvider terminalSizes */
+    public function testChatlessShellFrameIsClippedToTheTerminalHeight(int $cols, int $rows): void
+    {
+        $app = $this->sized($this->app(), $cols, $rows);
+
+        $this->assertLessThanOrEqual(
+            $rows,
+            substr_count($this->frame($app), "\n") + 1,
+            "shell frame is taller than the {$cols}x{$rows} terminal",
+        );
+    }
+
+    /** @return array<string, array{0: int, 1: int}> */
+    public static function terminalSizes(): array
+    {
+        return [
+            '200x60' => [200, 60],
+            '120x30' => [120, 30],
+            '100x24' => [100, 24],
+            '80x20' => [80, 20],
+        ];
+    }
+
+    public function testWindowSizeIsRecordedOnTheShellAndTheHostedChat(): void
+    {
+        [$next] = $this->app()->withChat(new Chat())->update(new WindowSizeMsg(111, 41));
+
+        $this->assertSame(41, $next->rows);
+        $this->assertSame(111, $next->cols);
+        // Both halves of the frame must agree, or the chrome and the content
+        // lay out against two different terminals.
+        $this->assertSame(41, $next->chat->rows());
+        $this->assertSame(111, $next->chat->cols());
+    }
+
+    public function testViewSizesFromWindowSizeMsgNotTheCachedTerminalProbe(): void
+    {
+        // The static probe says 200x60; WindowSizeMsg says otherwise, and
+        // WindowSizeMsg is the single source of truth.
+        [$next] = $this->app()->withChat(new Chat())->update(new WindowSizeMsg(90, 22));
+
+        $this->assertLessThanOrEqual(22, substr_count($this->frame($next), "\n") + 1);
+    }
+
+    public function testAMessageWiderThanTheOldPaneWidthSurvivesIntoTheFrame(): void
+    {
+        // 130 columns of content on a 200-column terminal. The pane is the
+        // ~146 columns actually left after the sidebar, so this fits — but the
+        // old pane hard-coded `max(40, cols - 80)` = 120 content columns and
+        // truncated every line to it, so the tail vanished silently.
+        $chat = new Chat([Message::assistant(str_repeat('w', 114) . ' TAIL-MARKER-XYZ', 0)]);
+
+        $frame = $this->frame($this->app()->withChat($chat));
+
+        $this->assertStringContainsString('TAIL-MARKER-XYZ', $frame);
+    }
+
+    public function testHostedChatIsSizedToThePaneNotTheTerminal(): void
+    {
+        $chat = new Chat();
+        $app = $this->sized($this->app()->withChat($chat), 120, 30);
+
+        // The pane's box has to close on the right: laying the chat out at the
+        // full terminal width and then chopping it to the pane is what severed
+        // the live renderer's rounded box mid-glyph.
+        $frame = $this->frame($app);
+        foreach (["\u{256D}", "\u{256E}", "\u{2570}", "\u{256F}"] as $corner) {
+            $this->assertStringContainsString(
+                $corner,
+                $frame,
+                'the hosted chat frame lost a box corner to pane truncation',
+            );
+        }
+    }
+
+    public function testHostedFrameHasExactlyOneInputBoxAndOneStatusBar(): void
+    {
+        $frame = $this->frame($this->app()->withChat(new Chat()));
+
+        // The shell's placeholder input box and provider/model bar stand down
+        // while the content model draws its own.
+        $this->assertStringNotContainsString('Type your message...', $frame);
+        $this->assertStringNotContainsString('Switch Pane', $frame);
+        $this->assertStringContainsString('Ctrl+P', $frame);
+    }
+
+    public function testHostedShellStillSurfacesAShellLevelError(): void
+    {
+        $app = $this->app()->withChat(new Chat())->withError('engine exploded');
+
+        $this->assertStringContainsString('engine exploded', $this->frame($app));
+    }
+
+    public function testEveryUpdateArmReturnsNullOrAClosure(): void
+    {
+        $chat = new Chat([], 'hello');
+        $app = $this->app()->withChat($chat);
+
+        $msgs = [
+            new SelectPaneMsg(Pane::Agents),
+            new StatusMsg('working'),
+            new ErrorMsg('boom'),
+            new UserInputMsg('hi'),
+            new ToolResultMsg('call_1', 'out'),
+            new OpenSkillPickerMsg(),
+            new SelectSkillMsg('nope'),
+            new WindowSizeMsg(120, 30),
+            new KeyMsg(KeyType::Char, 'h'),
+            new KeyMsg(KeyType::Enter),
+        ];
+
+        foreach ($msgs as $msg) {
+            [, $cmd] = $app->update($msg);
+            // candy-core's Program::scheduleCmd() is typed \Closure and is
+            // called for every non-null Cmd - anything else TypeErrors and
+            // kills the loop.
+            $this->assertTrue(
+                $cmd === null || $cmd instanceof \Closure,
+                $msg::class . ' returned a Cmd the Program cannot schedule',
+            );
+        }
+    }
+
+    public function testHostedChatImagePlacementsRideOutOnTheView(): void
+    {
+        $chat = new Chat();
+        $view = $this->app()->withChat($chat)->view();
+
+        $this->assertInstanceOf(View::class, $view);
+        // No images in this transcript, but the layer must be the hosted
+        // chat's own - not silently discarded by the pane.
+        $this->assertSame(Renderer::renderView($chat)->images, $view->images);
+    }
+
+    private function sized(App $app, int $cols, int $rows): App
+    {
+        [$next] = $app->update(new WindowSizeMsg($cols, $rows));
+
+        return $next;
+    }
+
+    private function frame(App $app): string
+    {
+        $view = $app->view();
+
+        return $view instanceof View ? $view->body : $view;
+    }
+}

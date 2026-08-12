@@ -4222,6 +4222,33 @@ final class Chat implements Model
     }
 
     /**
+     * The same size a {@see WindowSizeMsg} would have recorded, as a wither.
+     *
+     * A hosted `Chat` (crush_feat.md section 5 E7, merge branch) does not own
+     * the whole terminal: it lays out inside the shell's chat pane, several
+     * rows and columns smaller. Without this the content model would lay out
+     * against the FULL terminal and the pane would have to truncate every line
+     * to fit, silently destroying content. The shell therefore hands the pane's
+     * inner geometry down through here before rendering.
+     *
+     * Non-positive dimensions are ignored rather than stored: they would make
+     * {@see rows()}/{@see cols()} report a nonsense viewport, and the renderer
+     * divides by / clamps against both.
+     */
+    public function withSize(int $cols, int $rows): self
+    {
+        $changes = [];
+        if ($cols > 0) {
+            $changes['cols'] = $cols;
+        }
+        if ($rows > 0) {
+            $changes['rows'] = $rows;
+        }
+
+        return $changes === [] ? $this : $this->mutate($changes);
+    }
+
+    /**
      * Check if idle compaction should be prompted based on token count and idle time.
      *
      * This replicates the logic from Runtime::shouldPromptIdleCompaction() for use

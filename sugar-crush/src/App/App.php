@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\App;
 
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg as CoreMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Core\View;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -19,13 +25,27 @@ use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use DateTimeImmutable;
 
 /**
  * Main application state - immutable with*() builders.
  * Mirrors the canonical candy-sprinkles/src/Style.php pattern.
+ *
+ * Also the root {@see Model} of the pane shell (crush_feat.md §5 E7, the
+ * MERGE branch). §5 E7 offers two ways out of the two-parallel-UI-systems
+ * drift risk: delete the `App`/`Pane` layer, or switch the app onto it.
+ * The merge is what this is: `App` is the SHELL (pane focus, menu bar,
+ * agent view mode, status bar) and hosts a {@see Chat} — the CONTENT model
+ * that carries every Wave 1/2 feature — as a plain field. Shell-level
+ * messages are answered here; everything else is handed straight to `Chat`
+ * and the returned model folded back into a new `App`.
+ *
+ * `Chat` is deliberately untouched by this: it remains a standalone `Model`
+ * that `bin/sugarcrush` and ~3,900 tests can drive on its own. Hosting is
+ * composition, not absorption.
  */
-final class App
+final class App implements Model
 {
     private function __construct(
         public readonly ProviderInterface $provider,
@@ -45,6 +65,26 @@ final class App
         public readonly ?DateTimeImmutable $lastActivityAt = null,
         public readonly array $skillPickerOptions = [],
         public readonly ?InstructionFileLoader $instructionLoader = null,
+        /**
+         * The hosted content model. Null keeps `App` usable as the plain
+         * engine-state object {@see \SugarCraft\Crush\Runtime} and
+         * {@see \SugarCraft\Crush\Backend\EngineBackend} already build.
+         */
+        public readonly ?Chat $chat = null,
+        /**
+         * Real terminal dimensions, sourced from {@see WindowSizeMsg} — the
+         * one size candy-core's Program dispatches at startup AND again on
+         * every SIGWINCH resize. Null until the first WindowSizeMsg arrives
+         * (or for an App built directly in a test, never), in which case
+         * {@see TuiRenderer::getTerminalSize()}'s own detection is the
+         * fallback. The shell renderer MUST be handed these rather than
+         * querying the terminal itself: that query is cached in a static that
+         * is never invalidated, so it would keep drawing the chrome at the
+         * boot-time size while the hosted Chat — which does read
+         * WindowSizeMsg — draws at the new one.
+         */
+        public readonly ?int $rows = null,
+        public readonly ?int $cols = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -67,6 +107,9 @@ final class App
             lastActivityAt: null,
             skillPickerOptions: [],
             instructionLoader: null,
+            chat: null,
+            rows: null,
+            cols: null,
         );
     }
 
@@ -168,6 +211,18 @@ final class App
     public function withInstructionLoader(?InstructionFileLoader $v): self
     {
         return $this->mutate(instructionLoader: $v);
+    }
+
+    /**
+     * Host a {@see Chat} inside the shell (crush_feat.md §5 E7, merge branch).
+     *
+     * The instance handed in is the SAME model `bin/sugarcrush` would have run
+     * standalone — the shell adds layout around it and routes unhandled
+     * messages into it, and never copies state out of it.
+     */
+    public function withChat(?Chat $v): self
+    {
+        return $this->mutate(chat: $v);
     }
 
     /**
@@ -291,12 +346,83 @@ final class App
     }
 
     /**
+     * The startup Cmd, delegated to the hosted {@see Chat}.
+     *
+     * The shell itself has no startup side effect: its whole initial state is
+     * already in the constructor. Without a hosted chat there is nothing to
+     * run, which is why this is null rather than a no-op closure.
+     */
+    public function init(): ?\Closure
+    {
+        return $this->chat?->init();
+    }
+
+    /**
      * Update the state from a message.
      * Returns [newApp, command] where command is a Cmd to execute or null.
      *
+     * Shell-level messages are answered FIRST — pane selection, the skill
+     * picker, and the engine's own user-input/tool-result/error/status
+     * traffic. Anything left over belongs to the content model and is handed
+     * to {@see Chat::update()}, whose returned model is folded back into a
+     * new `App` and whose Cmd is passed straight through untouched (the Cmd
+     * is a `Closure(): ?Msg` the Program runs; re-wrapping it here would
+     * change when it runs).
+     *
+     * The parameter widened from this file's own `Msg` to candy-core's:
+     * implementing {@see Model} requires accepting every Msg the Program can
+     * deliver — KeyMsg, MouseMsg, WindowSizeMsg — not just this namespace's.
+     * `Msg` now extends the core marker, so every existing caller still
+     * type-checks.
+     *
+     * Agent-view transitions (list/peek/attach) are shell-level too but do
+     * not arrive as a Msg: {@see \SugarCraft\Crush\Tui\KeyboardHandler}
+     * applies them to the App directly. Routing that handler ahead of this
+     * delegation is W3.M3's step, not this one.
+     *
+     * Element 1 is always `null` or a `\Closure` — never this namespace's
+     * {@see Cmd}. See {@see dispatch()} for why, and for where the engine's
+     * Cmd objects are still reachable.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function update(CoreMsg $msg): array
+    {
+        return match (true) {
+            $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
+            $msg instanceof UserInputMsg,
+            $msg instanceof SelectPaneMsg,
+            $msg instanceof ToolResultMsg,
+            $msg instanceof ErrorMsg,
+            $msg instanceof StatusMsg,
+            $msg instanceof OpenSkillPickerMsg,
+            $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
+            default => $this->delegateToChat($msg),
+        };
+    }
+
+    /**
+     * The engine-facing half of {@see update()}: answer a shell/engine message
+     * and report the {@see Cmd} it asks for.
+     *
+     * This is deliberately NOT on the Model path. candy-core's
+     * `Program::scheduleCmd()` is declared `private function
+     * scheduleCmd(\Closure $cmd)` and is called for every non-null second
+     * tuple element, so returning one of this namespace's plain `Cmd` objects
+     * from `update()` would raise a TypeError and kill the loop the first time
+     * a user typed. `Cmd` is a declarative instruction for an engine driver,
+     * not a `Closure(): ?Msg` the Program can run, and wrapping it in a closure
+     * would only hide that — there is nothing for the closure to do.
+     *
+     * Disclosure: no production caller drives this yet. Nothing in `src/` or
+     * `bin/` constructs a `UserInputMsg`/`ToolResultMsg` today — the engine
+     * loop in {@see \SugarCraft\Crush\Runtime} runs completions directly — so
+     * this is exactly as reachable as the arms were before they moved here,
+     * neither more nor less. Wiring a driver onto it is a later step.
+     *
      * @return array{0: self, 1: ?Cmd}
      */
-    public function update(Msg $msg): array
+    public function dispatch(Msg $msg): array
     {
         return match (true) {
             $msg instanceof UserInputMsg => $this->handleUserInput($msg),
@@ -308,6 +434,94 @@ final class App
             $msg instanceof SelectSkillMsg => $this->handleSelectSkill($msg),
             default => [$this, null],
         };
+    }
+
+    /**
+     * Drop a {@see dispatch()} result's engine Cmd so the tuple satisfies the
+     * {@see Model} contract. @see dispatch() for why it cannot be forwarded.
+     *
+     * @param array{0: self, 1: ?Cmd} $handled
+     * @return array{0: self, 1: null}
+     */
+    private static function withoutEngineCmd(array $handled): array
+    {
+        return [$handled[0], null];
+    }
+
+    /**
+     * Record the authoritative terminal size AND pass it on to the hosted chat.
+     *
+     * Both halves of the frame have to learn about a resize: the shell sizes
+     * its chrome from {@see $rows}/{@see $cols} and the hosted Chat sizes its
+     * content from its own copy, and a frame built from two different notions
+     * of "how big is the terminal" is the row-collision this whole size
+     * plumbing exists to prevent.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleWindowSize(WindowSizeMsg $msg): array
+    {
+        [$next, $cmd] = $this->delegateToChat($msg);
+
+        return [$next->mutate(rows: $msg->rows, cols: $msg->cols), $cmd];
+    }
+
+    /**
+     * Hand a non-shell message to the hosted {@see Chat}.
+     *
+     * Returns `$this` unchanged — not a fresh clone — when the chat answered
+     * with the identical instance, so a no-op keystroke does not churn the
+     * App identity that tests and the renderer compare against.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function delegateToChat(CoreMsg $msg): array
+    {
+        if ($this->chat === null) {
+            return [$this, null];
+        }
+
+        [$next, $cmd] = $this->chat->update($msg);
+
+        if (!$next instanceof Chat || $next === $this->chat) {
+            return [$this, $cmd];
+        }
+
+        return [$this->withChat($next), $cmd];
+    }
+
+    /**
+     * Render the whole shell: menu bar, sidebars, chat pane, input, status.
+     *
+     * {@see TuiRenderer::renderView()} is the pane compositor; the chat pane it
+     * lays out delegates its body to the live
+     * {@see \SugarCraft\Crush\Renderer} against {@see $chat}, so the shell
+     * frames the content model's real output rather than a second, drifting
+     * transcript renderer.
+     *
+     * A {@see View} rather than a plain string because the hosted chat's frame
+     * can carry image markers: an image-bearing tool result leaves a
+     * Private-Use-Area marker cell in the body, and only the placements riding
+     * along on the View let `Program::renderFrame()` paint the blob and blank
+     * the marker. Returning the body alone would paint nothing and emit the
+     * raw marker bytes to the terminal.
+     *
+     * The size is passed down explicitly — see {@see $rows}.
+     */
+    public function view(): string|View
+    {
+        return TuiRenderer::renderView($this, $this->cols, $this->rows);
+    }
+
+    /**
+     * Subscriptions the Program should pump, delegated to the hosted chat.
+     *
+     * The shell declares none of its own, so a hosted `Chat` keeps whatever
+     * polling it declares standalone instead of losing it to the wrapper.
+     */
+    public function subscriptions(): ?Subscriptions
+    {
+        return $this->chat?->subscriptions();
     }
 
     /**
@@ -427,12 +641,21 @@ final class App
             lastActivityAt: array_key_exists('lastActivityAt', $changes) ? $changes['lastActivityAt'] : $this->lastActivityAt,
             skillPickerOptions: array_key_exists('skillPickerOptions', $changes) ? $changes['skillPickerOptions'] : $this->skillPickerOptions,
             instructionLoader: array_key_exists('instructionLoader', $changes) ? $changes['instructionLoader'] : $this->instructionLoader,
+            chat: array_key_exists('chat', $changes) ? $changes['chat'] : $this->chat,
+            rows: array_key_exists('rows', $changes) ? $changes['rows'] : $this->rows,
+            cols: array_key_exists('cols', $changes) ? $changes['cols'] : $this->cols,
         );
     }
 }
 
-// Msg types (internal)
-interface Msg {}
+/**
+ * Marker for this namespace's shell/engine messages.
+ *
+ * Extends candy-core's marker so {@see App::update()} can satisfy the
+ * {@see Model} contract (which accepts any core Msg) while every existing
+ * `App\*Msg` still reaches its own arm.
+ */
+interface Msg extends CoreMsg {}
 
 /**
  * Message from user input.
