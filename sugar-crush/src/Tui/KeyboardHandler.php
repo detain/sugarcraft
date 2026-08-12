@@ -99,6 +99,12 @@ final class KeyboardHandler
             return null;
         }
 
+        if ($msg->type === KeyType::F10) {
+            MenuBar::openMenu();
+
+            return [$app, null];
+        }
+
         return $this->handle($msg->string(), $app);
     }
 
@@ -116,6 +122,14 @@ final class KeyboardHandler
         }
 
         if ($app->pane === Pane::Agents) {
+            return true;
+        }
+
+        // F10 opens the menu bar -- the conventional TUI menu key, and the
+        // piece that was missing: MenuBar's navigation existed but nothing
+        // could ever open it, so the bar was unreachable by keyboard AND
+        // mouse. Claimed unconditionally so it works from any pane.
+        if ($msg->type === KeyType::F10) {
             return true;
         }
 
@@ -180,18 +194,28 @@ final class KeyboardHandler
             }
         }
 
-        // Handle arrow keys / vim keys for navigation
-        if (in_array($key, ['up', 'k', 'down', 'j', 'left', 'h', 'right', 'l'], true)) {
-            return $this->handleNavigation($key, $app);
-        }
-
-        // Handle menu shortcuts via menu bar
+        // An OPEN menu takes the arrow/vim keys first. Ordered before the
+        // generic pane navigation below because that block claimed
+        // left/right/h/l unconditionally, so a menu could never be navigated
+        // even once something opened it.
         $currentMenu = MenuBar::getActiveMenu();
         if ($currentMenu > 0) {
             $result = MenuBar::handleKey($key, $currentMenu);
+            // Persist the index handleKey() navigated to -- it is a pure
+            // function and this return value used to be dropped, so every
+            // move was computed and discarded.
+            MenuBar::activateMenu($result[0]);
             if ($result[1] !== null) {
                 return [$app, $result[1]];
             }
+            if ($result[0] !== $currentMenu) {
+                return [$app, null];
+            }
+        }
+
+        // Handle arrow keys / vim keys for navigation
+        if (in_array($key, ['up', 'k', 'down', 'j', 'left', 'h', 'right', 'l'], true)) {
+            return $this->handleNavigation($key, $app);
         }
 
         // Handle Escape - close menu and return to Chat pane

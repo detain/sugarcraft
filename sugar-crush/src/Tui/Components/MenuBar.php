@@ -183,4 +183,110 @@ final class MenuBar
     {
         return self::$activeMenu;
     }
+
+    /**
+     * Open the menu bar at $index (1-based), or close it if that menu is
+     * already open — the toggle behaviour every menu key in a TUI has.
+     *
+     * This setter is the piece that was missing. {@see handleKey()} implements
+     * full navigation (left/right/h/l between menus, enter/o to select, escape
+     * to close) and {@see KeyboardHandler} routes to it, but BOTH call sites
+     * are guarded by `getActiveMenu() > 0` and nothing ever assigned a
+     * non-zero value — `$activeMenu` was only ever read or reset by {@see
+     * closeMenu()}. So the bar rendered, and could not be opened by keyboard
+     * OR mouse; the navigation was unreachable code.
+     *
+     * @return int the menu index now active, 0 when closed
+     */
+    public static function openMenu(int $index = 1): int
+    {
+        $count = count(self::menus());
+        if ($count === 0 || $index < 1 || $index > $count) {
+            return self::$activeMenu;
+        }
+
+        return self::$activeMenu = self::$activeMenu === $index ? 0 : $index;
+    }
+
+    /**
+     * Persist the menu index {@see handleKey()} navigated to.
+     *
+     * handleKey() is pure — it RETURNS the new index — and its only caller
+     * discarded that return value, so every left/right/h/l press recomputed
+     * a move and threw it away. Non-toggling, unlike {@see openMenu()}.
+     */
+    /**
+     * The open menu's dropdown panel, or '' when nothing is open.
+     *
+     * The last missing piece: {@see render()} only ever recoloured the ACTIVE
+     * menu's title, and {@see getMenuItems()} had no caller at all, so opening
+     * a menu highlighted a name and showed nothing. Returns the item rows for
+     * the caller to composite; positioning is {@see activeMenuColumn()}'s job.
+     *
+     * @return list<string> one rendered line per row, borders included
+     */
+    public static function renderDropdown(): array
+    {
+        if (self::$activeMenu < 1) {
+            return [];
+        }
+
+        $menus = self::menus();
+        $names = array_keys($menus);
+        $name = $names[self::$activeMenu - 1] ?? null;
+        if ($name === null) {
+            return [];
+        }
+
+        /** @var list<string> $labels menus() yields display labels already */
+        $labels = array_values(array_map(static fn(mixed $i): string => (string) $i, $menus[$name]));
+        if ($labels === []) {
+            $labels = ['(empty)'];
+        }
+
+        $inner = max(array_map(static fn(string $l): int => Width::string($l), $labels));
+        $dim = Style::new()->foreground(Color::hex('#6b7280'));
+        $item = Style::new()->foreground(Color::hex('#e5e7eb'));
+
+        $lines = [$dim->render('┌' . str_repeat('─', $inner + 2) . '┐')];
+        foreach ($labels as $label) {
+            $pad = str_repeat(' ', $inner - Width::string($label));
+            $lines[] = $dim->render('│ ') . $item->render($label . $pad) . $dim->render(' │');
+        }
+        $lines[] = $dim->render('└' . str_repeat('─', $inner + 2) . '┘');
+
+        return $lines;
+    }
+
+    /**
+     * Column the open menu's title starts at, so its dropdown can be drawn
+     * under it. Mirrors {@see render()}'s own layout arithmetic (one leading
+     * space, then each name plus a three-space gap).
+     */
+    public static function activeMenuColumn(): int
+    {
+        if (self::$activeMenu < 1) {
+            return 0;
+        }
+
+        $col = 1;
+        $index = 1;
+        foreach (array_keys(self::menus()) as $name) {
+            if ($index === self::$activeMenu) {
+                return $col;
+            }
+            $col += Width::string($name) + 3;
+            $index++;
+        }
+
+        return 0;
+    }
+
+    public static function activateMenu(int $index): void
+    {
+        $count = count(self::menus());
+        if ($index >= 0 && $index <= $count) {
+            self::$activeMenu = $index;
+        }
+    }
 }

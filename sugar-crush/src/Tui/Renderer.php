@@ -274,6 +274,12 @@ final class Renderer
         $joined = implode("\n", $parts);
         $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
 
+        // The open menu's dropdown floats OVER the composed frame rather than
+        // taking part in the layout above, so opening a menu cannot reflow the
+        // panes underneath it. Applied after the clips so it is never the thing
+        // that gets trimmed away.
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown(), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+
         // The composite is final, so the hosted chat's zone registry — recorded
         // against the chat's own body, one nesting level down — can be told
         // where that body ended up on the terminal. Rows lost to the tail clip
@@ -443,5 +449,56 @@ final class Renderer
             ->caps(' ', '')
             ->left(...$segments)
             ->render();
+    }
+
+    /**
+     * Paint the menu dropdown onto an already-composed frame.
+     *
+     * A floating overlay, in the same spirit as the palette's Veil: it
+     * replaces cells rather than inserting rows, so the panes below keep the
+     * geometry the layout gave them and the zone origin computed after this
+     * stays correct.
+     *
+     * @param list<string> $panel
+     */
+    private static function overlayDropdown(string $frame, array $panel, int $col, int $topRow): string
+    {
+        if ($panel === []) {
+            return $frame;
+        }
+
+        $lines = explode("\n", $frame);
+        foreach ($panel as $i => $panelLine) {
+            $row = $topRow + $i;
+            if (!isset($lines[$row])) {
+                break;
+            }
+            $lines[$row] = self::spliceInto($lines[$row], $panelLine, $col);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Replace the run of cells starting at $col in $line with $patch,
+     * preserving whatever the line had on either side of it.
+     */
+    private static function spliceInto(string $line, string $patch, int $col): string
+    {
+        $plainWidth = Width::string($patch);
+        $head = Width::truncateAnsi($line, $col);
+        $headPad = str_repeat(' ', max(0, $col - Width::string($head)));
+        $tailStart = $col + $plainWidth;
+        $lineWidth = Width::string($line);
+        $tail = $lineWidth > $tailStart
+            ? Width::truncateAnsi($line, $lineWidth) // keep styling reset simple
+            : '';
+
+        // Drop the overlapped run from the tail by re-truncating from the left.
+        if ($tail !== '') {
+            $tail = mb_substr(preg_replace('/\e\[[0-9;]*m/', '', $tail) ?? '', $tailStart);
+        }
+
+        return $head . $headPad . $patch . $tail;
     }
 }
