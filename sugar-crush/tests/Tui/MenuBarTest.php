@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Tui;
 
+use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use PHPUnit\Framework\TestCase;
@@ -22,12 +23,13 @@ final class MenuBarTest extends TestCase
     }
 
     /**
-     * Test that cycleMenu(7, 1) cycles from last to first menu.
-     * Verifies the wrap-around when cycling forward past the last menu.
+     * Test that cycling forward past the last menu wraps to the first.
+     * The menu count follows CommandRegistry's distinct categories, so the
+     * last index is derived rather than hard-coded.
      */
     public function testCycleMenuForwardWrapsFromLastToFirst(): void
     {
-        $result = $this->invokeCycleMenu(7, 1);
+        $result = $this->invokeCycleMenu($this->menuCount(), 1);
         $this->assertSame(1, $result);
     }
 
@@ -48,13 +50,13 @@ final class MenuBarTest extends TestCase
     public function testCycleMenuBackwardWrapsFromFirstToLast(): void
     {
         $result = $this->invokeCycleMenu(1, -1);
-        $this->assertSame(7, $result);
+        $this->assertSame($this->menuCount(), $result);
     }
 
     /**
      * Test that selectMenuItem returns MenuSelectedMsg with correct menu.
-     * Verifies that a valid menu index (1 = first menu "File") returns the
-     * appropriate MenuSelectedMsg with menu name 'File' and empty item.
+     * Menu 1 is the first category CommandRegistry declares ("Session",
+     * owner of /new), and the item stays empty.
      */
     public function testSelectMenuItemReturnsCorrectMenuMsg(): void
     {
@@ -64,7 +66,7 @@ final class MenuBarTest extends TestCase
         $this->assertCount(2, $result);
         $this->assertSame(1, $result[0]);
         $this->assertInstanceOf(MenuSelectedMsg::class, $result[1]);
-        $this->assertSame('File', $result[1]->menu);
+        $this->assertSame('Session', $result[1]->menu);
         $this->assertSame('', $result[1]->item);
     }
 
@@ -97,18 +99,56 @@ final class MenuBarTest extends TestCase
     }
 
     /**
-     * Test that getMenuItems returns array for valid menu name.
-     * Verifies that 'File' menu returns its item list including separators.
+     * Test that getMenuItems returns the registry's rows for a valid menu.
+     * The 'Session' menu holds every CommandRegistry row in that category,
+     * in declaration order, labelled the way the palette labels it.
      */
     public function testGetMenuItemsReturnsArrayForValidMenu(): void
     {
-        $items = MenuBar::getMenuItems('File');
+        $items = MenuBar::getMenuItems('Session');
 
         $this->assertIsArray($items);
         $this->assertSame(
-            ['New Session', 'Open Session', 'Save Transcript', 'Export Chat', '---', 'Preferences', 'Quit'],
+            ['New session', 'Switch session', 'Share session', 'compact', 'branch', 'rename', 'rewind'],
             $items
         );
+    }
+
+    /**
+     * The menus must stay derived from CommandRegistry rather than drifting
+     * into a third hand-written command list beside the "/" popup and the
+     * Ctrl+P palette: every registry row has to be reachable from a menu.
+     */
+    public function testEveryCommandRegistryRowAppearsInAMenu(): void
+    {
+        foreach (CommandRegistry::all() as $spec) {
+            $this->assertContains(
+                $spec->label(),
+                MenuBar::getMenuItems($spec->category),
+                "/{$spec->name} is missing from the {$spec->category} menu",
+            );
+        }
+    }
+
+    /**
+     * A menu name that is not a CommandRegistry category has no rows — the
+     * hand-written 'File'/'Edit'/'Help' tables the bar used to carry were
+     * labels no dispatcher answered.
+     */
+    public function testGetMenuItemsReturnsEmptyArrayForNonRegistryCategory(): void
+    {
+        $this->assertSame([], MenuBar::getMenuItems('File'));
+    }
+
+    /** Distinct categories CommandRegistry declares, i.e. the menu count. */
+    private function menuCount(): int
+    {
+        $categories = [];
+        foreach (CommandRegistry::all() as $spec) {
+            $categories[$spec->category] = true;
+        }
+
+        return count($categories);
     }
 
     /**
