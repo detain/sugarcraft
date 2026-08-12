@@ -364,6 +364,13 @@ final class InputReader
             'Q' => new KeyMsg(KeyType::F2),
             'R' => new KeyMsg(KeyType::F3),
             'S' => new KeyMsg(KeyType::F4),
+            // Modified Tab. The raw 0x09 byte has no room to carry a
+            // modifier, so xterm-family terminals report Ctrl+Tab as
+            // `CSI 1;5I` and Ctrl+Shift+Tab as `CSI 1;6I`. Unmodified
+            // `CSI I` (empty params) is the focus-in report and is
+            // already returned above, so reaching here always means a
+            // parameterised — i.e. modified — Tab.
+            'I' => new KeyMsg(KeyType::Tab),
             '~' => match ($keyParams) {
                 '1', '7' => new KeyMsg(KeyType::Home),
                 '4', '8' => new KeyMsg(KeyType::End),
