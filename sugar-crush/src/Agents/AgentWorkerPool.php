@@ -51,12 +51,68 @@ final class AgentWorkerPool
      */
     private ?bool $forcePcntlUnavailableForTesting = null;
 
+    /**
+     * Absolute path to this pool instance's private IPC directory.
+     *
+     * Result files used to live directly in sys_get_temp_dir() under a name
+     * derived only from the agent id, so two processes (or two pools) running
+     * the same agent id read and clobbered each other's results — exactly what
+     * happened when sibling git worktrees ran their suites concurrently and
+     * produced an intermittent FanOutResearchTest failure. It was also a
+     * predictable path in a world-writable directory, i.e. a symlink-attack
+     * target. One unpredictable 0700 directory per pool instance fixes both.
+     */
+    private string $resultDir;
+
+    /**
+     * PID that created $resultDir. Forked children inherit this object and run
+     * destructors on exit(), so only the creating process may delete the
+     * directory — otherwise a child would erase the very result file the
+     * parent is still waiting to read.
+     */
+    private int $resultDirOwnerPid;
+
     public function __construct(
         private readonly int $maxConcurrent = 5,
         ?ExecutorInterface $executor = null,
     ) {
         $this->executor = $executor;
         $this->customExecutor = $executor !== null;
+        // The path is fixed at construction (not lazily on first write) because
+        // forked children must derive the SAME path the parent polls; a lazily
+        // randomised path would differ per process and hang the pool.
+        $this->resultDir = self::makeResultDirPath();
+        $this->resultDirOwnerPid = (int) getmypid();
+    }
+
+    /**
+     * A clone (see withStopOnFirstFailure()) gets its own IPC directory so the
+     * two instances never observe each other's results and neither destructor
+     * removes files the other still owns.
+     */
+    public function __clone(): void
+    {
+        $this->resultDir = self::makeResultDirPath();
+        $this->resultDirOwnerPid = (int) getmypid();
+    }
+
+    /**
+     * Remove this pool's private IPC directory, if this process created it.
+     */
+    public function __destruct()
+    {
+        if ($this->resultDirOwnerPid !== (int) getmypid()) {
+            return;
+        }
+
+        if (!is_dir($this->resultDir)) {
+            return;
+        }
+
+        foreach (glob($this->resultDir . '/*.result') ?: [] as $leftover) {
+            @unlink($leftover);
+        }
+        @rmdir($this->resultDir);
     }
 
     /**
@@ -398,6 +454,7 @@ final class AgentWorkerPool
      */
     protected function storeResult(string $agentId, AgentResult $result): void
     {
+        $this->ensureResultDir();
         $file = $this->resultFile($agentId);
         $json = json_encode($this->resultToArray($result), JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
@@ -450,11 +507,62 @@ final class AgentWorkerPool
     }
 
     /**
-     * Path to the temp result file for an agent.
+     * Path to the temp result file for an agent, inside this pool instance's
+     * private IPC directory.
+     *
+     * The agent id is hashed rather than passed through basename(): the id is
+     * caller-supplied, and basename() was only ever incidental sanitisation —
+     * it still lets through names that collide with siblings ('.result') or
+     * that are not valid filenames. A hash is total, collision-free in
+     * practice, and identical in the parent and in a forked child.
      */
     protected function resultFile(string $agentId): string
     {
-        return sys_get_temp_dir() . '/sc_pool_' . basename($agentId) . '.result';
+        return $this->resultDir . '/' . hash('sha256', $agentId) . '.result';
+    }
+
+    /**
+     * Build an unpredictable, process-qualified path for a pool's IPC directory.
+     *
+     * The random suffix is what defeats the symlink/pre-creation attack the old
+     * fixed path invited; the PID keeps the name self-describing when a stale
+     * directory has to be tracked down by hand.
+     */
+    private static function makeResultDirPath(): string
+    {
+        try {
+            $suffix = bin2hex(random_bytes(8));
+        } catch (\Throwable) {
+            // random_bytes() only fails when the CSPRNG is unavailable; a
+            // unique-but-guessable name is still better than a shared one.
+            $suffix = str_replace('.', '', uniqid('', true));
+        }
+
+        return sys_get_temp_dir() . '/sc_pool_' . getmypid() . '_' . $suffix;
+    }
+
+    /**
+     * Create this pool's private IPC directory on first write.
+     *
+     * 0700 keeps agent output (which can contain anything the model produced)
+     * out of other local users' reach and stops them planting symlinks for us
+     * to write through. Called from storeResult() only — the read-side helpers
+     * work off the path alone, so merely polling for a result never litters
+     * temp with directories.
+     */
+    private function ensureResultDir(): void
+    {
+        if (is_dir($this->resultDir)) {
+            return;
+        }
+
+        // Concurrent forked children race to create the shared directory; the
+        // loser's mkdir() fails but the directory it needed now exists.
+        if (!@mkdir($this->resultDir, 0700, true) && !is_dir($this->resultDir)) {
+            throw new \RuntimeException(
+                'AgentWorkerPool: could not create the IPC directory ' . $this->resultDir
+            );
+        }
     }
 
     /**
