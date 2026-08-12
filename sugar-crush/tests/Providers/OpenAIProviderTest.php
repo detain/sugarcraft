@@ -290,7 +290,15 @@ final class OpenAIProviderTest extends TestCase
             [
                 'role' => 'assistant',
                 'content' => 'Let me check the weather',
-                'tool_calls' => $toolCalls,
+                // The OpenAI wire shape, NOT the raw ToolCall objects this
+                // once asserted: ToolCall's state is private, so json_encode()
+                // rendered each call as `{}` and the server 400'd the whole
+                // request with "Field required" for the missing `function`.
+                'tool_calls' => [[
+                    'id' => 'call_123',
+                    'type' => 'function',
+                    'function' => ['name' => 'get_weather', 'arguments' => '{"city":"Tokyo"}'],
+                ]],
             ],
         ], $result);
     }

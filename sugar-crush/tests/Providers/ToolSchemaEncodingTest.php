@@ -74,6 +74,61 @@ final class ToolSchemaEncodingTest extends TestCase
         $this->assertStringContainsString('"required":[]', $json);
     }
 
+
+    /**
+     * Regression guard for the SECOND 400: any turn that actually CALLED a
+     * tool died on the follow-up request reporting the results back.
+     *
+     * Tools\ToolCall keeps its state in PRIVATE properties behind bare
+     * accessors, so json_encode() -- which serializes only public ones --
+     * rendered each call as `{}`. SGLang answered one
+     * "'msg': 'Field required'" per call for the missing `function` key.
+     */
+    public function testAssistantToolCallsSerializeToTheOpenAiWireShape(): void
+    {
+        $params = $this->buildParamsForMessages([
+            new \SugarCraft\Crush\Messages\AssistantMessage('', [
+                new \SugarCraft\Crush\Tools\ToolCall('call_1', 'Bash', ['command' => 'uname -a']),
+            ]),
+        ]);
+
+        $json = (string) json_encode($params);
+        $this->assertStringNotContainsString('"tool_calls":[{}]', $json, 'tool calls must not encode as empty objects');
+
+        $call = json_decode($json, true)['messages'][0]['tool_calls'][0];
+        $this->assertSame('call_1', $call['id']);
+        $this->assertSame('function', $call['type']);
+        $this->assertSame('Bash', $call['function']['name']);
+        $this->assertIsString($call['function']['arguments'], 'OpenAI requires arguments to be a JSON STRING');
+        $this->assertSame(['command' => 'uname -a'], json_decode($call['function']['arguments'], true));
+    }
+
+    /** An argument-less call must still send `{}`, not `[]`. */
+    public function testArgumentLessToolCallEncodesArgumentsAsAnObject(): void
+    {
+        $params = $this->buildParamsForMessages([
+            new \SugarCraft\Crush\Messages\AssistantMessage('', [
+                new \SugarCraft\Crush\Tools\ToolCall('call_2', 'doctor', []),
+            ]),
+        ]);
+
+        $call = json_decode((string) json_encode($params), true)['messages'][0]['tool_calls'][0];
+        $this->assertSame('{}', $call['function']['arguments']);
+    }
+
+    /** @param list<mixed> $messages */
+    private function buildParamsForMessages(array $messages): array
+    {
+        $provider = SglangProvider::openAiCompatible('https://example.invalid/v1', 'test-model');
+        $method = new \ReflectionMethod(SglangProvider::class, 'buildParams');
+        $method->setAccessible(true);
+
+        return $method->invoke($provider, new CompleteRequest(
+            model: 'test-model',
+            messages: $messages,
+        ));
+    }
+
     /** @param list<Tool> $tools */
     private function buildParams(array $tools): array
     {

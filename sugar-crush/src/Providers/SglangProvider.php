@@ -382,7 +382,7 @@ final readonly class SglangProvider implements ProviderInterface
                 $msg instanceof AssistantMessage => array_filter([
                     'role' => 'assistant',
                     'content' => $msg->content(),
-                    'tool_calls' => $msg->toolCalls(),
+                    'tool_calls' => $this->formatToolCalls($msg->toolCalls() ?? []),
                 ]),
                 $msg instanceof SystemMessage => ['role' => 'system', 'content' => $msg->content()],
                 $msg instanceof ToolResultMessage => [

@@ -40,4 +40,43 @@ trait ToolSchema
 
         return $schema;
     }
+
+    /**
+     * Render an assistant turn's tool calls into the OpenAI wire shape.
+     *
+     * {@see \SugarCraft\Crush\Tools\ToolCall} keeps its state in PRIVATE
+     * properties behind bare accessors, and `json_encode()` serializes only
+     * public ones — so handing the objects straight to the request body
+     * emitted `"tool_calls": [{}, {}, {}]`. SGLang answered with one
+     * `'msg': 'Field required'` per call for the missing `function` key and
+     * 400'd the request, which meant any turn that actually CALLED a tool
+     * died on the follow-up request that reports the results back.
+     *
+     * `function.arguments` is a JSON STRING in the OpenAI schema, not an
+     * object, and an argument-less call hits the same empty-array-vs-object
+     * trap as {@see normalizeToolSchema()} — hence JSON_FORCE_OBJECT.
+     *
+     * Already-shaped arrays (a decoded transcript replayed from disk, say)
+     * are passed through untouched.
+     *
+     * @param  array<mixed> $toolCalls
+     * @return array<mixed>
+     */
+    private function formatToolCalls(array $toolCalls): array
+    {
+        return array_map(static function (mixed $call): mixed {
+            if (!$call instanceof \SugarCraft\Crush\Tools\ToolCall) {
+                return $call;
+            }
+
+            return [
+                'id' => $call->id(),
+                'type' => 'function',
+                'function' => [
+                    'name' => $call->name(),
+                    'arguments' => json_encode($call->arguments(), JSON_FORCE_OBJECT) ?: '{}',
+                ],
+            ];
+        }, $toolCalls);
+    }
 }
