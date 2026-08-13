@@ -64,6 +64,38 @@ final class EngineBackend implements Backend
     private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
     /**
+     * {@see reapChild()}'s bounded WNOHANG poll: 20 attempts x 5ms is a 100ms
+     * ceiling on how long teardown may sit on the event loop. A SIGKILLed or
+     * already-exiting child is reaped on the first attempt or two; the budget
+     * exists only so an *unkillable* child (posix-less build, see
+     * {@see reapChild()}) costs one dropped frame instead of the whole UI.
+     */
+    private const REAP_ATTEMPTS = 20;
+
+    private const REAP_POLL_MICROSECONDS = 5_000;
+
+    /**
+     * PIDs {@see completeAsync()} forked that {@see reapChild()} has not yet
+     * confirmed reaped, swept opportunistically at the top of the next turn.
+     *
+     * Needed because {@see reapChild()}'s budget is finite by design: a child
+     * descheduled on a loaded box outlives its 100ms window, and the success
+     * path does not SIGKILL first (the child is already writing its last
+     * frame and exiting - killing it there would race the frame). One escaped
+     * child per turn is a zombie per turn in a TUI that lives for hours, and
+     * nothing else in this process sweeps: there is no SIGCHLD handler, and a
+     * blanket `pcntl_waitpid(-1, ...)` would be actively harmful here because
+     * {@see \SugarCraft\Crush\Chat::executeToolsParallel()} and
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner} both wait on
+     * their OWN pids in this same process and check the returned pid - a
+     * blind sweep would steal their exit statuses. So track ours and sweep
+     * only those.
+     *
+     * @var array<int, true>
+     */
+    private static array $unreapedChildren = [];
+
+    /**
      * @param array<int, \SugarCraft\Crush\Tools\Tool>   $tools
      * @param array<int, \SugarCraft\Crush\Skills\Skill> $skills
      */
@@ -283,6 +315,11 @@ final class EngineBackend implements Backend
     {
         $deferred = new Deferred();
 
+        // Costs one WNOHANG syscall per tracked straggler and buys back every
+        // child an earlier turn's bounded reap had to give up on. See
+        // self::$unreapedChildren.
+        self::sweepUnreapedChildren();
+
         if ($cancellation?->isCancelled() === true) {
             $deferred->reject(new \RuntimeException('Request cancelled'));
 
@@ -311,6 +348,8 @@ final class EngineBackend implements Backend
         if ($pid === 0) {
             $this->runCompleteInChild($childSocket, $history);
         }
+
+        self::$unreapedChildren[$pid] = true;
 
         fclose($childSocket);
         stream_set_blocking($parentSocket, false);
@@ -353,8 +392,7 @@ final class EngineBackend implements Backend
             if (function_exists('posix_kill')) {
                 posix_kill($pid, SIGKILL);
             }
-            $status = 0;
-            pcntl_waitpid($pid, $status);
+            self::reapChild($pid);
             $deferred->reject(new \RuntimeException($rejectMessage));
         };
 
@@ -377,8 +415,7 @@ final class EngineBackend implements Backend
             if ($cancelTimer !== null) {
                 $loop->cancelTimer($cancelTimer);
             }
-            $status = 0;
-            pcntl_waitpid($pid, $status);
+            self::reapChild($pid);
             $this->settleFromResultFrame($result, $deferred, $onToken);
         };
 
@@ -439,6 +476,71 @@ final class EngineBackend implements Backend
         });
 
         return $deferred->promise();
+    }
+
+    /**
+     * Reaps the forked completion child WITHOUT ever blocking the event loop.
+     *
+     * `pcntl_waitpid($pid, $status)` with no flags blocks until the child
+     * actually exits. That was harmless whenever the SIGKILL above landed -
+     * but `posix_kill()` is guarded precisely because ext-posix is not
+     * guaranteed (minimal `php:cli-alpine`-style images routinely ship
+     * ext-pcntl without it), and in exactly that build the child is still
+     * wedged inside a blocking provider read with nothing to kill it. The
+     * unflagged waitpid then blocked *inside a ReactPHP timer callback*,
+     * freezing the entire loop - in the cancel path the user reached for to
+     * escape a hung request in the first place.
+     *
+     * `WNOHANG` polls instead, over a bounded window that is generous for a
+     * killed or already-exiting child and still finite for one that will
+     * never die. Giving up hands the pid to {@see sweepUnreapedChildren()}
+     * rather than leaking it; a permanently frozen UI would be strictly worse
+     * than one deferred reap. The `function_exists()` guard mirrors the
+     * `posix_kill()` one at the call site - redundant with {@see
+     * completeAsync()}'s own entry check today, deliberately kept so the
+     * helper stays safe for any future caller.
+     */
+    private static function reapChild(int $pid): void
+    {
+        if (!function_exists('pcntl_waitpid')) {
+            return;
+        }
+
+        $status = 0;
+        for ($attempt = 0; $attempt < self::REAP_ATTEMPTS; $attempt++) {
+            // 0 means "still running, nothing reaped yet"; $pid means reaped,
+            // -1 means unwaitable (already reaped, or never ours) - both of
+            // the latter are terminal.
+            if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) {
+                unset(self::$unreapedChildren[$pid]);
+
+                return;
+            }
+            usleep(self::REAP_POLL_MICROSECONDS);
+        }
+    }
+
+    /**
+     * One non-blocking pass over the children {@see reapChild()} ran out of
+     * budget on, so a straggler from turn N is collected at turn N+1 instead
+     * of sitting as a zombie for the life of the TUI.
+     *
+     * Deliberately does not sleep or retry: anything still running here gets
+     * looked at again next turn. See self::$unreapedChildren for why this
+     * walks a tracked list rather than calling `pcntl_waitpid(-1, ...)`.
+     */
+    private static function sweepUnreapedChildren(): void
+    {
+        if (!function_exists('pcntl_waitpid')) {
+            return;
+        }
+
+        $status = 0;
+        foreach (array_keys(self::$unreapedChildren) as $pid) {
+            if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) {
+                unset(self::$unreapedChildren[$pid]);
+            }
+        }
     }
 
     /**

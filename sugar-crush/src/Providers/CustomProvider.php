@@ -11,6 +11,7 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -21,6 +22,8 @@ final readonly class CustomProvider implements ProviderInterface
     use ToolSchema;
 
     use ReasoningExtractor;
+
+    use HttpClientDefaults;
 
     public function __construct(
         private string $name,
@@ -48,7 +51,9 @@ final readonly class CustomProvider implements ProviderInterface
             $headers['Authorization'] = 'Bearer ' . $apiKey;
         }
 
-        $client = new Client([
+        // guzzleClient() (not `new Client`) so this provider inherits the
+        // shared connect-timeout policy - see HttpClientDefaults.
+        $client = self::guzzleClient([
             // See SglangProvider::openAiCompatible() - Guzzle's RFC 3986
             // relative-resolution drops a base_uri path suffix (e.g. '/v1')
             // when the request URI starts with '/'. Trailing-slash the base

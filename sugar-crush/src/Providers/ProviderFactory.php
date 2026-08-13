@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
+use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
@@ -16,6 +17,8 @@ use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
  */
 final readonly class ProviderFactory
 {
+    use HttpClientDefaults;
+
     /**
      * §12 D6 tool-call-parser names, mirroring SGLang's `--tool-call-parser`
      * flag: the default assumes the server was launched with a real parser
@@ -422,10 +425,21 @@ final readonly class ProviderFactory
         // unqualified. Importing `OpenAI\OpenAI` made the autoloader re-load that
         // file under the wrong PSR-4 path and fatal with "Cannot declare class
         // OpenAI, because the name is already in use" the moment this ran.
-        $client = \OpenAI::client(
-            apiKey: $config['apiKey'],
-            organization: $config['organization'] ?? null,
-        );
+        //
+        // Expanded from the one-line `\OpenAI::client()` shortcut because that
+        // shortcut resolves its transport via `Psr18ClientDiscovery`, yielding a
+        // default Guzzle client with NO connect timeout - the same
+        // unreachable-host hang HttpClientDefaults exists to close, just one
+        // layer down. Every other step below reproduces `\OpenAI::client()`
+        // verbatim, including the assistants=v2 beta header it sets; only the
+        // injected HTTP client differs. `withProject()` is omitted because its
+        // default is already null and nothing here configures a project.
+        $client = \OpenAI::factory()
+            ->withApiKey($config['apiKey'])
+            ->withOrganization($config['organization'] ?? null)
+            ->withHttpHeader('OpenAI-Beta', 'assistants=v2')
+            ->withHttpClient(self::guzzleClient())
+            ->make();
 
         $model = $config['model'] ?? 'gpt-4o';
 
@@ -451,7 +465,9 @@ final readonly class ProviderFactory
             'anthropic-version' => '2023-06-01',
         ];
 
-        $client = new \GuzzleHttp\Client([
+        // guzzleClient() (not `new Client`) so this provider inherits the
+        // shared connect-timeout policy - see HttpClientDefaults.
+        $client = self::guzzleClient([
             'base_uri' => $baseUrl,
             'headers' => $headers,
         ]);

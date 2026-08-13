@@ -11,9 +11,12 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 
 final readonly class BedrockProvider implements ProviderInterface
 {
+    use HttpClientDefaults;
+
     private const REGION_US = 'us-east-1';
     private const REGION_EU = 'eu-west-1';
 
@@ -25,9 +28,14 @@ final readonly class BedrockProvider implements ProviderInterface
 
     public static function create(string $region = self::REGION_US, ?string $model = null): self
     {
+        // The AWS SDK talks to Bedrock over Guzzle too, it just takes its
+        // transport options as `http` rather than accepting a client. Same
+        // policy, same reason - see HttpClientDefaults. Still no total
+        // `timeout`: a Bedrock completion is as long-running as any other.
         $client = new BedrockClient([
             'region' => $region,
             'version' => 'latest',
+            'http' => ['connect_timeout' => self::connectTimeoutSeconds()],
         ]);
 
         return new self($client, $region, $model ?? 'anthropic.claude-sonnet-4-6');

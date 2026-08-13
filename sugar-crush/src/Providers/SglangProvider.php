@@ -11,6 +11,7 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
@@ -23,6 +24,8 @@ final readonly class SglangProvider implements ProviderInterface
     use ToolSchema;
 
     use ReasoningExtractor;
+
+    use HttpClientDefaults;
 
     /**
      * The literal substring at the heart of the MiniMax-M2.x tool-call
@@ -74,7 +77,9 @@ final readonly class SglangProvider implements ProviderInterface
             $headers['Authorization'] = 'Bearer ' . $apiKey;
         }
 
-        $client = new Client([
+        // guzzleClient() (not `new Client`) so this provider inherits the
+        // shared connect-timeout policy - see HttpClientDefaults.
+        $client = self::guzzleClient([
             // Guzzle resolves a relative request URI against base_uri per
             // RFC 3986: an absolute-path request URI (leading '/') replaces
             // the whole base path instead of appending to it, silently
