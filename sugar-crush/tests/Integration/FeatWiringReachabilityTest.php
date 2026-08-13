@@ -8,9 +8,15 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tools\BuiltIn\Edit;
+use SugarCraft\Crush\Tools\BuiltIn\Read;
+use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 
 /**
  * Reachability tests for crush_feat.md's Executive Summary table of
@@ -28,7 +34,8 @@ use SugarCraft\Crush\Sessions\BackgroundSupervisor;
  * documents.
  *
  * Rows covered here (W4.S1a): the session store, session tabs, and background
- * sessions. Later sub-steps extend this class with the remaining rows.
+ * sessions. (W4.S1b): the Skills subsystem. Later sub-steps extend this class
+ * with the remaining rows.
  */
 final class FeatWiringReachabilityTest extends TestCase
 {
@@ -246,8 +253,252 @@ final class FeatWiringReachabilityTest extends TestCase
     }
 
     // =========================================================================
+    // Row: Skills subsystem (SkillLoader, SkillRegistry, 12 built-in SKILL.md)
+    // "App::availableSkills is never populated in AppBuilder::build() — the
+    //  entire skill roster is dormant in a live session. bin/sugarcrush has
+    //  zero references to Skill at all."
+    // =========================================================================
+
+    /**
+     * `App::availableSkills` is not populated where a test can see it directly
+     * on a live run: {@see EngineBackend::complete()} builds the `App` per turn
+     * from its OWN registry and throws it away, and {@see Bootstrap::app()}'s
+     * docblock is explicit that the registry on the shell App is a *display*
+     * copy for the Skills pane, not the one the engine reasons with. So the
+     * load-bearing assertion is one level up: the registry the launched Chat's
+     * backend holds — the single value `complete()` passes to
+     * `withAvailableSkills()` — must already carry the on-disk roster.
+     *
+     * Against the pre-W3.S8 code this was `null`, `complete()` substituted
+     * `new SkillRegistry()`, and every skill the model could have used was
+     * dormant for the process's whole lifetime.
+     */
+    public function testTheLaunchedChatsEngineBackendCarriesAPopulatedSkillRegistry(): void
+    {
+        $this->writeProjectSkill('reach-marker-skill', 'Marker skill for the engine-path reachability test.');
+
+        $registry = $this->engineSkillRegistry();
+
+        $this->assertNotNull(
+            $registry->get('reach-marker-skill'),
+            'a skill dropped under <root>/.sugar-crush/skills must reach the engine registry',
+        );
+        $this->assertNotNull(
+            $registry->get('security-audit'),
+            'the shipped BuiltIn/ roster must reach the engine registry too',
+        );
+    }
+
+    /**
+     * The registry is only half the wire: the model reaches a skill by calling
+     * the `Skill` tool, which resolves names against whichever registry it was
+     * constructed with. Two independently scanned registries would let a skill
+     * disabled in the engine's copy stay invocable through the tool, so the
+     * instances must be identical — and the tool must return the real on-disk
+     * body, which is the end of the chain the audit found missing entirely
+     * ("bin/sugarcrush has zero references to Skill").
+     */
+    public function testTheEngineSkillToolSharesThatRegistryAndReturnsTheOnDiskBody(): void
+    {
+        $this->writeProjectSkill(
+            'reach-body-skill',
+            'Marker skill whose body proves on-demand loading.',
+            "# Reach Body\n\nBODY MARKER LINE\n",
+        );
+
+        $backend = $this->launchedEngineBackend();
+        $tools = $this->privateValue($backend, 'tools');
+
+        $skillTool = null;
+        foreach ($tools as $tool) {
+            if ($tool instanceof SkillTool) {
+                $skillTool = $tool;
+            }
+        }
+
+        $this->assertInstanceOf(SkillTool::class, $skillTool, 'the engine tool list must ship the Skill tool');
+        $this->assertSame(
+            $this->privateValue($backend, 'skillRegistry'),
+            $this->privateValue($skillTool, 'registry'),
+        );
+
+        $result = $skillTool->execute(['id' => 'c1', 'name' => 'reach-body-skill']);
+
+        $this->assertFalse($result->isError());
+        $this->assertStringContainsString('BODY MARKER LINE', $result->content());
+    }
+
+    /**
+     * W3.S9's `paths:` auto-scoping, proved from the ENGINE's tool list rather
+     * than from `Bootstrap::tools()` in isolation ({@see
+     * SkillPathScopingWiringTest} covers the latter): the Read instance the
+     * live agent loop actually calls must announce a path-scoped skill the
+     * first time it opens a matching file. Before the nudge existed,
+     * `SkillRegistry::getForPaths()` was correct, tested, and had no
+     * production caller at all.
+     */
+    public function testTheEngineReadToolAnnouncesAPathScopedSkillOnFirstTouch(): void
+    {
+        $this->writeProjectSkill(
+            'reach-paths-skill',
+            'Marker skill scoped to PHP files.',
+            "# body\n",
+            ['*.php'],
+        );
+        $file = $this->tempDir . '/repo/Touched.php';
+        file_put_contents($file, "<?php\n");
+
+        $read = $this->engineTool(Read::class);
+        $content = $read->execute(['id' => 'c1', 'file_path' => $file])->content();
+
+        $this->assertStringContainsString('<system-reminder>', $content);
+        $this->assertStringContainsString(
+            'reach-paths-skill: Marker skill scoped to PHP files.',
+            $content,
+        );
+    }
+
+    /**
+     * The nudge is session-scoped, not per-call: Read/Edit/Glob in the engine
+     * list share one tracker, and a skill already announced must not be
+     * re-announced on the next matching file. A per-tool or per-call tracker
+     * would still pass the test above while re-spending context on the same
+     * reminder for every file the agent opens in a long session.
+     */
+    public function testTheEnginesPathNudgeIsSharedAcrossToolsAndFiresOncePerSkill(): void
+    {
+        $this->writeProjectSkill(
+            'reach-once-skill',
+            'Marker skill scoped to PHP files.',
+            "# body\n",
+            ['*.php'],
+        );
+        $backend = $this->launchedEngineBackend();
+
+        $read = $this->toolOf($backend, Read::class);
+        $this->assertSame(
+            $this->privateValue($read, 'skillNudge'),
+            $this->privateValue($this->toolOf($backend, Edit::class), 'skillNudge'),
+            'Read and Edit must share one SkillPathNudge so an announcement on one silences the other',
+        );
+        $this->assertInstanceOf(SkillPathNudge::class, $this->privateValue($read, 'skillNudge'));
+
+        $first = $this->tempDir . '/repo/First.php';
+        $second = $this->tempDir . '/repo/Second.php';
+        file_put_contents($first, "<?php\n");
+        file_put_contents($second, "<?php\n");
+
+        $firstContent = $read->execute(['id' => 'c1', 'file_path' => $first])->content();
+        $secondContent = $read->execute(['id' => 'c2', 'file_path' => $second])->content();
+
+        $this->assertStringContainsString('reach-once-skill', $firstContent);
+        $this->assertStringNotContainsString('reach-once-skill', $secondContent);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    /**
+     * Drop a SKILL.md into the launch root's project skill directory, the
+     * lowest-precedence-beating tier {@see \SugarCraft\Crush\Skills\SkillLoader}
+     * merges last, so the assertions above cannot be satisfied by a built-in
+     * that happens to be named similarly.
+     *
+     * @param list<string> $paths `paths:` frontmatter globs; omitted when empty
+     *                            so the skill is not path-scoped at all.
+     */
+    private function writeProjectSkill(
+        string $name,
+        string $description,
+        string $body = "# body\n",
+        array $paths = [],
+    ): void {
+        $dir = $this->tempDir . '/repo/.sugar-crush/skills/' . $name;
+        mkdir($dir, 0o755, true);
+
+        $frontmatter = "---\ndescription: {$description}\nuser-invocable: true\ndisable-model-invocation: false\n";
+        if ($paths !== []) {
+            $frontmatter .= "paths:\n";
+            foreach ($paths as $glob) {
+                $frontmatter .= "  - \"{$glob}\"\n";
+            }
+        }
+
+        file_put_contents($dir . '/SKILL.md', $frontmatter . "---\n" . $body);
+    }
+
+    /**
+     * The backend a plain launch hands the Chat — the engine half of the app,
+     * as opposed to {@see Bootstrap::app()}'s display copies.
+     *
+     * The two backend-selection env vars are cleared for the call and restored
+     * after: `$SUGARCRUSH_BACKEND_CMD` selects a `CommandBackend`, which has no
+     * tools and no registry, so a value leaked in from the environment (or from
+     * an earlier test in the same PHPUnit process) would turn a real wiring
+     * regression into a silently different assertion.
+     */
+    private function launchedEngineBackend(): EngineBackend
+    {
+        $provider = getenv('SUGARCRUSH_PROVIDER');
+        $command = getenv('SUGARCRUSH_BACKEND_CMD');
+        putenv('SUGARCRUSH_PROVIDER');
+        putenv('SUGARCRUSH_BACKEND_CMD');
+
+        try {
+            $backend = Bootstrap::chat($this->tempDir . '/repo')->backend();
+        } finally {
+            $provider === false ? putenv('SUGARCRUSH_PROVIDER') : putenv('SUGARCRUSH_PROVIDER=' . $provider);
+            $command === false ? putenv('SUGARCRUSH_BACKEND_CMD') : putenv('SUGARCRUSH_BACKEND_CMD=' . $command);
+        }
+
+        $this->assertInstanceOf(EngineBackend::class, $backend);
+
+        return $backend;
+    }
+
+    /**
+     * The registry {@see EngineBackend::complete()} feeds to
+     * `App::withAvailableSkills()` on every turn.
+     */
+    private function engineSkillRegistry(): SkillRegistry
+    {
+        $registry = $this->privateValue($this->launchedEngineBackend(), 'skillRegistry');
+
+        $this->assertInstanceOf(SkillRegistry::class, $registry);
+
+        return $registry;
+    }
+
+    /**
+     * @param class-string $class
+     */
+    private function engineTool(string $class): object
+    {
+        return $this->toolOf($this->launchedEngineBackend(), $class);
+    }
+
+    /**
+     * @param class-string $class
+     */
+    private function toolOf(EngineBackend $backend, string $class): object
+    {
+        foreach ($this->privateValue($backend, 'tools') as $tool) {
+            if ($tool instanceof $class) {
+                return $tool;
+            }
+        }
+
+        $this->fail("Expected {$class} among the engine backend's tools");
+    }
+
+    private function privateValue(object $object, string $property): mixed
+    {
+        $ref = new \ReflectionProperty($object, $property);
+        $ref->setAccessible(true);
+
+        return $ref->getValue($object);
+    }
 
     /**
      * Add a second row to the launched Chat's own store so tab cycling has
