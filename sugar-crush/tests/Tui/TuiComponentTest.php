@@ -12,6 +12,7 @@ use SugarCraft\Crush\Tui\Components\ChatPane;
 use SugarCraft\Crush\Tui\Components\FilesPane;
 use SugarCraft\Crush\Tui\Components\InputPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
+use SugarCraft\Crush\Tui\Components\SettingsPane;
 use SugarCraft\Crush\Tui\Components\SkillsPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Pane;
@@ -518,7 +519,7 @@ final class TuiComponentTest extends TestCase
             Pane::Agents->value => fn() => AgentsPane::render($this->makeApp(Pane::Agents), 40, 20),
             Pane::Files->value => fn() => FilesPane::render($this->makeApp(Pane::Files), 40, 20),
             Pane::Tools->value => fn() => ToolsPane::render($this->makeApp(Pane::Tools), 40, 20),
-            Pane::Settings->value => fn() => ChatPane::render($this->makeApp(Pane::Settings), 120, 40),
+            Pane::Settings->value => fn() => SettingsPane::render($this->makeApp(Pane::Settings), 40, 20),
             Pane::Help->value => fn() => ChatPane::render($this->makeApp(Pane::Help), 120, 40),
         ];
 

@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\App\SelectSkillMsg;
 use SugarCraft\Crush\Tui\Commands\CancelAgentCmd;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
@@ -75,6 +76,7 @@ final class KeyboardHandler
      * 2. An open menu owns the keyboard.
      * 3. `Pane::Agents` owns the keyboard: it is a full-pane agent view where
      *    c/r/s/q are commands, not text, and `q` is how the user leaves.
+     * 3b. An OPEN skill picker owns the keyboard for the same reason.
      * 4. Unmodified Tab cycles panes. Ctrl+Tab is excluded by rule 1 — that
      *    is Chat's session cycling (§5 E2).
      * 5. Escape returns to the chat pane, but only when the shell has
@@ -82,12 +84,10 @@ final class KeyboardHandler
      *    Escape cancels an in-flight turn and closes the palette.
      * 6. The {@see SHELL_CTRL_RUNES} chords.
      *
-     * Disclosure: the {@see KeyCmd} in element 1 is still inert. No main loop
-     * consumes any `Cmd` object in `src/` yet — the pre-existing, repo-wide
-     * gap documented on {@see App::userInvocableSkills()} — so a claimed
-     * Ctrl+K produces a `CommandPaletteCmd` nobody runs. Claiming is still
-     * strictly better than falling through, which would type a literal "k"
-     * into the chat input; wiring a Cmd driver is a later step.
+     * Element 1 is consumed by {@see App::consumeShellCmd()}, which translates
+     * it into shell state or into keystrokes the hosted Chat already answers.
+     * {@see App::consumeShellCmd()} names the commands that are still
+     * deliberately inert and why.
      *
      * @return array{0: App, 1: ?object}|null [newApp, command], or null when
      *         the key is not the shell's and must fall through to Chat.
@@ -123,6 +123,14 @@ final class KeyboardHandler
         }
 
         if ($app->pane === Pane::Agents) {
+            return true;
+        }
+
+        // An OPEN skill picker owns the keyboard for the same reason the
+        // agent view does: up/down/enter are the picker's commands, and
+        // letting them fall through would scroll the chat behind the modal
+        // instead of moving the highlighted skill.
+        if ($app->pane === Pane::Skills && $app->skillPickerOptions !== []) {
             return true;
         }
 
@@ -214,6 +222,18 @@ final class KeyboardHandler
             }
         }
 
+        // An open skill picker takes the arrow/enter/escape keys next, for the
+        // same reason the menu block above does: the generic navigation below
+        // claims up/down unconditionally and would otherwise make the picker
+        // unmovable — which is exactly why the Skills pane could be OPENED but
+        // never selected from.
+        if ($app->pane === Pane::Skills && $app->skillPickerOptions !== []) {
+            $result = $this->handleSkillPickerKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+
         // Handle arrow keys / vim keys for navigation
         if (in_array($key, ['up', 'k', 'down', 'j', 'left', 'h', 'right', 'l'], true)) {
             return $this->handleNavigation($key, $app);
@@ -231,6 +251,50 @@ final class KeyboardHandler
         }
 
         return [$app, null];
+    }
+
+    /**
+     * Move through, commit, or dismiss an open skill picker.
+     *
+     * Enter reports a {@see SelectSkillMsg} rather than applying the change
+     * here: enabling a skill is {@see App::update()}'s job (it re-validates
+     * the name against the user-invocable filter), and this layer only says
+     * WHICH row the user committed to.
+     *
+     * @return array{0: App, 1: ?SelectSkillMsg}|null null when the key is not
+     *         one the picker answers, so the caller's generic handling runs.
+     */
+    private function handleSkillPickerKey(string $key, App $app): ?array
+    {
+        $count = count($app->skillPickerOptions);
+        if ($count === 0) {
+            return null;
+        }
+
+        // Wrapping, so a user holding "down" on a short list does not simply
+        // stick on the last row.
+        if (in_array($key, ['up', 'k'], true)) {
+            return [$app->withSkillPickerIndex(($app->skillPickerIndex - 1 + $count) % $count), null];
+        }
+
+        if (in_array($key, ['down', 'j'], true)) {
+            return [$app->withSkillPickerIndex(($app->skillPickerIndex + 1) % $count), null];
+        }
+
+        if ($key === 'enter') {
+            $skill = $app->skillPickerOptions[min($app->skillPickerIndex, $count - 1)] ?? null;
+
+            return $skill === null ? [$app, null] : [$app, new SelectSkillMsg($skill->name)];
+        }
+
+        if ($key === 'escape') {
+            // Dismiss the picker AND leave the pane: an emptied picker would
+            // otherwise silently turn back into the plain skills list while
+            // the user believed they had closed a modal.
+            return [$app->withSkillPickerOptions([])->withPane(Pane::Chat), null];
+        }
+
+        return null;
     }
 
     /**

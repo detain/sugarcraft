@@ -26,7 +26,7 @@ enum Pane: string
     /**
      * Returns the next pane in the cycling order.
      *
-     * Cycle: Chat → Input → Files → Tools → Skills → Agents → Settings → Help → Chat.
+     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Chat.
      * Menu is a transient overlay reached by shortcut, not part of the Tab cycle,
      * so it folds back into Chat rather than extending the loop.
      */
@@ -35,17 +35,21 @@ enum Pane: string
         // Cycles exactly the panes the bar advertises as tabs
         // (MenuBar::PANE_TABS), and nothing else. Tab used to walk all eight
         // cases, so it stopped on Input, Settings and Help -- none of which
-        // appear in the tab strip and none of which has a renderer, leaving
-        // the user on a pane the UI never offered and that draws nothing.
-        // Those cases still exist for their own uses; they are just not
-        // somewhere Tab can strand you.
+        // appeared in the tab strip and none of which had a renderer, leaving
+        // the user on a pane the UI never offered and that drew nothing.
+        //
+        // Settings has since rejoined the strip, because it now HAS a renderer
+        // ({@see \SugarCraft\Crush\Tui\Components\SettingsPane}); the reason it
+        // was excluded no longer holds. Input and Help still draw nothing, so
+        // they still fold back into Chat rather than extending the loop.
         return match ($this) {
             self::Chat => self::Files,
             self::Files => self::Tools,
             self::Tools => self::Skills,
             self::Skills => self::Agents,
-            self::Agents => self::Chat,
-            self::Input, self::Settings, self::Help, self::Menu => self::Chat,
+            self::Agents => self::Settings,
+            self::Settings => self::Chat,
+            self::Input, self::Help, self::Menu => self::Chat,
         };
     }
 

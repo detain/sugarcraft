@@ -100,11 +100,12 @@ final class KeyboardHandlerTest extends TestCase
     public function testTabCyclesThroughAllPanes(): void
     {
         // Exactly the panes the tab strip advertises, in strip order. Tab
-        // used to walk Input/Settings/Help too -- panes absent from the strip
-        // with no renderer behind them.
+        // used to walk Input/Help too -- panes absent from the strip with no
+        // renderer behind them. Settings is in the strip again now that
+        // SettingsPane renders it.
         $app = $this->createApp(Pane::Chat);
 
-        foreach ([Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Chat] as $expected) {
+        foreach ([Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings, Pane::Chat] as $expected) {
             [$app] = $this->handler->handle('tab', $app);
             $this->assertSame($expected, $app->pane);
         }

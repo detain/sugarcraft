@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\App;
 
+use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg as CoreMsg;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\View;
@@ -15,6 +20,7 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -25,9 +31,18 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tui\AgentViewMode;
+use SugarCraft\Crush\Tui\Commands\CancelCmd;
+use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
+use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
+use SugarCraft\Crush\Tui\Commands\ProviderSelectCmd;
+use SugarCraft\Crush\Tui\Commands\SourceSkillCmd;
+use SugarCraft\Crush\Tui\Components\MenuBar;
+use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\ZoneClickTracker;
 use DateTimeImmutable;
 
 /**
@@ -66,6 +81,12 @@ final class App implements Model
         public readonly AgentViewMode $agentViewMode,
         public readonly ?DateTimeImmutable $lastActivityAt = null,
         public readonly array $skillPickerOptions = [],
+        /**
+         * Zero-based cursor into {@see $skillPickerOptions}. Without it the
+         * picker could be opened but never moved through, so Enter had no row
+         * to commit — the "skills pane cannot be selected from" gap.
+         */
+        public readonly int $skillPickerIndex = 0,
         public readonly ?InstructionFileLoader $instructionLoader = null,
         /**
          * The hosted content model. Null keeps `App` usable as the plain
@@ -108,6 +129,7 @@ final class App implements Model
             agentViewMode: AgentViewMode::List,
             lastActivityAt: null,
             skillPickerOptions: [],
+            skillPickerIndex: 0,
             instructionLoader: null,
             chat: null,
             rows: null,
@@ -200,6 +222,18 @@ final class App implements Model
     }
 
     /**
+     * Move the skill picker's cursor. Clamped to the option list rather than
+     * trusting the caller, so an index can never point past the last row and
+     * make Enter select nothing.
+     */
+    public function withSkillPickerIndex(int $v): self
+    {
+        $max = count($this->skillPickerOptions) - 1;
+
+        return $this->mutate(skillPickerIndex: $max < 0 ? 0 : max(0, min($v, $max)));
+    }
+
+    /**
      * Attach the session's shared {@see InstructionFileLoader} so
      * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} can fold the
      * repo-root CLAUDE.md/AGENTS.md and the config-driven forced-instruction
@@ -275,14 +309,12 @@ final class App implements Model
      * with exactly this filtered list, and SelectSkillMsg re-validates
      * against it before enabling a skill. `SkillsPane` renders the picker
      * whenever $skillPickerOptions is non-empty (Mirrors
-     * charmbracelet/crush SourceSkillCmd's skill list). Physical keypress
-     * reachability (wiring `KeyboardHandler`'s `SourceSkillCmd` into a
-     * running main loop so pressing the real key emits OpenSkillPickerMsg)
-     * is a pre-existing, repo-wide gap that predates this item — no `Cmd`
-     * type is consumed by any main loop anywhere in `src/` yet, not
-     * something this item introduced or narrowed the scope of. The
-     * Model-layer command surface itself (this method, the two Msg
-     * handlers, and the picker render) is real and covered by tests.
+     * charmbracelet/crush SourceSkillCmd's skill list).
+     *
+     * Physical keypress reachability is now real: Ctrl+S produces a
+     * `SourceSkillCmd`, {@see consumeShellCmd()} turns it into
+     * OpenSkillPickerMsg, and {@see KeyboardHandler::handleSkillPickerKey()}
+     * moves the cursor and turns Enter into a SelectSkillMsg.
      *
      * @return array<Skill>
      */
@@ -404,18 +436,116 @@ final class App implements Model
             $msg instanceof OpenSkillPickerMsg,
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
             $msg instanceof KeyMsg => $this->handleKey($msg),
+            $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             default => $this->delegateToChat($msg),
         };
     }
 
     /**
+     * Press/Release pairing state for clicks on the shell's CHROME.
+     *
+     * Static for exactly the reason {@see Chat::clickTracker()} is: a click
+     * spans two `update()` calls and `App` is immutable, so a field would be
+     * discarded with the intermediate instance and no click could ever
+     * complete. A tracker of its own rather than Chat's, because the two
+     * registries are in different coordinate spaces (see
+     * {@see TuiRenderer::chromeZoneAt()}) and the tracker re-tests the
+     * PRESS's recorded box against the release event — one tracker fed boxes
+     * from both spaces would reject every pair from one of them.
+     */
+    private static ?ZoneClickTracker $chromeClickTracker = null;
+
+    /** @see $chromeClickTracker */
+    public static function chromeClickTracker(): ZoneClickTracker
+    {
+        return self::$chromeClickTracker ??= new ZoneClickTracker();
+    }
+
+    /**
+     * Click-to-open a menu title and click-to-run a dropdown row
+     * (crush_feat.md §8's click-to-select pattern, applied to the one surface
+     * its E-list never reached — the user report is "clicking the menu up top
+     * with a mouse doesnt work").
+     *
+     * The shell gets first refusal on a left press/release, mirroring the
+     * priority routing §8 C documents in charmbracelet/crush (chrome and
+     * dialogs absorb mouse events before the chat sees them). Everything else
+     * — wheel, motion, other buttons, and any left click that lands outside
+     * the chrome — falls through to the hosted {@see Chat}, which owns the
+     * transcript's own zones, its scroll offset and the §8 E8 drag-versus-
+     * selection tolerance.
+     *
+     * A press that DID land on chrome is swallowed even though it dispatches
+     * nothing on its own: forwarding it would arm Chat's tracker with a press
+     * the matching release will never reach it, and the menu bar is not part
+     * of the frame Chat's zones were recorded against anyway.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleShellMouse(MouseMsg $msg): array
+    {
+        $press = $msg instanceof MouseClickMsg;
+        $release = $msg instanceof MouseReleaseMsg;
+
+        if ((!$press && !$release) || $msg->button !== MouseButton::Left) {
+            return $this->delegateToChat($msg);
+        }
+
+        $zone = TuiRenderer::chromeZoneAt($msg->x, $msg->y);
+        $event = $press
+            ? MouseEvent::press($msg->x, $msg->y)
+            : MouseEvent::release($msg->x, $msg->y);
+
+        $click = self::chromeClickTracker()->track($event, $zone);
+
+        if ($click === null) {
+            return $zone === null ? $this->delegateToChat($msg) : [$this, null];
+        }
+
+        return $this->dispatchChromeClick($click->zone->id);
+    }
+
+    /**
+     * Act on a completed click on a chrome zone.
+     *
+     * Both arms route into the keyboard's own entry points rather than a
+     * parallel mouse path: a title click is {@see MenuBar::openMenu()}, the
+     * toggle F10 already calls, and a row click is
+     * {@see MenuBar::selectItem()}, which moves the same cursor the arrows
+     * move and returns the same {@see MenuSelectedMsg} Enter produces — so it
+     * is handed to {@see consumeShellCmd()}, the one place that runs it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function dispatchChromeClick(string $zoneId): array
+    {
+        $titles = MenuBar::MENU_TITLE_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $titles)) {
+            MenuBar::openMenu((int) substr($zoneId, strlen($titles)));
+
+            return [$this, null];
+        }
+
+        $items = MenuBar::MENU_ITEM_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $items)) {
+            $selected = MenuBar::selectItem((int) substr($zoneId, strlen($items)));
+
+            return $selected === null ? [$this, null] : $this->consumeShellCmd($selected);
+        }
+
+        return [$this, null];
+    }
+
+    /**
      * Offer a keypress to the pane shell, falling through to the hosted chat.
      *
-     * The shell's {@see \SugarCraft\Crush\Tui\Commands\KeyCmd} is dropped here for the same reason
-     * {@see withoutEngineCmd()} drops the engine's: it is a declarative
+     * The shell's command object is no longer dropped here: it is handed to
+     * {@see consumeShellCmd()}, which TRANSLATES it into shell state changes
+     * or into keystrokes the hosted {@see Chat} already answers. It is still
+     * never returned: a `KeyCmd`/`MenuSelectedMsg` is a declarative
      * instruction object, not the `Closure(): ?Msg` candy-core's
-     * `Program::scheduleCmd()` accepts. {@see dispatchKey()} is the entry
-     * point that still reports it.
+     * `Program::scheduleCmd()` accepts, so returning one would TypeError and
+     * kill the loop.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -427,7 +557,180 @@ final class App implements Model
             return $this->delegateToChat($msg);
         }
 
-        return [$handled[0], null];
+        [$next, $cmd] = $handled;
+
+        return $cmd === null ? [$next, null] : $next->consumeShellCmd($cmd);
+    }
+
+    /**
+     * Act on a command object the shell's keyboard layer produced.
+     *
+     * This is the fix for the systemic gap {@see dispatchKey()} used to
+     * disclose ("the returned Cmd is inert today"): every command below now
+     * has a real effect, expressed either as shell state or — for the
+     * bindings whose behaviour lives on the content model — as the exact
+     * keystrokes the hosted {@see Chat} already binds. Translation, not
+     * pass-through: see {@see handleKey()} for why the object itself can
+     * never be returned to the Program.
+     *
+     * Still deliberately inert, and honestly so:
+     * {@see \SugarCraft\Crush\Tui\Commands\GroupInputCmd},
+     * {@see \SugarCraft\Crush\Tui\Commands\CancelAgentCmd},
+     * {@see \SugarCraft\Crush\Tui\Commands\ResumeAgentCmd},
+     * {@see \SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd} and
+     * {@see \SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd}. The first has no
+     * counterpart anywhere in the live app to translate INTO, and the agent
+     * four would have to reach into a worker pool the shell does not hold —
+     * their pane/selection half is already applied by
+     * {@see KeyboardHandler::handleAgentViewKey()}. Inventing a consumer for
+     * them here would be a fabricated call path, not a fix.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function consumeShellCmd(object $cmd): array
+    {
+        return match (true) {
+            // The keyboard layer speaks this namespace's own messages for the
+            // skill picker, so route them through the same arm update() uses.
+            $cmd instanceof Msg => self::withoutEngineCmd($this->dispatch($cmd)),
+            $cmd instanceof SourceSkillCmd => self::withoutEngineCmd($this->dispatch(new OpenSkillPickerMsg())),
+            $cmd instanceof MenuSelectedMsg => $this->dispatchMenuSelection($cmd),
+            $cmd instanceof CommandPaletteCmd => $this->feedChat([self::ctrl('p')]),
+            $cmd instanceof NewSessionCmd => $this->runRegistryCommand('new'),
+            $cmd instanceof ProviderSelectCmd => $this->runRegistryCommand('model'),
+            // Chat's Escape is the live "cancel the in-flight turn" binding.
+            $cmd instanceof CancelCmd => $this->feedChat([new KeyMsg(KeyType::Escape)]),
+            default => [$this, null],
+        };
+    }
+
+    /**
+     * Run the command a menu row names.
+     *
+     * The row label came from {@see \SugarCraft\Crush\Commands\CommandRegistry},
+     * so it maps back to exactly one {@see CommandSpec} — which is what makes
+     * "Enter dispatches the command it names" possible at all. Selecting also
+     * closes the menu: leaving it open would keep the shell swallowing every
+     * subsequent keypress while the command it launched runs.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function dispatchMenuSelection(MenuSelectedMsg $selected): array
+    {
+        MenuBar::closeMenu();
+
+        if ($selected->item === '') {
+            return [$this, null];
+        }
+
+        foreach (CommandRegistry::all() as $spec) {
+            if ($spec->label() === $selected->item) {
+                return $this->runRegistryCommand($spec->name);
+            }
+        }
+
+        return [$this->withError("No command matches menu item '{$selected->item}'."), null];
+    }
+
+    /**
+     * Dispatch a registry command through the hosted {@see Chat}.
+     *
+     * Chat::submit()'s own `str_starts_with()` chain is the single source of
+     * truth for what a command does, so the shell drives it rather than
+     * growing a second dispatcher — but only for rows the registry marks
+     * `slashVisible`. A row flagged `slashVisible: false` is one that chain
+     * has NO branch for (CommandRegistry's own docblock says so): submitting
+     * its text would send a prompt to the model instead of running anything.
+     * Those rows carry a palette action, so they are driven through Chat's
+     * Ctrl+P palette, which does dispatch them.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function runRegistryCommand(string $name): array
+    {
+        $spec = null;
+        foreach (CommandRegistry::all() as $candidate) {
+            if ($candidate->name === $name) {
+                $spec = $candidate;
+                break;
+            }
+        }
+
+        if ($spec === null) {
+            return [$this->withError("Unknown command '{$name}'."), null];
+        }
+
+        if ($this->chat === null) {
+            return [$this->withStatus("No chat is hosted — '{$name}' was not dispatched."), null];
+        }
+
+        $keys = $spec->slashVisible
+            ? [...self::clearInputKeys($this->chat), ...self::typeKeys('/' . $spec->name)]
+            : [self::ctrl('p'), ...self::typeKeys($spec->label())];
+        $keys[] = new KeyMsg(KeyType::Enter);
+
+        return $this->feedChat($keys);
+    }
+
+    /**
+     * Backspaces enough to empty the chat's draft.
+     *
+     * A menu command is typed into the same input buffer the user's draft
+     * lives in, so it has to start from empty or "/compact" appended to a
+     * half-written sentence would be submitted as prose.
+     *
+     * @return list<KeyMsg>
+     */
+    private static function clearInputKeys(Chat $chat): array
+    {
+        return array_fill(0, mb_strlen($chat->inputBuf), new KeyMsg(KeyType::Backspace));
+    }
+
+    /**
+     * The keystrokes that type $text one character at a time.
+     *
+     * @return list<KeyMsg>
+     */
+    private static function typeKeys(string $text): array
+    {
+        $keys = [];
+        foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+            $keys[] = $char === ' '
+                ? new KeyMsg(KeyType::Space)
+                : new KeyMsg(KeyType::Char, $char);
+        }
+
+        return $keys;
+    }
+
+    /** A Ctrl+<rune> chord as the live terminal decoder delivers it. */
+    private static function ctrl(string $rune): KeyMsg
+    {
+        return new KeyMsg(KeyType::Char, $rune, ctrl: true);
+    }
+
+    /**
+     * Replay a synthesized key sequence into the hosted {@see Chat}.
+     *
+     * Only the LAST non-null Cmd survives, because only the final Enter can
+     * produce one — the typing keystrokes before it are pure state changes,
+     * and candy-core's Program takes a single Cmd per update.
+     *
+     * @param list<KeyMsg> $keys
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function feedChat(array $keys): array
+    {
+        $app = $this;
+        $cmd = null;
+        foreach ($keys as $key) {
+            [$app, $next] = $app->delegateToChat($key);
+            if ($next !== null) {
+                $cmd = $next;
+            }
+        }
+
+        return [$app, $cmd];
     }
 
     /**
@@ -439,10 +742,9 @@ final class App implements Model
      * apart from "this key is not the shell's". {@see update()} relies on
      * that distinction to route unclaimed keys into {@see Chat}.
      *
-     * Disclosure: the returned Cmd is inert today. Nothing in `src/` or
-     * `bin/` consumes a `Cmd` object yet (see {@see userInvocableSkills()});
-     * this method exists so a future driver has one place to read them from,
-     * and so tests can assert which command a shell key produces.
+     * The returned command is no longer inert: {@see handleKey()} hands it to
+     * {@see consumeShellCmd()}. This method stays public so tests can assert
+     * which command a shell key produces without also running its effect.
      *
      * @return array{0: self, 1: ?object}|null
      */
@@ -584,7 +886,12 @@ final class App implements Model
     private function handleOpenSkillPicker(): array
     {
         $options = $this->userInvocableSkills();
-        $next = $this->withPane(Pane::Skills)->withSkillPickerOptions($options)->withError(null);
+        $next = $this->mutate(
+            pane: Pane::Skills,
+            skillPickerOptions: $options,
+            skillPickerIndex: 0,
+            error: null,
+        );
 
         if ($options === []) {
             $next = $next->withStatus('No user-invocable skills are registered.');
@@ -628,6 +935,7 @@ final class App implements Model
         $next = $this->mutate(
             enabledSkills: $enabledSkills,
             skillPickerOptions: [],
+            skillPickerIndex: 0,
             status: "Enabled skill '{$skill->name}'.",
             error: null,
         );
@@ -690,6 +998,7 @@ final class App implements Model
             agentViewMode: array_key_exists('agentViewMode', $changes) ? $changes['agentViewMode'] : $this->agentViewMode,
             lastActivityAt: array_key_exists('lastActivityAt', $changes) ? $changes['lastActivityAt'] : $this->lastActivityAt,
             skillPickerOptions: array_key_exists('skillPickerOptions', $changes) ? $changes['skillPickerOptions'] : $this->skillPickerOptions,
+            skillPickerIndex: array_key_exists('skillPickerIndex', $changes) ? $changes['skillPickerIndex'] : $this->skillPickerIndex,
             instructionLoader: array_key_exists('instructionLoader', $changes) ? $changes['instructionLoader'] : $this->instructionLoader,
             chat: array_key_exists('chat', $changes) ? $changes['chat'] : $this->chat,
             rows: array_key_exists('rows', $changes) ? $changes['rows'] : $this->rows,
