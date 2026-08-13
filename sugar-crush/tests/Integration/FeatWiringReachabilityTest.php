@@ -7,16 +7,24 @@ namespace SugarCraft\Crush\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\View;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
+use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Mouse\Sentinel;
+use SugarCraft\Mouse\Zone;
 
 /**
  * Reachability tests for crush_feat.md's Executive Summary table of
@@ -34,8 +42,8 @@ use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
  * documents.
  *
  * Rows covered here (W4.S1a): the session store, session tabs, and background
- * sessions. (W4.S1b): the Skills subsystem. Later sub-steps extend this class
- * with the remaining rows.
+ * sessions. (W4.S1b): the Skills subsystem. (W4.S1c): candy-mouse/candy-zone.
+ * Later sub-steps extend this class with the remaining rows.
  */
 final class FeatWiringReachabilityTest extends TestCase
 {
@@ -396,8 +404,179 @@ final class FeatWiringReachabilityTest extends TestCase
     }
 
     // =========================================================================
+    // Row: candy-mouse/candy-zone
+    // "grep -rln \"Mouse\" src/ returns zero files in sugar-crush. Mouse mode
+    //  isn't even turned on (ProgramOptions::$mouseMode defaults Off and is
+    //  never overridden)." — crush_feat.md §8 D/E1.
+    //
+    // The coordinate invariant (pane-local zone boxes rebased against
+    // Renderer::zoneOrigin()) is already guarded by tests/Tui/ShellMouseZoneTest
+    // against a hand-built App. What is asserted here is the other half: that
+    // the App a REAL launch produces turns tracking on and paints clickable
+    // zones at all.
+    // =========================================================================
+
+    /**
+     * `bin/sugarcrush` hands `Chat::programOptions()` to `Program`, so this is
+     * literally the value the terminal's tracking mode is set from. Against
+     * the pre-wiring code the entrypoint constructed `new ProgramOptions(...)`
+     * without a `mouseMode`, leaving candy-core's `MouseMode::Off` default —
+     * asserted alongside so the test fails if the wiring ever regresses back
+     * to "whatever ProgramOptions defaults to".
+     */
+    public function testTheOptionsTheBinaryStartsTheProgramWithTurnMouseTrackingOn(): void
+    {
+        $options = Chat::programOptions();
+
+        $this->assertSame(MouseMode::CellMotion, $options->mouseMode);
+        $this->assertNotSame(
+            (new ProgramOptions())->mouseMode,
+            $options->mouseMode,
+            'mouse mode must be overridden, not inherited from the Off default',
+        );
+        $this->assertTrue($options->useAltScreen);
+    }
+
+    /**
+     * Reachability end to end: the root Model `bin/sugarcrush` runs is
+     * `Bootstrap::app()`, and its first frame has to leave a populated
+     * hit-test registry behind — the chain being
+     * App::view() → Tui\Renderer::renderView() → ChatPane::renderView() →
+     * live Renderer::renderView() → Renderer::scanRoot().
+     *
+     * `pane:menu` is the zone a plain single-session launch paints (session
+     * tabs need a second session on disk, tool rows need a tool call), so it
+     * is the one that proves a *default* launch is clickable rather than only
+     * an elaborately staged one.
+     *
+     * The markers themselves must not survive into the painted frame: they
+     * are Private-Use codepoints a terminal renders as replacement glyphs and
+     * candy-core's line diff counts as content.
+     */
+    public function testAPlainLaunchsFirstFrameRegistersClickZonesAndPaintsNoMarkers(): void
+    {
+        try {
+            $body = $this->bootFrame();
+
+            $this->assertNotSame(
+                [],
+                LiveRenderer::scanner()->all(),
+                'a real launch frame must leave click zones behind for the hit test',
+            );
+            $this->assertInstanceOf(
+                Zone::class,
+                LiveRenderer::scanner()->get(LiveRenderer::PANE_ZONE_PREFIX . Pane::Menu->value),
+            );
+            $this->assertStringNotContainsString(Sentinel::OPEN, $body);
+            $this->assertStringNotContainsString(Sentinel::CLOSE, $body);
+        } finally {
+            LiveRenderer::clearZones();
+        }
+    }
+
+    /**
+     * The registry existing is not the same as a click landing in it: the
+     * shell composes the chat pane inset behind a sidebar and below a menu
+     * bar, so a zone recorded pane-locally is only reachable if the boot path
+     * also declares the pane's origin. Asserting on the cell the launch
+     * actually PAINTED the affordance on — rather than on the recorded box —
+     * is what makes this a reachability test and not a restatement of the
+     * coordinate arithmetic.
+     */
+    public function testAClickWhereARealLaunchPaintsTheMenuHintResolvesToThatZone(): void
+    {
+        try {
+            [$col, $row] = $this->locate($this->bootFrame(), 'Ctrl+P menu');
+
+            $this->assertSame(
+                LiveRenderer::PANE_ZONE_PREFIX . Pane::Menu->value,
+                Chat::zoneAt($col, $row)?->id,
+            );
+        } finally {
+            LiveRenderer::clearZones();
+        }
+    }
+
+    /**
+     * §8's most-repeated cross-tool complaint: while SGR tracking is active
+     * the terminal stops offering copy-on-select, so the opt-out has to reach
+     * the protocol itself, not just the hit test. Both halves are asserted —
+     * tracking off AND no zones marked, since marking would cost the ~24ms
+     * grapheme scan per frame for boxes nothing can ever click.
+     */
+    public function testDisableMouseTurnsTrackingOffForARealLaunch(): void
+    {
+        putenv('SUGARCRUSH_DISABLE_MOUSE=1');
+
+        try {
+            $this->assertSame(MouseMode::Off, Chat::programOptions()->mouseMode);
+            $this->bootFrame();
+            $this->assertSame([], LiveRenderer::scanner()->all());
+        } finally {
+            putenv('SUGARCRUSH_DISABLE_MOUSE');
+            LiveRenderer::clearZones();
+        }
+    }
+
+    /**
+     * The "keep scroll, drop clicks" escape hatch (§8 B). Wheel events are
+     * reported over the same tracking mode as clicks, so this one must NOT
+     * touch the mode — a launch that dropped to `Off` here would take
+     * wheel-scroll down with it, which is the exact regression the split
+     * flag exists to avoid.
+     */
+    public function testDisableMouseClicksKeepsTrackingOnButRegistersNoZones(): void
+    {
+        putenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS=1');
+
+        try {
+            $this->assertSame(MouseMode::CellMotion, Chat::programOptions()->mouseMode);
+            $this->bootFrame();
+            $this->assertSame([], LiveRenderer::scanner()->all());
+        } finally {
+            putenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
+            LiveRenderer::clearZones();
+        }
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    /**
+     * The painted body of the first frame of a real launch — `Bootstrap::app()`
+     * is the root Model `bin/sugarcrush` hands to `Program`, and `view()` is
+     * what `Program` would call on it.
+     */
+    private function bootFrame(): string
+    {
+        $view = Bootstrap::app($this->tempDir . '/repo')->view();
+
+        return $view instanceof View ? $view->body : $view;
+    }
+
+    /**
+     * The 1-based display column and row of $needle in a rendered frame — the
+     * coordinate space an SGR mouse report uses. SGR runs are stripped and
+     * wide glyphs measured rather than counted as bytes, so the column is a
+     * real terminal cell rather than a byte offset.
+     *
+     * @return array{0:int,1:int}
+     */
+    private function locate(string $frame, string $needle): array
+    {
+        foreach (explode("\n", $frame) as $index => $line) {
+            $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+            $at = mb_strpos($plain, $needle);
+            if ($at === false) {
+                continue;
+            }
+
+            return [Width::string(mb_substr($plain, 0, $at)) + 1, $index + 1];
+        }
+
+        $this->fail("frame does not contain '{$needle}'");
+    }
 
     /**
      * Drop a SKILL.md into the launch root's project skill directory, the
