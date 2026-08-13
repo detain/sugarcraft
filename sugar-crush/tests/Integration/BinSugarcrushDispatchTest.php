@@ -36,6 +36,16 @@ final class BinSugarcrushDispatchTest extends TestCase
     /** Usage error, per crush_code.md; distinct from NonInteractive's 1 = ran and failed. */
     private const EXIT_USAGE = 2;
 
+    /**
+     * A temp HOME for the env-controlled cases below. The real
+     * ~/.sugar-crush/config.json routinely carries a persisted `provider` from
+     * a previous Ctrl+P "Switch model", which
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::selectedProviderName()} honours —
+     * so a "nothing configured" vector run against the developer's own HOME
+     * would quietly be testing their provider, and could reach a live request.
+     */
+    private string $tempHome = '';
+
     /** Every case exec'd here provably terminates immediately; this is the "it regressed" tripwire, not a normal wait. */
     private const TIMEOUT_SECONDS = 20;
 
@@ -45,6 +55,24 @@ final class BinSugarcrushDispatchTest extends TestCase
      * the `proc_close()` wait() to reap a child that ignored SIGKILL.
      */
     private const WATCHDOG_GRACE_SECONDS = 5;
+
+    protected function tearDown(): void
+    {
+        if ($this->tempHome !== '' && \is_dir($this->tempHome)) {
+            $entries = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($this->tempHome, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST,
+            );
+            foreach ($entries as $entry) {
+                /** @var \SplFileInfo $entry */
+                $entry->isDir() ? @\rmdir($entry->getPathname()) : @\unlink($entry->getPathname());
+            }
+            @\rmdir($this->tempHome);
+        }
+        $this->tempHome = '';
+
+        parent::tearDown();
+    }
 
     /**
      * @return array<string, array{0: list<string>}>
@@ -102,9 +130,14 @@ final class BinSugarcrushDispatchTest extends TestCase
 
     /**
      * A one-shot invocation with no prompt VALUE must reach
-     * NonInteractive::run()'s existing "no prompt given" error (exit 1), not
-     * the TUI. The message is deliberately not duplicated in the binary, so
-     * asserting its text here also pins that single ownership.
+     * NonInteractive::run()'s "no prompt given" error, not the TUI. The
+     * message is deliberately not duplicated in the binary, so asserting its
+     * text here also pins that single ownership.
+     *
+     * Exit 2, not the 1 this originally pinned: nothing is attempted on that
+     * branch, which is the same thing `--bogus` and a bad `--root` mean, and
+     * a CI gate that retries on 1 would have retried a malformed invocation
+     * forever. See NonInteractive::EXIT_CONFIG.
      *
      * @param list<string> $args
      *
@@ -114,9 +147,113 @@ final class BinSugarcrushDispatchTest extends TestCase
     {
         $result = $this->runBin($args);
 
-        $this->assertSame(1, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
         $this->assertStringContainsString('no prompt given', $result['stderr']);
         $this->assertStringNotContainsString("\x1b", $result['stdout']);
+    }
+
+    /**
+     * @return array<string, array{0: list<string>}>
+     */
+    public static function runSubcommandBehindAFlagInvocations(): array
+    {
+        return [
+            '--output-format json run' => [['--output-format', 'json', 'run']],
+            '--output-format=json run' => [['--output-format=json', 'run']],
+            '--root . run'             => [['--root', '.', 'run']],
+        ];
+    }
+
+    /**
+     * The `run` subcommand behind a flag: `ArgvParser` only recognised it at
+     * $argv[1], so ANY preceding flag discarded it, promptRequested stayed
+     * false, and the binary fell past all three dispatch guards into
+     * `Program::run()` — a three-minute hang on a probe, not a fast failure.
+     *
+     * Every vector here is promptless on purpose: it proves the subcommand is
+     * recognised (it reaches the one-shot path's own "no prompt given" error
+     * at exit 2) without supplying a prompt that would call a backend. A
+     * regression re-opens the TUI and this fails on the deadline instead of
+     * hanging the suite.
+     *
+     * @param list<string> $args
+     *
+     * @dataProvider runSubcommandBehindAFlagInvocations
+     */
+    public function testRunSubcommandIsDispatchedEvenWhenAFlagPrecedesIt(array $args): void
+    {
+        $result = $this->runBin($args);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('no prompt given', $result['stderr']);
+        $this->assertStringNotContainsString("\x1b", $result['stdout'], 'the TUI was entered');
+    }
+
+    /**
+     * `--` still turns `run` back into a plain operand, which means the binary
+     * legitimately boots the TUI — so this one is asserted at the parse layer,
+     * exec'ing it being exactly the hang the rest of this file guards against.
+     */
+    public function testRunAfterTheSeparatorIsStillAnOperandAndNotDispatched(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '--output-format=json', '--', 'run']);
+
+        $this->assertFalse($args->promptRequested);
+        $this->assertSame([], $args->unknownFlags);
+        $this->assertFalse($args->help);
+    }
+
+    // -------------------------------------------------------------------------
+    // The --output-format json contract, on the exits that happen BEFORE
+    // NonInteractive is reached. Both used to exit 2 with a completely empty
+    // stdout, so `| jq` died on an unexpected EOF on two of the three exit-2
+    // causes the README promises a document for.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: list<string>, 1: string}>
+     */
+    public static function binLevelUsageErrorsUnderJson(): array
+    {
+        return [
+            'unrecognized flag' => [['--bogus', '--output-format', 'json'], 'unrecognized option'],
+            'bad --root'        => [['--root', '/no/such/dir', '--output-format', 'json'], 'no such directory'],
+            'no prompt given'   => [['--output-format', 'json', 'run'], 'no prompt given'],
+        ];
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @dataProvider binLevelUsageErrorsUnderJson
+     */
+    public function testEveryDocumentedExitTwoCauseStillPutsOneJsonObjectOnStdout(array $args, string $expectedFragment): void
+    {
+        $result = $this->runBin($args);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertNotSame('', \trim($result['stdout']), 'a | jq consumer got an empty pipe');
+
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($result['stdout'], true));
+        $this->assertNull($decoded['result']);
+        $this->assertSame('usage', $decoded['error']['type']);
+        $this->assertStringContainsString($expectedFragment, $decoded['error']['message']);
+    }
+
+    /**
+     * The same two invocations without `--output-format json` must keep stdout
+     * empty — the document is opt-in, and a `sugarcrush --bogus > out.txt`
+     * caller must not suddenly find JSON in the file.
+     */
+    public function testBinLevelUsageErrorsStayStdoutSilentInTextMode(): void
+    {
+        foreach ([['--bogus'], ['--root', '/no/such/dir']] as $args) {
+            $result = $this->runBin($args);
+
+            $this->assertSame(self::EXIT_USAGE, $result['status']);
+            $this->assertSame('', $result['stdout'], \implode(' ', $args) . ' wrote to stdout');
+        }
     }
 
     /**
@@ -212,6 +349,145 @@ final class BinSugarcrushDispatchTest extends TestCase
         $this->assertSame('/tmp/some/repo', $args->root);
     }
 
+    // -------------------------------------------------------------------------
+    // crush_code.md Phase 0 item 10: a one-shot run never answers from the
+    // offline echo provider on behalf of a provider that was asked for.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function unusableProviderInvocations(): array
+    {
+        return [
+            // The exact reproduction in crush_code.md §5: this used to print a
+            // warning to stderr and a canned Echo sentence to stdout at exit 0.
+            'known type, missing credential' => ['openai', "requires 'apiKey'"],
+            'unknown provider name'          => ['definitely-not-a-real-provider', 'Unknown provider type'],
+        ];
+    }
+
+    /**
+     * Safe to exec: every provider in this codebase is constructed without any
+     * I/O, so `SUGARCRUSH_PROVIDER=openai` with no key fails inside
+     * `ProviderFactory` — before `Backend::complete()`, before any socket, and
+     * long before `Program::run()`. The env is passed EXPLICITLY rather than
+     * inherited precisely so this stays true on a machine that exports a real
+     * `OPENAI_API_KEY`.
+     *
+     * @dataProvider unusableProviderInvocations
+     */
+    public function testExplicitlySelectedUnusableProviderExitsTwoWithNothingOnStdout(string $provider, string $expectedDetail): void
+    {
+        $result = $this->runBin(['-p', 'review this diff'], ['SUGARCRUSH_PROVIDER' => $provider]);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString($provider, $result['stderr'], 'the offending provider must be named');
+        $this->assertStringContainsString($expectedDetail, $result['stderr']);
+        $this->assertSame('', $result['stdout'], 'a caller must never get a canned reply it could mistake for an answer');
+    }
+
+    /**
+     * A `--output-format json` caller reads stdout and nothing else, so a
+     * failure has to arrive there as a well-formed document rather than as an
+     * empty pipe plus an exit code.
+     */
+    public function testUnusableProviderStillProducesAParseableJsonDocumentOnStdout(): void
+    {
+        $result = $this->runBin(
+            ['-p', 'hi', '--output-format', 'json'],
+            ['SUGARCRUSH_PROVIDER' => 'openai'],
+        );
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . $result['stdout']);
+        $this->assertNull($decoded['result']);
+        $this->assertSame('provider_configuration', $decoded['error']['type']);
+        $this->assertSame('openai', $decoded['error']['provider']);
+    }
+
+    /**
+     * The remediation line has to name the SOURCE the selection came from, and
+     * a subprocess is the only place stderr can actually be read: with the
+     * name coming from a persisted Ctrl+P "Switch model" choice and no
+     * variable set anywhere, "unset SUGARCRUSH_PROVIDER" sends the operator
+     * hunting for something that was never set. The config file is named
+     * instead, because that is the file they have to edit.
+     */
+    public function testThePersistedSelectionHintNamesTheConfigFileNotTheEnvironmentVariable(): void
+    {
+        $this->persistProviderChoice('definitely-not-a-real-provider');
+
+        $result = $this->runBin(['-p', 'hi'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringNotContainsString(
+            'unset SUGARCRUSH_PROVIDER',
+            $result['stderr'],
+            'no such variable was set on this run',
+        );
+        $this->assertStringContainsString($this->tempHome . '/.sugar-crush/config.json', $result['stderr']);
+        $this->assertStringContainsString('Switch model', $result['stderr'], 'the operator has to know which choice to undo');
+    }
+
+    /**
+     * The other branch, same configuration file present: when
+     * `$SUGARCRUSH_PROVIDER` IS what selected the provider, it outranks the
+     * persisted entry, so "unset SUGARCRUSH_PROVIDER" is the correct advice
+     * and the file must not be named.
+     */
+    public function testTheEnvironmentSelectionHintNamesTheVariableEvenWhenAChoiceIsAlsoPersisted(): void
+    {
+        $this->persistProviderChoice('dev-sglang');
+
+        $result = $this->runBin(['-p', 'hi'], ['SUGARCRUSH_PROVIDER' => 'definitely-not-a-real-provider']);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('unset SUGARCRUSH_PROVIDER', $result['stderr']);
+        $this->assertStringNotContainsString('/.sugar-crush/config.json', $result['stderr']);
+    }
+
+    /**
+     * Seed the throwaway HOME `minimalEnv()` hands the child with a persisted
+     * Ctrl+P provider choice. Creates the directory eagerly so the later
+     * `runBin()` reuses this HOME rather than making a fresh empty one.
+     */
+    private function persistProviderChoice(string $provider): void
+    {
+        if ($this->tempHome === '') {
+            $this->tempHome = \sys_get_temp_dir() . '/bin_dispatch_home_' . \uniqid('', true);
+            \mkdir($this->tempHome, 0700, true);
+        }
+
+        \mkdir($this->tempHome . '/.sugar-crush', 0700, true);
+        \file_put_contents(
+            $this->tempHome . '/.sugar-crush/config.json',
+            (string) \json_encode(['provider' => $provider]),
+        );
+    }
+
+    /**
+     * The unset-provider decision, end to end: with nothing configured the run
+     * still succeeds offline (exit 0, a real reply on stdout) — nothing was
+     * substituted for anything — but says on stderr that the answer came from
+     * the offline provider, so the CI caller who merely forgot to export
+     * `$SUGARCRUSH_PROVIDER` is not left guessing.
+     *
+     * Safe to exec: the offline `EchoProvider` makes no network call, and
+     * one-shot mode returns before `Program::run()`.
+     */
+    public function testUnconfiguredOneShotRunAnswersOfflineAtExitZeroAndSaysSo(): void
+    {
+        $result = $this->runBin(['-p', 'hello there'], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('hello there', $result['stdout']);
+        $this->assertStringContainsString('no provider configured', $result['stderr']);
+        $this->assertStringContainsString('offline echo provider', $result['stderr']);
+    }
+
     /**
      * Run the real bin/sugarcrush in a child process.
      *
@@ -223,9 +499,16 @@ final class BinSugarcrushDispatchTest extends TestCase
      * deadline path, see {@see self::armWatchdog()}.
      *
      * @param list<string> $args
+     * @param array<string, string>|null $env When non-null, the child gets a
+     *   MINIMAL environment (PATH + a throwaway HOME) plus these entries, and
+     *   inherits nothing else. Required for every provider-selection vector:
+     *   inheriting the runner's environment would let a real `OPENAI_API_KEY`
+     *   or a persisted `~/.sugar-crush/config.json` provider turn a vector
+     *   that must fail at construction into one that opens a socket. Null
+     *   inherits, which is right for the argv-only cases.
      * @return array{status: int, stdout: string, stderr: string}
      */
-    private function runBin(array $args): array
+    private function runBin(array $args, ?array $env = null): array
     {
         $root = \dirname(__DIR__, 2);
         $command = 'exec ' . \escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($root . '/bin/sugarcrush');
@@ -239,7 +522,7 @@ final class BinSugarcrushDispatchTest extends TestCase
             2 => ['pipe', 'w'],
         ];
 
-        $process = \proc_open($command, $descriptors, $pipes, $root);
+        $process = \proc_open($command, $descriptors, $pipes, $root, $env === null ? null : $this->minimalEnv($env));
         $this->assertIsResource($process, 'failed to spawn bin/sugarcrush');
 
         // `exec` above makes $pid the php process itself, not an sh wrapper.
@@ -299,6 +582,30 @@ final class BinSugarcrushDispatchTest extends TestCase
         }
 
         return ['status' => $exitCode, 'stdout' => $stdout, 'stderr' => $stderr];
+    }
+
+    /**
+     * PATH + a throwaway HOME + $overrides, and deliberately nothing else.
+     *
+     * A whitelist rather than "inherit and override": the whole point is that
+     * NO `SUGARCRUSH_*` or provider credential from the runner's environment
+     * can reach the child, and an override list cannot enumerate variables it
+     * does not know the machine has set.
+     *
+     * @param array<string, string> $overrides
+     * @return array<string, string>
+     */
+    private function minimalEnv(array $overrides): array
+    {
+        if ($this->tempHome === '') {
+            $this->tempHome = \sys_get_temp_dir() . '/bin_dispatch_home_' . \uniqid('', true);
+            \mkdir($this->tempHome, 0700, true);
+        }
+
+        return \array_merge(
+            ['PATH' => (string) (\getenv('PATH') ?: '/usr/bin:/bin'), 'HOME' => $this->tempHome],
+            $overrides,
+        );
     }
 
     /**

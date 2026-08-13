@@ -61,6 +61,7 @@ scriptable paths never attach to the TTY or enter the alt-screen:
 sugarcrush -p "explain the Width helper"        # one prompt, print, exit
 sugarcrush run "explain the Width helper"       # same thing
 sugarcrush -p "audit this" --output-format json # machine-readable envelope
+sugarcrush --output-format json run "audit this" # `run` works after flags too
 sugarcrush --root /path/to/project              # set the project root explicitly
 sugarcrush --help                               # prints and exits (never opens the TUI)
 ```
@@ -69,6 +70,49 @@ sugarcrush --help                               # prints and exits (never opens 
 `sugarcrush ../other-project` works. It is what the Bash/Read/Edit/Glob tools
 are jailed to and where `CLAUDE.md`/`AGENTS.md` and `.sugar-crush/skills` are
 looked for.
+
+**One-shot mode never falls back to the offline echo provider.** If this run
+selected a provider — via `$SUGARCRUSH_PROVIDER` or a persisted Ctrl+P "Switch
+model" choice — and that provider cannot be constructed (unknown name, missing
+credential), `-p`/`run` prints the reason to stderr and exits **2** rather than
+returning a canned reply at exit 0. The stderr line names the source it came
+from, so a persisted choice sends you to `~/.sugar-crush/config.json` rather
+than to a `$SUGARCRUSH_PROVIDER` nothing ever set. The interactive TUI keeps
+the opposite, lenient behaviour: it warns and opens an offline session, because
+refusing to launch an editor over a missing API key is worse than an offline
+one.
+
+| exit | meaning |
+| --- | --- |
+| `0` | the prompt ran and produced an answer |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), or the answer could not be encoded in the requested format — retrying may help |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, `--root` naming no directory, a missing `vendor/autoload.php`, or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help |
+
+`2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
+the invocation is malformed, no backend is ever selected, and a CI gate that
+retries on `1` would otherwise retry it forever.
+
+With `--output-format json`, stdout is always exactly one JSON object: either
+`{"result": "..."}` or `{"result": null, "error": {"type": "usage" |
+"provider_configuration" | "backend" | "encoding", "message": "...",
+"provider": "..."}}` (`provider` present only when a selection is to blame), so
+a `| jq` consumer never sees an empty pipe. That holds for the flag and
+`--root` usage errors too, which `bin/sugarcrush` catches before the one-shot
+path is entered, and for a reply or an error message carrying bytes that are
+not valid UTF-8 (they are substituted, not dropped along with the whole
+document). `error.type` is not the exit code renamed — `usage` and
+`provider_configuration` are both `2`, `backend` and `encoding` are both `1` —
+it is how a consumer that kept the code tells apart the two kinds of each.
+
+The single exception is a checkout with no `vendor/autoload.php`: that exits
+`2` with an empty stdout, because the class that owns the JSON document shape
+is precisely the one that could not be loaded, and hand-rolling a second copy
+of the shape in `bin/sugarcrush` to cover it would be the drift that having one
+definition prevents. Run `composer install`.
+
+With no provider configured at all, one-shot mode still answers offline from
+the `EchoProvider` and exits 0 — nothing was substituted for anything — but
+says so on stderr.
 
 ### Dependency-free shell-out
 

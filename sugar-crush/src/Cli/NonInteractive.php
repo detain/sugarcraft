@@ -37,11 +37,77 @@ use SugarCraft\Crush\Message;
  * `$args->outputFormat` (parsed from `--output-format`/`--output-format=`,
  * defaulting to `ParsedArgs::DEFAULT_OUTPUT_FORMAT`) flowing straight into
  * {@see self::format()}, and no TUI or alt-screen ever entered.
+ *
+ * Provider selection here is deliberately STRICTER than the TUI's. Both paths
+ * agree on WHICH provider a run selected — {@see
+ * Bootstrap::selectedProviderName()} is the single definition — but they
+ * disagree on what to do when that provider cannot be built:
+ * {@see Bootstrap::backend()} warns and degrades to the offline
+ * {@see \SugarCraft\Crush\Providers\EchoProvider}, which is right for a
+ * developer opening an editor, while this class calls
+ * {@see Bootstrap::backendFor()} and hard-fails, which is right for a caller
+ * whose entire view of the run is stdout plus an exit code (crush_code.md
+ * Phase 0 item 10 / §5). The Echo provider is still reachable from here — it
+ * is simply never *substituted* for something else.
  */
 final class NonInteractive
 {
     public const FORMAT_TEXT = 'text';
     public const FORMAT_JSON = 'json';
+
+    /** The prompt ran and produced an answer. */
+    public const EXIT_OK = 0;
+
+    /**
+     * "Ran and failed": the backend was usable and threw anyway — an
+     * unreachable host, a rejected key, a rate limit, a model error. Also the
+     * code for an answer that arrived but could not be rendered in the
+     * requested output format ({@see self::format()}'s `encoding` type).
+     *
+     * Everything under this code has the same operational meaning: something
+     * was attempted, and attempting it again might produce a different result.
+     */
+    public const EXIT_FAILURE = 1;
+
+    /**
+     * "Never ran": the invocation or the configuration is wrong, so nothing
+     * was attempted and a retry cannot help. Three shapes reach it —
+     *
+     *   - the provider this run explicitly selected could not even be
+     *     CONSTRUCTED: an unknown name, or a required credential/field missing
+     *     ({@see \SugarCraft\Crush\Providers\ProviderFactory::validateRequiredKeys()});
+     *   - a usage error `bin/sugarcrush` catches pre-flight: an unrecognised
+     *     flag, a `--root` naming no directory (both via {@see
+     *     self::failUsage()});
+     *   - a one-shot invocation with no prompt VALUE (`sugarcrush -p`,
+     *     `sugarcrush run`), which is the same class: the invocation is
+     *     malformed and nothing ran.
+     *
+     * That last one exited 1 in the first cut of this class and was moved here
+     * deliberately. "No prompt given" is not "ran and failed" by any reading —
+     * the backend is never even selected — and a CI gate that retries on 1
+     * would have retried it forever. The 1 is preserved for the case it
+     * describes (see {@see self::EXIT_FAILURE}); the one-shot path is
+     * unreleased (pre-1.0, no tagged version of this binary exists), so the
+     * back-compat cost of correcting it now is limited to this repo's own
+     * tests, and correcting it later would not be.
+     *
+     * 2 rather than 1 deliberately, and it is the whole point of
+     * crush_code.md Phase 0 item 10: no provider constructor in this codebase
+     * performs any I/O (the OpenAI/Anthropic/SGLang factories only build a
+     * Guzzle client, Bedrock only an AWS SDK client, Vertex only stores
+     * strings), so a throw from construction is *always* a configuration
+     * error and *never* a network one. Network failures surface later, from
+     * `Backend::complete()`, and keep {@see self::EXIT_FAILURE}. A CI gate
+     * can therefore tell "my config is wrong, retrying will not help" from
+     * "the model was unreachable, retry might" — a distinction that did not
+     * exist while both shapes silently became a canned Echo reply at exit 0.
+     *
+     * The value matches `bin/sugarcrush`'s existing usage-error exit (an
+     * unrecognised flag, a `--root` naming no directory): same class of
+     * problem — the invocation is wrong, nothing was attempted.
+     */
+    public const EXIT_CONFIG = 2;
 
     /**
      * Matches Claude Code's documented 10MB piped-stdin cap
@@ -53,39 +119,282 @@ final class NonInteractive
     /**
      * Run one prompt to completion and print the result.
      *
-     * $backend defaults to `Bootstrap::backend($args->root)` (the same
-     * env-var-driven selection the interactive TUI path uses) but can be
-     * supplied directly — used by tests to avoid depending on
+     * $backend can be supplied directly — used by tests to avoid depending on
      * `SUGARCRUSH_*` environment state, and available to a future headless
-     * server mode that already holds a constructed `Backend`.
+     * server mode that already holds a constructed `Backend`. When it is
+     * null, one is built here — and that is where this path deliberately
+     * stops matching the TUI's leniency, see {@see
+     * self::failUnusableProvider()}.
      *
-     * @return int Unix exit code: `0` on success, `1` when no prompt was
-     *   given or the backend threw — matching the existing `sugar-post`/
-     *   `sugar-wishlist` bins' 0/1 convention (crush_feat.md
-     *   Recommendation 4).
+     * @return int Unix exit code: {@see self::EXIT_OK} on success,
+     *   {@see self::EXIT_CONFIG} when no prompt was given or an explicitly
+     *   selected provider is unusable, {@see self::EXIT_FAILURE} when the
+     *   backend threw — extending the existing `sugar-post`/`sugar-wishlist`
+     *   bins' 0/1 convention (crush_feat.md Recommendation 4) with
+     *   `bin/sugarcrush`'s own 2-means-usage-error.
      */
     public static function run(ParsedArgs $args, ?Backend $backend = null, string $outputFormat = self::FORMAT_TEXT): int
     {
         if ($args->prompt === null || \trim($args->prompt) === '') {
-            \fwrite(\STDERR, "sugarcrush: no prompt given - pass -p \"<prompt>\" or `sugarcrush run \"<prompt>\"`\n");
-
-            return 1;
+            return self::failUsage(
+                'sugarcrush: no prompt given - pass -p "<prompt>" or `sugarcrush run "<prompt>"`',
+                $outputFormat,
+            );
         }
 
-        $backend ??= Bootstrap::backend($args->root);
+        if ($backend === null) {
+            $providerName = Bootstrap::selectedProviderName();
+
+            if ($providerName === null) {
+                // No provider was asked for, so nothing is being substituted
+                // for one — see noticeOfflineDefault() for why this stays
+                // lenient. The notice is still worth a line of stderr.
+                $backend = Bootstrap::backend($args->root);
+                self::noticeOfflineDefault();
+            } else {
+                try {
+                    $backend = Bootstrap::backendFor($providerName, $args->root);
+                } catch (\Throwable $e) {
+                    return self::failUnusableProvider($providerName, $e, $outputFormat);
+                }
+            }
+        }
+
         $history = self::historyFrom($args->prompt, self::readStdinIfPiped());
 
         try {
             $message = $backend->complete($history);
         } catch (\Throwable $e) {
             \fwrite(\STDERR, $e->getMessage() . "\n");
+            self::emitErrorDocument($outputFormat, 'backend', $e->getMessage(), null);
 
-            return 1;
+            return self::EXIT_FAILURE;
         }
 
-        echo self::format($message, $outputFormat) . "\n";
+        // The answer exists but may not be representable in the format the
+        // caller asked for. Emitting the typed document instead of an empty
+        // stdout keeps the JSON contract intact on this branch too, and 1
+        // rather than 2 because something really did run.
+        try {
+            $rendered = self::format($message, $outputFormat);
+        } catch (\JsonException $e) {
+            \fwrite(\STDERR, 'sugarcrush: the answer could not be encoded as JSON: ' . $e->getMessage() . "\n");
+            self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null);
 
-        return 0;
+            return self::EXIT_FAILURE;
+        }
+
+        echo $rendered . "\n";
+
+        return self::EXIT_OK;
+    }
+
+    /**
+     * Report a usage error — the invocation itself is malformed, so nothing
+     * ran — and return {@see self::EXIT_CONFIG}.
+     *
+     * Public because `bin/sugarcrush` detects two of these BEFORE this class
+     * is reached (an unrecognised flag, a `--root` naming no directory) and
+     * used to `exit(2)` straight from the binary with an empty stdout — which
+     * broke the "`--output-format json` always puts exactly one JSON object on
+     * stdout" contract on two of the three exit-2 causes the README lists.
+     * Routing them through here rather than hand-rolling a second document in
+     * the binary is what keeps the two from drifting: there is one definition
+     * of the failure shape, in {@see self::emitErrorDocument()}.
+     *
+     * @param string $message One line, and also the JSON document's
+     *   `error.message`.
+     * @param string|null $hint An extra stderr-only line (e.g. "Try
+     *   `sugarcrush --help`…"). Deliberately not part of the document: a
+     *   machine consumer branches on `error.type`, and the hint is prose
+     *   aimed at whoever is reading the terminal.
+     */
+    public static function failUsage(string $message, string $outputFormat, ?string $hint = null): int
+    {
+        \fwrite(\STDERR, $message . "\n" . ($hint === null ? '' : $hint . "\n"));
+        self::emitErrorDocument($outputFormat, 'usage', $message, null);
+
+        return self::EXIT_CONFIG;
+    }
+
+    /**
+     * Report an explicitly selected provider that could not be constructed,
+     * and refuse to answer (crush_code.md Phase 0 item 10).
+     *
+     * This is the asymmetry the item exists to create. {@see
+     * Bootstrap::backend()} — which the interactive TUI still reaches through
+     * {@see Bootstrap::app()} — catches this same throw, warns, and hands back
+     * a working offline backend, because refusing to open the editor over a
+     * missing API key would be a worse experience than an offline session a
+     * developer can still browse files and run `/help` in. A one-shot run has
+     * no such consolation: its entire observable output is one string on
+     * stdout and one exit code, and a canned Echo sentence at exit 0 is
+     * indistinguishable from a real answer to the CI job consuming it.
+     *
+     * The provider name is named in the message because the whole failure is
+     * "you asked for X and X is unusable" — and the remediation line names the
+     * SOURCE, because {@see Bootstrap::selectedProviderName()} has two of them
+     * and they are fixed in completely different places. Telling an operator
+     * to "unset SUGARCRUSH_PROVIDER" when the name actually came from a
+     * persisted Ctrl+P "Switch model" choice sends them looking for a variable
+     * nothing ever set; the config file is named instead, since that is the
+     * file they have to edit. The branch mirrors
+     * {@see Bootstrap::selectedProviderName()}'s own precedence: a non-empty
+     * `$SUGARCRUSH_PROVIDER` wins, so if it is set it IS the source.
+     *
+     * Note this also refuses the `$SUGARCRUSH_BACKEND_CMD` tier that {@see
+     * Bootstrap::backend()} would drop to next when BOTH are set. Substituting
+     * a shell-out for a requested provider is a smaller lie than substituting
+     * Echo, but it is the same lie: the caller reads one string and cannot see
+     * which backend produced it. Clearing the selection selects the command
+     * backend deliberately, which is what the message says.
+     */
+    private static function failUnusableProvider(string $providerName, \Throwable $e, string $outputFormat): int
+    {
+        $fromEnv = \getenv('SUGARCRUSH_PROVIDER');
+        $remedy = ($fromEnv !== false && $fromEnv !== '')
+            ? 'unset SUGARCRUSH_PROVIDER to select the fallback deliberately'
+            : \sprintf(
+                'remove the "provider" entry from %s — the persisted Ctrl+P "Switch model" choice this run'
+                . ' selected it from — to select the fallback deliberately',
+                Bootstrap::userConfigPath(),
+            );
+
+        \fwrite(\STDERR, \sprintf(
+            "sugarcrush: provider '%s' is unusable: %s\n"
+            . "sugarcrush: refusing to silently answer from a different backend on a one-shot run"
+            . " — fix the provider configuration, or %s.\n",
+            $providerName,
+            $e->getMessage(),
+            $remedy,
+        ));
+
+        self::emitErrorDocument($outputFormat, 'provider_configuration', $e->getMessage(), $providerName);
+
+        return self::EXIT_CONFIG;
+    }
+
+    /**
+     * Say on stderr that this run has no provider at all and the reply below
+     * came from the offline {@see \SugarCraft\Crush\Providers\EchoProvider}.
+     *
+     * Not an error, and deliberately not fatal: with nothing configured
+     * nothing was substituted for anything, `sugarcrush -p "hi"` with zero
+     * config is the documented zero-network smoke test, and turning "no
+     * config" into a crash would make the offline provider unreachable from
+     * the one-shot path entirely rather than merely un-substitutable. But the
+     * CI caller who simply forgot to export `$SUGARCRUSH_PROVIDER` hits the
+     * same "plausible canned sentence" trap as the misconfigured one, so the
+     * run says so out loud on the stream that is not the result.
+     *
+     * Silent when `$SUGARCRUSH_BACKEND_CMD` is what got selected: that IS an
+     * explicit backend choice, and it really did run.
+     */
+    private static function noticeOfflineDefault(): void
+    {
+        if (Bootstrap::selectedProviderLabel()[0] !== 'echo') {
+            return;
+        }
+
+        \fwrite(
+            \STDERR,
+            "sugarcrush: no provider configured (SUGARCRUSH_PROVIDER and SUGARCRUSH_BACKEND_CMD unset,"
+            . " none persisted); answering from the offline echo provider.\n"
+        );
+    }
+
+    /**
+     * Write the machine-readable failure document, for `--output-format json`
+     * only.
+     *
+     * Every failure branch above already writes a human line to stderr, which
+     * is the whole story for `--output-format text`. It is NOT the whole story
+     * for JSON: a caller running `sugarcrush -p ... --output-format json | jq
+     * -r .result` reads stdout and nothing else, and on every failure path
+     * stdout used to be completely empty — so `jq` failed on an unexpected EOF
+     * and the caller learned nothing beyond "something went wrong somewhere in
+     * the pipeline". Emitting a document keeps the contract "if you asked for
+     * JSON, stdout is always one JSON object" true on both outcomes.
+     *
+     * `result` is present and null rather than omitted so a consumer reading
+     * only `.result` keeps working; `error.type` is the field to branch on.
+     *
+     * `error.type` is NOT the exit code by another name — the earlier claim
+     * that it "mirrors" it was wrong, because `usage` reaches this method from
+     * two different places. Each type does determine exactly one exit code,
+     * but the mapping is many-to-one:
+     *
+     *   `usage`                 -> {@see self::EXIT_CONFIG} (2), from the
+     *                              no-prompt branch here and from
+     *                              `bin/sugarcrush`'s pre-flight checks via
+     *                              {@see self::failUsage()}
+     *   `provider_configuration`-> {@see self::EXIT_CONFIG} (2)
+     *   `backend`               -> {@see self::EXIT_FAILURE} (1)
+     *   `encoding`              -> {@see self::EXIT_FAILURE} (1)
+     *
+     * A consumer that kept the exit code and wants to know WHICH kind of 2 it
+     * got is exactly who `type` is for.
+     */
+    private static function emitErrorDocument(string $outputFormat, string $type, string $message, ?string $provider): void
+    {
+        if ($outputFormat !== self::FORMAT_JSON) {
+            return;
+        }
+
+        $error = ['type' => $type, 'message' => $message];
+        if ($provider !== null) {
+            $error['provider'] = $provider;
+        }
+
+        try {
+            $json = self::encodeDocument(['result' => null, 'error' => $error]);
+        } catch (\JsonException) {
+            // Unreachable with the flags below, and handled anyway because an
+            // empty stdout is the one outcome this whole method exists to
+            // prevent. $type is always one of this class's own ASCII literals,
+            // so the replacement document is encodable by construction; only
+            // the provider-supplied message — the sole field that can carry
+            // bytes we do not control — is dropped.
+            $json = \sprintf(
+                '{"result":null,"error":{"type":"%s","message":"error message could not be encoded as JSON"}}',
+                $type,
+            );
+        }
+
+        echo $json . "\n";
+    }
+
+    /**
+     * Encode one contract document.
+     *
+     * WHY the flags, and why this is not an inline `json_encode()` any more:
+     * `json_encode()` returns `false` — not a partial string — on a single
+     * invalid UTF-8 byte, and `(string) false` is `''`, so the JSON contract
+     * broke in precisely the case it exists to cover. A provider exception
+     * quoting a response body (Guzzle embeds body excerpts, and a 500 from a
+     * proxy is routinely not UTF-8) put a bare newline on stdout at exit 1 and
+     * `jq` died on a syntax error — the empty pipe, from the code written to
+     * prevent it. `JSON_INVALID_UTF8_SUBSTITUTE` replaces those bytes with
+     * U+FFFD so a document is always produced, and `JSON_THROW_ON_ERROR` makes
+     * any other failure loud at the call site rather than silently empty.
+     *
+     * @param array<string, mixed> $document
+     *
+     * @throws \JsonException
+     */
+    private static function encodeDocument(array $document): string
+    {
+        $json = \json_encode(
+            $document,
+            \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR,
+        );
+
+        // json_encode() is declared `string|false`; JSON_THROW_ON_ERROR turns
+        // every false into an exception, so this is unreachable — asserted
+        // rather than silently cast, because the silent cast IS the bug above.
+        return $json === false
+            ? throw new \JsonException('json_encode() returned false without raising')
+            : $json;
     }
 
     /**
@@ -148,14 +457,24 @@ final class NonInteractive
      * which this step does not yet surface; a caller piping through `jq
      * '.usage'` per that recommendation's full intent gets nothing today.
      * Any value other than `self::FORMAT_JSON` falls back to plain text.
+     *
+     * The success path had the same invalid-UTF-8 hole the failure path did
+     * (see {@see self::encodeDocument()}): a model that returns a byte
+     * sequence PHP will not accept as UTF-8 — a hexdump, a file excerpt read
+     * by the Read tool, a mojibake'd paste — used to produce a bare newline at
+     * exit 0, which is the worst shape of all: an empty pipe that claims
+     * success. Those bytes are now substituted, and the residual impossible
+     * failure throws instead of returning `''`.
+     *
+     * @throws \JsonException When `--output-format json` was asked for and the
+     *   answer cannot be encoded even with invalid bytes substituted.
+     *   {@see self::run()} turns this into an `encoding`-typed document at
+     *   {@see self::EXIT_FAILURE}; never into an empty stdout.
      */
     public static function format(Message $message, string $outputFormat): string
     {
         if ($outputFormat === self::FORMAT_JSON) {
-            return (string) \json_encode(
-                ['result' => $message->content],
-                \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE
-            );
+            return self::encodeDocument(['result' => $message->content]);
         }
 
         return $message->content;

@@ -291,16 +291,85 @@ final class ArgvParserTest extends TestCase
     }
 
     /**
-     * `run` is only the subcommand alias as the very first argument — the
-     * existing "leave a later `run` untouched" contract must not start
-     * flipping promptRequested either.
+     * @return array<string, array{0: list<string>, 1: string|null}>
      */
-    public function testRunAsANonFirstArgumentDoesNotRequestAPrompt(): void
+    public static function runSubcommandPositions(): array
     {
-        $result = ArgvParser::parse(['sugarcrush', '--root=/tmp/x', 'run']);
+        return [
+            'first argument'            => [['sugarcrush', 'run', 'hi'], 'hi'],
+            'after --root='             => [['sugarcrush', '--root=/tmp/x', 'run', 'hi'], 'hi'],
+            'after --root <value>'      => [['sugarcrush', '--root', '/tmp/x', 'run', 'hi'], 'hi'],
+            'after --output-format'     => [['sugarcrush', '--output-format', 'json', 'run', 'hi'], 'hi'],
+            'after --output-format='    => [['sugarcrush', '--output-format=json', 'run', 'hi'], 'hi'],
+            'after a path positional'   => [['sugarcrush', '/tmp/x', 'run', 'hi'], 'hi'],
+            'with no prompt value'      => [['sugarcrush', '--output-format=json', 'run'], null],
+        ];
+    }
+
+    /**
+     * `run` is the subcommand alias wherever a bare operand can legitimately
+     * appear, not only at $argv[1].
+     *
+     * Pinning it to the first position meant any flag placed before it silently
+     * discarded the subcommand, leaving promptRequested false — so
+     * `sugarcrush --output-format json run` fell through bin/sugarcrush's
+     * dispatch into the blocking full-screen TUI. Same hang class as the
+     * `--version` fall-through (crush_code.md Phase 0 item 3), reopened by
+     * argument order alone.
+     *
+     * @param list<string> $argv
+     *
+     * @dataProvider runSubcommandPositions
+     */
+    public function testRunIsRecognizedAtAnyOperandPosition(array $argv, ?string $expectedPrompt): void
+    {
+        $result = ArgvParser::parse($argv);
+
+        $this->assertTrue($result->promptRequested, 'the subcommand was discarded, so bin/sugarcrush would open the TUI');
+        $this->assertSame($expectedPrompt, $result->prompt);
+        $this->assertSame([], $result->unknownFlags);
+    }
+
+    /**
+     * The two readings that must NOT become subcommands, kept from the
+     * original first-position-only rule: `run` supplied as a flag's VALUE is
+     * consumed by that flag and never reaches the subcommand test, and a
+     * second `run` after one-shot mode is already armed is an ordinary
+     * positional rather than a re-arm.
+     *
+     * @return array<string, array{0: list<string>, 1: string|null}>
+     */
+    public static function runAsAValueNotASubcommand(): array
+    {
+        return [
+            '-p run'          => [['sugarcrush', '-p', 'run'], 'run'],
+            '--prompt run'    => [['sugarcrush', '--prompt', 'run'], 'run'],
+            '--prompt=run'    => [['sugarcrush', '--prompt=run'], 'run'],
+            '--root run'      => [['sugarcrush', '--root', 'run', '-p', 'hi'], 'hi'],
+            'run run'         => [['sugarcrush', 'run', 'run'], 'run'],
+            '-p hi then run'  => [['sugarcrush', '-p', 'hi', 'run'], 'hi'],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     *
+     * @dataProvider runAsAValueNotASubcommand
+     */
+    public function testRunAsAFlagValueStaysAValue(array $argv, ?string $expectedPrompt): void
+    {
+        $result = ArgvParser::parse($argv);
+
+        $this->assertSame($expectedPrompt, $result->prompt);
+        $this->assertSame([], $result->unknownFlags);
+    }
+
+    public function testRunSuppliedAsARootValueDoesNotRequestAPrompt(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--root', 'run']);
 
         $this->assertFalse($result->promptRequested);
-        $this->assertNull($result->prompt);
+        $this->assertSame('run', $result->root);
     }
 
     // -------------------------------------------------------------------------
@@ -414,8 +483,11 @@ final class ArgvParserTest extends TestCase
     }
 
     /**
-     * `run` is the one non-`-`-prefixed token with flag semantics, and it is
-     * only special as the very first argument — which `--` now occupies.
+     * `run` is the one non-`-`-prefixed token with flag semantics, so the
+     * separator has to neutralise it like any other. This matters more now
+     * that `run` is recognised at any operand position rather than only at
+     * $argv[1]: `--` is the ONLY thing left that turns it back into a plain
+     * operand.
      */
     public function testDoubleDashDisablesTheRunSubcommandAlias(): void
     {
@@ -424,6 +496,20 @@ final class ArgvParserTest extends TestCase
         $this->assertFalse($result->promptRequested);
         $this->assertNull($result->prompt);
         $this->assertSame([], $result->unknownFlags);
+    }
+
+    /**
+     * The same, with a flag before the separator — the shape that would have
+     * regressed if the position rule had simply been dropped rather than
+     * moved below the two `--` branches.
+     */
+    public function testDoubleDashDisablesRunEvenWhenFlagsPrecedeIt(): void
+    {
+        $result = ArgvParser::parse(['sugarcrush', '--output-format=json', '--', 'run', 'hello']);
+
+        $this->assertFalse($result->promptRequested);
+        $this->assertNull($result->prompt);
+        $this->assertSame('json', $result->outputFormat);
     }
 
     /**

@@ -51,6 +51,20 @@ Environment variables:
   SUGARCRUSH_BACKEND_CMD Shell command for a custom backend adapter.
                          Receives JSON history on stdin, writes JSON reply to stdout.
 
+Exit codes (one-shot mode):
+  0                      The prompt ran and produced an answer
+  1                      Ran and failed: the backend threw (unreachable host,
+                         rejected key, model error) — a retry may help
+  2                      Usage or configuration error, nothing was attempted
+                         and a retry will not help: no prompt given, an
+                         unrecognized flag, a --root naming no directory, a
+                         missing composer autoload.php, or a selected provider
+                         that cannot be constructed — either
+                         $SUGARCRUSH_PROVIDER or the provider persisted in
+                         ~/.sugar-crush/config.json by Ctrl+P "Switch model".
+                         A one-shot run never falls back to the offline echo
+                         provider when a provider was explicitly selected.
+
 Examples:
   sugarcrush -p "Explain the difference between require and include"
   SUGARCRUSH_PROVIDER=anthropic SUGARCRUSH_MODEL=claude-sonnet-4-20250514 \

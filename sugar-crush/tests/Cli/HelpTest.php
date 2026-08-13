@@ -121,6 +121,25 @@ final class HelpTest extends TestCase
         $this->assertStringContainsString('sugarcrush run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)', $screen);
     }
 
+    /**
+     * The exit-2 list has to name BOTH sources a provider selection can come
+     * from. Listing only `$SUGARCRUSH_PROVIDER` sent an operator whose run
+     * failed over a persisted Ctrl+P "Switch model" choice looking for a
+     * variable nothing had set — the same omission the stderr hint carried.
+     */
+    public function testScreenDocumentsBothProviderSelectionSourcesInTheExitCodeList(): void
+    {
+        $screen = Help::screen();
+
+        $this->assertStringContainsString('Exit codes (one-shot mode):', $screen);
+        $this->assertStringContainsString('$SUGARCRUSH_PROVIDER', $screen);
+        $this->assertStringContainsString('~/.sugar-crush/config.json', $screen);
+        $this->assertStringContainsString('Switch model', $screen);
+        // "no prompt given" moved from 1 to 2 with the rest of the
+        // "nothing was attempted" causes; the screen must not still promise 1.
+        $this->assertStringContainsString('no prompt given, an', $screen);
+    }
+
     public function testScreenPointsAtReadme(): void
     {
         $screen = Help::screen();

@@ -18,7 +18,7 @@ use SugarCraft\Crush\Role;
  * one-shot CLI path (crush_feat.md section 2, Recommendations 2-4).
  *
  * Covered cases:
- *   - missing/blank prompt -> exit 1, never calls the backend
+ *   - missing/blank prompt -> exit 2, never calls the backend
  *   - a real Backend::complete() result -> echoed to stdout, exit 0
  *   - a thrown backend error -> exit 1, nothing echoed to stdout
  *   - --output-format text|json rendering
@@ -28,28 +28,63 @@ final class NonInteractiveTest extends TestCase
 {
     // -------------------------------------------------------------------------
     // run() — missing prompt (exit-code convention, Recommendation 4)
+    //
+    // 2, not 1: nothing is attempted on this branch — the backend argument is
+    // never even consulted — so it belongs with the other "the invocation is
+    // malformed, a retry cannot help" causes bin/sugarcrush already exits 2
+    // for. See NonInteractive::EXIT_CONFIG's docblock for why correcting it
+    // now (pre-1.0, no tagged release of this binary) rather than living with
+    // the inconsistency.
     // -------------------------------------------------------------------------
 
-    public function testRunReturnsOneWhenPromptIsNull(): void
+    public function testRunReturnsConfigErrorWhenPromptIsNull(): void
     {
         $args = ArgvParser::parse(['sugarcrush']);
 
         $this->assertNull($args->prompt);
-        $this->assertSame(1, NonInteractive::run($args, new EchoBackend()));
+        $this->assertSame(NonInteractive::EXIT_CONFIG, NonInteractive::run($args, new EchoBackend()));
     }
 
-    public function testRunReturnsOneWhenPromptIsEmptyString(): void
+    public function testRunReturnsConfigErrorWhenPromptIsEmptyString(): void
     {
         $args = ArgvParser::parse(['sugarcrush', '-p', '']);
 
-        $this->assertSame(1, NonInteractive::run($args, new EchoBackend()));
+        $this->assertSame(NonInteractive::EXIT_CONFIG, NonInteractive::run($args, new EchoBackend()));
     }
 
-    public function testRunReturnsOneWhenPromptIsWhitespaceOnly(): void
+    public function testRunReturnsConfigErrorWhenPromptIsWhitespaceOnly(): void
     {
         $args = ArgvParser::parse(['sugarcrush', '-p', '   ']);
 
-        $this->assertSame(1, NonInteractive::run($args, new EchoBackend()));
+        $this->assertSame(NonInteractive::EXIT_CONFIG, NonInteractive::run($args, new EchoBackend()));
+    }
+
+    /**
+     * The other half of the same decision: a backend that RAN and threw keeps
+     * exit 1, so the move above did not collapse the two into one code.
+     * Asserted here as a pair, in one test, rather than as two constants that
+     * happen to differ.
+     */
+    public function testAMissingPromptAndAThrowingBackendAreDistinguishableByExitCode(): void
+    {
+        $missing = NonInteractive::run(ArgvParser::parse(['sugarcrush', '-p', '']), new EchoBackend());
+        $threw = NonInteractive::run(
+            ArgvParser::parse(['sugarcrush', '-p', 'hi']),
+            new class implements Backend {
+                public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+                {
+                    throw new \RuntimeException('cURL error 7');
+                }
+
+                public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
+                {
+                    return \React\Promise\reject(new \RuntimeException('cURL error 7'));
+                }
+            },
+        );
+
+        $this->assertSame(2, $missing, 'nothing was attempted');
+        $this->assertSame(1, $threw, 'something was attempted and failed');
     }
 
     public function testRunDoesNotCallBackendWhenPromptMissing(): void
@@ -181,6 +216,44 @@ final class NonInteractiveTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // failUsage() — the shared entry point bin/sugarcrush's pre-flight errors
+    // use so they emit the SAME document this class does
+    // -------------------------------------------------------------------------
+
+    public function testFailUsageReturnsTheConfigExitCodeAndEmitsNothingInTextMode(): void
+    {
+        \ob_start();
+        $code = NonInteractive::failUsage('sugarcrush: unrecognized option: --bogus', NonInteractive::FORMAT_TEXT);
+        $stdout = (string) \ob_get_clean();
+
+        $this->assertSame(NonInteractive::EXIT_CONFIG, $code);
+        $this->assertSame('', $stdout, 'the document is opt-in; a text-mode caller redirecting stdout must not find JSON');
+    }
+
+    public function testFailUsageEmitsTheSameTypedDocumentTheOneShotPathDoes(): void
+    {
+        \ob_start();
+        $code = NonInteractive::failUsage(
+            'sugarcrush: --root /no/such/dir: no such directory',
+            NonInteractive::FORMAT_JSON,
+            'Try `sugarcrush --help` for the list of supported options.',
+        );
+        $stdout = (string) \ob_get_clean();
+
+        $this->assertSame(NonInteractive::EXIT_CONFIG, $code);
+
+        $decoded = \json_decode(\trim($stdout), true);
+        $this->assertIsArray($decoded);
+        $this->assertNull($decoded['result']);
+        $this->assertSame('usage', $decoded['error']['type']);
+        $this->assertSame('sugarcrush: --root /no/such/dir: no such directory', $decoded['error']['message']);
+        // The hint is prose for whoever is at the terminal; a machine consumer
+        // branches on error.type, so it stays out of the document.
+        $this->assertStringNotContainsString('--help', $stdout);
+        $this->assertArrayNotHasKey('provider', $decoded['error']);
+    }
+
+    // -------------------------------------------------------------------------
     // historyFrom()
     // -------------------------------------------------------------------------
 
@@ -286,5 +359,92 @@ final class NonInteractiveTest extends TestCase
     {
         $this->assertSame('text', NonInteractive::FORMAT_TEXT);
         $this->assertSame('json', NonInteractive::FORMAT_JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // format() / run() — invalid UTF-8 must not collapse the JSON contract
+    //
+    // `json_encode()` returns false, not a partial string, on one bad byte;
+    // `(string) false` is '', so the success path used to print a bare newline
+    // at exit 0 — an empty pipe that claims success. A model can emit these
+    // bytes without anything being wrong: a hexdump, a latin-1 file excerpt
+    // read back by the Read tool, a mojibake'd paste.
+    // -------------------------------------------------------------------------
+
+    /** Not valid UTF-8 in any encoding: a truncated 2-byte sequence plus a lone 0xFF. */
+    private const INVALID_UTF8 = "\xC3\x28\xFF";
+
+    public function testFormatJsonSubstitutesInvalidUtf8RatherThanReturningAnEmptyString(): void
+    {
+        $encoded = NonInteractive::format(Message::assistant('answer with ' . self::INVALID_UTF8 . ' bytes'), NonInteractive::FORMAT_JSON);
+
+        $this->assertNotSame('', $encoded);
+
+        $decoded = \json_decode($encoded, true);
+        $this->assertIsArray($decoded, 'json_decode failed on: ' . $encoded);
+        $this->assertStringStartsWith('answer with ', $decoded['result']);
+        $this->assertStringContainsString("\u{FFFD}", $decoded['result'], 'the bad bytes must be substituted, not silently dropped');
+    }
+
+    public function testRunEmitsAParseableDocumentWhenTheAnswerCarriesInvalidUtf8(): void
+    {
+        $args = ArgvParser::parse(['sugarcrush', '-p', 'hexdump this']);
+
+        \ob_start();
+        $code = NonInteractive::run($args, $this->fixedBackend('binary: ' . self::INVALID_UTF8), NonInteractive::FORMAT_JSON);
+        $stdout = (string) \ob_get_clean();
+
+        $this->assertSame(0, $code);
+        $this->assertGreaterThan(1, \strlen(\trim($stdout)), 'stdout was a bare newline again');
+        $this->assertIsArray(\json_decode(\trim($stdout), true), 'stdout was not JSON: ' . $stdout);
+    }
+
+    public function testRunEmitsAParseableDocumentWhenTheErrorMessageCarriesInvalidUtf8(): void
+    {
+        // The production shape: Guzzle embeds a response-body excerpt in the
+        // exception message, and a 500 from a proxy is routinely not UTF-8.
+        $args = ArgvParser::parse(['sugarcrush', '-p', 'hi']);
+        $backend = new class implements Backend {
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                throw new \RuntimeException("HTTP 500 Response body: \xC3\x28\xFF binary");
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
+            {
+                return \React\Promise\reject(new \RuntimeException('unused'));
+            }
+        };
+
+        \ob_start();
+        $code = NonInteractive::run($args, $backend, NonInteractive::FORMAT_JSON);
+        $stdout = (string) \ob_get_clean();
+
+        $this->assertSame(1, $code);
+
+        $decoded = \json_decode(\trim($stdout), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . \var_export($stdout, true));
+        $this->assertNull($decoded['result']);
+        $this->assertSame('backend', $decoded['error']['type']);
+        $this->assertStringStartsWith('HTTP 500 Response body: ', $decoded['error']['message']);
+    }
+
+    private function fixedBackend(string $reply): Backend
+    {
+        return new class($reply) implements Backend {
+            public function __construct(private readonly string $reply)
+            {
+            }
+
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                return Message::assistant($this->reply);
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
+            {
+                return \React\Promise\resolve($this->complete($history, $onToken));
+            }
+        };
     }
 }

@@ -631,9 +631,16 @@ final class Bootstrap
      * default paths have no provider name at all, so they are labelled
      * honestly as such rather than given an invented one.
      *
+     * Public because {@see NonInteractive::run()} needs to distinguish "this
+     * run is on the offline Echo default" from "this run is on
+     * `$SUGARCRUSH_BACKEND_CMD`" before it decides whether to warn that the
+     * answer did not come from a model — re-reading the same two env vars
+     * there would be a second copy of this precedence chain that could drift
+     * from {@see backend()}'s.
+     *
      * @return array{0: string, 1: string}
      */
-    private static function selectedProviderLabel(): array
+    public static function selectedProviderLabel(): array
     {
         $name = self::selectedProviderName();
         if ($name === null) {
@@ -661,8 +668,18 @@ final class Bootstrap
      * offline Echo default). Same precedence {@see backend()} applies:
      * `$SUGARCRUSH_PROVIDER`, then the name persisted by a previous Ctrl+P
      * "Switch model".
+     *
+     * Public because this is the exact question the one-shot path has to ask
+     * before choosing between {@see backend()}'s lenient fallback and {@see
+     * backendFor()}'s throw-don't-degrade contract (crush_code.md Phase 0
+     * item 10): a non-null answer means *this run asked for a specific
+     * provider*, and silently answering it from Echo is the bug. Exposing the
+     * existing helper rather than re-deriving the precedence in {@see
+     * NonInteractive} keeps ONE definition of "which provider did this run
+     * select", so the backend, the session row's recorded provider and the
+     * one-shot hard-fail can never disagree about it.
      */
-    private static function selectedProviderName(): ?string
+    public static function selectedProviderName(): ?string
     {
         $env = getenv('SUGARCRUSH_PROVIDER');
         if ($env !== false && $env !== '') {

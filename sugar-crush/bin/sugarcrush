@@ -11,8 +11,17 @@ declare(strict_types=1);
             return;
         }
     }
+    // 2, not 1, for the same reason every other pre-flight failure below is a
+    // 2: nothing was attempted and a retry cannot help — the install is
+    // incomplete. This is the ONE exit that cannot honour the
+    // `--output-format json` contract, and deliberately so: the document shape
+    // is owned by NonInteractive::emitErrorDocument(), and the autoloader that
+    // would load that class is exactly what is missing. Hand-rolling a second
+    // JSON document here to cover it would create the drift that centralising
+    // the shape exists to prevent, over a case a `| jq` consumer can only hit
+    // by running the binary out of a broken checkout. Documented in README.md.
     fwrite(STDERR, "sugarcrush: cannot find composer autoload.php\n");
-    exit(1);
+    exit(2);
 })();
 
 use SugarCraft\Core\Program;
@@ -37,15 +46,21 @@ if ($args->help) {
 // blocking full-screen TUI and spewed raw ANSI instead of failing — the same
 // bug class as the fixed "`--help` opens the TUI" (crush_code.md Phase 0
 // item 3). Checked after --help so `sugarcrush --help` still prints usage.
-// Exit 2 = usage error, distinct from NonInteractive's 1 = ran and failed.
+// Exit 2 = nothing was attempted and a retry cannot help, which is the same
+// meaning NonInteractive gives it; 1 stays reserved for "ran and failed".
+//
+// Reported through NonInteractive::failUsage() rather than fwrite+exit here:
+// this branch is one of the three exit-2 causes the README's JSON contract
+// covers, and it used to leave stdout completely empty under
+// `--output-format json`, which is the empty pipe that contract promises never
+// happens.
 if ($args->unknownFlags !== []) {
-    fwrite(
-        STDERR,
+    exit(NonInteractive::failUsage(
         'sugarcrush: unrecognized option' . (count($args->unknownFlags) === 1 ? '' : 's') . ': '
-        . implode(', ', $args->unknownFlags) . "\n"
-        . "Try `sugarcrush --help` for the list of supported options.\n"
-    );
-    exit(2);
+        . implode(', ', $args->unknownFlags),
+        $args->outputFormat,
+        'Try `sugarcrush --help` for the list of supported options.',
+    ));
 }
 
 // A --root that names no directory is a usage error too, and for a sharper
@@ -55,8 +70,7 @@ if ($args->unknownFlags !== []) {
 // usage error (crush_code.md Phase 0 item 6).
 $rootError = ArgvParser::rootError($args);
 if ($rootError !== null) {
-    fwrite(STDERR, $rootError . "\n");
-    exit(2);
+    exit(NonInteractive::failUsage($rootError, $args->outputFormat));
 }
 
 // Dispatch on "the user asked for one-shot mode", NOT on "a prompt value was

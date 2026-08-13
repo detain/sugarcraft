@@ -34,8 +34,8 @@ final class ArgvParser
      * Flag precedence (same flag, different forms):
      *   -p <value>       -> prompt = <value>
      *   --prompt <value> -> prompt = <value>
-     *   run <value>      -> prompt = <value> (only as the very first argument;
-     *                       see below)
+     *   run <value>      -> prompt = <value> (at any operand position, i.e.
+     *                       not as a flag's value and not after `--`)
      *   --help           -> help = true
      *   -h               -> help = true
      *   --output-format <value>       -> outputFormat = <value>
@@ -103,12 +103,26 @@ final class ArgvParser
 
             // `run "<prompt>"` — the positional-subcommand alias for
             // -p "<prompt>" that Help::screen() and NonInteractive::run()'s
-            // own usage message both advertise. Only recognised as the very
-            // first argument (immediately after the script name), matching
-            // the documented `sugarcrush run "<prompt>"` invocation form and
-            // leaving a `run` appearing anywhere else (e.g. as a -p value)
-            // untouched.
-            if ($i === 1 && $arg === 'run') {
+            // own usage message both advertise.
+            //
+            // Recognised wherever a bare operand can legitimately appear, not
+            // only at $i === 1. Every flag VALUE is consumed inline by its own
+            // branch below (`$argv[++$i]`) and so never reaches this test, and
+            // the two `--` branches above already claimed everything after the
+            // separator — so a `run` arriving here is genuinely a standalone
+            // operand. Pinning it to the first position meant ANY flag before
+            // it silently discarded the subcommand: `sugarcrush
+            // --output-format json run` parsed to promptRequested=false and
+            // fell through bin/sugarcrush's dispatch into the blocking
+            // full-screen TUI — the same hang crush_code.md Phase 0 item 3
+            // fixed for `--version`, reopened by flag order alone.
+            //
+            // $promptRequested guards the SECOND occurrence, which keeps the
+            // two documented non-subcommand readings intact: `-p run` is a
+            // prompt (its value was consumed by the -p branch, so it never
+            // reaches here at all), and `sugarcrush run run` is a prompt of
+            // "run" rather than a subcommand that re-arms itself.
+            if ($arg === 'run' && !$promptRequested) {
                 $prompt = $argv[$i + 1] ?? null;
                 $promptRequested = true;
                 $i += 2;
