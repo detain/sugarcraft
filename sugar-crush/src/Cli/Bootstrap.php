@@ -17,6 +17,7 @@ use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Skills\SkillPathNudge;
@@ -82,6 +83,13 @@ final class Bootstrap
             // (crush_feat.md §1 E1) - hooks that a call gets gated by on the
             // engine pipeline would silently not apply on this one.
             hooks: self::hooks(),
+            // Without a supervisor instance /bg answers "Background sessions
+            // not configured" on every real run, which leaves crush_feat.md
+            // §5 E3 (`/bg` dispatching onto BackgroundSupervisor) implemented
+            // everywhere except where a user can reach it. One supervisor per
+            // launch: it owns the spawned sessions' IPC table, and a second
+            // instance would not know about the first's children.
+            backgroundSupervisor: new BackgroundSupervisor(),
         );
     }
 

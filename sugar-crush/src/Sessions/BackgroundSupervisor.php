@@ -45,6 +45,14 @@ final class BackgroundSupervisor implements SessionNotificationInterface
     /** Tracks per-session token output rates to detect stalls. */
     private StallDetector $stallDetector;
 
+    /**
+     * Last observed buffer-file mtime per session — the daemon's liveness
+     * signal. See {@see self::tick()}.
+     *
+     * @var array<string, int>
+     */
+    private array $bufferMtimes = [];
+
     public function __construct(
         ?SessionNotificationInterface $listener = null,
         ?StallDetector $stallDetector = null,
@@ -118,8 +126,10 @@ final class BackgroundSupervisor implements SessionNotificationInterface
      * Spawn a new background session as a child process with IPC.
      *
      * Uses proc_open() to launch a subprocess that connects back to the
-     * supervisor over a Unix socket. The subprocess daemonizes and runs
-     * the agent task independently, streaming output over IPC.
+     * supervisor over a Unix socket. The subprocess daemonizes and then hands
+     * control to {@see BackgroundSessionRunner}, which forks a worker running
+     * the real agent turn for $task and appends its answer to the session
+     * buffer file while the daemon keeps servicing HEARTBEAT/RESUME/STOP.
      *
      * @return BackgroundSession The newly spawned session
      * @throws \RuntimeException If child fails to connect within timeout
@@ -153,16 +163,31 @@ final class BackgroundSupervisor implements SessionNotificationInterface
         }
         stream_set_timeout($serverSocket, 5);
 
-        // Build command to run the session subprocess
-        // The subprocess will: daemonize, connect to socket, stream output
+        // Build command to run the session subprocess.
+        // The subprocess will: daemonize, connect to socket, run the task.
         $cmd = sprintf(
-            'php -r %s',
-            escapeshellarg($this->buildSessionDaemonCode($socketPath, $bufferPath, $sessionId, $task, $agent->model ?? 'unknown'))
+            '%s -r %s',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg($this->buildSessionDaemonCode(
+                $socketPath,
+                $bufferPath,
+                $sessionId,
+                $task,
+                $workingDirectory,
+                $agent->provider,
+                $agent->model,
+                $timeoutSeconds,
+            ))
         );
 
+        // Daemon stdout/stderr go to a sidecar log rather than the session
+        // buffer: the buffer is the curated transcript reconnect() restores
+        // as session output, and a stray provider warning printed on stderr
+        // must not end up quoted back to the user as model output.
+        $logPath = $bufferPath . '.log';
         $proc = proc_open(
             $cmd,
-            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            [['file', '/dev/null', 'r'], ['file', $logPath, 'a'], ['file', $logPath, 'a']],
             $pipes
         );
 
@@ -172,11 +197,6 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             @unlink($bufferPath);
             throw new \RuntimeException('Failed to spawn session process');
         }
-
-        // Close child's stdin — we don't write to it
-        fclose($pipes[0]);
-        // Close child's stderr — output goes to socket
-        fclose($pipes[2]);
 
         // Wait for child to connect to our socket (with timeout)
         $clientSocket = @stream_socket_accept($serverSocket, 5);
@@ -188,15 +208,8 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             throw new \RuntimeException('Session process failed to connect to IPC channel within timeout');
         }
 
-        // Get child PID
-        $procStatus = proc_get_status($proc);
-        $childPid = $procStatus['pid'];
-
         // Close the server socket — we only needed it to accept the connection
         fclose($serverSocket);
-
-        // Close the parent's copy of stdout pipe — we read via socket now
-        fclose($pipes[1]);
 
         // Create and register the session
         $session = new BackgroundSession(
@@ -209,12 +222,17 @@ final class BackgroundSupervisor implements SessionNotificationInterface
             tags: $tags,
         );
 
-        // Read initial handshake from child (session ID confirmation)
+        // Read the handshake and take the DAEMON's pid from it. The pid
+        // proc_get_status() reports belongs to the `php -r` launcher, which
+        // exits during the daemon's double fork — tracking that one makes
+        // isProcessRunning() false immediately and reconnect() would report
+        // every freshly spawned session as already Completed.
         stream_set_timeout($clientSocket, 2);
         $handshake = @fgets($clientSocket);
-        // Handshake is optional — child may have already written output
-
         fclose($clientSocket);
+
+        $childPid = self::parseHandshakePid(is_string($handshake) ? $handshake : '')
+            ?? (proc_get_status($proc)['pid'] ?? 0);
 
         $session = $session->withStatus(BackgroundSessionStatus::Running);
 
@@ -229,19 +247,36 @@ final class BackgroundSupervisor implements SessionNotificationInterface
     }
 
     /**
-     * Build the daemon code that the child process runs.
+     * Build the bootstrap code that the child process runs.
+     *
+     * It does exactly three things — daemonize, load the autoloader, hand off
+     * to {@see BackgroundSessionRunner::main()} — because code embedded in a
+     * `php -r` string cannot be unit-tested, static-analysed or read
+     * comfortably. The agent loop itself therefore lives in a real class.
      */
-    private function buildSessionDaemonCode(
+    public function buildSessionDaemonCode(
         string $socketPath,
         string $bufferPath,
         string $sessionId,
         string $task,
+        string $workingDirectory,
+        string $provider,
         string $model,
+        int $timeoutSeconds,
     ): string {
-        // This code is run in the child process and daemonizes it
+        $config = [
+            'sessionId' => $sessionId,
+            'socketPath' => $socketPath,
+            'bufferPath' => $bufferPath,
+            'task' => $task,
+            'workingDirectory' => $workingDirectory,
+            'provider' => $provider,
+            'model' => $model,
+            'timeoutSeconds' => $timeoutSeconds,
+        ];
+
         return sprintf(
             '
-// Daemonize
 umask(0);
 $pid = pcntl_fork();
 if ($pid < 0) { exit(1); }
@@ -251,49 +286,71 @@ $pid = pcntl_fork();
 if ($pid < 0) { exit(1); }
 if ($pid > 0) { exit(0); }
 
-// Close stdio
-fclose(STDIN);
-fclose(STDOUT);
-fclose(STDERR);
-
-// Reopen stderr to buffer file
-$buffer = fopen(%s, "a");
-
-// Connect to supervisor Unix socket
-$supervisor = stream_socket_client(%s, $errno, $errstr, 2);
-if (!$supervisor) {
-    file_put_contents($buffer, "[session:connect:error] {$errstr}\n");
+$autoload = %s;
+if ($autoload === null || !is_file($autoload)) {
+    file_put_contents(%s, "[session:bootstrap:error] composer autoload not found\n", FILE_APPEND);
     exit(1);
 }
-stream_set_timeout($supervisor, 1);
+require $autoload;
 
-// Send handshake
-fwrite($supervisor, %s . "\n");
-fflush($supervisor);
-
-// Read commands and stream output
-while (!feof($supervisor)) {
-    $cmd = trim(fgets($supervisor));
-    if ($cmd === "RESUME" || $cmd === "HEARTBEAT") {
-        // Acknowledge with session info
-        fwrite($supervisor, "OK:session={$sessionId}\n");
-        fwrite($buffer, "[session:heartbeat] pid={$pid}\n");
-    } elseif ($cmd === "STOP") {
-        fwrite($supervisor, "OK:stopping\n");
-        break;
-    }
-    usleep(100000); // 100ms
-}
-
-// Cleanup
-fclose($supervisor);
-file_put_contents($buffer, "[session:daemon:exit]\n", FILE_APPEND);
-exit(0);
+exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, true)));
 ',
+            var_export(self::autoloadPath(), true),
             var_export($bufferPath, true),
-            var_export('unix://' . $socketPath, true),
-            var_export($sessionId, true)
+            var_export((string) json_encode($config), true)
         );
+    }
+
+    /**
+     * Locate the composer autoloader the daemon must require.
+     *
+     * Asks the live ClassLoader first so the daemon loads the very same
+     * autoloader this process is running under, whether sugar-crush is the
+     * root package or installed under someone else's vendor/.
+     */
+    public static function autoloadPath(): ?string
+    {
+        foreach (spl_autoload_functions() ?: [] as $callable) {
+            if (is_array($callable) && $callable[0] instanceof \Composer\Autoload\ClassLoader) {
+                $file = (new \ReflectionClass($callable[0]))->getFileName();
+                if (is_string($file)) {
+                    $candidate = dirname($file, 2) . '/autoload.php';
+                    if (is_file($candidate)) {
+                        return $candidate;
+                    }
+                }
+            }
+        }
+
+        foreach ([__DIR__ . '/../../vendor/autoload.php', __DIR__ . '/../../../../autoload.php'] as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract the daemon PID from a `HELLO:<sessionId>:<pid>` handshake.
+     *
+     * Returns null for anything else so a malformed or missing handshake
+     * falls back to the launcher PID rather than tracking pid 0.
+     */
+    public static function parseHandshakePid(string $handshake): ?int
+    {
+        $handshake = trim($handshake);
+        if (!str_starts_with($handshake, BackgroundSessionRunner::HANDSHAKE_PREFIX)) {
+            return null;
+        }
+
+        $parts = explode(':', $handshake);
+        $pid = end($parts);
+        if (!is_string($pid) || !ctype_digit($pid) || (int) $pid <= 0) {
+            return null;
+        }
+
+        return (int) $pid;
     }
 
     /**
@@ -315,10 +372,11 @@ exit(0);
     /**
      * Tick the supervisor — call this periodically to check session health.
      *
-     * Each active session is checked for stalled heartbeat. A session that
-     * was previously not stalled but now exceeds the heartbeat timeout is
-     * marked Stalled and the listener is notified. Sessions that resume
-     * heartbeating after being stalled are also notified.
+     * A spawned session whose daemon has exited is settled first (see
+     * {@see self::reapFinishedDaemon()}); the rest are checked for stalled
+     * heartbeat. A session that was previously not stalled but now exceeds the
+     * heartbeat timeout is marked Stalled and the listener is notified.
+     * Sessions that resume heartbeating after being stalled are also notified.
      *
      * @param int|null $now Unix timestamp for testing injection; defaults to time()
      */
@@ -330,6 +388,12 @@ exit(0);
             if (!$session->isActive()) {
                 continue;
             }
+
+            if ($this->reapFinishedDaemon($id, $session)) {
+                continue;
+            }
+
+            $this->absorbDaemonHeartbeat($id, $session);
 
             $wasStalled = $session->status === BackgroundSessionStatus::Stalled;
             $isStalled = $session->isStalled(self::HEARTBEAT_TIMEOUT_SECS);
@@ -345,6 +409,129 @@ exit(0);
                 $this->sessions[$id] = $newSession;
                 $this->onSessionResumed($newSession);
             }
+        }
+    }
+
+    /**
+     * Settle a spawned session whose daemon has exited, and report its answer.
+     *
+     * The daemon exits the instant its task settles (see
+     * {@see BackgroundSessionRunner::supervise()}), so a dead pid IS the
+     * completion signal — and it is the only one, since the spawn connection
+     * is long gone by then. Without reaping here a session that finished
+     * SUCCESSFULLY merely stops touching its buffer file, which
+     * {@see self::absorbDaemonHeartbeat()} cannot tell apart from a wedged
+     * daemon: the user was told a finished session had "stalled", never saw
+     * the answer the worker wrote into the buffer, and the session stayed
+     * active forever, holding the TUI's background poll open for the rest of
+     * the process.
+     *
+     * @return bool true when the session was settled and needs no stall check
+     */
+    private function reapFinishedDaemon(string $id, BackgroundSession $session): bool
+    {
+        $ipc = $this->sessionIpc[$id] ?? null;
+        // pid 0 means BOTH the handshake and proc_get_status() failed, so this
+        // daemon's liveness is unknown — fall through to the stall check
+        // rather than declaring a session finished that we cannot observe.
+        if ($ipc === null || $ipc['pid'] <= 0 || $this->isProcessRunning($ipc['pid'])) {
+            return false;
+        }
+
+        $buffer = (string) @file_get_contents($ipc['bufferPath']);
+        $output = self::restoreOutput($buffer);
+        if ($output !== '') {
+            $session = $session->withOutput($output);
+        }
+
+        $failed = self::bufferReportsFailure($buffer);
+        $session = $session->withStatus(
+            $failed ? BackgroundSessionStatus::Failed : BackgroundSessionStatus::Completed
+        );
+
+        $this->sessions[$id] = $session;
+        unset($this->bufferMtimes[$id]);
+
+        if ($failed) {
+            $this->onSessionFailed($session);
+        } else {
+            $this->onSessionCompleted($session);
+        }
+
+        return true;
+    }
+
+    /**
+     * Pull the model's answer out of a session buffer file.
+     *
+     * `[session:` lines are the daemon's own bookkeeping — heartbeats, task
+     * lifecycle, bootstrap errors — and must never be quoted back to the user
+     * as model output.
+     */
+    private static function restoreOutput(string $buffer): string
+    {
+        $restored = '';
+        foreach (explode("\n", trim($buffer)) as $line) {
+            if ($line === '' || str_starts_with($line, '[session:')) {
+                continue;
+            }
+            $restored .= $line . "\n";
+        }
+
+        return $restored;
+    }
+
+    /**
+     * Decide a settled session's outcome from the last `[session:task:...]`
+     * record its daemon wrote.
+     *
+     * Anything other than a completion record — failed, timeout, stopped, a
+     * lone `start` from a daemon that died mid-turn, or no record at all —
+     * counts as a failure. Reporting those as Completed would be the same
+     * class of lie as the old "Backgrounded as <id>" for work that never ran.
+     */
+    private static function bufferReportsFailure(string $buffer): bool
+    {
+        $outcome = null;
+        foreach (explode("\n", $buffer) as $line) {
+            if (!str_starts_with($line, '[session:task:')) {
+                continue;
+            }
+            $rest = substr($line, strlen('[session:task:'));
+            $end = strpos($rest, ']');
+            $outcome = $end === false ? $rest : substr($rest, 0, $end);
+        }
+
+        return !in_array($outcome, ['complete', 'completed'], true);
+    }
+
+    /**
+     * Record a heartbeat for a spawned session whose daemon is still writing.
+     *
+     * {@see BackgroundSessionRunner} stamps a heartbeat record into the
+     * session buffer every few seconds, so an advancing buffer mtime is proof
+     * the daemon is alive. Without this every genuinely running spawned
+     * session went Stalled after HEARTBEAT_TIMEOUT_SECS, because nothing ever
+     * called recordHeartbeat() after construction. Reading an mtime keeps
+     * tick() non-blocking — a wedged daemon stops touching the file and is
+     * still correctly reported as stalled.
+     */
+    private function absorbDaemonHeartbeat(string $id, BackgroundSession $session): void
+    {
+        $bufferPath = $this->sessionIpc[$id]['bufferPath'] ?? null;
+        if ($bufferPath === null) {
+            return;
+        }
+
+        clearstatcache(true, $bufferPath);
+        $mtime = @filemtime($bufferPath);
+        if ($mtime === false) {
+            return;
+        }
+
+        if (($this->bufferMtimes[$id] ?? 0) !== $mtime) {
+            $this->bufferMtimes[$id] = $mtime;
+            $session->recordHeartbeat();
         }
     }
 
@@ -381,16 +568,7 @@ exit(0);
                 $bufferContent = file_get_contents($ipc['bufferPath']);
                 if ($bufferContent !== '' && $session->output === '') {
                     // Buffer has content and session output is empty (first reconnect)
-                    // Parse buffered output lines and restore them
-                    $lines = explode("\n", trim($bufferContent));
-                    $restoredOutput = '';
-                    foreach ($lines as $line) {
-                        // Skip internal log lines, preserve actual output
-                        if (str_starts_with($line, '[session:') || $line === '') {
-                            continue;
-                        }
-                        $restoredOutput .= $line . "\n";
-                    }
+                    $restoredOutput = self::restoreOutput((string) $bufferContent);
                     if ($restoredOutput !== '') {
                         $session = $session->withOutput($restoredOutput);
                         $this->sessions[$id] = $session;
