@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\View;
 use SugarCraft\Crush\App\App;
@@ -504,6 +506,66 @@ final class BootstrapTest extends TestCase
             \SugarCraft\Crush\Sessions\BackgroundSupervisor::class,
             $chat->backgroundSupervisor(),
         );
+    }
+
+    public function testSlashBgOnABootstrappedChatDefersASpawnInsteadOfSayingItIsNotConfigured(): void
+    {
+        // The instance check above proves the field is set; this proves the
+        // command a user actually types gets past the null guard in
+        // Chat::handleBackgroundCommand() and hands back the spawn Cmd
+        // (crush_feat.md §5 E3). Against a Bootstrap that does not pass a
+        // supervisor this fails on both assertions at once.
+        [$next, $cmd] = $this->submitLine(Bootstrap::chat($this->isolatedHome()), '/bg run the tests');
+
+        $this->assertStringNotContainsString('Background sessions not configured', self::transcript($next));
+        // The Cmd is deliberately NOT invoked: spawnSession() forks a real
+        // daemon and blocks on a socket handshake.
+        $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    public function testSlashForkOnABootstrappedChatReachesTheSupervisorToo(): void
+    {
+        // /fork needs three things wired at once - the supervisor, the
+        // session store, and a seeded currentSessionId - and answers with a
+        // different refusal for each, so it is the strictest check that
+        // Bootstrap::chat() hands Chat a complete background setup.
+        [$next, $cmd] = $this->submitLine(Bootstrap::chat($this->isolatedHome()), '/fork keep porting');
+
+        $transcript = self::transcript($next);
+        $this->assertStringNotContainsString('Background sessions not configured', $transcript);
+        $this->assertStringNotContainsString('Session store not configured', $transcript);
+        $this->assertStringNotContainsString('No active session', $transcript);
+        $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    /**
+     * Type $line into $chat one key at a time and press Enter, mirroring
+     * ChatTest's helper — including the extra Enter the "/" popup eats.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function submitLine(Chat $chat, string $line): array
+    {
+        foreach (preg_split('//u', $line, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+            [$chat] = $chat->update(
+                $char === ' ' ? new KeyMsg(KeyType::Space, '') : new KeyMsg(KeyType::Char, $char),
+            );
+        }
+
+        if ($chat->slashMenuMatches() !== []) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        }
+
+        /** @var array{0:Chat,1:?\Closure} $result */
+        $result = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        return $result;
+    }
+
+    /** Every message body in $chat's transcript, joined. */
+    private static function transcript(Chat $chat): string
+    {
+        return implode("\n", array_map(static fn($message): string => $message->content, $chat->history));
     }
 
     private static function peek(object $object, string $property): mixed
