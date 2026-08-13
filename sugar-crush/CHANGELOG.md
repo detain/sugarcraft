@@ -7,7 +7,134 @@ found to contradict each other and the actual code during the remediation
 audit described below, so treat *this* file plus `git log` as the source of
 truth going forward.
 
-## Remediation pass (current)
+## Feature-parity pass (current) — 2026-08
+
+Driven by `crush_feat.md` at the monorepo root: a 12-agent comparison of
+sugar-crush against `opencode` and Claude Code. Its dominant finding was not
+"features are missing" but **"most of this was already built and never wired
+into the live runtime"** — so most of the work below is connection, not
+construction. Waves are gated on the full suite staying green.
+
+Note on numbering: these waves are a *separate* pass from the
+`crush_code_update.md` remediation waves recorded further down this file, which
+happen to share the numbers 1–4.
+
+### Wave 1 — provider correctness, context, skills, CLI (2026-08)
+
+- **Provider/wire fixes** — corrected streaming tool-call parsing; added
+  parser-agnostic reasoning extraction (so a server that splits
+  `reasoning_content` and one that inlines `<think>` both work); send SGLang
+  route extras and sampling params on the wire; detect and report MiniMax's
+  `</parameter>` tool-call truncation instead of silently mangling arguments;
+  added `ToolCallParserInterface` with two implementations and wired it into
+  `ProviderFactory`; fixed `contextWindow()`.
+- **Context files** — new `EnvironmentBlock` (cwd/platform/git/date) prepended
+  to system prompts; new `ImportResolver` giving `CLAUDE.md`/`AGENTS.md`
+  `@import` expansion; wired instruction files into the system prompt and
+  stopped double-injecting imported docs; forced instructions now sourced from
+  user config.
+- **Skills** — skill matching, a model-invocable `Skill` tool (level 2 of
+  progressive disclosure), and cross-tool skill import; a
+  `ForeignAgentPresetRegistry` for Claude Code and opencode agent presets;
+  import of foreign CLI memory trees into `MemoryStore`.
+- **Non-interactive CLI** — `-p`/`run "<prompt>"`, `--output-format json`,
+  `--root`, and a fix for `--help` opening a blocking TUI instead of printing.
+- **Diffs** — a real unified diff on `ToolResult`, and no-op edits stopped
+  being reported as success.
+- **Images** — added the candy-mosaic dependency, image-bearing tool results,
+  and a `/doctor` capability-probe tool.
+
+### Wave 2 — the live chat surface (2026-08)
+
+- **Tool-lifecycle events** — an `onEvent` callback threaded through
+  `EngineBackend`/`Runtime`; the two rival `ToolCall`/`ToolResult` type pairs
+  reconciled into one; `Chat` wired to consume the event stream; hook gating
+  routed through the single unified tool-call path (previously `Chat`'s own
+  `registerTool()` calls were the one unguarded tool path in the binary).
+- **Permissions** — `HookResult::ask()` and a genuinely *blocking*
+  request/reply flow, rendered as a Veil modal. A follow-up closed a fail-open
+  in `Runtime::settleAsk()`'s answer handling.
+- **Transcript rendering** — Edit/Write diffs in the transcript; a per-tool-call
+  human-readable description; collapse/expand of tool output with
+  hide-on-success as the default (`Ctrl+O`); denied and interrupted calls as
+  distinct visual states; tool-result images via `ImageLayer`/`ImageOverlay`.
+- **Commands & palette** — `PaletteAction` and `CommandRegistry` collapsed into
+  one source; fuzzy-match highlighting, category grouping and MRU bias;
+  file-based custom commands loaded from disk; `/mcp` made a real command;
+  provenance badges in the skills picker.
+- **Mouse** — mouse mode enabled and `Mark`/`Scanner` wired into the root
+  render pass; wheel scrolling; click-to-expand a tool call; click-to-switch
+  session tab and pane; click-to-select in the palette/picker; and suppression
+  of zone clicks that were really text-selection drags.
+- **Sessions** — auto-generated session titles via a background small-model
+  call.
+- A follow-up guarded the **image-marker vs zone-sentinel collision**:
+  candy-core's image markers and candy-mouse's zone sentinels both live in
+  U+E000–U+F8FF, so `Renderer::maskImageMarkers()` masks that block out of the
+  copy the mouse `Scanner` reads.
+
+### Wave 3 — boot path, sessions, panes (2026-08)
+
+- **A real session at boot** — `Bootstrap::chat()` now seeds a session row and
+  sets `currentSessionId`. Without it the Wave-2 auto-title call could never
+  fire and `/sessions` had nothing to list.
+- **Pane-shell migration** — this wave's original plan called for *deleting*
+  the `App`/`Tui\Renderer` layer as dead code. That was superseded mid-wave
+  (commit `beacaace`) once it became clear `App` is the live engine's state
+  object, not dead TUI scaffolding. The merge branch was taken instead: `App`
+  became a candy-core `Model` hosting `Chat`, `ChatPane` delegates to the live
+  `Renderer`, shell keys route through `KeyboardHandler`, `bin/sugarcrush`
+  boots via `Bootstrap::app()`, the remaining panes were wired to real data,
+  and mouse events were rebased into the zone registry's coordinate space.
+  The earlier delete commit (`9243aa2a`) was reverted.
+- **Navigation** — `Ctrl+Tab`/`Ctrl+Shift+Tab` session cycling; a live session
+  picker that persists across turns; a real `subscriptions()` heartbeat/poll
+  pump; `/bg` and `/fork`.
+- **Agents** — sub-agent execution routed through `AgentManager` so agent
+  telemetry is real rather than synthesized; real elapsed/token/cost numbers;
+  `AgentDashboardPane` bound into the live shell; each `AgentWorkerPool` given
+  a private `0700` IPC directory.
+- **Skills** — the subsystem made genuinely populated, and paths-based
+  auto-scoping wired into the live tool-touch path.
+- **Live-run fixes found by actually using it** — a 400 Bad Request on *every*
+  SGLang message (an empty PHP tool-schema array encodes as `[]`, not `{}`);
+  a second 400 on any turn that called a tool (`tool_calls` encoded as `{}`);
+  `Ctrl+C` not exiting (candy-core normalizes control bytes, so `^C` arrives as
+  `ctrl+rune c`, never the raw `\x03` the code tested for); tool stderr leaking
+  onto the terminal under the TUI; `Tab` stranding the user on panes the strip
+  never offered; the menu bar being unopenable; and `Page Up`/`Page Down`
+  transcript scrolling.
+
+### Wave 3 follow-ups — live-run polish (2026-08)
+
+- Tool events **stream** from the forked child instead of being buffered until
+  the turn ends, with an idle timeout; tool calls appear in the transcript
+  live, running-then-done; the command a tool ran is shown.
+- Shell `Cmd` objects are consumed so menu `Enter` and skill-picker selection
+  actually act; the menu bar responds to the mouse.
+- `/bg` genuinely runs the backgrounded task (a `BackgroundSupervisor` is
+  constructed per launch — without one, `/bg` answered "Background sessions not
+  configured" on every real run).
+- Image-bearing tool results are labelled and collapsible; context usage is
+  shown as a token count as well as a percentage; the Settings pane got real
+  content.
+
+### Wave 4 — verification and documentation (2026-08)
+
+- **Reachability tests** (`tests/Integration/`) asserting that the session
+  store, session tabs, background sessions, the skills subsystem, mouse mode,
+  the environment block and root context-file loading are reached from
+  `bin/sugarcrush` → `Bootstrap::app()` — the tier that would have caught the
+  original build's "well-tested but unwired" failures.
+- **Documentation catch-up** (this entry): `README.md` rewritten around what
+  the binary actually does now — non-interactive mode, the key/mouse/slash
+  reference, the pane-shell architecture, and an honest `Limitations` section;
+  this changelog section; and new `CALIBER_LEARNINGS.md` entries for the
+  gotchas this pass surfaced.
+
+No on-disk format changed in this pass. Sessions written before it still load.
+
+## Remediation pass
 
 An independent line-by-line audit of the original P0–P7 build (recorded in
 the monorepo root's `crush_code_update.md`) found that a large fraction of
