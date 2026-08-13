@@ -493,6 +493,19 @@ final class BootstrapTest extends TestCase
         return $this->tmpHome;
     }
 
+    public function testChatCarriesABackgroundSupervisorSoSlashBgIsUsable(): void
+    {
+        // Without this, /bg answers "Background sessions not configured" on
+        // every real run and crush_feat.md §5 E3 is unreachable from the
+        // binary (the daemon it dispatches to is never even spawned).
+        $chat = Bootstrap::chat($this->isolatedHome());
+
+        $this->assertInstanceOf(
+            \SugarCraft\Crush\Sessions\BackgroundSupervisor::class,
+            $chat->backgroundSupervisor(),
+        );
+    }
+
     private static function peek(object $object, string $property): mixed
     {
         $prop = new \ReflectionProperty($object, $property);

@@ -62,7 +62,31 @@ final class BackgroundSession
      */
     public function withStatus(BackgroundSessionStatus $status): self
     {
-        return new self(
+        return $this->mutate($status, $this->output);
+    }
+
+    /**
+     * Update the accumulated output.
+     */
+    public function withOutput(string $output): self
+    {
+        return $this->mutate($this->status, $output);
+    }
+
+    /**
+     * Build the successor instance for a with*() call.
+     *
+     * The constructor stamps $lastHeartbeat with time(), so a bare `new self`
+     * forged a fresh heartbeat on every status change: the supervisor marked a
+     * silent session Stalled, that very act reset its heartbeat clock, and the
+     * next tick saw a "healthy" session and announced it Running again —
+     * flapping stalled/running notices into the transcript forever. Carrying
+     * the real heartbeat across means stalled → running only fires when a
+     * heartbeat genuinely arrived.
+     */
+    private function mutate(BackgroundSessionStatus $status, string $output): self
+    {
+        $clone = new self(
             id: $this->id,
             name: $this->name,
             agent: $this->agent,
@@ -72,27 +96,11 @@ final class BackgroundSession
             tags: $this->tags,
             createdAt: $this->createdAt,
             status: $status,
-            output: $this->output,
-        );
-    }
-
-    /**
-     * Update the accumulated output.
-     */
-    public function withOutput(string $output): self
-    {
-        return new self(
-            id: $this->id,
-            name: $this->name,
-            agent: $this->agent,
-            task: $this->task,
-            workingDirectory: $this->workingDirectory,
-            timeoutSeconds: $this->timeoutSeconds,
-            tags: $this->tags,
-            createdAt: $this->createdAt,
-            status: $this->status,
             output: $output,
         );
+        $clone->lastHeartbeat = $this->lastHeartbeat;
+
+        return $clone;
     }
 
     /**
