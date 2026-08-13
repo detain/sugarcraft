@@ -28,8 +28,10 @@ use SugarCraft\Crush\Message;
  *
  * Production reachability: `bin/sugarcrush` calls `ArgvParser::parse($argv)`
  * first, then `exit(NonInteractive::run($args, null, $args->outputFormat))`
- * whenever `$args->prompt !== null` (set by `-p`/`--prompt`/`--prompt=` or
- * the `run "<prompt>"` form), ahead of ever constructing
+ * whenever `$args->promptRequested` is true (`-p`/`--prompt`/`--prompt=` or
+ * the `run "<prompt>"` form appeared at all — including with no value, so the
+ * "no prompt given" branch below is the single owner of that error rather
+ * than the binary silently opening the TUI), ahead of ever constructing
  * `Bootstrap::chat()`/`Program` — so a real `sugarcrush -p "..." \
  * --output-format json` invocation reaches this class directly, with
  * `$args->outputFormat` (parsed from `--output-format`/`--output-format=`,

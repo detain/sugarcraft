@@ -28,14 +28,21 @@ SugarCrush — AI coding assistant for the terminal.
 
 Usage:
   sugarcrush                       Start the interactive TUI (default)
+  sugarcrush <dir>                 Start the TUI rooted at <dir>
   sugarcrush -p <prompt>           Run a single prompt and exit (one-shot)
   sugarcrush run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)
   sugarcrush --output-format json  Output machine-readable JSON (one-shot)
 
 Options:
   -p, --prompt <text>    Provide a prompt on the command line (one-shot mode)
-      --output-format   Output format: "text" (default) or "json"
+      --output-format <format>
+                         Output format: "text" (default) or "json"
+      --root <dir>       Use <dir> as the project root instead of the current
+                         directory. Also accepts --root=<dir>, and wins over a
+                         path-shaped positional argument.
   -h, --help             Show this help message
+      --                 End of options: every later argument is positional,
+                         never a flag
 
 Environment variables:
   SUGARCRUSH_PROVIDER    Provider to use: openai, anthropic, claude-code,

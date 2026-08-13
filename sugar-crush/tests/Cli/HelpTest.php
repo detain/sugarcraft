@@ -33,10 +33,81 @@ final class HelpTest extends TestCase
         $this->assertStringContainsString('--help', $screen);
         $this->assertStringContainsString('-h', $screen);
 
+        // Root flag. bin/sugarcrush's unknown-flag error tells the user to
+        // "Try `sugarcrush --help` for the list of supported options", which
+        // made this omission load-bearing: the screen it points at has to
+        // actually list every option ArgvParser accepts.
+        $this->assertStringContainsString('--root', $screen);
+
         // Env vars section
         $this->assertStringContainsString('SUGARCRUSH_PROVIDER', $screen);
         $this->assertStringContainsString('SUGARCRUSH_MODEL', $screen);
         $this->assertStringContainsString('SUGARCRUSH_BACKEND_CMD', $screen);
+    }
+
+    /**
+     * Read the flag literals straight out of {@see ArgvParser}'s source and
+     * require each one to be documented.
+     *
+     * Scraping the source rather than restating a hand-kept list is the
+     * point: `--root` shipped recognised-but-undocumented precisely because
+     * nothing tied the two files together, and a hand-kept list here would
+     * have been just as easy to forget to update. A new flag in the parser
+     * now fails this test until it is added to the screen.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function flagsRecognizedByTheParser(): array
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/ArgvParser.php');
+
+        $flags = [];
+        // `$arg === '--foo'` / `$arg === '-p'` / `$arg === '--'`
+        \preg_match_all("/\\\$arg === '(--?[a-z-]*)'/", $source, $exact);
+        // `str_starts_with($arg, '--foo=')` — the inline-value form of a flag
+        // whose bare form may not appear as an `===` comparison at all.
+        \preg_match_all("/str_starts_with\\(\\\$arg, '(--[a-z-]+)='\\)/", $source, $valued);
+
+        foreach ([...$exact[1], ...$valued[1]] as $flag) {
+            $flags[$flag] = [$flag];
+        }
+
+        \ksort($flags);
+
+        return $flags;
+    }
+
+    /**
+     * @dataProvider flagsRecognizedByTheParser
+     */
+    public function testEveryFlagTheParserRecognizesIsDocumented(string $flag): void
+    {
+        // Anchored to the start of an option line so that a bare substring
+        // match cannot pass -- '--' occurs inside '--help', and '-p' inside
+        // '--prompt'. The trailing class allows "-p," (paired short form),
+        // "--root <dir>" and a flag alone at end of line.
+        $pattern = '/^ +(?:-[a-z], )?' . \preg_quote($flag, '/') . '(?:[ =,]|$)/m';
+
+        $this->assertMatchesRegularExpression(
+            $pattern,
+            Help::screen(),
+            "ArgvParser recognizes {$flag} but Help::screen() does not document it"
+        );
+    }
+
+    public function testTheParserFlagScrapeActuallyFoundTheKnownFlags(): void
+    {
+        // Guards the test above from silently passing on an empty set if the
+        // parser's source layout ever changes shape.
+        $scraped = \array_keys(self::flagsRecognizedByTheParser());
+
+        $this->assertContains('--root', $scraped);
+        $this->assertContains('--prompt', $scraped);
+        $this->assertContains('--output-format', $scraped);
+        $this->assertContains('--', $scraped);
+        $this->assertContains('-p', $scraped);
+        $this->assertContains('-h', $scraped);
+        $this->assertContains('--help', $scraped);
     }
 
     public function testScreenContainsUsageExamples(): void
