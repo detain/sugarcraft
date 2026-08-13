@@ -15,6 +15,13 @@ use SugarCraft\Core\View;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\EmbeddingsRequest;
+use SugarCraft\Crush\Providers\EmbeddingsResponse;
+use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Skills\SkillPathNudge;
@@ -540,6 +547,107 @@ final class FeatWiringReachabilityTest extends TestCase
     }
 
     // =========================================================================
+    // Row: InstructionFileLoader::loadRoot()/loadForced() + the environment block
+    // "Never called — root CLAUDE.md/AGENTS.md never auto-load into the system
+    //  prompt. Only nested on-touch loading (loadForPath()) is actually
+    //  wired." (crush_feat.md §6 D, gap items 1, 2 and 4.)
+    // =========================================================================
+
+    /**
+     * The headline claim of the row: a repo-root AGENTS.md has "zero effect
+     * unless the agent happens to Read/Glob/Edit a file in that exact
+     * directory". Asserted on the system prompt a provider is handed by the
+     * backend `Bootstrap::chat()` built — not by a hand-assembled one, which
+     * is what {@see SystemPromptWiringTest} covers. Against the pre-wave code
+     * `Bootstrap::backend()` attached no loader and `buildSystemPrompt()` had
+     * no `loadRoot()` call, so the marker below could not appear.
+     */
+    public function testARealLaunchsBackendFeedsRootAgentsMdIntoTheSystemPrompt(): void
+    {
+        file_put_contents($this->tempDir . '/repo/AGENTS.md', 'LAUNCHED ROOT AGENTS MARKER');
+
+        $prompt = $this->launchedSystemPrompt();
+
+        $this->assertStringContainsString('LAUNCHED ROOT AGENTS MARKER', $prompt);
+        $this->assertStringContainsString('<project-instructions>', $prompt);
+    }
+
+    /**
+     * Gap item 4 — the environment half, which "does not exist anywhere"
+     * before this wave. The `<env>` block must also precede the project
+     * instructions: conventions talk about paths relative to a cwd the model
+     * has to have been told about first.
+     */
+    public function testARealLaunchDeliversTheEnvironmentBlockAheadOfProjectInstructions(): void
+    {
+        file_put_contents($this->tempDir . '/repo/AGENTS.md', 'ENV ORDER MARKER');
+
+        $prompt = $this->launchedSystemPrompt();
+
+        $this->assertStringContainsString('<env>', $prompt);
+        $this->assertStringContainsString('Working directory: ', $prompt);
+        $this->assertStringContainsString('Platform: ', $prompt);
+        $this->assertStringContainsString('Current date: ', $prompt);
+        $this->assertLessThan(
+            strpos($prompt, '<project-instructions>'),
+            strpos($prompt, '<env>'),
+            'the environment snapshot must reach the model before project conventions',
+        );
+    }
+
+    /**
+     * Gap item 5: this repo's own root CLAUDE.md uses `@./AGENTS.md`, so an
+     * unexpanded import would reach a real launch as literal dead text. The
+     * expansion has to happen inside the loader `Bootstrap` builds, not in a
+     * separately-constructed one.
+     */
+    public function testARealLaunchExpandsAtImportsInsideRootClaudeMd(): void
+    {
+        file_put_contents($this->tempDir . '/repo/CLAUDE.md', "# Root\n@./AGENTS.md\n");
+        file_put_contents($this->tempDir . '/repo/AGENTS.md', 'LAUNCHED IMPORT BODY MARKER');
+
+        $prompt = $this->launchedSystemPrompt();
+
+        $this->assertStringContainsString('LAUNCHED IMPORT BODY MARKER', $prompt);
+        $this->assertStringNotContainsString('@./AGENTS.md', $prompt);
+    }
+
+    /**
+     * Gap item 2, end to end: `loadForced()` stayed dead not only because
+     * nothing called it but because nothing ever passed it a pattern. The
+     * chain proven here is config-file -> `Bootstrap::forcedInstructions()`
+     * -> the loader `Bootstrap::backend()` attaches -> the system prompt, so
+     * a break at any link fails this test.
+     */
+    public function testConfiguredForcedInstructionGlobsReachARealLaunchsSystemPrompt(): void
+    {
+        mkdir($this->tempDir . '/repo/docs', 0755, true);
+        file_put_contents($this->tempDir . '/repo/docs/conventions.md', 'FORCED GLOB MARKER');
+        Bootstrap::writeUserConfig(['instructions' => ['docs/*.md']]);
+
+        $prompt = $this->launchedSystemPrompt();
+
+        $this->assertStringContainsString('FORCED GLOB MARKER', $prompt);
+    }
+
+    /**
+     * An absolute forced pattern must not be honoured even when it arrives
+     * from the user's own config file: `loadForced()`'s containment guard is
+     * the only thing standing between a hand-edited config and arbitrary
+     * host files being pasted into every system prompt.
+     */
+    public function testAnAbsoluteForcedPatternIsRefusedOnARealLaunch(): void
+    {
+        $outside = $this->tempDir . '/outside.md';
+        file_put_contents($outside, 'OUTSIDE THE REPO MARKER');
+        Bootstrap::writeUserConfig(['instructions' => [$outside]]);
+
+        $prompt = $this->launchedSystemPrompt();
+
+        $this->assertStringNotContainsString('OUTSIDE THE REPO MARKER', $prompt);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
@@ -726,6 +834,124 @@ final class FeatWiringReachabilityTest extends TestCase
         $result = $filled->update(new KeyMsg(KeyType::Enter, ''));
 
         return $result;
+    }
+
+    /**
+     * The system prompt one real turn hands the provider, driven from the
+     * backend `Bootstrap::chat()` built for a plain launch.
+     *
+     * Only the provider is substituted: the tool list, hook chain, skill
+     * registry and — the object this row is about — the
+     * {@see InstructionFileLoader} are the very instances `Bootstrap` wired,
+     * lifted off the launched backend by reflection and re-seated on a
+     * capturing twin, because `EngineBackend::$provider` is readonly and the
+     * default `EchoProvider` never reports what it was asked. A regression
+     * that dropped `withInstructionLoader()` from `Bootstrap::backend()`
+     * therefore fails here, which a locally-rebuilt backend could not catch.
+     */
+    private function launchedSystemPrompt(): string
+    {
+        $backend = $this->launchedEngineBackend();
+
+        $loader = $this->privateValue($backend, 'instructionLoader');
+        $this->assertInstanceOf(
+            InstructionFileLoader::class,
+            $loader,
+            'a real launch must hand its engine the shared instruction loader',
+        );
+
+        $provider = $this->promptCapturingProvider();
+        $this->reseatProvider($backend, $provider)->complete([Message::user('hello')]);
+
+        $this->assertCount(1, $provider->requests, 'expected exactly one provider round-trip');
+        $prompt = $provider->requests[0]->systemPrompt;
+        $this->assertIsString($prompt);
+
+        return $prompt;
+    }
+
+    /**
+     * Rebuild $backend around $provider, carrying every other constructor
+     * argument over as the same instance.
+     */
+    private function reseatProvider(EngineBackend $backend, ProviderInterface $provider): EngineBackend
+    {
+        return new EngineBackend(
+            $provider,
+            (string) $this->privateValue($backend, 'model'),
+            $this->privateValue($backend, 'tools'),
+            $this->privateValue($backend, 'skills'),
+            $this->privateValue($backend, 'hookManager'),
+            (int) $this->privateValue($backend, 'maxSteps'),
+            (bool) $this->privateValue($backend, 'hooksDisabled'),
+            $this->privateValue($backend, 'skillRegistry'),
+            $this->privateValue($backend, 'instructionLoader'),
+        );
+    }
+
+    /**
+     * Records every {@see CompleteRequest} the engine builds. Non-streaming
+     * on purpose — `Runtime::run()` only takes the deterministic
+     * one-response-per-step `runBatch()` path when the provider says so.
+     */
+    private function promptCapturingProvider(): object
+    {
+        return new class implements ProviderInterface {
+            /** @var list<CompleteRequest> */
+            public array $requests = [];
+
+            public function name(): string
+            {
+                return 'stub-reachability';
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return false;
+            }
+
+            public function supportsFunctionCalling(): bool
+            {
+                return true;
+            }
+
+            public function supportsVision(): bool
+            {
+                return false;
+            }
+
+            public function supportsJsonSchema(): bool
+            {
+                return false;
+            }
+
+            public function contextWindow(): int
+            {
+                return 1000;
+            }
+
+            public function costPer1kTokens(string $model, string $direction): float
+            {
+                return 0.0;
+            }
+
+            public function complete(CompleteRequest $request): CompleteResponse
+            {
+                $this->requests[] = $request;
+
+                return new CompleteResponse(content: 'answered');
+            }
+
+            public function completeStream(CompleteRequest $request): \Generator
+            {
+                yield new CompleteResponse(content: '');
+            }
+
+            public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+            {
+                return new EmbeddingsResponse([]);
+            }
+        };
     }
 
     private function removeDirectory(string $dir): void
