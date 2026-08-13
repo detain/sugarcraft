@@ -175,6 +175,13 @@ final class Renderer
     private const SHELL_CHROME_COLS = 6;
 
     /**
+     * Narrowest tail {@see toolCallSuffix()} will draw. Below this the row is
+     * left as-is: four columns of an elided command tells the user nothing
+     * and only costs the status marker its breathing room.
+     */
+    private const TOOL_DESCRIPTION_MIN_COLS = 8;
+
+    /**
      * Cell width a tool-result image ({@see renderToolImage()}) is scaled to
      * before its height is derived from the source aspect ratio. Literally
      * crush_feat.md §9 E3's `$w = 40`: wide enough for a screenshot to be
@@ -775,9 +782,9 @@ final class Renderer
 
     /**
      * The bottom status bar: the existing processing indicator/help text,
-     * plus a context-usage percentage from {@see Chat::contextUsagePercent()}
-     * so a user can see how full the context window is without running
-     * /compact speculatively.
+     * plus a context-usage readout ({@see contextIndicator()}) so a user can
+     * see how full the context window is without running /compact
+     * speculatively.
      */
     private static function renderStatusBar(Chat $chat): string
     {
@@ -790,8 +797,24 @@ final class Renderer
         $processing = $chat->inFlight
             ? '⠴ thinking… · Esc Esc to cancel'
             : 'Enter to send · ' . self::markPane(Pane::Menu, 'Ctrl+P menu') . ' · /exit or ^C to quit';
-        $percent = (int) round($chat->contextUsagePercent() * 100);
-        $bar = "{$percent}% context · {$processing}";
+        // The readout is sized against the room the rest of the row leaves
+        // rather than being emitted at full length and hoping it fits: it is
+        // the widest variable-length piece of the bar, and the bar is the one
+        // line that must never wrap (see below).
+        //
+        // The scroll readout's WIDEST form is reserved up front even though
+        // it is prepended afterwards, so that adding the token count can only
+        // ever shrink the context readout — never crowd the scroll position
+        // off the row. Scroll position is transient and only shown when the
+        // newest output is off-screen, which makes it the more urgent of the
+        // two; context usage still reports its percentage at any width.
+        $separator = ' · ';
+        $indicators = self::scrollIndicators($chat);
+        $room = $chat->cols()
+            - Width::of(self::stripZoneMarkers($processing))
+            - Width::of($separator)
+            - ($indicators === [] ? 0 : Width::of($indicators[0]));
+        $bar = self::contextIndicator($chat, $room) . $separator . $processing;
 
         // The bar is the frame's LAST line, so it is the one line that must
         // never wrap: a wrapped bar makes the frame rows+1 physical rows tall,
@@ -810,13 +833,65 @@ final class Renderer
         // its click zones (same failure mode markPaneHeader() documents). The
         // sentinels are invisible on screen, so they come off before measuring.
         $room = $chat->cols() - Width::of(self::stripZoneMarkers($bar));
-        foreach (self::scrollIndicators($chat) as $indicator) {
+        foreach ($indicators as $indicator) {
             if (Width::of($indicator) <= $room) {
                 return $indicator . $bar;
             }
         }
 
         return $bar;
+    }
+
+    /**
+     * The status bar's context-usage readout: an absolute token count in K
+     * alongside the percentage, because a bare "37%" is unactionable unless
+     * the user already knows the budget by heart.
+     *
+     * Both numbers come from Chat ({@see Chat::contextTokens()} /
+     * {@see Chat::contextTokenLimit()}) rather than being re-derived from the
+     * percentage — the renderer must not hardcode a budget that lives as a
+     * constant on Chat. They carry a leading `~` because neither is measured:
+     * the count is a chars/4 approximation and the limit is this app's fixed
+     * compaction threshold, not the provider's advertised window. Labelling
+     * the estimate is the honest option; printing "12.4K" unqualified would
+     * read as a figure the provider reported.
+     *
+     * $room is the columns the rest of the bar leaves. Forms are tried
+     * widest-first and the bare percentage is always emitted as a last
+     * resort: the bar may not wrap (see {@see renderStatusBar()}), but
+     * dropping the readout outright would leave a narrow terminal with no
+     * context signal at all.
+     */
+    private static function contextIndicator(Chat $chat, int $room): string
+    {
+        $percent = (int) round($chat->contextUsagePercent() * 100);
+        $used = self::formatTokenCount($chat->contextTokens());
+        $limit = self::formatTokenCount($chat->contextTokenLimit());
+
+        $forms = [
+            "~{$used} / {$limit} context ({$percent}%)",
+            "~{$used}/{$limit} ({$percent}%)",
+            "{$percent}% context",
+        ];
+        foreach ($forms as $form) {
+            if (Width::of($form) <= $room) {
+                return $form;
+            }
+        }
+
+        return "{$percent}%";
+    }
+
+    /**
+     * A token count as the compact "12.4K" the one-line status bar has room
+     * for. A round value loses its ".0" so a whole budget reads "100K"
+     * rather than the noisier "100.0K".
+     */
+    private static function formatTokenCount(int $tokens): string
+    {
+        $thousands = number_format($tokens / 1000, 1, '.', '');
+
+        return rtrim(rtrim($thousands, '0'), '.') . 'K';
     }
 
     /**
@@ -1223,8 +1298,26 @@ final class Renderer
      *
      * A result carrying image bytes ({@see ToolResult::hasImage()} - the
      * `/doctor` built-in is a real producer) additionally gets the picture
-     * itself painted below the marker, via {@see renderToolImage()}
-     * (crush_feat.md §9 E3).
+     * itself painted below the marker, via {@see renderToolPicture()}
+     * (crush_feat.md §9 E3), but only once the user has EXPANDED that call.
+     *
+     * User-reported: running `/doctor` "shows just a big green box for output,
+     * nothing else, not collapsable or expandable". Two causes, both fixed
+     * here. First, a picture is budgeted a whole viewport minus two rows
+     * ({@see renderView()}), and the transcript is tail-clipped, so an
+     * unconditional picture EVICTED its own icon+name row - the box arrived
+     * with nothing identifying it. Second, the image bypassed §1 E5's
+     * collapse machinery entirely, so Ctrl+O (and the click zone that shares
+     * its key) genuinely did nothing to it. An image-bearing result therefore
+     * now collapses exactly like a text body does: one faint
+     * {@see collapsedImageNotice()} line while collapsed, the real picture
+     * once expanded.
+     *
+     * The same result's text is that picture's only caption (`/doctor`
+     * returns a real summary string saying which protocol was detected), so -
+     * like an error body, and unlike an ordinary successful one - it is kept
+     * rather than hidden when the call is collapsed. A captionless swatch is
+     * what read as a glitch in the first place.
      *
      * Bodies are no longer dumped in full forever (crush_feat.md §1 E5). A
      * SUCCESSFUL result is the case where the output is least likely to be
@@ -1267,6 +1360,7 @@ final class Renderer
                 default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
             };
             $label = Style::new()->foreground($theme->systemLabel)->faint()->strikethrough($stopped)->render('🔧 tool: ' . self::untrusted($result->name)) . ' ' . $status;
+            $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
             $body = self::untrusted($result->isError() ? ($result->error ?? '') : $result->result);
             $key = $result->id ?? $result->name;
             $isExpanded = ($expanded[$key] ?? false) === true;
@@ -1274,17 +1368,19 @@ final class Renderer
             // drive one expansion mechanism rather than two.
             self::recordToolCallZone($key, $label);
 
-            $block = $label;
+            $hasImage = $result->hasImage();
+
+            $block = $row;
             if ($body !== '') {
-                $block .= "\n" . self::renderToolBody($body, $result->isError(), $isExpanded, $theme);
+                $block .= "\n" . self::renderToolBody($body, $result->isError() || $hasImage, $isExpanded, $theme);
             }
 
             if ($result->hasDiff()) {
                 $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
             }
 
-            if ($result->hasImage()) {
-                $picture = self::renderToolImage($result, $theme, $width, $images, $mosaic, $imageRows);
+            if ($hasImage) {
+                $picture = self::renderToolPicture($result, $theme, $width, $images, $mosaic, $imageRows, $isExpanded);
                 if ($picture !== '') {
                     $block .= "\n" . $picture;
                 }
@@ -1294,6 +1390,108 @@ final class Renderer
         }
 
         return implode("\n\n", $lines);
+    }
+
+    /**
+     * The " — <what actually ran>" tail appended to a finished tool row.
+     *
+     * User-reported gap behind crush_feat.md §3 E2: the running placeholder
+     * has always shown {@see Message::describeToolCall()}'s one-liner (e.g.
+     * `bash(command: "ls -la")`, or the model-authored description when the
+     * turn sent one), but the finished row replaced it with just the tool
+     * NAME - so once §1 E5's collapse hid the body, a row said `bash ✓ ok`
+     * and never which command that was. {@see Chat} now carries the
+     * placeholder's one-liner onto the result ({@see ToolResult::$description})
+     * and this is where it reaches the user.
+     *
+     * Appended AFTER the status rather than between name and status on
+     * purpose: {@see recordToolCallZone()} registers the un-suffixed label and
+     * {@see markToolCalls()} locates the row by `str_contains()`, so keeping
+     * the recorded label a verbatim PREFIX of the rendered row is what keeps
+     * click-to-expand pointing at the right line.
+     *
+     * The string is model-authored, so it is {@see untrusted()}-scrubbed (it
+     * was already flattened to one line upstream by
+     * {@see Message::describeToolCall()}, but this renderer never trusts that)
+     * and hard-truncated to whatever the row has left, preserving the
+     * one-logical-line-per-row invariant {@see renderDiff()} documents. Returns
+     * '' when there is no description or no room for a useful amount of it -
+     * a couple of columns of an elided command is worse than none.
+     *
+     * @param int $used display columns the label already occupies on this row
+     */
+    private static function toolCallSuffix(ToolResult $result, Theme $theme, int $width, int $used): string
+    {
+        if (!$result->hasDescription()) {
+            return '';
+        }
+
+        $separator = ' — ';
+        $room = $width - $used - Width::of($separator);
+        if ($room < self::TOOL_DESCRIPTION_MIN_COLS) {
+            return '';
+        }
+
+        $text = Width::truncate(self::untrusted((string) $result->description), $room);
+        if (trim($text) === '') {
+            return '';
+        }
+
+        return Style::new()->foreground($theme->systemLabel)->faint()->render($separator . $text);
+    }
+
+    /**
+     * The picture half of an image-bearing tool result, under §1 E5's
+     * collapse policy: the real {@see renderToolImage()} encode once the
+     * user has expanded the call, a one-line {@see collapsedImageNotice()}
+     * affordance until then.
+     *
+     * Gating here rather than inside {@see renderToolImage()} keeps the
+     * expensive path honest: a collapsed picture is never decoded, never
+     * encoded and never registered with the {@see ImageLayer}, so a
+     * transcript full of screenshots costs one faint line each per frame.
+     *
+     * Returns '' with no protocol at all, in BOTH states: with a null
+     * {@see Chat::mosaic()} expanding could only ever reveal nothing, and an
+     * affordance promising a picture that cannot exist is worse than silence.
+     */
+    private static function renderToolPicture(ToolResult $result, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, bool $isExpanded): string
+    {
+        if ($mosaic === null) {
+            return '';
+        }
+
+        return $isExpanded
+            ? self::renderToolImage($result, $theme, $width, $images, $mosaic, $imageRows)
+            : self::collapsedImageNotice($result, $theme, $width);
+    }
+
+    /**
+     * The collapsed stand-in for a tool result's picture: `🖼 20×10 sixel
+     * image hidden (ctrl+o)`.
+     *
+     * Names the source's pixel dimensions and the protocol it will be painted
+     * with, because the two questions a hidden picture raises are "how big is
+     * it" and "will my terminal even show it" - the second being the entire
+     * point of the `/doctor` swatch this was reported against.
+     *
+     * Dimensions come from `getimagesizefromstring()` (header only, no
+     * bitmap decode - a collapsed row must stay cheap) and are simply omitted
+     * when the header is unreadable; the expand path reports the real failure.
+     * The protocol string is truncated with the rest of the line to preserve
+     * the one-logical-line-per-row invariant.
+     */
+    private static function collapsedImageNotice(ToolResult $result, Theme $theme, int $width): string
+    {
+        $size = @getimagesizefromstring((string) $result->imageBytes);
+        $dimensions = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? "{$size[0]}×{$size[1]} " : '';
+        $protocol = $result->imageProtocol === null || $result->imageProtocol === ''
+            ? ''
+            : self::untrusted($result->imageProtocol) . ' ';
+
+        $text = Width::truncate('🖼 ' . $dimensions . $protocol . 'image hidden (ctrl+o)', max(1, $width));
+
+        return Style::new()->foreground($theme->systemLabel)->faint()->render($text);
     }
 
     /**
@@ -1399,17 +1597,23 @@ final class Renderer
     /**
      * One tool result's body under the collapse/expand policy documented on
      * {@see renderToolResults()}: verbatim when expanded, a faint one-line
-     * "N lines hidden" affordance when a successful call is collapsed, and a
-     * {@see collapseToolOutput()}-clipped excerpt (plus trailer) when a failed
-     * call is collapsed.
+     * "N lines hidden" affordance when a collapsed call's body is worth
+     * hiding, and a {@see collapseToolOutput()}-clipped excerpt (plus
+     * trailer) when it is not.
+     *
+     * @param bool $keepWhenCollapsed the body survives collapsing (clipped
+     *                                rather than hidden) because it is the
+     *                                thing the user is looking for: an error's
+     *                                reason, or the caption of a picture whose
+     *                                own rendering is collapsed alongside it
      */
-    private static function renderToolBody(string $body, bool $isError, bool $isExpanded, Theme $theme): string
+    private static function renderToolBody(string $body, bool $keepWhenCollapsed, bool $isExpanded, Theme $theme): string
     {
         if ($isExpanded) {
             return $body;
         }
 
-        if (!$isError) {
+        if (!$keepWhenCollapsed) {
             $count = substr_count($body, "\n") + 1;
             $hint = "… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)';
 

@@ -592,8 +592,92 @@ final class RendererTest extends TestCase
         $lines = explode("\n", $out);
         $lastLine = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
 
-        $this->assertMatchesRegularExpression('/\d+% context/', $lastLine);
+        $this->assertMatchesRegularExpression('/\(\d+%\)/', $lastLine);
         $this->assertStringContainsString('Enter to send', $lastLine);
+    }
+
+    /**
+     * F.CTXK: a bare percentage is unactionable without knowing the budget,
+     * so the bar carries the absolute count in K next to it. Would fail
+     * against the old "37% context · …" bar, which printed no count at all.
+     */
+    public function testStatusBarShowsAbsoluteTokenCountBesideThePercentage(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 200; $i++) {
+            $history[] = Message::user(str_repeat('x', 400));
+        }
+        $chat = $this->chat($history);
+        [$sized] = $chat->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+
+        $lastLine = $this->statusBar(Renderer::render($sized));
+
+        // 200 messages x (400 chars / 4 + 10 role overhead) = 22,000 tokens
+        // against Chat's 100,000-token budget.
+        $this->assertSame(22000, $chat->contextTokens());
+        $this->assertSame(100000, $chat->contextTokenLimit());
+        $this->assertStringContainsString('~22K / 100K context (22%)', $lastLine);
+    }
+
+    /**
+     * The count is a chars/4 proxy against a fixed compaction threshold, not
+     * a provider-reported figure, so it is prefixed rather than presented as
+     * a measurement.
+     */
+    public function testAbsoluteTokenCountIsLabelledAsAnEstimate(): void
+    {
+        [$sized] = $this->chat()->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+
+        $this->assertMatchesRegularExpression('/~[\d.]+K \/ [\d.]+K context/', $this->statusBar(Renderer::render($sized)));
+    }
+
+    /**
+     * The bar is the frame's last line and may never wrap, so the readout
+     * degrades to narrower forms instead of pushing the row over the width.
+     */
+    public function testStatusBarNeverExceedsTerminalWidthAsTheReadoutGrows(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 400; $i++) {
+            $history[] = Message::user(str_repeat('x', 4000));
+        }
+
+        foreach ([120, 80, 70, 60] as $cols) {
+            [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg($cols, 40));
+
+            $lastLine = $this->statusBar(Renderer::render($sized));
+
+            $this->assertLessThanOrEqual($cols, Width::of($lastLine), "overflowed at {$cols} cols");
+            // However narrow, the percentage itself is never dropped.
+            $this->assertMatchesRegularExpression('/\d+%/', $lastLine);
+        }
+    }
+
+    /**
+     * Below ~60 columns the bar's fixed help text ("Enter to send · Ctrl+P
+     * menu · /exit or ^C to quit", ~52 columns with its separator) overflows
+     * on its own — a pre-existing limit this step does not change. What is
+     * asserted here is that the context readout contributes its minimum in
+     * that case: the bare percentage, never a wider form.
+     */
+    public function testContextReadoutCollapsesToTheBarePercentageOnANarrowTerminal(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 200; $i++) {
+            $history[] = Message::user(str_repeat('x', 400));
+        }
+        [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(40, 40));
+
+        $this->assertStringStartsWith('22% · ', $this->statusBar(Renderer::render($sized)));
+    }
+
+    /** The final status-bar row, with SGR sequences and zone markers stripped. */
+    private function statusBar(string $frame): string
+    {
+        $lines = explode("\n", $frame);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
+
+        return (string) preg_replace('/\x{E000}\/?[A-Za-z0-9._:-]*\x{E001}/u', '', (string) $plain);
     }
 
     public function testPaletteNotRenderedWhenClosed(): void
@@ -1242,5 +1326,268 @@ final class RendererTest extends TestCase
         $out = (string) Renderer::render($closed);
 
         $this->assertStringNotContainsString('session picker', $out);
+    }
+
+    /**
+     * The user-reported regression behind crush_feat.md §3 E2: expanding a
+     * finished tool call showed its OUTPUT but the row never said which
+     * command produced it. Against the old renderer this fails - the finished
+     * row was `🔧 tool: bash ✓ ok` and the `ls -la` only ever appeared on the
+     * transient running placeholder.
+     */
+    public function testFinishedToolRowShowsTheCommandThatRan(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'a.txt', 'call_1')
+                ->withDescription('bash(command: "ls -la")'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('tool: bash', $out);
+        $this->assertStringContainsString('ls -la', $out);
+    }
+
+    /**
+     * The tail is drawn AFTER the status marker on purpose: markToolCalls()
+     * locates the clickable row by str_contains() of the label it recorded,
+     * so the un-suffixed label has to stay a verbatim prefix of the row or
+     * click-to-expand would start missing rows.
+     */
+    public function testCommandTailIsAppendedAfterTheStatusMarkerNotBeforeIt(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'a.txt', 'call_1')
+                ->withDescription('bash(command: "ls -la")'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+        $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash')
+            . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
+
+        $this->assertStringContainsString($label, $out);
+        $this->assertStringContainsString(
+            $label . Style::new()->foreground($theme->systemLabel)->faint()->render(' — bash(command: "ls -la")'),
+            $out,
+        );
+    }
+
+    /** A result with no known call keeps exactly the row it always had. */
+    public function testToolRowWithoutADescriptionIsUnchanged(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'a.txt', 'call_1'),
+        )]);
+        $theme = $chat->theme();
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString(
+            Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash')
+                . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
+            $out,
+        );
+        $this->assertStringNotContainsString('—', $out);
+    }
+
+    /**
+     * The tail is model-authored text on a row candy-core repaints by
+     * absolute position, so it must never push the row past the terminal.
+     */
+    public function testCommandTailIsTruncatedToTheTerminalWidth(): void
+    {
+        $cols = 60;
+        $chat = $this->sizedChat(
+            [$this->resultMessage(
+                \SugarCraft\Crush\ToolResult::ok('bash', 'done', 'call_1')
+                    ->withDescription('bash(command: "' . str_repeat('very-long-argument ', 20) . '")'),
+            )],
+            $cols,
+        );
+
+        $out = Renderer::render($chat);
+
+        $rows = array_values(array_filter(
+            explode("\n", $out),
+            static fn(string $line): bool => str_contains($line, 'tool: bash'),
+        ));
+
+        $this->assertCount(1, $rows, 'the tail must stay on the one row it belongs to');
+        $this->assertLessThanOrEqual($cols, Width::string($rows[0]));
+    }
+
+    /**
+     * Raw ESC in a model-authored description would forge SGR straight onto
+     * the terminal wire, exactly as the rest of this renderer's untrusted
+     * strings are guarded against.
+     */
+    public function testCommandTailIsScrubbedOfControlBytes(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('bash', 'done', 'call_1')
+                ->withDescription("bash(command: \"\x1b[31mred\x07\")"),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('red', $out);
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+    }
+
+    /**
+     * A tail so squeezed it could only show a couple of columns of the
+     * command is not worth the status marker's breathing room.
+     */
+    public function testNoTailIsDrawnWhenTheRowHasNoRoomForOne(): void
+    {
+        $chat = $this->sizedChat(
+            [$this->resultMessage(
+                \SugarCraft\Crush\ToolResult::ok(str_repeat('n', 40), 'done', 'call_1')
+                    ->withDescription('ls -la'),
+            )],
+            26,
+        );
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringNotContainsString('ls -la', $out);
+    }
+
+    // =========================================================================
+    // Image-bearing tool results: caption + collapse (crush_feat.md §9 E3 read
+    // through §1 E5). User-reported: `/doctor` "shows just a big green box for
+    // output, nothing else, not collapsable or expandable" - the swatch was
+    // painted unconditionally, at up to a full viewport of rows, so it evicted
+    // its own tool row from the tail-clipped transcript AND ignored Ctrl+O.
+    // =========================================================================
+
+    /** A real, decodable PNG — candy-mosaic refuses anything it cannot decode. */
+    private function pngBytes(int $width = 20, int $height = 10): string
+    {
+        $gd = imagecreatetruecolor($width, $height);
+        imagefilledrectangle($gd, 0, 0, $width - 1, $height - 1, (int) imagecolorallocate($gd, 46, 160, 74));
+        ob_start();
+        imagepng($gd);
+
+        return (string) ob_get_clean();
+    }
+
+    /** The shape `/doctor` produces: a summary string plus a capability swatch. */
+    private function doctorChat(?\SugarCraft\Mosaic\Mosaic $mosaic, ?string $bytes = null, int $rows = 40): Chat
+    {
+        if (!\extension_loaded('gd')) {
+            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+        }
+
+        return new Chat(
+            history: [$this->resultMessage(new \SugarCraft\Crush\ToolResult(
+                name: 'doctor',
+                result: 'Detected pixel-graphics protocol: sixel.',
+                id: 'call_img',
+                imageBytes: $bytes ?? $this->pngBytes(),
+                imageProtocol: 'sixel',
+            ))],
+            rows: $rows,
+            cols: 80,
+            mosaic: $mosaic,
+        );
+    }
+
+    /**
+     * The step-defining regression: collapsed, the picture is replaced by a
+     * one-line affordance, and the tool row plus the result's own summary -
+     * the picture's only caption - are both on screen.
+     */
+    public function testCollapsedImageResultShowsItsRowCaptionAndExpandAffordance(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock()));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+        $this->assertStringContainsString('image hidden (ctrl+o)', $out);
+        $this->assertStringNotContainsString('▀', $out, 'a collapsed picture must not be painted at all');
+    }
+
+    /** The affordance answers "how big" and "with what", the swatch's whole point. */
+    public function testCollapsedImageNoticeNamesTheSourceDimensionsAndProtocol(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock()));
+
+        $this->assertStringContainsString('20×10 sixel image hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * Ctrl+O (and the click zone that shares its key, §8 E5) now actually
+     * reaches the picture: expanding paints it and drops the affordance.
+     */
+    public function testExpandingAnImageResultPaintsThePictureAndDropsTheAffordance(): void
+    {
+        $chat = $this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock())->toggleToolOutput('call_img');
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('▀', $out, 'half-block cells must be visible once expanded');
+        $this->assertStringNotContainsString('image hidden (ctrl+o)', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+    }
+
+    /** A collapsed picture is never decoded, so it never reaches the image layer. */
+    public function testCollapsedPixelGraphicsImageRegistersNoPlacement(): void
+    {
+        $chat = $this->doctorChat(\SugarCraft\Mosaic\Mosaic::sixel());
+
+        $this->assertSame([], Renderer::renderView($chat)->images);
+        $this->assertNotSame([], Renderer::renderView($chat->toggleToolOutput('call_img'))->images);
+    }
+
+    /**
+     * The reported failure mode itself: a tall source is budgeted the whole
+     * viewport minus two rows, so painting it unconditionally pushed the tool
+     * row - and everything else - off the tail-clipped transcript.
+     */
+    public function testATallImageNoLongerEvictsItsOwnToolRow(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock(), $this->pngBytes(16, 1600), 12));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('image hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * With no probed protocol expanding could only ever reveal nothing, so the
+     * affordance would be a promise the renderer cannot keep - the caption
+     * still carries the result.
+     */
+    public function testImageResultWithoutAMosaicOffersNoExpandAffordance(): void
+    {
+        $out = Renderer::render($this->doctorChat(null));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+        $this->assertStringNotContainsString('image hidden (ctrl+o)', $out);
+    }
+
+    /** Unreadable bytes cost the dimensions, not the row. */
+    public function testCollapsedImageNoticeOmitsDimensionsItCannotRead(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock(), 'definitely-not-a-png'));
+
+        $this->assertStringContainsString('sixel image hidden (ctrl+o)', $out);
+        $this->assertStringNotContainsString('×', $out);
+    }
+
+    /** A text-only success keeps §1 E5's hide-the-body policy untouched. */
+    public function testTextOnlySuccessBodyIsStillHiddenWhenCollapsed(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringNotContainsString('alpha', $out);
+        $this->assertStringContainsString('2 lines hidden (ctrl+o)', $out);
     }
 }

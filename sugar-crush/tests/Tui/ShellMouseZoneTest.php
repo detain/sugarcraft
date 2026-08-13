@@ -250,6 +250,10 @@ final class ShellMouseZoneTest extends TestCase
                     new ToolResult(name: 'shot', result: 'captured', id: 'call_2', imageBytes: $this->pngBytes()),
                 ]),
             ],
+            // Expanded: a picture collapses with its tool row now (§1 E5
+            // applied to images), and a collapsed one is never encoded, so
+            // only the expanded state has a placement to keep.
+            expanded: ['call_2' => true],
             mosaic: Mosaic::sixel(),
         );
 

@@ -196,4 +196,43 @@ final class ToolTypeAdapterTest extends TestCase
         $this->assertFalse($result->hasDiff());
         $this->assertNull($result->durationMs);
     }
+
+    /**
+     * crush_feat.md §3 E2: the call's one-liner rides on the RESULT so a
+     * finished (and therefore collapsed) row can still say what ran.
+     */
+    public function testWithDescriptionAttachesTheCallsOneLinerWithoutTouchingAnythingElse(): void
+    {
+        $result = ToolResult::ok('bash', 'a.txt', 'call_1');
+        $described = $result->withDescription('bash(command: "ls -la")');
+
+        $this->assertSame('bash(command: "ls -la")', $described->description);
+        $this->assertTrue($described->hasDescription());
+        $this->assertSame('a.txt', $described->result);
+        $this->assertSame('call_1', $described->id);
+
+        // Immutable+fluent: the original is untouched (AGENTS.md).
+        $this->assertNull($result->description);
+        $this->assertFalse($result->hasDescription());
+    }
+
+    /**
+     * A placeholder that never carried a describeToolCall() one-liner would
+     * otherwise make the renderer draw a dangling " — " separator.
+     */
+    public function testWithDescriptionTreatsBlankAsUnknown(): void
+    {
+        $this->assertFalse(ToolResult::ok('bash', 'out')->withDescription('   ')->hasDescription());
+        $this->assertFalse(ToolResult::ok('bash', 'out')->withDescription(null)->hasDescription());
+    }
+
+    /** withImage() rebuilds field by field, so it must carry this one too. */
+    public function testWithImagePreservesTheDescription(): void
+    {
+        $result = ToolResult::ok('bash', 'out')
+            ->withDescription('bash(command: "ls")')
+            ->withImage('PNGBYTES');
+
+        $this->assertSame('bash(command: "ls")', $result->description);
+    }
 }

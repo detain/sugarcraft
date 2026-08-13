@@ -1120,7 +1120,12 @@ final class Chat implements Model
         foreach ($this->history as $historyMessage) {
             $pendingId = $historyMessage->pendingToolCallId;
             if ($pendingId !== null && isset($resultsById[$pendingId])) {
-                $result = $resultsById[$pendingId];
+                // The placeholder's content IS Message::describeToolCall()'s
+                // one-liner, and it is the only carrier of the call's
+                // arguments that reaches this point - the result itself never
+                // saw them. Carrying it onto the finished result is what lets
+                // a collapsed row still say WHAT ran (crush_feat.md §3 E2).
+                $result = $resultsById[$pendingId]->withDescription($historyMessage->content);
                 $newHistory[] = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
                     ->withToolResults([$result]);
 
@@ -1306,14 +1311,16 @@ final class Chat implements Model
     private function replaceToolRunningPlaceholder(ToolFinished $event): self
     {
         $result = ToolResult::fromEngineResult($event->result, $event->toolName);
-        $message = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
-            ->withToolResults([$result]);
 
         $newHistory = [];
         $replaced = false;
         foreach ($this->history as $historyMessage) {
             if (!$replaced && $historyMessage->pendingToolCallId === $event->toolCallId) {
-                $newHistory[] = $message;
+                // Same reasoning as finishToolCalls(): the placeholder content
+                // is Message::describeToolCall()'s one-liner, and ToolFinished
+                // carries no arguments, so this is the only point at which the
+                // finished row can learn WHAT ran (crush_feat.md §3 E2).
+                $newHistory[] = self::toolResultMessage($result->withDescription($historyMessage->content));
                 $replaced = true;
 
                 continue;
@@ -1322,10 +1329,24 @@ final class Chat implements Model
         }
 
         if (!$replaced) {
-            $newHistory[] = $message;
+            $newHistory[] = self::toolResultMessage($result);
         }
 
         return $this->mutate(['history' => $newHistory]);
+    }
+
+    /**
+     * The finished-tool-call history entry {@see replaceToolRunningPlaceholder()}
+     * writes, in both its replace and its append branch.
+     *
+     * Split out only so the two branches cannot drift apart now that the
+     * replace branch attaches a description the append branch has no way of
+     * knowing (there is no placeholder to read it off).
+     */
+    private static function toolResultMessage(ToolResult $result): Message
+    {
+        return Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
+            ->withToolResults([$result]);
     }
 
     /**
@@ -5189,6 +5210,31 @@ final class Chat implements Model
     public function contextUsagePercent(): float
     {
         return $this->estimateTokenCount($this->history) / self::REMINDER_TOKEN_LIMIT;
+    }
+
+    /**
+     * The numerator behind {@see contextUsagePercent()}: the current
+     * history's size in tokens. Exposed so the status bar can print an
+     * absolute count next to the percentage instead of multiplying the
+     * fraction back out against a limit it would have to hardcode.
+     *
+     * Approximate by construction - it is a chars/4 proxy, not a
+     * provider-reported usage figure - so any UI showing it must say so.
+     */
+    public function contextTokens(): int
+    {
+        return $this->estimateTokenCount($this->history);
+    }
+
+    /**
+     * The denominator behind {@see contextUsagePercent()}: the fixed proxy
+     * budget also used by the 70% reminder tier and the idle-compaction
+     * check. Deliberately NOT the live model's advertised context window -
+     * it is the threshold this app actually acts on.
+     */
+    public function contextTokenLimit(): int
+    {
+        return self::REMINDER_TOKEN_LIMIT;
     }
 
     /**
