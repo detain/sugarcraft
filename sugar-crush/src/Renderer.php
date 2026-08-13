@@ -1230,8 +1230,26 @@ final class Renderer
      *
      * A result carrying image bytes ({@see ToolResult::hasImage()} - the
      * `/doctor` built-in is a real producer) additionally gets the picture
-     * itself painted below the marker, via {@see renderToolImage()}
-     * (crush_feat.md §9 E3).
+     * itself painted below the marker, via {@see renderToolPicture()}
+     * (crush_feat.md §9 E3), but only once the user has EXPANDED that call.
+     *
+     * User-reported: running `/doctor` "shows just a big green box for output,
+     * nothing else, not collapsable or expandable". Two causes, both fixed
+     * here. First, a picture is budgeted a whole viewport minus two rows
+     * ({@see renderView()}), and the transcript is tail-clipped, so an
+     * unconditional picture EVICTED its own icon+name row - the box arrived
+     * with nothing identifying it. Second, the image bypassed §1 E5's
+     * collapse machinery entirely, so Ctrl+O (and the click zone that shares
+     * its key) genuinely did nothing to it. An image-bearing result therefore
+     * now collapses exactly like a text body does: one faint
+     * {@see collapsedImageNotice()} line while collapsed, the real picture
+     * once expanded.
+     *
+     * The same result's text is that picture's only caption (`/doctor`
+     * returns a real summary string saying which protocol was detected), so -
+     * like an error body, and unlike an ordinary successful one - it is kept
+     * rather than hidden when the call is collapsed. A captionless swatch is
+     * what read as a glitch in the first place.
      *
      * Bodies are no longer dumped in full forever (crush_feat.md §1 E5). A
      * SUCCESSFUL result is the case where the output is least likely to be
@@ -1282,17 +1300,19 @@ final class Renderer
             // drive one expansion mechanism rather than two.
             self::recordToolCallZone($key, $label);
 
+            $hasImage = $result->hasImage();
+
             $block = $row;
             if ($body !== '') {
-                $block .= "\n" . self::renderToolBody($body, $result->isError(), $isExpanded, $theme);
+                $block .= "\n" . self::renderToolBody($body, $result->isError() || $hasImage, $isExpanded, $theme);
             }
 
             if ($result->hasDiff()) {
                 $block .= "\n" . self::renderDiff((string) $result->diff, $theme, $width);
             }
 
-            if ($result->hasImage()) {
-                $picture = self::renderToolImage($result, $theme, $width, $images, $mosaic, $imageRows);
+            if ($hasImage) {
+                $picture = self::renderToolPicture($result, $theme, $width, $images, $mosaic, $imageRows, $isExpanded);
                 if ($picture !== '') {
                     $block .= "\n" . $picture;
                 }
@@ -1350,6 +1370,60 @@ final class Renderer
         }
 
         return Style::new()->foreground($theme->systemLabel)->faint()->render($separator . $text);
+    }
+
+    /**
+     * The picture half of an image-bearing tool result, under §1 E5's
+     * collapse policy: the real {@see renderToolImage()} encode once the
+     * user has expanded the call, a one-line {@see collapsedImageNotice()}
+     * affordance until then.
+     *
+     * Gating here rather than inside {@see renderToolImage()} keeps the
+     * expensive path honest: a collapsed picture is never decoded, never
+     * encoded and never registered with the {@see ImageLayer}, so a
+     * transcript full of screenshots costs one faint line each per frame.
+     *
+     * Returns '' with no protocol at all, in BOTH states: with a null
+     * {@see Chat::mosaic()} expanding could only ever reveal nothing, and an
+     * affordance promising a picture that cannot exist is worse than silence.
+     */
+    private static function renderToolPicture(ToolResult $result, Theme $theme, int $width, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, bool $isExpanded): string
+    {
+        if ($mosaic === null) {
+            return '';
+        }
+
+        return $isExpanded
+            ? self::renderToolImage($result, $theme, $width, $images, $mosaic, $imageRows)
+            : self::collapsedImageNotice($result, $theme, $width);
+    }
+
+    /**
+     * The collapsed stand-in for a tool result's picture: `🖼 20×10 sixel
+     * image hidden (ctrl+o)`.
+     *
+     * Names the source's pixel dimensions and the protocol it will be painted
+     * with, because the two questions a hidden picture raises are "how big is
+     * it" and "will my terminal even show it" - the second being the entire
+     * point of the `/doctor` swatch this was reported against.
+     *
+     * Dimensions come from `getimagesizefromstring()` (header only, no
+     * bitmap decode - a collapsed row must stay cheap) and are simply omitted
+     * when the header is unreadable; the expand path reports the real failure.
+     * The protocol string is truncated with the rest of the line to preserve
+     * the one-logical-line-per-row invariant.
+     */
+    private static function collapsedImageNotice(ToolResult $result, Theme $theme, int $width): string
+    {
+        $size = @getimagesizefromstring((string) $result->imageBytes);
+        $dimensions = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? "{$size[0]}×{$size[1]} " : '';
+        $protocol = $result->imageProtocol === null || $result->imageProtocol === ''
+            ? ''
+            : self::untrusted($result->imageProtocol) . ' ';
+
+        $text = Width::truncate('🖼 ' . $dimensions . $protocol . 'image hidden (ctrl+o)', max(1, $width));
+
+        return Style::new()->foreground($theme->systemLabel)->faint()->render($text);
     }
 
     /**
@@ -1455,17 +1529,23 @@ final class Renderer
     /**
      * One tool result's body under the collapse/expand policy documented on
      * {@see renderToolResults()}: verbatim when expanded, a faint one-line
-     * "N lines hidden" affordance when a successful call is collapsed, and a
-     * {@see collapseToolOutput()}-clipped excerpt (plus trailer) when a failed
-     * call is collapsed.
+     * "N lines hidden" affordance when a collapsed call's body is worth
+     * hiding, and a {@see collapseToolOutput()}-clipped excerpt (plus
+     * trailer) when it is not.
+     *
+     * @param bool $keepWhenCollapsed the body survives collapsing (clipped
+     *                                rather than hidden) because it is the
+     *                                thing the user is looking for: an error's
+     *                                reason, or the caption of a picture whose
+     *                                own rendering is collapsed alongside it
      */
-    private static function renderToolBody(string $body, bool $isError, bool $isExpanded, Theme $theme): string
+    private static function renderToolBody(string $body, bool $keepWhenCollapsed, bool $isExpanded, Theme $theme): string
     {
         if ($isExpanded) {
             return $body;
         }
 
-        if (!$isError) {
+        if (!$keepWhenCollapsed) {
             $count = substr_count($body, "\n") + 1;
             $hint = "… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)';
 

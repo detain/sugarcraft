@@ -45,6 +45,13 @@ final class RendererImageTest extends TestCase
         return (string) ob_get_clean();
     }
 
+    /**
+     * The call is EXPANDED because a picture now collapses with its tool row
+     * (§1 E5, applied to images): a collapsed result renders a one-line
+     * affordance and never decodes the bytes at all, so every encode/placement
+     * assertion in this file is about the expanded state by definition. The
+     * collapsed state is covered in {@see RendererTest}.
+     */
     private function chatWithImage(?Mosaic $mosaic, ?string $bytes = null): Chat
     {
         $result = new ToolResult(
@@ -58,6 +65,7 @@ final class RendererImageTest extends TestCase
             history: [Message::user('/doctor'), Message::assistant('')->withToolResults([$result])],
             rows: 40,
             cols: 80,
+            expanded: ['call_img' => true],
             mosaic: $mosaic,
         );
     }

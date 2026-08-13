@@ -1370,4 +1370,140 @@ final class RendererTest extends TestCase
 
         $this->assertStringNotContainsString('ls -la', $out);
     }
+
+    // =========================================================================
+    // Image-bearing tool results: caption + collapse (crush_feat.md §9 E3 read
+    // through §1 E5). User-reported: `/doctor` "shows just a big green box for
+    // output, nothing else, not collapsable or expandable" - the swatch was
+    // painted unconditionally, at up to a full viewport of rows, so it evicted
+    // its own tool row from the tail-clipped transcript AND ignored Ctrl+O.
+    // =========================================================================
+
+    /** A real, decodable PNG — candy-mosaic refuses anything it cannot decode. */
+    private function pngBytes(int $width = 20, int $height = 10): string
+    {
+        $gd = imagecreatetruecolor($width, $height);
+        imagefilledrectangle($gd, 0, 0, $width - 1, $height - 1, (int) imagecolorallocate($gd, 46, 160, 74));
+        ob_start();
+        imagepng($gd);
+
+        return (string) ob_get_clean();
+    }
+
+    /** The shape `/doctor` produces: a summary string plus a capability swatch. */
+    private function doctorChat(?\SugarCraft\Mosaic\Mosaic $mosaic, ?string $bytes = null, int $rows = 40): Chat
+    {
+        if (!\extension_loaded('gd')) {
+            $this->markTestSkipped('candy-mosaic decodes images through ext-gd');
+        }
+
+        return new Chat(
+            history: [$this->resultMessage(new \SugarCraft\Crush\ToolResult(
+                name: 'doctor',
+                result: 'Detected pixel-graphics protocol: sixel.',
+                id: 'call_img',
+                imageBytes: $bytes ?? $this->pngBytes(),
+                imageProtocol: 'sixel',
+            ))],
+            rows: $rows,
+            cols: 80,
+            mosaic: $mosaic,
+        );
+    }
+
+    /**
+     * The step-defining regression: collapsed, the picture is replaced by a
+     * one-line affordance, and the tool row plus the result's own summary -
+     * the picture's only caption - are both on screen.
+     */
+    public function testCollapsedImageResultShowsItsRowCaptionAndExpandAffordance(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock()));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+        $this->assertStringContainsString('image hidden (ctrl+o)', $out);
+        $this->assertStringNotContainsString('▀', $out, 'a collapsed picture must not be painted at all');
+    }
+
+    /** The affordance answers "how big" and "with what", the swatch's whole point. */
+    public function testCollapsedImageNoticeNamesTheSourceDimensionsAndProtocol(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock()));
+
+        $this->assertStringContainsString('20×10 sixel image hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * Ctrl+O (and the click zone that shares its key, §8 E5) now actually
+     * reaches the picture: expanding paints it and drops the affordance.
+     */
+    public function testExpandingAnImageResultPaintsThePictureAndDropsTheAffordance(): void
+    {
+        $chat = $this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock())->toggleToolOutput('call_img');
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringContainsString('▀', $out, 'half-block cells must be visible once expanded');
+        $this->assertStringNotContainsString('image hidden (ctrl+o)', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+    }
+
+    /** A collapsed picture is never decoded, so it never reaches the image layer. */
+    public function testCollapsedPixelGraphicsImageRegistersNoPlacement(): void
+    {
+        $chat = $this->doctorChat(\SugarCraft\Mosaic\Mosaic::sixel());
+
+        $this->assertSame([], Renderer::renderView($chat)->images);
+        $this->assertNotSame([], Renderer::renderView($chat->toggleToolOutput('call_img'))->images);
+    }
+
+    /**
+     * The reported failure mode itself: a tall source is budgeted the whole
+     * viewport minus two rows, so painting it unconditionally pushed the tool
+     * row - and everything else - off the tail-clipped transcript.
+     */
+    public function testATallImageNoLongerEvictsItsOwnToolRow(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock(), $this->pngBytes(16, 1600), 12));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('image hidden (ctrl+o)', $out);
+    }
+
+    /**
+     * With no probed protocol expanding could only ever reveal nothing, so the
+     * affordance would be a promise the renderer cannot keep - the caption
+     * still carries the result.
+     */
+    public function testImageResultWithoutAMosaicOffersNoExpandAffordance(): void
+    {
+        $out = Renderer::render($this->doctorChat(null));
+
+        $this->assertStringContainsString('tool: doctor', $out);
+        $this->assertStringContainsString('Detected pixel-graphics protocol: sixel.', $out);
+        $this->assertStringNotContainsString('image hidden (ctrl+o)', $out);
+    }
+
+    /** Unreadable bytes cost the dimensions, not the row. */
+    public function testCollapsedImageNoticeOmitsDimensionsItCannotRead(): void
+    {
+        $out = Renderer::render($this->doctorChat(\SugarCraft\Mosaic\Mosaic::halfBlock(), 'definitely-not-a-png'));
+
+        $this->assertStringContainsString('sixel image hidden (ctrl+o)', $out);
+        $this->assertStringNotContainsString('×', $out);
+    }
+
+    /** A text-only success keeps §1 E5's hide-the-body policy untouched. */
+    public function testTextOnlySuccessBodyIsStillHiddenWhenCollapsed(): void
+    {
+        $chat = $this->sizedChat([$this->resultMessage(
+            \SugarCraft\Crush\ToolResult::ok('grep', "alpha\nbeta", 'call_1'),
+        )]);
+
+        $out = Renderer::render($chat);
+
+        $this->assertStringNotContainsString('alpha', $out);
+        $this->assertStringContainsString('2 lines hidden (ctrl+o)', $out);
+    }
 }
