@@ -41,12 +41,13 @@ final class PaneTest extends TestCase
 
     /**
      * @testdox next() cycles exactly the panes the tab strip advertises
-     * Cycle: Chat → Files → Tools → Skills → Agents → Chat
+     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Chat
      *
      * This once walked all eight cases, so Tab stopped on Input, Settings
-     * and Help — none of which appear in MenuBar::PANE_TABS and none of
-     * which has a renderer, stranding the user on a pane the UI never
-     * offered and that draws nothing.
+     * and Help — none of which appeared in MenuBar::PANE_TABS and none of
+     * which had a renderer, stranding the user on a pane the UI never
+     * offered and that drew nothing. Settings has a renderer now
+     * (SettingsPane) and is back in the strip, so Tab reaches it again.
      */
     public function testNextCyclesCorrectly(): void
     {
@@ -54,14 +55,14 @@ final class PaneTest extends TestCase
         $this->assertSame(Pane::Tools, Pane::Files->next());
         $this->assertSame(Pane::Skills, Pane::Tools->next());
         $this->assertSame(Pane::Agents, Pane::Skills->next());
-        $this->assertSame(Pane::Chat, Pane::Agents->next());
+        $this->assertSame(Pane::Settings, Pane::Agents->next());
+        $this->assertSame(Pane::Chat, Pane::Settings->next());
     }
 
     /** Panes outside the strip are not somewhere Tab can leave you. */
     public function testNonTabPanesReturnToChat(): void
     {
         $this->assertSame(Pane::Chat, Pane::Input->next());
-        $this->assertSame(Pane::Chat, Pane::Settings->next());
         $this->assertSame(Pane::Chat, Pane::Help->next());
         $this->assertSame(Pane::Chat, Pane::Menu->next());
     }
@@ -73,8 +74,8 @@ final class PaneTest extends TestCase
     {
         $pane = Pane::Chat;
 
-        // 5 transitions: one per advertised tab
-        for ($i = 0; $i < 5; $i++) {
+        // 6 transitions: one per advertised tab
+        for ($i = 0; $i < 6; $i++) {
             $pane = $pane->next();
         }
 

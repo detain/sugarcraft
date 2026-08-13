@@ -21,6 +21,7 @@ use SugarCraft\Crush\Tui\Components\SkillsPane;
 use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
 use SugarCraft\Crush\Tui\Components\AgentsPane;
 use SugarCraft\Crush\Tui\Components\FilesPane;
+use SugarCraft\Crush\Tui\Components\SettingsPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Chat;
@@ -589,6 +590,12 @@ final class Renderer
 
         if ($a->pane === Pane::Skills) {
             return SkillsPane::render($a, $width, $rows);
+        }
+
+        // Pane::Settings had no arm here at all, which is what made selecting
+        // it (Ctrl+, or, before it was dropped, Tab) draw an empty band.
+        if ($a->pane === Pane::Settings) {
+            return SettingsPane::render($a, $width, $rows);
         }
 
         if ($a->pane === Pane::Agents) {
