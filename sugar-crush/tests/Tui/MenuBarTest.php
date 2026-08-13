@@ -56,7 +56,8 @@ final class MenuBarTest extends TestCase
     /**
      * Test that selectMenuItem returns MenuSelectedMsg with correct menu.
      * Menu 1 is the first category CommandRegistry declares ("Session",
-     * owner of /new), and the item stays empty.
+     * owner of /new), and the item now names the highlighted ROW — an empty
+     * item is what made menu Enter undispatchable.
      */
     public function testSelectMenuItemReturnsCorrectMenuMsg(): void
     {
@@ -67,7 +68,7 @@ final class MenuBarTest extends TestCase
         $this->assertSame(1, $result[0]);
         $this->assertInstanceOf(MenuSelectedMsg::class, $result[1]);
         $this->assertSame('Session', $result[1]->menu);
-        $this->assertSame('', $result[1]->item);
+        $this->assertSame(MenuBar::getMenuItems('Session')[0], $result[1]->item);
     }
 
     /**

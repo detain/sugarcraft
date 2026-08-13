@@ -24,8 +24,16 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
+use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
+use SugarCraft\Crush\Tui\Commands\GroupInputCmd;
 use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
 use SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd;
+use SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd;
+use SugarCraft\Crush\Tui\Components\MenuBar;
+use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
+use SugarCraft\Crush\Tui\Components\SkillsPane;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 
@@ -519,5 +527,213 @@ final class AppModelTest extends TestCase
         [, $cmd] = $this->app()->withChat(new Chat())->update(new KeyMsg(KeyType::Char, 'n', ctrl: true));
 
         $this->assertNull($cmd);
+    }
+
+    // =====================================================================
+    // Consuming the shell Cmd objects (crush_feat.md section 5 E7 /
+    // section 7 -- F.CMDCONSUME). Before this, App::handleKey() dropped
+    // dispatchKey()'s element 1 on the floor, so Ctrl+S, menu Enter and the
+    // skill picker all produced a command object nothing ever ran.
+    // =====================================================================
+
+    /** @return array{0: App, 1: \SugarCraft\Crush\Skills\Skill} */
+    private function appWithOneUserInvocableSkill(): array
+    {
+        $skill = new Skill(
+            name: 'audit',
+            description: 'Audit the code',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'inline',
+            paths: [],
+            content: 'body',
+            sourcePath: '',
+        );
+        $hidden = new Skill(
+            name: 'internal',
+            description: 'Not for humans',
+            userInvocable: false,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: 'inline',
+            paths: [],
+            content: 'body',
+            sourcePath: '',
+        );
+
+        $registry = new SkillRegistry();
+        $registry->register(['audit' => $skill, 'internal' => $hidden]);
+
+        return [$this->app()->withAvailableSkills($registry), $skill];
+    }
+
+    /**
+     * The regression the step exists for: Ctrl+S used to produce a
+     * SourceSkillCmd that handleKey() discarded, so the picker never opened.
+     */
+    public function testCtrlSOpensTheSkillPickerThroughUpdate(): void
+    {
+        [$app] = $this->appWithOneUserInvocableSkill();
+
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Char, 's', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame(Pane::Skills, $next->pane);
+        $this->assertCount(1, $next->skillPickerOptions);
+        $this->assertSame('audit', $next->skillPickerOptions[0]->name);
+        $this->assertSame(0, $next->skillPickerIndex);
+    }
+
+    public function testOpenPickerMovesItsCursorAndWrapsBothWays(): void
+    {
+        [$app] = $this->appWithOneUserInvocableSkill();
+        [$open] = $app->update(new KeyMsg(KeyType::Char, 's', ctrl: true));
+
+        // One option, so both directions wrap back onto row 0 - the clamp in
+        // withSkillPickerIndex() must not let it point past the last row.
+        [$down] = $open->update(new KeyMsg(KeyType::Down));
+        $this->assertSame(0, $down->skillPickerIndex);
+
+        [$up] = $open->update(new KeyMsg(KeyType::Up));
+        $this->assertSame(0, $up->skillPickerIndex);
+    }
+
+    /**
+     * Enter on the picker enables the highlighted skill. This is the whole
+     * "the skills pane cannot be selected from" report.
+     */
+    public function testEnterOnTheSkillPickerEnablesTheHighlightedSkill(): void
+    {
+        [$app, $skill] = $this->appWithOneUserInvocableSkill();
+        [$open] = $app->update(new KeyMsg(KeyType::Char, 's', ctrl: true));
+
+        [$next, $cmd] = $open->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertNull($cmd);
+        $this->assertSame([$skill], $next->enabledSkills);
+        $this->assertSame([], $next->skillPickerOptions);
+        $this->assertSame("Enabled skill 'audit'.", $next->status);
+    }
+
+    public function testEscapeDismissesTheSkillPickerAndLeavesThePane(): void
+    {
+        [$app] = $this->appWithOneUserInvocableSkill();
+        [$open] = $app->update(new KeyMsg(KeyType::Char, 's', ctrl: true));
+
+        [$next] = $open->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertSame([], $next->skillPickerOptions);
+        $this->assertSame(Pane::Chat, $next->pane);
+    }
+
+    /**
+     * An open picker draws its cursor - a highlight the user can move is the
+     * difference between a list and a picker.
+     */
+    public function testOpenPickerRendersACursorMarker(): void
+    {
+        [$app] = $this->appWithOneUserInvocableSkill();
+        [$open] = $app->update(new KeyMsg(KeyType::Char, 's', ctrl: true));
+
+        $this->assertStringContainsString('▸ audit', SkillsPane::render($open, 40, 10));
+    }
+
+    /**
+     * Menu Enter used to emit MenuSelectedMsg('Session', '') - an item nobody
+     * could dispatch. It now names the highlighted row and runs it through
+     * Chat's own slash dispatch.
+     */
+    public function testMenuEnterDispatchesTheCommandItNames(): void
+    {
+        MenuBar::closeMenu();
+        $app = $this->app()->withChat(new Chat());
+
+        [$opened] = $app->update(new KeyMsg(KeyType::F10));
+        $this->assertGreaterThan(0, MenuBar::getActiveMenu());
+
+        // Row 0 of "Session" is /new, which is palette-only; move to a row
+        // whose slash form Chat::submit() really dispatches.
+        $items = MenuBar::getMenuItems('Session');
+        $target = array_search('Switch session', $items, true);
+        $this->assertIsInt($target);
+        for ($i = 0; $i < $target; $i++) {
+            [$opened] = $opened->update(new KeyMsg(KeyType::Down));
+        }
+        $this->assertSame($target, MenuBar::getActiveItem());
+
+        [$next, $cmd] = $opened->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertTrue($cmd === null || $cmd instanceof \Closure);
+        // Selecting closes the menu, and the command really ran: /sessions
+        // appends its own response turn to the hosted chat.
+        $this->assertSame(0, MenuBar::getActiveMenu());
+        $this->assertNotNull($next->chat);
+        $this->assertNotSame([], $next->chat->history);
+        $this->assertSame('/sessions', $next->chat->history[0]->content);
+        MenuBar::closeMenu();
+    }
+
+    public function testMenuSelectionWithoutAHostedChatReportsInsteadOfPretending(): void
+    {
+        [$next, $cmd] = $this->app()->consumeShellCmd(new MenuSelectedMsg('Session', 'Switch session'));
+
+        $this->assertNull($cmd);
+        $this->assertSame("No chat is hosted — 'sessions' was not dispatched.", $next->status);
+    }
+
+    public function testUnknownMenuItemIsAnErrorNotASilentNoOp(): void
+    {
+        [$next] = $this->app()->withChat(new Chat())->consumeShellCmd(new MenuSelectedMsg('Session', 'Nope'));
+
+        $this->assertSame("No command matches menu item 'Nope'.", $next->error);
+    }
+
+    /**
+     * Ctrl+K's CommandPaletteCmd is translated into the Ctrl+P keystroke Chat
+     * already binds, rather than returned to a Program that cannot run it.
+     */
+    public function testCommandPaletteCmdOpensTheHostedChatsPalette(): void
+    {
+        [$next, $cmd] = $this->app()->withChat(new Chat())->consumeShellCmd(new CommandPaletteCmd());
+
+        $this->assertNull($cmd);
+        $this->assertNotNull($next->chat);
+        $this->assertNotNull($next->chat->palette());
+    }
+
+    /**
+     * A menu command must not be appended to a half-typed draft: the shell
+     * backspaces the buffer empty before typing the command.
+     */
+    public function testDispatchingACommandClearsTheChatsDraftFirst(): void
+    {
+        $app = $this->app()->withChat(new Chat([], 'half written'));
+
+        [$next] = $app->consumeShellCmd(new MenuSelectedMsg('Session', 'Switch session'));
+
+        $this->assertNotNull($next->chat);
+        $this->assertSame('', $next->chat->inputBuf);
+    }
+
+    /**
+     * The commands consumeShellCmd() deliberately leaves inert must stay
+     * inert AND schedulable - no fabricated effect, no Cmd the loop chokes on.
+     */
+    public function testDeliberatelyInertCommandsAreNoOps(): void
+    {
+        $app = $this->app()->withChat(new Chat());
+
+        foreach ([new GroupInputCmd(), new StopAllAgentsCmd(), new QuitAgentViewCmd()] as $inert) {
+            [$next, $cmd] = $app->consumeShellCmd($inert);
+            $this->assertNull($cmd);
+            $this->assertSame($app, $next);
+        }
     }
 }

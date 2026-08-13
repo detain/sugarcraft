@@ -45,10 +45,18 @@ final class SkillsPane
 
         if ($a->skillPickerOptions !== []) {
             $lines = [];
-            foreach (array_slice($a->skillPickerOptions, 0, $budget) as $skill) {
+            // Scroll the window so the cursor stays visible on a list longer
+            // than the pane: an off-screen cursor is the same "cannot select"
+            // dead end as having no cursor at all.
+            $offset = max(0, min($a->skillPickerIndex - $budget + 1, count($a->skillPickerOptions) - $budget));
+            foreach (array_slice($a->skillPickerOptions, $offset, $budget, true) as $row => $skill) {
+                $isCursor = $row === $a->skillPickerIndex;
                 $lines[] = self::badgePrefix($skill) . Style::new()
-                    ->foreground(Color::hex('#00ffaa'))
-                    ->render(Width::truncate('▸ ' . $skill->name . ' — ' . $skill->description, $labelWidth));
+                    ->foreground(Color::hex($isCursor ? '#00ffaa' : '#7d6e98'))
+                    ->render(Width::truncate(
+                        ($isCursor ? '▸ ' : '  ') . $skill->name . ' — ' . $skill->description,
+                        $labelWidth,
+                    ));
             }
             $body = implode("\n", $lines);
             $title = ' select a skill ';

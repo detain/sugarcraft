@@ -63,6 +63,17 @@ final class MenuBar
     private static int $activeMenu = 0;
 
     /**
+     * Zero-based row cursor INSIDE the open menu's dropdown.
+     *
+     * Without it {@see selectMenuItem()} could only ever name the menu, never
+     * a row of it — which is why {@see MenuSelectedMsg::$item} was always the
+     * empty string and pressing Enter on a menu could not dispatch anything.
+     * Reset whenever the open menu changes, so opening a menu always starts
+     * on its first row.
+     */
+    private static int $activeItem = 0;
+
+    /**
      * @param int|null $cols Width the bar has to fit in. Null renders the full
      *                       bar, which is what a caller measuring the bar on
      *                       its own wants; the shell frame passes the terminal
@@ -118,11 +129,22 @@ final class MenuBar
         return $tabs . ' ' . $current;
     }
 
+    /**
+     * Route one key to the open menu.
+     *
+     * Up/down (and their vim spellings) move the {@see $activeItem} row
+     * cursor: a dropdown that lists rows but cannot be moved through has no
+     * row for Enter to name.
+     *
+     * @return array{0: int, 1: ?MenuSelectedMsg}
+     */
     public static function handleKey(string $key, int $currentMenu): array
     {
         return match ($key) {
             'left', 'h' => [self::cycleMenu($currentMenu, -1), null],
             'right', 'l' => [self::cycleMenu($currentMenu, 1), null],
+            'up', 'k' => [self::moveItem($currentMenu, -1), null],
+            'down', 'j' => [self::moveItem($currentMenu, 1), null],
             'enter', 'o' => self::selectMenuItem($currentMenu),
             'escape', 'q' => [self::closeMenu(), null],
             default => [$currentMenu, null],
@@ -144,9 +166,50 @@ final class MenuBar
             $new = 1;
         }
 
+        // A different menu has a different row list, so the cursor cannot
+        // carry over — it would land on an unrelated (or out-of-range) row.
+        self::$activeItem = 0;
+
         return $new;
     }
 
+    /**
+     * Move the dropdown's row cursor, wrapping at both ends the way the menu
+     * strip itself wraps. Returns the menu index unchanged so the caller's
+     * "did the menu change?" check stays meaningful.
+     */
+    private static function moveItem(int $currentMenu, int $direction): int
+    {
+        $count = count(self::itemsOf($currentMenu));
+        if ($count === 0) {
+            self::$activeItem = 0;
+
+            return $currentMenu;
+        }
+
+        self::$activeItem = (self::$activeItem + $direction % $count + $count) % $count;
+
+        return $currentMenu;
+    }
+
+    /**
+     * The row labels of the menu at $menuIndex (1-based), or [] when there is
+     * no such menu.
+     *
+     * @return list<string>
+     */
+    private static function itemsOf(int $menuIndex): array
+    {
+        $menus = self::menus();
+        $names = array_keys($menus);
+        $name = $names[$menuIndex - 1] ?? null;
+
+        return $name === null ? [] : array_values($menus[$name]);
+    }
+
+    /**
+     * @return array{0: int, 1: ?MenuSelectedMsg}
+     */
     private static function selectMenuItem(int $menuIndex): array
     {
         $menus = self::menus();
@@ -156,8 +219,18 @@ final class MenuBar
 
         $menuNames = array_keys($menus);
         $menuName = $menuNames[$menuIndex - 1] ?? '';
+        $items = self::itemsOf($menuIndex);
 
-        return [$menuIndex, new MenuSelectedMsg($menuName, '')];
+        return [$menuIndex, new MenuSelectedMsg($menuName, $items[self::$activeItem] ?? '')];
+    }
+
+    /**
+     * The dropdown's zero-based row cursor. Exposed so the shell can assert
+     * on (and a renderer can highlight) the row Enter would select.
+     */
+    public static function getActiveItem(): int
+    {
+        return self::$activeItem;
     }
 
     /**
@@ -173,6 +246,7 @@ final class MenuBar
     public static function closeMenu(): int
     {
         self::$activeMenu = 0;
+        self::$activeItem = 0;
         return 0;
     }
 
@@ -204,6 +278,8 @@ final class MenuBar
         if ($count === 0 || $index < 1 || $index > $count) {
             return self::$activeMenu;
         }
+
+        self::$activeItem = 0;
 
         return self::$activeMenu = self::$activeMenu === $index ? 0 : $index;
     }
@@ -248,10 +324,15 @@ final class MenuBar
         $dim = Style::new()->foreground(Color::hex('#6b7280'));
         $item = Style::new()->foreground(Color::hex('#e5e7eb'));
 
+        // The row Enter would select has to be visible, or the cursor
+        // moves invisibly and the user cannot tell what they are about to run.
+        $selected = Style::new()->foreground(Color::hex('#00ffaa'))->bold();
+
         $lines = [$dim->render('┌' . str_repeat('─', $inner + 2) . '┐')];
-        foreach ($labels as $label) {
+        foreach ($labels as $row => $label) {
             $pad = str_repeat(' ', $inner - Width::string($label));
-            $lines[] = $dim->render('│ ') . $item->render($label . $pad) . $dim->render(' │');
+            $style = $row === self::$activeItem ? $selected : $item;
+            $lines[] = $dim->render('│ ') . $style->render($label . $pad) . $dim->render(' │');
         }
         $lines[] = $dim->render('└' . str_repeat('─', $inner + 2) . '┘');
 
@@ -286,6 +367,9 @@ final class MenuBar
     {
         $count = count(self::menus());
         if ($index >= 0 && $index <= $count) {
+            if ($index !== self::$activeMenu) {
+                self::$activeItem = 0;
+            }
             self::$activeMenu = $index;
         }
     }
