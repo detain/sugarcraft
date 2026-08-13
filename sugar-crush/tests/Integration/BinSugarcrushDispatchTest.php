@@ -592,6 +592,13 @@ final class BinSugarcrushDispatchTest extends TestCase
      * can reach the child, and an override list cannot enumerate variables it
      * does not know the machine has set.
      *
+     * TMPDIR earns its place for the same reason HOME does. The child is a real
+     * CLI launch, so it performs a real startup sweep of abandoned tool-IPC
+     * payloads ({@see \SugarCraft\Crush\Support\ToolIpcFiles::sweepOnce()}) —
+     * and without this it performs it on the developer's actual `/tmp`.
+     * tests/bootstrap.php parks a sandbox there for the whole run.
+     *
+
      * @param array<string, string> $overrides
      * @return array<string, string>
      */
@@ -603,7 +610,11 @@ final class BinSugarcrushDispatchTest extends TestCase
         }
 
         return \array_merge(
-            ['PATH' => (string) (\getenv('PATH') ?: '/usr/bin:/bin'), 'HOME' => $this->tempHome],
+            [
+                'PATH' => (string) (\getenv('PATH') ?: '/usr/bin:/bin'),
+                'HOME' => $this->tempHome,
+                'TMPDIR' => (string) (\getenv('TMPDIR') ?: \sys_get_temp_dir()),
+            ],
             $overrides,
         );
     }

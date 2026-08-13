@@ -1639,7 +1639,10 @@ final class Chat implements Model
                 continue;
             }
 
-            $file = sys_get_temp_dir() . '/sc_chat_tool_' . bin2hex(random_bytes(8)) . '.json';
+            $file = \SugarCraft\Crush\Support\ToolIpcFiles::reserve(
+                \SugarCraft\Crush\Support\ToolIpcFiles::CHAT_PREFIX,
+                'json',
+            );
             $pid = pcntl_fork();
 
             if ($pid === -1) {
@@ -1807,7 +1810,11 @@ final class Chat implements Model
         ];
 
         $json = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
-        file_put_contents($file, $json === false ? '' : $json);
+
+        // 0600 + atomic rename, via the same helper Runtime's fork path uses:
+        // this payload is a whole tool result (file bodies, fetched pages) and
+        // was landing world-readable in /tmp under the ambient umask.
+        \SugarCraft\Crush\Support\ToolIpcFiles::write($file, $json === false ? '' : $json);
     }
 
     /**
@@ -1903,9 +1910,11 @@ final class Chat implements Model
     private function collectToolResult(string $file, ToolCall $toolCall): ToolResult
     {
         $data = is_file($file) ? file_get_contents($file) : false;
-        if ($data !== false && $data !== '') {
-            @unlink($file);
-        }
+        // Unconditionally, and including the `.partial` sibling: the old
+        // "only unlink what we successfully read" left an empty or
+        // half-written payload behind forever, which is the same leak
+        // ToolIpcFiles::sweep() exists to mop up after a cancel.
+        \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
 
         $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
         if (!is_array($decoded) || !is_array($decoded['result'] ?? null)) {

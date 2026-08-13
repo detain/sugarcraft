@@ -382,7 +382,14 @@ final class BootstrapTest extends TestCase
     private static function runBin(array $command, string $cwd, string $home): array
     {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $env = ['HOME' => $home, 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'];
+        // TMPDIR is forwarded so the child's real startup sweep of abandoned
+        // tool-IPC payloads lands in the sandbox tests/bootstrap.php parks
+        // there, not in the developer's actual /tmp.
+        $env = [
+            'HOME' => $home,
+            'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
+            'TMPDIR' => getenv('TMPDIR') ?: sys_get_temp_dir(),
+        ];
 
         $process = proc_open([PHP_BINARY, ...$command], $descriptors, $pipes, $cwd, $env);
         self::assertIsResource($process);

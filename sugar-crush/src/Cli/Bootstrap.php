@@ -23,6 +23,7 @@ use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\BuiltIn\Doctor;
@@ -222,9 +223,17 @@ final class Bootstrap
      *      without needing $SUGARCRUSH_PROVIDER exported every time.
      *   4. (default) the offline EchoProvider, still run through the engine so the
      *      binary launches with zero network and zero config.
+     *
+     * Also the process's one startup sweep of abandoned forked-tool payloads
+     * ({@see ToolIpcFiles::sweepOnce()}) — every real run reaches this method
+     * or {@see backendFor()} exactly once, and the files being swept are by
+     * definition ones whose owning process was killed before it could clean up
+     * after itself.
      */
     public static function backend(?string $root = null): Backend
     {
+        ToolIpcFiles::sweepOnce();
+
         $root ??= getcwd() ?: null;
 
         $providerType = getenv('SUGARCRUSH_PROVIDER');
@@ -277,6 +286,11 @@ final class Bootstrap
      */
     public static function backendFor(string $providerName, ?string $root = null): Backend
     {
+        // See backend(): whichever of the two a run enters through, the sweep
+        // happens once. sweepOnce() latches, so backend() delegating here does
+        // not sweep twice.
+        ToolIpcFiles::sweepOnce();
+
         $root ??= getcwd() ?: null;
         $factory = new ProviderFactory();
         $provider = $factory->create($factory->defaultConfig($providerName));
