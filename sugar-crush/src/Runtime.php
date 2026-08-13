@@ -192,12 +192,67 @@ final class Runtime
                 ? (json_decode($hookResult->modifiedInput ?? '', true) ?? $toolCall->arguments())
                 : $toolCall->arguments();
 
-            $result = $tool->execute($args);
+            // A throwing tool must cost its own call, not the whole turn.
+            // Without this catch the \Throwable escapes this generator, out
+            // through Runtime::run(), and is only stopped by
+            // EngineBackend::runCompleteInChild()'s outer boundary — which
+            // reports a turn-level failure and discards every OTHER tool
+            // result plus all assistant content already produced. A model
+            // handing Bash a non-string `command` (TypeError out of
+            // escapeshellarg()) is enough to trigger it.
+            //
+            // Scope, precisely: everything from here to the yield below is
+            // contained — the tool body, the PostToolUse hook chain, and the
+            // ToolFinished emit — each degrading to an annotated result for
+            // THIS call. What is NOT contained is anything before it (the
+            // PreToolUse chain and settleAsk, which decide whether the call
+            // happens at all and so have nothing to degrade to) and the yield
+            // itself (a consumer throwing back into this generator is the
+            // consumer ending the turn). This is strictly wider than
+            // Chat::invokeTool(), which guards only the tool body.
+            try {
+                $result = $tool->execute($args);
+            } catch (\Throwable $e) {
+                $result = new ToolResult(
+                    toolCallId: $toolCall->id(),
+                    content: sprintf(
+                        'Error: %s failed with %s: %s',
+                        $tool->name(),
+                        $e::class,
+                        $e->getMessage(),
+                    ),
+                    isError: true,
+                );
+            }
 
-            // Post-hook observes the tool output.
-            $this->hookManager->postToolUse($context->withToolOutput($result->content()));
+            // Post-hook observes the tool output. HookRegistry::executeHooks()
+            // calls $hook->execute() bare, so a ScriptHook whose script is
+            // missing, or a PHP hook with a bug, throws straight through — and
+            // a hook is OBSERVABILITY, not the answer. The tool already ran
+            // and its output is valid, so the failure is reported alongside
+            // that output rather than replacing it or discarding the turn.
+            try {
+                $this->hookManager->postToolUse($context->withToolOutput($result->content()));
+            } catch (\Throwable $e) {
+                $result = self::annotate($result, sprintf(
+                    '[PostToolUse hook failed: %s: %s]',
+                    $e::class,
+                    $e->getMessage(),
+                ));
+            }
 
-            $this->emit($onEvent, ToolFinished::fromResult($toolCall, $result));
+            // A listener that throws is a UI bug. It must not take the turn's
+            // other tool results down with it, and the model still needs this
+            // result regardless of whether anything managed to render it.
+            try {
+                $this->emit($onEvent, ToolFinished::fromResult($toolCall, $result));
+            } catch (\Throwable $e) {
+                $result = self::annotate($result, sprintf(
+                    '[ToolFinished listener failed: %s: %s]',
+                    $e::class,
+                    $e->getMessage(),
+                ));
+            }
 
             // Echo the ORIGINAL tool-call id: the model correlates a result
             // to its request by this id, and the tool itself never sees it.
@@ -264,6 +319,32 @@ final class Runtime
         ));
 
         return new ToolResultMessage($toolCall->id(), $message, isError: true);
+    }
+
+    /**
+     * Append a side-channel note to a {@see ToolResult} without disturbing it.
+     *
+     * `isError` is deliberately left alone: a hook or a renderer falling over
+     * says nothing about whether the tool succeeded, and flipping the flag
+     * would tell the model to retry a call that already worked. Every other
+     * field is copied through because {@see ToolResult} is readonly and its
+     * image/diff payloads are what {@see \SugarCraft\Crush\Backend\EngineBackend}
+     * renders.
+     */
+    private static function annotate(ToolResult $result, string $note): ToolResult
+    {
+        $content = $result->content();
+
+        return new ToolResult(
+            toolCallId: $result->toolCallId(),
+            content: $content === '' ? $note : $content . "\n\n" . $note,
+            isError: $result->isError(),
+            durationMs: $result->durationMs(),
+            imageBytes: $result->imageBytes(),
+            imagePath: $result->imagePath(),
+            imageProtocol: $result->imageProtocol(),
+            diff: $result->diff(),
+        );
     }
 
     private function emit(?callable $onEvent, ToolStarted|ToolFinished $event): void

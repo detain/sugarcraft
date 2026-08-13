@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -31,10 +32,20 @@ use SugarCraft\Crush\Tools\ToolResult;
 final readonly class Bash implements Tool
 {
     use CapturesProcessOutput;
+    use TruncatesOutput;
 
+    /**
+     * $maxOutputBytes bounds what a command can push into the context window.
+     * Shell output is the least predictable of any tool's — `find /`, a `cat`
+     * of a build artefact or a verbose test run all produce megabytes with no
+     * warning — so the bound applies during capture as well as after it (see
+     * {@see CapturesProcessOutput::runCaptured()}). Zero or negative disables
+     * the cap for a caller that has arranged its own containment.
+     */
     public function __construct(
         private ?string $root = null,
         private ?AgentPathJail $worktreeJail = null,
+        private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
     ) {}
 
     public function name(): string
@@ -79,11 +90,21 @@ final readonly class Bash implements Tool
         // attached to the real terminal, so a command that writes there
         // paints outside the TUI frame -- and the model never sees the
         // reason a command failed.
-        $run = $this->runCaptured($cmd);
+        $run = $this->runCaptured($cmd, null, $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null);
 
+        // The merge can concatenate stdout AND stderr, so each being within
+        // the bound is not the same as the result being within it — the final
+        // string gets the authoritative clip. It is handed the merge's own
+        // account of what survived rather than the capture's raw totals: only
+        // the merge knows whether the stderr the capture clipped is even part
+        // of this answer, and whether the failure explanation still has to be
+        // fitted in alongside a large stdout.
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: $this->mergeCapturedOutput($run),
+            content: $this->truncateMerged(
+                $this->mergeCapturedOutput($run),
+                $this->maxOutputBytes,
+            ),
             isError: $run['exitCode'] !== 0,
         );
     }

@@ -112,7 +112,33 @@ final class BuiltInToolTest extends TestCase
         $tool = new Glob();
 
         $this->assertSame('Glob', $tool->name());
-        $this->assertSame('Find files matching a glob pattern', $tool->description());
+        $this->assertStringStartsWith('Find files matching a glob pattern', $tool->description());
+    }
+
+    /**
+     * The default prune list is the tool's single biggest behavioural
+     * surprise, and a model only ever learns about a default it is told
+     * about. Leaving it out of description() meant the escape hatch existed
+     * but was undiscoverable, so an empty result for a file living in
+     * vendor/ read as "that file does not exist".
+     */
+    public function testGlobDescriptionNamesThePrunedDirectoriesAndTheOptOut(): void
+    {
+        $description = (new Glob())->description();
+
+        foreach (['.git', 'vendor', 'node_modules', '.phpunit.cache'] as $dir) {
+            $this->assertStringContainsString($dir, $description, $dir);
+        }
+        $this->assertStringContainsString('vendor/**/*.php', $description, 'the opt-out has to be spelled out');
+    }
+
+    /** A caller that turned pruning off must not advertise a prune list. */
+    public function testGlobDescriptionDropsThePruneNoteWhenPruningIsDisabled(): void
+    {
+        $this->assertSame(
+            'Find files matching a glob pattern',
+            (new Glob(prunedDirs: []))->description(),
+        );
     }
 
     public function testWebFetchToolHasCorrectNameAndDescription(): void

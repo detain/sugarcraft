@@ -57,7 +57,10 @@ final readonly class Edit implements Tool
             'file_path' => ['type' => 'string', 'description' => 'Path to file to edit'],
             'old_string' => ['type' => 'string', 'description' => 'The text to replace'],
             'new_string' => ['type' => 'string', 'description' => 'The replacement text'],
-            'replace_all' => ['type' => 'bool', 'description' => 'Replace all occurrences'],
+            // `boolean`, not `bool`: JSON Schema has no `bool` type, and a
+            // guided-decoding backend (SGLang outlines/xgrammar) can reject
+            // or mis-constrain a field whose declared type it cannot resolve.
+            'replace_all' => ['type' => 'boolean', 'description' => 'Replace all occurrences'],
             'description' => [
                 'type' => 'string',
                 'description' => 'Clear, concise 5-10 word description in active voice of what this edit does (e.g. "Rename the legacy config helper", not "edits a file").',

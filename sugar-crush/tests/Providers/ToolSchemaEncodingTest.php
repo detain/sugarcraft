@@ -66,6 +66,25 @@ final class ToolSchemaEncodingTest extends TestCase
         $this->assertSame('string', $byName['real']['properties']['path']['type']);
     }
 
+    /**
+     * The stubs below are only ever asked for their SCHEMA, so a fatal in
+     * their execute() would sit latent until someone extended a test to drive
+     * one. They used to call a `ToolResult::ok()` factory that has never
+     * existed on {@see ToolResult} — constructor only. Driving them here means
+     * the next person cannot inherit that trap.
+     */
+    public function testTheSchemaStubsAreRunnableToolsNotJustSchemaHolders(): void
+    {
+        foreach ([new EmptyPropsToolStub(), new RealPropsToolStub()] as $stub) {
+            $result = $stub->execute(['id' => 'call_stub']);
+
+            $this->assertInstanceOf(ToolResult::class, $result);
+            $this->assertSame('call_stub', $result->toolCallId());
+            $this->assertSame('ok', $result->content());
+            $this->assertFalse($result->isError());
+        }
+    }
+
     /** `required` is genuinely a JSON array — it must NOT be objectified. */
     public function testRequiredStaysAnArray(): void
     {
@@ -116,6 +135,135 @@ final class ToolSchemaEncodingTest extends TestCase
         $this->assertSame('{}', $call['function']['arguments']);
     }
 
+    // =========================================================================
+    // JSON-Schema `type` validity across every built-in
+    // =========================================================================
+
+    /**
+     * `Edit.replace_all` was declared `'type' => 'bool'`. JSON Schema has no
+     * `bool` type — the primitive is spelled `boolean` — and a strict
+     * guided-decoding backend (SGLang's outlines/xgrammar) can reject the
+     * schema or, worse, fail to constrain the field at all and let the model
+     * emit anything there.
+     *
+     * Walking every built-in recursively is what stops the next one silently
+     * regressing: PHP's own type names (`bool`, `int`, `float`) are the
+     * natural thing to type, and nothing else in the stack complains.
+     *
+     * @dataProvider builtInToolProvider
+     */
+    public function testEveryBuiltInToolDeclaresOnlyValidJsonSchemaTypes(Tool $tool): void
+    {
+        $this->assertSchemaTypesAreValid($tool->inputSchema(), $tool->name());
+    }
+
+    /** @return iterable<string, array{Tool}> */
+    public static function builtInToolProvider(): iterable
+    {
+        foreach (self::builtInTools() as $tool) {
+            yield $tool->name() => [$tool];
+        }
+    }
+
+    /** Every built-in tool, constructed with its default (standalone) wiring. */
+    private static function builtInTools(): array
+    {
+        return [
+            new \SugarCraft\Crush\Tools\BuiltIn\Bash(),
+            new \SugarCraft\Crush\Tools\BuiltIn\Doctor(),
+            new \SugarCraft\Crush\Tools\BuiltIn\Edit(),
+            new \SugarCraft\Crush\Tools\BuiltIn\Glob(),
+            new \SugarCraft\Crush\Tools\BuiltIn\Grep(),
+            new \SugarCraft\Crush\Tools\BuiltIn\Read(),
+            new \SugarCraft\Crush\Tools\BuiltIn\SkillTool(new \SugarCraft\Crush\Skills\SkillRegistry()),
+            new \SugarCraft\Crush\Tools\BuiltIn\WebFetch(),
+            new \SugarCraft\Crush\Tools\BuiltIn\WebSearch(),
+        ];
+    }
+
+    /**
+     * The seven JSON-Schema primitives. Anything else — `bool`, `int`,
+     * `float`, `dict`, a PHP class name — is not a schema type.
+     */
+    private const VALID_JSON_SCHEMA_TYPES = [
+        'string', 'number', 'integer', 'boolean', 'object', 'array', 'null',
+    ];
+
+    /**
+     * Recurse through `properties`, `items`, and the combinator keywords so a
+     * bad type nested three levels down is still caught.
+     */
+    private function assertSchemaTypesAreValid(mixed $schema, string $path): void
+    {
+        if ($schema instanceof \stdClass) {
+            $schema = (array) $schema;
+        }
+
+        if (!is_array($schema)) {
+            return;
+        }
+
+        if (isset($schema['type'])) {
+            foreach ((array) $schema['type'] as $type) {
+                $this->assertContains(
+                    $type,
+                    self::VALID_JSON_SCHEMA_TYPES,
+                    "$path declares JSON-Schema type '$type', which is not a JSON-Schema primitive",
+                );
+            }
+        }
+
+        foreach (['properties', 'patternProperties', '$defs', 'definitions'] as $mapKeyword) {
+            $map = $schema[$mapKeyword] ?? null;
+            if ($map instanceof \stdClass) {
+                $map = (array) $map;
+            }
+            if (is_array($map)) {
+                foreach ($map as $name => $sub) {
+                    $this->assertSchemaTypesAreValid($sub, "$path.$mapKeyword.$name");
+                }
+            }
+        }
+
+        foreach (['items', 'additionalProperties', 'not'] as $singleKeyword) {
+            if (isset($schema[$singleKeyword])) {
+                $this->assertSchemaTypesAreValid($schema[$singleKeyword], "$path.$singleKeyword");
+            }
+        }
+
+        foreach (['anyOf', 'oneOf', 'allOf', 'prefixItems'] as $listKeyword) {
+            if (is_array($schema[$listKeyword] ?? null)) {
+                foreach ($schema[$listKeyword] as $i => $sub) {
+                    $this->assertSchemaTypesAreValid($sub, "$path.$listKeyword[$i]");
+                }
+            }
+        }
+    }
+
+    /** The specific field that was wrong, pinned by name. */
+    public function testEditReplaceAllIsABooleanNotABool(): void
+    {
+        $schema = (new \SugarCraft\Crush\Tools\BuiltIn\Edit())->inputSchema();
+
+        $this->assertSame('boolean', $schema['properties']['replace_all']['type']);
+    }
+
+    /** The walker has to actually fail on the shape that shipped. */
+    public function testTheValidatorRejectsTheBoolSpelling(): void
+    {
+        $failed = false;
+        try {
+            $this->assertSchemaTypesAreValid(
+                ['type' => 'object', 'properties' => ['flag' => ['type' => 'bool']]],
+                'stub',
+            );
+        } catch (\PHPUnit\Framework\AssertionFailedError) {
+            $failed = true;
+        }
+
+        $this->assertTrue($failed, 'the recursive walk must reject a nested `bool` type');
+    }
+
     /** @param list<mixed> $messages */
     private function buildParamsForMessages(array $messages): array
     {
@@ -155,7 +303,7 @@ final class EmptyPropsToolStub implements Tool
     }
     public function execute(array $args): ToolResult
     {
-        return ToolResult::ok('ok');
+        return new ToolResult(toolCallId: $args['id'] ?? '', content: 'ok');
     }
 }
 
@@ -174,6 +322,6 @@ final class RealPropsToolStub implements Tool
     }
     public function execute(array $args): ToolResult
     {
-        return ToolResult::ok('ok');
+        return new ToolResult(toolCallId: $args['id'] ?? '', content: 'ok');
     }
 }

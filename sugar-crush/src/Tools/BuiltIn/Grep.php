@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
@@ -12,9 +13,18 @@ use SugarCraft\Crush\Tools\PathJail;
 final readonly class Grep implements Tool
 {
     use CapturesProcessOutput;
+    use TruncatesOutput;
 
+    /**
+     * $maxOutputBytes bounds the hit list. `grep -rn` over a real tree has no
+     * ceiling of its own: a common identifier, or a pattern that happens to
+     * match minified assets or a lockfile, returns tens of thousands of lines
+     * that would otherwise be replayed into every following request of the
+     * turn. Zero or negative disables the cap.
+     */
     public function __construct(
         private ?string $root = null,
+        private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
     ) {}
 
     public function name(): string
@@ -83,11 +93,16 @@ final readonly class Grep implements Tool
         // See Bash::execute() -- exec() leaks the child's stderr onto the
         // terminal underneath the TUI. grep exits 1 for "no matches", which
         // is a normal outcome rather than an error.
-        $run = $this->runCaptured($cmd);
+        $run = $this->runCaptured($cmd, null, $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null);
 
+        // See Bash::execute() for why the merge's account is what gets clipped
+        // rather than the capture's raw byte totals.
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: $this->mergeCapturedOutput($run),
+            content: $this->truncateMerged(
+                $this->mergeCapturedOutput($run),
+                $this->maxOutputBytes,
+            ),
             isError: $run['exitCode'] > 1,
         );
     }

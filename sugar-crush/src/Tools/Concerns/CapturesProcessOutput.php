@@ -27,9 +27,41 @@ namespace SugarCraft\Crush\Tools\Concerns;
 trait CapturesProcessOutput
 {
     /**
-     * @return array{stdout: string, stderr: string, exitCode: int}
+     * $maxBytes bounds what is RETAINED per stream, not what is read: the
+     * pipes are still drained to completion so the child never blocks on a
+     * full buffer, but bytes past the bound are counted and discarded instead
+     * of accumulated. Without it a `cat` of a multi-gigabyte file is an
+     * out-of-memory kill of the agent itself, long before {@see
+     * TruncatesOutput} would get a chance to clip the finished string. Null
+     * keeps the capture unbounded for callers that want the whole thing.
+     *
+     * The discard counts are reported PER STREAM, not only as a total. Which
+     * stream lost bytes is not bookkeeping trivia: {@see
+     * mergeCapturedOutput()} routinely drops one stream from the result
+     * entirely, and folding that stream's discards into the reported loss
+     * labels a complete answer partial — bytes that were never going to
+     * appear at any cap counted as if the cap had cost them. `truncatedBytes`
+     * remains the sum for callers that genuinely want both.
+     *
+     * `stdoutMidLine`/`stderrMidLine` say whether the bound landed INSIDE a
+     * line. The bound is a byte count, so it lands wherever it lands; the
+     * retained text can therefore end on half a path or half a grep hit,
+     * which the presentation layer has to repair (it cannot infer this from a
+     * discard count alone, since a cut that happened to fall on a newline
+     * needs no repair).
+     *
+     * @return array{
+     *     stdout: string,
+     *     stderr: string,
+     *     exitCode: int,
+     *     truncatedBytes: int,
+     *     stdoutDropped: int,
+     *     stderrDropped: int,
+     *     stdoutMidLine: bool,
+     *     stderrMidLine: bool,
+     * }
      */
-    private function runCaptured(string $command, ?string $cwd = null): array
+    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null): array
     {
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -39,7 +71,16 @@ trait CapturesProcessOutput
 
         $process = @proc_open($command, $descriptors, $pipes, $cwd);
         if (!is_resource($process)) {
-            return ['stdout' => '', 'stderr' => 'Failed to start process', 'exitCode' => 127];
+            return [
+                'stdout' => '',
+                'stderr' => 'Failed to start process',
+                'exitCode' => 127,
+                'truncatedBytes' => 0,
+                'stdoutDropped' => 0,
+                'stderrDropped' => 0,
+                'stdoutMidLine' => false,
+                'stderrMidLine' => false,
+            ];
         }
 
         // Close stdin immediately: a command that reads from it (and nothing
@@ -54,6 +95,8 @@ trait CapturesProcessOutput
 
         $stdout = '';
         $stderr = '';
+        $stdoutDropped = 0;
+        $stderrDropped = 0;
         while (!feof($pipes[1]) || !feof($pipes[2])) {
             $read = array_filter([$pipes[1], $pipes[2]], static fn($p) => !feof($p));
             if ($read === []) {
@@ -69,9 +112,9 @@ trait CapturesProcessOutput
                     continue;
                 }
                 if ($pipe === $pipes[1]) {
-                    $stdout .= $chunk;
+                    $stdout = self::appendBounded($stdout, $chunk, $maxBytes, $stdoutDropped);
                 } else {
-                    $stderr .= $chunk;
+                    $stderr = self::appendBounded($stderr, $chunk, $maxBytes, $stderrDropped);
                 }
             }
         }
@@ -80,37 +123,127 @@ trait CapturesProcessOutput
         fclose($pipes[2]);
         $exitCode = proc_close($process);
 
+        // Decided BEFORE the rtrim: a stream that lost bytes but happened to
+        // stop on a newline is intact, and repairing it anyway would throw
+        // away a complete line for nothing.
+        $stdoutMidLine = $stdoutDropped > 0 && !str_ends_with($stdout, "\n");
+        $stderrMidLine = $stderrDropped > 0 && !str_ends_with($stderr, "\n");
+
         return [
             'stdout' => rtrim($stdout, "\n"),
             'stderr' => rtrim($stderr, "\n"),
             'exitCode' => $exitCode,
+            'truncatedBytes' => $stdoutDropped + $stderrDropped,
+            'stdoutDropped' => $stdoutDropped,
+            'stderrDropped' => $stderrDropped,
+            'stdoutMidLine' => $stdoutMidLine,
+            'stderrMidLine' => $stderrMidLine,
         ];
     }
 
     /**
-     * Fold a captured run into the single string a {@see
-     * \SugarCraft\Crush\Tools\ToolResult} carries.
+     * Append as much of $chunk as the bound still allows, adding the remainder
+     * to $discarded.
+     *
+     * The partial-append case matters: a bound reached mid-chunk keeps the
+     * prefix rather than dropping the whole 8 KiB read, so the retained output
+     * lands on the bound instead of somewhere up to a chunk short of it.
+     */
+    private static function appendBounded(string $buffer, string $chunk, ?int $maxBytes, int &$discarded): string
+    {
+        if ($maxBytes === null || $maxBytes <= 0) {
+            return $buffer . $chunk;
+        }
+
+        $room = $maxBytes - strlen($buffer);
+        if ($room <= 0) {
+            $discarded += strlen($chunk);
+
+            return $buffer;
+        }
+
+        if (strlen($chunk) <= $room) {
+            return $buffer . $chunk;
+        }
+
+        $discarded += strlen($chunk) - $room;
+
+        return $buffer . substr($chunk, 0, $room);
+    }
+
+    /**
+     * Decide which captured streams belong in the result, and hand the
+     * presentation layer everything it needs to bound them honestly.
      *
      * stderr is surfaced when the command FAILED (that is where the reason
      * lives) or when it succeeded silently on stdout but said something on
      * stderr. A successful command with real stdout keeps its output clean.
      *
-     * @param array{stdout: string, stderr: string, exitCode: int} $run
+     * The return is a two-part shape rather than one joined string because
+     * the two parts have different claims on a limited budget. `head` is the
+     * bulk answer and `tail` is the trailing explanation; concatenating them
+     * first and clipping from the front afterwards is precisely how the
+     * explanation gets lost, since it is by construction the last thing in
+     * the string. {@see TruncatesOutput::truncateMerged()} is what acts on
+     * the distinction.
+     *
+     * `dropped` counts ONLY the streams that made it into this result.
+     * Reporting the discards of a stream this merge just threw away tells the
+     * model a complete answer is partial and sends it back to re-run a
+     * command that already answered the question.
+     *
+     * @param array{
+     *     stdout: string,
+     *     stderr: string,
+     *     exitCode: int,
+     *     stdoutDropped?: int,
+     *     stderrDropped?: int,
+     *     stdoutMidLine?: bool,
+     *     stderrMidLine?: bool,
+     * } $run
+     *
+     * @return array{head: string, tail: string, dropped: int, headMidLine: bool, tailMidLine: bool}
      */
-    private function mergeCapturedOutput(array $run): string
+    private function mergeCapturedOutput(array $run): array
     {
-        $failed = $run['exitCode'] !== 0;
+        $stdoutDropped = $run['stdoutDropped'] ?? 0;
+        $stderrDropped = $run['stderrDropped'] ?? 0;
+        $stdoutMidLine = $run['stdoutMidLine'] ?? false;
+        $stderrMidLine = $run['stderrMidLine'] ?? false;
+
+        $onlyStdout = [
+            'head' => $run['stdout'],
+            'tail' => '',
+            'dropped' => $stdoutDropped,
+            'headMidLine' => $stdoutMidLine,
+            'tailMidLine' => false,
+        ];
+        $onlyStderr = [
+            'head' => $run['stderr'],
+            'tail' => '',
+            'dropped' => $stderrDropped,
+            'headMidLine' => $stderrMidLine,
+            'tailMidLine' => false,
+        ];
 
         if ($run['stderr'] === '') {
-            return $run['stdout'];
+            return $onlyStdout;
         }
 
-        if ($failed) {
-            return $run['stdout'] === ''
-                ? $run['stderr']
-                : $run['stdout'] . "\n" . $run['stderr'];
+        if ($run['stdout'] === '') {
+            return $onlyStderr;
         }
 
-        return $run['stdout'] === '' ? $run['stderr'] : $run['stdout'];
+        if ($run['exitCode'] !== 0) {
+            return [
+                'head' => $run['stdout'],
+                'tail' => $run['stderr'],
+                'dropped' => $stdoutDropped + $stderrDropped,
+                'headMidLine' => $stdoutMidLine,
+                'tailMidLine' => $stderrMidLine,
+            ];
+        }
+
+        return $onlyStdout;
     }
 }

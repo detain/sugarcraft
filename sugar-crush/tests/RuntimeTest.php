@@ -586,6 +586,385 @@ final class RuntimeTest extends TestCase
         $this->assertSame('kitty', $results[0]->imageProtocol());
     }
 
+    // =========================================================================
+    // A throwing tool must cost its own call, not the whole turn
+    // =========================================================================
+
+    /**
+     * Before the fix `$tool->execute()` ran bare. A \Throwable escaping a tool
+     * propagated out of this generator, through Runtime::run(), and was only
+     * stopped at EngineBackend::runCompleteInChild()'s outer boundary — which
+     * reports a TURN-level failure, discarding every other tool result and all
+     * assistant content already produced.
+     *
+     * Reproducible trigger in the wild: a model supplying a non-string
+     * `command` to Bash, raising `TypeError: escapeshellarg(): Argument #1
+     * ($arg) must be of type string, array given`.
+     */
+    public function testAThrowingToolDegradesToAnErrorResultInsteadOfEscaping(): void
+    {
+        $toolCall = new ToolCall('call_boom', 'boom_tool', ['command' => ['not', 'a', 'string']]);
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createThrowingTool('boom_tool', new \TypeError('escapeshellarg(): Argument #1 ($arg) must be of type string, array given')),
+        ]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [[$toolCall], $app]));
+
+        $this->assertCount(1, $results);
+        $this->assertInstanceOf(ToolResultMessage::class, $results[0]);
+        $this->assertSame('call_boom', $results[0]->toolCallId());
+        $this->assertTrue($results[0]->isError());
+        $this->assertStringContainsString('escapeshellarg()', $results[0]->content());
+        $this->assertStringContainsString('TypeError', $results[0]->content());
+    }
+
+    /**
+     * The whole point of containing the throw: the REST of the batch has to
+     * keep running. Against the old code the generator died on the first call
+     * and the second tool never executed at all.
+     */
+    public function testATooThrowingMidBatchDoesNotStopLaterToolCalls(): void
+    {
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createMockTool('first_tool', 'first ok'),
+            $this->createThrowingTool('boom_tool', new \RuntimeException('exploded')),
+            $this->createMockTool('third_tool', 'third ok'),
+        ]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [[
+            new ToolCall('call_1', 'first_tool', []),
+            new ToolCall('call_2', 'boom_tool', []),
+            new ToolCall('call_3', 'third_tool', []),
+        ], $app]));
+
+        $this->assertCount(3, $results);
+        $this->assertSame(['call_1', 'call_2', 'call_3'], array_map(static fn ($r) => $r->toolCallId(), $results));
+        $this->assertSame([false, true, false], array_map(static fn ($r) => $r->isError(), $results));
+        $this->assertSame('first ok', $results[0]->content());
+        $this->assertStringContainsString('exploded', $results[1]->content());
+        $this->assertSame('third ok', $results[2]->content());
+    }
+
+    /**
+     * A contained throw is still a finished tool call, so the running→done
+     * transition a renderer draws must complete rather than hang forever on
+     * the ToolStarted it already painted.
+     */
+    public function testAThrowingToolStillEmitsItsToolFinishedEvent(): void
+    {
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createThrowingTool('boom_tool', new \RuntimeException('exploded')),
+        ]);
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [new ToolCall('call_boom', 'boom_tool', [])],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $this->assertSame(
+            [ToolStarted::class, ToolFinished::class],
+            array_map(static fn ($e) => $e::class, $events),
+        );
+        $this->assertTrue($events[1]->result->isError());
+        $this->assertStringContainsString('exploded', $events[1]->result->content());
+    }
+
+    /** A throw anywhere in the batch must not fail the whole run() either. */
+    public function testRunSurvivesAThrowingToolAndKeepsTheAssistantContent(): void
+    {
+        $this->provider->method('supportsStreaming')->willReturn(false);
+        $this->provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'assistant text that must survive',
+            toolCalls: [new ToolCall('call_boom', 'boom_tool', [])],
+        ));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createThrowingTool('boom_tool', new \RuntimeException('exploded')),
+        ]);
+
+        $results = iterator_to_array($this->runtime->run($app));
+
+        $this->assertCount(2, $results);
+        $this->assertSame('assistant text that must survive', $results[0]->content());
+        $this->assertTrue($results[1]->isError());
+    }
+
+    // =========================================================================
+    // ...and neither must a throwing PostToolUse hook
+    // =========================================================================
+
+    /**
+     * Containing only `$tool->execute()` left the turn just as easy to lose:
+     * HookRegistry::executeHooks() calls `$hook->execute($context)` bare, so a
+     * ScriptHook whose script is missing (or any PHP hook with a bug) threw
+     * straight out of this generator and hit the same
+     * EngineBackend::runCompleteInChild() boundary — discarding every other
+     * tool result and all assistant content, because an OBSERVER failed after
+     * the work was already done.
+     */
+    public function testAThrowingPostToolUseHookDoesNotCostTheToolResult(): void
+    {
+        $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('hook script missing')));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createMockTool('good_tool', 'the real answer'),
+        ]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [new ToolCall('call_hook', 'good_tool', [])],
+            $app,
+        ]));
+
+        $this->assertCount(1, $results);
+        $this->assertSame('call_hook', $results[0]->toolCallId());
+        $this->assertStringContainsString('the real answer', $results[0]->content());
+        $this->assertStringContainsString('PostToolUse hook failed', $results[0]->content());
+        $this->assertStringContainsString('hook script missing', $results[0]->content());
+        $this->assertFalse(
+            $results[0]->isError(),
+            'the tool succeeded — a broken observer must not tell the model to retry it',
+        );
+    }
+
+    /** The rest of the batch has to survive a throwing post-hook too. */
+    public function testAThrowingPostToolUseHookDoesNotStopLaterToolCalls(): void
+    {
+        $this->hookRegistry->register($this->throwingPostHook(new \LogicException('boom in hook')));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createMockTool('first_tool', 'first ok'),
+            $this->createMockTool('second_tool', 'second ok'),
+        ]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [[
+            new ToolCall('call_1', 'first_tool', []),
+            new ToolCall('call_2', 'second_tool', []),
+        ], $app]));
+
+        $this->assertCount(2, $results);
+        $this->assertStringContainsString('first ok', $results[0]->content());
+        $this->assertStringContainsString('second ok', $results[1]->content());
+    }
+
+    /** run() must not lose the assistant content either. */
+    public function testRunSurvivesAThrowingPostToolUseHook(): void
+    {
+        $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('boom in hook')));
+        $this->provider->method('supportsStreaming')->willReturn(false);
+        $this->provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'assistant text that must survive',
+            toolCalls: [new ToolCall('call_hook', 'good_tool', [])],
+        ));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createMockTool('good_tool', 'the real answer'),
+        ]);
+
+        $results = iterator_to_array($this->runtime->run($app));
+
+        $this->assertCount(2, $results);
+        $this->assertSame('assistant text that must survive', $results[0]->content());
+        $this->assertStringContainsString('the real answer', $results[1]->content());
+    }
+
+    /**
+     * The hook note has to reach the ToolFinished event as well, or a renderer
+     * shows a clean result while the model is told a hook fell over.
+     */
+    public function testAThrowingPostToolUseHookIsAnnotatedOntoTheEventToo(): void
+    {
+        $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('boom in hook')));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createMockTool('good_tool', 'the real answer'),
+        ]);
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [new ToolCall('call_hook', 'good_tool', [])],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $this->assertSame(
+            [ToolStarted::class, ToolFinished::class],
+            array_map(static fn ($e) => $e::class, $events),
+        );
+        $this->assertStringContainsString('PostToolUse hook failed', $events[1]->result->content());
+    }
+
+    /**
+     * A throwing listener is a UI bug. It must not take the turn's other tool
+     * results down with it, and the model still needs this result whether or
+     * not anything managed to render it.
+     */
+    public function testAThrowingToolFinishedListenerStillDeliversTheResult(): void
+    {
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createMockTool('good_tool', 'the real answer'),
+            $this->createMockTool('other_tool', 'also fine'),
+        ]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [new ToolCall('call_1', 'good_tool', []), new ToolCall('call_2', 'other_tool', [])],
+            $app,
+            static function ($event): void {
+                if ($event instanceof ToolFinished) {
+                    throw new \RuntimeException('renderer exploded');
+                }
+            },
+        ]));
+
+        $this->assertCount(2, $results);
+        $this->assertStringContainsString('the real answer', $results[0]->content());
+        $this->assertStringContainsString('ToolFinished listener failed', $results[0]->content());
+        $this->assertStringContainsString('also fine', $results[1]->content());
+    }
+
+    /** A tool that ALSO threw keeps its own error, with the hook note added. */
+    public function testAThrowingToolAndAThrowingHookBothSurfaceOnTheSameResult(): void
+    {
+        $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('boom in hook')));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([
+            $this->createThrowingTool('boom_tool', new \RuntimeException('exploded')),
+        ]);
+
+        $results = iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [new ToolCall('call_boom', 'boom_tool', [])],
+            $app,
+        ]));
+
+        $this->assertTrue($results[0]->isError(), 'the tool failure keeps the error flag');
+        $this->assertStringContainsString('exploded', $results[0]->content());
+        $this->assertStringContainsString('PostToolUse hook failed', $results[0]->content());
+    }
+
+    /**
+     * `Runtime::annotate()` rebuilds a readonly {@see ToolResult} by copying
+     * every constructor argument across by name. That is correct today and
+     * unpinned: adding a ninth field to ToolResult drops it silently, and
+     * only on the hook-failure path — the one path nobody exercises by hand.
+     *
+     * Reflecting over the real constructor is what makes it a tripwire. A new
+     * parameter fails this test at the array_diff, whoever adds it has to
+     * extend the map below, and the round-trip assertions then fail until
+     * annotate() copies it too.
+     */
+    public function testAnnotateCopiesEveryToolResultConstructorField(): void
+    {
+        /** @var array<string, mixed> $fields ctor parameter name => a distinctive non-default value */
+        $fields = [
+            'toolCallId' => 'call_annotated',
+            'content' => 'the real answer',
+            'isError' => true,
+            'durationMs' => 4242,
+            'imageBytes' => 'RAW-PNG-BYTES',
+            'imagePath' => '/tmp/screenshot.png',
+            'imageProtocol' => 'kitty',
+            'diff' => "--- a/x.php\n+++ b/x.php\n@@ -1 +1 @@\n-old\n+new\n",
+        ];
+
+        $constructor = (new \ReflectionClass(ToolResult::class))->getConstructor();
+        $this->assertNotNull($constructor);
+        $declared = array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            $constructor->getParameters(),
+        );
+
+        $this->assertSame(
+            [],
+            array_values(array_diff($declared, array_keys($fields))),
+            'ToolResult grew a constructor field. Runtime::annotate() is a manual named-argument '
+            . 'copy, so the new field is being dropped on the hook-failure path — add it to '
+            . 'annotate() and to this map.',
+        );
+
+        $original = new ToolResult(...$fields);
+        $annotated = $this->invokePrivateMethod($this->runtime, 'annotate', [$original, '[note]']);
+
+        $this->assertInstanceOf(ToolResult::class, $annotated);
+        $this->assertSame("the real answer\n\n[note]", $annotated->content());
+
+        // Every field except the one the note is appended to survives.
+        unset($fields['content']);
+        foreach ($fields as $accessor => $expected) {
+            $this->assertSame($expected, $annotated->{$accessor}(), $accessor);
+        }
+    }
+
+    /** An empty content must not gain a leading blank-line pair. */
+    public function testAnnotateOnAnEmptyResultIsJustTheNote(): void
+    {
+        $annotated = $this->invokePrivateMethod(
+            $this->runtime,
+            'annotate',
+            [new ToolResult('call_empty', ''), '[note]'],
+        );
+
+        $this->assertSame('[note]', $annotated->content());
+    }
+
+    /**
+     * The end-to-end version: a diff- and image-bearing result annotated by a
+     * real failing PostToolUse hook still reaches the renderer with its
+     * payloads. Those fields are what EngineBackend draws, so losing them
+     * turns a rendered diff into plain text.
+     */
+    public function testADiffAndImageBearingResultSurvivesAFailingPostToolUseHook(): void
+    {
+        $this->hookRegistry->register($this->throwingPostHook(new \RuntimeException('hook script missing')));
+
+        $rich = $this->createMock(Tool::class);
+        $rich->method('name')->willReturn('rich_tool');
+        $rich->method('description')->willReturn('rich');
+        $rich->method('inputSchema')->willReturn([]);
+        $rich->method('execute')->willReturn(new ToolResult(
+            toolCallId: 'call_rich',
+            content: 'edited x.php',
+            isError: false,
+            durationMs: 17,
+            imageBytes: 'RAW-PNG-BYTES',
+            imagePath: '/tmp/shot.png',
+            imageProtocol: 'kitty',
+            diff: "--- a/x.php\n+++ b/x.php\n",
+        ));
+
+        $app = App::new($this->provider, 'gpt-4')->withTools([$rich]);
+
+        $events = [];
+        iterator_to_array($this->invokePrivateMethod($this->runtime, 'executeToolCalls', [
+            [new ToolCall('call_rich', 'rich_tool', [])],
+            $app,
+            function ($event) use (&$events): void { $events[] = $event; },
+        ]));
+
+        $delivered = $events[1]->result;
+        $this->assertStringContainsString('PostToolUse hook failed', $delivered->content());
+        $this->assertStringContainsString('edited x.php', $delivered->content());
+        $this->assertTrue($delivered->hasDiff());
+        $this->assertSame("--- a/x.php\n+++ b/x.php\n", $delivered->diff());
+        $this->assertTrue($delivered->hasImage());
+        $this->assertSame('RAW-PNG-BYTES', $delivered->imageBytes());
+        $this->assertSame('/tmp/shot.png', $delivered->imagePath());
+        $this->assertSame('kitty', $delivered->imageProtocol());
+        $this->assertSame(17, $delivered->durationMs());
+        $this->assertFalse($delivered->isError(), 'a broken observer must not flag the tool as failed');
+    }
+
+    private function throwingPostHook(\Throwable $throwable): HookInterface
+    {
+        return new class ($throwable) implements HookInterface {
+            public function __construct(private \Throwable $throwable) {}
+            public function name(): string { return 'throwing-post'; }
+            public function event(): HookEvent { return HookEvent::PostToolUse; }
+            public function matcher(): string { return '.*'; }
+            public function execute(HookContext $context): HookResult { throw $this->throwable; }
+        };
+    }
+
     public function testExecuteToolCallsHandlesMultipleToolCalls(): void
     {
         $tool1 = $this->createMockTool('tool_one', 'Result 1');
@@ -1265,6 +1644,18 @@ final class RuntimeTest extends TestCase
                 content: $result,
             );
         });
+
+        return $tool;
+    }
+
+    /** A tool whose execute() throws rather than returning a ToolResult. */
+    private function createThrowingTool(string $name, \Throwable $throwable): Tool
+    {
+        $tool = $this->createMock(Tool::class);
+        $tool->method('name')->willReturn($name);
+        $tool->method('description')->willReturn("Description for $name");
+        $tool->method('inputSchema')->willReturn([]);
+        $tool->method('execute')->willThrowException($throwable);
 
         return $tool;
     }
