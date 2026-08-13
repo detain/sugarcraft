@@ -28,7 +28,7 @@ A terminal AI coding agent — PHP port of [`charmbracelet/crush`](https://githu
 ┌────────────────────────────────────────────────────┐
 │ > run them█                                        │
 └────────────────────────────────────────────────────┘
- Enter to send · Esc / ^C to quit
+ Enter to send · Ctrl+P menu · /exit or ^C to quit
 ```
 
 > **History:** SugarCrush absorbed the former experimental `candy-crush` port. There is now a single `SugarCraft\Crush` library.
@@ -50,7 +50,25 @@ export SUGARCRUSH_MODEL=gpt-4o          # optional; provider default otherwise
 ./bin/sugarcrush
 ```
 
-`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Glob/Grep/WebFetch) and the safety hooks automatically.
+`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Glob/Grep/WebFetch/Doctor/Skill) and the safety hooks automatically.
+
+### Non-interactive (one-shot) mode
+
+`bin/sugarcrush` parses `argv` *before* it constructs a `Program`, so the
+scriptable paths never attach to the TTY or enter the alt-screen:
+
+```bash
+sugarcrush -p "explain the Width helper"        # one prompt, print, exit
+sugarcrush run "explain the Width helper"       # same thing
+sugarcrush -p "audit this" --output-format json # machine-readable envelope
+sugarcrush --root /path/to/project              # set the project root explicitly
+sugarcrush --help                               # prints and exits (never opens the TUI)
+```
+
+`--root` also accepts the first positional argument that looks like a path, so
+`sugarcrush ../other-project` works. It is what the Bash/Read/Edit/Glob tools
+are jailed to and where `CLAUDE.md`/`AGENTS.md` and `.sugar-crush/skills` are
+looked for.
 
 ### Dependency-free shell-out
 
@@ -77,6 +95,77 @@ Three ways to get off the offline `EchoProvider`, from quickest to most permanen
 1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is the project's own dev/test SGLang endpoint (declared in `.sugar-crush/config.dev.json`, checked into the repo), useful for trying a real (if smaller) model with zero API keys.
 2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. **Switch theme** works the same way for color themes.
 3. **Persisted across restarts:** either of the above choices made via the palette is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD` still take priority over the persisted choice when set, for scripting/CI overrides.
+
+## Using the TUI
+
+The interactive binary boots a **pane shell** (`App`) that hosts the chat
+model, so the menu bar, pane strip, session tabs and the chat transcript are
+all one candy-core `Model` tree — not two parallel UIs.
+
+### Keys
+
+| Key | Does |
+|-----|------|
+| `Enter` | Send |
+| `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
+| `Esc` | Close the palette or the session picker |
+| `Ctrl+C` | Quit |
+| `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
+| `Ctrl+O` | Expand/collapse the most recent tool call's output |
+| `Ctrl+R` | Session picker (persisted across turns) |
+| `Ctrl+A` | Same dispatch as typing `/agents` |
+| `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
+| `Up` (empty input) | Recall the last message you sent |
+| `Page Up` / `Page Down` | Scroll the transcript a screenful |
+| `Tab` | Cycle panes |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions |
+| `F10` | Open the menu bar |
+| `y` / `n` / `a` | Answer a permission prompt: once / refuse / always |
+
+`Ctrl+P`, `Ctrl+O`, `Ctrl+A`, `Ctrl+W` and `Ctrl+C` always belong to the chat
+content model — the shell never claims them, in any pane, so hosting chat
+inside the shell cannot silently steal a binding.
+
+### Mouse
+
+Mouse mode is on by default (`SUGARCRUSH_DISABLE_MOUSE=1` turns it off). Zones
+are registered during the render pass, so clicks land on what you see: wheel
+scrolls the transcript, clicking a tool call expands/collapses it, clicking a
+session tab or a pane label switches to it, clicking a palette/picker row
+selects it, and clicking the menu bar opens a menu. Click-vs-drag is
+discriminated so a text-selection drag does not fire the zone underneath it.
+
+### Slash commands
+
+`/agents` `/agent` `/bg` `/background` `/fork` `/branch` `/compact` `/mcp`
+`/memory` `/rename` `/rewind` `/sessions` `/share` `/theme` `/workflow`
+`/exit` (`/quit`) — plus any **file-based custom command** found on disk.
+Typing `/` opens a live popup of the matches.
+
+**New session**, **Switch model** and **Open docs** are palette-only actions
+(`Ctrl+P`) — they have no slash spelling, so `CommandRegistry` keeps them out
+of the `/` popup.
+
+`/bg` really does run the work: it dispatches onto a `BackgroundSupervisor`
+that `bin/sugarcrush` constructs per launch, and the result comes back into
+the transcript. `/fork` branches the current session.
+
+### What you see while a turn runs
+
+Tool calls stream into the transcript **as they happen** — the forked child
+emits lifecycle events rather than buffering until the turn ends — each with a
+human-readable description and the command it actually ran, then a
+running→done transition. `Edit`/`Write` results render a real unified diff. A
+no-op edit reports as a no-op instead of success. Denied and interrupted calls
+get their own visual state. Tool results that carry images are labelled and
+rendered inline via candy-mosaic. Successful tool bodies are hidden by default
+(`Ctrl+O` or a click opens them). Context usage shows as both a token count and
+a percentage.
+
+Sessions get a name automatically: after the first exchange a **cheap
+small-model backend** (supplied separately from the conversation backend, so
+naming never costs a second tool-capable agent turn) generates a title, which
+is what `/sessions`, the tab strip and `Ctrl+R` list.
 
 ## Providers
 
@@ -130,10 +219,10 @@ $backend = (EngineBackend::new($provider, 'gpt-4o'))
 
 ## Capabilities
 
-- **Tools** — `Tools\BuiltIn\*`: `Bash`, `Read`, `Edit`, `Glob`, `Grep`, `WebFetch`. Implement `Tools\Tool` for your own.
+- **Tools** — `Tools\BuiltIn\*`: `Bash`, `Read`, `Edit`, `Glob`, `Grep`, `WebFetch`, `Doctor` (a capability probe the model can call to report what this build/deployment actually supports), and `Skill` (level 2 of the progressive-disclosure design below). Implement `Tools\Tool` for your own.
 - **Hooks** — `Hooks\*`: pre/post-tool-use guards (allow / deny / **modify** the input). Built-ins: `AuditHook`, `ConfirmRemoveHook`, `ProtectFilesHook`. YAML config and external `ScriptHook` supported.
 - **Permission modes** — `Permissions\*`: `PermissionGate` enforces one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`) per tool call, with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured.
-- **Skills** — `Skills\*`: frontmatter `SKILL.md` files inject prompt context, matched by keyword/path. Discovered from built-ins (`src/Skills/BuiltIn/`), `~/.sugar-crush/skills`, and `<project>/.sugar-crush/skills` (project wins). Ships 12 built-ins spanning language/framework conventions (`php-best-practices`, `laravel-best-practices`, `symfony-best-practices`), workflow (`testing-strategies`, `api-design`, `explore-codebase`, `worktree-workflow`, `mcp-authoring`, `matchups-sync`) and the original four (`security-audit`, `phpunit-master`, `composer-wizard`). `disable-model-invocation`, `user-invocable`, and `context: fork` frontmatter flags are enforced, not decorative — a fork-context skill runs through `AgentWorkerPool` as an isolated sub-agent.
+- **Skills** — `Skills\*`: frontmatter `SKILL.md` files inject prompt context, matched by keyword/path. Discovered from built-ins (`src/Skills/BuiltIn/`), `~/.sugar-crush/skills`, and `<project>/.sugar-crush/skills` (project wins). Ships 12 built-ins spanning language/framework conventions (`php-best-practices`, `laravel-best-practices`, `symfony-best-practices`), workflow (`testing-strategies`, `api-design`, `explore-codebase`, `worktree-workflow`, `mcp-authoring`, `matchups-sync`) and the original four (`security-audit`, `phpunit-master`, `composer-wizard`). `disable-model-invocation`, `user-invocable`, and `context: fork` frontmatter flags are enforced, not decorative — a fork-context skill runs through `AgentWorkerPool` as an isolated sub-agent. Loading is **progressive**: the system prompt carries only each skill's name + description, and the model pulls the full `SKILL.md` body through the `Skill` tool when it decides one is relevant. Path-scoped skills self-announce — the first time `Read`/`Edit`/`Glob` touches a file a skill's `paths:` covers, that skill is surfaced (once per session, via one shared announce-set across the three tools). Skills authored for other CLIs (Claude Code, opencode) are imported rather than ignored, and the picker shows a provenance badge for where each one came from.
 - **Agents** — `Agents\*`: 6 sub-agent presets (coder/reviewer/debugger/architect/tester/devops) with their own model, tools, skills, and a streaming lifecycle, dispatched through `AgentWorkerPool` (`pcntl_fork`-based, with a synchronous fallback + warning when `pcntl` is unavailable).
 - **Teams & worktrees** — `Agents\{Team,TeamManager,Teammate,TaskList,Mailbox}`: a lead agent spawns a capped team of teammates that atomically claim `TaskList` tasks (SQLite `flock`-backed, contention-tested) and exchange append-only JSON-lines mailbox messages. `Agents\{WorktreeConfig,WorktreeManager,PathJail}` give each teammate an isolated git worktree (`.worktreeinclude`-aware, swept for staleness) sandboxed by a path jail.
 - **Workflows** — `Workflows\*`: `WorkflowBuilder`/`WorkflowRegistry`/`WorkflowEngine` run multi-stage agent pipelines — sequential `stage()`, fan-out `parallel()`, chained `pipeline()`, and task-then-verifier `withVerification()` — defined as PHP DSL files or YAML (`WorkflowRegistry::loadYaml()`). SIGINT/SIGTERM during `run()` captures a real pause file for later resumption at stage granularity. See [`examples/workflows/lint-then-fix.yaml`](examples/workflows/lint-then-fix.yaml) for a runnable YAML example and [`workflows/deep-research.php`](workflows/deep-research.php) for the PHP DSL form.
@@ -141,20 +230,39 @@ $backend = (EngineBackend::new($provider, 'gpt-4o'))
 - **Sessions** — `Session\SessionStore`: SQLite (WAL) persistence of sessions/messages/tool-calls with FK-enforced cascade and age-based pruning.
 - **Tokens & export** — `Util\TokenTracker` (token + cost accumulation) and `Util\Exporter` (Markdown / JSON / text transcripts).
 - **Messages** — typed `Messages\{System,User,Assistant,ToolResult}Message`; `UserMessage` carries file/image attachments; `AssistantMessage` carries tool calls + reasoning.
+- **Context files** — `CLAUDE.md`/`AGENTS.md` at the project root are loaded into the system prompt, with `@import` expansion (cycle- and traversal-guarded, and de-duplicated so an imported doc is not injected twice). `Forced` instructions come from user config. An `EnvironmentBlock` (cwd, platform, git state, date) is prepended so the model is not guessing at its surroundings.
+- **Permission prompts** — a blocking request/reply flow (`HookResult::ask()` → `PermissionRequestMsg`/`PermissionReplyMsg`) rendered as a Veil modal over the transcript; the answer settles the paused tool call rather than being advisory.
 
 ## Architecture
 
-SugarCrush keeps the proven sugar-crush **chassis** (the `Chat` candy-core `Model`, buffer-diff `Renderer`, `bin/sugarcrush`) and runs the ported **engine** behind it:
+SugarCrush keeps the proven sugar-crush **chassis** (the `Chat` candy-core `Model`, buffer-diff `Renderer`) and runs the ported **engine** behind it. The interactive binary boots the **pane shell** that hosts that chassis:
 
 ```
 bin/sugarcrush
-  └─ Program → Chat (Model: input, scrollback, inFlight gate, buffer-diff view)
-       └─ Backend  ── EchoBackend / CommandBackend (simple)
-                   └─ EngineBackend (agent loop)
-                        └─ Runtime → ProviderInterface  (+ Tools · Hooks · Skills via App)
+  └─ Bootstrap::app()
+       └─ Program → App (root candy-core Model: menu bar, pane focus, session tabs)
+            ├─ Tui\Renderer → ChatPane ─┐
+            │                            └→ Renderer (the live buffer-diff chat renderer)
+            └─ Chat (Model: input, scrollback, inFlight gate, permissions, zones)
+                 └─ Backend  ── EchoBackend / CommandBackend (simple)
+                             └─ EngineBackend (agent loop, emits tool-lifecycle events)
+                                  └─ Runtime → ProviderInterface  (+ Tools · Hooks · Skills via App)
 ```
 
+`App` plays two roles that are easy to confuse: it is the **engine's state object** (`Runtime::run(App $app, …)` and `EngineBackend` both take it, carrying tools/hooks/skills) *and* the root TUI `Model` the pane shell renders. `Chat` is untouched by the shell — it is still a standalone `Model` you can run directly with `new Program(new Chat(...))`.
+
 The chassis speaks the root `Message` value object; the engine speaks the typed `Messages\*` hierarchy; `EngineBackend` converts at the seam.
+
+## Limitations
+
+Things that are genuinely not finished, stated plainly rather than left for you to discover:
+
+- **`SglangProvider`'s `toolCallParser` applies to the batch `complete()` path only.** The streaming path reassembles tool calls itself and does not consult the setting.
+- **Five shell commands are still inert**: `GroupInputCmd`, `CancelAgentCmd`, `ResumeAgentCmd`, `StopAllAgentsCmd`, `QuitAgentViewCmd`. The first has no counterpart in the live app; the agent four would need to reach into a worker pool the shell does not hold. Their pane/selection half *is* applied — only the action half is missing.
+- **Workflow resume granularity is per whole stage.** An interrupted *parallel* sub-stage cannot be resumed with partial credit.
+- **`pcntl` is required for real parallelism.** Without it `AgentWorkerPool` falls back to sequential execution and logs a one-time visible warning rather than pretending to fan out.
+- **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by `/doctor` and by using it, not by CI.
+- **The `Doctor` tool reports capabilities, it does not repair them.**
 
 ## Custom provider
 
@@ -182,4 +290,8 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-3,159 tests / 8,048 assertions (0 failures, 0 errors). Coverage spans every subsystem: typed messages + attachments, the 6 built-in tools, all 7 providers (unit-tested with mocked transports — no live calls), the hook framework, permission-mode gating (incl. `pcntl_fork` concurrency stress tests for atomic task claiming), skills discovery + flag enforcement, sub-agents/teams/worktrees, workflow execution (sequential/parallel/pipeline/verification, PHP + YAML loading), the MCP client/servers (incl. per-agent routing enforcement), the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), the shell-out `CommandBackend` / `StreamingCommandBackend`, and the `EngineBackend` agentic loop (incl. the `maxSteps` guard). See [`CHANGELOG.md`](CHANGELOG.md) for how the suite got here.
+4,337 tests / 12,587 assertions (0 failures, 0 errors). Coverage spans every subsystem: typed messages + attachments, the 6 built-in tools, all 7 providers (unit-tested with mocked transports — no live calls), the hook framework, permission-mode gating (incl. `pcntl_fork` concurrency stress tests for atomic task claiming), skills discovery + flag enforcement, sub-agents/teams/worktrees, workflow execution (sequential/parallel/pipeline/verification, PHP + YAML loading), the MCP client/servers (incl. per-agent routing enforcement), the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), the shell-out `CommandBackend` / `StreamingCommandBackend`, and the `EngineBackend` agentic loop (incl. the `maxSteps` guard).
+
+A dedicated `tests/Integration/` tier asserts **reachability** rather than behaviour: that the session store, session tabs, background sessions, the skills subsystem, mouse mode, the environment block and root context-file loading are actually reached from `bin/sugarcrush` → `Bootstrap::app()`, not merely implemented somewhere in `src/`. That tier exists because the audit recorded in the monorepo root's `crush_code_update.md` found well-tested subsystems that no real run could ever touch.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for how the suite got here.
