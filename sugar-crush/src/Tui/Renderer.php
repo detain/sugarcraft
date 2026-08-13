@@ -23,6 +23,9 @@ use SugarCraft\Crush\Tui\Components\AgentsPane;
 use SugarCraft\Crush\Tui\Components\FilesPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
+use SugarCraft\Crush\Chat;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Zone;
 
 /**
  * Stateless renderer for the sugar-crush TUI shell.
@@ -166,6 +169,112 @@ final class Renderer
     }
 
     /**
+     * Zone registry for the shell CHROME — today the menu bar's titles and
+     * the open menu's dropdown rows (crush_feat.md §8, whose E-list wired
+     * session tabs, panes, tool rows and the palette but never the bar).
+     *
+     * Deliberately NOT the hosted chat's registry
+     * ({@see \SugarCraft\Crush\Renderer::scanner()}). The two live in
+     * different coordinate spaces: chat zones are recorded against the chat's
+     * own sub-frame and {@see Chat::zoneAt()} re-bases a pointer report by
+     * {@see \SugarCraft\Crush\Renderer::zoneOrigin()} before hit-testing,
+     * while the menu bar is chrome ABOVE that origin — its zones are
+     * frame-absolute, which is the space a terminal mouse report already
+     * arrives in. Sharing one registry would mean one of the two sets was
+     * always off by the pane inset.
+     *
+     * Shared across renders for the same reason the chat's is: a mouse event
+     * arrives BETWEEN frames, so the only boxes a click can be tested
+     * against are the ones the frame currently on screen recorded.
+     */
+    private static ?Scanner $chromeScanner = null;
+
+    /** @see $chromeScanner */
+    public static function chromeScanner(): Scanner
+    {
+        return self::$chromeScanner ??= Scanner::new();
+    }
+
+    /**
+     * The chrome zone under a reported pointer cell, or null when there is
+     * none.
+     *
+     * `$col`/`$row` are terminal-absolute and are used as-is: the chrome is
+     * drawn by this class directly into the frame it composes, so the frame
+     * IS the terminal. Contrast {@see Chat::zoneAt()}, which must subtract
+     * the pane origin first.
+     *
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` is honoured through the same
+     * {@see Chat::mouseClicksEnabled()} switch every other hit test reads, so
+     * the escape hatch stays a single decision rather than one per surface.
+     */
+    public static function chromeZoneAt(int $col, int $row): ?Zone
+    {
+        if (!Chat::mouseClicksEnabled()) {
+            return null;
+        }
+
+        return self::chromeScanner()->hit($col, $row);
+    }
+
+    /**
+     * Record the chrome's click zones for the frame just composed.
+     *
+     * Scans a SCRATCH copy of the bar (and, when it is painted, the dropdown
+     * panel padded to the column it is spliced at) rather than the frame
+     * itself: the frame must reach the terminal marker-free, and the marked
+     * copy exists only to be measured. Both copies come from the same layout
+     * arithmetic ({@see MenuBar::compose()}), so a column measured here is
+     * the column the title is painted at.
+     *
+     * The registry is CLEARED rather than populated when the frame lost rows
+     * off the top — `clipTail` keeps the bottom, so a dropped row means the
+     * bar is not on screen at all and a stale box would make dead cells
+     * clickable — and when clicks are disabled, where a registry nothing may
+     * read is pure waste.
+     *
+     * @param int $dropped   Rows `clipTail` removed from the top of the frame.
+     * @param int $frameRows Height of the composed frame; panel rows past it
+     *                       were never painted (see {@see overlayDropdown()},
+     *                       which stops at the same edge).
+     */
+    private static function scanChrome(
+        App $a,
+        int $cols,
+        string $menuBar,
+        int $dropped,
+        int $frameRows,
+        bool $withDropdown,
+    ): void {
+        if ($dropped > 0 || !Chat::mouseClicksEnabled()) {
+            self::chromeScanner()->clear();
+
+            return;
+        }
+
+        $lines = explode("\n", MenuBar::renderMarked($a, $cols));
+
+        if ($withDropdown) {
+            $col = MenuBar::activeMenuColumn();
+            $top = self::lineCount($menuBar);
+            foreach (MenuBar::renderDropdownMarked() as $i => $panelLine) {
+                if ($top + $i >= $frameRows) {
+                    break;
+                }
+                $lines[$top + $i] = str_repeat(' ', $col) . $panelLine;
+            }
+        }
+
+        try {
+            self::chromeScanner()->scan(implode("\n", $lines), $cols);
+        } catch (\Throwable) {
+            // Same trade as the chat's root scan: a malformed marker costs an
+            // unclickable bar, never a crash out of view().
+            self::chromeScanner()->clear();
+        }
+    }
+
+    /**
      * The shell frame's text bytes only.
      *
      * @param ?int $cols Authoritative terminal width (from `WindowSizeMsg`);
@@ -289,6 +398,13 @@ final class Renderer
         // that gets trimmed away.
         $frame = self::overlayDropdown($frame, MenuBar::renderDropdown(), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
 
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        // The bar's own click zones, recorded against the frame that was just
+        // composed — the menu bar is chrome, so this is the terminal's own
+        // coordinate space and NOT the pane-local space declared below.
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true);
+
         // The composite is final, so the hosted chat's zone registry — recorded
         // against the chat's own body, one nesting level down — can be told
         // where that body ended up on the terminal. Rows lost to the tail clip
@@ -299,7 +415,7 @@ final class Renderer
             self::lineCount($menuBar)
                 + ($notice === '' ? 0 : self::lineCount($notice))
                 + ChatPane::BODY_ROW_INSET
-                - (self::lineCount($joined) - self::lineCount($frame)),
+                - $dropped,
         );
 
         return new View($frame, images: $images);
@@ -344,9 +460,22 @@ final class Renderer
             $parts[] = $bottom;
         }
 
-        $frame = self::clipWidth(self::clipTail(implode("\n", $parts), $rows), $cols);
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
 
         LiveRenderer::clearZones();
+
+        // The dashboard drops the hosted chat's zones (above) but keeps the
+        // bar's: this frame DOES paint the menu titles, so a click on one has
+        // to work here too. No dropdown — this path never overlays one.
+        self::scanChrome(
+            $a,
+            $cols,
+            $menuBar,
+            self::lineCount($joined) - self::lineCount($frame),
+            self::lineCount($frame),
+            false,
+        );
 
         return new View($frame);
     }

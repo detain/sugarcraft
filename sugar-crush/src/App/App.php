@@ -7,7 +7,11 @@ namespace SugarCraft\Crush\App;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg as CoreMsg;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\View;
@@ -37,6 +41,8 @@ use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
+use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\ZoneClickTracker;
 use DateTimeImmutable;
 
 /**
@@ -430,8 +436,104 @@ final class App implements Model
             $msg instanceof OpenSkillPickerMsg,
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
             $msg instanceof KeyMsg => $this->handleKey($msg),
+            $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             default => $this->delegateToChat($msg),
         };
+    }
+
+    /**
+     * Press/Release pairing state for clicks on the shell's CHROME.
+     *
+     * Static for exactly the reason {@see Chat::clickTracker()} is: a click
+     * spans two `update()` calls and `App` is immutable, so a field would be
+     * discarded with the intermediate instance and no click could ever
+     * complete. A tracker of its own rather than Chat's, because the two
+     * registries are in different coordinate spaces (see
+     * {@see TuiRenderer::chromeZoneAt()}) and the tracker re-tests the
+     * PRESS's recorded box against the release event — one tracker fed boxes
+     * from both spaces would reject every pair from one of them.
+     */
+    private static ?ZoneClickTracker $chromeClickTracker = null;
+
+    /** @see $chromeClickTracker */
+    public static function chromeClickTracker(): ZoneClickTracker
+    {
+        return self::$chromeClickTracker ??= new ZoneClickTracker();
+    }
+
+    /**
+     * Click-to-open a menu title and click-to-run a dropdown row
+     * (crush_feat.md §8's click-to-select pattern, applied to the one surface
+     * its E-list never reached — the user report is "clicking the menu up top
+     * with a mouse doesnt work").
+     *
+     * The shell gets first refusal on a left press/release, mirroring the
+     * priority routing §8 C documents in charmbracelet/crush (chrome and
+     * dialogs absorb mouse events before the chat sees them). Everything else
+     * — wheel, motion, other buttons, and any left click that lands outside
+     * the chrome — falls through to the hosted {@see Chat}, which owns the
+     * transcript's own zones, its scroll offset and the §8 E8 drag-versus-
+     * selection tolerance.
+     *
+     * A press that DID land on chrome is swallowed even though it dispatches
+     * nothing on its own: forwarding it would arm Chat's tracker with a press
+     * the matching release will never reach it, and the menu bar is not part
+     * of the frame Chat's zones were recorded against anyway.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleShellMouse(MouseMsg $msg): array
+    {
+        $press = $msg instanceof MouseClickMsg;
+        $release = $msg instanceof MouseReleaseMsg;
+
+        if ((!$press && !$release) || $msg->button !== MouseButton::Left) {
+            return $this->delegateToChat($msg);
+        }
+
+        $zone = TuiRenderer::chromeZoneAt($msg->x, $msg->y);
+        $event = $press
+            ? MouseEvent::press($msg->x, $msg->y)
+            : MouseEvent::release($msg->x, $msg->y);
+
+        $click = self::chromeClickTracker()->track($event, $zone);
+
+        if ($click === null) {
+            return $zone === null ? $this->delegateToChat($msg) : [$this, null];
+        }
+
+        return $this->dispatchChromeClick($click->zone->id);
+    }
+
+    /**
+     * Act on a completed click on a chrome zone.
+     *
+     * Both arms route into the keyboard's own entry points rather than a
+     * parallel mouse path: a title click is {@see MenuBar::openMenu()}, the
+     * toggle F10 already calls, and a row click is
+     * {@see MenuBar::selectItem()}, which moves the same cursor the arrows
+     * move and returns the same {@see MenuSelectedMsg} Enter produces — so it
+     * is handed to {@see consumeShellCmd()}, the one place that runs it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function dispatchChromeClick(string $zoneId): array
+    {
+        $titles = MenuBar::MENU_TITLE_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $titles)) {
+            MenuBar::openMenu((int) substr($zoneId, strlen($titles)));
+
+            return [$this, null];
+        }
+
+        $items = MenuBar::MENU_ITEM_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $items)) {
+            $selected = MenuBar::selectItem((int) substr($zoneId, strlen($items)));
+
+            return $selected === null ? [$this, null] : $this->consumeShellCmd($selected);
+        }
+
+        return [$this, null];
     }
 
     /**

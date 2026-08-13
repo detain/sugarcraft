@@ -11,6 +11,7 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Mouse\Mark;
 
 /**
  * The shell's top menu bar: the command menus on the left, the quick-switch
@@ -21,6 +22,22 @@ use SugarCraft\Crush\Tui\Pane;
  */
 final class MenuBar
 {
+    /**
+     * Zone-id prefix every clickable menu TITLE carries (crush_feat.md §8 E6:
+     * "on click, dispatch the same Msg/Cmd the Enter key currently
+     * dispatches"). The suffix is the 1-based menu index {@see openMenu()}
+     * takes, so a click is the mouse spelling of F10-then-arrows.
+     */
+    public const MENU_TITLE_ZONE_PREFIX = 'menu:';
+
+    /**
+     * Zone-id prefix every clickable dropdown ROW carries. The suffix is the
+     * zero-based row index {@see selectItem()} takes — the same cursor
+     * up/down move and Enter read, so a clicked row runs the command it
+     * names through exactly one confirm path.
+     */
+    public const MENU_ITEM_ZONE_PREFIX = 'menuitem:';
+
     /**
      * The bar's menus: one per {@see CommandSpec::$category}, holding that
      * category's rows in the registry's own declaration order.
@@ -81,6 +98,32 @@ final class MenuBar
      */
     public static function render(App $a, ?int $cols = null): string
     {
+        return self::compose($a, $cols, false);
+    }
+
+    /**
+     * The very same bar, with every menu title wrapped in a candy-mouse click
+     * zone ({@see MENU_TITLE_ZONE_PREFIX}).
+     *
+     * A SEPARATE render rather than a flag on the painted one, because the
+     * sentinels are Private-Use cells that
+     * {@see \SugarCraft\Crush\Tui\Renderer}'s width clip and
+     * `Layout::joinHorizontal()` would both measure as content — the same
+     * reason {@see \SugarCraft\Crush\Renderer::scanRoot()} gives for never
+     * marking a row in place. So the shell paints {@see render()} and scans
+     * THIS, whose layout arithmetic is identical because both come from
+     * {@see compose()}.
+     */
+    public static function renderMarked(App $a, ?int $cols = null): string
+    {
+        return self::compose($a, $cols, true);
+    }
+
+    /**
+     * @param bool $marked Whether menu titles carry zone sentinels.
+     */
+    private static function compose(App $a, ?int $cols, bool $marked): string
+    {
         $tabs = self::paneTabs($a);
 
         // The tab strip and the "Currently:" indicator are how the shell is
@@ -99,7 +142,10 @@ final class MenuBar
             }
             $isActive = self::$activeMenu === $menuIndex;
             $color = $isActive ? Color::hex('#00ffaa') : Color::hex('#fde68a');
-            $output .= Style::new()->foreground($color)->bold()->render($name);
+            $title = Style::new()->foreground($color)->bold()->render($name);
+            $output .= $marked
+                ? Mark::zone(self::MENU_TITLE_ZONE_PREFIX . $menuIndex, $title)
+                : $title;
             $output .= '   ';
             $width += $cost;
             $menuIndex++;
@@ -225,6 +271,34 @@ final class MenuBar
     }
 
     /**
+     * Choose the dropdown row at $row (zero-based) and return the message
+     * Enter on that row would have produced.
+     *
+     * The mouse half of {@see handleKey()}'s `enter` arm: it moves the SAME
+     * {@see $activeItem} cursor the arrow keys move and then goes through
+     * {@see selectMenuItem()}, so a clicked row and a keyboard-confirmed row
+     * are indistinguishable downstream — there is no click-only dispatch
+     * path that could drift from the keyboard one.
+     *
+     * @return ?MenuSelectedMsg null when no menu is open, or the open menu
+     *                          has no such row
+     */
+    public static function selectItem(int $row): ?MenuSelectedMsg
+    {
+        if (self::$activeMenu < 1) {
+            return null;
+        }
+
+        if ($row < 0 || $row >= count(self::itemsOf(self::$activeMenu))) {
+            return null;
+        }
+
+        self::$activeItem = $row;
+
+        return self::selectMenuItem(self::$activeMenu)[1];
+    }
+
+    /**
      * The dropdown's zero-based row cursor. Exposed so the shell can assert
      * on (and a renderer can highlight) the row Enter would select.
      */
@@ -303,6 +377,31 @@ final class MenuBar
      */
     public static function renderDropdown(): array
     {
+        return self::dropdownLines(false);
+    }
+
+    /**
+     * The same dropdown with every ROW wrapped in a click zone
+     * ({@see MENU_ITEM_ZONE_PREFIX}).
+     *
+     * Scan-only, for the reason {@see renderMarked()} gives: the painted
+     * panel is spliced into the composed frame cell by cell, and a sentinel
+     * inside the patch would be measured as a cell and shift the splice.
+     *
+     * @return list<string>
+     */
+    public static function renderDropdownMarked(): array
+    {
+        return self::dropdownLines(true);
+    }
+
+    /**
+     * @param bool $marked Whether item rows carry zone sentinels.
+     *
+     * @return list<string>
+     */
+    private static function dropdownLines(bool $marked): array
+    {
         if (self::$activeMenu < 1) {
             return [];
         }
@@ -332,7 +431,10 @@ final class MenuBar
         foreach ($labels as $row => $label) {
             $pad = str_repeat(' ', $inner - Width::string($label));
             $style = $row === self::$activeItem ? $selected : $item;
-            $lines[] = $dim->render('│ ') . $style->render($label . $pad) . $dim->render(' │');
+            $line = $dim->render('│ ') . $style->render($label . $pad) . $dim->render(' │');
+            $lines[] = $marked
+                ? Mark::zone(self::MENU_ITEM_ZONE_PREFIX . $row, $line)
+                : $line;
         }
         $lines[] = $dim->render('└' . str_repeat('─', $inner + 2) . '┘');
 
