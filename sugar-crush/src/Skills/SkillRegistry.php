@@ -45,7 +45,12 @@ final class SkillRegistry
     {
         return array_filter(
             $this->skills,
-            fn($name) => !$this->isDisabled($name),
+            // Cast because PHP coerces a decimal-integer string array key to
+            // `int` on insertion: a skill named `123` is stored under
+            // `int(123)` and reaches this callback as an int, which
+            // isDisabled(string) rejects with a TypeError — crashing every
+            // caller of all() for the whole session.
+            fn($name) => !$this->isDisabled((string) $name),
             ARRAY_FILTER_USE_KEY
         );
     }
