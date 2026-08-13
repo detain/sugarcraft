@@ -134,6 +134,86 @@ happen to share the numbers 1–4.
 
 No on-disk format changed in this pass. Sessions written before it still load.
 
+## Second audit pass — `crush_code.md`
+
+A second, independent 13-angle audit (monorepo root `crush_code.md`). Phase 0
+is its highest-severity findings.
+
+### Phase 0 — session-store performance (2026-08)
+
+- **Checkpoints stopped rewriting the whole conversation every turn**
+  (item 11, §1). `EnhancedSessionStore::saveCheckpoint()` used to
+  `json_encode()` the entire history per turn. Message bodies are now
+  content-addressed in a new `checkpoint_blobs` table and stored once each; a
+  checkpoint keeps only the ordered list of blob ids, so total *message* bytes
+  over a session are O(N) instead of O(N²).
+  Measured over a simulated growing session of distinct 200-byte bodies, on
+  bytes WRITTEN: **18× less at 50 turns, 28× at 100, 38× at 200, 46× at 400,
+  50× at 800**. The factor moves with both turn count and message size — the
+  same 400-turn run is 19× with 50-byte bodies and 145× with 2 KB ones — so it
+  is a range, not a headline number.
+  **The envelope's id list is itself O(N) per checkpoint, so total bytes
+  written remain Θ(N²)**, just with a far smaller constant: the measured
+  doubling factor climbs 2.5 → 3.7 across those runs (4.0 would be purely
+  quadratic) and the envelope is 77% of everything written by turn 400, 88% by
+  turn 800. Removing that last term needs a checkpoint format that can
+  reference a range of blobs, which is a separate schema change. Bytes left ON
+  DISK are bounded by the existing 100-checkpoint cap.
+  **No recovery guarantee was traded away** — every turn is still its own
+  checkpoint and `/rewind n` still means exactly n turns, which is why a
+  "checkpoint every K turns" throttle was rejected.
+- **The WAL is bounded again.** `saveCheckpoint()` left the cursor of its
+  MAX-index query open across the following INSERT, which holds a read
+  transaction, and SQLite skips its automatic WAL checkpoint at a COMMIT taken
+  while a reader is open — so `session.db-wal` grew for the life of the
+  process while the main database stayed at 4 KB. That is the audit item's
+  actual "files reaching hundreds of MB" symptom. With the cursor closed, a
+  1500-turn run goes from `main=4 KB / wal=57 MB` to `main=656 KB / wal=4 MB`
+  (SQLite's default 1000-page auto-checkpoint threshold).
+- **`/rewind` survives a second terminal.** The interned hash → blob-id cache
+  is now invalidated by `PRAGMA data_version`, so a `/rewind` in one process
+  no longer leaves another process writing checkpoints that name
+  garbage-collected blob ids and read back as "Checkpoint N not found" for the
+  rest of its life. Two sugar-crush terminals always share a session, because
+  `Bootstrap::seedSession()` resumes the globally most recent one.
+- **An un-encodable message no longer becomes a null hole.** Checkpoint
+  encoding uses `JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR`: a tool
+  result carrying raw bytes (nothing on `Chat::finishToolCalls()`'s path
+  validates UTF-8) used to encode as `false`, store as `""`, hash as `""` —
+  collapsing every un-encodable message onto one shared blob — and decode back
+  to `null`, killing `/rewind` with "Argument #1 ($m) must be of type array,
+  null given".
+- **`sessions.updated_at` is indexed** (item 12, §1). `listSessions()` runs
+  from the render path up to 60×/sec and was `SCAN sessions` +
+  `USE TEMP B-TREE FOR ORDER BY`; it is now `SCAN sessions USING INDEX
+  idx_sessions_updated_at` with no sort. The index is ASC on purpose: scanned
+  backwards it satisfies `updated_at DESC, rowid DESC` outright, where a DESC
+  index would leave the rowid half of the sort behind.
+- **That query also stopped running once per frame** — `listSessions()` is
+  memoised per `$limit` and invalidated by this connection's own writes plus
+  `PRAGMA data_version` for other connections'.
+- **Retention is wired up, and OPT-IN** — `pruneSessions()` had never been
+  called from anywhere. `Bootstrap::sessionStore()` now runs it once per
+  launch, before the session to resume is chosen, but **only when
+  `$SUGARCRUSH_SESSION_RETENTION_DAYS` is set; the default is `0`, which
+  disables retention entirely.** A destructive default deletes precisely the
+  session the user came back for, and "unnamed" is a weak proxy for
+  "abandoned" (auto-titling fires at most once per session, needs a working
+  title backend, and fails silently). Three guards on top: **named sessions
+  are exempt at any age**, the row the launch is about to resume is exempt at
+  any age, and what was deleted — ids, ages, message counts — is reported on
+  stderr instead of the return value being discarded. The window is clamped to
+  100 years (`ctype_digit()` accepts a 20-digit value, `(int)` saturates it to
+  `PHP_INT_MAX`, and `strtotime()` overflows that into a cutoff in the FUTURE
+  that matches every row), and the cutoff is computed with `gmdate()` because
+  `updated_at` is SQLite's UTC `CURRENT_TIMESTAMP` — a local-time cutoff east
+  of UTC deleted sessions up to 14 hours early.
+
+On-disk format: additive and backward-compatible. `checkpoint_blobs` and
+`idx_sessions_updated_at` are created by the existing `IF NOT EXISTS` schema
+init, so an existing `session.db` migrates on its next open, and checkpoints
+written in the old inline format still read back unchanged.
+
 ## Remediation pass
 
 An independent line-by-line audit of the original P0–P7 build (recorded in

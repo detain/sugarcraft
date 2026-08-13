@@ -17,6 +17,7 @@ use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
@@ -560,10 +561,114 @@ final class Bootstrap
      * variant here means /rewind's checkpoint commands work out of the box
      * instead of degrading with "Session store does not support
      * checkpoints."
+     *
+     * Retention is applied here too — `pruneSessions()` had been written and
+     * unit-tested but never called from anywhere — but only when the user
+     * OPTED IN with `SUGARCRUSH_SESSION_RETENTION_DAYS`. It is off by default,
+     * because the session a silent 30-day default deletes is precisely the one
+     * the user came back for: coming back after a month means the row is old,
+     * and it is unnamed because auto-titling fires at most once and fails
+     * silently without a title backend. Startup is nevertheless the right
+     * moment to run it when it IS on — it is the one point in the process
+     * where no session is open, it runs before {@see seedSession()} picks the
+     * row to resume, and it costs one indexed DELETE rather than anything on
+     * the render or turn path.
+     *
+     * Two further guards, since this deletes conversations: the row
+     * `seedSession()` would resume is passed in as exempt (so retention can
+     * never eat the session the user is about to be handed, whatever its age),
+     * and everything actually deleted is reported on stderr rather than going
+     * unmentioned. A failure is swallowed: an unprunable database is not a
+     * reason to refuse to start.
+     *
+     * @see \SugarCraft\Crush\Session\SessionStore::pruneSessions() for why
+     *      named sessions are exempt from retention entirely.
      */
     public static function sessionStore(): EnhancedSessionStore
     {
-        return new EnhancedSessionStore(self::configDir() . '/session.db');
+        $store = new EnhancedSessionStore(self::configDir() . '/session.db');
+
+        $retentionDays = self::sessionRetentionDays();
+        if ($retentionDays > 0) {
+            try {
+                $resumable = $store->listSessions(1)[0]['id'] ?? null;
+                $pruned = $store->pruneSessions(
+                    $retentionDays,
+                    is_string($resumable) && $resumable !== '' ? $resumable : null,
+                );
+                if ($pruned > 0) {
+                    self::reportPrunedSessions($store->pruneReport(), $retentionDays);
+                }
+            } catch (\Throwable) {
+                // Best effort — see the docblock above.
+            }
+        }
+
+        return $store;
+    }
+
+    /**
+     * Tell the user which conversations retention just deleted.
+     *
+     * Silence was the worst part of the original wiring: a launch destroyed a
+     * month-old session and its whole transcript, printed nothing, logged
+     * nothing, and the caller threw the count away. stderr before the TUI
+     * takes the screen is where this class already reports provider fallbacks.
+     *
+     * @param array<int, array{id: string, name: ?string, updated_at: string, messages: int}> $report
+     */
+    private static function reportPrunedSessions(array $report, int $retentionDays): void
+    {
+        $count = count($report);
+        fwrite(STDERR, sprintf(
+            "sugarcrush: retention removed %d unnamed %s untouched for %d+ days:\n",
+            $count,
+            $count === 1 ? 'session' : 'sessions',
+            $retentionDays,
+        ));
+        foreach ($report as $row) {
+            fwrite(STDERR, sprintf(
+                "sugarcrush:   %s (last used %s UTC, %d %s)\n",
+                $row['id'],
+                $row['updated_at'],
+                $row['messages'],
+                $row['messages'] === 1 ? 'message' : 'messages',
+            ));
+        }
+    }
+
+    /**
+     * How many days an unnamed session survives without being touched, from
+     * `SUGARCRUSH_SESSION_RETENTION_DAYS`.
+     *
+     * **Retention is opt-in: the default is `0`, which disables it.** An
+     * unset variable cannot mean "delete my history", and the only signal
+     * distinguishing a session worth keeping from an abandoned one — a name —
+     * is weak enough (auto-titling runs once per session, needs a working
+     * title backend, and fails silently) that a session holding a month of
+     * work can easily still be unnamed.
+     *
+     * `0` and any value that is not a plain positive integer — negative,
+     * fractional, suffixed, wordy — also disable it rather than guessing at an
+     * intent. A value above {@see SessionStore::MAX_RETENTION_DAYS} is clamped
+     * rather than rejected: `ctype_digit()` accepts `99999999999999999999`,
+     * `(int)` saturates it to `PHP_INT_MAX`, and `strtotime("-PHP_INT_MAX
+     * days")` overflows to a cutoff in the year 2343668 — a FUTURE cutoff, at
+     * which "older than the cutoff" is every session there is.
+     */
+    public static function sessionRetentionDays(): int
+    {
+        $raw = getenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
+        if ($raw === false) {
+            return 0;
+        }
+
+        $trimmed = trim($raw);
+        if ($trimmed === '' || !ctype_digit($trimmed)) {
+            return 0;
+        }
+
+        return min((int) $trimmed, SessionStore::MAX_RETENTION_DAYS);
     }
 
     /**

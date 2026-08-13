@@ -80,6 +80,11 @@ final class EnhancedSessionStore
     public function deleteSession(string $id): void
     {
         $this->sessionStore->deleteSession($id);
+        // The FK cascade took this session's checkpoint_blobs rows with it, so
+        // every id this instance had interned for it is now dangling. See
+        // internMessages(): ANY blob deletion has to invalidate the cache, not
+        // just the GC's own.
+        $this->forgetInternedBlobs($id);
     }
 
     /**
@@ -108,9 +113,24 @@ final class EnhancedSessionStore
         $this->sessionStore->addToolCall($sessionId, $messageId, $toolCall);
     }
 
-    public function pruneSessions(int $daysOld = 30): int
+    public function pruneSessions(int $daysOld = 30, ?string $exemptSessionId = null): int
     {
-        return $this->sessionStore->pruneSessions($daysOld);
+        $pruned = $this->sessionStore->pruneSessions($daysOld, $exemptSessionId);
+        if ($pruned > 0) {
+            // Same cascade as deleteSession(), for a set of ids the caller
+            // never named.
+            $this->blobIds = [];
+        }
+
+        return $pruned;
+    }
+
+    /**
+     * @return array<int, array{id: string, name: ?string, updated_at: string, messages: int}>
+     */
+    public function pruneReport(): array
+    {
+        return $this->sessionStore->pruneReport();
     }
 
     private function initEnhancedSchema(): void
@@ -149,6 +169,23 @@ final class EnhancedSessionStore
         $this->pdo->exec('
             CREATE INDEX IF NOT EXISTS idx_checkpoints_session_index
             ON checkpoints(session_id, "index" DESC)
+        ');
+
+        // Content-addressed message bodies shared by every checkpoint of a
+        // session — see saveCheckpoint() for why checkpoints stopped storing
+        // the conversation inline. Created here rather than in a one-shot
+        // migration because initEnhancedSchema() runs on every construction,
+        // so an existing database picks the table up the next time it opens
+        // and keeps reading its old inline checkpoints meanwhile.
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS checkpoint_blobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                hash TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                UNIQUE (session_id, hash),
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
         ');
     }
 
@@ -229,11 +266,104 @@ final class EnhancedSessionStore
     private const MAX_CHECKPOINTS_PER_SESSION = 100;
 
     /**
+     * Envelope key marking a `state_data` payload as message-referencing
+     * rather than a full inline snapshot. Its presence is what distinguishes
+     * the two on read; rows written before this existed have no such key and
+     * are still decoded verbatim.
+     */
+    private const CHECKPOINT_ENVELOPE_VERSION = '__cpv';
+
+    /** Envelope key holding the ordered list of `checkpoint_blobs.id`. */
+    private const CHECKPOINT_ENVELOPE_MESSAGES = '__cpm';
+
+    /** Envelope key holding the rest of the chat state, `messages` nulled. */
+    private const CHECKPOINT_ENVELOPE_STATE = '__cps';
+
+    /**
+     * Interned message bodies, `sessionId => [sha256 => checkpoint_blobs.id]`.
+     *
+     * Keeps the steady-state cost of {@see saveCheckpoint()} proportional to
+     * the messages the turn actually ADDED rather than to the whole history:
+     * every message already checkpointed is a cache hit and issues no query
+     * at all. Cold on the first save of a process, which costs one batched
+     * SELECT.
+     *
+     * Bounded to {@see MAX_CACHED_SESSIONS} sessions, least-recently-interned
+     * evicted first. A single session's map grows with the messages this
+     * PROCESS has checkpointed (~80 B each) and is released when the session
+     * falls out of the window — nothing else releases it, because a store
+     * instance is never told a session is finished.
+     *
+     * @var array<string, array<string, int>>
+     */
+    private array $blobIds = [];
+
+    /**
+     * Value of `PRAGMA data_version` when {@see $blobIds} was last known to
+     * match the database. See {@see forgetInternedBlobsIfStale()}.
+     */
+    private ?string $blobDataVersion = null;
+
+    /**
+     * How many sessions {@see $blobIds} keeps maps for.
+     *
+     * One live conversation plus room for the sessions `/branch`, `/session`
+     * and background runs move between inside one process.
+     */
+    private const MAX_CACHED_SESSIONS = 4;
+
+    /**
      * Save a checkpoint snapshot for the session.
+     *
+     * Checkpoints are written once per turn by {@see
+     * \SugarCraft\Crush\Chat::submit()} and read back only by `/rewind`, so
+     * the feature's contract is "every turn is individually rewindable, up to
+     * MAX_CHECKPOINTS_PER_SESSION turns back". That contract is preserved
+     * exactly — what changed is where the bytes go.
+     *
+     * This used to `json_encode($chatState)` in full, meaning turn N wrote
+     * the whole N-message history again: O(N²) bytes over a session, and the
+     * single largest write amplifier in the store. Messages are now stored
+     * once each in `checkpoint_blobs`, addressed by the SHA-256 of their
+     * encoded form, and the checkpoint row keeps only the ordered list of
+     * blob ids. A turn therefore writes its new messages plus a short id
+     * list, so total message BYTES over a session are O(N).
+     *
+     * The envelope is not: its id list is itself O(N) per checkpoint, so total
+     * bytes written stay Θ(N²) with a much smaller constant — a few bytes of
+     * decimal id per message instead of the message. Measured on distinct
+     * 200-byte bodies that is 18× fewer bytes written at 50 turns and 46× at
+     * 400, with the envelope 77% of the total by then; the factor moves with
+     * both turn count and message size.
+     * Removing that last quadratic term needs a checkpoint format that can
+     * reference a RANGE of blobs, which is a schema change and a separate
+     * piece of work.
+     *
+     * Content addressing rather than a delta chain against the previous
+     * checkpoint, for two reasons. First, history is not strictly
+     * append-only: a `tool_running` placeholder is REPLACED in place when its
+     * result lands, and `/compact` rewrites history wholesale — a
+     * prefix-delta would degrade to a full snapshot on exactly the turns that
+     * matter most, while content addressing just reuses the messages that did
+     * not change. Second, a chain makes each checkpoint depend on its
+     * predecessor, and `pruneOldCheckpoints()` deletes oldest-first, so every
+     * prune would have to re-materialise the new oldest checkpoint as a full
+     * snapshot — reintroducing O(N²) past the retention limit and giving one
+     * corrupt row a blast radius over every checkpoint above it. Here each
+     * checkpoint row is independent: it names blobs, and blobs never change.
+     *
+     * A throttle ("checkpoint every K turns") was rejected outright: it is
+     * the one change that would silently alter what `/rewind 1` means, and
+     * losing up to K turns of undo is a worse trade than a slightly larger
+     * schema when an O(N) representation is available for the same
+     * guarantees.
      *
      * @param string $sessionId The session ID
      * @param array $chatState The chat state to snapshot (messages, input buffer, agent context)
      * @return int The checkpoint index that was assigned
+     *
+     * @throws \JsonException on a state that cannot be encoded — loudly, so a
+     *         checkpoint is skipped rather than stored with a hole in it
      */
     public function saveCheckpoint(string $sessionId, array $chatState): int
     {
@@ -243,6 +373,14 @@ final class EnhancedSessionStore
         ');
         $stmt->execute([$sessionId]);
         $nextIndex = (int) $stmt->fetchColumn();
+        // fetchColumn() leaves the cursor open, which holds a read transaction
+        // for as long as the statement lives. SQLite will not run its
+        // automatic WAL checkpoint at a COMMIT taken while a reader is open,
+        // so leaving this cursor across the INSERT below meant the WAL never
+        // truncated and `session.db-wal` grew without bound for the life of
+        // the process — the "files reaching hundreds of MB" symptom this whole
+        // item is about. One turn per line, and every line held one open.
+        $stmt->closeCursor();
 
         // Insert the new checkpoint
         $insertStmt = $this->pdo->prepare('
@@ -252,7 +390,7 @@ final class EnhancedSessionStore
         $insertStmt->execute([
             $sessionId,
             $nextIndex,
-            json_encode($chatState),
+            $this->encodeCheckpoint($sessionId, $chatState),
             (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
         ]);
 
@@ -260,6 +398,294 @@ final class EnhancedSessionStore
         $this->pruneOldCheckpoints($sessionId, self::MAX_CHECKPOINTS_PER_SESSION);
 
         return $nextIndex;
+    }
+
+    /**
+     * Serialise one chat state into a `state_data` payload.
+     *
+     * A state with no `messages` list has nothing to intern and is stored
+     * inline exactly as before — the envelope is only worth its constant
+     * overhead when there is a history to share.
+     *
+     * `messages` is nulled in place rather than removed from the state array
+     * so the key keeps its original position; {@see decodeCheckpoint()}
+     * writes the rehydrated list straight back into that slot, and callers
+     * that compare a round-tripped state against the one they saved (the
+     * checkpoint tests do, with `assertSame`) see identical key order.
+     *
+     * @param array<string, mixed> $chatState
+     *
+     * @throws \JsonException on a state that cannot be encoded at all
+     */
+    private function encodeCheckpoint(string $sessionId, array $chatState): string
+    {
+        $messages = $chatState['messages'] ?? null;
+        if (!is_array($messages)) {
+            return self::encodeJson($chatState);
+        }
+
+        $payloads = [];
+        foreach (array_values($messages) as $message) {
+            $payloads[] = self::encodeJson($message);
+        }
+
+        $chatState['messages'] = null;
+
+        return self::encodeJson([
+            self::CHECKPOINT_ENVELOPE_VERSION  => 1,
+            self::CHECKPOINT_ENVELOPE_MESSAGES => $this->internMessages($sessionId, $payloads),
+            self::CHECKPOINT_ENVELOPE_STATE    => $chatState,
+        ]);
+    }
+
+    /**
+     * Encode one checkpoint fragment.
+     *
+     * WHY the flags: `json_encode()` returns `false` — not a partial string —
+     * on a single invalid UTF-8 byte, and `(string) false` is `''`. A message
+     * body that hit that path was stored as the empty string, hashed as the
+     * empty string (so EVERY un-encodable message in the session collapsed
+     * onto one shared blob), and came back from `json_decode('')` as `null`,
+     * punching exactly the hole in the restored history that
+     * {@see decodeCheckpoint()} promises never to return. `/rewind` then died
+     * in its catch-all on `Argument #1 ($m) must be of type array, null
+     * given`. Tool results reach history verbatim — `Chat::finishToolCalls()`
+     * does not transcode them — so 64 raw bytes out of any binary-emitting
+     * command is enough to trigger it.
+     *
+     * `JSON_INVALID_UTF8_SUBSTITUTE` makes that case WORK (U+FFFD in, message
+     * still distinct, still restorable) and `JSON_THROW_ON_ERROR` makes any
+     * other encode failure loud at the call site instead of silently empty.
+     * The same pair, for the same reason, guards
+     * {@see \SugarCraft\Crush\Cli\NonInteractive::encodeDocument()}.
+     *
+     * @throws \JsonException
+     */
+    private static function encodeJson(mixed $value): string
+    {
+        $json = json_encode($value, \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
+
+        // Unreachable with JSON_THROW_ON_ERROR set; asserted rather than cast,
+        // because the silent `(string)` cast IS the bug described above.
+        return $json === false
+            ? throw new \JsonException('json_encode() returned false without raising')
+            : $json;
+    }
+
+    /**
+     * Inverse of {@see encodeCheckpoint()}.
+     *
+     * Returns null when the envelope references a blob that is no longer on
+     * disk. That is unreconstructable state, and reporting it as a missing
+     * checkpoint (which every caller already handles) is honest, where
+     * silently returning a history with a hole punched in it would not be.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function decodeCheckpoint(string $stateData): ?array
+    {
+        $decoded = json_decode($stateData, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        // Pre-envelope rows stored the whole state inline; they still read
+        // back byte-for-byte as what they were written from.
+        if (($decoded[self::CHECKPOINT_ENVELOPE_VERSION] ?? null) !== 1) {
+            return $decoded;
+        }
+
+        $ids = $decoded[self::CHECKPOINT_ENVELOPE_MESSAGES] ?? null;
+        $state = $decoded[self::CHECKPOINT_ENVELOPE_STATE] ?? null;
+        if (!is_array($ids) || !is_array($state)) {
+            return null;
+        }
+
+        $payloads = $this->loadBlobs(array_map('intval', $ids));
+        if ($payloads === null) {
+            return null;
+        }
+
+        $state['messages'] = $payloads;
+
+        return $state;
+    }
+
+    /**
+     * Map message bodies onto `checkpoint_blobs` ids, inserting the ones this
+     * session has never checkpointed before.
+     *
+     * The cache is only trusted for as long as no OTHER connection has
+     * written to the file — see {@see forgetInternedBlobsIfStale()} for why
+     * that matters and what it costs.
+     *
+     * @param list<string> $payloads encoded message bodies, in history order
+     * @return list<int> blob ids, in the same order
+     */
+    private function internMessages(string $sessionId, array $payloads): array
+    {
+        $this->forgetInternedBlobsIfStale();
+
+        $known = $this->blobIds[$sessionId] ?? [];
+
+        $hashes = [];
+        $missing = [];
+        foreach ($payloads as $payload) {
+            $hash = hash('sha256', $payload);
+            $hashes[] = $hash;
+            if (!isset($known[$hash])) {
+                $missing[$hash] = $payload;
+            }
+        }
+
+        if ($missing !== []) {
+            // A blob may already be on disk from an earlier process even
+            // though this instance's cache is cold, so look before inserting.
+            foreach ($this->lookupBlobIds($sessionId, array_keys($missing)) as $hash => $id) {
+                $known[$hash] = $id;
+                unset($missing[$hash]);
+            }
+        }
+
+        if ($missing !== []) {
+            $insert = $this->pdo->prepare('
+                INSERT OR IGNORE INTO checkpoint_blobs (session_id, hash, payload)
+                VALUES (?, ?, ?)
+            ');
+            foreach ($missing as $hash => $payload) {
+                $insert->execute([$sessionId, $hash, $payload]);
+            }
+            // Re-read rather than trusting lastInsertId(): OR IGNORE leaves it
+            // stale on a row that lost a race with another connection.
+            foreach ($this->lookupBlobIds($sessionId, array_keys($missing)) as $hash => $id) {
+                $known[$hash] = $id;
+            }
+        }
+
+        // Re-inserted last so the eviction order below is
+        // least-recently-interned first.
+        unset($this->blobIds[$sessionId]);
+        $this->blobIds[$sessionId] = $known;
+        while (count($this->blobIds) > self::MAX_CACHED_SESSIONS) {
+            array_shift($this->blobIds);
+        }
+
+        $ids = [];
+        foreach ($hashes as $hash) {
+            $ids[] = $known[$hash] ?? 0;
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Drop every interned id when another connection has written to the file.
+     *
+     * The cache maps a body hash to a `checkpoint_blobs.id`, and those ids are
+     * only stable while nothing deletes blobs. `collectCheckpointBlobs()`
+     * clears the map on the instance that ran the GC, but two sugar-crush
+     * terminals resume the SAME session — `Bootstrap::seedSession()` takes
+     * `listSessions(1)[0]`, the globally most recent row — so a `/rewind` in
+     * one process silently invalidated the other's cache. That process then
+     * wrote envelopes naming deleted ids, and `decodeCheckpoint()` (correctly)
+     * reported every one of them as "Checkpoint N not found": `/rewind` dead
+     * for the rest of that process's life, with `/rewind` the table's only
+     * consumer.
+     *
+     * `PRAGMA data_version` is the same invalidation `listSessions()` already
+     * uses and reads only the database header, so the check is O(1) per save.
+     * It changes for other-connection writes and NOT for ours, which is
+     * exactly the split needed here: the GC, `deleteSession()` and
+     * `pruneSessions()` clear their own instance directly (a same-connection
+     * delete moves nothing), and everyone else's writes land here.
+     *
+     * Dropping rather than re-validating: a re-validation would have to
+     * re-read every cached hash, which IS the cold path, so it would cost the
+     * same and only complicate the invariant. The cache is kept — it is what
+     * keeps the common single-process turn off a full-history hash lookup —
+     * and a second live terminal pays one batched `lookupBlobIds()` per turn,
+     * the same order as the envelope that turn writes anyway.
+     *
+     * A blob deleted between this check and the INSERT below is still
+     * possible in principle; SQLite serialises the two writers, so the loser
+     * re-interns on its next turn instead of staying wrong forever, and a
+     * checkpoint that cannot be read is refused rather than silently
+     * truncated.
+     */
+    private function forgetInternedBlobsIfStale(): void
+    {
+        $stmt = $this->pdo->query('PRAGMA data_version');
+        $dataVersion = (string) $stmt->fetchColumn();
+        $stmt->closeCursor();
+
+        if ($this->blobDataVersion !== $dataVersion) {
+            $this->blobIds = [];
+            $this->blobDataVersion = $dataVersion;
+        }
+    }
+
+    /** Forget one session's interned ids, e.g. after its blobs were deleted. */
+    private function forgetInternedBlobs(string $sessionId): void
+    {
+        unset($this->blobIds[$sessionId]);
+    }
+
+    /**
+     * @param list<string> $hashes
+     * @return array<string, int> hash => id, for the hashes that exist
+     */
+    private function lookupBlobIds(string $sessionId, array $hashes): array
+    {
+        $found = [];
+        // Chunked because SQLite caps bound parameters per statement and a
+        // long session's history can exceed that on a cold first save.
+        foreach (array_chunk($hashes, 400) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = $this->pdo->prepare("
+                SELECT hash, id FROM checkpoint_blobs
+                WHERE session_id = ? AND hash IN ({$placeholders})
+            ");
+            $stmt->execute([$sessionId, ...$chunk]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $found[(string) $row['hash']] = (int) $row['id'];
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * @param list<int> $ids
+     * @return list<mixed>|null decoded message bodies in the given order, or
+     *         null when any id has no row
+     */
+    private function loadBlobs(array $ids): ?array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $byId = [];
+        foreach (array_chunk(array_unique($ids), 400) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = $this->pdo->prepare("
+                SELECT id, payload FROM checkpoint_blobs WHERE id IN ({$placeholders})
+            ");
+            $stmt->execute($chunk);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $byId[(int) $row['id']] = json_decode((string) $row['payload'], true);
+            }
+        }
+
+        $messages = [];
+        foreach ($ids as $id) {
+            if (!array_key_exists($id, $byId)) {
+                return null;
+            }
+            $messages[] = $byId[$id];
+        }
+
+        return $messages;
     }
 
     /**
@@ -276,12 +702,17 @@ final class EnhancedSessionStore
         ');
         $stmt->execute([$sessionId, $index]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        // restoreCheckpoint() DELETEs immediately after calling this, so the
+        // read transaction a live cursor holds would straddle that write and
+        // suppress the WAL auto-checkpoint — the same trap saveCheckpoint()
+        // fell into. Closed explicitly rather than left to $stmt's scope.
+        $stmt->closeCursor();
 
         if (!$row) {
             return null;
         }
 
-        return json_decode($row['state_data'], true);
+        return $this->decodeCheckpoint((string) $row['state_data']);
     }
 
     /**
@@ -307,7 +738,7 @@ final class EnhancedSessionStore
             return [
                 'index' => (int) $row['index'],
                 'created_at' => $row['created_at'],
-                'state_data' => json_decode($row['state_data'], true),
+                'state_data' => $this->decodeCheckpoint((string) $row['state_data']),
             ];
         }, $rows);
     }
@@ -333,7 +764,51 @@ final class EnhancedSessionStore
         ');
         $deleteStmt->execute([$sessionId, $index]);
 
+        // A rewind is the one moment a user explicitly discards state, so it
+        // is also where the messages that state referenced stop being worth
+        // keeping. Deliberately NOT done from pruneOldCheckpoints(): that runs
+        // on the turn path once a session passes the retention limit, and
+        // blob storage is O(total distinct messages) with or without it, so
+        // paying a scan every turn would buy nothing.
+        $this->collectCheckpointBlobs($sessionId);
+
         return $state;
+    }
+
+    /**
+     * Drop `checkpoint_blobs` rows no surviving checkpoint of this session
+     * references any more.
+     */
+    private function collectCheckpointBlobs(string $sessionId): void
+    {
+        $stmt = $this->pdo->prepare('SELECT state_data FROM checkpoints WHERE session_id = ?');
+        $stmt->execute([$sessionId]);
+
+        $live = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $stateData) {
+            $decoded = json_decode((string) $stateData, true);
+            $ids = is_array($decoded) ? ($decoded[self::CHECKPOINT_ENVELOPE_MESSAGES] ?? null) : null;
+            if (!is_array($ids)) {
+                continue;
+            }
+            foreach ($ids as $id) {
+                $live[(int) $id] = true;
+            }
+        }
+
+        if ($live === []) {
+            $this->pdo->prepare('DELETE FROM checkpoint_blobs WHERE session_id = ?')->execute([$sessionId]);
+        } else {
+            // Ids are ints straight out of (int) casts, never user text.
+            $keep = implode(',', array_keys($live));
+            $this->pdo
+                ->prepare("DELETE FROM checkpoint_blobs WHERE session_id = ? AND id NOT IN ({$keep})")
+                ->execute([$sessionId]);
+        }
+
+        // Ids this instance had interned may have just been deleted. Other
+        // instances see it through forgetInternedBlobsIfStale().
+        $this->forgetInternedBlobs($sessionId);
     }
 
     /**
@@ -344,6 +819,8 @@ final class EnhancedSessionStore
         $countStmt = $this->pdo->prepare('SELECT COUNT(*) FROM checkpoints WHERE session_id = ?');
         $countStmt->execute([$sessionId]);
         $count = (int) $countStmt->fetchColumn();
+        // Same open-cursor-blocks-the-WAL-checkpoint trap as saveCheckpoint().
+        $countStmt->closeCursor();
 
         if ($count <= $maxCheckpoints) {
             return;
