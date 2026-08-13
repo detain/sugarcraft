@@ -27,6 +27,7 @@ use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Events\TokenDelta;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookContext;
@@ -107,7 +108,13 @@ final class Chat implements Model
      * whatever the user did since — same staleness contract as
      * {@see AssistantMsg::$generation}.
      *
-     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished}>
+     * Also carries {@see TokenDelta}s — the assistant's reply as it is written
+     * (crush_code.md Phase 0 item 13) — on this SAME queue rather than one of
+     * its own, because the order of "the model said this" against "the model
+     * called that tool" is the story of an agentic turn and two queues could
+     * not preserve it.
+     *
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta}>
      */
     private readonly \ArrayObject $liveToolEvents;
 
@@ -494,9 +501,43 @@ final class Chat implements Model
          * allocating here) keeps every existing embedder/test constructor
          * call working unchanged.
          *
-         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished}>|null
+         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
+        /**
+         * The in-flight assistant reply as far as it has arrived — the
+         * accumulation of this turn's {@see TokenDelta}s, drained off
+         * {@see $liveToolEvents} by {@see pumpLiveToolEvents()}
+         * (crush_code.md Phase 0 item 13).
+         *
+         * Deliberately NOT a {@see Message} in {@see $history}. A half-written
+         * reply must never be checkpointed, compacted, counted towards the
+         * context budget or re-sent to the model as if it were a finished
+         * turn, and everything that walks $history would treat it as one.
+         * {@see Renderer} paints it above the "thinking…" placeholder instead,
+         * and the settled {@see AssistantMsg} — which is authoritative, being
+         * what the provider actually committed to — clears it as it appends
+         * the real message.
+         *
+         * Reset on {@see ToolStarted} as well, so each step of an agentic turn
+         * shows its OWN prose: {@see Backend\EngineBackend::complete()} returns
+         * only the final step's content, so an accumulation spanning steps
+         * would visibly shrink when the turn settled.
+         *
+         * KNOWN LOSS, not a rendering detail: on a multi-step turn every
+         * intermediate step's prose is painted and then DISCARDED. "Let me
+         * check the clock. " streams, the reset blanks it when the tool
+         * starts, and only the last step's "It is noon." survives into the
+         * transcript — the earlier sentence reaches no message and no
+         * checkpoint. The reset is not the cause; `complete()` collapsing a
+         * multi-step turn down to its last step is, which leaves the reset as
+         * the only honest option (the alternative is prose that shrinks on
+         * settle). The real fix is to commit each step's assistant message as
+         * that step ends, so the partial has a settled message to be
+         * superseded by; that is tracked as its own follow-up and is
+         * deliberately out of scope here.
+         */
+        private readonly string $streamingText = '',
         /**
          * The project root this session was launched against — `--root`'s
          * value as {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} resolved
@@ -554,12 +595,21 @@ final class Chat implements Model
 
             $message = $msg->message;
 
+            // The settled Message supersedes whatever was streamed: it is what
+            // the provider actually committed to, and on the failure path
+            // ({@see scheduleBackendCompletion()}'s rejection handler) it is
+            // the error notice, which must not be preceded by a half-sentence
+            // the user would read as a complete answer. Clearing here rather
+            // than in each branch keeps the two exits (plain reply, tool
+            // calls) from drifting apart.
+            $settled = $this->mutate(['streamingText' => '']);
+
             // Check if the message has tool calls to execute
             if ($message->toolCalls !== [] && $this->tools !== []) {
-                return $this->beginToolCalls($message);
+                return $settled->beginToolCalls($message);
             }
 
-            return [$this->mutate([
+            return [$settled->mutate([
                 'history' => [...$this->history, $message],
                 'inFlight' => false,
                 'inFlightCancellation' => null,
@@ -685,6 +735,11 @@ final class Chat implements Model
                 'lastEscapeAt' => null,
                 'generation' => $this->generation + 1,
                 'history' => [...$this->history, Message::system('_Request cancelled._')],
+                // Half a sentence left under the cancellation notice would
+                // read as an answer the user is still waiting on. The
+                // generation bump also strands any delta still in the inbox,
+                // so nothing can type into the void after this.
+                'streamingText' => '',
             ]), null];
         }
         if ($this->inFlight) {
@@ -1239,10 +1294,51 @@ final class Chat implements Model
     {
         $events = [];
         foreach ($this->liveToolEvents as [, $event]) {
+            // TokenDelta shares the queue (see the property docblock) but is
+            // not a tool lifecycle event, and this accessor's contract is.
+            if ($event instanceof TokenDelta) {
+                continue;
+            }
             $events[] = $event;
         }
 
         return $events;
+    }
+
+    /**
+     * Append one fragment of assistant text to the live inbox
+     * ({@see $liveToolEvents}) — the text counterpart of
+     * {@see enqueueToolEvent()}, written through by a {@see Backend}'s
+     * `$onToken` callback (crush_code.md Phase 0 item 13).
+     *
+     * Mutating for exactly the reason that one is: the callback fires inside
+     * the backend, on a ReactPHP readable edge for {@see Backend\EngineBackend},
+     * where a returned Chat would have nowhere to go.
+     *
+     * @param int|null $generation see {@see enqueueToolEvent()} — a delta from
+     *                             a turn the user has since aborted is dropped
+     *                             at drain time rather than typed onto the
+     *                             screen after the cancellation notice.
+     */
+    public function enqueueToken(string $text, ?int $generation = null): void
+    {
+        if ($text === '') {
+            return;
+        }
+
+        $this->liveToolEvents[] = [$generation ?? $this->generation, new TokenDelta($text)];
+    }
+
+    /**
+     * The in-flight reply as far as it has arrived; empty outside a turn, and
+     * outside a turn the model has actually started answering.
+     *
+     * {@see Renderer} reads this to replace the static "assistant is
+     * thinking…" placeholder with the words as they are written.
+     */
+    public function streamingText(): string
+    {
+        return $this->streamingText;
     }
 
     /**
@@ -1261,28 +1357,76 @@ final class Chat implements Model
      * re-schedules, so a queue full of an aborted turn's events empties
      * instead of blocking the ones behind it.
      *
+     * {@see TokenDelta}s are the one exception to one-entry-per-update, and
+     * are COALESCED: a run of consecutive deltas is folded into a single
+     * append. One-at-a-time is what makes a tool call's running→done walk
+     * visible, but a delta has no such two-state shape — it is text — and a
+     * provider emits hundreds to thousands of them per reply. Rendering the
+     * whole transcript once per token would spend the turn repainting instead
+     * of streaming, while coalescing bounds the repaint rate at the pump's own
+     * {@see TOOL_EVENT_POLL_SECONDS} tick and loses nothing: the user cannot
+     * read faster than the screen refreshes either way. Coalescing stops at
+     * the first non-delta entry, so text never jumps ahead of the tool call it
+     * preceded.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function pumpLiveToolEvents(): array
     {
         $pending = $this->liveToolEvents->getArrayCopy();
         $entry = array_shift($pending);
-        $this->liveToolEvents->exchangeArray(array_values($pending));
 
         if ($entry === null) {
             return [$this, null];
         }
 
         [$generation, $event] = $entry;
+
+        // Consumed-prefix cursor rather than an array_shift per coalesced
+        // delta: shifting re-indexes the whole remainder every time, so a
+        // burst of n deltas cost O(n^2) to fold into one append. One slice at
+        // the end is O(n) for the same result.
+        $consumed = 0;
+        $text = null;
+        if ($event instanceof TokenDelta) {
+            $text = $event->text;
+            while (($peek = $pending[$consumed] ?? null) !== null
+                && $peek[1] instanceof TokenDelta
+                && $peek[0] === $generation) {
+                $consumed++;
+                $text .= $peek[1]->text;
+            }
+        }
+
+        $this->liveToolEvents->exchangeArray(
+            $consumed === 0 ? array_values($pending) : array_slice($pending, $consumed),
+        );
         $more = count($this->liveToolEvents) > 0 ? Cmd::send(new ToolEventPumpMsg()) : null;
 
         if ($generation !== $this->generation) {
             return [$this, $more];
         }
 
+        if ($text !== null) {
+            return [$this->mutate(['streamingText' => $this->streamingText . $text]), $more];
+        }
+
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event)
+            // A ToolFinished deliberately does NOT reset the partial: the
+            // model has not spoken since the reset its ToolStarted already
+            // did, so there is nothing to clear and clearing would be
+            // indistinguishable either way.
             : $this->replaceToolRunningPlaceholder($event);
+
+        // The model stopped talking and started doing. Whatever prose
+        // introduced this call belongs to the step that is now over, and the
+        // next step's deltas are a new utterance - see $streamingText's
+        // docblock for why an accumulation spanning steps would visibly
+        // shrink when the turn settles.
+        if ($event instanceof ToolStarted) {
+            $next = $next->mutate(['streamingText' => '']);
+        }
 
         return [$next, $more];
     }
@@ -2854,6 +2998,7 @@ final class Chat implements Model
             // appends to the turn's inbox has to reach whichever clone is on
             // screen when the pump next runs.
             'liveToolEvents' => $this->liveToolEvents,
+            'streamingText' => $this->streamingText,
         ];
 
         return new self(...array_merge($constructorProps, $changes));
@@ -3052,6 +3197,10 @@ final class Chat implements Model
             'inFlightCancellation' => $cancellation,
             'generation' => $generation,
             'lastActivityAt' => new \DateTimeImmutable(),
+            // Belt-and-braces: every settled/cancelled path already clears
+            // this, but a new turn must start from a blank partial no matter
+            // how the previous one ended.
+            'streamingText' => '',
         ]);
 
         // Auto-save checkpoint before processing prompt
@@ -3187,9 +3336,49 @@ final class Chat implements Model
     {
         $backend = $next->backend;
         $history = $next->history;
-        $onToken = $next->streaming ? $next->onToken : null;
 
         $inbox = $next->liveToolEvents;
+
+        // The consuming half of the backend's `$onToken` seam, and the fix for
+        // the second half of crush_code.md Phase 0 item 13: this used to be
+        // `$next->streaming ? $next->onToken : null`, i.e. null on every real
+        // run, because nothing ever set either field — so even a backend that
+        // streamed perfectly had nowhere to stream TO.
+        //
+        // The Chat's own live rendering no longer depends on an embedder
+        // supplying a callback: deltas go onto the same inbox the tool events
+        // use and {@see pumpLiveToolEvents()} folds them into
+        // {@see $streamingText}. $onToken stays an ADDITIONAL, optional
+        // observer for embedders that want the raw chunks (a logger, a
+        // non-TUI shell), and is invoked after the queue append so a throwing
+        // embedder callback cannot cost the UI the delta it is holding.
+        //
+        // Nor may it cost the UI the REST of the turn. An exception raised
+        // here unwinds through the backend and out of the Cmd::promise()
+        // factory below, so no promise is created, no AssistantMsg is ever
+        // dispatched, and the Chat sits inFlight with no way to settle short
+        // of an abort — a whole turn lost to a misbehaving logger. A broken
+        // observer is therefore detached for the remainder of THIS turn
+        // (per-turn because $userSink is a local of this call, so one bad
+        // delta does not disable the embedder's sink forever) and reported
+        // once through error_log rather than once per token.
+        $userSink = $next->onToken;
+        $onToken = !$next->streaming ? null : static function (string $delta) use ($inbox, $generation, &$userSink): void {
+            if ($delta === '') {
+                return;
+            }
+            $inbox[] = [$generation, new TokenDelta($delta)];
+            if ($userSink === null) {
+                return;
+            }
+
+            try {
+                $userSink($delta);
+            } catch (\Throwable $e) {
+                $userSink = null;
+                error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
+            }
+        };
 
         return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation, $inbox): PromiseInterface {
             $onEvent = static function (ToolStarted|ToolFinished $event) use ($inbox, $generation): void {
@@ -3232,14 +3421,21 @@ final class Chat implements Model
      * they can only be an aborted turn's, and the resolving turn's
      * {@see BackendToolEventsMsg} would carry them under the wrong stamp.
      *
-     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished}> $inbox
+     * Undrained {@see TokenDelta}s are discarded outright, whatever their
+     * generation. They share the inbox (see {@see $liveToolEvents}) but not
+     * this destination: {@see BackendToolEventsMsg} carries tool lifecycle
+     * states, and the settled Message beside them already contains every byte
+     * those deltas described. Applying them here would in any case be too late
+     * to be streaming — the turn is over.
+     *
+     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta}> $inbox
      * @return list<ToolStarted|ToolFinished>
      */
     private static function drainToolEventInbox(\ArrayObject $inbox, int $generation): array
     {
         $events = [];
         foreach ($inbox as [$eventGeneration, $event]) {
-            if ($eventGeneration === $generation) {
+            if ($eventGeneration === $generation && !$event instanceof TokenDelta) {
                 $events[] = $event;
             }
         }

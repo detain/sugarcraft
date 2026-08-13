@@ -57,9 +57,30 @@ final class Runtime
      *                           Runtime fails the call closed rather than
      *                           guessing. See {@see settleAsk()}.
      *
+     * @param ?callable $onToken Optional incremental-text observer, signature
+     *                           `function(string $delta): void`, called with
+     *                           each fragment of assistant text the moment it
+     *                           is parsed off the wire.
+     *
+     *                           This is what makes streaming real rather than
+     *                           merely parsed (crush_code.md Phase 0 item 13):
+     *                           {@see runStreaming()} decoded the provider's
+     *                           SSE correctly and then re-buffered the WHOLE
+     *                           response before yielding a single
+     *                           {@see AssistantMessage}, so the caller — and
+     *                           through it the TUI — saw the same one-shot
+     *                           delivery it would have seen with streaming
+     *                           switched off, having paid the full parsing
+     *                           cost for nothing.
+     *
+     *                           Deltas, not a running total: consumers append.
+     *                           {@see runBatch()} emits the whole content as
+     *                           one delta so a consumer never has to ask
+     *                           whether the provider streams.
+     *
      * @return \Generator yields CompleteResponse chunks
      */
-    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null): \Generator
+    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
     {
         $messages = $this->buildMessages($app);
 
@@ -78,15 +99,15 @@ final class Runtime
         // collapsed by iterator_to_array(). Re-yielding lets this outer
         // generator hand out fresh sequential keys.
         $inner = $this->provider->supportsStreaming()
-            ? $this->runStreaming($request, $app, $onEvent, $onPermissionRequest)
-            : $this->runBatch($request, $app, $onEvent, $onPermissionRequest);
+            ? $this->runStreaming($request, $app, $onEvent, $onPermissionRequest, $onToken)
+            : $this->runBatch($request, $app, $onEvent, $onPermissionRequest, $onToken);
 
         foreach ($inner as $msg) {
             yield $msg;
         }
     }
 
-    private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null): \Generator
+    private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
     {
         $buffer = '';
         $toolCalls = [];
@@ -97,8 +118,20 @@ final class Runtime
         // sentinel to detect completion — real providers stream content with
         // tokensUsed=0 and only report totals at the end (if at all), so a
         // sentinel drops the entire message in production.
+        //
+        // The buffer stays even now that $onToken forwards each chunk live:
+        // the AssistantMessage below is what the agentic loop feeds back to
+        // the model on the next step and what lands in the transcript, and
+        // that has to be the WHOLE turn. $onToken is an additional live
+        // observer of the same bytes, not a replacement for assembling them.
         foreach ($this->provider->completeStream($request) as $response) {
             $buffer .= $response->content;
+            // Forwarded before the tool-call/reasoning bookkeeping below so a
+            // chunk carrying both text and the start of a tool call still
+            // reaches the screen as text first, in wire order.
+            if ($onToken !== null && $response->content !== '') {
+                $onToken($response->content);
+            }
             if ($response->toolCalls !== null) {
                 $toolCalls = array_merge($toolCalls, $response->toolCalls);
             }
@@ -116,9 +149,18 @@ final class Runtime
         }
     }
 
-    private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null): \Generator
+    private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
     {
         $response = $this->provider->complete($request);
+
+        // One delta carrying the whole reply. A non-streaming provider has no
+        // incremental bytes to offer, but the $onToken contract is uniform on
+        // purpose: without this the consumer would need its own
+        // supportsStreaming() check to know whether to expect any deltas at
+        // all, and would silently render nothing for a batch provider.
+        if ($onToken !== null && $response->content !== '') {
+            $onToken($response->content);
+        }
 
         yield new AssistantMessage(
             $response->content,

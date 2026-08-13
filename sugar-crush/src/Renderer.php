@@ -682,6 +682,22 @@ final class Renderer
             max(1, $chat->rows() - 2),
         );
         if ($chat->inFlight) {
+            // The reply so far, when the model has started writing one
+            // (crush_code.md Phase 0 item 13). It sits ABOVE the spinner
+            // rather than replacing it: the turn is still running - more text
+            // is coming, and possibly tool calls after it - so removing the
+            // only "still working" affordance the moment the first token
+            // landed would make a mid-stream pause look like a finished
+            // answer.
+            //
+            // Rendered here rather than pushed into $chat->history because a
+            // half-written reply is not a turn: see Chat::$streamingText for
+            // why it must not be checkpointed, compacted or re-sent.
+            $partial = $chat->streamingText();
+            if ($partial !== '') {
+                $stream = self::renderStreamingTurn($partial, $theme);
+                $body = $body === '' ? $stream : $body . "\n\n" . $stream;
+            }
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
             // where the reply is about to appear.
@@ -1282,6 +1298,38 @@ final class Renderer
         }
 
         return $label . "\n" . self::renderReasoning($msg->reasoning, $theme) . "\n" . $body;
+    }
+
+    /**
+     * The in-flight reply as far as it has arrived, painted with the same
+     * label and Markdown treatment a settled assistant turn gets - so the
+     * moment the turn lands, the text does not visibly re-flow into a
+     * different shape.
+     *
+     * Markdown rendering is guarded, which {@see renderAssistantTurn()} does
+     * not need to be: a partial reply is a genuinely different input class -
+     * an unterminated code fence, a half-written table row, a lone `[` - and
+     * every frame of a streaming turn feeds one to the parser. A renderer
+     * exception here would take down the whole TUI mid-answer, so a partial
+     * that cannot be parsed yet is shown as plain (sanitized) text until the
+     * next chunk completes the construct. Untrusted-stripped in that fallback
+     * because CandyShine is what normally neutralises raw model output.
+     */
+    private static function renderStreamingTurn(string $partial, Theme $theme): string
+    {
+        $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
+        // Sentinels stripped BEFORE the renderer, same order and reason as
+        // renderAssistantTurn(): the model's raw text can smuggle
+        // U+E000/U+E001 into the frame and break the mouse-zone scan.
+        $raw = self::stripSentinels($partial);
+
+        try {
+            $body = rtrim((new Markdown($theme->markdown))->render($raw));
+        } catch (\Throwable) {
+            $body = self::untrusted($raw);
+        }
+
+        return $label . "\n" . $body;
     }
 
     /**

@@ -104,6 +104,19 @@ final class Bootstrap
             // or `--root` stops at the tool boundary (crush_code.md Phase 0
             // item 6).
             projectRoot: $root,
+            // crush_code.md Phase 0 item 13's second half. Every provider on
+            // the engine path already streamed, and {@see Chat} already had a
+            // `$streaming` flag - but nothing ever turned it on, so
+            // {@see Chat::scheduleBackendCompletion()} passed a null $onToken
+            // to the backend on every real run and the reply arrived in one
+            // piece after a silent "thinking…" spinner, having paid the full
+            // SSE-parsing cost for nothing.
+            //
+            // No `onToken:` closure alongside it: that field is an OPTIONAL
+            // extra observer for embedders (see its docblock), and the live
+            // TUI rendering is driven off the shared inbox instead. Passing
+            // one here would only duplicate what the pump already does.
+            streaming: true,
         );
     }
 

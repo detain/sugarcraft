@@ -233,6 +233,26 @@ final class EngineBackend implements Backend
      *                           observable while the turn is still running
      *                           (crush_feat.md §1 E1). Without it the caller
      *                           sees only $lastAssistant's text.
+     *
+     * @param ?callable $onToken Incremental-text observer, threaded straight
+     *                           into {@see Runtime::run()} so it fires per
+     *                           provider chunk while the turn runs. It used to
+     *                           be called exactly ONCE here, after the whole
+     *                           bounded loop had finished, with the finished
+     *                           reply — which is why streaming was
+     *                           indistinguishable from no streaming
+     *                           (crush_code.md Phase 0 item 13).
+     *
+     *                           Deltas span the WHOLE turn, every step of the
+     *                           agentic loop included, so a consumer that
+     *                           concatenates them can end up with more text
+     *                           than the returned Message (which is only the
+     *                           LAST step's assistant content — the earlier
+     *                           steps' prose is superseded by the tool results
+     *                           it introduced). Consumers that render the
+     *                           accumulation live are expected to reset it
+     *                           when a {@see ToolStarted} arrives; see
+     *                           {@see \SugarCraft\Crush\Chat::pumpLiveToolEvents()}.
      */
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
@@ -250,6 +270,19 @@ final class EngineBackend implements Backend
         $lastImageBytes = null;
         $lastImageProtocol = null;
 
+        // Whether the runtime managed to emit anything incrementally, so the
+        // end-of-turn fallback below stays a FALLBACK rather than a duplicate:
+        // firing it after a stream that already delivered the same bytes would
+        // paint the reply twice.
+        $streamed = false;
+        $tokenSink = $onToken === null ? null : static function (string $delta) use ($onToken, &$streamed): void {
+            if ($delta === '') {
+                return;
+            }
+            $streamed = true;
+            $onToken($delta);
+        };
+
         // Bounded agentic loop: keep running while the model asks for tools.
         // The Runtime resolves one assistant turn + its tool calls per run();
         // we feed the results back and re-run until the model answers without
@@ -259,7 +292,7 @@ final class EngineBackend implements Backend
             $assistant = null;
             $toolResults = [];
 
-            foreach ($runtime->run($app, $onEvent) as $message) {
+            foreach ($runtime->run($app, $onEvent, null, $tokenSink) as $message) {
                 if ($message instanceof AssistantMessage) {
                     $assistant = $message;
                 } elseif ($message instanceof ToolResultMessage) {
@@ -291,7 +324,11 @@ final class EngineBackend implements Backend
         }
 
         $content = $lastAssistant?->content() ?? '';
-        if ($onToken !== null && $content !== '') {
+        // Only when the turn produced no deltas at all — a provider whose
+        // stream yielded nothing but that still resolved to content. Keeping
+        // the one-shot for that case means a consumer is never left with an
+        // empty screen and a finished turn.
+        if ($onToken !== null && !$streamed && $content !== '') {
             $onToken($content);
         }
 
@@ -326,11 +363,19 @@ final class EngineBackend implements Backend
      *
      * The child does not batch: it writes each {@see ToolStarted}/{@see
      * ToolFinished} as its own length-prefixed frame the moment the event
-     * fires, and the final result as the last frame. The parent drains
-     * whatever whole frames have arrived on every readable edge and hands
-     * each event straight to $onEvent, so a turn running eight rounds of
-     * tools renders them as they happen instead of showing nothing but a
-     * "thinking" spinner until the very end (crush_feat.md §1 E1).
+     * fires, each chunk of assistant text as a `token` frame the moment the
+     * provider's stream produces it, and the final result as the last frame.
+     * The parent drains whatever whole frames have arrived on every readable
+     * edge and hands each straight to $onEvent/$onToken, so a turn running
+     * eight rounds of tools renders them as they happen instead of showing
+     * nothing but a "thinking" spinner until the very end (crush_feat.md §1
+     * E1), and the reply itself appears as it is written rather than all at
+     * once at the end (crush_code.md Phase 0 item 13).
+     *
+     * Text and events share this one channel deliberately. Their relative
+     * order is meaningful — it is the difference between "the model explained
+     * itself and then ran a command" and "it ran a command and then explained"
+     * — and two parallel channels could not preserve it.
      */
     public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
@@ -379,6 +424,10 @@ final class EngineBackend implements Backend
         $buffer = '';
         $settled = false;
         $result = null;
+        // Set once any token frame has been forwarded, so the result frame's
+        // own one-shot $onToken call is suppressed rather than repeating the
+        // reply the caller has already been handed chunk by chunk.
+        $streamed = false;
 
         // $timeoutTimer/$cancelTimer are assigned below, AFTER $teardown is
         // built (each timer's own callback needs to call $teardown) - they're
@@ -421,7 +470,7 @@ final class EngineBackend implements Backend
         // hung up. Same cleanup as $teardown minus the kill (the child is
         // already on its way out), then settle from whatever result frame
         // arrived - a child that died before writing one is still a failure.
-        $finalize = function () use (&$settled, &$result, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer): void {
+        $finalize = function () use (&$settled, &$result, &$streamed, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer): void {
             if ($settled) {
                 return;
             }
@@ -437,7 +486,7 @@ final class EngineBackend implements Backend
                 $loop->cancelTimer($cancelTimer);
             }
             self::reapChild($pid);
-            $this->settleFromResultFrame($result, $deferred, $onToken);
+            $this->settleFromResultFrame($result, $deferred, $streamed ? null : $onToken);
         };
 
         // Restart the idle clock. Called once up front and again for every
@@ -466,7 +515,7 @@ final class EngineBackend implements Backend
             }
         });
 
-        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$result, $onEvent, $finalize, $resetTimeout): void {
+        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$result, &$streamed, $onToken, $onEvent, $finalize, $resetTimeout): void {
             $chunk = fread($stream, 65536);
             if ($chunk === '' || $chunk === false) {
                 $finalize();
@@ -487,6 +536,22 @@ final class EngineBackend implements Backend
                     $finalize();
 
                     return;
+                }
+
+                if (($frame['kind'] ?? null) === 'token') {
+                    $text = $frame['text'] ?? null;
+                    if (!is_string($text) || $text === '') {
+                        continue;
+                    }
+                    // Latched even when nobody is listening: the child streamed
+                    // this turn either way, and the result frame's one-shot
+                    // would then be a second delivery of the same reply.
+                    $streamed = true;
+                    if ($onToken !== null) {
+                        $onToken($text);
+                    }
+
+                    continue;
                 }
 
                 $event = self::decodeEvent($frame);
@@ -582,9 +647,24 @@ final class EngineBackend implements Backend
             // batch is exactly what made a multi-tool turn look like a silent
             // "thinking" spinner (and what made the parent's single
             // wall-clock timer kill turns that were in fact making progress).
-            $message = $this->complete($history, null, static function (ToolStarted|ToolFinished $event) use ($childSocket): void {
-                self::writeFrame($childSocket, self::encodeEvent($event));
-            });
+            $message = $this->complete(
+                $history,
+                // Assistant text crosses the fork on the SAME channel and by
+                // the same rule as the tool events: a plain in-process
+                // closure here would write into the child's COPY of the
+                // parent's state and vanish on exit, so a delta is a frame or
+                // it is nothing. One frame per chunk, unbatched, because a
+                // batch is precisely the re-buffering that made streaming
+                // fake (crush_code.md Phase 0 item 13). Interleaved with the
+                // event frames in wire order, which is what lets the parent
+                // reconstruct "said this, then called that".
+                static function (string $delta) use ($childSocket): void {
+                    self::writeFrame($childSocket, ['kind' => 'token', 'text' => $delta]);
+                },
+                static function (ToolStarted|ToolFinished $event) use ($childSocket): void {
+                    self::writeFrame($childSocket, self::encodeEvent($event));
+                },
+            );
             // imageBytes/imageProtocol survive this fork boundary too - PHP's
             // serialize()/unserialize() (unlike JSON) round-trip arbitrary
             // binary strings natively, so no base64 step is needed here the
@@ -678,10 +758,16 @@ final class EngineBackend implements Backend
 
     /**
      * Settle $deferred from the child's final result frame - resolving with
-     * the real content (firing $onToken once, matching {@see complete()}'s
-     * own one-shot-at-the-end semantics) or rejecting with its error message.
-     * A null frame (child crashed before writing one) is reported as a
-     * failure rather than silently resolving empty.
+     * the real content or rejecting with its error message. A null frame
+     * (child crashed before writing one) is reported as a failure rather than
+     * silently resolving empty.
+     *
+     * $onToken here is the FALLBACK delivery only, and {@see completeAsync()}
+     * passes null once any token frame has arrived: a turn the child streamed
+     * has already handed the caller these bytes, and repeating them whole
+     * would double the reply on screen. It survives for the child that
+     * produced no deltas (a provider whose stream yielded nothing), matching
+     * {@see complete()}'s own fallback.
      *
      * @param ?array<string, mixed> $data
      */
