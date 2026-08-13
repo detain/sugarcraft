@@ -14,6 +14,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
+use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 
 /**
  * @see Tool
@@ -23,6 +24,7 @@ use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
  * @see Grep
  * @see Glob
  * @see WebFetch
+ * @see WebSearch
  * @see Doctor
  */
 final class BuiltInToolTest extends TestCase
@@ -65,6 +67,7 @@ final class BuiltInToolTest extends TestCase
         yield Grep::class => [Grep::class];
         yield Glob::class => [Glob::class];
         yield WebFetch::class => [WebFetch::class];
+        yield WebSearch::class => [WebSearch::class];
         yield Doctor::class => [Doctor::class];
     }
 
@@ -118,6 +121,14 @@ final class BuiltInToolTest extends TestCase
 
         $this->assertSame('WebFetch', $tool->name());
         $this->assertSame('Fetch content from a URL', $tool->description());
+    }
+
+    public function testWebSearchToolHasCorrectNameAndDescription(): void
+    {
+        $tool = new WebSearch();
+
+        $this->assertSame('WebSearch', $tool->name());
+        $this->assertSame('Search the web for information via a configurable SearXNG endpoint. Returns answers, top results with snippets, suggestions, and corrections.', $tool->description());
     }
 
     public function testDoctorToolHasCorrectName(): void
@@ -221,6 +232,21 @@ final class BuiltInToolTest extends TestCase
         $this->assertContains('url', $schema['required']);
     }
 
+    public function testWebSearchToolInputSchemaHasRequiredFields(): void
+    {
+        $tool = new WebSearch();
+        $schema = $tool->inputSchema();
+
+        $this->assertArrayHasKey('query', $schema['properties']);
+        $this->assertArrayHasKey('description', $schema['properties']);
+        $this->assertContains('query', $schema['required']);
+        $this->assertContains('description', $schema['required']);
+        $this->assertArrayHasKey('safesearch', $schema['properties']);
+        $this->assertArrayHasKey('time_range', $schema['properties']);
+        $this->assertNotContains('safesearch', $schema['required']);
+        $this->assertNotContains('time_range', $schema['required']);
+    }
+
     /**
      * crush_feat.md §3 E2: every built-in tool marks a human-readable
      * `description` required, so a compliant backend always emits the label
@@ -238,6 +264,7 @@ final class BuiltInToolTest extends TestCase
             'grep' => [new Grep()],
             'glob' => [new Glob()],
             'webfetch' => [new WebFetch()],
+            'websearch' => [new WebSearch()],
         ];
     }
 
@@ -570,6 +597,7 @@ final class BuiltInToolTest extends TestCase
             Grep::class => new Grep(),
             Glob::class => new Glob(),
             WebFetch::class => new WebFetch(),
+            WebSearch::class => new WebSearch(),
             Doctor::class => new Doctor(),
             default => throw new \InvalidArgumentException("Unknown tool class: $className"),
         };

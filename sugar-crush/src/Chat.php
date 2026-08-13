@@ -37,6 +37,7 @@ use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
+use SugarCraft\Crush\Commands\WebSearchCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
@@ -2980,6 +2981,11 @@ final class Chat implements Model
             return $this->handleMcpAuthCommand($text);
         }
 
+        // Handle /websearch command (local search via SearXNG)
+        if (str_starts_with($text, '/websearch')) {
+            return $this->handleWebSearchCommand($text);
+        }
+
         // Idle-compaction check, once per turn, before dispatching a real
         // prompt to the backend. shouldPromptIdleCompaction() previously had
         // no live call site anywhere in the codebase — only tests invoked it
@@ -3470,11 +3476,48 @@ final class Chat implements Model
     }
 
     /**
+     * Handle /websearch command.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleWebSearchCommand(string $inputBuf): array
+    {
+        $afterCommand = ltrim(substr($inputBuf, 11)); // "/websearch" = 10 chars
+        $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
+
+        ob_start();
+        $command = new WebSearchCommand();
+        $exitCode = $command->execute($this, $args);
+        $output = ob_get_clean();
+
+        if ($exitCode !== 0) {
+            return [$this, static fn() => print $output];
+        }
+
+        return $this->webSearchResponse($inputBuf, $output);
+    }
+
+    /**
      * Return a share command response, adding both user command and assistant response to history.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function shareResponse(string $inputBuf, string $response): array
+    {
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+        return [$next, null];
+    }
+
+    /**
+     * Return a websearch command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function webSearchResponse(string $inputBuf, string $response): array
     {
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],

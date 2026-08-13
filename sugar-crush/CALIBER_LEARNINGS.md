@@ -167,3 +167,42 @@ than silently working around it.
 - **Behaviour tests** for `Chat` drive `update()` with scripted `KeyMsg` / `MouseMsg` / `Tick` objects and assert the `[Model, ?Cmd]` tuple shape.
 - **Coercion tests** for `Session` feed edge cases (missing file, empty string, wrong type) and assert the no-op / clamp / fresh-session outcome.
 - **Generator tests** for `StreamingDirectoryLister` assert the yielded `[index, absolutePath]` pairs and handle early-exit by exhausting the generator normally.
+
+## SugarCrush Slash Command Pattern (2026-08-12)
+
+### Adding a new slash command
+
+**Three-step checklist:**
+
+1. **CommandRegistry::all()** — Add `CommandSpec::new()` entry with command name, description, category, and argumentHint
+2. **Chat::submit()** — Add `str_starts_with($text, '/<command>')` dispatch check returning `$this->handle<Command>Command($text)`
+3. **Chat handle*Command()** — Add private method that:
+   - Parses args after the command prefix
+   - Uses `ob_start()`/`ob_get_clean()` to capture command output (buffering happens HERE, not in the command class)
+   - Returns `[$nextChat, null]` or `[$this, static fn() => print $output]` on error
+
+### WebSearch Command (SearXNG integration)
+
+**Endpoint configuration pattern:**
+```php
+new WebSearch(?string $endpoint)
+// Uses SUGARCRUSH_SEARCH_ENDPOINT env var as fallback
+// Default: http://skynet2.interserver.net:8080/search
+```
+
+**Command class pattern:**
+- Command class uses DIRECT `echo` statements for output
+- Output buffering (`ob_start()`/`ob_get_clean()`) happens in Chat handler
+- Command returns exit code: 0 = success, 1 = failure
+
+**Input schema requirements:**
+- `query` (required): The search query string
+- `description` (required): "Web search: $query" or similar
+- `safesearch` (optional): 0-2 filter level
+- `time_range` (optional): "day", "month", or "year"
+
+**Flag parsing:** Position-independent — flags (`--safesearch`, `--time-range`) can appear anywhere in arg list
+
+**Query validation:**
+- Non-empty after trim
+- Max 2000 characters

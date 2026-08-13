@@ -108,6 +108,12 @@ final class CommandRegistry
             CommandSpec::new('rewind', 'Restore chat state from an earlier checkpoint', 'Session'),
             CommandSpec::new('bg', 'Run a task in a background session', 'Session', argumentHint: '<task>'),
             CommandSpec::new('fork', 'Clone this conversation into a background session', 'Session', argumentHint: '<prompt>'),
+            CommandSpec::new(
+                'websearch',
+                'Search the web via SearXNG',
+                'Tools',
+                argumentHint: '<query> [--safesearch 0|1|2] [--time-range day|month|year]',
+            ),
         ];
     }
 

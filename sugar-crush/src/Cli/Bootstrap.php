@@ -31,6 +31,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
+use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -439,6 +440,7 @@ final class Bootstrap
             new Glob($root, instructionLoader: $loader, skillNudge: $nudge),
             new Grep($root),
             new WebFetch(),
+            new WebSearch(),
             new Doctor(),
             // Level-2 of the progressive-disclosure design: the system prompt
             // carries only each skill's name+description, and the model pulls
