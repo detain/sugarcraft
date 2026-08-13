@@ -176,17 +176,25 @@ final class MultiAgentRefactorTest extends TestCase
         $this->assertNotFalse($winnersA);
         $this->assertNotFalse($winnersB);
 
+        // Surface the children's give-up breadcrumbs, so a failure says WHY
+        // rather than just showing an empty list.
+        $gaveUp = implode(', ', array_map(
+            static fn(string $f): string => basename($f) . '[' . trim((string) file_get_contents($f)) . ']',
+            glob($resultDir . '/*.gaveup.*') ?: [],
+        ));
+        $diag = $gaveUp === '' ? '' : ' | gave up: ' . $gaveUp;
+
         $this->assertCount(
             1,
             $winnersA,
             'Expected exactly one winner for task-a among the concurrent coder processes, got: '
-                . implode(', ', $winnersA),
+                . implode(', ', $winnersA) . $diag,
         );
         $this->assertCount(
             1,
             $winnersB,
             'Expected exactly one winner for task-b among the concurrent coder processes, got: '
-                . implode(', ', $winnersB),
+                . implode(', ', $winnersB) . $diag,
         );
 
         $winnerA = file_get_contents($winnersA[0]);
@@ -270,8 +278,11 @@ final class MultiAgentRefactorTest extends TestCase
         $wm = new WorktreeManager($this->worktreeConfig, $this->repoRoot);
 
         foreach (['task-a', 'task-b'] as $taskId) {
-            $raceDeadline = microtime(true) + 3.0;
+            // Generous budget: claimTask() creates a real git worktree, which
+            // takes far longer on a small shared CI runner than on a dev box.
+            $raceDeadline = microtime(true) + 30.0;
             $claimed = false;
+            $attempts = 0;
             while (microtime(true) < $raceDeadline) {
                 if ($childTeam->claimTask($taskId, $coderId, $wm)) {
                     $claimed = true;
@@ -284,6 +295,28 @@ final class MultiAgentRefactorTest extends TestCase
                 if ($current !== null && $current->status !== TaskStatus::Pending) {
                     break;
                 }
+
+                // Back off between attempts. Without this the loop is a hot
+                // spin, and two forked children hammering the same lock on a
+                // 2-vCPU runner starve each other badly enough that NEITHER
+                // claims before the deadline — the CI failure this fixes was
+                // "expected exactly one winner ... got: 0", i.e. livelock, not
+                // a broken claim. Jittered by coder id so the two processes
+                // do not re-collide in lockstep.
+                $attempts++;
+                usleep(min(20_000, 1_000 * $attempts) + (crc32($coderId) % 3_000));
+            }
+
+            if (!$claimed) {
+                // Leave a breadcrumb: without it a livelock and a genuine
+                // double-claim regression both surface as an empty winner
+                // list with nothing to tell them apart.
+                $status = $childTeam->getTaskList()->getTask($taskId)?->status->value ?? 'missing';
+                file_put_contents(
+                    "{$resultDir}/{$taskId}.gaveup.{$coderId}",
+                    "status={$status} attempts={$attempts}",
+                    LOCK_EX,
+                );
             }
 
             if ($claimed) {

@@ -334,7 +334,13 @@ final class TeamManager
             ];
         }
 
-        $bytes = file_put_contents(
+        // @-suppressed because the failure is NOT swallowed: the $bytes check
+        // below converts it into a RuntimeException naming the path, which is
+        // strictly more useful than PHP's warning. Without the @, an
+        // unwritable registry emits a raw "Failed to open stream" warning
+        // *and* the exception -- and under a TUI that warning paints straight
+        // onto the terminal outside the managed frame.
+        $bytes = @file_put_contents(
             $this->registryPath,
             json_encode($data, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
             LOCK_EX,

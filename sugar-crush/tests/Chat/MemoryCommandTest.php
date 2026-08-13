@@ -28,26 +28,35 @@ final class MemoryCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        // Clean up temp files
-        $files = glob($this->tempDir . '/*.md');
-        if ($files !== false) {
-            foreach ($files as $file) {
-                unlink($file);
+        // Recursive: the old cleanup only unlinked *.md, so anything else the
+        // store wrote (index subdirectories, non-.md sidecars) left the
+        // directory non-empty and every rmdir() raised "Directory not empty"
+        // -- 10 of the suite's warnings came from this one line.
+        self::removeTree($this->tempDir);
+    }
+
+    /** Delete a directory and everything under it, quietly and completely. */
+    private static function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $entries = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($entries as $entry) {
+            /** @var \SplFileInfo $entry */
+            if ($entry->isDir()) {
+                @rmdir($entry->getPathname());
+            } else {
+                @unlink($entry->getPathname());
             }
         }
-        $indexDir = $this->tempDir . '/indexes';
-        if (is_dir($indexDir)) {
-            $indexFiles = glob($indexDir . '/*.md');
-            if ($indexFiles !== false) {
-                foreach ($indexFiles as $file) {
-                    unlink($file);
-                }
-            }
-            rmdir($indexDir);
-        }
-        if (is_dir($this->tempDir)) {
-            rmdir($this->tempDir);
-        }
+
+        @rmdir($dir);
     }
 
     public function testMemoryListShowsMemories(): void
