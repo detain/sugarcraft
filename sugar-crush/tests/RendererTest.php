@@ -592,8 +592,92 @@ final class RendererTest extends TestCase
         $lines = explode("\n", $out);
         $lastLine = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
 
-        $this->assertMatchesRegularExpression('/\d+% context/', $lastLine);
+        $this->assertMatchesRegularExpression('/\(\d+%\)/', $lastLine);
         $this->assertStringContainsString('Enter to send', $lastLine);
+    }
+
+    /**
+     * F.CTXK: a bare percentage is unactionable without knowing the budget,
+     * so the bar carries the absolute count in K next to it. Would fail
+     * against the old "37% context · …" bar, which printed no count at all.
+     */
+    public function testStatusBarShowsAbsoluteTokenCountBesideThePercentage(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 200; $i++) {
+            $history[] = Message::user(str_repeat('x', 400));
+        }
+        $chat = $this->chat($history);
+        [$sized] = $chat->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+
+        $lastLine = $this->statusBar(Renderer::render($sized));
+
+        // 200 messages x (400 chars / 4 + 10 role overhead) = 22,000 tokens
+        // against Chat's 100,000-token budget.
+        $this->assertSame(22000, $chat->contextTokens());
+        $this->assertSame(100000, $chat->contextTokenLimit());
+        $this->assertStringContainsString('~22K / 100K context (22%)', $lastLine);
+    }
+
+    /**
+     * The count is a chars/4 proxy against a fixed compaction threshold, not
+     * a provider-reported figure, so it is prefixed rather than presented as
+     * a measurement.
+     */
+    public function testAbsoluteTokenCountIsLabelledAsAnEstimate(): void
+    {
+        [$sized] = $this->chat()->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+
+        $this->assertMatchesRegularExpression('/~[\d.]+K \/ [\d.]+K context/', $this->statusBar(Renderer::render($sized)));
+    }
+
+    /**
+     * The bar is the frame's last line and may never wrap, so the readout
+     * degrades to narrower forms instead of pushing the row over the width.
+     */
+    public function testStatusBarNeverExceedsTerminalWidthAsTheReadoutGrows(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 400; $i++) {
+            $history[] = Message::user(str_repeat('x', 4000));
+        }
+
+        foreach ([120, 80, 70, 60] as $cols) {
+            [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg($cols, 40));
+
+            $lastLine = $this->statusBar(Renderer::render($sized));
+
+            $this->assertLessThanOrEqual($cols, Width::of($lastLine), "overflowed at {$cols} cols");
+            // However narrow, the percentage itself is never dropped.
+            $this->assertMatchesRegularExpression('/\d+%/', $lastLine);
+        }
+    }
+
+    /**
+     * Below ~60 columns the bar's fixed help text ("Enter to send · Ctrl+P
+     * menu · /exit or ^C to quit", ~52 columns with its separator) overflows
+     * on its own — a pre-existing limit this step does not change. What is
+     * asserted here is that the context readout contributes its minimum in
+     * that case: the bare percentage, never a wider form.
+     */
+    public function testContextReadoutCollapsesToTheBarePercentageOnANarrowTerminal(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 200; $i++) {
+            $history[] = Message::user(str_repeat('x', 400));
+        }
+        [$sized] = $this->chat($history)->update(new \SugarCraft\Core\Msg\WindowSizeMsg(40, 40));
+
+        $this->assertStringStartsWith('22% · ', $this->statusBar(Renderer::render($sized)));
+    }
+
+    /** The final status-bar row, with SGR sequences and zone markers stripped. */
+    private function statusBar(string $frame): string
+    {
+        $lines = explode("\n", $frame);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', (string) end($lines));
+
+        return (string) preg_replace('/\x{E000}\/?[A-Za-z0-9._:-]*\x{E001}/u', '', (string) $plain);
     }
 
     public function testPaletteNotRenderedWhenClosed(): void

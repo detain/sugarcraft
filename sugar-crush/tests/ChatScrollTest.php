@@ -259,9 +259,11 @@ final class ChatScrollTest extends TestCase
             self::assertLessThanOrEqual(self::COLS, Width::of($line), "frame line {$i} must fit the terminal");
         }
 
-        // Narrowed rather than dropped: the readout is the only clue that the
-        // newest output is off-screen.
-        self::assertStringContainsString('↑123', end($lines));
+        // Kept rather than dropped: the readout is the only clue that the
+        // newest output is off-screen, so renderStatusBar() reserves its
+        // widest form before sizing the context readout. Either form is a
+        // pass - what must not happen is the offset disappearing.
+        self::assertMatchesRegularExpression('/↑ ?123/u', end($lines));
     }
 
     public function testMaxScrollOffsetTracksTheLastRenderedFrame(): void

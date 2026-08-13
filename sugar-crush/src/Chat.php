@@ -5213,6 +5213,31 @@ final class Chat implements Model
     }
 
     /**
+     * The numerator behind {@see contextUsagePercent()}: the current
+     * history's size in tokens. Exposed so the status bar can print an
+     * absolute count next to the percentage instead of multiplying the
+     * fraction back out against a limit it would have to hardcode.
+     *
+     * Approximate by construction - it is a chars/4 proxy, not a
+     * provider-reported usage figure - so any UI showing it must say so.
+     */
+    public function contextTokens(): int
+    {
+        return $this->estimateTokenCount($this->history);
+    }
+
+    /**
+     * The denominator behind {@see contextUsagePercent()}: the fixed proxy
+     * budget also used by the 70% reminder tier and the idle-compaction
+     * check. Deliberately NOT the live model's advertised context window -
+     * it is the threshold this app actually acts on.
+     */
+    public function contextTokenLimit(): int
+    {
+        return self::REMINDER_TOKEN_LIMIT;
+    }
+
+    /**
      * Build the soft, non-blocking reminder message surfaced once
      * {@see ContextCompactor::shouldSendReminder()} reports the conversation
      * has crossed its 70%-of-budget tier. Rendered with a distinct

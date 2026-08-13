@@ -782,9 +782,9 @@ final class Renderer
 
     /**
      * The bottom status bar: the existing processing indicator/help text,
-     * plus a context-usage percentage from {@see Chat::contextUsagePercent()}
-     * so a user can see how full the context window is without running
-     * /compact speculatively.
+     * plus a context-usage readout ({@see contextIndicator()}) so a user can
+     * see how full the context window is without running /compact
+     * speculatively.
      */
     private static function renderStatusBar(Chat $chat): string
     {
@@ -797,8 +797,24 @@ final class Renderer
         $processing = $chat->inFlight
             ? '⠴ thinking… · Esc Esc to cancel'
             : 'Enter to send · ' . self::markPane(Pane::Menu, 'Ctrl+P menu') . ' · /exit or ^C to quit';
-        $percent = (int) round($chat->contextUsagePercent() * 100);
-        $bar = "{$percent}% context · {$processing}";
+        // The readout is sized against the room the rest of the row leaves
+        // rather than being emitted at full length and hoping it fits: it is
+        // the widest variable-length piece of the bar, and the bar is the one
+        // line that must never wrap (see below).
+        //
+        // The scroll readout's WIDEST form is reserved up front even though
+        // it is prepended afterwards, so that adding the token count can only
+        // ever shrink the context readout — never crowd the scroll position
+        // off the row. Scroll position is transient and only shown when the
+        // newest output is off-screen, which makes it the more urgent of the
+        // two; context usage still reports its percentage at any width.
+        $separator = ' · ';
+        $indicators = self::scrollIndicators($chat);
+        $room = $chat->cols()
+            - Width::of(self::stripZoneMarkers($processing))
+            - Width::of($separator)
+            - ($indicators === [] ? 0 : Width::of($indicators[0]));
+        $bar = self::contextIndicator($chat, $room) . $separator . $processing;
 
         // The bar is the frame's LAST line, so it is the one line that must
         // never wrap: a wrapped bar makes the frame rows+1 physical rows tall,
@@ -817,13 +833,65 @@ final class Renderer
         // its click zones (same failure mode markPaneHeader() documents). The
         // sentinels are invisible on screen, so they come off before measuring.
         $room = $chat->cols() - Width::of(self::stripZoneMarkers($bar));
-        foreach (self::scrollIndicators($chat) as $indicator) {
+        foreach ($indicators as $indicator) {
             if (Width::of($indicator) <= $room) {
                 return $indicator . $bar;
             }
         }
 
         return $bar;
+    }
+
+    /**
+     * The status bar's context-usage readout: an absolute token count in K
+     * alongside the percentage, because a bare "37%" is unactionable unless
+     * the user already knows the budget by heart.
+     *
+     * Both numbers come from Chat ({@see Chat::contextTokens()} /
+     * {@see Chat::contextTokenLimit()}) rather than being re-derived from the
+     * percentage — the renderer must not hardcode a budget that lives as a
+     * constant on Chat. They carry a leading `~` because neither is measured:
+     * the count is a chars/4 approximation and the limit is this app's fixed
+     * compaction threshold, not the provider's advertised window. Labelling
+     * the estimate is the honest option; printing "12.4K" unqualified would
+     * read as a figure the provider reported.
+     *
+     * $room is the columns the rest of the bar leaves. Forms are tried
+     * widest-first and the bare percentage is always emitted as a last
+     * resort: the bar may not wrap (see {@see renderStatusBar()}), but
+     * dropping the readout outright would leave a narrow terminal with no
+     * context signal at all.
+     */
+    private static function contextIndicator(Chat $chat, int $room): string
+    {
+        $percent = (int) round($chat->contextUsagePercent() * 100);
+        $used = self::formatTokenCount($chat->contextTokens());
+        $limit = self::formatTokenCount($chat->contextTokenLimit());
+
+        $forms = [
+            "~{$used} / {$limit} context ({$percent}%)",
+            "~{$used}/{$limit} ({$percent}%)",
+            "{$percent}% context",
+        ];
+        foreach ($forms as $form) {
+            if (Width::of($form) <= $room) {
+                return $form;
+            }
+        }
+
+        return "{$percent}%";
+    }
+
+    /**
+     * A token count as the compact "12.4K" the one-line status bar has room
+     * for. A round value loses its ".0" so a whole budget reads "100K"
+     * rather than the noisier "100.0K".
+     */
+    private static function formatTokenCount(int $tokens): string
+    {
+        $thousands = number_format($tokens / 1000, 1, '.', '');
+
+        return rtrim(rtrim($thousands, '0'), '.') . 'K';
     }
 
     /**
