@@ -60,6 +60,12 @@ final class Bootstrap
      */
     public static function chat(?string $root = null): Chat
     {
+        // `?: null` rather than a bare `getcwd()`: the call can fail (deleted
+        // cwd, permissions), every $root consumer below is typed ?string, and
+        // the one layer that genuinely needs a string — {@see requireRoot()},
+        // reached through backend() -> tools() — reports the missing root as a
+        // clear error rather than handing a path jail a `false`.
+        $root ??= getcwd() ?: null;
         $userConfig = self::readUserConfig();
 
         // ONE store instance, seeded before the Chat is built: seedSession()
@@ -91,6 +97,12 @@ final class Bootstrap
             // launch: it owns the spawned sessions' IPC table, and a second
             // instance would not know about the first's children.
             backgroundSupervisor: new BackgroundSupervisor(),
+            // The same root the tools above are jailed to. Chat's own
+            // pipeline builds hook contexts and spawns background sessions
+            // without an App or Runtime in reach, so it needs its own copy
+            // or `--root` stops at the tool boundary (crush_code.md Phase 0
+            // item 6).
+            projectRoot: $root,
         );
     }
 
@@ -126,7 +138,7 @@ final class Bootstrap
      */
     public static function app(?string $root = null): App
     {
-        $root ??= getcwd();
+        $root ??= getcwd() ?: null;
 
         $chat = self::chat($root);
         [$provider, $model] = self::shellProvider();
@@ -140,7 +152,11 @@ final class Bootstrap
             ->withChat($chat)
             ->withSessionId($chat->currentSessionId())
             ->withTools(self::tools($root, null, $skills))
-            ->withAvailableSkills($skills);
+            ->withAvailableSkills($skills)
+            // Same string the tools/skill scan above used, so the shell's
+            // Settings pane, the environment block the model reads and every
+            // hook context all name one directory.
+            ->withRoot($root);
     }
 
     /**
@@ -195,7 +211,7 @@ final class Bootstrap
      */
     public static function backend(?string $root = null): Backend
     {
-        $root ??= getcwd();
+        $root ??= getcwd() ?: null;
 
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
@@ -227,7 +243,8 @@ final class Bootstrap
             ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks())
             ->withSkillRegistry($skills)
-            ->withInstructionLoader($loader);
+            ->withInstructionLoader($loader)
+            ->withRoot($root);
     }
 
     /**
@@ -246,7 +263,7 @@ final class Bootstrap
      */
     public static function backendFor(string $providerName, ?string $root = null): Backend
     {
-        $root ??= getcwd();
+        $root ??= getcwd() ?: null;
         $factory = new ProviderFactory();
         $provider = $factory->create($factory->defaultConfig($providerName));
         $model = getenv('SUGARCRUSH_MODEL') ?: ($factory->defaultConfig($providerName)['model'] ?? 'gpt-4o');
@@ -258,7 +275,8 @@ final class Bootstrap
             ->withTools(self::tools($root, $loader, $skills))
             ->withHooks(self::hooks())
             ->withSkillRegistry($skills)
-            ->withInstructionLoader($loader);
+            ->withInstructionLoader($loader)
+            ->withRoot($root);
     }
 
     /**
@@ -423,7 +441,7 @@ final class Bootstrap
      */
     public static function tools(?string $root = null, ?InstructionFileLoader $loader = null, ?SkillRegistry $skills = null): array
     {
-        $root ??= getcwd();
+        $root = self::requireRoot($root);
         $loader ??= self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
 
@@ -464,7 +482,34 @@ final class Bootstrap
      */
     public static function instructionLoader(?string $root = null): InstructionFileLoader
     {
-        return new InstructionFileLoader($root ?? getcwd(), self::forcedInstructions());
+        return new InstructionFileLoader(self::requireRoot($root), self::forcedInstructions());
+    }
+
+    /**
+     * The directory a run is rooted at: the caller's `--root`, else the
+     * process working directory.
+     *
+     * Throws rather than substituting a placeholder when neither is
+     * available. Every consumer of this value is a path jail
+     * (Bash/Read/Edit/Glob/Grep) or a repo-root file scan
+     * ({@see InstructionFileLoader}, {@see skillRegistry()}), and there is no
+     * benign stand-in: `''` points those scans at the filesystem root, and
+     * `null` leaves the tools with no jail at all — strictly worse than
+     * refusing to start. A process whose working directory has been deleted
+     * has no root to offer, so saying so is the only honest degradation
+     * (crush_code.md Phase 0 item 6).
+     */
+    private static function requireRoot(?string $root): string
+    {
+        $resolved = $root ?? (getcwd() ?: null);
+        if ($resolved === null) {
+            throw new \RuntimeException(
+                'sugarcrush: cannot determine a project root — the process working directory is '
+                . 'unavailable (deleted or unreadable). Pass --root <dir>.'
+            );
+        }
+
+        return $resolved;
     }
 
     /**

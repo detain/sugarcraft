@@ -166,7 +166,7 @@ final class Runtime
                 toolOutput: '',
                 model: $app->model,
                 provider: $app->provider->name(),
-                projectRoot: getcwd() ?: '',
+                projectRoot: self::projectRoot($app),
             );
 
             // Run pre-hook. Only a true DENY blocks the call — a MODIFY
@@ -444,10 +444,30 @@ final class Runtime
      * documents — a point-in-time capture, not live-polled state — so the
      * same instance must be reused once taken. An owner that already holds a
      * session-wide snapshot injects it through the constructor instead.
+     *
+     * Captured at {@see projectRoot()}, not at the process directory: the
+     * "Working directory"/"Is directory a git repo" lines this renders are
+     * what orient the model, and on a `--root <lib>` run they must name the
+     * directory the tools are jailed to.
      */
     private function environmentSnapshot(App $app): EnvironmentBlock
     {
-        return $this->environmentBlock ??= EnvironmentBlock::capture((string) getcwd(), $app->model);
+        return $this->environmentBlock ??= EnvironmentBlock::capture(self::projectRoot($app), $app->model);
+    }
+
+    /**
+     * The directory this turn is rooted at: the App's configured
+     * {@see App::$root} (`--root`), falling back to the process directory
+     * for an App that was never given one.
+     *
+     * Single seam for both consumers — the environment block the model reads
+     * and the {@see HookContext::$projectRoot} every PreToolUse/PostToolUse
+     * hook gates on — because the whole defect in crush_code.md Phase 0
+     * item 6 was those two disagreeing with the tools' own root.
+     */
+    private static function projectRoot(App $app): string
+    {
+        return $app->root ?? (getcwd() ?: '');
     }
 
     /**

@@ -109,6 +109,12 @@ final class EngineBackend implements Backend
         private readonly bool $hooksDisabled = false,
         private readonly ?SkillRegistry $skillRegistry = null,
         private readonly ?InstructionFileLoader $instructionLoader = null,
+        /**
+         * The project root every turn this backend runs is anchored at —
+         * `--root`'s value, forwarded onto {@see App::$root}. Null leaves the
+         * App unrooted, which resolves to the process directory downstream.
+         */
+        private readonly ?string $root = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -121,7 +127,7 @@ final class EngineBackend implements Backend
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root);
     }
 
     /**
@@ -129,7 +135,7 @@ final class EngineBackend implements Backend
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root);
     }
 
     /**
@@ -144,7 +150,7 @@ final class EngineBackend implements Backend
      */
     public function withSkillRegistry(SkillRegistry $skillRegistry): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root);
     }
 
     /**
@@ -156,13 +162,13 @@ final class EngineBackend implements Backend
      */
     public function withInstructionLoader(InstructionFileLoader $instructionLoader): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root);
     }
 
     /**
@@ -172,12 +178,26 @@ final class EngineBackend implements Backend
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root);
+    }
+
+    /**
+     * Anchor this backend's turns at $root, so {@see Runtime}'s environment
+     * block and its {@see \SugarCraft\Crush\Hooks\HookContext}s name the same
+     * directory the tools {@see withTools()} received are jailed to.
+     *
+     * Separate from {@see withWorktreeRoot()} on purpose: that one registers
+     * a Bash-escape guard and says nothing about what the model is told,
+     * while this one is purely the reported/gated root.
+     */
+    public function withRoot(?string $root): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root);
     }
 
     /**
@@ -201,7 +221,7 @@ final class EngineBackend implements Backend
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root);
     }
 
     /**
@@ -223,6 +243,7 @@ final class EngineBackend implements Backend
             ->withEnabledSkills($this->skills)
             ->withAvailableSkills($this->skillRegistry ?? new SkillRegistry())
             ->withInstructionLoader($this->instructionLoader)
+            ->withRoot($this->root)
             ->withMessages($this->toTypedMessages($history));
 
         $lastAssistant = null;

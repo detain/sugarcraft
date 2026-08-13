@@ -582,6 +582,10 @@ final class Renderer
      * full-width {@see AgentDashboardPane} before any sidebar is built. It is
      * kept, not removed — it is the sidebar-sized agents widget, and the arm
      * is the seam a future side-by-side layout re-enters through.
+     *
+     * {@see \SugarCraft\Crush\Renderer}'s class docblock records the same
+     * dormant-seam status from the transcript renderer's side; if one of the
+     * two is ever changed, the other has to move with it.
      */
     private static function rightSidebar(App $a, int $cols, int $rows): string
     {

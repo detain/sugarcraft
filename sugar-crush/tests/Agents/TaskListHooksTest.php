@@ -174,8 +174,92 @@ final class TaskListHooksTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // projectRoot — the HookContext field that becomes a proc_open() cwd
+    // -------------------------------------------------------------------------
+
+    /**
+     * `makeHookContext()` used to hardcode `projectRoot: ''`. That is not a
+     * cosmetic blank: {@see \SugarCraft\Crush\Hooks\ScriptHook::execute()}
+     * hands the field straight to `proc_open()` as the cwd, and a directory
+     * that does not exist stops the hook from running at all — which used to
+     * mean a DENYING hook silently allowed the call (crush_code.md Phase 0
+     * item 6).
+     */
+    public function testTaskScopedHookContextsCarryAUsableProjectRoot(): void
+    {
+        $recorder = $this->rootRecordingHook();
+        $list = new TaskList($this->dbPath, $this->dispatcherFor($recorder));
+
+        $list->addTask($this->makeTask('task-root-1', 'team-a', 'Rooted'));
+
+        $this->assertNotSame([], $recorder->roots, 'the recording hook never saw a TaskCreated context');
+        foreach ($recorder->roots as $root) {
+            $this->assertDirectoryExists($root, 'a task hook context must name a directory a hook can run in');
+        }
+    }
+
+    public function testTaskScopedHookContextsUseTheInjectedProjectRootWhenGivenOne(): void
+    {
+        $root = \sys_get_temp_dir() . '/tasklist_root_' . \uniqid('', true);
+        \mkdir($root, 0755, true);
+
+        try {
+            $recorder = $this->rootRecordingHook();
+            $list = new TaskList($this->dbPath, $this->dispatcherFor($recorder), $root);
+
+            $list->addTask($this->makeTask('task-root-2', 'team-a', 'Injected root'));
+
+            $this->assertSame([$root], $recorder->roots);
+        } finally {
+            \rmdir($root);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * A TaskCreated hook that records every context's projectRoot and allows
+     * the task through.
+     */
+    private function rootRecordingHook(): HookInterface
+    {
+        return new class implements HookInterface {
+            /** @var list<string> */
+            public array $roots = [];
+
+            public function name(): string
+            {
+                return 'RootRecordingHook';
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::TaskCreated;
+            }
+
+            public function matcher(): string
+            {
+                return 'TaskList';
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                $this->roots[] = $context->projectRoot;
+
+                return HookResult::allow();
+            }
+        };
+    }
+
+    private function dispatcherFor(HookInterface $hook): HookDispatcher
+    {
+        $registry = new HookRegistry();
+        $registry->register($hook);
+
+        return new HookDispatcher($registry);
+    }
 
     private function makeTask(
         string $id,

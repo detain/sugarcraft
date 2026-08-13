@@ -394,6 +394,53 @@ final class TuiComponentTest extends TestCase
     }
 
     /**
+     * Pins what {@see AgentsPane} IS: a preserved dormant seam, not the widget
+     * the shell paints for `Pane::Agents`. {@see Renderer::renderView()}
+     * diverts that pane to the full-width AgentDashboardPane before any
+     * sidebar is built, so `rightSidebar()`'s `Pane::Agents` arm is never
+     * reached on a real frame.
+     *
+     * Asserted because the two boxes are trivially confusable by eye —
+     * AgentDashboardPane delegates to AgentViewPane, which draws the same
+     * `' agents '` title and the same `(no active agents)` empty state. Width
+     * is the only thing that tells them apart, and a docblock in
+     * `src/Renderer.php` once claimed the opposite on the strength of that
+     * resemblance. Neither this seam nor the arm may be deleted; if a
+     * side-by-side layout ever re-enters through them, this test is what has
+     * to change first.
+     */
+    public function testTheShellPaintsTheFullWidthDashboardForPaneAgentsNotTheAgentsPaneSeam(): void
+    {
+        $app = $this->makeApp(Pane::Agents);
+        Renderer::setSize(120, 40);
+
+        $view = Renderer::renderView($app, 120, 40);
+        $frame = $view instanceof \SugarCraft\Core\View ? $view->body : (string) $view;
+
+        $sidebar = AgentsPane::render($app, 30, 20);
+        $this->assertStringNotContainsString(
+            $sidebar,
+            $frame,
+            'the sidebar-sized AgentsPane block must not appear in a Pane::Agents frame',
+        );
+
+        $agentsRow = null;
+        foreach (explode("\n", $frame) as $line) {
+            if (str_contains($line, 'agents')) {
+                $agentsRow = $line;
+                break;
+            }
+        }
+
+        $this->assertNotNull($agentsRow, 'the frame must still draw an agents box');
+        $this->assertSame(
+            120,
+            \SugarCraft\Core\Util\Width::of($agentsRow),
+            'the box actually painted is the full-width dashboard, not the quarter-width sidebar',
+        );
+    }
+
+    /**
      * @testdox AgentsPane::render() border color changes based on pane focus
      */
     public function testAgentsPaneBorderColorChangesBasedOnPaneFocus(): void

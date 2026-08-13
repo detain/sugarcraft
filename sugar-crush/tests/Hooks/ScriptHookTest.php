@@ -217,10 +217,86 @@ final class ScriptHookTest extends TestCase
     }
 
     // =========================================================================
+    // Fail-closed Tests — an unusable projectRoot must not become an allow
+    // =========================================================================
+
+    /**
+     * The regression this pins: `proc_open()` refuses to start a process whose
+     * `cwd` does not exist, and ScriptHook used to translate that failure into
+     * `HookResult::allow()`. A `--root /typo` therefore turned every DENYING
+     * hook into an allow — the one direction a gate must never fail in
+     * (crush_code.md Phase 0 item 6).
+     */
+    public function testADenyingHookStaysDenyingWhenTheProjectRootDoesNotExist(): void
+    {
+        $hook = new ScriptHook(
+            name: 'deny_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'printf "access denied" >&2 && exit 1',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext(
+            sys_get_temp_dir() . '/sugarcrush_no_such_root_' . uniqid('', true),
+        ));
+
+        $this->assertTrue($result->isDenied(), 'a bogus --root must not downgrade a deny into an allow');
+        $this->assertSame('access denied', $result->message);
+    }
+
+    /**
+     * `TaskList::makeHookContext()` used to hardcode `projectRoot: ''`, which
+     * hits the same `proc_open()` failure as a bogus `--root`.
+     */
+    public function testADenyingHookStaysDenyingWhenTheProjectRootIsEmpty(): void
+    {
+        $hook = new ScriptHook(
+            name: 'deny_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'exit 42',
+            description: '',
+        );
+
+        $result = $hook->execute($this->createContext(''));
+
+        $this->assertTrue($result->isDenied());
+        $this->assertSame('Hook exited with code 42', $result->message);
+    }
+
+    /**
+     * The fallback only replaces the DIRECTORY, never the verdict — a usable
+     * root is still the directory the script runs in.
+     */
+    public function testAUsableProjectRootIsStillTheScriptsWorkingDirectory(): void
+    {
+        $root = sys_get_temp_dir() . '/sugarcrush_root_' . uniqid('', true);
+        mkdir($root, 0755, true);
+
+        $hook = new ScriptHook(
+            name: 'pwd_hook',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'pwd',
+            description: '',
+        );
+
+        try {
+            $result = $hook->execute($this->createContext($root));
+
+            $this->assertTrue($result->isAllowed());
+            $this->assertSame(realpath($root), realpath($result->message));
+        } finally {
+            rmdir($root);
+        }
+    }
+
+    // =========================================================================
     // Helper Methods
     // =========================================================================
 
-    private function createContext(): HookContext
+    private function createContext(string $projectRoot = '/tmp'): HookContext
     {
         return new HookContext(
             sessionId: 'test_session_123',
@@ -230,7 +306,7 @@ final class ScriptHookTest extends TestCase
             toolOutput: 'test output',
             model: 'test-model',
             provider: 'test-provider',
-            projectRoot: '/tmp',
+            projectRoot: $projectRoot,
         );
     }
 }

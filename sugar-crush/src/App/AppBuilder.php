@@ -145,6 +145,12 @@ final class AppBuilder
      * is exactly the production defect crush_feat.md section 7 E1 reports:
      * every skill-driven code path (picker, findSkillsForTask(), fork
      * dispatch) reads App::$availableSkills, and nothing ever filled it.
+     *
+     * Also lands on {@see App::$root}, so a builder-constructed App reports
+     * the same directory to the environment block and hook contexts that it
+     * scanned for skills — a builder that rooted discovery here while the
+     * prompt still said `getcwd()` would reintroduce exactly the split
+     * crush_code.md Phase 0 item 6 describes.
      */
     public function withProjectRoot(string $projectRoot): self
     {
@@ -187,7 +193,8 @@ final class AppBuilder
             ->withSessionId($this->sessionId)
             ->withContextFiles($this->contextFiles)
             ->withEnabledSkills($this->enabledSkills)
-            ->withActiveHooks($this->activeHooks);
+            ->withActiveHooks($this->activeHooks)
+            ->withRoot($this->projectRoot);
     }
 
     /**

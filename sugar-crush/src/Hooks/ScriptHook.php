@@ -49,8 +49,24 @@ final readonly class ScriptHook implements HookInterface
         return $this->matcher;
     }
 
+    /**
+     * Run the script and turn its exit code into a verdict.
+     *
+     * A guard that could not RUN has approved nothing, so both failure modes
+     * below fail CLOSED. `proc_open()` refuses to start a process whose `cwd`
+     * does not exist, and {@see HookContext::$projectRoot} can legitimately
+     * carry an unusable value — a mistyped `--root` threaded through
+     * {@see \SugarCraft\Crush\Runtime}, or a caller with no root of its own
+     * to give. Before this, that turned a DENYING hook into an allow: the
+     * one direction a security gate must never fail in.
+     */
     public function execute(HookContext $context): HookResult
     {
+        // Inherit the process directory rather than refuse to run: the hook's
+        // VERDICT is what matters, and running it one directory over is a far
+        // smaller loss than not running it at all.
+        $cwd = is_dir($context->projectRoot) ? $context->projectRoot : null;
+
         $env = [
             'CRUSH_SESSION_ID' => $context->sessionId,
             'CRUSH_TOOL_NAME' => $context->toolName,
@@ -70,12 +86,12 @@ final readonly class ScriptHook implements HookInterface
             $this->command,
             $descriptors,
             $pipes,
-            $context->projectRoot,
+            $cwd,
             $env
         );
 
         if (!is_resource($process)) {
-            return HookResult::allow();
+            return HookResult::deny("Hook {$this->name} could not be executed");
         }
 
         fclose($pipes[0]);

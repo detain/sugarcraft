@@ -408,6 +408,478 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->assertTrue($result->isError());
     }
 
+    // =========================================================================
+    // `--root` propagation (crush_code.md Phase 0 item 6)
+    //
+    // Every test below points --root at $this->tempDir . '/repo', which is
+    // NEVER the process cwd (PHPUnit runs from the package directory). That
+    // divergence IS the bug: `--root candy-shine` correctly jailed the tools
+    // to candy-shine/ while telling the model — through the environment block
+    // and through every HookContext — that it was standing in the enclosing
+    // monorepo. A test where the configured root and getcwd() coincide cannot
+    // observe that at all.
+    // =========================================================================
+
+    public function testBootstrapAppCarriesTheConfiguredRootRatherThanTheProcessDirectory(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $this->assertNotSame(getcwd(), $root, 'the fixture root must diverge from the process cwd');
+
+        $app = Bootstrap::app($root);
+
+        $this->assertSame($root, $app->root);
+    }
+
+    public function testAnAppConstructedWithoutARootReportsNullRatherThanGuessing(): void
+    {
+        // Null, not getcwd(): App::$root has to stay distinguishable from
+        // "explicitly rooted at the process directory" so each consumer can
+        // spell its own fallback. Bootstrap::app() with no argument does
+        // resolve one, so this exercises the App seam directly.
+        $this->assertNull(\SugarCraft\Crush\App\App::new(new \SugarCraft\Crush\Providers\EchoProvider(), 'echo')->root);
+    }
+
+    public function testBootstrapChatResolvesTheConfiguredRootRatherThanTheProcessDirectory(): void
+    {
+        $root = $this->tempDir . '/repo';
+
+        $chat = Bootstrap::chat($root);
+
+        $this->assertSame($root, $chat->projectRoot());
+        $this->assertNotSame(getcwd(), $chat->projectRoot());
+    }
+
+    /**
+     * The Settings sidebar is the one place a user can SEE which root the
+     * session is on. It read `getcwd()` because App carried no root to read
+     * back, so it agreed with the (wrong) environment block rather than with
+     * the tools.
+     */
+    public function testSettingsPaneReportsTheConfiguredRootNotTheProcessDirectory(): void
+    {
+        $root = $this->tempDir . '/repo';
+
+        $settings = [];
+        foreach (\SugarCraft\Crush\Tui\Components\SettingsPane::settings(Bootstrap::app($root)) as [$label, $value]) {
+            $settings[$label] = $value;
+        }
+
+        $this->assertSame($root, $settings['Root'] ?? null);
+    }
+
+    /**
+     * The engine pipeline, end to end through the real production seam
+     * `Bootstrap::backend($root)` builds: a model-issued tool call reaches
+     * `Runtime::executeToolCalls()`, which builds the `HookContext` every
+     * PreToolUse/PostToolUse hook gates on. That context's `projectRoot` used
+     * to be `getcwd()`, so a `protect-files`-style guard on a `--root` run
+     * would have resolved paths against the wrong tree.
+     *
+     * `complete()` (not `completeAsync()`) on purpose: the async path forks,
+     * and a hook recording into the child's memory is unobservable here.
+     */
+    public function testEngineHookContextsReportTheConfiguredRoot(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $recorder = $this->recordingHook();
+
+        $hooks = new \SugarCraft\Crush\Hooks\HookManager(new \SugarCraft\Crush\Hooks\HookRegistry());
+        $hooks->register($recorder);
+
+        $backend = \SugarCraft\Crush\Backend\EngineBackend::new($this->toolCallingProvider(), 'stub')
+            ->withTools([$this->noopTool()])
+            ->withHooks($hooks)
+            ->withRoot($root);
+
+        $backend->complete([\SugarCraft\Crush\Message::user('go')]);
+
+        $this->assertNotSame([], $recorder->roots, 'the recording hook never saw a PreToolUse call');
+        $this->assertSame([$root], array_values(array_unique($recorder->roots)));
+    }
+
+    /**
+     * Chat's OWN tool pipeline (crush_feat.md §1 D's second dispatcher) builds
+     * its own `HookContext`, with no App or Runtime in reach — which is why it
+     * needed its own copy of the root rather than reading the engine's.
+     */
+    public function testChatsOwnHookContextsReportTheConfiguredRoot(): void
+    {
+        $root = $this->tempDir . '/repo';
+        $recorder = $this->recordingHook();
+
+        $hooks = new \SugarCraft\Crush\Hooks\HookManager(new \SugarCraft\Crush\Hooks\HookRegistry());
+        $hooks->register($recorder);
+
+        $chat = (new \SugarCraft\Crush\Chat(hooks: $hooks, projectRoot: $root))
+            ->registerTool('noop', static fn(array $args): string => 'ok');
+
+        $gate = new \ReflectionMethod($chat, 'gateToolCall');
+        $gate->setAccessible(true);
+        $gate->invoke($chat, new \SugarCraft\Crush\ToolCall('noop', [], 'call_1'));
+
+        $this->assertSame([$root], $recorder->roots);
+    }
+
+    /**
+     * Bootstrap is what actually hands Chat that root on a real run, so the
+     * two halves above are only joined once this holds — and it is asserted
+     * on the CONTEXT a hook receives, not on the stored field, because the
+     * field being right while the context is not is exactly the failure the
+     * neighbouring tests exist to catch.
+     */
+    public function testBootstrapChatDeliversTheConfiguredRootAllTheWayIntoAHookContext(): void
+    {
+        $root = $this->tempDir . '/repo';
+        // registerTool() only adds the callable gateToolCall() dispatches on;
+        // the root, the guard chain and everything else still come from
+        // Bootstrap, and registerTool() returns a NEW Chat sharing the same
+        // HookManager instance.
+        $chat = Bootstrap::chat($root)->registerTool('noop', static fn(array $args): string => 'ok');
+
+        $hooks = $this->privateValue($chat, 'hooks');
+        $this->assertInstanceOf(\SugarCraft\Crush\Hooks\HookManager::class, $hooks, 'Bootstrap::chat() must wire the guard chain');
+
+        // Registered onto the guard chain Bootstrap already built, so nothing
+        // about the construction path under test is replaced by the fixture.
+        $recorder = $this->recordingHook();
+        $hooks->register($recorder);
+
+        $gate = new \ReflectionMethod($chat, 'gateToolCall');
+        $gate->setAccessible(true);
+        $gate->invoke($chat, new \SugarCraft\Crush\ToolCall('noop', [], 'call_1'));
+
+        $this->assertSame([$root], $recorder->roots);
+    }
+
+    /**
+     * The one `bin/sugarcrush` path that can be executed end-to-end without
+     * blocking: the root check runs before either dispatch, so the process
+     * exits before `Program::run()` ever attaches to a TTY.
+     *
+     * Worth an actual subprocess rather than a call to
+     * {@see \SugarCraft\Crush\Cli\ArgvParser::rootError()} alone, because the
+     * defect being pinned is a WIRING one — rootError() existing but never
+     * being consulted would leave `--root /typo` reaching App::$root, every
+     * HookContext, and every ScriptHook's proc_open() cwd exactly as before.
+     */
+    public function testBinRejectsARootThatNamesNoDirectory(): void
+    {
+        $missing = $this->tempDir . '/no_such_root';
+        $bin = \dirname(__DIR__, 2) . '/bin/sugarcrush';
+
+        $process = proc_open(
+            [PHP_BINARY, $bin, '--root', $missing],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(2, $exitCode, 'a --root naming no directory is a usage error');
+        $this->assertStringContainsString($missing, $stderr);
+        $this->assertSame('', $stdout, 'the TUI must not have started');
+    }
+
+    public function testBinAcceptsARootThatExists(): void
+    {
+        // The complement: proving the check is not simply rejecting every
+        // --root. Paired with `--help` so the process still terminates.
+        $bin = \dirname(__DIR__, 2) . '/bin/sugarcrush';
+
+        $process = proc_open(
+            [PHP_BINARY, $bin, '--root', $this->tempDir . '/repo', '--help'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        $this->assertSame(0, proc_close($process));
+        $this->assertNotSame('', $stdout);
+    }
+
+    /**
+     * A dead working directory (deleted out from under the process) must
+     * produce a clear error naming --root, not a TypeError from whichever
+     * `string`-typed constructor `false` happened to reach first.
+     */
+    public function testBootstrapReportsAMissingRootRatherThanHandingAPathJailAFalse(): void
+    {
+        $dead = $this->tempDir . '/dead_cwd';
+        mkdir($dead, 0755, true);
+
+        $original = getcwd();
+        $this->assertIsString($original);
+
+        try {
+            chdir($dead);
+            rmdir($dead);
+            $this->assertFalse(getcwd(), 'this test is meaningless unless getcwd() actually fails');
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessageMatches('/--root/');
+            Bootstrap::tools(null);
+        } finally {
+            chdir($original);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Scrape-and-pin: a NEW root-resolving site must not be able to skip this
+    // -------------------------------------------------------------------------
+
+    /**
+     * Positions where a bare `getcwd()` means "this site silently ignores
+     * `--root`". Spelled several ways rather than one, for the same reason
+     * ProviderConnectTimeoutTest scrapes several timeout spellings: a
+     * single-pattern scrape is trivially evadable and would then read as
+     * proof of something it never checked.
+     *
+     * Both the named-argument form (`projectRoot: getcwd()`) and the local
+     * form (`$workingDirectory = getcwd()`) are covered — the two original
+     * offenders were spelled one each way. `$root ??= getcwd()` is
+     * deliberately NOT matched: that is Bootstrap resolving the DEFAULT root
+     * for a run that named none, which is the one correct use.
+     */
+    private const BARE_GETCWD_ROOT_SPELLINGS = [
+        '/projectRoot:\s*(\(string\)\s*)?getcwd\(\)/',
+        '/workingDirectory:\s*(\(string\)\s*)?getcwd\(\)/',
+        self::ROOT_CAPTURE_EXEMPT_PATTERN,
+        '/\$projectRoot\s*=\s*(\(string\)\s*)?getcwd\(\)/',
+        '/\$workingDirectory\s*=\s*(\(string\)\s*)?getcwd\(\)/',
+        '/\$root\s*=\s*(\(string\)\s*)?getcwd\(\)/',
+    ];
+
+    /**
+     * The one file allowed to capture an environment block at `getcwd()`.
+     *
+     * {@see \SugarCraft\Crush\Agents\Agent} is a PERSISTED config value
+     * object — it has no root of its own and must not grow one, since a root
+     * written into an agent definition file would outlive the session that
+     * captured it. Its rooted path is the `?EnvironmentBlock $environment`
+     * parameter/field a caller holding a session snapshot passes in; the
+     * capture is the documented last resort for the callers that hold none
+     * (AgentManager, ProcessExecutor, WorkflowEngine). The pin below asserts
+     * that rooted path still exists, so the exemption cannot quietly become
+     * a licence to ignore the root.
+     *
+     * The exemption is per-PATTERN, not per-file: only
+     * {@see ROOT_CAPTURE_EXEMPT_PATTERN} is skipped for this file, and the
+     * other five spellings still apply to it. A whole-file `return` would
+     * have disarmed the guard for the one file most likely to grow a new
+     * root-resolving site — a `$projectRoot = getcwd();` added here would
+     * have slid through the check that exists to catch precisely that.
+     */
+    private const ROOT_CAPTURE_EXEMPT = 'Agents/Agent.php';
+
+    /** The single spelling {@see ROOT_CAPTURE_EXEMPT} is excused from. */
+    private const ROOT_CAPTURE_EXEMPT_PATTERN = '/EnvironmentBlock::capture\(\s*(\(string\)\s*)?getcwd\(\)/';
+
+    /**
+     * Every PHP source the guard below scans: all of `src/`, plus the
+     * `bin/sugarcrush` entry point — which is `src/`-adjacent, carries no
+     * `.php` extension, and is exactly where a "resolve the root here"
+     * shortcut would be most tempting to add.
+     *
+     * Comments are stripped before the patterns run. The scrape is
+     * source-TEXT based, so without this a future docblock quoting
+     * `$root = getcwd()` as the anti-pattern it warns against would fail the
+     * guard spuriously — and the natural "fix" for that is to weaken the
+     * pattern, which is the outcome worth avoiding.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function crushSourceFiles(): array
+    {
+        $lib = (string) realpath(\dirname(__DIR__, 2));
+        $root = $lib . '/src';
+        $files = [];
+
+        /** @var \SplFileInfo $file */
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+        ) as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+            $path = (string) $file->getPathname();
+            $relative = str_replace('\\', '/', substr($path, strlen($root) + 1));
+            $files[$relative] = [$relative, self::codeWithoutComments((string) file_get_contents($path))];
+        }
+
+        ksort($files);
+
+        $bin = $lib . '/bin/sugarcrush';
+        if (is_file($bin)) {
+            $files['bin/sugarcrush'] = ['bin/sugarcrush', self::codeWithoutComments((string) file_get_contents($bin))];
+        }
+
+        return $files;
+    }
+
+    /**
+     * The PHP source with every comment and docblock removed, so the scrape
+     * matches real code rather than prose that quotes it.
+     */
+    private static function codeWithoutComments(string $source): string
+    {
+        $code = '';
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token)) {
+                if ($token[0] === \T_COMMENT || $token[0] === \T_DOC_COMMENT) {
+                    continue;
+                }
+                $code .= $token[1];
+                continue;
+            }
+            $code .= $token;
+        }
+
+        return $code;
+    }
+
+    /**
+     * @dataProvider crushSourceFiles
+     */
+    public function testNoRootResolvingSiteFallsBackToBareGetcwd(string $name, string $source): void
+    {
+        $exempt = $name === self::ROOT_CAPTURE_EXEMPT;
+        if ($exempt) {
+            $this->assertStringContainsString(
+                '?EnvironmentBlock $environment',
+                $source,
+                'the exemption is only defensible while the rooted path (an injected snapshot) still exists',
+            );
+        }
+
+        foreach (self::BARE_GETCWD_ROOT_SPELLINGS as $pattern) {
+            // One pattern is excused for one file — never the whole list.
+            if ($exempt && $pattern === self::ROOT_CAPTURE_EXEMPT_PATTERN) {
+                continue;
+            }
+
+            $this->assertDoesNotMatchRegularExpression(
+                $pattern,
+                $source,
+                $name . ' resolves a project root with a bare getcwd(). Read the configured root '
+                    . '(App::$root / Chat::$projectRoot / EngineBackend::withRoot()) and fall back to '
+                    . 'getcwd() only when it is null, or `--root` stops here (crush_code.md Phase 0 item 6).',
+            );
+        }
+    }
+
+    public function testTheRootScrapeActuallyFoundTheKnownRootResolvingFiles(): void
+    {
+        // Guards the scrape above from silently passing on an empty or
+        // mis-rooted file set.
+        $found = array_keys(self::crushSourceFiles());
+
+        foreach ([
+            'Runtime.php',
+            'Chat.php',
+            'Cli/Bootstrap.php',
+            'App/App.php',
+            'Agents/TaskList.php',
+            'bin/sugarcrush',
+            self::ROOT_CAPTURE_EXEMPT,
+        ] as $expected) {
+            $this->assertContains($expected, $found);
+        }
+    }
+
+    /**
+     * A PreToolUse hook that records the `projectRoot` of every context it is
+     * handed, and permits the call so the pipeline runs to completion.
+     */
+    private function recordingHook(): \SugarCraft\Crush\Hooks\HookInterface
+    {
+        return new class implements \SugarCraft\Crush\Hooks\HookInterface {
+            /** @var list<string> */
+            public array $roots = [];
+
+            public function name(): string { return 'root-recorder'; }
+
+            public function event(): \SugarCraft\Crush\Hooks\HookEvent
+            {
+                return \SugarCraft\Crush\Hooks\HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string { return '.*'; }
+
+            public function execute(\SugarCraft\Crush\Hooks\HookContext $context): \SugarCraft\Crush\Hooks\HookResult
+            {
+                $this->roots[] = $context->projectRoot;
+
+                return \SugarCraft\Crush\Hooks\HookResult::allow();
+            }
+        };
+    }
+
+    /** A tool that does nothing but exist, so the gate has something to resolve. */
+    private function noopTool(): \SugarCraft\Crush\Tools\Tool
+    {
+        return new class implements \SugarCraft\Crush\Tools\Tool {
+            public function name(): string { return 'noop'; }
+
+            public function description(): string { return 'Does nothing.'; }
+
+            public function inputSchema(): array { return ['type' => 'object', 'properties' => []]; }
+
+            public function execute(array $args): \SugarCraft\Crush\Tools\ToolResult
+            {
+                return \SugarCraft\Crush\Tools\ToolResult::success('noop', 'ok', 'call_noop_1');
+            }
+        };
+    }
+
+    /** Issues one `noop` tool call, then answers plainly. No network. */
+    private function toolCallingProvider(): \SugarCraft\Crush\Providers\ProviderInterface
+    {
+        return new class implements \SugarCraft\Crush\Providers\ProviderInterface {
+            private int $calls = 0;
+
+            public function name(): string { return 'stub-root'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+
+            public function complete(\SugarCraft\Crush\Providers\CompleteRequest $r): \SugarCraft\Crush\Providers\CompleteResponse
+            {
+                $this->calls++;
+
+                return $this->calls === 1
+                    ? new \SugarCraft\Crush\Providers\CompleteResponse(
+                        content: 'calling noop',
+                        toolCalls: [new \SugarCraft\Crush\Tools\ToolCall('call_noop_1', 'noop', [])],
+                    )
+                    : new \SugarCraft\Crush\Providers\CompleteResponse(content: 'done');
+            }
+
+            public function completeStream(\SugarCraft\Crush\Providers\CompleteRequest $r): \Generator
+            {
+                yield new \SugarCraft\Crush\Providers\CompleteResponse(content: '');
+            }
+
+            public function embeddings(\SugarCraft\Crush\Providers\EmbeddingsRequest $r): \SugarCraft\Crush\Providers\EmbeddingsResponse
+            {
+                return new \SugarCraft\Crush\Providers\EmbeddingsResponse([]);
+            }
+        };
+    }
+
     private function skillToolFromBootstrap(): \SugarCraft\Crush\Tools\BuiltIn\SkillTool
     {
         $tool = $this->toolsByClass()[\SugarCraft\Crush\Tools\BuiltIn\SkillTool::class] ?? null;

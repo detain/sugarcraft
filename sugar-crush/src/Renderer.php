@@ -29,12 +29,20 @@ use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\Pane;
 
 /**
- * Pure view function for {@see Chat} — the renderer actually reached by a
- * real user running `bin/sugarcrush` (`Chat::view()` calls
- * {@see self::render()}). `src/Tui/Renderer.php` + its `App`-keyed
- * Pane/Component system is a second, parallel renderer that nothing in the
- * live path ever constructs; this class is deliberately kept independent of
- * it (see the "R20 wiring decision" note below).
+ * Pure view function for {@see Chat} — the renderer that actually paints
+ * the transcript a real user running `bin/sugarcrush` sees.
+ *
+ * It is reached two ways, and both are live: `Chat::view()` calls
+ * {@see self::render()} for a Chat driven standalone, and the pane shell
+ * `bin/sugarcrush` runs today ({@see \SugarCraft\Crush\Cli\Bootstrap::app()}
+ * -> {@see \SugarCraft\Crush\App\App::view()} ->
+ * {@see \SugarCraft\Crush\Tui\Renderer::renderView()}) delegates its chat
+ * pane's BODY back to this class against the hosted `Chat`. So
+ * `src/Tui/Renderer.php` is the surrounding chrome/compositor rather than a
+ * rival transcript renderer — the "second, parallel renderer nothing ever
+ * constructs" this docblock used to describe was merged onto, not deleted.
+ * This class still holds no reference to it (see the "R20 wiring decision"
+ * note below); the dependency runs one way only.
  *
  * Lays out the conversation scrollback (with each turn rendered through
  * CandyShine) above a fixed input area at the bottom, plus — when the
@@ -116,10 +124,25 @@ use SugarCraft\Crush\Tui\Pane;
  * "current live output buffer" accessor on `AgentManager`/`AgentWorkerPool`
  * first, which is out of scope for this pass (those files are not in R20's
  * file list). `src/Tui/Components/AgentsPane.php` — also in R20's file list
- * — was left unmodified for the same reason `Tui\Renderer.php` itself is
- * untouched: it belongs entirely to the disconnected `App`-keyed system, so
- * fixing its stub body would not make anything reachable from this, the
- * live, path.
+ * — is untouched by THIS class for a different reason than the one recorded
+ * here originally. The `App`-keyed pane system it belongs to is no longer
+ * disconnected (see the opening paragraph), but that does NOT mean the shell
+ * paints `AgentsPane`: {@see \SugarCraft\Crush\Tui\Renderer::renderView()}
+ * diverts `Pane::Agents` to the full-width
+ * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane} before any
+ * sidebar is built, so the `Pane::Agents` arm of that class's
+ * `rightSidebar()` is never reached on a real frame. `AgentsPane` is an
+ * intentionally preserved DORMANT SEAM — the sidebar-sized agents widget,
+ * kept as the re-entry point for a future side-by-side layout — not dead
+ * code and not to be deleted. `Tui\Renderer::rightSidebar()`'s own docblock
+ * records the same thing from the other side; the two are meant to agree.
+ *
+ * Do not "confirm" the opposite by eye: `AgentDashboardPane` delegates to
+ * {@see \SugarCraft\Crush\Tui\AgentViewPane}, which draws an identically
+ * worded `' agents '` border title and `(no active agents)` empty state. On
+ * a 120-column terminal the box actually in the frame is 120 wide and the
+ * 34-column `AgentsPane` block appears nowhere in it — width, not wording,
+ * is what tells the two apart.
  *
  * `Tui\SessionTabs` is not instantiated here either: its constructor always
  * seeds one synthetic "main" tab when started empty, a shape built for a
@@ -133,27 +156,27 @@ use SugarCraft\Crush\Tui\Pane;
  * `SessionStore::listSessions()`'s real, persisted row order — see
  * `Chat::cycleSessionTab()`'s docblock for the matching switching half.
  *
- * ### R20.fix: no production code path ever calls `createSession()`
+ * ### Session rows are created in production (was: "no production code path
+ * ever calls `createSession()`")
  *
  * `renderSessionTabStrip()` reads real rows from
- * {@see \SugarCraft\Crush\Session\SessionStore::listSessions()}, but nothing
- * in `src/` or `bin/sugarcrush` ever calls
- * `SessionStore::createSession()`/`EnhancedSessionStore::createSession()` —
- * `Chat::init()` returns no startup `Cmd` that would create one either. So
- * `listSessions()` returns `[]` for the entire lifetime of a real
- * `bin/sugarcrush` process today, independent of the `currentSessionId`
- * gap documented above: even a hypothetical fix that seeded a
- * `currentSessionId` into `Bootstrap::chat()` would still show a tab strip
- * with zero rows, because no session row would exist on disk for it to
- * point at. `count($rows) < 2` already degrades this to `''` rather than
- * rendering an empty/malformed strip, so this is inert, not broken — but it
- * is a real gap, and the tests exercising this method
- * (`RendererTest::testRendersSessionTabStripWithMultipleSessionsAndBracketsCurrent`)
- * only do so by constructing a `SessionStore` and calling `createSession()`
- * directly, a path no production code takes. Wiring an actual session-create
- * call into `Bootstrap::chat()`/`Chat::init()` is out of this item's file
- * scope (`Bootstrap.php` is not in R20's file list) and is left as follow-up
- * work alongside the `currentSessionId` seeding noted above.
+ * {@see \SugarCraft\Crush\Session\SessionStore::listSessions()}, and since
+ * 737da6413 (W3.S1) those rows exist on a real run:
+ * `Cli\Bootstrap::seedSession()` resumes the most recent session or creates
+ * one before `Bootstrap::chat()` constructs the Chat, and the Ctrl+P
+ * palette's "New session" (`Chat::handlePaletteNewSession()`, which really
+ * does call `createSession()`) and `/branch` add more. The note that used
+ * to sit here — claiming nothing in `src/` or `bin/` ever called
+ * `createSession()`, so `listSessions()` returned `[]` for the whole
+ * process lifetime — was written four days before that commit and is simply
+ * no longer true.
+ *
+ * `count($rows) < 2` still suppresses the strip, and that is the intended
+ * shape rather than the leftover of the old gap: a boot seeds ONE row, and
+ * a single-session strip would be chrome that never changes. The strip
+ * appears the moment a second session exists — the same threshold
+ * {@see Chat::cycleSessionTab()} switches at, so the strip and the Ctrl+Tab
+ * binding that moves through it become useful together.
  */
 final class Renderer
 {

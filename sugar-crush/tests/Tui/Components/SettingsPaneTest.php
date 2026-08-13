@@ -73,11 +73,28 @@ final class SettingsPaneTest extends TestCase
         $this->assertSame('MiniMax-M2.7', $rows['Model']);
     }
 
-    public function testRootIsTheProcessWorkingDirectory(): void
+    public function testRootFallsBackToTheProcessWorkingDirectoryForAnUnrootedApp(): void
     {
-        // Bootstrap::app() defaults its $root to getcwd() and hands that same
-        // string to every loader, so on the live boot path this is the root.
+        // This App carries no root (App::$root is null), which is the shape
+        // every test and embedder that never names one has. The process
+        // directory is the honest answer there.
         $this->assertSame(getcwd(), $this->map($this->app())['Root']);
+    }
+
+    /**
+     * The `--root` case: a rooted App must report ITS root, not the process
+     * directory. This pane read `getcwd()` unconditionally until App carried
+     * a root to read back, so it agreed with the (then wrong) environment
+     * block rather than with the tools (crush_code.md Phase 0 item 6).
+     */
+    public function testRootReportsTheAppsConfiguredRootWhenItDivergesFromTheProcessDirectory(): void
+    {
+        $root = sys_get_temp_dir() . '/settings_pane_root_' . uniqid('', true);
+        $this->assertNotSame(getcwd(), $root);
+
+        $rows = $this->map($this->app()->withRoot($root));
+
+        $this->assertSame($root, $rows['Root']);
     }
 
     public function testThemeAndSessionAreExplicitPlaceholdersWithoutAHostedChat(): void

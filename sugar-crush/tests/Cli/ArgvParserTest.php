@@ -473,4 +473,62 @@ final class ArgvParserTest extends TestCase
         $this->assertSame('/tmp/explicit', $result->root);
         $this->assertSame([], $result->unknownFlags);
     }
+
+    // -------------------------------------------------------------------------
+    // rootError() — a --root that names no directory is a usage error
+    // -------------------------------------------------------------------------
+
+    /**
+     * The root is not merely a convenience: it reaches every HookContext's
+     * projectRoot and, from there, the proc_open() cwd of every ScriptHook.
+     * A typo has to be reported, not absorbed (crush_code.md Phase 0 item 6).
+     */
+    public function testRootErrorReportsARootThatIsNotADirectory(): void
+    {
+        $missing = sys_get_temp_dir() . '/sugarcrush_no_such_root_' . uniqid('', true);
+
+        $error = ArgvParser::rootError(ArgvParser::parse(['sugarcrush', '--root', $missing]));
+
+        $this->assertNotNull($error);
+        $this->assertStringContainsString($missing, $error);
+        $this->assertStringContainsString('no such directory', $error);
+    }
+
+    public function testRootErrorReportsAFileGivenWhereADirectoryIsExpected(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'sugarcrush_root_');
+        $this->assertIsString($file);
+
+        try {
+            $error = ArgvParser::rootError(ArgvParser::parse(['sugarcrush', '--root=' . $file]));
+
+            $this->assertNotNull($error);
+        } finally {
+            unlink($file);
+        }
+    }
+
+    public function testRootErrorIsNullForARootThatExists(): void
+    {
+        $this->assertNull(ArgvParser::rootError(ArgvParser::parse(['sugarcrush', '--root', sys_get_temp_dir()])));
+    }
+
+    /**
+     * No `--root` at all is not an error — Bootstrap resolves the default.
+     */
+    public function testRootErrorIsNullWhenNoRootWasGiven(): void
+    {
+        $this->assertNull(ArgvParser::rootError(ArgvParser::parse(['sugarcrush'])));
+    }
+
+    /**
+     * parse() must stay a pure argv -> value-object transform; the filesystem
+     * question lives in rootError(), which the binary asks separately.
+     */
+    public function testParseItselfDoesNotRejectANonExistentRoot(): void
+    {
+        $missing = sys_get_temp_dir() . '/sugarcrush_no_such_root_' . uniqid('', true);
+
+        $this->assertSame($missing, ArgvParser::parse(['sugarcrush', '--root', $missing])->root);
+    }
 }

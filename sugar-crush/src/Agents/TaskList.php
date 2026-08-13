@@ -31,10 +31,23 @@ final class TaskList
     /**
      * @param string $dbPath Path to the SQLite database file
      * @param HookDispatcher|null $hookDispatcher Optional hook dispatcher for lifecycle events
+     * @param string|null $projectRoot Directory the task-scoped hooks run in.
+     *        {@see HookContext::$projectRoot} becomes the `proc_open()` cwd in
+     *        {@see \SugarCraft\Crush\Hooks\ScriptHook::execute()}, so this is a
+     *        root-resolving position even though no `getcwd()` appears at the
+     *        site (crush_code.md Phase 0 item 6). It is nullable because the
+     *        only construction path — {@see Team}, keyed on
+     *        `~/.sugar-crush/teams/{teamId}/` — holds no project root of its
+     *        own yet: teams are a dormant seam, not wired to `--root` through
+     *        {@see \SugarCraft\Crush\Cli\Bootstrap}. This parameter is the
+     *        injection point for when they are; until then the process
+     *        directory is the honest answer, and it beats the hardcoded `''`
+     *        that used to sit in makeHookContext().
      */
     public function __construct(
         private readonly string $dbPath,
         private readonly ?HookDispatcher $hookDispatcher = null,
+        private readonly ?string $projectRoot = null,
     ) {
         $this->db = $this->getConnection($dbPath);
         $this->migrate();
@@ -683,7 +696,11 @@ final class TaskList
             toolOutput: '',
             model: '',
             provider: '',
-            projectRoot: '',
+            // Same shape as Runtime::projectRoot(): the configured root when
+            // there is one, the process directory otherwise. A hardcoded ''
+            // here made a denying ScriptHook fail open, because proc_open()
+            // cannot start a process in a directory that does not exist.
+            projectRoot: $this->projectRoot ?? (getcwd() ?: ''),
         );
     }
 }

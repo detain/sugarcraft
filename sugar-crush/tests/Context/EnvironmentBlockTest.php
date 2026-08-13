@@ -6,7 +6,12 @@ namespace SugarCraft\Crush\Tests\Context;
 
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Runtime;
 
 /**
  * Tests for EnvironmentBlock — covers capture(), render(), and gitStatusSnapshot().
@@ -187,5 +192,83 @@ final class EnvironmentBlockTest extends TestCase
 
         $this->assertSame($this->tempDir, $block->cwd());
         $this->assertSame('model', $block->modelName());
+    }
+
+    // ─── `--root` propagation (crush_code.md Phase 0 item 6) ────────
+    //
+    // Every case below deliberately points the configured root at a temp
+    // directory that is NOT the process cwd. A test where the two coincide
+    // proves nothing here: the whole defect was that the block reported
+    // `getcwd()` while the tools were jailed somewhere else, and that is
+    // invisible unless they differ.
+
+    public function testCaptureReportsTheGivenRootRatherThanTheProcessDirectory(): void
+    {
+        $this->assertNotSame(getcwd(), $this->tempDir, 'the fixture must diverge from the process cwd');
+
+        $output = EnvironmentBlock::capture($this->tempDir, 'model')->render();
+
+        $this->assertStringContainsString('Working directory: ' . $this->tempDir, $output);
+        $this->assertStringNotContainsString('Working directory: ' . getcwd() . "\n", $output);
+    }
+
+    /**
+     * The git half of the same divergence: `Is directory a git repo` and the
+     * status snapshot are read from the CAPTURED directory. sugar-crush lives
+     * inside a git repo, so a block that had silently fallen back to
+     * `getcwd()` would answer "Yes" here — which is exactly how the bug
+     * presented (`--root <lib>` describing the enclosing monorepo's git
+     * state to the model).
+     */
+    public function testCaptureReadsGitStateFromTheGivenRootNotTheProcessDirectory(): void
+    {
+        $output = EnvironmentBlock::capture($this->tempDir, 'model')->render();
+
+        $this->assertStringContainsString('Is directory a git repo: No', $output);
+    }
+
+    /**
+     * The production capture path. {@see \SugarCraft\Crush\Runtime} is what
+     * actually builds the block folded into every system prompt, and it used
+     * to call `getcwd()` bare — so an App configured with `--root` still told
+     * the model it was standing in the process directory.
+     */
+    public function testRuntimeCapturesTheEnvironmentAtTheAppsConfiguredRoot(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test-provider');
+
+        $runtime = new Runtime($provider, new HookManager(new HookRegistry()));
+        $app = App::new($provider, 'gpt-4')->withRoot($this->tempDir);
+
+        $prompt = $this->buildSystemPrompt($runtime, $app);
+
+        $this->assertStringContainsString('Working directory: ' . $this->tempDir, $prompt);
+        $this->assertStringNotContainsString('Working directory: ' . getcwd() . "\n", $prompt);
+    }
+
+    /**
+     * The unrooted App must keep falling back to the process directory —
+     * `App::$root` is null for every test and embedder that never names one,
+     * and null must not degrade to an empty working directory.
+     */
+    public function testRuntimeFallsBackToTheProcessDirectoryForAnUnrootedApp(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test-provider');
+
+        $runtime = new Runtime($provider, new HookManager(new HookRegistry()));
+
+        $prompt = $this->buildSystemPrompt($runtime, App::new($provider, 'gpt-4'));
+
+        $this->assertStringContainsString('Working directory: ' . getcwd(), $prompt);
+    }
+
+    private function buildSystemPrompt(Runtime $runtime, App $app): string
+    {
+        $method = new \ReflectionMethod($runtime, 'buildSystemPrompt');
+        $method->setAccessible(true);
+
+        return (string) $method->invoke($runtime, $app);
     }
 }

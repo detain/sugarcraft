@@ -48,6 +48,17 @@ if ($args->unknownFlags !== []) {
     exit(2);
 }
 
+// A --root that names no directory is a usage error too, and for a sharper
+// reason than a typo: the root becomes App::$root, then every HookContext's
+// projectRoot, then the proc_open() cwd of every ScriptHook. Checked before
+// either dispatch below so one-shot and TUI runs fail identically. Exit 2 =
+// usage error (crush_code.md Phase 0 item 6).
+$rootError = ArgvParser::rootError($args);
+if ($rootError !== null) {
+    fwrite(STDERR, $rootError . "\n");
+    exit(2);
+}
+
 // Dispatch on "the user asked for one-shot mode", NOT on "a prompt value was
 // parsed": a bare `sugarcrush -p` / `--prompt` / `run` has a null prompt, and
 // keying off the value sent it into the TUI. NonInteractive::run() already

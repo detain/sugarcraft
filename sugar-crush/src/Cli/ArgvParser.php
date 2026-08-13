@@ -202,6 +202,36 @@ final class ArgvParser
     }
 
     /**
+     * The usage error for a `--root` that names no directory, or null when
+     * the parsed root is usable.
+     *
+     * Kept OUT of {@see parse()} so parsing stays a pure argv->value-object
+     * transform with no filesystem access; `bin/sugarcrush` calls this
+     * immediately after parsing, next to the unknown-flag check.
+     *
+     * Validated at all because the root is not merely a convenience: it
+     * becomes {@see \SugarCraft\Crush\App\App::$root}, then
+     * {@see \SugarCraft\Crush\Runtime}'s `HookContext::$projectRoot`, then
+     * the `proc_open()` cwd of every {@see \SugarCraft\Crush\Hooks\ScriptHook}.
+     * A `--root /typo` therefore used to be far worse than a wrong directory
+     * — it silently downgraded a DENYING hook into an allow. ScriptHook now
+     * fails closed on its own, but a typo deserves a message at the boundary
+     * rather than a run that quietly does the wrong thing everywhere
+     * (crush_code.md Phase 0 item 6).
+     */
+    public static function rootError(ParsedArgs $args): ?string
+    {
+        if ($args->root === null || is_dir($args->root)) {
+            return null;
+        }
+
+        return sprintf(
+            'sugarcrush: --root %s: no such directory',
+            $args->root,
+        );
+    }
+
+    /**
      * Heuristic: does this string look like a filesystem path?
      */
     private static function looksLikePath(string $s): bool

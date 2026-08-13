@@ -497,6 +497,21 @@ final class Chat implements Model
          * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
+        /**
+         * The project root this session was launched against — `--root`'s
+         * value as {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} resolved
+         * it, or null for a Chat built without one.
+         *
+         * Chat needs its own copy rather than reading the engine's: the two
+         * places below that resolve a root — the {@see HookContext} this
+         * class's OWN tool pipeline builds, and the working directory `/bg`
+         * hands a spawned session — run entirely inside Chat, with no App
+         * and no Runtime in reach. Both used to call `getcwd()` bare, so a
+         * `--root <lib>` run gated its Chat-side tool calls against the
+         * monorepo and backgrounded work into it too (crush_code.md Phase 0
+         * item 6).
+         */
+        private readonly ?string $projectRoot = null,
     ) {
         $this->liveToolEvents = $liveToolEvents ?? new \ArrayObject();
         $this->backend = $backend ?? new Backend\EchoBackend();
@@ -760,8 +775,8 @@ final class Chat implements Model
                 => [$this->withInputBuf(self::dropLastWord($this->inputBuf)), null],
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the real SessionStore listing — see
-            // cycleSessionTab()'s docblock for reachability caveats and how
-            // this relates to Tui\SessionTabs.
+            // cycleSessionTab()'s docblock for the decode/routing chain a
+            // real keypress takes and how this relates to Tui\SessionTabs.
             $msg->type === KeyType::Tab && $msg->ctrl
                 => $this->cycleSessionTab($msg->shift ? -1 : 1),
             $msg->type === KeyType::Char
@@ -791,31 +806,29 @@ final class Chat implements Model
      * `currentSessionId` is already a real, mutate()-able field
      * ({@see withCurrentSessionId()}), so no constructor change was needed.
      *
-     * Reachability note: most terminals send Ctrl+Tab as a `CSI 1;5I`
-     * sequence that candy-core's `InputReader` does not yet decode into a
-     * `KeyMsg` (a separate, pre-existing gap in a file outside this item's
-     * scope — Ctrl+Tab isn't in the generic modifier-key CSI table there).
-     * That decoder gap is NOT the only thing standing between this handler
-     * and a real `bin/sugarcrush` user, though — even a `KeyMsg` source that
-     * bypasses it entirely (Kitty-protocol terminals, scripted input) hits
-     * the early-return above, because `Cli\Bootstrap::chat()` (the live
-     * construction path) never passes a `currentSessionId`, `init()` returns
-     * `null` (no startup Cmd selects or creates one either), and nothing
-     * else in the live path calls {@see withCurrentSessionId()} except this
-     * method and `handleBranchCommand()` — which itself requires an
-     * existing `currentSessionId` to fork from, a circular, pre-existing
-     * gap of its own. So a freshly-launched `bin/sugarcrush` session has
-     * `currentSessionId === null` for its entire lifetime unless the user
-     * first runs `/branch` against a session id it has no way to have
-     * started with. Concretely, this method is exercised and correct
-     * against any Chat that already carries a non-null `currentSessionId`
-     * (as every test below does), but is a guaranteed no-op for a Chat
-     * built the way `Bootstrap::chat()` actually builds it. Wiring an
-     * initial `currentSessionId` into `Bootstrap::chat()`/`init()` (e.g.
-     * selecting the most-recent row from `SessionStore::listSessions()`, or
-     * creating one) would close this, but touches `src/Cli/Bootstrap.php`,
-     * which is outside this item's declared file scope — left as an
-     * explicit follow-up rather than fixed here.
+     * Reachability: live end to end since 737da6413 (W3.S1). The chain a
+     * real keypress takes is
+     *   candy-core `InputReader` decodes `CSI 1;5I`/`CSI 1;6I` into
+     *   `KeyMsg(Tab, ctrl: true[, shift: true])`
+     *   -> `Tui\KeyboardHandler` deliberately declines Ctrl+Tab (its
+     *      pane-cycling arm requires an UNmodified Tab) so the App shell
+     *      passes it down
+     *   -> this handler,
+     * and `Cli\Bootstrap::seedSession()` now creates-or-resumes a real
+     * session row before constructing the Chat, so `currentSessionId` is
+     * non-null from the first frame instead of for the whole process
+     * lifetime. This docblock previously said the opposite on both counts;
+     * both statements were written before that commit and were left stale
+     * for four days.
+     *
+     * What remains is the `$count < 2` guard, and it is intended behaviour
+     * rather than a gap: a boot seeds exactly ONE row, so Ctrl+Tab has
+     * nothing to cycle to until the user makes a second session — via the
+     * Ctrl+P palette's "New session" ({@see handlePaletteNewSession()},
+     * which really does call `SessionStore::createSession()`) or `/branch`.
+     * That is the same threshold `Renderer::renderSessionTabStrip()` uses to
+     * decide whether to draw the strip at all, so the two surfaces appear
+     * together.
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -1547,7 +1560,7 @@ final class Chat implements Model
             // sugar-crush gates on toolName/toolArgs/toolInput.
             model: '',
             provider: '',
-            projectRoot: getcwd() ?: '',
+            projectRoot: $this->projectRoot(),
         );
 
         $hookResult = $this->hooks->preToolUse($context);
@@ -2347,6 +2360,21 @@ final class Chat implements Model
     }
 
     /**
+     * The directory this session is rooted at, already resolved — the
+     * configured {@see $projectRoot} (`--root`), else the process directory.
+     *
+     * Resolved here rather than at each call site so the two consumers (the
+     * hook contexts {@see gateToolCall()} builds and the working directory
+     * {@see scheduleBackgroundSpawn()} hands a spawned session) can never
+     * drift apart, and so a test can assert the resolved answer without
+     * reaching for the nullable field.
+     */
+    public function projectRoot(): string
+    {
+        return $this->projectRoot ?? (getcwd() ?: '');
+    }
+
+    /**
      * Get the session store, if set.
      */
     public function sessionStore(): \SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null
@@ -2821,6 +2849,7 @@ final class Chat implements Model
             'backgroundSupervisor' => $this->backgroundSupervisor,
             'backgroundStatuses' => $this->backgroundStatuses,
             'sessionPicker' => $this->sessionPicker,
+            'projectRoot' => $this->projectRoot,
             // Passed by object identity on purpose: an event the backend
             // appends to the turn's inbox has to reach whichever clone is on
             // screen when the pump next runs.
@@ -4049,7 +4078,10 @@ final class Chat implements Model
         $agent = $this->agentManager?->get('default')
             ?? ($this->agentManager?->all()[0] ?? null)
             ?? self::defaultBackgroundAgent();
-        $workingDirectory = getcwd() ?: '.';
+        // The session is spawned into the SAME tree this run is rooted at:
+        // a `--root <lib>` run that backgrounded work into the enclosing
+        // monorepo would have the child acting outside the parent's jail.
+        $workingDirectory = $this->projectRoot() ?: '.';
         $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
 
         return Cmd::promise(static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags): PromiseInterface {

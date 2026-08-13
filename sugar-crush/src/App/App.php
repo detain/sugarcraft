@@ -108,6 +108,24 @@ final class App implements Model
          */
         public readonly ?int $rows = null,
         public readonly ?int $cols = null,
+        /**
+         * The project root this session was pointed at — `--root`'s value as
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::app()} resolved it — or null
+         * when the App was built without one (a test, an embedder).
+         *
+         * Deliberately NOT pre-resolved to `getcwd()` here: null has to stay
+         * distinguishable from "explicitly rooted at the process directory",
+         * so consumers spell the fallback themselves as `$root ?? getcwd()`.
+         *
+         * This exists because `--root` used to reach only the TOOLS. A
+         * `sugarcrush --root candy-shine` jailed Bash/Read/Edit/Glob to that
+         * library while {@see \SugarCraft\Crush\Runtime}'s environment block
+         * and hook contexts still reported the whole monorepo — so the model
+         * reasoned about one repository while acting inside another, which is
+         * worse than either being wrong on its own (crush_code.md Phase 0
+         * item 6).
+         */
+        public readonly ?string $root = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -134,6 +152,7 @@ final class App implements Model
             chat: null,
             rows: null,
             cols: null,
+            root: null,
         );
     }
 
@@ -259,6 +278,18 @@ final class App implements Model
     public function withChat(?Chat $v): self
     {
         return $this->mutate(chat: $v);
+    }
+
+    /**
+     * Point this App at a project root — see {@see $root}.
+     *
+     * Accepts null so an embedder can explicitly clear an inherited root and
+     * fall back to the process directory, matching every other nullable
+     * field on this class.
+     */
+    public function withRoot(?string $v): self
+    {
+        return $this->mutate(root: $v);
     }
 
     /**
@@ -1003,6 +1034,7 @@ final class App implements Model
             chat: array_key_exists('chat', $changes) ? $changes['chat'] : $this->chat,
             rows: array_key_exists('rows', $changes) ? $changes['rows'] : $this->rows,
             cols: array_key_exists('cols', $changes) ? $changes['cols'] : $this->cols,
+            root: array_key_exists('root', $changes) ? $changes['root'] : $this->root,
         );
     }
 }

@@ -72,13 +72,15 @@ final class SettingsPane
     {
         $chat = $a->chat;
 
-        // getcwd() rather than a stored field: `Bootstrap::app()` defaults its
-        // $root to getcwd() and hands that same string to every loader, and
-        // App carries no root of its own to read back. On the live boot path
-        // this IS the root; an embedder that passes a custom $root leaves no
-        // trace in App, so reporting the process directory is the honest
-        // answer rather than a guess at theirs.
-        $root = getcwd();
+        // App::$root is the configured root (`--root`), so a
+        // `sugarcrush --root candy-shine` run shows the library it is jailed
+        // to rather than the directory the binary was started from. It stayed
+        // getcwd() here only because App carried no root to read back — the
+        // same gap that let the model be told the wrong repository
+        // (crush_code.md Phase 0 item 6). Null means the App was built
+        // without one (a test, an embedder), and the process directory is
+        // then the honest answer.
+        $root = $a->root ?? getcwd();
 
         return [
             ['Provider', $a->provider->name()],
