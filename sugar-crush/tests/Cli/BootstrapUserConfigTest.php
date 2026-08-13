@@ -62,8 +62,52 @@ final class BootstrapUserConfigTest extends TestCase
 
     public function testReadUserConfigToleratesInvalidJson(): void
     {
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
         file_put_contents(Bootstrap::userConfigPath(), '{not valid json');
+
         $this->assertSame([], Bootstrap::readUserConfig());
+    }
+
+    public function testReadUserConfigToleratesAFileItCannotRead(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root reads a 0000 file regardless of its mode.');
+        }
+
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+        chmod(Bootstrap::userConfigPath(), 0o000);
+
+        try {
+            // Silently, too: the warning a bare file_get_contents() emits here
+            // would land in the middle of the TUI's own output.
+            $this->assertSame([], Bootstrap::readUserConfig());
+        } finally {
+            chmod(Bootstrap::userConfigPath(), 0o600);
+        }
+    }
+
+    /**
+     * Naming the config file must not create ~/.sugar-crush. Every read goes
+     * through {@see Bootstrap::userConfigPath()} — including the per-turn
+     * dispatch settings {@see \SugarCraft\Crush\Backend\EngineBackend} resolves
+     * — and a directory appearing on disk because something asked a question
+     * is a side effect nobody asked for.
+     */
+    public function testReadingTheConfigDoesNotCreateTheConfigDirectory(): void
+    {
+        $dir = $this->tempDir . '/home/.sugar-crush';
+
+        $this->assertSame($dir . '/config.json', Bootstrap::userConfigPath());
+        $this->assertSame([], Bootstrap::readUserConfig());
+
+        $this->assertDirectoryDoesNotExist($dir);
+    }
+
+    public function testWritingTheConfigCreatesTheDirectoryItNeeds(): void
+    {
+        Bootstrap::writeUserConfig(['theme' => 'dracula']);
+
+        $this->assertDirectoryExists($this->tempDir . '/home/.sugar-crush');
     }
 
     public function testChatSeedsThemeNameFromPersistedConfig(): void

@@ -50,6 +50,22 @@ Environment variables:
   SUGARCRUSH_MODEL       Model name (overrides provider default)
   SUGARCRUSH_BACKEND_CMD Shell command for a custom backend adapter.
                          Receives JSON history on stdin, writes JSON reply to stdout.
+  SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS
+                         Run a turn's tool calls strictly one at a time.
+                         Concurrent dispatch is the default and only ever
+                         groups non-mutating tools; this is the escape hatch.
+                         Persist it as "parallelToolCalls": false in
+                         ~/.sugar-crush/config.json.
+  SUGARCRUSH_PARALLEL_TOOL_DEADLINE
+                         Seconds one concurrent group may run before its
+                         stragglers are killed and reported as failed calls
+                         (default 90, must be 1-119; a fraction is truncated).
+                         Persist it as "parallelToolDeadlineSeconds".
+                         Precedence: this variable, then the persisted key,
+                         then the default. A value outside 1-119, or one that
+                         is not a number at all, does not count as set — it
+                         falls through to the next source rather than
+                         discarding it.
 
 Exit codes (one-shot mode):
   0                      The prompt ran and produced an answer

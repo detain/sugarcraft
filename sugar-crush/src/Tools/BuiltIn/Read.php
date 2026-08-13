@@ -7,11 +7,13 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Tools\CarriesSessionState;
+use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Read implements Tool
+final readonly class Read implements Tool, ParallelSafe, CarriesSessionState
 {
     private const DEFAULT_MAX_BYTES = 1024 * 1024;
 
@@ -29,6 +31,54 @@ final readonly class Read implements Tool
         private array $sessionCache = [],
         private ?SkillPathNudge $skillNudge = null,
     ) {}
+
+    /**
+     * Opening a file mutates nothing a sibling call could observe, so a batch
+     * of reads is the canonical case for
+     * {@see \SugarCraft\Crush\Runtime}'s concurrent dispatch.
+     *
+     * The one thing `execute()` DOES mutate — the announce-once marks of the
+     * shared {@see InstructionFileLoader}/{@see SkillPathNudge} — would die
+     * with the forked child, which is why this tool also implements
+     * {@see CarriesSessionState} and hands those marks back.
+     */
+    public function isParallelSafe(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * Kept byte-identical to {@see Glob::exportSessionState()}: both tools are
+     * wired to the SAME two collaborators (see
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}), so a key one of them
+     * exported and the other did not would leave that half re-announcing
+     * forever.
+     */
+    public function exportSessionState(): array
+    {
+        return [
+            'emittedInstructionPaths' => $this->instructionLoader?->emittedPaths() ?? [],
+            'announcedSkills' => $this->skillNudge?->announced() ?? [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    public function mergeSessionState(array $state): void
+    {
+        $paths = $state['emittedInstructionPaths'] ?? null;
+        if (is_array($paths)) {
+            $this->instructionLoader?->markEmitted(array_values($paths));
+        }
+
+        $skills = $state['announcedSkills'] ?? null;
+        if (is_array($skills)) {
+            $this->skillNudge?->markAnnounced(array_values($skills));
+        }
+    }
 
     public function name(): string
     {

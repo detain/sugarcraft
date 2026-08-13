@@ -6,11 +6,12 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Grep implements Tool
+final readonly class Grep implements Tool, ParallelSafe
 {
     use CapturesProcessOutput;
     use TruncatesOutput;
@@ -26,6 +27,16 @@ final readonly class Grep implements Tool
         private ?string $root = null,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
     ) {}
+
+    /**
+     * Unconditionally concurrency-safe: `grep -rn` reads, and this tool holds
+     * no session-scoped state for a fork to strand (contrast `Read`/`Glob`,
+     * which carry the announce-once collaborators).
+     */
+    public function isParallelSafe(): bool
+    {
+        return true;
+    }
 
     public function name(): string
     {

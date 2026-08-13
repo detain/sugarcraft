@@ -164,4 +164,62 @@ final class SkillPathNudgeTest extends TestCase
 
         self::assertNull(SkillPathNudge::new($registry)->forPath('/src/App.php'));
     }
+
+    /**
+     * The announce-once mark has to survive the round trip a forked tool child
+     * makes it take: {@see SkillPathNudge::announced()} out, `serialize()`
+     * across the fork, {@see SkillPathNudge::markAnnounced()} back in.
+     *
+     * A skill named `123` is where that used to break. PHP coerces a
+     * decimal-integer string ARRAY KEY to `int` on insertion, so `array_keys()`
+     * handed back `int(123)`, and a `is_string()` filter on the way in dropped
+     * it — leaving the skill unmarked, so it re-announced on every forked
+     * Read/Glob for the rest of the session.
+     */
+    public function testASkillWithANumericNameSurvivesTheAnnounceOnceRoundTrip(): void
+    {
+        $registry = new SkillRegistry();
+        $registry->register([
+            '123' => Skill::parse(
+                <<<SKILL
+                ---
+                description: Numerically named skill
+                paths:
+                  - /src/**/*.php
+                ---
+                body
+                SKILL,
+                '123'
+            ),
+        ]);
+
+        // The child announces it and exports what it marked.
+        $child = SkillPathNudge::new($registry);
+        self::assertNotNull($child->forPath('/src/App.php'));
+        $exported = $child->announced();
+        self::assertSame(['123'], $exported);
+
+        // The parent unions that export back in.
+        $parent = SkillPathNudge::new($registry);
+        $parent->markAnnounced($exported);
+
+        self::assertSame(['123'], $parent->announced());
+        self::assertNull(
+            $parent->forPath('/src/Other.php'),
+            'the mark must have landed, or this skill re-announces on every later touch',
+        );
+    }
+
+    /**
+     * And the merge tolerates a payload from an older build that really did
+     * hand over an `int`, because the export crosses a process boundary and
+     * the two sides can be different versions of this code.
+     */
+    public function testMarkAnnouncedAcceptsAnIntegerNameFromAnOlderPayload(): void
+    {
+        $nudge = SkillPathNudge::new($this->registry());
+        $nudge->markAnnounced([123, 'php-audit']);
+
+        self::assertSame(['123', 'php-audit'], $nudge->announced());
+    }
 }

@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
@@ -54,6 +55,19 @@ final class EngineBackend implements Backend
      * alive indefinitely while a genuinely hung provider still dies.
      */
     private const COMPLETE_TIMEOUT_SECONDS = 120;
+
+    /**
+     * The two escape hatches for {@see Runtime}'s concurrent tool dispatch,
+     * and the ~/.sugar-crush/config.json keys that persist them. See
+     * {@see parallelToolCallsEnabled()} / {@see parallelToolDeadlineSeconds()}.
+     */
+    private const PARALLEL_TOOL_CALLS_DISABLE_ENV = 'SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS';
+
+    private const PARALLEL_TOOL_DEADLINE_ENV = 'SUGARCRUSH_PARALLEL_TOOL_DEADLINE';
+
+    private const PARALLEL_TOOL_CALLS_CONFIG_KEY = 'parallelToolCalls';
+
+    private const PARALLEL_TOOL_DEADLINE_CONFIG_KEY = 'parallelToolDeadlineSeconds';
 
     /**
      * Upper bound on a single length-prefixed frame from the child. A frame
@@ -256,7 +270,16 @@ final class EngineBackend implements Backend
      */
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
-        $runtime = new Runtime($this->provider, $this->resolveHookManager());
+        // Read once and hand to both resolvers, so a turn touches the config
+        // file at most one time however many settings are resolved off it.
+        $userConfig = self::userConfig();
+
+        $runtime = new Runtime(
+            $this->provider,
+            $this->resolveHookManager(),
+            parallelToolCalls: self::parallelToolCallsEnabled($userConfig),
+            parallelToolDeadlineSeconds: self::parallelToolDeadlineSeconds($userConfig),
+        );
 
         $app = App::new($this->provider, $this->model)
             ->withTools($this->tools)
@@ -340,6 +363,143 @@ final class EngineBackend implements Backend
         // image-bearing tool result (W1.G2 reachability fix).
         return Message::assistant($content, reasoning: $lastAssistant?->reasoning())
             ->withImage($lastImageBytes, $lastImageProtocol);
+    }
+
+    /**
+     * Whether this run may fan a same-turn batch of
+     * {@see \SugarCraft\Crush\Tools\ParallelSafe} calls out concurrently.
+     *
+     * {@see Runtime} has carried the switch since crush_code.md Phase 0 item
+     * 14, but nothing outside its own tests ever passed it: a user hitting a
+     * bad interaction with concurrency had no way to turn it off short of
+     * editing this file. This is that way.
+     *
+     * Both routes follow conventions the lib already has rather than inventing
+     * a mechanism: a `SUGARCRUSH_DISABLE_*` presence flag with exactly the
+     * semantics {@see \SugarCraft\Crush\Chat}'s `SUGARCRUSH_DISABLE_MOUSE`
+     * uses (set and neither empty nor "0"), and a key in the same
+     * ~/.sugar-crush/config.json {@see Bootstrap::readUserConfig()} already
+     * owns. Precedence mirrors {@see Bootstrap::backend()}'s: the env var is
+     * the per-invocation override and wins over the persisted preference.
+     *
+     * Only a literal `false` in the config file disables — a missing key, and
+     * anything that is not a bool, means "unset", so a typo cannot silently
+     * turn concurrency off.
+     *
+     * @param ?array<string, mixed> $config the already-read user config;
+     *                                      null reads it, which is what the
+     *                                      resolver's own tests want
+     */
+    private static function parallelToolCallsEnabled(?array $config = null): bool
+    {
+        $flag = getenv(self::PARALLEL_TOOL_CALLS_DISABLE_ENV);
+        if ($flag !== false && $flag !== '' && $flag !== '0') {
+            return false;
+        }
+
+        $config ??= self::userConfig();
+
+        return ($config[self::PARALLEL_TOOL_CALLS_CONFIG_KEY] ?? null) !== false;
+    }
+
+    /**
+     * The persisted user config, or nothing.
+     *
+     * Guarded because reading it is the only filesystem access {@see
+     * complete()} performs, and a missing, unreadable or malformed config must
+     * cost the DEFAULT dispatch settings, never the turn.
+     *
+     * @return array<string, mixed>
+     */
+    private static function userConfig(): array
+    {
+        try {
+            return Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * The wall-clock budget one concurrent group gets, as configured.
+     *
+     * The ceiling is not a preference: the group deadline is enforced INSIDE
+     * the forked completion child, and no frame reaches the parent while a
+     * group is executing, so a group allowed to outlive
+     * {@see COMPLETE_TIMEOUT_SECONDS} would have the whole turn SIGKILLed from
+     * above — losing every sibling's result — instead of the one stuck call
+     * being reported as a failed call. A configured value at or past that
+     * ceiling therefore cannot be honoured, and neither can a zero or negative
+     * one.
+     *
+     * Nonsense falls back to {@see Runtime::PARALLEL_TOOL_DEADLINE_SECONDS}
+     * rather than being clamped, matching how
+     * {@see \SugarCraft\Crush\Providers\Concerns\HttpClientDefaults} treats an
+     * out-of-range `SUGARCRUSH_CONNECT_TIMEOUT`: an operator who asked for
+     * something impossible is better served by the documented default than by
+     * a silently different number they never chose.
+     *
+     * A REJECTED env value falls through to the config exactly as an absent
+     * one does, rather than jumping straight to the default. Both sources are
+     * independent statements of intent, and the env var only outranks the
+     * config when it actually says something: `SUGARCRUSH_PARALLEL_TOOL_DEADLINE=abc`
+     * silently discarding a deliberately persisted `45` is the same bug shape
+     * {@see parallelToolCallsEnabled()} already avoids by treating a
+     * not-really-set flag as unset.
+     *
+     * @param ?array<string, mixed> $config the already-read user config;
+     *                                      null reads it, which is what the
+     *                                      resolver's own tests want
+     */
+    private static function parallelToolDeadlineSeconds(?array $config = null): int
+    {
+        $env = getenv(self::PARALLEL_TOOL_DEADLINE_ENV);
+        $seconds = self::honourableDeadline($env === false ? null : $env);
+        if ($seconds !== null) {
+            return $seconds;
+        }
+
+        $config ??= self::userConfig();
+
+        return self::honourableDeadline($config[self::PARALLEL_TOOL_DEADLINE_CONFIG_KEY] ?? null)
+            ?? Runtime::PARALLEL_TOOL_DEADLINE_SECONDS;
+    }
+
+    /**
+     * One source's proposed deadline, or null if this source has not usably
+     * asked for anything — the shared shape that lets env and config be judged
+     * by identical rules.
+     *
+     * Any finite number is accepted and truncated toward zero, whatever type
+     * carried it: `SUGARCRUSH_PARALLEL_TOOL_DEADLINE=45.7` and a JSON
+     * `"parallelToolDeadlineSeconds": 45.9` are the same request expressed in
+     * the two ways the two sources can express it, and both mean 45. (An env
+     * var has no type but string, so rejecting the float in JSON while
+     * honouring it in the environment was an artifact of where the value came
+     * from, not a judgement about the value.) Sub-second precision is dropped
+     * rather than honoured because {@see Runtime} takes whole seconds.
+     */
+    private static function honourableDeadline(mixed $raw): ?int
+    {
+        if (is_string($raw)) {
+            // "" is the shape an env var that is set-but-empty arrives in, and
+            // means unset here as everywhere else in this lib.
+            $raw = is_numeric($raw) ? $raw + 0 : null;
+        }
+
+        // is_float excludes bool/null/array; NAN and INF are excluded because
+        // casting a non-finite float to int is undefined.
+        if (!is_int($raw) && !(is_float($raw) && is_finite($raw))) {
+            return null;
+        }
+
+        // Compared before the cast, so an out-of-range float is rejected on its
+        // own value rather than on whatever an overflowing (int) produced.
+        if ($raw < 1 || $raw >= self::COMPLETE_TIMEOUT_SECONDS) {
+            return null;
+        }
+
+        return (int) $raw;
     }
 
     /**

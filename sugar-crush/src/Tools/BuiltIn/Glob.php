@@ -6,12 +6,14 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
+use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
 
-final readonly class Glob implements Tool
+final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
 {
     use TruncatesOutput;
 
@@ -60,6 +62,47 @@ final readonly class Glob implements Tool
         private int $maxMatches = self::DEFAULT_MAX_MATCHES,
         private ?array $prunedDirs = null,
     ) {}
+
+    /**
+     * Walking the tree mutates nothing a sibling call could observe. The
+     * announce-once marks `execute()` sets on the shared
+     * {@see InstructionFileLoader}/{@see SkillPathNudge} DO need to survive
+     * the fork, hence {@see CarriesSessionState}.
+     */
+    public function isParallelSafe(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * Kept byte-identical to {@see Read::exportSessionState()} — see the note
+     * there on why the two must not drift.
+     */
+    public function exportSessionState(): array
+    {
+        return [
+            'emittedInstructionPaths' => $this->instructionLoader?->emittedPaths() ?? [],
+            'announcedSkills' => $this->skillNudge?->announced() ?? [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    public function mergeSessionState(array $state): void
+    {
+        $paths = $state['emittedInstructionPaths'] ?? null;
+        if (is_array($paths)) {
+            $this->instructionLoader?->markEmitted(array_values($paths));
+        }
+
+        $skills = $state['announcedSkills'] ?? null;
+        if (is_array($skills)) {
+            $this->skillNudge?->markAnnounced(array_values($skills));
+        }
+    }
 
     public function name(): string
     {

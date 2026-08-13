@@ -21,6 +21,21 @@ namespace SugarCraft\Crush\Hooks;
 enum HookEvent: string
 {
     case PreToolUse = 'PreToolUse';
+
+    /**
+     * Fires in the parent, in provider order, after the tool has run.
+     *
+     * One caveat when {@see \SugarCraft\Crush\Runtime} dispatches a same-turn
+     * batch concurrently: every member of the group is forked BEFORE any of
+     * them reaches this event, so a hook here that mutates shared state
+     * (writes a file, touches a database) no longer has that mutation
+     * observable by a later sibling in the same group, the way it would under
+     * sequential dispatch. The number of invocations and their order are
+     * unchanged; only the interleave point moved. The safety rule that keeps
+     * concurrency invisible in the results covers TOOLS — it cannot cover
+     * user-supplied hook bodies. See
+     * {@see \SugarCraft\Crush\Tools\ParallelSafe}.
+     */
     case PostToolUse = 'PostToolUse';
     case Stop = 'Stop';
     case SubagentStop = 'SubagentStop';

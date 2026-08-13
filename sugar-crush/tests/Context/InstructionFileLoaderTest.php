@@ -492,4 +492,34 @@ final class InstructionFileLoaderTest extends TestCase
         $this->assertStringNotContainsString('TOP SECRET CONTENT', $result);
         $this->assertStringContainsString('import-blocked', $result);
     }
+
+    /**
+     * The emit-once mark crosses a fork as
+     * {@see InstructionFileLoader::emittedPaths()} out and
+     * {@see InstructionFileLoader::markEmitted()} back in, so it has to
+     * round-trip a key PHP would coerce to `int` — the same defect
+     * {@see \SugarCraft\Crush\Skills\SkillPathNudge} really does suffer.
+     * Unreachable here (these are realpaths, so they start with `/`), asserted
+     * so the two halves of one interface cannot drift apart.
+     */
+    public function testTheEmittedSetRoundTripsANumericKey(): void
+    {
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $loader->markEmitted(['123']);
+
+        $this->assertSame(['123'], $loader->emittedPaths());
+
+        $other = new InstructionFileLoader($this->repoRoot);
+        $other->markEmitted($loader->emittedPaths());
+
+        $this->assertSame(['123'], $other->emittedPaths());
+    }
+
+    public function testMarkEmittedAcceptsAnIntegerFromAnOlderPayload(): void
+    {
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $loader->markEmitted([123]);
+
+        $this->assertSame(['123'], $loader->emittedPaths());
+    }
 }

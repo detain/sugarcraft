@@ -261,6 +261,63 @@ final class InstructionFileLoader
     }
 
     /**
+     * The real paths whose bodies have already been emitted into the model's
+     * context this session.
+     *
+     * Exists so the "emit once" mark can cross a process boundary: a tool run
+     * inside one of {@see \SugarCraft\Crush\Runtime}'s forked tool children
+     * mutates the child's copy-on-write copy of this loader, which dies with
+     * the child. The child exports these paths and the parent unions them back
+     * in via {@see markEmitted()} — see
+     * {@see \SugarCraft\Crush\Tools\CarriesSessionState}.
+     *
+     * `strval` over the raw keys for the same reason
+     * {@see \SugarCraft\Crush\Skills\SkillPathNudge::announced()} needs it:
+     * PHP coerces a decimal-integer string array key to `int`. Unreachable in
+     * practice here (these are realpaths, so they start with `/`), and kept
+     * only so the two halves of one interface cannot drift.
+     *
+     * @return list<string>
+     */
+    public function emittedPaths(): array
+    {
+        return array_map(strval(...), array_keys($this->emittedPaths));
+    }
+
+    /**
+     * Union $paths into the emitted set — see {@see emittedPaths()}.
+     *
+     * A union, never a replacement: several forked children can report
+     * overlapping sets in no defined order, and each of them started from a
+     * copy of this loader's own state. Re-marking an already-marked path is a
+     * no-op by construction.
+     *
+     * The memoized {@see loadRoot()}/{@see loadForced()} caches are left
+     * alone: they hold what THIS process already emitted, and marking a path
+     * cannot un-emit it.
+     *
+     * CAST rather than an `is_string()` filter — see
+     * {@see \SugarCraft\Crush\Skills\SkillPathNudge::markAnnounced()}: a
+     * numeric-string key arrives back as an `int` and a type filter would drop
+     * it. Not reachable for a realpath, mirrored here so the two
+     * {@see \SugarCraft\Crush\Tools\CarriesSessionState} implementations stay
+     * identical in shape.
+     *
+     * @param list<string|int> $paths
+     */
+    public function markEmitted(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (is_string($path) || is_int($path)) {
+                $path = (string) $path;
+                if ($path !== '') {
+                    $this->emittedPaths[$path] = true;
+                }
+            }
+        }
+    }
+
+    /**
      * Expand `@path` import references in freshly-read instruction content.
      *
      * A boundary-check closure is handed straight into

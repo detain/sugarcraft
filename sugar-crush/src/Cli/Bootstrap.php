@@ -357,10 +357,18 @@ final class Bootstrap
      * into the repo and shared; this one is a real per-user runtime state
      * file, same directory convention as {@see sessionStore()}/{@see
      * memoryStore()}.
+     *
+     * Resolved off {@see configDirPath()}, NOT {@see configDir()}: naming the
+     * config file must never be what creates ~/.sugar-crush. Every read path
+     * runs through here — including {@see \SugarCraft\Crush\Backend\EngineBackend}'s
+     * per-turn dispatch settings — and a process that only ever reads its
+     * config should leave no directory behind on a box where the user never
+     * persisted anything. {@see writeUserConfig()} creates the directory at
+     * the point it actually has something to put in it.
      */
     public static function userConfigPath(): string
     {
-        return self::configDir() . '/config.json';
+        return self::configDirPath() . '/config.json';
     }
 
     /**
@@ -368,6 +376,12 @@ final class Bootstrap
      * or invalid-JSON file returns [] rather than throwing - there is
      * nothing yet to persist on a fresh install, and a corrupt file
      * shouldn't block the CLI from starting.
+     *
+     * The read is `@`-silenced because the `false` branch below already IS the
+     * handling for an unreadable file: without it a config the user has
+     * chmod'ed away leaks a `Permission denied` warning into the TUI's own
+     * output (and fails any `failOnWarning` suite) on a path that then goes on
+     * to degrade gracefully anyway.
      *
      * @return array<string, mixed>
      */
@@ -378,7 +392,7 @@ final class Bootstrap
             return [];
         }
 
-        $contents = file_get_contents($path);
+        $contents = @file_get_contents($path);
         if ($contents === false) {
             return [];
         }
@@ -402,6 +416,10 @@ final class Bootstrap
         if ($json === false) {
             return;
         }
+
+        // The write, not the read, is what earns the directory — see
+        // {@see userConfigPath()}.
+        self::ensureDir(self::configDirPath());
 
         file_put_contents(self::userConfigPath(), $json);
     }
@@ -898,11 +916,22 @@ final class Bootstrap
      */
     private static function configDir(): string
     {
-        $home = getenv('HOME') ?: (getenv('USERPROFILE') ?: '/tmp');
-        $dir = $home . '/.sugar-crush';
+        $dir = self::configDirPath();
         self::ensureDir($dir);
 
         return $dir;
+    }
+
+    /**
+     * Where {@see configDir()} would be, without creating it — the resolver on
+     * its own, so read-only callers can name the directory without the naming
+     * having a side effect on disk.
+     */
+    private static function configDirPath(): string
+    {
+        $home = getenv('HOME') ?: (getenv('USERPROFILE') ?: '/tmp');
+
+        return $home . '/.sugar-crush';
     }
 
     private static function ensureDir(string $dir): void

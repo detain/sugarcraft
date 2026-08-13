@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
-final readonly class WebFetch implements Tool
+final readonly class WebFetch implements Tool, ParallelSafe
 {
     private const MAX_REDIRECTS = 3;
     private const MAX_RESPONSE_SIZE = 2 * 1024 * 1024;
@@ -28,6 +29,17 @@ final readonly class WebFetch implements Tool
         'fc00::/7',
         'fe80::/10',
     ];
+
+    /**
+     * The tool concurrency pays off most for: an HTTP round-trip is seconds
+     * of pure waiting, it writes nothing locally, and this tool holds no
+     * session-scoped state for a fork to strand. Two fetches racing each other
+     * is exactly what a batch of them should do.
+     */
+    public function isParallelSafe(): bool
+    {
+        return true;
+    }
 
     public function name(): string
     {

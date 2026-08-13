@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -14,7 +15,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * with ClassIsFinalException. Injecting a client would be the tidier fix and
  * would let this join the others as final.
  */
-class WebSearch implements Tool
+class WebSearch implements Tool, ParallelSafe
 {
     private const BLOCKED_HOSTNAMES = [
         'localhost',
@@ -43,6 +44,27 @@ class WebSearch implements Tool
         private int $maxResults = 10,
     ) {
         $this->endpoint = $endpoint ?? getenv('SUGARCRUSH_SEARCH_ENDPOINT') ?: 'http://skynet2.interserver.net:8080/search';
+    }
+
+    /**
+     * Same reasoning as {@see WebFetch::isParallelSafe()}: a search round-trip
+     * is seconds of waiting, writes nothing locally, and strands no
+     * session-scoped state in a forked child.
+     *
+     * True for THIS class only. Every other built-in that answers this
+     * question is `final`, so "the class said yes" and "the instance is the
+     * code that said yes" are the same statement; this one is subclassable
+     * (see the class docblock), and a plain `return true` would have made a
+     * subclass — including every PHPUnit mock — inherit the promise without
+     * ever making it. That is fail-OPEN, and it inverts
+     * {@see ParallelSafe}'s own principle that saying nothing means barrier.
+     * A subclass that IS safe re-states it by overriding this method, which is
+     * the same act of declaring that every other tool performs by
+     * implementing the interface in the first place.
+     */
+    public function isParallelSafe(): bool
+    {
+        return static::class === self::class;
     }
 
     public function name(): string
